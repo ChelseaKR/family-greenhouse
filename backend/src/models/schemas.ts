@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isValidTimeZone } from '../utils/timeZone.js';
+import { MAX_SEASONAL_CADENCES, SEASONS, duplicateSeasons } from '../services/seasonalCadence.js';
 
 // Auth schemas
 export const cognitoPasswordSchema = z
@@ -192,11 +193,36 @@ export const movePlantsSchema = z
 // Task schemas
 export const taskTypeEnum = z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']);
 
+export const seasonEnum = z.enum(SEASONS);
+
+/**
+ * A seasonal profile: at most one cadence per season, each a whole number of
+ * days in the same 1–365 range as the task's base `frequency` — a seasonal
+ * interval is the same kind of thing as the base one, so it gets the same
+ * bounds rather than a second, quietly different set.
+ *
+ * Uniqueness is enforced here rather than left to the resolver: `resolveCadence`
+ * takes the FIRST entry for a season, so two winter entries would silently make
+ * one of them dead, and the household would see a number it did not set.
+ */
+export const seasonalCadenceSchema = z.object({
+  season: seasonEnum,
+  frequency: z.number().int().min(1).max(365),
+});
+
+export const seasonalCadencesSchema = z
+  .array(seasonalCadenceSchema)
+  .max(MAX_SEASONAL_CADENCES)
+  .refine((cadences) => duplicateSeasons(cadences).length === 0, {
+    message: 'Each season may appear at most once',
+  });
+
 export const createTaskSchema = z.object({
   plantId: z.string().uuid(),
   type: taskTypeEnum,
   customType: z.string().max(50).optional(),
   frequency: z.number().int().min(1).max(365),
+  seasonalCadences: seasonalCadencesSchema.optional(),
   assignedTo: z.string().uuid().optional(),
   notes: z.string().max(500).optional(),
   nextDue: z.string().datetime().optional(),
@@ -206,6 +232,8 @@ export const updateTaskSchema = z.object({
   type: taskTypeEnum.optional(),
   customType: z.string().max(50).optional().nullable(),
   frequency: z.number().int().min(1).max(365).optional(),
+  /** `null` clears the profile; omitted leaves it as it is. */
+  seasonalCadences: seasonalCadencesSchema.optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
   nextDue: z.string().datetime().optional(),

@@ -11,6 +11,14 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   TABLE_NAME: 'test-table',
 }));
 
+// Read by the seasonal-cadence resolver to get the household's hemisphere, and
+// ONLY for a plant that has at least one seasonally-scheduled task. Mocked
+// separately from `dynamodb.send` so it cannot consume a queued completion-read
+// response and quietly change what the drift tests are measuring.
+vi.mock('../../../src/services/householdService.js', () => ({
+  getHousehold: vi.fn(async () => null),
+}));
+
 const NOW = new Date('2026-09-03T12:00:00.000Z');
 
 function completionRow(overrides: Record<string, unknown> = {}) {
@@ -201,6 +209,87 @@ describe('doubleCare service', () => {
         reason: 'insufficient_completions',
       });
       expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+    });
+
+    it('measures a seasonal task against the cadence in force, not its base frequency', async () => {
+      // Four completions 14 days apart, in November, for a household in Berlin
+      // on a 7/14 profile. Against the base 7 that is +100% drift and earns a
+      // "your schedule does not match reality" suggestion; against the winter
+      // cadence the household actually set, it is no drift at all.
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockResolvedValue({
+        id: 'hh-1',
+        name: 'Home',
+        location: { city: 'Berlin', lat: 52.52, lon: 13.4 },
+        createdAt: '',
+        createdBy: 'u',
+      } as never);
+      const { getScheduleDriftForPlant } = await import('../../../src/services/doubleCare.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [1, 15, 29, 43].map((offset, i) =>
+          completionRow({
+            id: `w${i}`,
+            completedAt: new Date(Date.UTC(2026, 10, 1) + (offset - 1) * 86_400_000).toISOString(),
+          })
+        ),
+      } as never);
+
+      const [reading] = await getScheduleDriftForPlant('hh-1', 'p-1', [
+        {
+          id: 't-1',
+          frequency: 7,
+          seasonalCadences: [
+            { season: 'spring', frequency: 7 },
+            { season: 'summer', frequency: 7 },
+            { season: 'autumn', frequency: 14 },
+            { season: 'winter', frequency: 14 },
+          ],
+        },
+      ]);
+
+      expect(reading.scheduledIntervalDays).toBe(14);
+      expect(reading.drift).toMatchObject({ driftPct: 0, exceedsThreshold: false });
+    });
+
+    it('reports schedule_unavailable, not a number, when the household read fails', async () => {
+      // The history read fine; the interval to divide it by did not. Falling
+      // back to the base frequency here would publish a confident wrong
+      // percentage rather than an honest gap.
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getHousehold).mockRejectedValue(new Error('throttled'));
+      const { getScheduleDriftForPlant } = await import('../../../src/services/doubleCare.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Items: [
+          ...[1, 12, 23, 30].map((d, i) => completionRow({ id: `w${i}`, completedAt: at(d) })),
+          ...[1, 12, 23, 30].map((d, i) =>
+            completionRow({ id: `f${i}`, taskId: 't-2', completedAt: at(d) })
+          ),
+        ],
+      } as never);
+
+      const readings = await getScheduleDriftForPlant('hh-1', 'p-1', [
+        { id: 't-1', frequency: 7, seasonalCadences: [{ season: 'autumn', frequency: 14 }] },
+        // A task with no profile is unaffected: its interval was never in doubt,
+        // so it still gets a real reading off the very same history read.
+        { id: 't-2', frequency: 7 },
+      ]);
+
+      expect(readings[0]).toMatchObject({ drift: null, reason: 'schedule_unavailable' });
+      expect(readings[1].reason).toBeNull();
+      expect(readings[1].drift).not.toBeNull();
+      expect(readings[1].scheduledIntervalDays).toBe(7);
+    });
+
+    it('does not read the household when no task on the plant is seasonal', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const { getScheduleDriftForPlant } = await import('../../../src/services/doubleCare.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: [] } as never);
+
+      await getScheduleDriftForPlant('hh-1', 'p-1', [{ id: 't-1', frequency: 7 }]);
+      expect(householdService.getHousehold).not.toHaveBeenCalled();
     });
 
     it('marks every task history_unavailable when the read fails (no 0% drift)', async () => {

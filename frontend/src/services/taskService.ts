@@ -1,5 +1,6 @@
 import { api } from './api';
 import { Task } from './plantService';
+import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
 import { track } from './analytics';
 import { firstDueIso } from '@/utils/date';
 
@@ -8,6 +9,7 @@ export interface CreateTaskData {
   type: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
   customType?: string;
   frequency: number;
+  seasonalCadences?: SeasonalCadence[];
   assignedTo?: string;
   notes?: string;
   nextDue?: string;
@@ -17,6 +19,8 @@ export interface UpdateTaskData {
   type?: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
   customType?: string;
   frequency?: number;
+  /** `null` clears the seasonal profile; omitted leaves it as it is. */
+  seasonalCadences?: SeasonalCadence[] | null;
   assignedTo?: string | null;
   notes?: string;
   nextDue?: string;
@@ -46,7 +50,10 @@ export interface ScheduleDrift {
   requiredCompletions: number;
   /** null below `requiredCompletions` or when the history read failed — see `reason`. */
   drift: ScheduleDriftReading | null;
-  reason: 'insufficient_completions' | 'history_unavailable' | null;
+  /** `schedule_unavailable`: the history read, but the interval to measure it
+   *  against did not (a seasonally-scheduled task whose household row could not
+   *  be read). Mirrors backend `doubleCareRules.ScheduleDriftReason`. */
+  reason: 'insufficient_completions' | 'history_unavailable' | 'schedule_unavailable' | null;
 }
 
 export interface ScheduleDriftResponse {

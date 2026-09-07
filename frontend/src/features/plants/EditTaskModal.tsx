@@ -12,12 +12,31 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
+import { useTranslation } from 'react-i18next';
+import { SEASONS } from '@/features/tasks/seasonalCadence';
+import { cadencesFromForm, formFromCadences } from '@/features/tasks/cadenceForm';
+
+/**
+ * A season's box is EMPTY when that season has no cadence — not 0, and not the
+ * base frequency pre-filled. Empty is a distinct state the server understands
+ * (`season_unset`, falling back to the base interval), and pre-filling would
+ * silently turn "I have not decided about spring" into "spring is exactly the
+ * same as the base", which is a different thing the household never said.
+ */
+const seasonBox = z
+  .union([z.literal(''), z.coerce.number().int().min(1).max(365)])
+  .optional()
+  .transform((v) => (v === '' || v === undefined ? undefined : (v as number)));
 
 const taskSchema = z.object({
   type: z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']),
   customType: z.string().max(50).optional(),
   frequency: z.coerce.number().int().min(1).max(365),
   notes: z.string().max(500).optional(),
+  spring: seasonBox,
+  summer: seasonBox,
+  autumn: seasonBox,
+  winter: seasonBox,
 });
 
 type TaskFormInput = z.input<typeof taskSchema>;
@@ -30,6 +49,7 @@ interface EditTaskModalProps {
 }
 
 export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
 
@@ -46,6 +66,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
       customType: task.customType ?? '',
       frequency: task.frequency,
       notes: task.notes ?? '',
+      ...formFromCadences(task.seasonalCadences),
     },
   });
 
@@ -56,6 +77,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
         customType: task.customType ?? '',
         frequency: task.frequency,
         notes: task.notes ?? '',
+        ...formFromCadences(task.seasonalCadences),
       });
     }
   }, [isOpen, task, reset]);
@@ -66,6 +88,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
         type: data.type,
         customType: data.type === 'custom' ? data.customType || undefined : undefined,
         frequency: data.frequency,
+        seasonalCadences: cadencesFromForm(data),
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
@@ -169,6 +192,30 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                     error={errors.frequency?.message}
                     {...register('frequency')}
                   />
+
+                  <fieldset className="rounded-md border border-primary-100 p-3">
+                    <legend className="px-1 text-sm font-medium text-ink">
+                      {t('tasks.seasonal.legend')}
+                    </legend>
+                    <p className="mb-3 text-xs text-gray-600">{t('tasks.seasonal.help')}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {SEASONS.map((season) => (
+                        <Input
+                          key={season}
+                          label={t('tasks.seasonal.field', {
+                            season: t(`tasks.seasonal.season.${season}`),
+                          })}
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={365}
+                          placeholder={t('tasks.seasonal.placeholder')}
+                          error={errors[season]?.message}
+                          {...register(season)}
+                        />
+                      ))}
+                    </div>
+                  </fieldset>
 
                   <div>
                     <label htmlFor="notes" className="label">

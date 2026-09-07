@@ -669,6 +669,25 @@
     "careRule": {
       "title": "Antes de marcar {{plant}} como hecha",
       "confirm": "Marcar como hecha"
+    },
+    "seasonal": {
+      "interval_one": "cada {{count}} día",
+      "interval_many": "cada {{count}} días",
+      "interval_other": "cada {{count}} días",
+      "chip": "{{interval}} · cadencia de {{season}}",
+      "chipUntil": "{{interval}} · cadencia de {{season}} hasta el {{date}}",
+      "noLocation": "Temporadas no disponibles — añade una ubicación del hogar",
+      "season": {
+        "spring": "primavera",
+        "summer": "verano",
+        "autumn": "otoño",
+        "winter": "invierno"
+      },
+      "legend": "Cadencia por temporada",
+      "help": "Asigna a cada temporada su propio intervalo: la mayoría de las plantas se ralentizan en los meses fríos. Las temporadas siguen el hemisferio de tu hogar. Una temporada que dejes en blanco usa la frecuencia de arriba.",
+      "field": "Intervalo de {{season}} (días)",
+      "placeholder": "Frecuencia base",
+      "noLocationHelp": "Añade una ubicación del hogar y estas temporadas empezarán a aplicarse."
     }
   },
   "today": {

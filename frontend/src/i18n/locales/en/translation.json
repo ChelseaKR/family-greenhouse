@@ -652,6 +652,24 @@
     "careRule": {
       "title": "Before you mark {{plant}} done",
       "confirm": "Mark done"
+    },
+    "seasonal": {
+      "interval_one": "every {{count}} day",
+      "interval_other": "every {{count}} days",
+      "chip": "{{interval}} · {{season}} cadence",
+      "chipUntil": "{{interval}} · {{season}} cadence until {{date}}",
+      "noLocation": "Seasons unavailable — add a household location",
+      "season": {
+        "spring": "spring",
+        "summer": "summer",
+        "autumn": "autumn",
+        "winter": "winter"
+      },
+      "legend": "Seasonal cadence",
+      "help": "Give a season its own interval — most plants slow down in the cool months. Seasons follow your household's hemisphere. A season you leave blank uses the frequency above.",
+      "field": "{{season}} interval (days)",
+      "placeholder": "Base frequency",
+      "noLocationHelp": "Add a household location and these seasons start applying."
     }
   },
   "today": {

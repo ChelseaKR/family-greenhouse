@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import { resolveCadence } from '../../../src/services/seasonalCadence.js';
 
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/plantService.js');
@@ -450,6 +451,13 @@ describe('POST /tasks/{id}/match-schedule', () => {
     const taskService = await import('../../../src/services/taskService.js');
     vi.mocked(taskService.getTask).mockResolvedValue(task);
     vi.mocked(taskService.updateTask).mockResolvedValue({ ...task, frequency: 11 });
+    // Delegate to the REAL resolver rather than pinning a literal. The handler
+    // branches on what this returns, so a mock that ignored the task it was
+    // handed would let the branch under test stop depending on the task's own
+    // profile without a single assertion moving.
+    vi.mocked(taskService.resolveTaskCadence).mockImplementation(async (_hh, t, at) =>
+      resolveCadence(t.frequency, t.seasonalCadences, 'north', at)
+    );
     const doubleCare = await import('../../../src/services/doubleCare.js');
     vi.mocked(doubleCare.getScheduleDriftForTask).mockResolvedValue(driftReading);
   });
@@ -490,6 +498,69 @@ describe('POST /tasks/{id}/match-schedule', () => {
         completionsConsidered: 5,
       },
     });
+  });
+
+  it('writes the new interval into the season in force, not the base frequency', async () => {
+    // A seasonally-scheduled task: the household is on its 14-day autumn
+    // cadence, so the base `frequency` is not what the schedule reads. Writing
+    // the median there would leave the household tapping "match my rhythm" and
+    // watching the schedule not move.
+    const seasonal = {
+      ...task,
+      seasonalCadences: [
+        { season: 'autumn' as const, frequency: 14 },
+        { season: 'winter' as const, frequency: 21 },
+      ],
+    };
+    const taskService = await import('../../../src/services/taskService.js');
+    vi.mocked(taskService.getTask).mockResolvedValue(seasonal);
+    vi.mocked(taskService.updateTask).mockResolvedValue({ ...seasonal, frequency: 7 });
+    vi.setSystemTime(new Date('2026-11-15T09:00:00.000Z'));
+
+    const { matchTaskSchedule } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await matchTaskSchedule(
+      jsonPost({ id: 't1' }, {}),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+
+    const [, , input] = vi.mocked(taskService.updateTask).mock.calls[0];
+    // The base frequency is left alone; autumn's 14 becomes the median 11 and
+    // winter's 21 is untouched.
+    expect(input.frequency).toBeUndefined();
+    expect(input.seasonalCadences).toEqual([
+      { season: 'autumn', frequency: 11 },
+      { season: 'winter', frequency: 21 },
+    ]);
+    vi.useRealTimers();
+  });
+
+  it('falls back to the base frequency when no season is in force', async () => {
+    // Same profile, but the household has no location, so `resolveCadence`
+    // cannot name a season and the base frequency IS what the schedule reads.
+    const seasonal = {
+      ...task,
+      seasonalCadences: [{ season: 'autumn' as const, frequency: 14 }],
+    };
+    const taskService = await import('../../../src/services/taskService.js');
+    vi.mocked(taskService.getTask).mockResolvedValue(seasonal);
+    vi.mocked(taskService.updateTask).mockResolvedValue({ ...seasonal, frequency: 11 });
+    vi.mocked(taskService.resolveTaskCadence).mockImplementation(async (_hh, t, at) =>
+      resolveCadence(t.frequency, t.seasonalCadences, null, at)
+    );
+
+    const { matchTaskSchedule } = await import('../../../src/handlers/tasks/handler.js');
+    const res = (await matchTaskSchedule(
+      jsonPost({ id: 't1' }, {}),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+
+    const [, , input] = vi.mocked(taskService.updateTask).mock.calls[0];
+    expect(input.frequency).toBe(11);
+    expect(input.seasonalCadences).toBeUndefined();
   });
 
   it('402s on the free tier without touching the task', async () => {

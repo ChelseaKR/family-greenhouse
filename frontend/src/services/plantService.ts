@@ -2,6 +2,9 @@ import axios from 'axios';
 import { api } from './api';
 import { track } from './analytics';
 import type { IdentifyCreditBalance } from './billingService';
+import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
+
+export type { SeasonalCadence };
 
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
 
@@ -189,6 +192,12 @@ export interface Task {
   type: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
   customType?: string;
   frequency: number; // days
+  /** Optional seasonal profile: up to four cadences, one per season, that
+   *  override `frequency` while their season is in force. `frequency` stays
+   *  the base interval — it is what the schedule uses for a season with no
+   *  cadence set, and for a household with no location to season the profile
+   *  by. See `features/tasks/seasonalCadence.ts`. */
+  seasonalCadences?: SeasonalCadence[] | null;
   lastCompleted: string | null;
   nextDue: string;
   assignedTo: string | null;
