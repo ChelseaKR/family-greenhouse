@@ -234,7 +234,7 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -330,7 +330,7 @@ jobs:
     environment: production
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -579,7 +579,7 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -789,7 +789,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Configure AWS credentials (Cognito admin for test-user create+delete)
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -877,7 +877,7 @@ jobs:
         run: npm ci
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -918,7 +918,7 @@ jobs:
           persist-credentials: false
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -953,7 +953,7 @@ jobs:
         id: aws_credentials
         # allow-silenced-gate: independent rollback branches continue; the final outcome verifier re-fails incomplete recovery
         continue-on-error: true
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_PRODUCTION_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
