@@ -260,6 +260,8 @@ export const STEPS = [
     script: 'commercial:check',
     weight: 0,
     why: "the README's commercial-status banner drifting from commercial-status.json — the front page said the product was not accepting payments or generating revenue for five days after it started taking cards, and linked to the document that contradicted it (#688)",
+  },
+  {
     id: 'citation:check',
     script: 'citation:check',
     weight: 0,

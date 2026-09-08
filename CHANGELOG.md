@@ -53,6 +53,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `scripts/check-no-silenced-gates.mjs` asserts it stays in a required job.
   ([#688](https://github.com/ChelseaKR/family-greenhouse/issues/688))
 
+- **`CITATION.cff` named the wrong release.** It said `version: 0.23.0` while
+  `package.json` said `0.29.0`, and had done since 2026-07-26 — so anyone citing
+  this work cited a version six releases behind the code. Both files parsed and
+  both values were individually plausible; nothing compared them, so there was
+  no run to fail. `date-released` was `'2026-07-25'` while the `v0.23.0` tag is
+  dated 2026-07-26, so it was a day off its own tag as well; both now read
+  `0.29.0` / `2026-09-05`, the `v0.29.0` tagger date.
+
+  `npm run citation:check` compares the two on every run, in the required `Lint`
+  job and in `npm run verify`, with `--write` to copy the version across at bump
+  time. `scripts/check-no-silenced-gates.mjs` asserts it stays in a required job.
+
+  It deliberately does **not** compare `date-released` against the `v<version>`
+  tag. A release pull request bumps `package.json` before that tag exists, so
+  the check would go red on the commit doing the right thing; and it would read
+  tags, which `actions/checkout` does not fetch at its default depth, so a
+  shallow checkout answers "no tags" and the comparison passes over nothing. The
+  date is held to what is true at every commit instead: present, a real calendar
+  date, and not in the future.
+
+  The other half of
+  [#685](https://github.com/ChelseaKR/family-greenhouse/issues/685) — 21 tags
+  with no GitHub Release — is unchanged here; its gate landed in
+  `scripts/check-release-record.mjs`, and publishing the missing releases is an
+  owner action.
+
 ## [0.29.0] - 2026-09-05
 
 ### Added
