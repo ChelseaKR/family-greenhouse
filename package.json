@@ -72,6 +72,7 @@
     "figures:check": "node scripts/check-doc-figures.mjs",
     "well-known:check": "node scripts/check-well-known.mjs",
     "commercial:check": "node scripts/check-commercial-status.mjs",
+    "citation:check": "node scripts/check-citation-version.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
     "verify": "node scripts/run-gate.mjs"
   },

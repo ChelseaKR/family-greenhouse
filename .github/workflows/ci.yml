@@ -266,6 +266,19 @@ jobs:
         # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
         # pre-push and CI run the identical check (CICD-27).
         run: npm run commercial:check
+      - name: CITATION.cff states the same version as package.json
+        # #685. `CITATION.cff` said 0.23.0 while `package.json` said 0.29.0 —
+        # six minor versions apart since 2026-07-26 — so anyone citing this work
+        # cited the wrong release. Both files parsed and both values were
+        # individually plausible; nothing compared them, so there was no run to
+        # fail.
+        #
+        # Lives in the required `Lint` job for the same reason the settled-read
+        # ratchet and the i18n gates do; scripts/check-no-silenced-gates.mjs
+        # asserts it stays here. Also a step in `npm run verify`
+        # (scripts/gate-steps.mjs) so local pre-push and CI run the identical
+        # check (CICD-27).
+        run: npm run citation:check
 
       - name: Hardcoded-string ratchet (no new untranslatable JSX text)
         # §4 G2 as a ratchet against scripts/i18n-hardcoded-baseline.json —
