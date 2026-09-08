@@ -30,6 +30,7 @@ import { SitterLinksCard } from './SitterLinksCard';
 import { CaretakerSeatsCard } from './CaretakerSeatsCard';
 import { CareLoadCard } from './CareLoadCard';
 import { AutoHandoffCard } from './AutoHandoffCard';
+import { HouseholdTimeZoneCard } from './HouseholdTimeZoneCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -315,6 +316,16 @@ export function HouseholdPage() {
           proof-of-visit report. Admin-only, like sitter links. Plan gating is
           read from the catalog inside, exactly like AutoHandoffCard. */}
       {isAdmin && householdId && <CaretakerSeatsCard householdId={householdId} />}
+
+      {/* Timezone — ADR 0025 phase 2. Admin-only for the same reason the
+          location is: a zone belongs to the household, not to a member (members
+          keep their own for quiet hours). It sits beside Location because the
+          ADR says it should, and because they are the two settings that are
+          about where the household is rather than what it does. Reads no due
+          date and changes no answer; phase 4 is the cutover. */}
+      {isAdmin && householdId && (
+        <HouseholdTimeZoneCard householdId={householdId} household={household} />
+      )}
 
       {/* Location — drives climate-aware care tips. Admin-only because the
           location is shared across the household. Non-admins still see what

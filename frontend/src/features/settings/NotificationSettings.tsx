@@ -16,6 +16,7 @@ import {
 import { notificationService, type NotificationPreferences } from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
 import { isNativeApp } from '@/lib/platform';
+import { resolveBrowserTimeZone } from '@/utils/timeZone';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY ?? '') as string;
@@ -48,22 +49,6 @@ interface SaveVariables {
   overrides: Partial<PreferencesUpdate>;
   /** A background write the user did not ask for: no "saved" banner on success. */
   quiet?: boolean;
-}
-
-/**
- * IANA zone this browser reports, or null when it cannot be resolved (no Intl,
- * a runtime that throws, or one that answers with a placeholder). Null means
- * "leave the stored value alone" — never a guessed zone.
- */
-function resolveBrowserTimeZone(): string | null {
-  try {
-    if (typeof Intl === 'undefined' || typeof Intl.DateTimeFormat !== 'function') return null;
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (typeof zone !== 'string' || zone.trim() === '' || zone === 'Etc/Unknown') return null;
-    return zone;
-  } catch {
-    return null;
-  }
 }
 
 /** Zones equivalent to the server's UTC default; persisting one changes nothing. */

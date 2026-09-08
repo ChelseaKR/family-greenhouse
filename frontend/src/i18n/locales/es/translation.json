@@ -844,7 +844,21 @@
       "checkFailed": "No pudimos comprobar qué plantas no tienen notas en este momento, así que esta lista puede estar incompleta. Tu cuidador solo ve las notas que hayas escrito."
     },
     "memberEmailUndeliverable": "El correo no llega",
-    "memberEmailUndeliverableHint": "Los recordatorios y resúmenes enviados al correo de esta persona están rebotando, así que dejamos de enviarlos. Puede reanudar el correo desde Ajustes → Notificaciones cuando la dirección vuelva a funcionar."
+    "memberEmailUndeliverableHint": "Los recordatorios y resúmenes enviados al correo de esta persona están rebotando, así que dejamos de enviarlos. Puede reanudar el correo desde Ajustes → Notificaciones cuando la dirección vuelva a funcionar.",
+    "timeZoneTitle": "Zona horaria",
+    "timeZoneDescription": "La zona en la que se cuentan los días de este hogar. Una zona para el hogar, no una por persona: tus horas de silencio siguen en Ajustes, Notificaciones.",
+    "timeZoneNotSet": "Todavía no hay ninguna zona configurada para este hogar.",
+    "timeZoneCurrent": "Configurada actualmente en",
+    "timeZoneNotUsedYet": "Todavía no se usa. Las fechas de vencimiento, los recordatorios, el calendario y el resumen semanal siguen contando los días como hasta ahora; configurar una zona ahora es lo que permitirá cambiarlo más adelante sin adivinar.",
+    "timeZoneLabel": "Zona horaria IANA",
+    "timeZoneBrowserHint": "Este navegador indica {{zone}}. No se guarda nada hasta que elijas.",
+    "timeZoneNoBrowserZone": "Este navegador no puede indicar su propia zona, así que no hay nada que sugerir.",
+    "timeZoneInvalid": "Ese no es un nombre de zona horaria que la aplicación reconozca. Usa un nombre IANA como America/New_York o Europe/Madrid.",
+    "timeZoneSave": "Guardar zona horaria",
+    "timeZoneClear": "Borrar zona horaria",
+    "timeZoneSaved": "Zona horaria guardada.",
+    "timeZoneCleared": "Zona horaria borrada. Este hogar vuelve a no tener ninguna zona configurada, que no es lo mismo que elegir UTC.",
+    "timeZonePlaceholder": "America/New_York"
   },
   "sitter": {
     "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",

@@ -8,6 +8,19 @@ export interface Household {
   location?: { city: string; lat: number; lon: number } | null;
   /** Auto-handoff rule: days overdue before a task goes up for grabs; null/absent = off. */
   escalateAfterDays?: number | null;
+  /**
+   * The household's IANA timezone (ADR 0025), or `''` for **never set**.
+   *
+   * Three states, not two, and the middle one is load-bearing: absent or `''`
+   * means nobody has chosen, `'UTC'` means somebody chose UTC, and any other
+   * name is a real zone. The backend keeps that distinction by removing the
+   * DynamoDB attribute rather than emptying it, and the whole ADR 0025 cutover
+   * rests on it — a household with no zone set keeps today's instant-based
+   * behaviour byte for byte.
+   *
+   * Read by nothing that decides a due date yet. Phase 4 is the cutover.
+   */
+  timezone?: string;
   createdAt: string;
   createdBy: string;
 }
@@ -227,6 +240,19 @@ export const householdService = {
       `/households/${householdId}/escalation`,
       { escalateAfterDays }
     );
+    return response.data;
+  },
+
+  /**
+   * The household's IANA timezone (ADR 0025 phase 2, admin-only, not
+   * plan-gated). `''` clears it back to **never set**, which is a different
+   * state from choosing `'UTC'` — the server removes the attribute rather than
+   * storing an empty string, and the cutover in phase 4 keys on the difference.
+   */
+  async setTimeZone(householdId: string, timezone: string): Promise<{ timezone: string }> {
+    const response = await api.put<{ timezone: string }>(`/households/${householdId}/timezone`, {
+      timezone,
+    });
     return response.data;
   },
 
