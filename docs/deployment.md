@@ -27,8 +27,10 @@ Shared modules live under `infrastructure/modules/`.
 - Domain name in Route 53 (or external NS pointed at AWS)
 - Terraform 1.5+
 - AWS CLI authenticated (`aws sso login` or static creds — OIDC for CI is best, see below)
-- A Stripe account only when the commercial hold is lifted; billing remains
-  intentionally inert while its keys and price IDs are blank
+- A Stripe account for payment activity. `isPaymentActivityAllowed` requires
+  both `commercialHoldActive: false` in `commercial-status.json` and
+  `PAYMENTS_ENABLED` equal to the exact string `"1"`; billing stays inert while
+  its keys and price IDs are blank, whatever those two say
 - A Sentry project (optional but recommended)
 - An SES verified domain identity (out-of-sandbox)
 

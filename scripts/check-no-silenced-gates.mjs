@@ -142,6 +142,10 @@ const MUST_BLOCK_MERGE = [
   },
   { pattern: /reads:check/, label: 'the ADR 0010 settled-read ratchet' },
   { pattern: /mobile:validate/, label: 'store-release readiness' },
+  {
+    pattern: /commercial:check/,
+    label: "the README's commercial-status banner (#688)",
+  },
 ];
 
 function requiredContexts() {

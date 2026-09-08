@@ -12,12 +12,16 @@
 
 🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
-> **Paid activity hold — July 14, 2026; free registration reopened July 19, 2026.**
-> Family Greenhouse accepts free accounts for one home with up to 3 people and 20 plants.
-> It is not currently accepting payments, offering paid plans, or generating
-> revenue. Pricing and billing material is retained as historical product-design
-> documentation. See
+<!-- commercial-status:start -->
+<!-- Generated from commercial-status.json by scripts/check-commercial-status.mjs.
+     Edit the JSON and run `npm run commercial:check -- --write`; do not edit this block. -->
+
+> **Commercial status — effective September 1, 2026.**
+> Free account registration is open. Paid plans are available on the web; purchases and plan changes are made by a household admin in Settings.
+> The dated transitions, and the two gates that control payment activity, are in
 > [`docs/COMMERCIAL-STATUS.md`](docs/COMMERCIAL-STATUS.md).
+
+<!-- commercial-status:end -->
 
 Built with React + TypeScript on the frontend and AWS Lambda + DynamoDB (single-table) + Cognito on the backend, plus a local Express dev server that mirrors the API surface so you can develop entirely offline — no AWS account or third-party keys required to run it locally.
 
@@ -73,7 +77,7 @@ Headline features that are wired end-to-end:
 - **Tasks**: types (water/fertilize/prune/repot/custom), recurring frequency, complete/snooze/edit, assigned-to lookups
 - **Care history**: per-plant + household activity feed
 - **Notifications**: browser pop-ups, web push (VAPID), email (SES), SMS (SNS) — each one configurable per user under Settings → Notifications
-- **Plan architecture**: Seedling/Garden/Greenhouse caps are enforced server-side; the historical Stripe implementation remains in source, but payment creation is fail-closed during the commercial hold
+- **Plan architecture**: Seedling/Garden/Greenhouse caps are enforced server-side; paid Garden and Greenhouse plans are sold through Stripe Checkout, and payment creation is fail-closed unless **both** gates are open — `commercialHoldActive: false` in `commercial-status.json` and `PAYMENTS_ENABLED` equal to the exact string `"1"` at runtime (`isPaymentActivityAllowed`, `backend/src/config/commercialStatus.ts`)
 
 What needs real infra credentials to leave demo mode is enumerated in [`docs/production-checklist.md`](docs/production-checklist.md). Every channel/integration falls back gracefully to a structured log line when its env var isn't set, so you don't need a single key to develop locally.
 
