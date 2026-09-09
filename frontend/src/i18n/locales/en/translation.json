@@ -817,7 +817,21 @@
       "checkFailed": "We couldn’t check which plants are missing notes just now, so this list may be incomplete. Your sitter only sees notes you have written."
     },
     "memberEmailUndeliverable": "Email not arriving",
-    "memberEmailUndeliverableHint": "Reminders and digests to this member's email are bouncing, so we've stopped sending them. They can resume email from Settings → Notifications once the address works again."
+    "memberEmailUndeliverableHint": "Reminders and digests to this member's email are bouncing, so we've stopped sending them. They can resume email from Settings → Notifications once the address works again.",
+    "timeZoneTitle": "Time zone",
+    "timeZoneDescription": "The zone this household's days are counted in. One zone for the home, not one per person — your own quiet hours stay under Settings, Notifications.",
+    "timeZoneNotSet": "No zone is set for this household yet.",
+    "timeZoneCurrent": "Currently set to",
+    "timeZoneNotUsedYet": "Nothing reads this yet. Due dates, reminders, the calendar feed and the weekly digest still count days the way they do today; setting a zone now is what lets that change happen later without guessing.",
+    "timeZoneLabel": "IANA time zone",
+    "timeZoneBrowserHint": "This browser reports {{zone}}. Nothing is saved until you choose.",
+    "timeZoneNoBrowserZone": "This browser cannot report its own zone, so there is nothing to suggest.",
+    "timeZoneInvalid": "That is not a time zone name this app recognises. Use an IANA name such as America/New_York or Europe/Madrid.",
+    "timeZoneSave": "Save time zone",
+    "timeZoneClear": "Clear time zone",
+    "timeZoneSaved": "Time zone saved.",
+    "timeZoneCleared": "Time zone cleared. This household is back to having no zone set, which is not the same as choosing UTC.",
+    "timeZonePlaceholder": "America/New_York"
   },
   "sitter": {
     "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",

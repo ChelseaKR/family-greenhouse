@@ -16,6 +16,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **An admin can set the household's time zone** (Household → Time zone). ADR
+  0025 phase 1 added `PUT /households/{id}/timezone` and made the field
+  readable, and nothing in the app called it — a `git grep` for the route
+  across `frontend/src` returned nothing. So no household could set the field
+  phase 4's cutover keys on, and phase 4 had nobody to go first with.
+
+  **Nothing reads it yet, and the card says so.** Due dates, reminders, the
+  calendar feed and the weekly digest still count days exactly as they do
+  today; ADR 0025's phase table records phase 2 as changing no answer. Copy
+  promising "your due dates now follow this zone" would have been the more
+  comfortable sentence and would have been false.
+
+  Three states are kept apart, because the cutover's guarantee depends on it:
+  absent or `''` is **never set**, `'UTC'` is somebody **choosing** UTC, and
+  anything else is a real zone. Clearing sends `''` and never `'UTC'`, and a
+  test asserts the difference. The browser's zone seeds the input and is never
+  written on anyone's behalf — a background write would move a household into
+  the chosen state with nobody choosing.
+
+  Client-side validation is deliberately no stricter than the server's:
+  `Intl.supportedValuesOf('timeZone')` omits legacy link names like
+  `US/Pacific`, which the backend accepts, so the constructor fallback is
+  load-bearing rather than defensive padding. `resolveBrowserTimeZone` moved
+  out of `NotificationSettings.tsx` into `frontend/src/utils/timeZone.ts`,
+  which both surfaces import, rather than being copied.
+  ([#342](https://github.com/ChelseaKR/family-greenhouse/issues/342))
+
 ### Fixed
 
 - **The README said the product was not accepting payments.** It had been
