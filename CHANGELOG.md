@@ -16,6 +16,43 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The README said the product was not accepting payments.** It had been
+  taking real cards since 2026-09-02. `commercial-status.json` has carried
+  `commercialHoldActive: false` since 2026-09-01, the production tfvars have
+  carried `payments_enabled = "1"` since 2026-09-02, and
+  `docs/COMMERCIAL-STATUS.md` records both with dates — while the front page of
+  the repository said in bold that the product was "not currently accepting
+  payments, offering paid plans, or generating revenue", and linked the reader
+  to the document that contradicted it. Two paragraphs further down it also
+  said payment creation was "fail-closed during the commercial hold", and
+  `docs/deployment.md` listed a Stripe account as needed "only when the
+  commercial hold is lifted".
+
+  The commercial state is single-sourced everywhere else — both workspaces
+  import the JSON, and `infrastructure/main.tf` refuses an apply that opens one
+  gate without the other. The README was the one copy nothing derived and
+  nothing checked. It is generated now: the banner between the
+  `commercial-status` markers is rendered from `publicMessage` and
+  `effectiveDate` by `scripts/check-commercial-status.mjs`, so the wording of
+  any future claim is a JSON edit rather than a third place to remember, and
+  `npm run commercial:check -- --write` regenerates it.
+
+  The check has a second rule, because the first one can hold while a
+  contradiction sits elsewhere in the file — which was exactly the state of
+  line 76. While `commercialHoldActive` is false, README prose outside the
+  generated block may not assert that payments are held. That half is a
+  denylist of phrasings and is documented as one: it finds the copies that
+  exist, not a sentence worded a new way, and the derived banner is the
+  structural guard. Every pattern is run against its own sample on each
+  invocation, so one that has quietly stopped matching fails rather than
+  reporting nothing found.
+
+  It runs in the required `Lint` job and in `npm run verify`, and
+  `scripts/check-no-silenced-gates.mjs` asserts it stays in a required job.
+  ([#688](https://github.com/ChelseaKR/family-greenhouse/issues/688))
+
 ## [0.29.0] - 2026-09-05
 
 ### Added

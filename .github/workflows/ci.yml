@@ -249,6 +249,24 @@ jobs:
         working-directory: frontend
         run: node scripts/check-i18n-catalogs.mjs
 
+      - name: README commercial-status banner is derived from commercial-status.json
+        # #688. The commercial state is single-sourced everywhere else — both
+        # workspaces import the JSON, and `infrastructure/main.tf` refuses an
+        # apply that opens one gate without the other. The README was the one
+        # copy nothing derived and nothing checked, so for five days after the
+        # first real card payment its front page said in bold that the product
+        # was "not currently accepting payments ... or generating revenue" and
+        # linked the reader to the document that said otherwise.
+        #
+        # Lives in the required `Lint` job for the same reason the settled-read
+        # ratchet and the i18n gates do: an unrequired job is green in exactly
+        # the same shade as a required one. scripts/check-no-silenced-gates.mjs
+        # asserts it stays here.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check (CICD-27).
+        run: npm run commercial:check
+
       - name: Hardcoded-string ratchet (no new untranslatable JSX text)
         # §4 G2 as a ratchet against scripts/i18n-hardcoded-baseline.json —
         # existing debt is pinned per file and may only shrink. Also covers

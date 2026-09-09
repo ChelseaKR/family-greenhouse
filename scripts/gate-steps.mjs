@@ -255,4 +255,10 @@ export const STEPS = [
     weight: 0,
     why: 'the deep-link association files falling out of the deploy path — /.well-known/assetlinks.json is uploaded by neither S3 sync, and the extensionless Apple file is rewritten to the app shell before it reaches the origin (#469 §2)',
   },
+  {
+    id: 'commercial:check',
+    script: 'commercial:check',
+    weight: 0,
+    why: "the README's commercial-status banner drifting from commercial-status.json — the front page said the product was not accepting payments or generating revenue for five days after it started taking cards, and linked to the document that contradicted it (#688)",
+  },
 ];
