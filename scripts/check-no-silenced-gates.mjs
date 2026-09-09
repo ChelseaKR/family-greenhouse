@@ -146,6 +146,7 @@ const MUST_BLOCK_MERGE = [
     pattern: /commercial:check/,
     label: "the README's commercial-status banner (#688)",
   },
+  { pattern: /citation:check/, label: 'CITATION.cff version parity (#685)' },
 ];
 
 function requiredContexts() {
