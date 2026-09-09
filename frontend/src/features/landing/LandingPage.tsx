@@ -246,7 +246,15 @@ const differentiators = [
     // which production leaves empty (environments/production/terraform.tfvars), so
     // the toggle is disabled for every real user and the help page says as much.
     // "or text" goes back in when the flag is on, not before.
-    body: 'Browser or email. Pick the channel, set quiet hours, and both get respected.',
+    //
+    // Quiet hours are named per channel because they only apply to one of the
+    // two. `eligibleReminderChannels` (backend/src/services/reminders.ts) routes
+    // email and SMS through `inDnd ? dndDeferred : eligible` and pushes
+    // 'browser' unconditionally; services/notifier.ts states the policy in terms
+    // ("Push is NOT suppressed — the OS already manages quiet hours"). The
+    // settings panel and the help page have always said so. This band said the
+    // opposite, which the visitor could only discover after signing up.
+    body: 'Browser or email. Set quiet hours and email waits for them; browser pop-ups follow your device’s own Do Not Disturb.',
   },
   {
     icon: ChartBarIcon,

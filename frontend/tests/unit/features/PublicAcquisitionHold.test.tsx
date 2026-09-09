@@ -170,6 +170,98 @@ describe('free registration with paid activity on hold', () => {
     }
   });
 
+  it('does not promise quiet hours for a channel the reminder run never defers', () => {
+    // Same surface, same rule, one clause over from the SMS fix above, and it
+    // survived that PR: the band read "Pick the channel, set quiet hours, and
+    // both get respected" while naming the browser channel first.
+    //
+    // The reminder run defers a channel during quiet hours by routing its
+    // `push(...)` through `inDnd ? dndDeferred : eligible`. Email and SMS are
+    // routed that way; 'browser' — one preference covering both web push and
+    // the native shells' device push — is pushed unconditionally, on purpose:
+    // services/notifier.ts states the policy ("Push is NOT suppressed — the OS
+    // already manages quiet hours better than we can"), the settings panel says
+    // "Browser pop-ups follow your OS Do Not Disturb settings instead", the help
+    // page says quiet hours "deliberately do not silence browser notifications",
+    // and backend/tests/integration/notification-dispatch.test.ts pins it end to
+    // end. Every surface a customer reads AFTER signing up was right; the one
+    // they read BEFORE was not.
+    //
+    // So this reads the eligibility function rather than trusting either copy.
+    // If push is ever deferred like the loud channels, the caveat stops being
+    // required and this test says so instead of pinning a stale sentence.
+    const repositoryRoot = resolve(process.cwd(), '..');
+    const reminders = readFileSync(
+      resolve(repositoryRoot, 'backend/src/services/reminders.ts'),
+      'utf8'
+    );
+
+    const start = reminders.indexOf('async function eligibleReminderChannels');
+    expect(
+      start,
+      'eligibleReminderChannels() not found in backend/src/services/reminders.ts — this reader has stopped matching, which is not the same as push being deferred'
+    ).toBeGreaterThan(-1);
+    // The closing brace on its own line. Not `indexOf('\n}')`, which stops at
+    // the `}>` closing the return type three lines into the signature and
+    // hands back a slice with no body in it — a reader that finds nothing,
+    // which is the failure this whole test is written around.
+    const end = reminders.slice(start).search(/\n\}\s*\n/);
+    expect(end, 'could not find the end of eligibleReminderChannels()').toBeGreaterThan(-1);
+    const eligibility = reminders.slice(start, start + end).split('\n');
+
+    const deferredDuringQuietHours = (channel: string) => {
+      const line = eligibility.find((l) => l.includes(`push('${channel}')`));
+      expect(
+        line,
+        `eligibleReminderChannels() no longer plans the '${channel}' channel`
+      ).toBeDefined();
+      return /dndDeferred/.test(line as string);
+    };
+
+    // Floors. A reader that stopped recognising the DND fork would report every
+    // channel as undeferred, which is the answer that makes the copy check
+    // demand a caveat — i.e. it would look like it was working. These two are
+    // the known-deferred channels, so they fail loudly instead.
+    expect(
+      deferredDuringQuietHours('email'),
+      'email is no longer DND-deferred in eligibleReminderChannels()'
+    ).toBe(true);
+    expect(
+      deferredDuringQuietHours('sms'),
+      'sms is no longer DND-deferred in eligibleReminderChannels()'
+    ).toBe(true);
+
+    const pushWaitsForQuietHours = deferredDuringQuietHours('browser');
+
+    // Comments stripped for the same reason as the SMS check above: the source
+    // explains the split, and the explanation must not satisfy the claim.
+    const landingSource = readFileSync(
+      resolve(repositoryRoot, 'frontend/src/features/landing/LandingPage.tsx'),
+      'utf8'
+    ).replace(/^\s*\/\/.*$/gm, '');
+
+    const bodies = [...landingSource.matchAll(/\bbody:\s*(['"`])((?:\\.|(?!\1).)*)\1/g)].map(
+      (m) => m[2]
+    );
+    const quietHoursCopy = bodies.filter((body) => /quiet hours/i.test(body));
+    // Deleting the sentence must not be a way to pass: a check satisfied by
+    // removing its own subject is a check that quietly stopped checking
+    // (scripts/check-doc-figures.mjs makes the same argument).
+    expect(
+      quietHoursCopy.length,
+      'no LandingPage band copy mentions quiet hours — either the claim was deleted or this extractor stopped matching; both need a person'
+    ).toBeGreaterThan(0);
+
+    if (!pushWaitsForQuietHours) {
+      for (const copy of quietHoursCopy) {
+        expect(
+          copy,
+          `LandingPage band copy promises quiet hours without naming the channel they do not cover: "${copy}"`
+        ).toMatch(/do not disturb/i);
+      }
+    }
+  });
+
   it('advertises free registration in crawler and PWA metadata', () => {
     const repositoryRoot = resolve(process.cwd(), '..');
     for (const relativePath of ['frontend/index.html', 'frontend/vite.config.ts']) {

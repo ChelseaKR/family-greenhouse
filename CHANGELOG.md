@@ -16,6 +16,43 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The landing page promised quiet hours for the one channel that ignores
+  them.** The "Reminders where you'll see them" band read _"Pick the channel,
+  set quiet hours, and both get respected"_ while naming the browser channel
+  first. `eligibleReminderChannels`
+  (`backend/src/services/reminders.ts`) routes email and SMS through
+  `inDnd ? dndDeferred : eligible` and pushes `'browser'` unconditionally —
+  deliberately, and `services/notifier.ts` says so in terms: _"Push is NOT
+  suppressed — the OS already manages quiet hours better than we can."_
+
+  Every surface a customer reads **after** signing up already said the right
+  thing. The settings panel: _"Email + SMS reminders pause during this window.
+  Browser pop-ups follow your OS Do Not Disturb settings instead."_ The help
+  page: quiet hours _"deliberately do not silence browser notifications."_
+  `docs/notifications.md` and `docs/roadmap.md` agree, and
+  `backend/tests/integration/notification-dispatch.test.ts` pins the split end
+  to end. The acquisition surface — the one read **before** signing up — was
+  the only place making the opposite claim, and it is the surface that is
+  attached to a price.
+
+  The sentence is ambiguous about what "both" refers to (the two channels, or
+  the channel choice and the quiet hours) and is false for the browser channel
+  under either reading. It now names the split the same way the settings panel
+  does. Measured across the tree, this was the only live instance: the store
+  listing's _"Set quiet hours so reminders do not arrive overnight"_ sits in a
+  release that states in the same block that it sends by email only.
+
+  This is one clause over from the SMS claim [#607](https://github.com/ChelseaKR/family-greenhouse/issues/607)
+  fixed in the same string, and it survived that PR. So the guard is not a
+  reworded sentence: `PublicAcquisitionHold.test.tsx` now reads the eligibility
+  function itself and requires the caveat only while push really is undeferred,
+  with floors that fail loudly if the reader stops recognising the DND fork
+  (email and SMS must still be deferred) or if the claim is deleted rather than
+  corrected.
+  ([#607](https://github.com/ChelseaKR/family-greenhouse/issues/607))
+
 ## [0.30.0] - 2026-09-10
 
 ### Added
