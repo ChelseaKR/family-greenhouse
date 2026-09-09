@@ -77,3 +77,12 @@ Significant or non-obvious decisions get an ADR — see [`docs/adr/`](docs/adr/)
 ## Docs you'll want
 
 `docs/development.md` (dev loop), `docs/architecture.md` (how it fits together), `docs/deployment.md`, `docs/testing.md`, `docs/runbooks.md` + `docs/incidents.md` (when prod breaks), `docs/compliance.md`.
+
+## Commercial solicitation
+
+Issues here are not open to bids. They are design records — written so a decision is
+reconstructable later — not scope documents for outside quoting, and unsolicited offers to
+implement one for a fee will be declined.
+
+Contributions through the normal fork-and-PR process are welcome, and `good first issue` is the
+place to start.
