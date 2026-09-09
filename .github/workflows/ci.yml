@@ -623,7 +623,27 @@ jobs:
             # No usable base to diff against (e.g. a new branch's first push) —
             # fail open (run Lighthouse) rather than silently skip it.
             echo "changed=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -qE '^(frontend/|\.github/workflows/ci\.yml)'; then
+            exit 0
+          fi
+          # A `git diff` that FAILS — a base commit this checkout does not have,
+          # a force-pushed or GC'd base — must reach the same fail-open answer as
+          # a missing base. It used to reach the opposite one: the diff lived in
+          # an `elif` condition, where errexit is suspended, so a failed pipeline
+          # merely evaluated false, the `else` set `changed=false`, and the only
+          # perf+a11y gate (OBS-23/24/25, A11Y-02) was skipped with the job still
+          # green. `pipefail` does not help — `grep -q` reports 1 on no-match
+          # either way, so the condition is false however the pipeline is read.
+          # The diff's own exit status has to be captured and branched on.
+          set +e
+          diff_out="$(git diff --name-only "$BEFORE" "${{ github.sha }}")"
+          diff_rc=$?
+          set -e
+          if [ "$diff_rc" -ne 0 ]; then
+            echo "::warning title=Lighthouse path check failed open::git diff ${BEFORE}..${{ github.sha }} exited ${diff_rc}; running Lighthouse rather than silently skipping the only perf+a11y gate"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$diff_out" | grep -qE '^(frontend/|\.github/workflows/ci\.yml)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
