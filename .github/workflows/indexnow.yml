@@ -1,0 +1,58 @@
+name: IndexNow submission
+
+# Tell Bing, Yandex, Seznam, Naver and the other IndexNow engines about every
+# page in the live sitemap, by hand. cd-production.yml does the same after every
+# release that passes its post-deploy smoke (its `indexnow` job); this exists
+# for the first submission, straight after the first release that carries the
+# key file, and for resubmitting without cutting a release. The logic is
+# scripts/indexnow-submit.mjs; docs/deployment.md has the runbook.
+#
+# workflow_dispatch only, on purpose. It POSTs to a third party, so it runs when
+# a person asks, never on a push or a pull request, and it is not a
+# `workflow_run` follower of the deploy, which zizmor flags as a dangerous
+# trigger. The deploy's own job covers the automatic case.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Verify the key file and the sitemap and print the payload, without submitting'
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: indexnow
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: Submit the live sitemap to IndexNow
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Reads the script and key file, then makes three public HTTPS requests.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Submit
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            node scripts/indexnow-submit.mjs --dry-run
+          else
+            node scripts/indexnow-submit.mjs
+          fi

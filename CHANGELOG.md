@@ -18,6 +18,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Each production release now tells Bing and the other IndexNow engines what
+  the site serves.** Bing Webmaster Tools reported zero pages indexed for
+  familygreenhouse.net. The sitemap and robots.txt were fine; nothing had ever
+  submitted a URL. A new `indexnow` job in `cd-production.yml` runs after the
+  post-deploy smoke passes: it confirms the key file
+  (`frontend/public/<key>.txt`) is live at the site root with exactly the key
+  in it, reads every `<loc>` from the live sitemap, POSTs them to
+  `api.indexnow.org`, and writes the HTTP status and URL count to the job
+  summary. Google does not use IndexNow and is still done by hand.
+
+  It cannot fail, delay or roll back a deploy. It runs only on a smoke that
+  passed, no job needs it (so `rollback` and `notify` never wait on it or read
+  it), it has a read-only token with no AWS role, a 5-minute timeout, and
+  `continue-on-error`, so a refused submission is a failed job on a green run.
+  An empty or off-host URL list, or a key file that is not live, fails before
+  anything is posted rather than reporting a submission of nothing.
+  `indexnow.yml` (manual dispatch only, with a dry-run switch) runs the same
+  script by hand. `scripts/indexnow-submit.test.mjs` covers the script with a
+  fake `fetch` and asserts the job graph, including that nothing needs the new
+  job.
+
 - **An admin can set the household's time zone** (Household → Time zone). ADR
   0025 phase 1 added `PUT /households/{id}/timezone` and made the field
   readable, and nothing in the app called it — a `git grep` for the route
