@@ -926,6 +926,54 @@ jobs:
       - name: Purge all frontend snapshot versions and delete markers
         run: bash .github/scripts/purge-frontend-snapshot-versions.sh "$ARTIFACT_BUCKET" "$FRONTEND_SNAPSHOT_PREFIX"
 
+  indexnow:
+    name: Tell IndexNow engines about the deployed pages
+    runs-on: ubuntu-latest
+    # Bing, Yandex, Seznam, Naver and the other IndexNow engines, told about
+    # every page in the live sitemap (scripts/indexnow-submit.mjs). Bing had
+    # indexed nothing: nothing had ever submitted a URL.
+    #
+    # After the release is known good, and only then. The post-deploy smoke is
+    # the job that proves it, so this needs it and runs on its success alone —
+    # never on a run that is rolling back. And nothing needs THIS job: not
+    # `rollback`, whose condition reads smoke-tests and never this, and not
+    # `notify`. So however it ends it cannot trigger, block or delay a rollback
+    # or the deploy's own verdict; the most it can hold is the production-deploy
+    # concurrency slot, for at most timeout-minutes.
+    # scripts/indexnow-submit.test.mjs asserts that graph.
+    needs: [validate, smoke-tests]
+    if: ${{ needs.smoke-tests.result == 'success' }}
+    timeout-minutes: 5
+    # A search-engine ping is not a gate on the release it follows. A refusal —
+    # IndexNow down, a 429, a key file that is not live — shows as this job
+    # failing, with the reason in the step summary, while the run that deployed
+    # a release that passed its smoke stays green.
+    # allow-silenced-gate: advisory post-release notification, not a check; the release already passed smoke, and a refused ping must not turn its run red
+    continue-on-error: true
+    # Reads the script and key file, then makes three public HTTPS requests. No
+    # AWS role, no secrets, no write scope.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the submission script and key file
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # The deployed tag, so the key the script expects is the key this
+          # release uploaded.
+          ref: ${{ needs.validate.outputs.version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Submit the live sitemap to IndexNow
+        run: |
+          set -euo pipefail
+          node scripts/indexnow-submit.mjs
+
   rollback:
     name: Auto-rollback production release
     runs-on: ubuntu-latest

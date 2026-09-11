@@ -194,6 +194,8 @@ while naming three):
 - `cd-production.yml` — version tag (`v*`) or manual dispatch deploys to production
 - `release-record.yml` — weekly and on every `v*` tag: asserts each deployed tag
   left a GitHub Release behind it (`docs/release-record-gap.md`)
+- `indexnow.yml` — manual only: submits the live sitemap to IndexNow
+  ([below](#search-engine-submission-indexnow))
 
 Use OIDC federated identity from GitHub to AWS instead of static keys:
 
@@ -308,6 +310,33 @@ rendered-image path. Teardown uses the real account-erasure endpoint to remove
 S3 photos before its Cognito/DynamoDB administrative fallback, then
 independently purges and verifies every Version/DeleteMarker for only the exact
 object URL issued to that disposable fixture.
+
+## Search-engine submission (IndexNow)
+
+After a production deploy passes its post-deploy smoke, `cd-production.yml`'s
+`indexnow` job sends every `<loc>` in the live `sitemap.xml` to
+`api.indexnow.org`, which passes it on to Bing, Yandex, Seznam, Naver and the
+other IndexNow engines (`scripts/indexnow-submit.mjs`). Google does not use
+IndexNow; Search Console is done by hand.
+
+- **The key** is the one 32-hex-character `.txt` file in `frontend/public/`,
+  containing exactly its own name. Vite copies it to the site root, and the
+  CloudFront router serves it as a file (it leaves alone any path whose last
+  segment has a dot). The script will not submit unless the live copy matches.
+- **It cannot hurt a release.** It runs only when smoke passed. No job `needs`
+  it, so it cannot trigger or block `rollback`. It has a read-only token, no AWS
+  role and a 5-minute timeout, and it is `continue-on-error`, so a refusal shows
+  as a failed job on a green run. The job summary gives the outcome, the HTTP
+  status and the URL count. `scripts/indexnow-submit.test.mjs` asserts the job
+  graph.
+- **By hand:** `gh workflow run indexnow.yml --ref main`, or add
+  `-f dry_run=true` to check the key file and sitemap without submitting. The
+  release that first carries the key file also carries the job, so it submits on
+  its own; the manual run is for confirming that, or for resubmitting without
+  cutting a release. A first answer of `202` (key validation pending) counts as
+  accepted.
+- **Rotating the key** means replacing the file, not adding a second one (the
+  script refuses two), then releasing.
 
 ## Costs roughly
 
