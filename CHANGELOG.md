@@ -16,7 +16,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-10
+
 ### Added
+
+- **Watering schedules can follow the seasons.** A task used to carry one
+  interval, so "every 7 days" was wrong for half the year: most houseplants slow
+  down in the dormant months, and a household that compensated by hand had that
+  correct winter rhythm reported back to it as schedule drift. A task may now
+  carry up to four seasonal cadences, one per season, and completing it advances
+  the next due date by whichever is in force that day. A cadence names a season,
+  never a month range. The months come from the household's hemisphere, read
+  from its stored location, so a profile survives a move across the equator. The
+  cadence in force is used everywhere the old interval was: completion, drift,
+  "match my rhythm", the calendar feed, the weekly digest and the task row's own
+  headline. When it has to fall back to the base interval it records why (no
+  profile, no location, household unreadable, season unset) instead of guessing
+  a season. ([#673](https://github.com/ChelseaKR/family-greenhouse/issues/673))
 
 - **Each production release now tells Bing and the other IndexNow engines what
   the site serves.** Bing Webmaster Tools reported zero pages indexed for
@@ -66,7 +82,134 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   which both surfaces import, rather than being copied.
   ([#342](https://github.com/ChelseaKR/family-greenhouse/issues/342))
 
+- **A native-push sender exists, and it is switched off.** The iOS and Android
+  shells have registered device tokens since the first store build, and nothing
+  read them. `services/fcmNotifier.ts` now sends through FCM HTTP v1 beside web
+  push under the one "browser" channel, and prunes a token FCM reports as
+  unregistered. **This is delivery code only, not working push.**
+  `FCM_SERVICE_ACCOUNT_SECRET_ID` is blank in every environment, so every
+  reminder run returns before opening a socket. The app's push toggle is still
+  unreachable. The Firebase project, the APNs key and the service-account secret
+  all remain owner steps (`docs/mobile.md` § Push notifications). Device-token
+  reads now follow every page instead of stopping at the first twenty rows,
+  where rotated-out tokens collect, and send to the twenty newest devices.
+
+### Changed
+
+- **Deep-link association files have a working path to production, before
+  any exist.** Neither `assetlinks.json` nor `apple-app-site-association` is
+  in the tree yet. The deploy would have lost both: the first matched no
+  upload at all, and the second went up with a one-year cache and the wrong
+  content type. The CloudFront router would also have rewritten the
+  extensionless Apple file to the app shell. Both CD workflows now upload them
+  explicitly as `application/json` with a five-minute cache, the router passes
+  `/.well-known/` through, and `well-known:check` holds the wiring. Until a
+  file is committed, every step is a no-op.
+
+- **Store screenshots show a household, not a test account.** All twelve
+  frames came from the mock backend's default fixture: "Welcome back, Test",
+  one member, one plant. They are now captured from an opt-in seeded
+  household (`SEED_STORE_DEMO=1`) with three members, eight plants and a
+  month of shared care history.
+
+- **CI keeps a verdict for every commit on `main`.** The workflows keyed their
+  concurrency on the branch alone, so a burst of merges evicted pending runs
+  before any job started. 32 of 100 `main` runs ended cancelled with zero
+  jobs, and three commits sat on `main` with no verdict from the workflow that
+  produces twelve of the thirteen required checks. `ci.yml`,
+  `gradle-wrapper-validation.yml` and `zizmor.yml` now give each push its own
+  group, and `workflowConcurrency.test.ts` guards it.
+
+- **The Lighthouse gate runs when it cannot tell what changed.** A failing
+  `git diff` sat inside an `elif` condition, where errexit is suspended, so an
+  unusable base commit read as "frontend unchanged" and silently skipped the
+  only performance and accessibility gate. The diff's status is now captured
+  on its own, and an unusable base fails open to running Lighthouse.
+
+- **A weekly check that every deployed tag has a release record.**
+  Measured on 2026-09-06: 46 tags had produced 8 GitHub Releases, so 32
+  successful production deploys left no public record.
+  `docs/release-record-gap.md` is the measurement,
+  `.github/release-record-baseline.txt` the existing debt, and
+  `release-record.yml` fails when a new tag goes seven days without a
+  release. `docs/deployment.md` now lists publishing the release as part of
+  promotion.
+
+- **Groundwork for counting due dates in the household's own day** (ADR 0025
+  phase 3). `services/dueDay.ts` holds both day rules, with an equivalence suite
+  showing it agrees with the four production expressions for a household with no
+  zone set, which is every household until it sets one. Nothing in production
+  calls it yet. Running it disproved three of the ADR's own claims, each bounded
+  at one day. A new reminder test pins when a reminder really fires today: for a
+  task due at 22:00 New York time, twice before the due day is under way, and
+  not at all during it. The dates helpers lost two dead exports; one of them
+  mixed the UTC day with the local one. No answer changes.
+
+- **`CONTRIBUTING.md` says issues are not open to commercial bids.** They
+  are design records, and unsolicited offers to implement one for a fee are
+  declined.
+
+- **Dependency updates:** the AWS SDK SES, SNS, Secrets Manager and Bedrock
+  Runtime clients, `js-yaml` 4.3.2, Instrument Sans 5.3.0, and the
+  `configure-aws-credentials` (6.2.4) and `zizmor-action` (0.6.3) actions.
+
 ### Fixed
+
+- **The paid plans now state their renewal, cancellation and trial terms.**
+  Garden and Greenhouse were taking real cards, and `/legal/terms` never said
+  that a subscription renews automatically, how often, how to cancel, what
+  happens when the 14-day trial ends, or how a price change is announced. Five
+  sections now cover this in English and Spanish, each describing what the
+  billing code does:
+  - free trials: 14 days, card taken up front, first charge on day 15, and how
+    to stop it;
+  - automatic monthly renewal, at the subscription's own price;
+  - cancelling: from the billing portal, by an admin, effective at the end of
+    the period, and exactly what the household keeps once it drops to
+    Seedling;
+  - the 14-day notice for a material price change;
+  - one-time purchases, which never renew.
+
+  Two existing statements the new sections contradicted were corrected:
+  yearly and lifetime cadences withdrawn on 2026-09-02, and deleting the last
+  member's account now cancelling the subscription. The help article that
+  still said account deletion does not touch billing was corrected with them.
+  **Refunds are deliberately not stated**, because there is no refund policy
+  to state. A test asserts that neither language publishes one, and #426
+  holds the options.
+
+- **Pricing and the landing page stopped selling what does not ship.** The
+  landing page offered reminders by "Browser, email, or text". SMS is built
+  but switched off in production, so it now says "Browser or email".
+  Greenhouse's "Priority support" bullet is gone, because no support tiering
+  exists. Garden's "Priority plant identification" now says what the code
+  does: "More plant identifications each month". Tests read the production
+  SMS flag and the pricing catalog rather than trusting the copy.
+  ([#607](https://github.com/ChelseaKR/family-greenhouse/issues/607))
+
+- **The help page understated what a paid sitter link shows.** It told every
+  household that a sitter cannot see plant notes or photos, or plants with
+  nothing due. On Garden and Greenhouse the Away Kit brief covers every
+  active plant with its latest photo and its care rule or the plant's own
+  notes, and a sitter can upload photos. The answer now splits by plan and
+  names those fields, including in the FAQ markup search engines read. What
+  the brief discloses has not changed.
+  ([#609](https://github.com/ChelseaKR/family-greenhouse/issues/609))
+
+- **Search engines get a better version of four public pages.**
+  - `/pricing` now publishes its plan offers as structured data: one Offer
+    for each cadence a household can actually start, amounts mirrored from
+    the backend catalog and compared field by field in a test, withdrawn
+    cadences left out, and no invented rating.
+  - `/pet-safe` prerenders a static directory of all 24 care guides with
+    each guide's pet-safety verdict, quoted verbatim, plus structured data
+    and links to both pet-safety posts. It had been an empty search form to
+    any crawler, with no outbound links while registration was closed.
+  - Blog posts and care guides emit the `article:*` dates their `og:type`
+    promises: publish dates for posts, review dates for guides, neither
+    passed off as the other.
+  - The homepage footer lost two links to a `/coming-soon` route that never
+    existed.
 
 - **The README said the product was not accepting payments.** It had been
   taking real cards since 2026-09-02. `commercial-status.json` has carried
@@ -128,6 +271,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   with no GitHub Release — is unchanged here; its gate landed in
   `scripts/check-release-record.mjs`, and publishing the missing releases is an
   owner action.
+
+- **`docs/billing.md` had five of six plan caps wrong** while real cards were
+  being charged, and told readers to trust it over `plans.ts`.
+  `figures:check` now re-derives all six from `plans.ts`.
+
+- **The telemetry probe no longer reports a release that has not deployed
+  yet as broken.** A 400 that names an accepted set missing the probe's new
+  kind is reported as pending deploy. Any other 400 still fails.
+  ([#639](https://github.com/ChelseaKR/family-greenhouse/issues/639))
+
+- **The care assistant cannot state a household count from a partial
+  payload.** An answer that asserts how many plants a household has, or
+  that none or all of them match something, is checked against the coverage
+  of what the assistant was actually sent. Where coverage is partial, the
+  answer is replaced with copy pointing at the plant list (ADR 0026). The
+  Sprout integration is enabled in no environment, so no production answer
+  changes today.
 
 - **The README still sold SMS reminders.** #661 took "or text" off the landing
   page because production does not send SMS: `sms_notifications_enabled` is
