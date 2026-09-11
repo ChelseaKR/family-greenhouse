@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
 import { manualChunks } from './vite.manualChunks';
+import { NAVIGATE_FALLBACK_DENYLIST } from './vite.navigationFallback';
 
 /**
  * Strip HTML comments, repeatedly, until the output stops changing.
@@ -230,9 +231,14 @@ export default defineConfig(({ isSsrBuild }) => ({
               // CloudFront's error response).
               navigateFallback: 'app-shell.html',
               additionalManifestEntries: [{ url: 'app-shell.html', revision: SHELL_REVISION }],
-              // Cache only the app shell; don't cache API responses (the data is
-              // collaborative, stale reads are confusing).
-              navigateFallbackDenylist: [/^\/api\//],
+              // Navigations the shell must never answer: the API, /.well-known/,
+              // and any path whose last segment has a dot (sitemap.xml,
+              // robots.txt, ...) — those go to the network. Answering them with
+              // the shell rendered the app's 404 page for /sitemap.xml in any
+              // browser with this worker installed. The patterns and their
+              // reasoning live in ./vite.navigationFallback.ts, where the test
+              // suite can run the exact array handed over here.
+              navigateFallbackDenylist: NAVIGATE_FALLBACK_DENYLIST,
               runtimeCaching: [
                 {
                   urlPattern: /\.(?:png|jpg|jpeg|svg|webp)$/i,
