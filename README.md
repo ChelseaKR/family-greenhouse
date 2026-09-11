@@ -8,7 +8,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![AWS](https://img.shields.io/badge/AWS-Lambda%20%2B%20DynamoDB%20%2B%20Cognito-ff9900)
 
-**A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person across browser, email, and SMS, so nobody has to ask "did you water the Monstera?" ever again.
+**A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person in the browser or by email, so nobody has to ask "did you water the Monstera?" ever again.
 
 🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
@@ -60,7 +60,7 @@ For everything else (running tests, deploying, configuring channels) follow the 
 - [`docs/architecture.md`](docs/architecture.md) — how the pieces fit, single-table DDB layout, request lifecycle
 - [`docs/deployment.md`](docs/deployment.md) — from-zero AWS deploy
 - [`docs/testing.md`](docs/testing.md) — the test pyramid we run + how to add to it
-- [`docs/notifications.md`](docs/notifications.md) — browser, email, SMS, web-push details
+- [`docs/notifications.md`](docs/notifications.md) — browser, email and web-push details, and the SMS channel that is built but switched off
 - [`docs/billing.md`](docs/billing.md) — Stripe integration, plan caps, webhook flow
 - [`docs/public-api.md`](docs/public-api.md) — read-only public API: key auth, scopes, rate limits, endpoints
 - [`docs/production-checklist.md`](docs/production-checklist.md) — gating list for going live
@@ -76,8 +76,15 @@ Headline features that are wired end-to-end:
 - **Plants**: CRUD, photo upload (with S3 presigned URL race-fixed), species autocomplete from a curated catalog, plant-name shuffle, optional Plant.id-powered identification from a photo
 - **Tasks**: types (water/fertilize/prune/repot/custom), recurring frequency, complete/snooze/edit, assigned-to lookups
 - **Care history**: per-plant + household activity feed
-- **Notifications**: browser pop-ups, web push (VAPID), email (SES), SMS (SNS) — each one configurable per user under Settings → Notifications
+- **Notifications**: browser pop-ups, web push (VAPID) and email (SES), each one configurable per user under Settings → Notifications
 - **Plan architecture**: Seedling/Garden/Greenhouse caps are enforced server-side; paid Garden and Greenhouse plans are sold through Stripe Checkout, and payment creation is fail-closed unless **both** gates are open — `commercialHoldActive: false` in `commercial-status.json` and `PAYMENTS_ENABLED` equal to the exact string `"1"` at runtime (`isPaymentActivityAllowed`, `backend/src/config/commercialStatus.ts`)
+
+<!-- SMS (SNS) is left out of the Notifications line above, and out of the headline, on purpose.
+     It is built but switched off: production leaves sms_notifications_enabled empty
+     (infrastructure/environments/production/terraform.tfvars) until AWS approves SMS production
+     access, so smsAvailable() is false, the toggle renders disabled for every real user, and the
+     help page says so. It goes back in when that flag is "1", not before;
+     frontend/tests/unit/features/PublicAcquisitionHold.test.tsx fails if it comes back early. -->
 
 What needs real infra credentials to leave demo mode is enumerated in [`docs/production-checklist.md`](docs/production-checklist.md). Every channel/integration falls back gracefully to a structured log line when its env var isn't set, so you don't need a single key to develop locally.
 

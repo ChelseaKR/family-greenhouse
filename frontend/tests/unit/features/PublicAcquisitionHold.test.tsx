@@ -6,6 +6,25 @@ import { MemoryRouter } from 'react-router';
 import { PublicShell } from '@/components/PublicShell';
 import { planBandFor } from '@/features/landing/planBand';
 
+/**
+ * `text` with every `<!-- ... -->` removed; an unterminated comment runs to the
+ * end, as it does in a browser. Scanned with indexOf rather than a regex
+ * replace, which CodeQL reads as incomplete HTML sanitization
+ * (js/incomplete-multi-character-sanitization) even in a test.
+ */
+function withoutHtmlComments(text: string): string {
+  let kept = '';
+  let index = 0;
+  for (;;) {
+    const open = text.indexOf('<!--', index);
+    if (open === -1) return kept + text.slice(index);
+    kept += text.slice(index, open);
+    const close = text.indexOf('-->', open + 4);
+    if (close === -1) return kept;
+    index = close + 3;
+  }
+}
+
 describe('free registration with paid activity on hold', () => {
   it('links the shared public shell to free registration', () => {
     render(
@@ -93,6 +112,62 @@ describe('free registration with paid activity on hold', () => {
       smsDelivers || !/\bSMS\b|\bor text\b|\btext message/i.test(landingCopy),
       'LandingPage.tsx offers a text/SMS reminder channel that production does not deliver'
     ).toBe(true);
+  });
+
+  it('keeps the readme and the headline it lends out to the channels production delivers', () => {
+    // #661's rule, applied to the repository's own front page. After the
+    // landing page stopped selling SMS, README.md still said reminders reach
+    // people "across browser, email, and SMS" and listed "SMS (SNS)" under
+    // "What works today" — the first thing anyone evaluating the code reads —
+    // and the same headline was copied into CITATION.cff's abstract and the
+    // root package.json description. A channel is named as working once
+    // production's flag delivers it, and this reads that flag, not the copy.
+    const repositoryRoot = resolve(process.cwd(), '..');
+    const productionVars = readFileSync(
+      resolve(repositoryRoot, 'infrastructure/environments/production/terraform.tfvars'),
+      'utf8'
+    );
+    const smsDelivers = /^\s*sms_notifications_enabled\s*=\s*"1"/m.test(productionVars);
+    const namesSms = (copy: string) => /\bSMS\b|\bor text\b|\btext[- ]messag/i.test(copy);
+
+    // The predicate has to catch the sentence this test was written against;
+    // a pattern that no longer matches it would pass every file below.
+    expect(namesSms('reminders that find the right person across browser, email, and SMS')).toBe(
+      true
+    );
+
+    // Stripped before matching, as #661 strips comment lines:
+    // - HTML comments. The README records why SMS is absent inside one, and
+    //   that note must not read as the claim it is there to prevent.
+    // - Docs-index entries ("- [`docs/notifications.md`](...) — ..."). They
+    //   describe what a document covers, and notifications.md does document
+    //   the SMS channel, including that it is switched off.
+    const readme = withoutHtmlComments(readFileSync(resolve(repositoryRoot, 'README.md'), 'utf8'))
+      .split('\n')
+      .filter((line) => !/^\s*-\s*\[`docs\//.test(line))
+      .join('\n');
+    // Both claim sites must survive the stripping, or this checks nothing.
+    expect(readme).toMatch(/reminders that find the right person/);
+    expect(readme).toMatch(/\*\*Notifications\*\*:/);
+
+    const citation = readFileSync(resolve(repositoryRoot, 'CITATION.cff'), 'utf8').replace(
+      /^\s*#.*$/gm,
+      ''
+    );
+    const { description } = JSON.parse(
+      readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8')
+    ) as { description: string };
+
+    for (const [source, copy] of [
+      ['README.md', readme],
+      ['CITATION.cff', citation],
+      ['package.json description', description],
+    ] as const) {
+      expect(
+        smsDelivers || !namesSms(copy),
+        `${source} names a text/SMS reminder channel that production does not deliver`
+      ).toBe(true);
+    }
   });
 
   it('advertises free registration in crawler and PWA metadata', () => {

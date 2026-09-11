@@ -175,7 +175,8 @@ billing help are not rendered inside the shells.
 ## Push notifications
 
 Current state: native registration and delivery are disabled in the product UI.
-Email/SMS reminders still work. Do not restore the toggle until the following
+Email reminders still work; SMS is built but switched off in production (see
+`notifications.md`). Do not restore the toggle until the following
 delivery work is complete and verified end to end.
 
 This is now enforced rather than remembered. `scripts/validate-store-release.mjs`

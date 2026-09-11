@@ -3,7 +3,7 @@
   "version": "0.29.0",
   "license": "Elastic-2.0",
   "private": true,
-  "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person across browser/email/SMS, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
+  "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person in the browser or by email, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
   "keywords": [
     "plant-care",
     "houseplants",
