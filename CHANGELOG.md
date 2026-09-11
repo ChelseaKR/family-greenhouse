@@ -148,6 +148,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the claim it prevents; the predicate is run against the old headline so a
   pattern that stops matching fails instead of passing everything.
 
+- **`/sitemap.xml` opened in a browser showed the app's 404 page.** The server
+  was never wrong: curl, a Chrome user agent and Googlebot's all got
+  `200 application/xml`. The service worker answered first. Workbox's
+  `navigateFallback` serves `app-shell.html` for every navigation it does not
+  otherwise match, and its denylist named only `/api/`, so in any browser with
+  the worker installed a navigation to `/sitemap.xml`, or to any other file
+  the worker had not precached, got the shell, and the router rendered "not
+  found". Crawlers do not run service workers, so search engines were never
+  affected.
+
+  The denylist (now `frontend/vite.navigationFallback.ts`) also sends any path
+  whose last segment has a dot to the network — the same file-versus-route
+  test the CloudFront router applies — and everything under `/.well-known/`,
+  whose `apple-app-site-association` has no extension. It reads the
+  path only: workbox matches `pathname + search`, and
+  `/confirm-email?email=someone@example.com` has its dot in the query. No
+  route has a dot in its last segment. Tokens are 64 hex characters, invite
+  and share codes are UUIDs with the hyphens removed, and plant ids are UUIDs.
+  `navigateFallback.test.ts` checks every path the router declares and every
+  sitemap URL against the list, and fails if a token generator changes shape.
+  Browsers holding the old worker get the new one on the next deploy, because
+  the worker already sets `skipWaiting` and `clientsClaim`.
+
 ## [0.29.0] - 2026-09-05
 
 ### Added

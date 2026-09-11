@@ -8,10 +8,12 @@ docs/research/
 # Build outputs
 frontend/vite.config.js
 frontend/vite.config.d.ts
-# Same emit, from the chunk rules vite.config.ts imports (tsconfig.node.json
-# is a composite project, so every file it compiles lands beside its source).
+# Same emit, from the modules vite.config.ts imports (tsconfig.node.json is a
+# composite project, so every file it compiles lands beside its source).
 frontend/vite.manualChunks.js
 frontend/vite.manualChunks.d.ts
+frontend/vite.navigationFallback.js
+frontend/vite.navigationFallback.d.ts
 dist/
 # SSR bundle for the marketing prerender (frontend/scripts/prerender.mjs).
 # Build artifact of `vite build --ssr`; regenerate it, never commit it.
