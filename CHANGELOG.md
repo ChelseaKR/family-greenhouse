@@ -108,6 +108,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `scripts/check-release-record.mjs`, and publishing the missing releases is an
   owner action.
 
+- **The README still sold SMS reminders.** #661 took "or text" off the landing
+  page because production does not send SMS: `sms_notifications_enabled` is
+  empty in `infrastructure/environments/production/terraform.tfvars` until AWS
+  approves SMS production access, so `smsAvailable()` is false and the toggle
+  renders disabled for every real user. The README's headline still said
+  reminders reach people "across browser, email, and SMS", and "What works
+  today" listed "SMS (SNS)" as wired end-to-end. The same headline had been
+  copied into `CITATION.cff`'s abstract and the root `package.json`
+  description, and `docs/mobile.md` said "Email/SMS reminders still work". All
+  four now name browser and email only; the README's docs index says the SMS
+  channel is built but switched off, in the help page's words.
+
+  `PublicAcquisitionHold.test.tsx` now reads production's flag and fails if
+  the README, the citation abstract or the package description names a
+  text/SMS channel while it is not `"1"`. HTML comments and docs-index entries
+  are stripped first, so the note recording why SMS is absent cannot read as
+  the claim it prevents; the predicate is run against the old headline so a
+  pattern that stops matching fails instead of passing everything.
+
 ## [0.29.0] - 2026-09-05
 
 ### Added
