@@ -6,6 +6,25 @@ import { MemoryRouter } from 'react-router';
 import { PublicShell } from '@/components/PublicShell';
 import { planBandFor } from '@/features/landing/planBand';
 
+/**
+ * `text` with every `<!-- ... -->` removed; an unterminated comment runs to the
+ * end, as it does in a browser. Scanned with indexOf rather than a regex
+ * replace, which CodeQL reads as incomplete HTML sanitization
+ * (js/incomplete-multi-character-sanitization) even in a test.
+ */
+function withoutHtmlComments(text: string): string {
+  let kept = '';
+  let index = 0;
+  for (;;) {
+    const open = text.indexOf('<!--', index);
+    if (open === -1) return kept + text.slice(index);
+    kept += text.slice(index, open);
+    const close = text.indexOf('-->', open + 4);
+    if (close === -1) return kept;
+    index = close + 3;
+  }
+}
+
 describe('free registration with paid activity on hold', () => {
   it('links the shared public shell to free registration', () => {
     render(
@@ -123,8 +142,7 @@ describe('free registration with paid activity on hold', () => {
     // - Docs-index entries ("- [`docs/notifications.md`](...) — ..."). They
     //   describe what a document covers, and notifications.md does document
     //   the SMS channel, including that it is switched off.
-    const readme = readFileSync(resolve(repositoryRoot, 'README.md'), 'utf8')
-      .replace(/<!--[\s\S]*?-->/g, '')
+    const readme = withoutHtmlComments(readFileSync(resolve(repositoryRoot, 'README.md'), 'utf8'))
       .split('\n')
       .filter((line) => !/^\s*-\s*\[`docs\//.test(line))
       .join('\n');
