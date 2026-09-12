@@ -36,8 +36,8 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    effectiveEn: 'Effective September 2, 2026.',
-    effectiveEs: 'Vigente desde el 2 de septiembre de 2026.',
+    effectiveEn: 'Effective September 12, 2026.',
+    effectiveEs: 'Vigente desde el 12 de septiembre de 2026.',
   },
   {
     name: 'terms',

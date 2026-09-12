@@ -55,7 +55,7 @@
       "lead": "These terms govern your use of Family Greenhouse. We’ve kept them readable. If anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll explain.",
       "agreement": {
         "heading": "The agreement",
-        "body": "By creating an account or using the service, you agree to these terms. If you don’t agree, don’t use the service. Material changes will be announced in-app with at least 14 days’ notice; continued use after that is acceptance of the new terms."
+        "body": "By creating an account or using the service, you agree to these terms. If you don’t agree, don’t use the service. When these terms change materially we publish the new version here with a new effective date at the top, and the full revision history is public in our repository. Anything that changes what a subscriber is charged is emailed to the household’s admins first, at least 14 days before it takes effect. Continued use after the new effective date is acceptance of the new terms."
       },
       "eligibility": {
         "heading": "Who may use the service",
@@ -65,7 +65,7 @@
         "heading": "What you can expect from us",
         "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
         "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
-        "notice": "<strong>Reasonable notice before changes.</strong> Material features and usage limits are stable for at least 14 days from announcement. Bug fixes and improvements ship continuously.",
+        "notice": "<strong>No mid-period cuts to what you paid for.</strong> We do not reduce a paid plan’s features or usage limits during a period you have already paid for. Free-plan limits can change, and have. Bug fixes and improvements ship continuously.",
         "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 3 people and 20 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
       },
       "fromYou": {
@@ -101,7 +101,7 @@
       },
       "priceChanges": {
         "heading": "Price changes",
-        "body": "We can change what a plan costs. A change to the price you are charged is a material change under these terms, so it gets the same notice: announced in-app at least 14 days before it takes effect, in time to cancel. Until then your subscription keeps renewing at its own price — a new price applies to new subscriptions, and we do not move an existing one onto it without that notice."
+        "body": "We can change what a plan costs. A new price applies to new subscriptions; a subscription that is already running keeps the price it started at, and we do not move a live subscription onto a different price. If that ever has to change, we will email the household’s admins at least 14 days before the new price takes effect, in time to cancel — and the price does not move until that has been done."
       },
       "oneTimePurchases": {
         "heading": "One-time purchases",
@@ -126,7 +126,7 @@
       },
       "changes": {
         "heading": "Changes to these terms",
-        "body": "Material changes get 14 days of notice in-app. Minor edits (typos, clarifications, additional examples) are made directly and reflected in the effective date at the top."
+        "body": "A material change is published here with a new effective date, and the revision history is public in our repository. Notice is given by that effective date and, where a change affects what you are charged, by email to the household’s admins; we do not have an in-app announcement today. Minor edits (typos, clarifications, additional examples) are made directly and reflected in the effective date at the top."
       },
       "counselNote": "We’re a small team with no in-house counsel today. These terms are best-effort plain-language and may not cover every edge case the way a fully lawyered document would. Email us for anything ambiguous."
     },
@@ -184,7 +184,7 @@
       },
       "changes": {
         "heading": "Changes",
-        "body": "When we update this policy, we’ll bump the effective date at the top and (for material changes) show a one-time banner in the app. The full revision history lives in our repo."
+        "body": "When we update this policy we bump the effective date at the top, and the full revision history is public in our repository. We do not show an in-app banner today."
       }
     }
   }

@@ -10,8 +10,14 @@ const AWS_DATA_PRIVACY_URL = 'https://aws.amazon.com/compliance/data-privacy/';
  * Privacy policy. Honest, plain-language version — not the
  * boilerplate-from-a-template variety. Tracks our actual data practices:
  * what we collect, why, who we share with, and the user's rights. Updates
- * here should bump the effective date. A first-login banner announcing
- * policy changes is a known gap, tracked in docs/roadmap.md, not yet built.
+ * here should bump the effective date.
+ *
+ * There is no in-app policy-change banner, and since #710 this page no longer
+ * says there is: `legal.privacy.changes.body` promises the effective date and
+ * the public revision history, which are the two things that exist. Building
+ * a policy-version + first-login banner is the alternative repair and is
+ * tracked on #710 (it was previously said to be tracked in docs/roadmap.md,
+ * which never mentioned it).
  *
  * App-store reviewers (Apple/Google) expect a public privacy URL; this
  * is it. Keep the language readable enough that a non-lawyer can
@@ -31,7 +37,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-02">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-12">
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"

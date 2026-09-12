@@ -55,7 +55,7 @@
       "lead": "Estos términos regulan tu uso de Family Greenhouse. Los hemos redactado para que sean fáciles de leer. Si algo no queda claro, escribe a <helloLink>{{helloEmail}}</helloLink> y te lo explicaremos.",
       "agreement": {
         "heading": "El acuerdo",
-        "body": "Al crear una cuenta o usar el servicio, aceptas estos términos. Si no estás de acuerdo, no uses el servicio. Los cambios sustanciales se anunciarán dentro de la aplicación con al menos 14 días de antelación; seguir usando el servicio después de ese plazo supone aceptar los nuevos términos."
+        "body": "Al crear una cuenta o usar el servicio, aceptas estos términos. Si no estás de acuerdo, no uses el servicio. Cuando estos términos cambien de forma sustancial, publicaremos aquí la nueva versión con una nueva fecha de vigencia al principio, y el historial completo de revisiones es público en nuestro repositorio. Cualquier cambio en lo que se cobra a una persona suscriptora se comunica antes por correo electrónico a las personas administradoras del hogar, con al menos 14 días de antelación. Seguir usando el servicio después de la nueva fecha de vigencia supone aceptar los nuevos términos."
       },
       "eligibility": {
         "heading": "Quién puede usar el servicio",
@@ -65,7 +65,7 @@
         "heading": "Qué puedes esperar de nosotros",
         "service": "<strong>El servicio, tal como se describe.</strong> Procuramos que la aplicación esté disponible, sea precisa y no tenga errores básicos. No prometemos cero interrupciones; consulta <em>Limitaciones</em> más abajo.",
         "data": "<strong>Tus datos, tratados con cuidado.</strong> Consulta nuestra <privacyLink>Política de privacidad</privacyLink> para conocer los detalles.",
-        "notice": "<strong>Aviso razonable antes de los cambios.</strong> Las funciones principales y los límites de uso se mantienen estables durante al menos 14 días desde su anuncio. Las correcciones de errores y las mejoras se publican de forma continua.",
+        "notice": "<strong>Nada de recortes a mitad de un periodo ya pagado.</strong> No reducimos las funciones ni los límites de uso de un plan de pago durante un periodo que ya has pagado. Los límites del plan gratuito sí pueden cambiar, y han cambiado. Las correcciones de errores y las mejoras se publican de forma continua.",
         "plans": "<strong>Un nivel gratuito y planes de pago que eliges tú.</strong> Family Greenhouse admite cuentas gratuitas Plántula (Seedling) para un hogar, con hasta 3 personas y 20 plantas. También hay planes de pago Garden y Greenhouse; no se cobra nada a menos que una persona administradora del hogar contrate uno."
       },
       "fromYou": {
@@ -101,7 +101,7 @@
       },
       "priceChanges": {
         "heading": "Cambios de precio",
-        "body": "Podemos cambiar lo que cuesta un plan. Un cambio en el importe que se te cobra es un cambio sustancial según estos términos, así que recibe el mismo aviso: se anuncia dentro de la aplicación con al menos 14 días de antelación, con tiempo para cancelar. Hasta entonces tu suscripción se sigue renovando a su propio precio: un precio nuevo se aplica a las suscripciones nuevas, y no trasladamos una suscripción existente a ese precio sin ese aviso."
+        "body": "Podemos cambiar lo que cuesta un plan. Un precio nuevo se aplica a las suscripciones nuevas; una suscripción que ya está en marcha conserva el precio con el que empezó, y no trasladamos una suscripción activa a un precio distinto. Si eso alguna vez tuviera que cambiar, escribiremos por correo electrónico a las personas administradoras del hogar al menos 14 días antes de que el precio nuevo entre en vigor, con tiempo para cancelar, y el precio no cambia hasta que eso se haya hecho."
       },
       "oneTimePurchases": {
         "heading": "Compras únicas",
@@ -126,7 +126,7 @@
       },
       "changes": {
         "heading": "Cambios en estos términos",
-        "body": "Los cambios sustanciales se anuncian dentro de la aplicación con 14 días de antelación. Las modificaciones menores (erratas, aclaraciones, ejemplos adicionales) se hacen directamente y se reflejan en la fecha de vigencia que aparece al principio."
+        "body": "Un cambio sustancial se publica aquí con una nueva fecha de vigencia, y el historial de revisiones es público en nuestro repositorio. El aviso se da mediante esa fecha de vigencia y, cuando el cambio afecta a lo que se te cobra, por correo electrónico a las personas administradoras del hogar; hoy no tenemos un aviso dentro de la aplicación. Las modificaciones menores (erratas, aclaraciones, ejemplos adicionales) se hacen directamente y se reflejan en la fecha de vigencia que aparece al principio."
       },
       "counselNote": "Somos un equipo pequeño y hoy no contamos con asesoría legal interna. Estos términos están redactados de buena fe en lenguaje claro y puede que no cubran todos los casos límite como lo haría un documento revisado por abogados. Escríbenos si algo te resulta ambiguo."
     },
@@ -184,7 +184,7 @@
       },
       "changes": {
         "heading": "Cambios",
-        "body": "Cuando actualicemos esta política, cambiaremos la fecha de vigencia que aparece al principio y (en el caso de cambios sustanciales) mostraremos un aviso único dentro de la aplicación. El historial completo de revisiones está en nuestro repositorio."
+        "body": "Cuando actualicemos esta política, cambiaremos la fecha de vigencia que aparece al principio, y el historial completo de revisiones es público en nuestro repositorio. Hoy no mostramos ningún aviso dentro de la aplicación."
       }
     }
   }
