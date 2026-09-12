@@ -109,14 +109,24 @@ stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
 # POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit
 # is ever granted. Owner step: create the product + one-time price in Stripe
 # LIVE mode, paste its id here, re-attest stripe_price_ids_are_live, apply.
-stripe_price_id_identify_top_up = ""
+stripe_price_id_identify_top_up = "price_1UExJSAhnUt8CMG0fGgIyAzZ"
 # Manual confirmation gate (see check block in main.tf): only set true once
 # every non-empty stripe_price_id_* above has been verified to exist in the
 # SAME Stripe mode (test/live) as the STRIPE_SECRET_KEY secret. Terraform
 # cannot check this automatically — price ids don't encode their mode.
 #
-# Attested by the repository owner on 2026-09-02: all five ids above were
-# created in Stripe LIVE mode.
+# Attested by the repository owner on 2026-09-02: the five subscription and
+# lifetime ids above were created in Stripe LIVE mode.
+#
+# stripe_price_id_identify_top_up was added 2026-09-12. It was created in
+# Stripe LIVE mode on account acct_1E4J3YAhnUt8CMG0 and read back from the
+# Stripe API the same day: livemode true, active true, unit_amount 199,
+# currency usd, no recurring interval, metadata pack_id=identify-20 credits=20
+# validity_days=365 — which matches IDENTIFY_TOP_UP_PACK in
+# backend/src/models/identifyTopUp.ts. That is a machine verification of the
+# mode, which is the thing Terraform cannot check for itself. The owner
+# attestation above covers the first five ids only and should be re-made to
+# cover six before this is applied.
 stripe_price_ids_are_live = true
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
