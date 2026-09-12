@@ -18,6 +18,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // A test that needed a retry to pass is reported `flaky`, and Playwright exits
+  // 0 on flaky unless told otherwise. The weekly cross-browser sweep concluded
+  // `success` over 2 flaky (2026-07-21, webkit), 1 flaky (2026-08-11, firefox)
+  // and 1 flaky (2026-08-18, webkit). In CI the retries still run, and
+  // `trace: 'on-first-retry'` still records the failed attempt; the run fails.
+  failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
