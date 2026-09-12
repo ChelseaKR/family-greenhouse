@@ -25,9 +25,10 @@ import { TermsPage } from '@/features/legal/TermsPage';
 
 /**
  * `effectiveEn` / `effectiveEs` are per page on purpose: each page carries its
- * own effective date and only the page whose text changed moves. Terms is a
- * day ahead of the rest because the commercial sections (renewal, cancelling,
- * the trial, price changes, one-time purchases) landed after the others.
+ * own effective date and only the page whose text changed moves. Terms is
+ * ahead of the rest because the commercial sections (renewal, cancelling, the
+ * trial, price changes, one-time purchases) landed after the others, and
+ * moved again when the refund section was published (#426).
  */
 const PAGES = [
   {
@@ -43,8 +44,8 @@ const PAGES = [
     Page: TermsPage,
     en: 'Terms of Service',
     es: 'Términos del servicio',
-    effectiveEn: 'Effective September 3, 2026.',
-    effectiveEs: 'Vigente desde el 3 de septiembre de 2026.',
+    effectiveEn: 'Effective September 12, 2026.',
+    effectiveEs: 'Vigente desde el 12 de septiembre de 2026.',
   },
   {
     name: 'support',

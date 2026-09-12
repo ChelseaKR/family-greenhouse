@@ -54,13 +54,14 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 116 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 121 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
     // 101 when the fragment was split out, +15 for the commercial terms
-    // (trial, renewal, cancellation, price changes, one-time purchases).
-    expect(en).toHaveLength(116);
+    // (trial, renewal, cancellation, price changes, one-time purchases),
+    // +5 for the refund section (#426).
+    expect(en).toHaveLength(121);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

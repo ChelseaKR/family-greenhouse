@@ -15,15 +15,17 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * Every sentence lives in the `legal.terms.*` catalog keys; this file is
  * structure only. Wording changes go in both locales (docs/i18n.md).
  *
- * The commercial sections — trial, renewal, cancellation, price changes and
- * one-time purchases — describe what the billing code actually does, not a
- * policy written ahead of it. Each claim is traceable: the 14-day trial is
- * `trial_period_days: 14` in services/billing.ts, cancellation runs through
- * the Stripe portal (`createPortalSession`, admin-only) and holds the plan
- * until `customer.subscription.deleted` drops it to seedling, the withdrawn
- * cadences are `withdrawnIntervals` in models/plans.ts, and the caps that
- * bite after a downgrade are enforced on create/import/invite only, never on
- * read or edit. Change the behaviour and this text has to change with it.
+ * The commercial sections — trial, renewal, cancellation, price changes,
+ * one-time purchases and refunds — describe what the billing code actually
+ * does, not a policy written ahead of it. Each claim is traceable: the
+ * 14-day trial is `trial_period_days: 14` in services/billing.ts,
+ * cancellation runs through the Stripe portal (`createPortalSession`,
+ * admin-only) and holds the plan until `customer.subscription.deleted` drops
+ * it to seedling, the withdrawn cadences are `withdrawnIntervals` in
+ * models/plans.ts, the refund section describes a system with no refund path
+ * at all (see the comment beside it), and the caps that bite after a
+ * downgrade are enforced on create/import/invite only, never on read or edit.
+ * Change the behaviour and this text has to change with it.
  */
 export function TermsPage() {
   const { t } = useTranslation();
@@ -33,7 +35,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-03">
+    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-12">
       <p className="lead">
         <Trans
           i18nKey="legal.terms.lead"
@@ -127,20 +129,29 @@ export function TermsPage() {
       <p>{t('legal.terms.oneTimePurchases.packs')}</p>
 
       {/*
-        TODO(owner) (#426): a "Refunds" section belongs here and is deliberately
-        absent. There is no refund policy to state — nothing in this repo ever
-        calls Stripe's refund API, `cancelAbandonedHouseholdSubscription`
-        explicitly requests no proration or refund, and the help centre already
-        says we do not publish one. Choosing between "no refunds", a stated
-        window, and "case by case, ask us" is a commercial decision only the
-        owner can make, and it has to cover subscriptions, the Garden lifetime
-        purchase, and unused identification credits (which survive a
-        cancellation but are destroyed with the household on account deletion).
-        Issue #426 holds the options. Until one is chosen, publishing any refund
-        term here would commit the business to something it has not agreed to,
-        so this renders nothing. `legal.terms.planStatus.body` already tells a
-        reader to email us about a billing event, in both locales.
+        Refunds (#426). Every sentence here describes what the billing code
+        does, and nothing here promises a refund the system could not make:
+        no path in `backend/src` calls Stripe's refund API,
+        `accountCleanup.cancelAbandonedHouseholdSubscription` cancels with no
+        proration and no refund requested, and a refund — if one is agreed —
+        is issued by hand in the Stripe dashboard. Both halves of that are
+        held to the code by `backend/tests/unit/config/refundPosture.test.ts`,
+        so adding a refund path here without re-reading this section fails the
+        build. What is NOT stated is a refund window: there is no clock on a
+        refund request anywhere in the product, so a stated window would be a
+        commitment nothing tracks. See `docs/billing.md` § Refunds.
       */}
+      <h2>{t('legal.terms.refunds.heading')}</h2>
+      <p>{t('legal.terms.refunds.cancelling')}</p>
+      <p>
+        <Trans
+          i18nKey="legal.terms.refunds.policy"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
+      </p>
+      <p>{t('legal.terms.refunds.oneTime')}</p>
+      <p>{t('legal.terms.refunds.statutory')}</p>
 
       <h2>{t('legal.terms.limitations.heading')}</h2>
       <p>{t('legal.terms.limitations.asIs')}</p>
