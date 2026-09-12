@@ -1,0 +1,236 @@
+name: Alert relay
+
+# Every CloudWatch alarm in this stack publishes to one SNS topic, and that
+# topic's only human destination is an email subscription. Measured 2026-09-12,
+# the production path is:
+#
+#   alarm -> SNS family-greenhouse-alerts-production
+#         -> support@familygreenhouse.net
+#         -> SES inbound receipt rule (the MX record points at inbound-smtp,
+#            not at a mailbox)
+#         -> the family-greenhouse-mail-forwarder Lambda
+#         -> the maintainer's real inbox
+#
+# That path works today. It is also four hops long, self-referential (the
+# alarms that watch the mail forwarder can only reach a human THROUGH the mail
+# forwarder), and one accidental click on the unsubscribe link that SNS puts in
+# every alert email silences all thirty-three alarms permanently and silently.
+# The `alarms_have_a_notification_destination` check in
+# infrastructure/modules/monitoring/main.tf catches a topic with no subscriber,
+# but only when someone runs `terraform plan`.
+#
+# This workflow is a SECOND channel that fails independently of the first. It
+# reads alarm state from CloudWatch directly and reports into a GitHub issue:
+# no address to be wrong, no subscription to be cancelled, and a durable
+# numbered artefact instead of a colour in a tab. It does not replace the email
+# path and it does not touch any AWS resource — the AWS credentials it assumes
+# are used for two read-only calls.
+#
+# Design constraints, all enforced by scripts/alert-relay-report.test.mjs:
+#
+#   * This repository is PUBLIC and its issues are world-readable. The issue
+#     body carries counts, alarm names that matched a strict infrastructure
+#     shape, and a pointer to the log groups. Never an identifier — no
+#     household, no address, no object id, no ARN (an ARN carries the account
+#     id), and never an alarm's StateReason, which quotes metric values.
+#   * Idempotent. One open issue is reused. The body is rewritten every run
+#     (silent), and a comment is added only when the state fingerprint changes,
+#     so a condition standing for a week does not produce a week of comments.
+#   * It never closes the issue. A person closes it, having looked.
+#   * It fails loudly. If the AWS read fails, if the response is malformed, or
+#     if the GitHub API call fails, the run goes red rather than exiting quiet —
+#     re-introducing the defect one layer up is the specific thing being
+#     avoided here.
+
+on:
+  schedule:
+    # Every half hour. The alarms themselves evaluate over one to three
+    # five-minute periods, so this adds at most ~30 minutes to detection on a
+    # channel whose current alternative is "the email path is fine, probably".
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # A singleton. `cancel-in-progress: false` on purpose: cancelling a relay run
+  # would leave the issue un-updated with no signal that anything was dropped,
+  # and these runs take seconds.
+  group: alert-relay
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  # The alarms and the alerts topic are both us-east-1 (Route 53 publishes
+  # HealthCheckStatus there only, and a CloudWatch alarm can only notify a
+  # topic in its own region — see modules/monitoring/main.tf).
+  ALERTS_TOPIC_NAME: family-greenhouse-alerts-production
+  ALARM_NAME_PREFIX: family-greenhouse-
+  RELAY_LABEL: alert-relay
+
+jobs:
+  relay:
+    name: Relay alarm state to a GitHub issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # OIDC, to assume the read-only half of the deploy role
+      issues: write # file and update the alert issue
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # AWS_DEPLOY_ROLE_ARN rather than AWS_PRODUCTION_ROLE_ARN: the
+      # `production` GitHub environment carries a required-reviewers rule, and
+      # an unattended scheduled run would sit waiting for an approval that
+      # nobody is there to give — an alerting path that needs a human before it
+      # can tell a human. The role's OIDC trust allows `ref:refs/heads/main`
+      # (modules/cicd/variables.tf, allowed_refs), which is where a scheduled
+      # run executes.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Two read-only calls. The account id is resolved here rather than being
+      # written down anywhere in this public repository, and it is used only to
+      # build the topic ARN for the API call — it never reaches the report (the
+      # builder takes the topic NAME and drops the ARN).
+      - name: Read alarm state and the alerts topic's subscriber count
+        run: |
+          set -euo pipefail
+          mkdir -p relay-snapshot
+          aws cloudwatch describe-alarms \
+            --region "$AWS_REGION" \
+            --alarm-name-prefix "$ALARM_NAME_PREFIX" \
+            --output json > relay-snapshot/alarms.json
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          aws sns get-topic-attributes \
+            --region "$AWS_REGION" \
+            --topic-arn "arn:aws:sns:${AWS_REGION}:${account_id}:${ALERTS_TOPIC_NAME}" \
+            --output json > relay-snapshot/topic.json
+
+      - name: Build the redacted report
+        run: |
+          set -euo pipefail
+          node scripts/alert-relay-report.mjs \
+            --alarms relay-snapshot/alarms.json \
+            --topic relay-snapshot/topic.json \
+            --region "$AWS_REGION" \
+            --out-dir relay-report
+
+      - name: Ensure the relay label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create "$RELAY_LABEL" --repo "$GITHUB_REPOSITORY" \
+            --color "B60205" --force \
+            --description "Filed by .github/workflows/alert-relay.yml. Close it when you have looked."
+
+      # The whole point of the workflow. Every failure mode below exits
+      # non-zero: a relay that cannot report must not report success.
+      - name: File or update the alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          should_report="$(cat relay-report/should-report)"
+          title="$(cat relay-report/title)"
+          state="$(cat relay-report/state)"
+
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --label "$RELAY_LABEL" --json number --jq '.[0].number // empty')"
+
+          if [ -z "$existing" ]; then
+            if [ "$should_report" != "true" ]; then
+              echo "alert relay: nothing to report and no open issue — done"
+              echo "$state"
+              exit 0
+            fi
+            # `gh issue create` prints the new issue's URL, not JSON.
+            issue_url="$(gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$title" --label "$RELAY_LABEL" \
+              --body-file relay-report/body.md)"
+            number="${issue_url##*/}"
+            case "$number" in
+              ''|*[!0-9]*)
+                echo "::error::gh issue create did not return an issue URL"
+                exit 1
+                ;;
+            esac
+            echo "alert relay: filed #${number}"
+          else
+            number="$existing"
+            # The previous state fingerprint is read back from the issue itself
+            # rather than from any local cache, so a run that lost its notes —
+            # or the first run after this workflow changes — still compares
+            # against what is actually published.
+            previous="$(gh issue view "$number" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' \
+              | sed -n 's/.*<!-- alert-relay-state: \(.*\) -->.*/\1/p' | head -n 1)"
+
+            # Always rewrite the body: it is the current picture, and editing it
+            # notifies nobody. The title is deliberately left alone — an issue
+            # whose title changes under a reader is worse than one that does not.
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body-file relay-report/body.md
+
+            if [ "$previous" = "$state" ]; then
+              echo "alert relay: #${number} already says this; body refreshed, no comment"
+            else
+              {
+                echo "State changed."
+                echo
+                echo "Was: \`${previous:-(no previous state recorded)}\`"
+                echo "Now: \`${state}\`"
+                echo
+                echo "The issue body above has been updated to match. Relay run: ${RUN_URL}"
+                if [ "$should_report" != "true" ]; then
+                  echo
+                  echo "Nothing is currently firing and the alerts topic has a confirmed"
+                  echo "subscriber. This issue stays open until a person closes it — the relay"
+                  echo "never closes one, so a cleared alert is still read by someone."
+                fi
+              } > relay-report/comment.md
+              gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file relay-report/comment.md
+              echo "alert relay: commented on #${number}"
+            fi
+          fi
+
+          # Read the result back rather than trusting the exit codes above:
+          # a report that silently failed to land is the exact defect this
+          # workflow exists to remove.
+          if [ "$should_report" = "true" ]; then
+            open_now="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+              --label "$RELAY_LABEL" --json number --jq 'length')"
+            if [ "$open_now" -lt 1 ]; then
+              echo "::error::there is a condition to report and no open relay issue exists"
+              exit 1
+            fi
+          fi
+
+      # A red run is a second, weaker signal (GitHub emails the repository owner
+      # when a scheduled workflow on the default branch fails), and it is the
+      # only one available when the steps above could not run at all. Making the
+      # job's conclusion follow the finding keeps the two consistent: a firing
+      # alarm leaves both an issue and a red run, never a green run with an open
+      # incident behind it.
+      - name: Fail the run when there is something to report
+        run: |
+          set -euo pipefail
+          if [ "$(cat relay-report/should-report)" = "true" ]; then
+            echo "::error::$(cat relay-report/title) — see the open '$RELAY_LABEL' issue"
+            exit 1
+          fi
+          echo "alert relay: nothing to report"

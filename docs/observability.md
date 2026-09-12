@@ -345,6 +345,72 @@ Metric filters, the SNS topic, the budget, and Cost Anomaly Detection are not
 gated — they are free or near-free and several are the data source the alarms
 would read on the way back up.
 
+## Whether an alarm can reach a human
+
+Every alarm above publishes to one SNS topic, and in production that topic's
+only human destination is an email subscription. Measured on 2026-09-12, the
+full path is five hops:
+
+    alarm
+      -> SNS family-greenhouse-alerts-production
+      -> support@familygreenhouse.net
+      -> the SES inbound receipt rule (familygreenhouse.net's MX record points
+         at inbound-smtp, not at a mailbox)
+      -> the family-greenhouse-mail-forwarder Lambda
+      -> the maintainer's real inbox
+
+That path works. Two things about it are worth naming anyway, because both are
+invisible from inside it:
+
+- **It is self-referential.** `*-mail-forwarder-dlq-not-empty` and
+  `*-mail-not-relayed-unverified` are alarms about the forwarder, and their only
+  route to a person runs through the forwarder. When the relay is what broke,
+  the alarm that says so cannot arrive.
+- **One click removes it.** SNS puts an unsubscribe link in every notification
+  email. Following it silences every alarm in this stack, permanently, with no
+  other symptom. The `alarms_have_a_notification_destination` check catches a
+  topic with no subscriber — but only when someone runs `terraform plan`.
+
+`.github/workflows/alert-relay.yml` is a second channel that fails
+independently of the first. Every half hour it reads CloudWatch alarm state and
+the alerts topic's confirmed-subscriber count directly, and reports into a
+GitHub issue: no address to be wrong, nothing to unsubscribe from, and a
+numbered durable artefact rather than an unread colour. It creates and changes
+nothing in AWS — two read-only API calls.
+
+Three properties of it are deliberate and are pinned by
+`scripts/alert-relay-report.test.mjs`:
+
+- **It reports counts and names, never an identifier.** This repository is
+  public and its issues are world-readable. The body is assembled from fixed
+  prose, integers, and alarm names that matched a strict infrastructure shape
+  (`family-greenhouse-` plus lowercase hyphenated words); anything else is
+  withheld with a visible placeholder, so a withheld alarm still counts toward
+  the total. Alarm `StateReason` text, which quotes metric values, is never
+  read at all, and neither is any ARN — an ARN carries the AWS account id. A
+  final scan re-reads the finished body and refuses to publish it if anything
+  identifier-shaped survived; the test sabotages the allowlist to prove that
+  scan actually catches what it claims to.
+- **It reuses one issue and never closes it.** The body is rewritten every run
+  (which notifies nobody), and a comment is added only when the state
+  fingerprint changes — so a condition standing for a week does not produce a
+  week of comments. Closing is a person's job, because "the alarm cleared" and
+  "a person knows the alarm cleared" are different facts.
+- **An empty result is a finding, not health.** Zero alarms matching the
+  project prefix means the query failed, the credentials were wrong, or the
+  alarms are gone — all states in which nothing is watching anything. It is
+  reported as its own condition rather than read as quiet. (The threshold is
+  "more than zero", not an expected count somebody would have to keep
+  updating.)
+
+It assumes `AWS_DEPLOY_ROLE_ARN` rather than `AWS_PRODUCTION_ROLE_ARN`: the
+`production` GitHub environment carries a required-reviewers rule, and an
+unattended scheduled run would wait for an approval nobody is there to give —
+an alerting path that needs a human before it can tell a human. A scoped
+read-only role for it (`cloudwatch:DescribeAlarms`, `sns:GetTopicAttributes`,
+`sts:GetCallerIdentity`) would be better than reusing the deploy role and is
+not yet written.
+
 ## Triage
 
 1. Open the `family-greenhouse-production` CloudWatch dashboard and set the incident time range.
