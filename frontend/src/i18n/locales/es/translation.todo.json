@@ -10,6 +10,7 @@
   ],
   "intentionallyEqual": [
     "awayRecap.noteLine",
+    "nav.chat",
     "awayRecap.taskLine",
     "caretaker.page.instructionOther",
     "caretaker.report.byCaretakerRange",
