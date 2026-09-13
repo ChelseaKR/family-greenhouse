@@ -227,6 +227,11 @@ describe('cutting shares', () => {
 
   it('snapshot is immune to later edits of the source plant', async () => {
     const token = await loginAsSeed();
+    await request(app)
+      .put(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ careRule: 'bottom-water only' });
+
     const share = await request(app)
       .post(`/plants/${seedPlantId}/share`)
       .set('Authorization', `Bearer ${token}`);
@@ -235,12 +240,58 @@ describe('cutting shares', () => {
     await request(app)
       .put(`/plants/${seedPlantId}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Renamed!', notes: 'totally different now' });
+      .send({ name: 'Renamed!', careRule: 'totally different now' });
 
     const preview = await request(app).get(`/plants/shared/${share.body.code}`);
     expect(preview.status).toBe(200);
     expect(preview.body.plant.name).toBe('Monstera'); // as shared, not as edited
-    expect(preview.body.plant.notes).toBe('Needs indirect light');
+    expect(preview.body.plant.careRule).toBe('bottom-water only');
+  });
+
+  /**
+   * The cutting link is unauthenticated and gets pasted into group chats, so
+   * what it carries is a promise to the household that minted it — and the
+   * share dialog says the card shows the plant and its house rule. The
+   * household's free-text notes are the other thing entirely: the long-form
+   * field where people keep what they wrote for themselves.
+   *
+   * Asserted against the RAW response bytes, not a named field, so a leak
+   * through some future field this test does not know about still fails. Same
+   * shape as tests/integration/sitter-privacy.test.ts, and deliberately not a
+   * snapshot — a snapshot would record a leak as the expected value.
+   */
+  it('never carries the plant’s private notes on the public preview or into the copy', async () => {
+    const PRIVATE_NOTE = 'PRIVATENOTE-2B7 the spare key is under the mat';
+    const HOUSE_RULE = 'CARERULE-6H3 bottom-water only';
+    const token = await loginAsSeed();
+
+    await request(app)
+      .put(`/plants/${seedPlantId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ notes: PRIVATE_NOTE, careRule: HOUSE_RULE });
+
+    const share = await request(app)
+      .post(`/plants/${seedPlantId}/share`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(share.status).toBe(201);
+
+    // The public preview: no Authorization header at all.
+    const preview = await request(app).get(`/plants/shared/${share.body.code}`);
+    expect(preview.status).toBe(200);
+    expect(JSON.stringify(preview.body)).not.toContain('PRIVATENOTE-2B7');
+    // The house rule IS the care direction a cutting card carries.
+    expect(preview.body.plant.careRule).toBe(HOUSE_RULE);
+
+    // ...and accepting the cutting must not smuggle the note into the
+    // receiving household either.
+    const otherToken = await createUserWithHousehold('grafter@example.com', 'Grafter House');
+    const accept = await request(app)
+      .post(`/plants/shared/${share.body.code}/accept`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(accept.status).toBe(201);
+    expect(JSON.stringify(accept.body)).not.toContain('PRIVATENOTE-2B7');
+    expect(accept.body.notes).toBe('Cutting from Test Household');
+    expect(accept.body.careRule).toBe(HOUSE_RULE);
   });
 
   it('survives deletion of the source plant (still previewable + acceptable)', async () => {
