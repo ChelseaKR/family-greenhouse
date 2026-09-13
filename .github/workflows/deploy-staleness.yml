@@ -1,0 +1,204 @@
+# Is the site a visitor gets at familygreenhouse.net the site this repository has?
+#
+# Nothing here asked before. `uptime.yml` runs every fifteen minutes and proves the
+# API answers and the pages render; it never reads which commit produced them, so a
+# site frozen three weeks behind `main` passes it every time. `cd-production.yml`
+# deploys on a `v*` tag and on nothing else — a merge to `main` reaches no visitor
+# until someone cuts a release, which is deliberate and which this workflow does not
+# change. And the auto-rollback is invisible from outside: when the post-deploy smoke
+# test fails, `cd-production.yml` puts the previous frontend snapshot back, while the
+# three `production` deployment rows it already wrote keep saying `success` at the
+# tagged commit. See scripts/check-deploy-staleness.mjs for how that was measured and
+# what this reads instead.
+#
+# This workflow publishes NOTHING. It holds no AWS credential, no `id-token: write`,
+# no `pages: write`; it dispatches nothing and reads no publish-enable variable.
+# Whether a release should be cut is the owner's call and this file does not touch
+# it. It only reports the distance.
+#
+# The output is an issue, not a red run. A scheduled workflow that fails whenever a
+# release is overdue would be red for weeks at a time here, and a check that is
+# permanently red is a check nobody reads. This run goes red only when the
+# comparison cannot be made at all: no production deployment that published, a live
+# service worker with no commit fingerprint in it, a live commit this clone does not
+# contain, a history that has diverged, or bytes from a commit no deployment names.
+# A detector that cannot tell must look broken rather than report a comfortable zero.
+#
+# Every action is pinned to a full 40-char commit SHA already in use elsewhere in
+# this repository.
+name: Deploy staleness sentinel
+
+on:
+  schedule:
+    # Mondays, 15:47 UTC. Releases here are cut by hand in bursts, so the useful
+    # question is a weekly one; asking hourly would produce the same answer 168
+    # times. Off the hour, and off release-record.yml's 15:20, so the two weekly
+    # reports do not queue behind each other.
+    - cron: '47 15 * * 1'
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: 'Days an unreleased visitor-visible commit may wait before this reports'
+        required: false
+        default: '14'
+        type: string
+
+# Least privilege at the workflow level; the one job grants itself what it needs.
+permissions: {}
+
+# This workflow writes — it files or updates one issue. Never cancel a run
+# mid-write, and never let a manual dispatch race the Monday schedule onto the same
+# issue.
+concurrency:
+  group: deploy-staleness
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Measure how far the live site is behind main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # the checkout, and the git history the comparison walks
+      deployments: read # which commit each published build was made from
+      issues: write # the report itself; nothing here writes anywhere else
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Required, not incidental. On a shallow clone the deployed commit is
+          # simply absent, `git log <live>..origin/main` prints nothing, and the
+          # site reads as up to date. check-deploy-staleness.mjs refuses that case
+          # rather than reporting it as zero — this is what keeps it from having to.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # The network belongs to the caller, so the checker itself is a pure function
+      # of files on disk and is unit-tested without one — the same split
+      # release-record.yml uses for the releases API.
+      - name: Read the production deployment record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${REPOSITORY}/deployments?environment=production&per_page=100" \
+            > "$RUNNER_TEMP/deployments.json"
+          # The statuses are what say whether a row published; a row is a request.
+          # Thirty is well past the current release and keeps this to one page of
+          # API calls.
+          jq -r '.[0:30][].id' "$RUNNER_TEMP/deployments.json" > "$RUNNER_TEMP/ids.txt"
+          echo '{}' > "$RUNNER_TEMP/statuses.json"
+          while read -r id; do
+            gh api "repos/${REPOSITORY}/deployments/${id}/statuses?per_page=20" \
+              > "$RUNNER_TEMP/one.json"
+            jq --arg id "$id" --slurpfile s "$RUNNER_TEMP/one.json" \
+              '.[$id] = $s[0]' "$RUNNER_TEMP/statuses.json" > "$RUNNER_TEMP/next.json"
+            mv "$RUNNER_TEMP/next.json" "$RUNNER_TEMP/statuses.json"
+          done < "$RUNNER_TEMP/ids.txt"
+
+      # Two read-only GETs of public URLs. `sw.js` carries the commit the frontend
+      # bytes were built from and is what an auto-rollback restores; `/health`
+      # carries the commit Terraform stamped into the Lambda environment, which a
+      # rollback does NOT revert. Their disagreement is the rollback's signature.
+      - name: Read what the live site reports
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://familygreenhouse.net' }}
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$HEALTHCHECK_URL"
+          curl --fail --silent --show-error --max-time 30 \
+            "${SITE_URL}/sw.js" -o "$RUNNER_TEMP/sw.js"
+          curl --fail --silent --show-error --max-time 30 \
+            "$HEALTHCHECK_URL" -o "$RUNNER_TEMP/health.json"
+
+      - name: Measure the distance
+        id: measure
+        env:
+          MAX_AGE_DAYS: ${{ inputs.max_age_days || '14' }}
+        # `|| true` so a refusal reaches the reporting step, which turns it into the
+        # red run with the reason attached, rather than ending the job here with no
+        # explanation. The step's own exit code is not the verdict; `measured` is.
+        run: |
+          set -euo pipefail
+          node scripts/check-deploy-staleness.mjs \
+            --deployments "$RUNNER_TEMP/deployments.json" \
+            --statuses "$RUNNER_TEMP/statuses.json" \
+            --service-worker "$RUNNER_TEMP/sw.js" \
+            --health "$RUNNER_TEMP/health.json" \
+            --head origin/main \
+            --max-age-days "$MAX_AGE_DAYS" \
+            > "$RUNNER_TEMP/report.txt" 2> "$RUNNER_TEMP/error.txt" || true
+          cat "$RUNNER_TEMP/report.txt" "$RUNNER_TEMP/error.txt"
+
+      # The same discipline uptime.yml and release-record.yml use on their own
+      # checks. An assertion proved only in the passing case is not an assertion:
+      # feed the sentinel a deployment record that cannot support a measurement and
+      # require it to refuse. If this step ever passes by measuring something, the
+      # refusal path has stopped working and every green run above means nothing.
+      - name: Negative control (the sentinel must still be able to refuse)
+        run: |
+          set -euo pipefail
+          echo '[]' > "$RUNNER_TEMP/no-deployments.json"
+          node scripts/check-deploy-staleness.mjs \
+            --deployments "$RUNNER_TEMP/no-deployments.json" \
+            --statuses "$RUNNER_TEMP/statuses.json" \
+            --service-worker "$RUNNER_TEMP/sw.js" \
+            --health "$RUNNER_TEMP/health.json" \
+            --head origin/main \
+            --expect-failure
+
+      - name: File, update or close the report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MEASURED: ${{ steps.measure.outputs.measured }}
+          OVERDUE: ${{ steps.measure.outputs.overdue }}
+          TITLE: 'The live site is behind main'
+        run: |
+          set -euo pipefail
+
+          existing=$(gh issue list --repo "$REPOSITORY" --state open \
+            --json number,title --jq "[.[] | select(.title == env.TITLE)] | .[0].number // empty")
+
+          if [ "$MEASURED" != "true" ]; then
+            echo "::error::the staleness comparison could not be made; see the report above"
+            exit 1
+          fi
+
+          if [ "$OVERDUE" != "true" ]; then
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --repo "$REPOSITORY" --reason completed \
+                --comment "The live site is no longer behind. ${RUN_URL}"
+              echo "closed #$existing"
+            else
+              echo "not overdue; no open report to close"
+            fi
+            exit 0
+          fi
+
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/report.txt"
+            echo '```'
+            echo
+            echo "Deploys here are tag-gated: \`cd-production.yml\` fires on \`push: tags: ['v*']\`."
+            echo "Cutting a release is an owner action and this sentinel does not deploy."
+            echo "Measured by \`scripts/check-deploy-staleness.mjs\` in ${RUN_URL}."
+          } > "$RUNNER_TEMP/body.md"
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+            echo "updated #$existing"
+          else
+            gh issue create --repo "$REPOSITORY" --title "$TITLE" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
