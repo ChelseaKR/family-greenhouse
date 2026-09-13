@@ -364,6 +364,16 @@ still matches `frontend/scripts/public-routes.mjs`, and asserts the source
 stays inside CloudFront's 10 KB function limit — the map grows by one line per
 blog post, and failing a gate is cheaper than failing a `terraform apply`.
 
+Since #719 it also decides which paths are routes at all, from a second
+generated list read out of `src/App.tsx`, so the suite walks **every** route
+App.tsx declares and requires the function to reach the app for each one. That
+matters more than the usual coverage argument: a route the parser cannot see
+answers 404 in production. Three of those assertions used to read the other way
+round — the file asserted `rewrite('/pricinng') === '/app-shell.html'` under
+the comment "a typo, a stale inbound link, an unknown deep path: all still boot
+the app" — which is the plainest example this repository has of a gate pinned
+to the defect it should have caught.
+
 ### The production availability predicates
 
 `scripts/synthetic-page-check.test.mjs` (`npm run test:checks`, `node --test`)

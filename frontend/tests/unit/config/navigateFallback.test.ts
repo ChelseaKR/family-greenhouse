@@ -23,6 +23,8 @@ import { describe, expect, it } from 'vitest';
 // gives: an extensionless import resolves to the `.js` that `tsc -b` emits
 // beside the source, which is the LAST BUILD's array, not this one.
 import { NAVIGATE_FALLBACK_DENYLIST } from '../../../vite.navigationFallback.ts';
+// @ts-expect-error - vanilla ESM build script, deliberately untyped
+import { declaredRoutePaths } from '../../../scripts/app-routes.mjs';
 
 const FRONTEND = process.cwd();
 const REPO = resolve(FRONTEND, '..');
@@ -91,9 +93,13 @@ describe('the service worker navigation fallback', () => {
   });
 
   it('keeps the shell for every path the router declares', () => {
-    const app = readFileSync(resolve(FRONTEND, 'src/App.tsx'), 'utf8');
-    const paths = [...app.matchAll(/\bpath="([^"]+)"/g)].map((match) => match[1]);
-    // Guard: a pattern that stopped matching would pass the loop vacuously.
+    // Read through `scripts/app-routes.mjs` rather than with a second regex of
+    // its own (#719). That module is what the CloudFront router's route table
+    // is generated from, and it refuses to return a list it could not fully
+    // account for — so "the parser silently stopped matching" now fails there
+    // instead of passing this loop vacuously in one place and 404ing a real
+    // route in the other. The length guard below stays as a cheap local check.
+    const paths: string[] = declaredRoutePaths();
     expect(paths.length).toBeGreaterThan(30);
 
     for (const path of paths.filter((p) => p !== '*')) {

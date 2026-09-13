@@ -16,6 +16,37 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **Every URL on `familygreenhouse.net` answered HTTP 200**, including ones
+  that do not exist. Measured live on 2026-09-13:
+  `/definitely-not-a-page`, `/blog/no-such-post` and `/care/no-such-plant`
+  each returned 200 with the same 4,715-byte app shell — the only host of
+  twelve in this portfolio that did. The shell is `noindex`, so nothing was
+  polluting a search index; the harm is that a 200 asserts the resource
+  exists, so nothing outside a browser could tell a care guide that is
+  missing from one that is there, and a link check against this host could
+  not fail.
+
+  The CloudFront viewer-request function could not distinguish `/dashboard`
+  (a real route with no prerendered file, which must boot the app) from
+  `/dashboard-typo` (nothing), so it served the shell for both. It now
+  carries a second generated list, read out of `src/App.tsx` by
+  `frontend/scripts/app-routes.mjs` — the same `<Routes>` table React Router
+  matches — and leaves a path matching neither that list nor the prerendered
+  map alone, so S3 answers 404. Every URL that moves from 200 to 404 is one
+  React Router already resolved to its catch-all and rendered as "Nothing
+  growing here", so no page that worked changes. `/blog/:slug`, `/care/:slug`
+  and `/help/:topicId` are excluded from the pattern list on purpose: every
+  valid member is manifest-driven and already prerendered, which is what
+  makes `/care/no-such-plant` answerable at all. The 404 **body** is still
+  S3's error document; a branded one needs a distribution-wide
+  `error_code = 404` rule that `observability:check` deliberately forbids.
+  Live only after the next `terraform apply`.
+
+  `sitemap:check` and `spa-router:check` also now run on every pull request.
+  Both had only ever run in the local pre-push gate, so nothing on a PR could
+  see either drift — and since this change the second one decides which URLs
+  answer 404.
+
 ## [0.31.0] - 2026-09-12
 
 ### Added

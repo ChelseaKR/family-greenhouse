@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Regenerate the `PRERENDERED` map inside the CloudFront viewer-request
- * function from `public-routes.mjs`, the same list the sitemap and the
- * prerenderer read.
+ * Regenerate the two lists inside the CloudFront viewer-request function:
+ * `PRERENDERED`, from `public-routes.mjs` (the same list the sitemap and the
+ * prerenderer read), and `APP_EXACT` / `APP_PATTERNS`, from `App.tsx` via
+ * `app-routes.mjs` (the table React Router itself matches).
  *
  * ## Why the edge function has to know the route list at all
  *
@@ -27,9 +28,14 @@
  * `check-prerender-coverage.mjs` exist to prevent, reintroduced one layer
  * lower down.
  *
+ * The second list exists because the function could not tell `/dashboard` (a
+ * real route with no prerendered file) from `/dashboard-typo` (nothing), so it
+ * answered 200 with the shell for both — every URL on the host, issue #719.
+ * `app-routes.mjs` carries that reasoning in full.
+ *
  * `--check` (npm run spa-router:check, composed by the root `verify`) reads the
  * committed function the way CloudFront does — by evaluating it — and compares
- * the map it actually defines with the route list. It writes nothing: a gate
+ * the lists it actually defines with their sources. It writes nothing: a gate
  * that repairs the artifact it is judging heals drift on the contributor's disk
  * while the committed bytes stay stale. Same reasoning as
  * `build-sitemap.mjs --check`, and the same reason it is a separate gate step.
@@ -44,6 +50,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { runInNewContext } from 'node:vm';
 
+import { appRoutes } from './app-routes.mjs';
 import { FRONTEND_ROOT, publicRoutePaths } from './public-routes.mjs';
 
 export const ROUTER = join(
@@ -58,6 +65,10 @@ export const ROUTER = join(
 
 const BEGIN = '// --- generated from public-routes.mjs: do not edit by hand -------------------';
 const END = '// --- end generated -----------------------------------------------------------';
+
+const APP_BEGIN =
+  '// --- generated from App.tsx: do not edit by hand -----------------------------';
+const APP_END = '// --- end generated App.tsx ---------------------------------------------------';
 
 /**
  * The routes the function needs a map entry for: every public route except
@@ -83,54 +94,140 @@ export function committedRoutes(source = readFileSync(ROUTER, 'utf8')) {
   return Object.keys(map);
 }
 
+/**
+ * The app-route lists the committed function actually defines, read the same
+ * way — by evaluating it. Returned split, as `{ exact, patterns }`.
+ */
+export function committedAppRoutes(source = readFileSync(ROUTER, 'utf8')) {
+  const sandbox = {};
+  runInNewContext(source, sandbox, { filename: 'spa-router.js' });
+  for (const name of ['APP_EXACT', 'APP_PATTERNS']) {
+    if (typeof sandbox[name] !== 'string') {
+      throw new Error(`spa-router.js does not define a ${name} string`);
+    }
+  }
+  const split = (value) => (value === '' ? [] : value.split(' '));
+  return { exact: split(sandbox.APP_EXACT), patterns: split(sandbox.APP_PATTERNS) };
+}
+
+/** What App.tsx says the app routes are, minus what PRERENDERED already covers. */
+export function expectedAppRoutes() {
+  return appRoutes(publicRoutePaths());
+}
+
 /** The generated block, formatted the way Prettier formats it. */
 function generatedBlock(routes) {
   const entries = routes.map((route) => `  '${route}': 1,`).join('\n');
   return `${BEGIN}\nvar PRERENDERED = {\n${entries}\n};\n${END}`;
 }
 
-function replaceBlock(source, routes) {
-  const start = source.indexOf(BEGIN);
-  const end = source.indexOf(END);
-  if (start === -1 || end === -1 || end < start) {
+/**
+ * The App.tsx block. Space-delimited strings, not object literals: spa-router.js
+ * has a hard 10 KB ceiling and the two lists cost about half as much this way.
+ *
+ * The emitted shape has to BE the Prettier-formatted shape, because
+ * `format:check` and `spa-router:check` are both steps of the same gate: a
+ * generator that emits something Prettier then rewrites makes the two
+ * unsatisfiable together. Prettier cannot break a string literal, so it keeps
+ * `var NAME = '…';` on one line while that line fits inside printWidth and
+ * moves the string to its own indented line when it does not. PRINT_WIDTH below
+ * mirrors .prettierrc; `frontend/scripts/spa-router.test.mjs` compares the
+ * committed bytes with `renderedRouterSource()` rather than trusting this
+ * comment, and the gate's `format:check` step runs Prettier over the file, so
+ * the two together pin generator output == committed == formatted.
+ */
+const PRINT_WIDTH = 100;
+
+function generatedAppBlock({ exact, patterns }) {
+  const decl = (name, values) => {
+    const oneLine = `var ${name} = '${values.join(' ')}';`;
+    return oneLine.length <= PRINT_WIDTH ? oneLine : `var ${name} =\n  '${values.join(' ')}';`;
+  };
+  return `${APP_BEGIN}\n${decl('APP_EXACT', exact)}\n${decl('APP_PATTERNS', patterns)}\n${APP_END}`;
+}
+
+function spliceBlock(source, begin, end, block) {
+  const start = source.indexOf(begin);
+  const stop = source.indexOf(end);
+  if (start === -1 || stop === -1 || stop < start) {
     throw new Error(`spa-router.js is missing its generated block markers (${ROUTER})`);
   }
-  return source.slice(0, start) + generatedBlock(routes) + source.slice(end + END.length);
+  return source.slice(0, start) + block + source.slice(stop + end.length);
+}
+
+function replaceBlock(source, routes, app) {
+  const withRoutes = spliceBlock(source, BEGIN, END, generatedBlock(routes));
+  return spliceBlock(withRoutes, APP_BEGIN, APP_END, generatedAppBlock(app));
+}
+
+/** Exactly what `write()` would put on disk, without writing it. */
+export function renderedRouterSource(source = readFileSync(ROUTER, 'utf8')) {
+  return replaceBlock(source, mappedRoutes(), expectedAppRoutes());
+}
+
+function reportDrift(label, expected, actual, consequence) {
+  const missing = expected.filter((value) => !actual.includes(value));
+  const extra = actual.filter((value) => !expected.includes(value));
+  if (missing.length === 0 && extra.length === 0) return false;
+
+  console.error(`\n❌ spa-router:check: ${label}\n${consequence}\n`);
+  for (const value of missing) console.error(`  missing from spa-router.js: ${value}`);
+  for (const value of extra) console.error(`  in spa-router.js but not expected: ${value}`);
+  return true;
 }
 
 function check() {
-  const expected = mappedRoutes();
-  const actual = committedRoutes();
+  const expectedApp = expectedAppRoutes();
+  const actualApp = committedAppRoutes();
 
-  const missing = expected.filter((route) => !actual.includes(route));
-  const extra = actual.filter((route) => !expected.includes(route));
+  const drifted = [
+    reportDrift(
+      'the CloudFront function disagrees with public-routes.mjs.',
+      mappedRoutes(),
+      committedRoutes(),
+      'A route missing here is prerendered, uploaded, and advertised in the sitemap,\n' +
+        'and then served as the empty SPA shell — the failure ADR 0013 exists to prevent.'
+    ),
+    reportDrift(
+      'the CloudFront function disagrees with App.tsx (exact routes).',
+      expectedApp.exact,
+      actualApp.exact,
+      'A route missing here answers 404 in production for a page the app can render,\n' +
+        'and a route here that App.tsx no longer has answers 200 for nothing (#719).'
+    ),
+    reportDrift(
+      'the CloudFront function disagrees with App.tsx (parameterised routes).',
+      expectedApp.patterns,
+      actualApp.patterns,
+      'Same consequence as the exact list, for the routes that carry a :param.'
+    ),
+  ].some(Boolean);
 
-  if (missing.length === 0 && extra.length === 0) {
-    console.log(`spa-router:check OK — ${actual.length} prerendered routes match public-routes.`);
+  if (drifted) {
+    console.error('\nRegenerate with: npm run spa-router --workspace frontend\n');
+    process.exitCode = 1;
     return;
   }
 
-  console.error(
-    '\n❌ spa-router:check: the CloudFront function disagrees with public-routes.mjs.\n' +
-      'A route missing here is prerendered, uploaded, and advertised in the sitemap,\n' +
-      'and then served as the empty SPA shell — the failure ADR 0013 exists to prevent.\n'
+  console.log(
+    `spa-router:check OK — ${committedRoutes().length} prerendered routes match ` +
+      `public-routes, and ${actualApp.exact.length} exact + ${actualApp.patterns.length} ` +
+      'parameterised app routes match App.tsx.'
   );
-  for (const route of missing) console.error(`  missing from spa-router.js: ${route}`);
-  for (const route of extra) console.error(`  in spa-router.js but not public: ${route}`);
-  console.error('\nRegenerate with: npm run spa-router --workspace frontend\n');
-  process.exitCode = 1;
 }
 
 function write() {
   const routes = mappedRoutes();
+  const app = expectedAppRoutes();
   const source = readFileSync(ROUTER, 'utf8');
-  const next = replaceBlock(source, routes);
+  const next = replaceBlock(source, routes, app);
+  const counts = `${routes.length} prerendered + ${app.exact.length}/${app.patterns.length} app`;
   if (next === source) {
-    console.log(`spa-router: already up to date (${routes.length} routes).`);
+    console.log(`spa-router: already up to date (${counts} routes).`);
     return;
   }
   writeFileSync(ROUTER, next);
-  console.log(`spa-router: wrote ${routes.length} routes into ${ROUTER}`);
+  console.log(`spa-router: wrote ${counts} routes into ${ROUTER}`);
 }
 
 const invokedDirectly = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
