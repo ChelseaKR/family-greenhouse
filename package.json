@@ -67,6 +67,7 @@
     "links:check": "node scripts/check-app-links.mjs",
     "sitemap:check": "npm run sitemap:check --workspace frontend",
     "spa-router:check": "npm run spa-router:check --workspace frontend",
+    "aasa:check": "npm run aasa:check --workspace frontend",
     "test:checks": "node --test scripts/*.test.mjs",
     "brand:check": "npm run brand:check --workspace frontend",
     "smoke:parse": "npm run smoke:parse --workspace frontend",

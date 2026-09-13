@@ -19,14 +19,19 @@
 - [ ] Apple Developer and Google Play accounts have accepted current agreements.
 - [ ] Reviewer account is seeded and its credentials are stored only in the store consoles.
 - [ ] Android upload keystore is created, backed up, and exposed through the four `ANDROID_UPLOAD_*` environment variables.
-- [ ] Deep links, in this order — the serving half is already wired and gated
-      (`npm run well-known:check`), so what is left is the three values this
-      repo cannot derive. See `docs/mobile.md`, "The serving half is ready".
+- [ ] Deep links, in this order — the serving half is wired and gated
+      (`npm run well-known:check`) and the iOS association file has landed, so
+      what is left is the Android fingerprint and the app-side half. See
+      `docs/mobile.md`, "The iOS association file".
   - [ ] `keytool -list -v` (or Play Console → Setup → App integrity) for the
         upload certificate's SHA-256 fingerprint → commit
         `frontend/public/.well-known/assetlinks.json`.
-  - [ ] Apple Developer → Membership for the Team ID → commit
-        `frontend/public/.well-known/apple-app-site-association`.
+  - [x] Apple Developer → Membership for the Team ID → commit
+        `frontend/public/.well-known/apple-app-site-association`. **Done** —
+        the file is generated from `src/App.tsx` (`npm run aasa --workspace
+frontend`) and carries the real Team ID; `npm run aasa:check` and
+        `npm run well-known:check` both gate it, in `npm run verify` and in
+        CI's Lint job.
   - [ ] Deploy, then confirm both URLs return `200 application/json` on the
         live domain before touching the native projects. A missing file now
         answers 404 rather than the app shell, so this is checkable.
