@@ -318,7 +318,13 @@ PUBLISHES against the Price objects Stripe would CHARGE.
 `createCheckoutSession` retrieves the price it is about to charge and refuses
 unless `unit_amount`, `currency`, and the recurring interval match
 `models/plans.ts` — and refuses when the price cannot be retrieved at all.
-`reconcileConfiguredPrices` sweeps every configured cadence for an ops check.
+`createIdentifyTopUpCheckoutSession` does the same against
+`IDENTIFY_TOP_UP_PACK` via `assertIdentifyTopUpPriceMatchesCatalog`, and it
+matters more there, not less: the top-up webhook grants credits from the
+`credits` metadata stamped at checkout rather than from what Stripe charged,
+so an unreconciled price id would bill whatever it bills and still hand over
+twenty identifications. `reconcileConfiguredPrices` sweeps every sellable
+amount — the five plan cadences and the pack — for an ops check.
 This is the only thing in the stack that would catch two transposed `price_…`
 ids in tfvars: price ids encode neither amount nor cadence, and
 `stripe_price_ids_are_live` only guards test-vs-live mode.

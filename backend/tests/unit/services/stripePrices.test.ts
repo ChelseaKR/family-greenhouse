@@ -3,10 +3,12 @@ import type Stripe from 'stripe';
 import {
   CATALOG_CURRENCY,
   PriceReconciliationError,
+  assertIdentifyTopUpPriceMatchesCatalog,
   assertPriceMatchesCatalog,
   comparePriceToCatalog,
   expectedPriceFor,
   expectedPrices,
+  identifyTopUpExpectedPrice,
   isPriceReconciliationError,
   reconcileConfiguredPrices,
   reconcilePrice,
@@ -14,6 +16,7 @@ import {
   type ExpectedPrice,
 } from '../../../src/services/stripePrices.js';
 import { PLANS } from '../../../src/models/plans.js';
+import { IDENTIFY_TOP_UP_PACK } from '../../../src/models/identifyTopUp.js';
 
 /**
  * These tests never construct a Stripe client and never carry a key. The
@@ -52,15 +55,34 @@ describe('catalog expansion', () => {
     expect(unitAmountFor(149)).toBe(14900);
   });
 
-  it('expands exactly the five sellable amounts and skips the free tier', () => {
-    const rows = expectedPrices().map((r) => `${r.planId}:${r.cadence}`);
+  it('expands every sellable amount — the five plan cadences AND the top-up pack — and skips the free tier', () => {
+    // The pack is in this list on purpose. `reconcileConfiguredPrices` sweeps
+    // exactly what `expectedPrices()` returns, so a sellable amount missing
+    // from here is one the sweep reports nothing about and therefore declares
+    // clean. The pack takes real money ($1.99) on a path whose credits come
+    // from checkout metadata, not from what Stripe charged.
+    const rows = expectedPrices().map((r) => `${r.itemId}:${r.cadence}`);
     expect(rows.sort()).toEqual([
       'garden:lifetime',
       'garden:month',
       'garden:year',
       'greenhouse:month',
       'greenhouse:year',
+      'identify-20:one_time',
     ]);
+  });
+
+  it('derives the top-up row from the pack rather than restating $1.99', () => {
+    expect(identifyTopUpExpectedPrice()).toEqual({
+      itemId: IDENTIFY_TOP_UP_PACK.id,
+      cadence: 'one_time',
+      env: IDENTIFY_TOP_UP_PACK.stripePriceEnv,
+      dollars: IDENTIFY_TOP_UP_PACK.priceUsd,
+      unitAmount: unitAmountFor(IDENTIFY_TOP_UP_PACK.priceUsd),
+    });
+    // Not a plan and never resolvable as one: the pack grants credits, not
+    // entitlement, and must never be reachable through a plan lookup.
+    expect(expectedPriceFor('garden', 'one_time')).toBeNull();
   });
 
   it('derives the expected amounts from plans.ts rather than restating them', () => {
@@ -222,6 +244,7 @@ describe('reconcileConfiguredPrices', () => {
         unit_amount: 7999,
         recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
       }),
+      p_topup: priceLike({ unit_amount: 199, recurring: null }),
     });
     const results = await reconcileConfiguredPrices(stripe, {
       STRIPE_PRICE_ID_GARDEN: 'p_garden_m',
@@ -229,9 +252,10 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'p_garden_l',
       STRIPE_PRICE_ID_GREENHOUSE: 'p_gh_m',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'p_gh_y',
+      STRIPE_PRICE_ID_IDENTIFY_TOP_UP: 'p_topup',
     });
 
-    expect(retrieve).toHaveBeenCalledTimes(5);
+    expect(retrieve).toHaveBeenCalledTimes(6);
     const byEnv = Object.fromEntries(results.map((r) => [r.env, r.status]));
     expect(byEnv).toEqual({
       STRIPE_PRICE_ID_GARDEN: 'ok',
@@ -239,6 +263,7 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'ok',
+      STRIPE_PRICE_ID_IDENTIFY_TOP_UP: 'ok',
     });
   });
 
@@ -247,7 +272,7 @@ describe('reconcileConfiguredPrices', () => {
     // production price id is blank on purpose (docs/billing.md).
     const { stripe, retrieve } = fakeStripe({});
     const results = await reconcileConfiguredPrices(stripe, {});
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
     expect(results.every((r) => r.status === 'unconfigured')).toBe(true);
     expect(retrieve).not.toHaveBeenCalled();
   });
@@ -285,5 +310,82 @@ describe('assertPriceMatchesCatalog', () => {
       assertPriceMatchesCatalog(stripe, 'greenhouse', 'lifetime', 'anything')
     ).rejects.toThrow(/publishes no lifetime amount/);
     expect(retrieve).not.toHaveBeenCalled();
+  });
+});
+
+describe('assertIdentifyTopUpPriceMatchesCatalog', () => {
+  /** What Stripe must report for the configured top-up price. */
+  const topUpPrice = (over: Partial<Stripe.Price> = {}) =>
+    priceLike({ unit_amount: 199, recurring: null, ...over });
+
+  it('resolves silently when Stripe agrees with the published $1.99', async () => {
+    const { stripe, retrieve } = fakeStripe({ price_topup: topUpPrice() });
+    await expect(
+      assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup')
+    ).resolves.toBeUndefined();
+    expect(retrieve).toHaveBeenCalledWith('price_topup');
+  });
+
+  it('refuses a price that would charge an amount the pack never published', async () => {
+    // The defect this closes: credits are granted from checkout METADATA, so
+    // a transposed id charges $79.99 and still hands over twenty
+    // identifications. Nothing else in the stack compares the two numbers.
+    const { stripe } = fakeStripe({
+      price_topup: topUpPrice({
+        unit_amount: 7999,
+        recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
+      }),
+    });
+    const err = await assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup').catch(
+      (e: unknown) => e
+    );
+    expect(isPriceReconciliationError(err)).toBe(true);
+    expect((err as PriceReconciliationError).reconciliation.status).toBe('mismatch');
+    expect((err as PriceReconciliationError).reconciliation.itemId).toBe(IDENTIFY_TOP_UP_PACK.id);
+  });
+
+  it('refuses a RECURRING price standing in for the one-time pack', async () => {
+    // The expensive direction: a household pays $1.99 once for twenty
+    // identifications and is billed $1.99 every month forever.
+    const { stripe } = fakeStripe({
+      price_topup: topUpPrice({
+        recurring: { interval: 'month', interval_count: 1 } as Stripe.Price.Recurring,
+      }),
+    });
+    const err = await assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup').catch(
+      (e: unknown) => e
+    );
+    expect(isPriceReconciliationError(err)).toBe(true);
+    expect((err as PriceReconciliationError).reconciliation.problems.join(' ')).toContain(
+      'one-time charge'
+    );
+  });
+
+  it('refuses a foreign-currency price even when the digits match', async () => {
+    const { stripe } = fakeStripe({ price_topup: topUpPrice({ currency: 'gbp' }) });
+    await expect(
+      assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup')
+    ).rejects.toMatchObject({ code: 'PRICE_RECONCILIATION_FAILED' });
+  });
+
+  it('fails CLOSED when the price cannot be retrieved at all', async () => {
+    const { stripe } = fakeStripe({ price_topup: new Error('Stripe unreachable') });
+    const err = await assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup').catch(
+      (e: unknown) => e
+    );
+    expect(isPriceReconciliationError(err)).toBe(true);
+    expect((err as PriceReconciliationError).reconciliation.status).toBe('unretrievable');
+  });
+
+  it('names the env var, never the configured price id', async () => {
+    const { stripe } = fakeStripe({
+      price_looks_secret: topUpPrice({ unit_amount: 1, id: 'price_looks_secret' }),
+    });
+    const err = (await assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_looks_secret').catch(
+      (e: unknown) => e
+    )) as PriceReconciliationError;
+    const problems = err.reconciliation.problems.join(' ');
+    expect(problems).not.toContain('price_looks_secret');
+    expect(problems).toContain(IDENTIFY_TOP_UP_PACK.stripePriceEnv);
   });
 });

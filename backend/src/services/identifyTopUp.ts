@@ -24,6 +24,7 @@ import {
   identifyTopUpPriceId,
 } from '../models/identifyTopUp.js';
 import { getHouseholdSubscription, getStripe } from './billing.js';
+import { assertIdentifyTopUpPriceMatchesCatalog } from './stripePrices.js';
 
 export interface IdentifyTopUpCheckoutArgs {
   householdId: string;
@@ -57,6 +58,16 @@ export async function createIdentifyTopUpCheckoutSession(
   // has never subscribed checks out by email; Stripe emails the receipt.
   const sub = await getHouseholdSubscription(args.householdId);
   const stripe = await getStripe();
+  // Never charge an amount the UI did not publish — the same reconciliation
+  // `createCheckoutSession` runs immediately before minting a subscription
+  // Session, for the same reason: a `price_…` id encodes neither the amount
+  // nor whether it recurs, so a transposed value in tfvars is invisible to
+  // every other check we have. It matters more here than there. The webhook
+  // grants credits from the `credits` metadata stamped below, NOT from what
+  // Stripe charged, so a wrong price id bills whatever it bills and still
+  // hands over twenty identifications — the two numbers never meet. Fails
+  // closed: a price that cannot be retrieved is a refusal, not an assumption.
+  await assertIdentifyTopUpPriceMatchesCatalog(stripe, priceId);
   // `purchase` is the positive marker the webhook branches on; `credits` is
   // what the grant reads, so a later change to the pack size cannot re-price
   // a session already paid for. `interval` is deliberately absent — this is
