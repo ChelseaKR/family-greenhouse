@@ -10,7 +10,7 @@
 
 **A shared plant-care journal for the whole household** — a collaborative houseplant tracker with per-plant watering schedules, recurring care tasks (water, fertilize, prune…), and reminders that find the right person in the browser or by email, so nobody has to ask "did you water the Monstera?" ever again.
 
-🌿 **Live app (free accounts):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
+🌿 **Live app (free accounts; paid plans on the web):** **[familygreenhouse.net](https://familygreenhouse.net)** &nbsp;·&nbsp; 📚 **Docs:** [`docs/`](docs/) &nbsp;·&nbsp; 🧭 **Start here:** [`docs/development.md`](docs/development.md)
 
 <!-- commercial-status:start -->
 <!-- Generated from commercial-status.json by scripts/check-commercial-status.mjs.

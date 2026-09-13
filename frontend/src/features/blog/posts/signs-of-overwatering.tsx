@@ -132,7 +132,8 @@ export default function SignsOfOverwatering() {
         needs a record: some shared place that says this was watered on Tuesday, so the second
         person doesn&rsquo;t. A note on the pot works. So does <a href="/">Family Greenhouse</a>,
         which logs who watered what and when precisely so nobody in the house has to guess &mdash;
-        the same reason it assigns each task to one person instead of reminding everybody.
+        the same reason a task can be assigned to one person, so the reminder goes to them rather
+        than to the whole household.
       </p>
       <p>
         If you want the fuller diagnosis on discoloured foliage, we went through the causes in{' '}
