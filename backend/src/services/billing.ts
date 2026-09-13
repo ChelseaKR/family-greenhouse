@@ -829,6 +829,80 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
 }
 
 /**
+ * The log message emitted when Stripe says money settled and this function
+ * produced no grant of any kind.
+ *
+ * Exported as a named constant because it is half of a contract that spans
+ * two languages: the `stripe_webhook_no_grant` metric filter in
+ * `infrastructure/modules/monitoring/main.tf` matches this exact string, and
+ * the alarm on that metric is the only thing that turns "a household paid and
+ * received nothing" into a notification. `scripts/check-observability.mjs`
+ * reads the literal out of this file and asserts Terraform still matches it,
+ * so renaming it here without moving the filter fails the gate rather than
+ * silently un-alarming the path.
+ */
+export const PAID_NO_GRANT_LOG_MESSAGE = 'stripe_event_paid_no_grant';
+
+/**
+ * Shout when a PAID checkout event reached the end of `applyStripeEvent`
+ * without granting anything.
+ *
+ * The hole this closes: an identification top-up whose `credits` metadata is
+ * missing or nonsensical makes `identifyTopUpGrantFromEvent` return null, and
+ * `deltaForStripeEvent` returns null for every top-up session by design — so
+ * the event fell out of a bare `return` with no log line at all. The customer
+ * was charged $1.99, received no credits, and nothing anywhere recorded it:
+ * Stripe's delivery log showed a 200 and the alarm had nothing to fire on.
+ *
+ * Deliberately keyed on `payment_status === 'paid'` for the two checkout
+ * events and nothing else, so it cannot fire on the paths that are correctly
+ * silent: an unpaid or deferred session (no money has moved yet), a trial
+ * (`no_payment_required`), a subscription lifecycle event, or an
+ * invoice/email-only event. Every occurrence means money was taken and
+ * nothing was delivered.
+ *
+ * It logs and returns rather than throwing. Retrying cannot help — the broken
+ * metadata is fixed on the Session, so every redelivery would fail the same
+ * way until Stripe gave up — and refusing the webhook would only replace a
+ * silent failure with a wall of 5xx. The grant has to be made by hand from
+ * the session id this line carries.
+ */
+function warnPaidEventGrantedNothing(event: Stripe.Event): void {
+  if (
+    event.type !== 'checkout.session.completed' &&
+    event.type !== 'checkout.session.async_payment_succeeded'
+  ) {
+    return;
+  }
+  const session = event.data.object as unknown as {
+    id?: string;
+    mode?: string;
+    payment_status?: string;
+    metadata?: Record<string, string> | null;
+    client_reference_id?: string | null;
+  };
+  if (session.payment_status !== 'paid') return;
+  logger.error(
+    {
+      stripeEventId: event.id,
+      type: event.type,
+      stripeSessionId: session.id ?? null,
+      mode: session.mode ?? null,
+      // Both identity routes, because which one is missing is the whole
+      // diagnosis when the grant could not be attributed to a household.
+      householdId: session.metadata?.householdId ?? null,
+      clientReferenceId: session.client_reference_id ?? null,
+      // The two metadata fields a grant is reconstructed from. Stamped by us
+      // at checkout, so printing them says exactly which contract broke.
+      purchase: session.metadata?.purchase ?? null,
+      credits: session.metadata?.credits ?? null,
+      planId: session.metadata?.planId ?? null,
+    },
+    PAID_NO_GRANT_LOG_MESSAGE
+  );
+}
+
+/**
  * Record a Stripe event id in the dedupe ledger. Returns `true` the first
  * time an id is seen, `false` on a redelivery.
  *
@@ -1093,7 +1167,14 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   }
 
   const delta = deltaForStripeEvent(event);
-  if (!delta) return;
+  if (!delta) {
+    // The one exit from this function that a paid event can reach having
+    // granted nothing at all. Everything below logs its own reason before
+    // returning; this was a bare `return`, which is how a charged-and-not-
+    // delivered top-up became invisible. See warnPaidEventGrantedNothing.
+    warnPaidEventGrantedNothing(event);
+    return;
+  }
 
   /**
    * The paid tier the household held when a `customer.subscription.deleted`

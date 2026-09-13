@@ -26,6 +26,7 @@ const syntheticPageCheck = read('scripts/synthetic-page-check.mjs');
 const frontendTf = read('infrastructure/modules/frontend/main.tf');
 const spaRouter = read('infrastructure/modules/frontend/functions/spa-router.js');
 const syntheticPageCheckTest = read('scripts/synthetic-page-check.test.mjs');
+const billingService = read('backend/src/services/billing.ts');
 
 /**
  * The body of one `resource "TYPE" "NAME" { ... }` block, or '' if absent.
@@ -78,6 +79,27 @@ const probeAlarm = tfResource(
   'aws_cloudwatch_metric_alarm',
   'frontend_telemetry_unreportable'
 );
+const stripeNoGrantFilter = tfResource(
+  monitoring,
+  'aws_cloudwatch_log_metric_filter',
+  'stripe_webhook_no_grant'
+);
+const stripeNoGrantAlarm = tfResource(
+  monitoring,
+  'aws_cloudwatch_metric_alarm',
+  'stripe_webhook_no_grant'
+);
+
+/**
+ * The three messages the no-grant filter was built for. Restated here on
+ * purpose — unlike the paid-no-grant message below, these are the EXISTING
+ * contract, and the check is that neither side quietly loses one.
+ */
+const SUBSCRIPTION_NO_GRANT_MESSAGES = [
+  'stripe_event_missing_or_unknown_plan_id',
+  'stripe_event_subscription_mismatch_skipped',
+  'stripe_event_out_of_order_skipped',
+];
 
 /**
  * Source with comments removed, so an assertion about CODE is not satisfied or
@@ -143,6 +165,17 @@ const backendEventBlock = telemetryModel.slice(
 const eventNames = (block) => [...block.matchAll(/'([a-z][a-z0-9_]*)'/gu)].map((match) => match[1]);
 const frontendEventNames = eventNames(frontendEventBlock);
 const backendEventNames = eventNames(backendEventBlock);
+
+/**
+ * The paid-but-no-grant message, read out of billing.ts rather than restated,
+ * so the assertion below is genuinely "Terraform matches the code". A rename
+ * in TypeScript that does not move the metric filter with it fails here
+ * instead of silently un-alarming the path where a household is charged and
+ * receives nothing.
+ */
+const paidNoGrantMessage =
+  /^export const PAID_NO_GRANT_LOG_MESSAGE = '([a-z_]+)';$/mu.exec(billingService)?.[1] ?? null;
+const billingCode = stripComments(billingService);
 
 const checks = [
   ['28-day SLO window', /window_days:\s*28/u.test(slo)],
@@ -542,6 +575,35 @@ const checks = [
     /FrontendTelemetryProbe/u.test(observabilityDoc) &&
       /FrontendReportsUndelivered/u.test(observabilityDoc) &&
       !/Fixing this needs an out-of-band collector/u.test(observabilityDoc),
+  ],
+  // ---------------------------------------------------------------------
+  // Money taken, nothing delivered, nobody told.
+  //
+  // applyStripeEvent had exactly one exit a PAID event could reach having
+  // granted nothing: the bare `return` after deltaForStripeEvent came back
+  // null. An identification top-up with broken `credits` metadata went out
+  // that way — charged, ungranted, and unlogged, so the alarm on
+  // StripeWebhookNoGrant had nothing to fire on. The contract spans two
+  // languages and neither compiler can see the other, which is what these
+  // three checks are for.
+  [
+    'a PAID Stripe event that granted nothing is logged with a message the no-grant filter matches',
+    paidNoGrantMessage !== null &&
+      /logger\.error\(\s*\{[\s\S]*?\},\s*PAID_NO_GRANT_LOG_MESSAGE\s*\)/u.test(billingCode) &&
+      stripHclComments(stripeNoGrantFilter).includes(paidNoGrantMessage),
+  ],
+  [
+    'the no-grant filter still matches every subscription-path message that emits one',
+    SUBSCRIPTION_NO_GRANT_MESSAGES.every(
+      (msg) =>
+        billingCode.includes(`'${msg}'`) && stripHclComments(stripeNoGrantFilter).includes(msg)
+    ),
+  ],
+  [
+    'the no-grant alarm notifies the alerts topic on a single occurrence',
+    /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(stripeNoGrantAlarm) &&
+      /comparison_operator\s*=\s*"GreaterThanThreshold"/u.test(stripeNoGrantAlarm) &&
+      /threshold\s*=\s*0\b/u.test(stripeNoGrantAlarm),
   ],
   [
     'production smoke uses component health',

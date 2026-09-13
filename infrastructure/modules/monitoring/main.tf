@@ -1397,11 +1397,19 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
 # subscriptions, could drop entitlement grants indefinitely while the delivery
 # log in Stripe showed a clean wall of 200s.
 #
-# TWO metrics rather than one, on purpose. The first three messages should be
+# TWO metrics rather than one, on purpose. The first four messages should be
 # flat zero in normal operation, so any occurrence is worth waking up for. The
-# fourth (a first payment that did not settle) is an ordinary business event —
+# fifth (a first payment that did not settle) is an ordinary business event —
 # declined cards happen — and folding it into the same metric would bury the
 # contract breaks under routine noise.
+#
+# `stripe_event_paid_no_grant` is the strongest of the four: Stripe says the
+# money settled and applyStripeEvent produced no grant of any kind. It is the
+# backstop for the identification top-up pack, whose credits are read from
+# Checkout metadata — broken metadata there charged a household $1.99 and
+# delivered nothing while logging absolutely nothing. The message is defined
+# once, in backend/src/services/billing.ts (PAID_NO_GRANT_LOG_MESSAGE), and
+# scripts/check-observability.mjs asserts this pattern still matches it.
 #
 # Drill down with CloudWatch Logs Insights on the billing log group:
 #   fields @timestamp, msg, stripeEventId, householdId, type
@@ -1410,7 +1418,7 @@ resource "aws_cloudwatch_metric_alarm" "auth_login_failure_spike" {
 resource "aws_cloudwatch_log_metric_filter" "stripe_webhook_no_grant" {
   name           = "${var.project_name}-stripe-webhook-no-grant-${var.environment}"
   log_group_name = var.billing_lambda_log_group_name
-  pattern        = "{ $.msg = \"stripe_event_missing_or_unknown_plan_id\" || $.msg = \"stripe_event_subscription_mismatch_skipped\" || $.msg = \"stripe_event_out_of_order_skipped\" }"
+  pattern        = "{ $.msg = \"stripe_event_missing_or_unknown_plan_id\" || $.msg = \"stripe_event_subscription_mismatch_skipped\" || $.msg = \"stripe_event_out_of_order_skipped\" || $.msg = \"stripe_event_paid_no_grant\" }"
 
   metric_transformation {
     name          = "StripeWebhookNoGrant"
@@ -1431,7 +1439,7 @@ resource "aws_cloudwatch_metric_alarm" "stripe_webhook_no_grant" {
   period              = 900
   statistic           = "Sum"
   threshold           = 0
-  alarm_description   = "A Stripe webhook was acknowledged without granting entitlement (unknown plan metadata, subscription mismatch, or an out-of-order event). Expected to be zero: a paying household may be missing its plan. Query the billing Lambda log group for msg=stripe_event_*."
+  alarm_description   = "A Stripe webhook was acknowledged without granting anything (unknown plan metadata, subscription mismatch, an out-of-order event, or a PAID checkout that produced no grant at all). Expected to be zero: a household may have been charged and received nothing. Query the billing Lambda log group for msg=stripe_event_*; stripe_event_paid_no_grant carries the session id to grant from by hand."
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 

@@ -350,6 +350,24 @@ Webhook events we handle:
 
 Anything else is acknowledged and ignored.
 
+**A paid event that grants nothing is never silent.** `applyStripeEvent` has
+one exit a settled payment can reach having granted nothing at all — the
+`return` taken when `deltaForStripeEvent` produces no delta — and it logs
+`stripe_event_paid_no_grant` (`PAID_NO_GRANT_LOG_MESSAGE`) with the session
+id, both household identity routes, and the `purchase` / `credits` / `planId`
+metadata before returning. The `stripe_webhook_no_grant` metric filter matches
+that message alongside the three subscription-path ones, so the existing
+CloudWatch alarm pages on a single occurrence. It fires only for
+`payment_status === 'paid'` on the two checkout events: an unpaid or deferred
+session, a trial, and every subscription or invoice event are correctly silent
+here. The realistic cause is an identification top-up whose `credits` metadata
+is missing or nonsensical — the pack's credits come from checkout metadata, so
+a break there charges $1.99 and delivers nothing. The event is still
+acknowledged rather than retried (the metadata is fixed on the Session, so
+redelivery would fail identically); the grant is made by hand from the session
+id in the log line. `scripts/check-observability.mjs` asserts the TypeScript
+message and the Terraform filter still agree.
+
 Four more event types are read only for the billing emails below and never
 change entitlement: `invoice.paid`, `invoice.upcoming`,
 `invoice.payment_failed`, `customer.source.expiring`.
