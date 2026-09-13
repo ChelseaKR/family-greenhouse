@@ -33,9 +33,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   It is replaced by `latency-fast-burn` (>72% of requests over 500 ms across
   most of an hour, a 14.4x burn) and `latency-slow-burn` (>30% across most of
   six hours, a 6x burn), mirroring the availability burn alarms multiplier for
-  multiplier. Both read the share of requests above the objective from
-  `TC(500:)` on the metric already collected, so no new metric filter and no
-  access-log change was needed. Replayed over the same 28 days: fast fires 0
+  multiplier. Both read the share of requests above the objective as
+  `PR(500:)`, a percentile-rank statistic on the metric already collected, so
+  no metric math, no new metric filter and no access-log change was needed. Replayed over the same 28 days: fast fires 0
   times, slow fires once. The objective itself is unchanged at `p95 <= 500ms`;
   `scripts/check-observability.mjs` now reads the 500 ms boundary and both
   burn rates out of `observability/slos.yaml` and asserts the Terraform

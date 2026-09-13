@@ -181,7 +181,7 @@ const billingCode = stripComments(billingService);
  * The latency objective and its burn-rate alerts, read OUT of
  * observability/slos.yaml rather than restated here, so the two checks below
  * are genuinely "Terraform implements the objective". Moving the objective to
- * 800ms without moving the alarms' TC() boundary with it fails here, instead
+ * 800ms without moving the alarms' PR() boundary with it fails here, instead
  * of leaving a pair of alarms quietly measuring a number the SLO no longer
  * states.
  */
@@ -222,9 +222,13 @@ const checks = [
         (alarm) =>
           alarm !== '' &&
           /metric_name\s*=\s*"ApplicationLatency"/u.test(alarm) &&
-          new RegExp(`stat\\s*=\\s*"TC\\(${latencyObjectiveMs}:\\)"`, 'u').test(alarm) &&
-          /stat\s*=\s*"SampleCount"/u.test(alarm) &&
-          /expression\s*=\s*"IF\(requests > 0, 100 \* slow \/ requests, 0\)"/u.test(alarm)
+          // PR(n:) is the percentage of samples above n, read straight from the
+          // metric: the objective's over-budget share, and a statistic
+          // PutMetricAlarm documents for alarms with a metric-value bound.
+          new RegExp(`extended_statistic\\s*=\\s*"PR\\(${latencyObjectiveMs}:\\)"`, 'u').test(
+            alarm
+          ) &&
+          !/metric_query/u.test(alarm)
       ),
   ],
   [

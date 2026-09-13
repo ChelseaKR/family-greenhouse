@@ -887,10 +887,20 @@ resource "aws_cloudwatch_metric_alarm" "application_5xx" {
 #
 # What IS well defined at n = 1 is the objective's own error budget. "p95 <=
 # 500 ms" means at most 5% of requests may exceed 500 ms, and that fraction is
-# exact whether the period held two requests or two hundred. CloudWatch can
-# compute it from the metric already being collected: TC(500:) is the count of
-# ApplicationLatency samples at or above 500. No new metric filter, no change
-# to the access-log format.
+# exact whether the period held two requests or two hundred. CloudWatch computes
+# it directly from the metric already being collected: PR(500:) is the
+# percentage of ApplicationLatency samples above 500. Percentile rank excludes
+# its lower bound, so a request of exactly 500 ms counts as within the
+# objective, which is what the objective says. No metric math, no new metric
+# filter, no change to the access-log format.
+#
+# PR(500:) rather than a TC(500:) / SampleCount expression. They are the same
+# number: identical in all 134 half-hour buckets for 2026-09-11 -> 13 read with
+# get-metric-data, maximum difference 0.0000. But PutMetricAlarm's API
+# reference lists PR(n:m) with metric values as a valid alarm statistic, and
+# lists TC only with percentage bounds. A statistic the alarm API rejected
+# would fail the production release at its Terraform step, so the documented
+# form wins.
 #
 # A log metric filter could not have done it anyway. API Gateway's JSON access
 # log writes responseLatency as a QUOTED STRING, and
@@ -899,10 +909,6 @@ resource "aws_cloudwatch_metric_alarm" "application_5xx" {
 # does not, which is why the sibling 5xx filter above uses the string wildcard
 # `5*` rather than `>= 500`. A slow-request filter written the obvious way
 # would have published a permanent zero and alarmed on nothing.
-#
-# TC's lower bound is inclusive, so a request landing on exactly 500 ms counts
-# against the budget. Over the 28 days that is 2 requests in 3,694 versus a
-# strict `> 500` count: conservative, in the direction of alarming.
 #
 # The burn rates and windows mirror the availability SLO below multiplier for
 # multiplier, and scripts/check-observability.mjs reads both the 500 ms
@@ -929,6 +935,10 @@ resource "aws_cloudwatch_metric_alarm" "latency_fast_burn" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 12
   datapoints_to_alarm = 10
+  metric_name         = "ApplicationLatency"
+  namespace           = "FamilyGreenhouse/API/${var.environment}"
+  period              = 300
+  extended_statistic  = "PR(500:)"
   threshold           = 72
   alarm_description   = "500ms p95 latency SLO fast burn: >72% of application requests over 500ms across most of an hour; GET /health is excluded"
   alarm_actions       = [aws_sns_topic.alerts.arn]
@@ -938,35 +948,6 @@ resource "aws_cloudwatch_metric_alarm" "latency_fast_burn" {
   # watched from outside the stack entirely — see "External availability
   # checks" in docs/observability.md.
   treat_missing_data = "notBreaching"
-
-  metric_query {
-    id          = "requests"
-    return_data = false
-    metric {
-      metric_name = "ApplicationLatency"
-      namespace   = "FamilyGreenhouse/API/${var.environment}"
-      period      = 300
-      stat        = "SampleCount"
-    }
-  }
-
-  metric_query {
-    id          = "slow"
-    return_data = false
-    metric {
-      metric_name = "ApplicationLatency"
-      namespace   = "FamilyGreenhouse/API/${var.environment}"
-      period      = 300
-      stat        = "TC(500:)"
-    }
-  }
-
-  metric_query {
-    id          = "slow_rate"
-    expression  = "IF(requests > 0, 100 * slow / requests, 0)"
-    label       = "Application requests over the 500ms objective, percent"
-    return_data = true
-  }
 }
 
 resource "aws_cloudwatch_metric_alarm" "latency_slow_burn" {
@@ -976,40 +957,15 @@ resource "aws_cloudwatch_metric_alarm" "latency_slow_burn" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 12
   datapoints_to_alarm = 10
+  metric_name         = "ApplicationLatency"
+  namespace           = "FamilyGreenhouse/API/${var.environment}"
+  period              = 1800
+  extended_statistic  = "PR(500:)"
   threshold           = 30
   alarm_description   = "500ms p95 latency SLO slow burn: >30% of application requests over 500ms across most of six hours; GET /health is excluded"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
-
-  metric_query {
-    id          = "requests"
-    return_data = false
-    metric {
-      metric_name = "ApplicationLatency"
-      namespace   = "FamilyGreenhouse/API/${var.environment}"
-      period      = 1800
-      stat        = "SampleCount"
-    }
-  }
-
-  metric_query {
-    id          = "slow"
-    return_data = false
-    metric {
-      metric_name = "ApplicationLatency"
-      namespace   = "FamilyGreenhouse/API/${var.environment}"
-      period      = 1800
-      stat        = "TC(500:)"
-    }
-  }
-
-  metric_query {
-    id          = "slow_rate"
-    expression  = "IF(requests > 0, 100 * slow / requests, 0)"
-    label       = "Application requests over the 500ms objective, percent"
-    return_data = true
-  }
 }
 
 # 99.5% availability SLO, 28-day window. The fast alarm detects a 14.4x burn
