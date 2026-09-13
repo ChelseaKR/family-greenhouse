@@ -112,11 +112,12 @@ describe('terms: the commercial sections render', () => {
 describe('terms: the two locales agree about money', () => {
   /**
    * Both locales must carry the same commercial numbers. These are the ones a
-   * reader acts on: the trial length, the notice period before a price change,
-   * and how long a one-time pack of identifications lasts.
+   * reader acts on: the trial length, the notice period before a price change
+   * (now by email — there is no in-app announcement, #710), and how long a
+   * one-time pack of identifications lasts.
    */
   it.each([
-    ['the 14-day trial and the 14 days of notice before a price change', /14/],
+    ['the 14-day trial and the 14 days of email notice before a price change', /14/],
     ['the 12-month expiry on a pack of identifications', /12 (months|meses)/],
   ])('%s appears in both locales', (_label, pattern) => {
     const english = renderEnglish().container.textContent ?? '';

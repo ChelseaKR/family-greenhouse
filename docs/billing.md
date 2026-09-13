@@ -567,6 +567,7 @@ Invoice access goes through the Stripe Customer Portal. We don't ingest invoice 
 - `tests/unit/services/billingEmails.test.ts` — admins-only recipients, sends although every preference is off, the redelivered-webhook-sends-no-second-receipt case, marker release on a dry run, and the customer pointer
 - `tests/unit/services/billingEmailWebhook.test.ts` — the two dispatch phases in `applyStripeEvent`, and that a delivery the guards decline sends no cancellation confirmation
 - `tests/unit/config/refundPosture.test.ts` — the published Refunds section held to the code: no Stripe refund path anywhere in `backend/src`, an unprorated account-deletion cancellation, the section present in both locales, and no refund window in either
+- `tests/unit/config/priceChangeNotice.test.ts` — the price promise held to the code: every sellable price literal and live Stripe price id pinned, no path able to re-price a running subscription, both locales holding the published sentences, and the withdrawn in-app notice promise unable to return
 
 The webhook signature verification is _not_ unit-tested here because mocking `stripe.webhooks.constructEvent` would just be testing our mock. We rely on Stripe's official typings + the `deltaForStripeEvent` test coverage.
 
@@ -586,16 +587,77 @@ loaded by `frontend/src/i18n/legalCatalog.ts`, not the startup
 description of behaviour in this repo, not a policy written ahead of it — so a
 change to any row below is a change to the Terms as well, in **both** locales.
 
-| Terms section       | The behaviour it describes                                                                                                                                                                                                                | Where it lives                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                                              | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate                    |
-| Free trials         | 14 days on a household's FIRST paid subscription only, card collected at checkout, first charge at trial end, trial-end date shown on the billing page; a household that already consumed its trial gets none and is charged at checkout  | `services/billing.ts` (`TRIAL_PERIOD_DAYS`, gated on `trialConsumedAt`; `trialAvailable` on `GET /billing/me`), `BillingSettings.tsx` `trialEnds` |
-| Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                                                | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                                              |
-| Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                  | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                     |
-| Price changes       | The 14-day material-change notice these Terms already give; an existing subscription keeps its own price                                                                                                                                  | `legal.terms.agreement.body` / `changes.body`; § _Setup checklist_ above ("do not archive those Stripe prices")                                   |
-| One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                               | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                |
-| Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                   |
-| Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                    |
+| Terms section       | The behaviour it describes                                                                                                                                                                                                                | Where it lives                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                                              | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate                                       |
+| Free trials         | 14 days on a household's FIRST paid subscription only, card collected at checkout, first charge at trial end, trial-end date shown on the billing page; a household that already consumed its trial gets none and is charged at checkout  | `services/billing.ts` (`TRIAL_PERIOD_DAYS`, gated on `trialConsumedAt`; `trialAvailable` on `GET /billing/me`), `BillingSettings.tsx` `trialEnds`                    |
+| Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                                                | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                                                                 |
+| Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                  | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                                        |
+| Price changes       | A new price applies to new subscriptions only; a live subscription is never moved onto a different price, and a change that would move one is emailed to the household's admins 14 days ahead                                             | `line_items: [{ price: priceId }]` set once at checkout and never updated; § _Price changes_ below; § _Setup checklist_ above ("do not archive those Stripe prices") |
+| One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                               | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                                   |
+| Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                                      |
+| Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                                       |
+
+### Price changes, and the notice nothing sends
+
+Until #710 the Terms promised that a price change would be **"announced in-app
+at least 14 days before it takes effect, in time to cancel"**, and three
+neighbouring sentences promised an in-app notice for any material change.
+**There is no in-app announcement mechanism** — no policy version, no banner,
+no stored acknowledgement, no billing-email kind for a price change. The six
+kinds in `services/billingEmailCopy.ts` are all derived from a Stripe webhook
+event, and a price change 14 days in the future is not one.
+
+So the sentences were narrowed to what the system does, and the guarantee
+underneath them was kept because it is the stronger half and it is already
+enforced by the architecture:
+
+- **A subscription is priced once, at checkout.** `createCheckoutSession` sets
+  `line_items: [{ price: priceId, quantity: 1 }]`, and nothing calls
+  `subscriptions.update` or touches `subscriptionItems` afterwards, so no code
+  path can move a running subscription onto a different price. The plan catalog
+  never migrates one either — that is why the withdrawn annual and lifetime
+  Stripe prices must not be archived.
+- **A change to the catalog therefore only reaches new subscriptions.** The
+  Terms say exactly that, and say that if an existing subscription ever does
+  have to move, the household's admins are emailed at least 14 days first.
+
+**What is gated:** `backend/tests/unit/config/priceChangeNotice.test.ts` pins
+every sellable price literal and every live Stripe price id, fails if anything
+in `backend/src` acquires the ability to re-price a running subscription, holds
+both locales to the published sentences, and fails if an in-app notice promise
+comes back while no mechanism exists. It is a speed bump, not a notifier: it
+guarantees a price cannot move while nobody is looking, and knows nothing about
+whether a notice was sent. The top-up price id is deliberately left unpinned —
+setting it for the first time puts a new product on sale (ADR 0019), it
+re-prices nobody, and it must not be caught by a notice obligation that does
+not apply to it.
+
+**What is manual:** writing and sending the notice. There is no broadcast send
+path. `services/billingEmails.ts` dispatches from a Stripe event; reaching every
+admin of every household on a given price would be a new send — the seventh
+notice kind plus a fan-out over subscribed households, in the shape
+`services/scheduledFanOut.ts` already provides — and it does not exist. Until
+it does, the 14-day email is a person's job.
+
+**What was already not kept.** The sentence
+`legal.terms.fromUs.notice` used to promise that "material features and usage
+limits are stable for at least 14 days from announcement". It has been on
+`main` since at least 2026-07-05. On 2026-09-02, one day after payments went
+live, ADR 0012 cut the free tier's leaf-health cap from 200 to 20, its monthly
+identifications from 3 to 1, and its chat budget to a quarter — with no
+announcement, because there was nowhere to make one. The paid tiers were
+deliberately untouched, which is why the replacement sentence promises exactly
+that and nothing wider.
+
+The replacement sentence deliberately does **not** say where a free-tier change
+is recorded. `CHANGELOG.md` carries the cap cut in full, and the repository is
+public — but the hand-curated public page at `/changelog`
+(`frontend/src/features/changelog/ChangelogPage.tsx`) does not, and its
+2026-09-02 entry says "The free Seedling plan is unchanged and stays free" on
+the day those caps were cut. Pointing the Terms at "our release notes" would
+have published a second promise the product does not keep. That page is a
+separate defect and is not touched here.
 
 ### Refunds
 
