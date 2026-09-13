@@ -90,9 +90,15 @@ and wait for CloudFront invalidation before restoring the previous Lambda code.
 
 ## Lambda cold-start / latency
 
-**Symptom:** intermittent slow first requests, `p95` panel elevated.
+**Symptom:** `family-greenhouse-latency-fast-burn-production` or
+`family-greenhouse-latency-slow-burn-production` in ALARM; intermittent slow first requests, `p95`
+panel elevated.
 
-**Diagnosis:** cold starts are expected at low traffic. The `chat` Lambda is 512MB/90s on purpose (Bedrock tool loop); others are 256MB/30s. A _sustained_ p95 climb that isn't cold starts points at a downstream dependency (DDB, Bedrock, an external API) — check X-Ray traces (trace id is on every log line).
+**Diagnosis:** cold starts are expected at low traffic, and the burn-rate alarms are calibrated so
+that the _expected_ rate of them does not page — fast fires when >72% of requests exceed 500 ms
+across most of an hour, slow when >30% do across most of six hours. Replayed over the 28 days to
+2026-09-13, fast fired 0 times and slow fired once. So either of these in ALARM means the share of
+slow requests has moved, not that a cold start happened. The `chat` Lambda is 512MB/90s on purpose (Bedrock tool loop); others are 256MB/30s. A _sustained_ p95 climb that isn't cold starts points at a downstream dependency (DDB, Bedrock, an external API) — check X-Ray traces (trace id is on every log line).
 
 ---
 
