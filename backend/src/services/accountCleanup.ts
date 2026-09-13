@@ -4,6 +4,7 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as billing from './billing.js';
 import * as kioskService from './kioskService.js';
+import * as plantService from './plantService.js';
 import * as plantTagService from './plantTagService.js';
 import * as sitterService from './sitterService.js';
 
@@ -208,10 +209,11 @@ export async function deleteUserScopedData(userId: string): Promise<void> {
  * leaves a usable sitter link or a live wall display and a substantial amount
  * of household data behind.
  * Activity events and caretaker visit records use dedicated partitions, while
- * sitter and caretaker credentials use secret-token partitions projected onto
- * GSI1. Account deletion must clear every one of those boundaries; deleting
- * only the visible plants leaves a usable sitter link or caretaker token and a
- * substantial amount of household data behind.
+ * sitter, caretaker and cutting-share credentials use secret-code partitions
+ * projected onto GSI1. Account deletion must clear every one of those
+ * boundaries; deleting only the visible plants leaves a usable sitter link, a
+ * caretaker token or a public cutting link, and a substantial amount of
+ * household data behind.
  *
  * Plant-specific S3 objects and per-plant rows are removed by
  * plantService.deletePlant before this runs. This final partition sweep is
@@ -259,6 +261,20 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
     ProjectionExpression: 'PK, SK',
   });
   await deleteItems(caretakerVisitItems);
+
+  // Cutting shares are the fifth boundary, and the only PUBLIC one: a
+  // `/shared/{code}` link needs no credential at all. Its row carries a TTL,
+  // so a survivor retires itself within 14 days — but "the household was
+  // erased and a public link to its plant card kept answering for a
+  // fortnight" is not an outcome account deletion should leave behind.
+  const shareItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'GSI1PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#SHARE` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(shareItems);
 
   // Plant tags (ADR 0016) use the same secret-token-partition shape as sitter
   // links. The household PIN row sits in the base partition and is swept below.
@@ -315,6 +331,8 @@ export interface RevokedCredentialCounts {
   plantTags: number;
   sitterLinks: number;
   kioskLinks: number;
+  /** Public cutting-share links (`/shared/{code}`), which live up to 14 days. */
+  cuttingShares: number;
 }
 
 /**
@@ -325,6 +343,11 @@ export interface RevokedCredentialCounts {
  * every capability token they had issued lived in the `HOUSEHOLD#{id}` or
  * secret-token partitions and kept working. Plant tags and kiosk links never
  * expire at all; sitter links last up to 7 days free / 90 paid (#449).
+ *
+ * Cutting shares belong to the same family and were missed by that sweep: a
+ * `/shared/{code}` link is public and unauthenticated, and kept serving the
+ * household's plant card for the remainder of its 14-day life after the
+ * member who minted it was removed.
  *
  * MUST BE CALLED BEFORE `anonymizeUserInHousehold`. That function overwrites
  * `createdBy` with DELETED_USER_ID on exactly these rows — deliberately, so a
@@ -344,18 +367,19 @@ export async function revokeCredentialsCreatedBy(
   householdId: string,
   userId: string
 ): Promise<RevokedCredentialCounts> {
-  const [plantTags, sitterLinks, kioskLinks] = await Promise.all([
+  const [plantTags, sitterLinks, kioskLinks, cuttingShares] = await Promise.all([
     plantTagService.revokeTagsCreatedBy(householdId, userId),
     sitterService.revokeSitterLinksCreatedBy(householdId, userId),
     kioskService.revokeKioskLinksCreatedBy(householdId, userId),
+    plantService.revokePlantSharesCreatedBy(householdId, userId),
   ]);
-  if (plantTags + sitterLinks + kioskLinks > 0) {
+  if (plantTags + sitterLinks + kioskLinks + cuttingShares > 0) {
     logger.info(
-      { householdId, plantTags, sitterLinks, kioskLinks },
+      { householdId, plantTags, sitterLinks, kioskLinks, cuttingShares },
       'member_removal.credentials_revoked'
     );
   }
-  return { plantTags, sitterLinks, kioskLinks };
+  return { plantTags, sitterLinks, kioskLinks, cuttingShares };
 }
 
 export async function anonymizeUserInHousehold(householdId: string, userId: string): Promise<void> {
