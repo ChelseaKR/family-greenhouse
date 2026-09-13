@@ -867,6 +867,7 @@
     "allDoneBody": "Ya se atendió todo lo de la lista. ¡Muchísimas gracias por echar una mano!",
     "nothingDueTitle": "Ahora mismo no hay nada que hacer",
     "nothingDueBody": "El hogar no tiene nada programado en este momento. ¡Gracias por pasarte a mirar!",
+    "markedDone": "Marcado como hecho: {{plant}}.",
     "photo": {
       "heading": "Envía una foto a casa",
       "body": "Si has hecho una foto, les encantará verla. Las fotos van directas al historial de esa planta, sin necesidad de crear una cuenta.",
