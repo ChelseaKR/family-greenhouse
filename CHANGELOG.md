@@ -16,6 +16,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The iOS app-site-association file was never published, and every deploy
+  said it was.** `frontend/public/.well-known/apple-app-site-association` has
+  carried the real Team ID since #731 and is built into `dist/` correctly, but
+  `.well-known/` is a hidden directory and `actions/upload-artifact` drops
+  hidden files unless told not to. The build job recorded
+  `include-hidden-files: false`, the artifact reached the deploy job without
+  `.well-known/`, and the deploy's deliberately-guarded
+  `if [ -f dist/.well-known/apple-app-site-association ]` found nothing to
+  copy. Nothing failed: `Deploy to Production` for `v0.33.0` uploaded 331
+  objects, none of them under `.well-known/`, and reported success while
+  `https://familygreenhouse.net/.well-known/apple-app-site-association`
+  answered `404 NoSuchKey`. Universal links cannot be verified against a 404,
+  so this blocked the iOS Associated Domains work behind a green deploy.
+
+  Both workflows that hand `frontend/dist` to a deploy job now set
+  `include-hidden-files: true`. `scripts/deploy.sh` reads `frontend/dist` in
+  place and never crosses an artifact, so it was never affected.
+
+  `scripts/check-well-known.mjs` could not have caught this: it verified that
+  the file is committed and that each deploy path names it with the right
+  content type, but nothing asserted the file survives the trip. The assertion
+  now lives in `scripts/artifact-hidden-files.mjs`, in its own module because
+  the gate runs at import time and cannot be imported by a test, and
+  `scripts/artifact-hidden-files.test.mjs` covers it — including that both
+  real workflows carry the flag, so removing it fails a test rather than a
+  deploy six weeks later.
+
 ## [0.33.0] - 2026-09-13
 
 ### Security
