@@ -16,7 +16,175 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-12
+
+### Added
+
+- **The identification top-up pack is on sale.** The $1.99 pack of twenty
+  extra plant identifications has been built, tested and drawn in the app since
+  ADR 0019, and could be bought nowhere: `stripe_price_id_identify_top_up` was
+  blank in production, so `POST /billing/top-up/checkout` answered
+  `400 TOP_UP_NOT_CONFIGURED`, `GET /billing/plans` published
+  `identifyTopUp.available: false`, and `IdentifyTopUpCard` rendered the
+  balance with no purchase button. The Stripe price object did not exist.
+
+  It does now, and **this release is the thing that puts the pack on sale.**
+  The price was created in Stripe **live** mode as a one-time $1.99 USD charge
+  and read back from the Stripe API before its id was committed: `livemode`
+  true, `active` true, `unit_amount` 199, `currency` usd, no recurring
+  interval, and metadata `pack_id=identify-20`, `credits=20`,
+  `validity_days=365` — matching `IDENTIFY_TOP_UP_PACK` in
+  `backend/src/models/identifyTopUp.ts` field for field. The id reaches the API
+  Lambda as `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` through the production Terraform
+  apply that a `v*` tag runs, so a household admin can buy the pack from the
+  moment this deploys. It is the first new paid thing this product has offered
+  since the plans opened on 2026-09-02.
+
+  What a pack is has not changed: credits, not entitlement. It raises no cap,
+  starts no subscription, and is drawn on only after the month's plan allowance
+  is spent, soonest-expiring pack first. Credits expire 365 days after purchase
+  and never auto-renew. Buying is admin-only, like every other purchase here.
+  Staging's price id stays blank on purpose, so the fail-closed "not for sale
+  in this environment" path keeps somewhere real to be exercised.
+
+  **Two things are deliberately left for the owner, and neither is enforced by
+  a gate.** First, `stripe_price_ids_are_live` is a hand-made attestation that
+  every non-blank price id was created in the same Stripe mode as the secret
+  key — Terraform cannot check it, because a price id does not encode its mode.
+  The attestation in `terraform.tfvars` is dated 2026-09-02 and covers five
+  ids; there are six now. The sixth carries its own machine read-back in the
+  file, so the gap is the attestation's scope rather than an unverified id, but
+  `stripe_price_mode_confirmed` is a Terraform `check` block, and a check block
+  warns without stopping an apply. Second, the pull request that supplied the
+  price id argued that the product's refund terms and its price-change promises
+  belonged ahead of a new paid SKU. Half of that is answered in this same
+  release — the Refunds section below — and the price-change notice
+  ([#710](https://github.com/ChelseaKR/family-greenhouse/issues/710)) is still
+  open as this is written.
+  ([#712](https://github.com/ChelseaKR/family-greenhouse/issues/712))
+
+- **Alarms can now reach a person without an email address.** All thirty-three
+  CloudWatch alarms in this stack publish to one SNS topic whose only human
+  destination is an email subscription, and that path is five hops: alarm to
+  SNS, to `support@familygreenhouse.net`, to the SES inbound receipt rule (the
+  domain's MX points at `inbound-smtp`, not a mailbox), to the mail-forwarder
+  Lambda, to the maintainer's inbox. It works, and it has two holes that only
+  show when it matters. It is **self-referential** — the alarms that watch the
+  mail forwarder can only reach a person _through_ the mail forwarder — and one
+  click on the unsubscribe link SNS puts in every alert email silences all
+  thirty-three alarms permanently and silently. The existing
+  `alarms_have_a_notification_destination` check catches a topic with no
+  subscriber, but only when somebody runs `terraform plan`.
+
+  `alert-relay.yml` adds a second channel that fails independently: a
+  half-hourly workflow that reads alarm state and the topic's
+  confirmed-subscriber count directly and writes them into a GitHub issue.
+  There is no address to be wrong and nothing to unsubscribe from. It makes two
+  read-only AWS calls and creates or changes nothing in the account.
+
+  Because this repository is public and its issues are world-readable, the
+  report is **assembled rather than forwarded**: fixed prose, integers, and
+  alarm names that matched a strict infrastructure shape. Anything else is
+  withheld behind a visible placeholder, so a withheld alarm still counts
+  toward the total instead of vanishing from it. `StateReason` (which quotes
+  metric values) and ARNs (which carry the account id) are never read at all,
+  and a final scan re-reads the finished body and refuses to publish it if
+  anything identifier-shaped survived. The tests carry a hostile fixture — an
+  email address, a 32-hex literal, a UUID, an account id, an ARN, a household
+  name — and a negative control that disables the allowlist and asserts the
+  guard still refuses.
+
+  Three states are kept apart, not two: zero alarms matching the prefix is a
+  broken query, not a quiet morning, and is reported as its own condition. The
+  issue is reused and its body rewritten silently each run, with a comment only
+  when the state fingerprint changes, and it is never closed automatically — a
+  person closes it, having looked.
+  ([#711](https://github.com/ChelseaKR/family-greenhouse/issues/711))
+
+### Changed
+
+- **An end-to-end test that passes only on its retry now fails the run.**
+  `frontend/playwright.config.ts` retries twice in CI, and Playwright reports a
+  test that failed and then passed on a retry as `flaky` — exiting 0 unless
+  `failOnFlakyTests` is set. It was not set, and the weekly cross-browser sweep
+  concluded `success` over `2 flaky` (2026-07-21, webkit), `1 flaky`
+  (2026-08-11, firefox) and `1 flaky` (2026-08-18, webkit). Nothing but the job
+  log recorded it. The retries still run and `trace: 'on-first-retry'` still
+  records the failed attempt; the run now fails. Local runs have no retries and
+  are unchanged.
+
+  This should not redden anything: as of 2026-09-09 the last eight merged e2e
+  reports each printed `expected(passed)=128 unexpected(failed)=0 flaky=0`.
+  `scripts/check-playwright-flaky.test.mjs` holds the rule by importing every
+  `playwright*.config.ts` under `frontend/` rather than grepping it, so a
+  commented-out or misspelt key cannot satisfy it, and it fails on an exemption
+  naming a config that no longer exists or that now satisfies the rule.
+
+  **The post-deploy smoke config is deliberately exempt**, with its reason
+  recorded: on that config, failing on flaky means rolling production back on a
+  smoke that passed on its retry. That is
+  [#703](https://github.com/ChelseaKR/family-greenhouse/issues/703), and it is
+  an open decision rather than an oversight.
+  ([#705](https://github.com/ChelseaKR/family-greenhouse/issues/705))
+
 ### Fixed
+
+- **The Terms now say what happens to money already taken.** Every other
+  commercial term was published — automatic renewal, cancellation, the trial,
+  price changes, one-time purchases — and refunds were blank on purpose, behind
+  a non-rendering `TODO(owner)` block, while real cards were being charged. The
+  help centre had been answering the question all along ("anything in that
+  territory is handled case by case — ask"), so the product answered it in a
+  help article and declined to answer it in the document a paying customer is
+  actually held to.
+
+  The published section describes the system rather than a policy written ahead
+  of it. Cancelling stops the next charge and returns nothing already taken: the
+  household keeps its plan, and every paid feature, to the end of the period it
+  has already paid for, and then moves to Seedling. The 14-day trial on a
+  household's first paid subscription is what makes the first charge avoidable,
+  and the Terms say so rather than offering a refund in its place. A charge that
+  looks wrong — a duplicate, an amount you do not recognise, a renewal after a
+  cancellation — is investigated and put right, and everything else is
+  considered case by case on request. One-time purchases are treated the same
+  way. Statutory rights are expressly reserved: where local law grants a right
+  to cancel and be repaid, that right applies whatever the section says. Both
+  locales.
+
+  **It states no refund window, deliberately, and that is the honest answer
+  rather than the generous-sounding one.** "A full refund if you ask within N
+  days" is the one option in #426 that creates an obligation with a clock on it,
+  and nothing here can see the clock start: the intake is the support mailbox,
+  no request is recorded, and no report shows requests approaching a deadline.
+  `docs/billing.md` § Refunds names what a window would have to arrive with — a
+  record that a request was made and when, a report of requests inside and
+  outside it, and a rule for pack credits when the purchase that granted them is
+  refunded.
+
+  The claim is held to the code in both directions rather than asserted in
+  prose. `backend/tests/unit/config/refundPosture.test.ts` walks all 167 `.ts`
+  files under `backend/src` and fails if any of them acquires a Stripe refund
+  call — there are none today, independently re-derived for this release. It
+  fails if the account-deletion cancellation starts passing `prorate`,
+  `invoice_now` or `proration_behavior`, because that would move money on a
+  deletion the Terms say returns nothing. It fails if the section is deleted
+  from either locale, if a refund window appears in either, or if the help
+  article stops agreeing with the Terms. It asserts it read a real tree before
+  scanning it, so it cannot pass over nothing, and it pins the cancellation
+  call's shape positively so the negative assertions cannot quietly stop
+  matching anything.
+
+  **Two things stay manual, and the documentation says so rather than implying
+  otherwise.** Issuing a refund is a person in the Stripe dashboard; the
+  deployed Stripe key is not restricted to read-only, so "no refund path" is a
+  posture the tests defend, not a boundary the credentials enforce. And nothing
+  reconciles a refund made in Stripe back to the identification credits a pack
+  purchase granted, so a refunded pack leaves its credits spendable — which
+  starts mattering with this release, because this is the release that puts the
+  pack on sale. [#426](https://github.com/ChelseaKR/family-greenhouse/issues/426)
+  stays open for its four numbered questions, among them whether a household
+  should be warned or repaid when deleting its last account erases unused pack
+  credits with no warning and nothing returned.
 
 - **The landing page promised quiet hours for the one channel that ignores
   them.** The "Reminders where you'll see them" band read _"Pick the channel,
