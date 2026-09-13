@@ -565,3 +565,43 @@ variable "stripe_price_ids_are_live" {
   type        = bool
   default     = false
 }
+
+# The scope of the attestation above. `stripe_price_ids_are_live` is a bare
+# boolean, so it says "I checked" without saying WHAT was checked: once true,
+# it stays true while price ids are added, swapped or re-pasted underneath it,
+# and nothing notices. That is not hypothetical — the identification top-up id
+# (ADR 0019) was added to production on 2026-09-12 under an attestation dated
+# 2026-09-02 that names five ids, and the only thing that would have flagged it
+# was a `check` block, which warns and lets the apply proceed.
+#
+# So the attestation names the ids it covers, and a PRECONDITION on
+# terraform_data.commercial_gate_guard refuses a live-mode apply that ships a
+# price id absent from this list. Adding a sixth id now FAILS the plan instead
+# of warning past it.
+#
+# Naming the ids rather than counting them is deliberate: a count catches an
+# added id but not a swapped one, and pasting a test-mode id over a live one is
+# precisely the mistake this attestation exists to prevent.
+#
+# The check is one-directional on purpose. Every id IN USE must be attested; an
+# attested id no longer in use is left alone, because a price nothing
+# references cannot charge anyone, and failing on it would add churn without
+# adding safety.
+#
+# Default is empty, which BLOCKS rather than passes: an environment that pairs
+# a live key with open payments and no attested list cannot apply.
+variable "stripe_price_ids_attested" {
+  description = "The exact Stripe price ids the stripe_price_ids_are_live attestation covers. Every non-empty stripe_price_id_* must appear here before a live-mode apply with payments_enabled=\"1\" is allowed. Re-attest by adding the new id here in the same reviewed change that introduces it."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.stripe_price_ids_attested) == length(toset(var.stripe_price_ids_attested))
+    error_message = "stripe_price_ids_attested contains a duplicate. Each attested price id must appear exactly once, so the list reads as the literal set of ids the owner confirmed."
+  }
+
+  validation {
+    condition     = alltrue([for id in var.stripe_price_ids_attested : startswith(id, "price_")])
+    error_message = "stripe_price_ids_attested must contain Stripe price ids (price_...). A product id, a lookup key, or a placeholder here would silently attest nothing."
+  }
+}

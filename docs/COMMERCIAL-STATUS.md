@@ -83,12 +83,21 @@ paused.` / `Billing access is currently paused.`) and originate nothing.
   `stripe_price_ids_are_live = false`. `STRIPE_SECRET_KEY` and
   `STRIPE_WEBHOOK_SECRET` are GitHub Actions secrets forwarded as `TF_VAR_…`
   by the deploy workflows, never committed.
-- `terraform_data.commercial_gate_guard` carries three **preconditions** that
+- `terraform_data.commercial_gate_guard` carries four **preconditions** that
   fail the plan — not `check` blocks, which only warn and would let
   `terraform apply` proceed unread in CI. Enabling `payments_enabled` fails
   unless the repository hold is also lifted, the Stripe secret/webhook/monthly
-  price IDs are all populated, and a live key is paired with a confirmed
-  `stripe_price_ids_are_live`.
+  price IDs are all populated, a live key is paired with a confirmed
+  `stripe_price_ids_are_live`, and every configured price ID is named in
+  `stripe_price_ids_attested`.
+- **The attestation names the IDs it covers.** `stripe_price_ids_are_live` is a
+  boolean: it records that the owner checked, not what she checked, so once
+  true it stays true while price IDs are added or swapped underneath it. That
+  happened — the ADR 0019 top-up ID reached production under an attestation
+  naming five IDs. `stripe_price_ids_attested` lists them, the fourth
+  precondition refuses an apply that ships an ID absent from the list, and the
+  error names the offending ID. Adding a price ID therefore means re-attesting
+  in the same reviewed change, or the plan fails.
 - Every purchase surface in the frontend is gated on the API's own
   `paymentsAvailable` field rather than on the compile-time constant, so a
   frontend deployed ahead of its backend — or an environment whose runtime gate
@@ -242,6 +251,11 @@ update the corresponding assertion in `commercialStatus.test.ts`, and set
 `stripe_price_ids_are_live = true` only after manually confirming every id was
 created in live mode — Terraform cannot detect a mode mismatch, because price
 ids look identical in both.
+
+Then list those exact ids in `stripe_price_ids_attested`. That list is what
+makes the attestation enforceable: the plan fails, naming the id, if a
+configured price is missing from it. Re-attesting is part of adding a price,
+not a follow-up to it.
 
 ### 6. Deploy production
 

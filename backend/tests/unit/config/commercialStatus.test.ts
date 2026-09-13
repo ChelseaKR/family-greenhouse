@@ -49,6 +49,20 @@ describe('repository commercial status', () => {
 });
 
 describe('production IaC commercial-hold invariants', () => {
+  /** The commercial_gate_guard resource body, preconditions and all. */
+  const guardBlock = (): string =>
+    rootModule.slice(
+      rootModule.indexOf('resource "terraform_data" "commercial_gate_guard"'),
+      rootModule.indexOf('check "web_push_vapid_configuration_complete"')
+    );
+
+  /** The price ids an environment's tfvars attests to, in file order. */
+  const attestedIds = (vars: string): string[] => {
+    const block = vars.match(/^stripe_price_ids_attested\s*=\s*\[([\s\S]*?)^\]/m);
+    if (!block) return [];
+    return [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  };
+
   const root = new URL('../../../../', import.meta.url);
   const apiModule = readFileSync(new URL('infrastructure/modules/api/main.tf', root), 'utf8');
   const authModule = readFileSync(new URL('infrastructure/modules/auth/main.tf', root), 'utf8');
@@ -162,7 +176,7 @@ describe('production IaC commercial-hold invariants', () => {
       rootModule.indexOf('check "web_push_vapid_configuration_complete"')
     );
     expect(guard).not.toBe('');
-    expect(guard.match(/precondition\s*{/g) ?? []).toHaveLength(3);
+    expect(guard.match(/precondition\s*{/g) ?? []).toHaveLength(4);
 
     // Opening the runtime gate while the committed status file still holds.
     expect(guard).toMatch(/commercialHoldActive == false/);
@@ -171,12 +185,78 @@ describe('production IaC commercial-hold invariants', () => {
     expect(guard).toMatch(/var\.stripe_webhook_secret != ""/);
     // Opening it with a live key against unverified price ids.
     expect(guard).toMatch(/var\.stripe_price_ids_are_live/);
+    // Opening it with a live key against a price id the attestation never named.
+    expect(guard).toMatch(/length\(local\.stripe_price_ids_unattested\) == 0/);
 
     // Every precondition must be inert while payments are off, so the guard
     // never blocks an ordinary deploy of the held configuration.
     for (const condition of guard.match(/condition\s*=[\s\S]*?\n\s*error_message/g) ?? []) {
       expect(condition).toContain('var.payments_enabled != "1"');
     }
+  });
+
+  it('scopes the live-mode attestation to named ids, not a bare boolean', () => {
+    // `stripe_price_ids_are_live` records THAT the owner checked, never WHAT
+    // she checked: once true it stays true while price ids are added, swapped
+    // or re-pasted underneath it. That is not hypothetical — the ADR 0019
+    // top-up id reached production under an attestation naming five ids.
+    //
+    // `stripe_price_ids_attested` names them, and the fourth precondition
+    // refuses a live-mode apply that ships an id absent from the list.
+    expect(rootVariables).toMatch(/variable "stripe_price_ids_attested"/);
+
+    // It must default to EMPTY. A default that listed anything, or a condition
+    // that skipped the check when the list is empty, would be a gate that
+    // cannot fail: an environment with no attestation at all would sail past.
+    const decl = rootVariables.slice(
+      rootVariables.indexOf('variable "stripe_price_ids_attested"'),
+      rootVariables.indexOf('variable "stripe_price_ids_attested"') + 2000
+    );
+    expect(decl).toMatch(/type\s*=\s*list\(string\)/);
+    expect(decl).toMatch(/default\s*=\s*\[\]/);
+    expect(guardBlock()).not.toMatch(/length\(var\.stripe_price_ids_attested\)\s*(==|>)\s*0/);
+
+    // The failure has to name the offending ids, or the operator learns only
+    // that something is wrong and not which price to go and verify.
+    expect(guardBlock()).toMatch(/join\(", ", sort\(local\.stripe_price_ids_unattested\)\)/);
+  });
+
+  it('compares the attestation against EVERY declared Stripe price id', () => {
+    // The comparison set is hand-written (Terraform cannot enumerate its own
+    // variables), so a seventh stripe_price_id_* added later would silently
+    // bypass the gate. This is the assertion that makes that impossible: every
+    // declared price-id variable must appear in local.stripe_price_ids_in_use.
+    const declared = [...rootVariables.matchAll(/variable "(stripe_price_id_[a-z_]+)"/g)].map(
+      (m) => m[1]
+    );
+    expect(declared.length).toBeGreaterThanOrEqual(6);
+
+    const inUse = rootModule.slice(
+      rootModule.indexOf('stripe_price_ids_in_use = toset(compact(['),
+      rootModule.indexOf('stripe_price_ids_unattested')
+    );
+    expect(inUse).not.toBe('');
+    for (const name of declared) {
+      expect(inUse).toContain(`var.${name},`);
+    }
+
+    // And nothing else: an entry here that is not a declared variable would
+    // not compile, but an entry that is a declared NON-price variable would
+    // widen the set with something the attestation was never about.
+    const referenced = [...inUse.matchAll(/var\.([a-z_]+),/g)].map((m) => m[1]);
+    expect([...referenced].sort()).toEqual([...declared].sort());
+  });
+
+  it('keeps the production attestation list a well-formed set of price ids', () => {
+    // Shape only. WHICH ids belong here is the owner's attestation to make,
+    // and the Terraform precondition — not this suite — is what refuses an
+    // apply whose catalog has outrun it. Pinning the membership here as well
+    // would jam every merge on an owner action, which is how a gate stops
+    // being a gate and starts being a blocker people route around.
+    const listed = attestedIds(productionVars);
+    expect(listed.length).toBeGreaterThan(0);
+    for (const id of listed) expect(id).toMatch(/^price_[A-Za-z0-9]+$/);
+    expect(new Set(listed).size).toBe(listed.length);
   });
 
   it('makes staging buckets disposable while leaving production undestroyable', () => {

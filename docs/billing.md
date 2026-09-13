@@ -321,7 +321,18 @@ unless `unit_amount`, `currency`, and the recurring interval match
 `reconcileConfiguredPrices` sweeps every configured cadence for an ops check.
 This is the only thing in the stack that would catch two transposed `price_…`
 ids in tfvars: price ids encode neither amount nor cadence, and
-`stripe_price_ids_are_live` only guards test-vs-live mode.
+`stripe_price_ids_are_live` only guards test-vs-live mode — now scoped by
+`stripe_price_ids_attested`, which names the ids that attestation covers so an
+unattested id fails the Terraform plan instead of warning past a `check` block.
+
+Two gaps worth knowing about. The attested list proves an id was _reviewed_,
+not that it charges the right amount, and reconciliation is what proves the
+amount — so they are complements, not substitutes. And
+`createIdentifyTopUpCheckoutSession` (ADR 0019) does **not** call
+`assertPriceMatchesCatalog`: the pack's credits come from session metadata, not
+from the price, so a wrong `stripe_price_id_identify_top_up` would charge
+whatever that price says and still grant 20 credits. Extending reconciliation
+to the one-time pack price is the open follow-up.
 
 `deltaForStripeEvent` is intentionally pure. The webhook handler verifies the Stripe signature, calls `deltaForStripeEvent`, and applies whatever (if anything) it returns. This keeps the test surface small — `billing.test.ts` exercises the delta logic for every Stripe event type without ever touching DDB.
 
