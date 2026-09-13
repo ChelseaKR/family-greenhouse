@@ -161,8 +161,11 @@ broader billing-correctness change with its own tests and is left as is.
 - **Nothing is for sale until the owner acts.** Open step: create the
   product and a ONE-TIME $1.99 price in Stripe (test mode first, then
   live), set `stripe_price_id_identify_top_up` in the environment tfvars,
-  re-attest `stripe_price_ids_are_live` for production, apply. Until then
-  every surface reports `available: false` and checkout refuses.
+  re-attest `stripe_price_ids_are_live` for production by adding the new id to
+  `stripe_price_ids_attested`, apply. Until then every surface reports
+  `available: false` and checkout refuses. The attested list is enforced by a
+  precondition, so production cannot be applied with the id configured but
+  unattested — the plan fails and names it.
 - **A household that has never subscribed has no Stripe customer.** Its
   top-up checks out by email and Stripe sends the receipt; the purchase is
   not visible in the billing portal, which needs a customer. Subscribed

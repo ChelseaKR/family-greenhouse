@@ -253,6 +253,30 @@ check "stripe_price_mode_confirmed" {
   }
 }
 
+# Every Stripe price id this stack can hand to the backend, in one place so
+# the attestation gate below can compare the catalog against what the owner
+# actually confirmed. Adding a new stripe_price_id_* variable WITHOUT adding it
+# here would let it bypass the gate, so a unit test
+# (backend/tests/unit/config/commercialStatus.test.ts) asserts this list names
+# every such variable declared in variables.tf.
+locals {
+  stripe_price_ids_in_use = toset(compact([
+    var.stripe_price_id_garden,
+    var.stripe_price_id_garden_annual,
+    var.stripe_price_id_garden_lifetime,
+    var.stripe_price_id_greenhouse,
+    var.stripe_price_id_greenhouse_annual,
+    var.stripe_price_id_identify_top_up,
+  ]))
+
+  # Configured ids the owner attestation does not cover. Non-empty means an id
+  # reached the catalog without being confirmed live-mode.
+  stripe_price_ids_unattested = setsubtract(
+    local.stripe_price_ids_in_use,
+    toset(var.stripe_price_ids_attested)
+  )
+}
+
 # The two commercial gates guard real charges to real cards, so they are
 # enforced with preconditions rather than `check` blocks: a check block only
 # emits a WARNING and lets `terraform apply` proceed, which in CI (plan -out
@@ -291,6 +315,23 @@ resource "terraform_data" "commercial_gate_guard" {
     precondition {
       condition     = var.payments_enabled != "1" || !startswith(var.stripe_secret_key, "sk_live_") || var.stripe_price_ids_are_live
       error_message = "payments_enabled is \"1\" with a live Stripe key, but stripe_price_ids_are_live is still false. Confirm every stripe_price_id_* was created in Stripe LIVE mode, then set stripe_price_ids_are_live = true."
+    }
+
+    # ...and the attestation must cover the ids actually shipping. The boolean
+    # above only records THAT the owner checked; it carries no record of WHAT
+    # was checked, so once true it stays true while ids are added or swapped
+    # underneath it. stripe_price_ids_attested names them, and this refuses an
+    # apply that ships a price id the owner never confirmed.
+    #
+    # This is the enforceable half of the guarantee the warn-only
+    # stripe_price_mode_confirmed check cannot give: CI runs `plan -out` then
+    # `apply tfplan`, so a check block's warning reaches nobody, while a failed
+    # precondition fails the plan and the apply never happens.
+    precondition {
+      condition = var.payments_enabled != "1" || !startswith(var.stripe_secret_key, "sk_live_") || (
+        length(local.stripe_price_ids_unattested) == 0
+      )
+      error_message = "payments_enabled is \"1\" with a live Stripe key, but these configured Stripe price ids are not covered by the stripe_price_ids_are_live attestation: ${join(", ", sort(local.stripe_price_ids_unattested))}. Confirm each was created in Stripe LIVE mode, then add it to stripe_price_ids_attested in the same reviewed change. Do not widen the list past what you have actually verified."
     }
   }
 }

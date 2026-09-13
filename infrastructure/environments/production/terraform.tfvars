@@ -125,9 +125,41 @@ stripe_price_id_identify_top_up = "price_1UExJSAhnUt8CMG0fGgIyAzZ"
 # validity_days=365 — which matches IDENTIFY_TOP_UP_PACK in
 # backend/src/models/identifyTopUp.ts. That is a machine verification of the
 # mode, which is the thing Terraform cannot check for itself. The owner
-# attestation above covers the first five ids only and should be re-made to
-# cover six before this is applied.
+# attestation above covers the first five ids only and must be re-made to
+# cover six before this is applied; stripe_price_ids_attested below is what
+# makes that enforceable rather than advisory.
 stripe_price_ids_are_live = true
+
+# The SCOPE of that attestation, and the thing that makes it enforceable.
+#
+# `stripe_price_ids_are_live` is a bare boolean: it records that the owner
+# checked, not WHAT she checked. Once true it stays true while price ids are
+# added, swapped or re-pasted underneath it. The `check` block in main.tf
+# cannot close that hole — a check block WARNS and lets `terraform apply`
+# proceed, and CI runs `plan -out` then `apply tfplan`, so the warning reaches
+# nobody.
+#
+# This list names the ids the attestation covers, and a precondition on
+# terraform_data.commercial_gate_guard FAILS THE PLAN when a configured price
+# id is missing from it. The five below are the ids attested on 2026-09-02.
+#
+# stripe_price_id_identify_top_up is deliberately ABSENT. It is machine-
+# verified live-mode (see above) but it is not owner-attested, and this file is
+# where that distinction has to stay honest. Until the list names it, the
+# production plan fails with that id in the error message — which is the
+# intended behaviour, and the reason a sixth id cannot reach an apply by being
+# forgotten.
+#
+# Owner step to re-attest: confirm price_1UExJSAhnUt8CMG0fGgIyAzZ in the Stripe
+# LIVE dashboard, add it to this list, and extend the dated attestation comment
+# above to say the top-up id is covered too.
+stripe_price_ids_attested = [
+  "price_1Tkur4AhnUt8CMG0b07WYF1t", # Garden monthly
+  "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual (withdrawn from sale; existing subscribers still renew)
+  "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime (withdrawn from sale)
+  "price_1UB7JuAhnUt8CMG05o9ktQLa", # Greenhouse monthly
+  "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual (withdrawn from sale; existing subscribers still renew)
+]
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
 stripe_automatic_tax_enabled = ""
