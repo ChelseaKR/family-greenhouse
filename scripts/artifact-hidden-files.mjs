@@ -47,7 +47,8 @@ export function distArtifactUploads(text) {
     }
     if (!isUpload) continue;
     let block = '';
-    for (let j = i + 1; j < lines.length && !/^\s*-\s/u.test(lines[j]); j += 1) block += `${lines[j]}\n`;
+    for (let j = i + 1; j < lines.length && !/^\s*-\s/u.test(lines[j]); j += 1)
+      block += `${lines[j]}\n`;
     blocks.push(block);
   }
   return blocks;
