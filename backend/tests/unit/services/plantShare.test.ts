@@ -120,6 +120,62 @@ describe('plantService — shares + lineage', () => {
     });
   });
 
+  describe('revokePlantSharesCreatedBy', () => {
+    /** Two rows in the household's share index, minted by different people. */
+    const shareRows = [
+      {
+        PK: 'SHARE#aaa',
+        SK: 'METADATA',
+        createdBy: 'departing-user',
+        householdId: 'hh-1',
+      },
+      {
+        PK: 'SHARE#bbb',
+        SK: 'METADATA',
+        createdBy: 'staying-user',
+        householdId: 'hh-1',
+      },
+    ];
+
+    it('deletes only the departing member’s links and counts them', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { revokePlantSharesCreatedBy } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: shareRows });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+
+      const revoked = await revokePlantSharesCreatedBy('hh-1', 'departing-user');
+
+      expect(revoked).toBe(1);
+      const calls = vi
+        .mocked(dynamodb.send)
+        .mock.calls.map(([c]) => c as unknown as { kind: string; input: Record<string, unknown> });
+      // Read the household's share index...
+      expect(calls[0].kind).toBe('Query');
+      expect(calls[0].input.IndexName).toBe('GSI1');
+      expect((calls[0].input.ExpressionAttributeValues as Record<string, string>)[':pk']).toBe(
+        'HOUSEHOLD#hh-1#SHARE'
+      );
+      // ...and delete exactly the one row they created. A sweep that took the
+      // household's other live link would be a different bug.
+      expect(calls).toHaveLength(2);
+      expect(calls[1].kind).toBe('Delete');
+      expect(calls[1].input.Key).toEqual({ PK: 'SHARE#aaa', SK: 'METADATA' });
+    });
+
+    it('propagates a read failure instead of reporting zero revoked', async () => {
+      // A swallowed error here publishes a 0 into the removal audit, which
+      // reads as "they left nothing behind" — the one answer that cannot be
+      // checked afterwards.
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { revokePlantSharesCreatedBy } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb throttled'));
+
+      await expect(revokePlantSharesCreatedBy('hh-1', 'departing-user')).rejects.toThrow(
+        'ddb throttled'
+      );
+    });
+  });
+
   describe('getPlantShare', () => {
     const storedShare = {
       code: 'c0ffee'.padEnd(32, '0'),

@@ -1172,12 +1172,84 @@ export async function createPlantShare(
     SK: 'METADATA',
     entityType: 'PlantShare',
     ...share,
+    // Household-scoped index, the same shape sitter links, kiosk links and
+    // caretaker seats use (GSI1PK = HOUSEHOLD#{id}#{KIND}, newest first).
+    // The row itself lives in a secret-code partition, so without this the
+    // household owns a live public link it has no way to enumerate — and
+    // therefore no way to revoke when the member who minted it leaves (#449).
+    GSI1PK: `HOUSEHOLD#${householdId}#SHARE`,
+    GSI1SK: share.createdAt,
     ttl: Math.floor(expiresAt.getTime() / 1000),
   };
 
   await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
 
   return share;
+}
+
+/**
+ * Page size for the share listing. A transport detail, NOT a cap: the caller
+ * below follows `LastEvaluatedKey` to exhaustion, because a short read here
+ * would silently leave a live public link behind and report a count that
+ * understated it — the failure `kioskService` documents at its own page size.
+ */
+const SHARE_PAGE_SIZE = 100;
+
+/** Every live share row for a household, newest first. */
+async function listPlantShareRows(householdId: string): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const page = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#SHARE` },
+        ScanIndexForward: false,
+        Limit: SHARE_PAGE_SIZE,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]));
+    exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return items;
+}
+
+/**
+ * Delete the cutting-share links a departing member minted, and return how
+ * many stopped resolving.
+ *
+ * A cutting share is a public, unauthenticated link into a household's plant
+ * card. Every other credential a member can mint — plant tag, sitter link,
+ * kiosk link — is revoked when they are removed (#449); this one was not, so
+ * a link handed out on the way out kept serving for the rest of its 14-day
+ * life. Deletion, not a status flag: the row has no lifecycle beyond its TTL
+ * and nothing lists it, so the honest revocation is to remove it.
+ *
+ * A read or write failure PROPAGATES. The caller audits this count as what
+ * departure actually cost the household, and a swallowed error would publish
+ * a zero that reads as "they had left nothing behind".
+ *
+ * Limit, stated plainly: rows minted before this index existed carry no
+ * GSI1PK and cannot be found by household. Their own 14-day TTL is what
+ * retires them.
+ */
+export async function revokePlantSharesCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<number> {
+  const rows = (await listPlantShareRows(householdId)).filter((row) => row.createdBy === userId);
+  let revoked = 0;
+  for (const row of rows) {
+    if (typeof row.PK !== 'string' || typeof row.SK !== 'string') continue;
+    await dynamodb.send(
+      new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: row.PK, SK: row.SK } })
+    );
+    revoked += 1;
+  }
+  return revoked;
 }
 
 /**
