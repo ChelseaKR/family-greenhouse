@@ -273,4 +273,10 @@ export const STEPS = [
     weight: 0,
     why: 'CITATION.cff drifting from package.json — it said 0.23.0 while the code was 0.29.0, so a citation of this work named the wrong release for six weeks, and nothing compared the two files (#685)',
   },
+  {
+    id: 'lockfile:check',
+    script: 'lockfile:check',
+    weight: 0,
+    why: 'package-lock.json drifting from package.json — it states the version in four places, it is the file `npm ci` installs from, and npm does not compare the two: a release that edits the manifests and forgets `npm install --package-lock-only` builds an artifact reporting the previous version (#728)',
+  },
 ];

@@ -16,6 +16,89 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-13
+
+### Fixed
+
+- **A mis-pasted top-up price id would have charged whatever that price
+  charged, and still handed over twenty identifications.**
+  `createIdentifyTopUpCheckoutSession` resolved
+  `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` and passed it straight to Stripe. It never
+  called `assertPriceMatchesCatalog` and did not import `stripePrices` at all,
+  so nothing compared the amount Stripe would actually charge against the $1.99
+  the pack publishes.
+
+  That gap is worse on this path than on the subscription path it was copied
+  from, because the webhook grants credits from the `credits` metadata stamped
+  onto the Session at checkout rather than from what Stripe charged. **The
+  amount taken and the value delivered never meet.** A transposed `price_...`
+  in `terraform.tfvars` bills whatever that price bills and still hands over
+  the twenty identifications. Reproduced before fixing: with
+  `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` pointed at a $79.99/yr recurring price, the
+  old code made zero `prices.retrieve` calls and minted a Session stamped
+  `credits=20`. Neither existing guard could see it —
+  `stripe_price_ids_are_live` attests the Stripe _mode_ of an id, and a price
+  id encodes neither the amount nor whether it recurs.
+
+  The fix uses the mechanism that was already there rather than a second one.
+  `stripePrices` gains the pack as a first-class catalog row derived from
+  `IDENTIFY_TOP_UP_PACK` (never a restated `1.99`), and
+  `assertIdentifyTopUpPriceMatchesCatalog` runs `reconcilePrice` and throws the
+  same `PriceReconciliationError` the plan path throws. Checkout calls it
+  immediately before minting the Session and **fails closed**: a price that
+  cannot be retrieved is a refusal, not an assumption. The pack also joins
+  `expectedPrices()`, so `reconcileConfiguredPrices` — the sweep that answers
+  "is anything configured to charge what we never published" — now covers it;
+  a sellable amount missing from that list is one the sweep silently declares
+  clean. `PriceCadence` gains `one_time` so a 365-day credit pack is not
+  described to an operator as "the lifetime tier", and
+  `ExpectedPrice.planId` / `PriceReconciliation.planId` become
+  `itemId: CatalogItemId`, because a field named `planId` holding
+  `identify-20` would be a lie in the one place an operator reads to find out
+  which slot is misconfigured.
+  ([#725](https://github.com/ChelseaKR/family-greenhouse/issues/725))
+
+- **A paid checkout that granted nothing wrote no log line and fired no
+  alarm.** A paid identification top-up whose `credits` metadata was missing or
+  nonsensical made `identifyTopUpGrantFromEvent` return null;
+  `deltaForStripeEvent` returns null for every top-up session by design; and
+  `applyStripeEvent` then took a bare `return`. **The household was charged
+  $1.99, received no credits, and nothing was written anywhere** — Stripe's
+  delivery log showed a 200 and the billing log showed nothing at all. The
+  `stripe_webhook_no_grant` metric filter matched only three subscription-path
+  messages, so no alarm could fire. Money taken, nothing delivered, nobody
+  alerted. Reproduced before fixing, on a paid `checkout.session.completed`
+  carrying `credits: "twenty"`: 0 DynamoDB writes, 0 log lines, 0 filter
+  matches.
+
+  That bare `return` was the one exit a settled payment could reach having
+  granted nothing; every other early return already logged its reason first. It
+  now calls `warnPaidEventGrantedNothing`, which emits
+  `stripe_event_paid_no_grant` with the session id, both household identity
+  routes, and the `purchase` / `credits` / `planId` metadata, and the existing
+  metric filter's pattern is extended to match it. The message is defined once
+  (`PAID_NO_GRANT_LOG_MESSAGE`) and `scripts/check-observability.mjs` reads
+  that literal out of `billing.ts` and asserts Terraform still matches it, so a
+  rename cannot quietly un-alarm the path. The new pattern was verified against
+  AWS's own evaluator (`aws logs test-metric-filter`, read-only): it matches
+  the real NDJSON line this code emits, still matches the existing messages,
+  does not match a successful grant, and **the pattern deployed in production
+  today does not match the new message** — so the Terraform change is
+  load-bearing rather than decorative.
+
+  The guard is keyed on `payment_status === 'paid'` for the two checkout events
+  and nothing else, so the correctly-silent paths stay silent: an unpaid or
+  deferred session, a trial, and every subscription or invoice event. An alarm
+  that fired on those would be trained away inside a month. It logs and returns
+  rather than throwing — the broken metadata is fixed on the Session, so
+  redelivery would fail identically until Stripe gave up, and refusing the
+  webhook would replace a silent failure with a wall of 5xx. **The grant itself
+  is still made by hand**, from the session id in the log line. The alarm and
+  metric filter already existed and are already wired to
+  `family-greenhouse-alerts-production`; this release changes the filter
+  pattern and the alarm's description, and creates nothing.
+  ([#727](https://github.com/ChelseaKR/family-greenhouse/issues/727))
+
 - **Every billing email linked to a page that does not exist.** The footer on
   every transactional billing message, in `en` and `es`, ended with
   `familygreenhouse.net/settings/notifications`. `frontend/src/App.tsx`
@@ -49,6 +132,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `sitemap:check` could not have caught this: it byte-compares the committed
   sitemap against what the generator produces, so both sides read the same
   wrong source, and it can only tell a stale file from a fresh one.
+  ([#718](https://github.com/ChelseaKR/family-greenhouse/issues/718))
+
+### Changed
 
 - **Every URL on `familygreenhouse.net` answered HTTP 200**, including ones
   that do not exist. Measured live on 2026-09-13:
@@ -80,6 +166,44 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Both had only ever run in the local pre-push gate, so nothing on a PR could
   see either drift — and since this change the second one decides which URLs
   answer 404.
+  ([#719](https://github.com/ChelseaKR/family-greenhouse/issues/719))
+
+- **The live-price attestation now names the ids it covers, and an
+  unattested price id blocks the deploy.** `stripe_price_ids_are_live` was a
+  bare boolean: it recorded _that_ the owner had checked each production Stripe
+  price id was created in the same mode as the secret key, never _what_ she had
+  checked. Once true it stayed true while ids were added, swapped or re-pasted
+  underneath it.
+
+  That was not hypothetical. 0.31.0 added a sixth production price id — the
+  ADR 0019 identification top-up pack — under an attestation dated 2026-09-02
+  whose own text named five, and the pack has been charging real cards since
+  the 2026-09-13 06:04Z deploy. **Five ids were attested while six were taking
+  money.** The only thing between that and an apply was
+  `stripe_price_mode_confirmed`, which is a Terraform `check` block: it warns
+  and lets `terraform apply` proceed, and `cd-production.yml` runs
+  `plan -out` then `apply tfplan`, so the warning reached nobody.
+
+  The attestation now carries its scope as `stripe_price_ids_attested`
+  (`list(string)`, default `[]`), and a fourth precondition on
+  `terraform_data.commercial_gate_guard` refuses a live-mode apply that ships a
+  price id absent from it, naming the offending ids. Named ids rather than a
+  count, because a count catches an added id but not a swapped one, and pasting
+  a test-mode id over a live one is precisely the mistake this exists to
+  prevent. It is one-directional on purpose — every id **in use** must be
+  attested; a stale entry for a price nothing references cannot charge anyone.
+  The default is empty, so a missing attestation blocks rather than passes.
+
+  Production lists all six ids, verified by set comparison, so this release
+  plans clean. **From here on, a change that adds or swaps a
+  `stripe_price_id_*` without adding it to the attestation in the same commit
+  fails `terraform plan`, and the production deploy stops before apply.** The
+  sixth id was read back from the live Stripe API on 2026-09-12 — `livemode`
+  true, `active` true, `unit_amount` 199, `currency` usd, no recurring
+  interval, metadata `pack_id=identify-20`, `credits=20`, `validity_days=365` —
+  matching `IDENTIFY_TOP_UP_PACK` field for field. Staging is unaffected: every
+  price id there is blank, so the set difference is empty regardless.
+  ([#724](https://github.com/ChelseaKR/family-greenhouse/issues/724))
 
 ## [0.31.0] - 2026-09-12
 

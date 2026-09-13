@@ -310,6 +310,25 @@ jobs:
         # check (CICD-27).
         run: npm run citation:check
 
+      - name: package-lock.json records the same version as package.json (#728)
+        # The last version declaration in this repository that nothing compared.
+        # package-lock.json states the version in FOUR places (top-level,
+        # packages[""], and one entry per workspace) and it is the file `npm ci`
+        # installs from, so a release that edits the three package.json files
+        # and forgets `npm install --package-lock-only` builds an artifact
+        # reporting the previous version.
+        #
+        # npm does not catch this. It rejects a lockfile whose DEPENDENCY tree
+        # disagrees with package.json; the root `version` field is not part of
+        # that comparison. Measured on a fixture with package.json at 0.32.0 and
+        # the lock at 0.31.0: `npm ci` exits 0, warns about nothing, and leaves
+        # the lockfile stale. Elsewhere in this portfolio the same drift shipped
+        # a wheel reporting 0.1.0 under a tag that said 0.2.0.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check (CICD-27).
+        run: npm run lockfile:check
+
       - name: Hardcoded-string ratchet (no new untranslatable JSX text)
         # §4 G2 as a ratchet against scripts/i18n-hardcoded-baseline.json —
         # existing debt is pinned per file and may only shrink. Also covers
