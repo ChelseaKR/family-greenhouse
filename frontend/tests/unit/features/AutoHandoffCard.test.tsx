@@ -10,7 +10,11 @@ import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
 
-vi.mock('@/services/billingService', () => ({
+vi.mock('@/services/billingService', async () => ({
+  // The real tier resolver: the card gates on it (ADR 0027).
+  effectivePlanId: (
+    await vi.importActual<typeof import('@/services/billingService')>('@/services/billingService')
+  ).effectivePlanId,
   billingService: {
     listPlans: vi.fn(),
     getCurrentSubscription: vi.fn(),

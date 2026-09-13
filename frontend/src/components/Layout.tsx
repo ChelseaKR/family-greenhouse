@@ -21,7 +21,7 @@ import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { CommandPalette } from './CommandPalette';
 import { SidebarPattern } from './brand/SidebarPattern';
 import { MemorialFrame } from './brand/MemorialFrame';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
 import clsx from 'clsx';
@@ -86,7 +86,9 @@ export function Layout() {
   // The backend rejects Seedling chat turns with 402. Hide the navigation
   // until the household is proven to hold an existing chat entitlement so a
   // free user never lands on a working-looking composer that cannot send.
-  const chatAvailable = subscription?.planId === 'garden' || subscription?.planId === 'greenhouse';
+  // A no-card Garden trial counts (ADR 0027): the tier whose features apply now.
+  const chatPlanId = effectivePlanId(subscription);
+  const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
   const isChatRoute = location.pathname === '/chat' && chatAvailable;
 
   const handleLogout = () => {

@@ -28,6 +28,7 @@ import { AskToUpgrade } from '@/components/LockedFeature';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
+import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
@@ -246,6 +247,11 @@ export function BillingSettings() {
           <p>{t(purchaseErrorKeyState)}</p>
         </Alert>
       )}
+      <NoCardTrialNoticeView
+        placement="billing"
+        subscription={subQuery.data}
+        plans={plansQuery.data?.plans}
+      />
       <Card>
         <CardHeader title="Plan status" description="View your household's current plan limits." />
         {limits.overall === 'over' && (
@@ -271,7 +277,12 @@ export function BillingSettings() {
           <p className="text-sm text-gray-600" data-testid="current-plan">
             {subQuery.data?.status === 'trialing'
               ? t('settings.billing.currentPlanTrial', { plan: planRead.planName })
-              : t('settings.billing.currentPlan', { plan: planRead.planName })}
+              : subQuery.data?.noCardTrial?.state === 'active'
+                ? t('settings.billing.noCardTrial.currentPlan', {
+                    plan: planRead.planName,
+                    date: formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' }),
+                  })
+                : t('settings.billing.currentPlan', { plan: planRead.planName })}
           </p>
         ) : null}
         {/* A trial that does not say when it ends is a surprise charge with

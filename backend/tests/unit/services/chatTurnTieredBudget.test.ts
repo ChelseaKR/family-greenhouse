@@ -166,6 +166,56 @@ describe('chat turn budget tiering', () => {
     expect(invokeChatModel).not.toHaveBeenCalled();
   });
 
+  describe('the no-card Garden trial (ADR 0027)', () => {
+    // The production tfvars: Seedling at a quarter of the flat pair, Garden and
+    // Greenhouse blank (so they inherit the flat pair).
+    const PRODUCTION_SEEDLING = { maxInputTokensPerMonth: 62500, maxOutputTokensPerMonth: 12500 };
+    function productionTiers() {
+      process.env.CHAT_BUDGET_INPUT_TOKENS_SEEDLING = '62500';
+      process.env.CHAT_BUDGET_OUTPUT_TOKENS_SEEDLING = '12500';
+    }
+
+    it("gives a trial household the care assistant, held to Seedling's budget rather than Garden's", async () => {
+      productionTiers();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+      });
+      answer();
+      const result = await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' });
+
+      expect(configHandedToGate()).toEqual(PRODUCTION_SEEDLING);
+      expect(result.budgetRemaining).toEqual({ inputTokens: 62500 - 10, outputTokens: 12500 - 5 });
+      expect(billing.getHouseholdSubscription).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses the care assistant once the trial has ended, before any budget is reserved', async () => {
+      productionTiers();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        noCardTrialEndsAt: '2026-01-01T00:00:00.000Z',
+      });
+      await expect(
+        runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' })
+      ).rejects.toMatchObject({ statusCode: 402 });
+      expect(reserveBudget).not.toHaveBeenCalled();
+      expect(invokeChatModel).not.toHaveBeenCalled();
+    });
+
+    it("keeps Garden's budget for a household on a card-based Stripe Garden trial, whatever its row carries", async () => {
+      productionTiers();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        status: 'trialing',
+        stripeSubscriptionId: 'sub_synthetic_card_trial',
+        noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+      });
+      answer();
+      await runChatTurn({ userId: 'u1', householdId: 'hh-1', message: 'hello' });
+      expect(configHandedToGate()).toEqual(FLAT);
+    });
+  });
+
   it('a failed plan lookup fails closed once tiers are configured: no reservation, no Bedrock call', async () => {
     process.env.CHAT_BUDGET_INPUT_TOKENS_GARDEN = '62500';
     vi.mocked(billing.getHouseholdSubscription).mockRejectedValueOnce(new Error('ddb down'));

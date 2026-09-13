@@ -78,6 +78,8 @@ export interface PlantTagDeps {
         planId?: 'seedling' | 'garden' | 'greenhouse';
         subscriptionStatus?: string;
         lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
+        stripeSubscriptionId?: string;
+        noCardTrialEndsAt?: string;
       }
     >;
     plants: Map<
@@ -174,6 +176,8 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       planId: h?.planId,
       status: h?.subscriptionStatus,
       lifetimePlanId: h?.lifetimePlanId,
+      stripeSubscriptionId: h?.stripeSubscriptionId,
+      noCardTrialEndsAt: h?.noCardTrialEndsAt,
     });
   };
 

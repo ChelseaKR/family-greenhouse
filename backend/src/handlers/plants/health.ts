@@ -12,7 +12,7 @@ import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
-import { getEntitledPlan } from '../../models/plans.js';
+import { getMeteredPlanId } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -68,8 +68,11 @@ export const checkPlantHealth = createHandler(
     // is the same treatment a downgrade already gets (identify.ts does this).
     let cap: number;
     try {
-      cap = await leafHealthBudget.resolveMonthlyCap(
-        async () => getEntitledPlan(await billing.getHouseholdSubscription(user.householdId!)).id
+      // METERED, not merely entitled (ADR 0027): a household on the no-card
+      // Garden trial spends Seedling's leaf-health allowance. For every other
+      // household this is the entitled tier.
+      cap = await leafHealthBudget.resolveMonthlyCap(async () =>
+        getMeteredPlanId(await billing.getHouseholdSubscription(user.householdId!))
       );
     } catch (err) {
       logger.error(
