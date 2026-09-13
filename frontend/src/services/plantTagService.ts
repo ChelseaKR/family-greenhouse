@@ -98,7 +98,6 @@ export interface TagDueTask {
 export interface TagView {
   plantName: string;
   species: string | null;
-  imageUrl: string | null;
   /** The plant's house rule, the same text the sitter brief shows. Never the
    *  plant's private Notes. Null when the household wrote no rule. */
   careNote: string | null;

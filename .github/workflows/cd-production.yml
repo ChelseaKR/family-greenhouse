@@ -232,6 +232,10 @@ jobs:
       cognito_user_pool_id: ${{ steps.outputs.outputs.cognito_user_pool_id }}
       dynamodb_table_name: ${{ steps.outputs.outputs.dynamodb_table_name }}
       registration_snapshot_ready: ${{ steps.registration_snapshot.outputs.ready }}
+      # "an apply started, so production's infrastructure may have moved" —
+      # read by the rollback job below to decide whether there is anything to
+      # restore. Set before the apply, never after; see the step for why.
+      apply_attempted: ${{ steps.apply_attempted.outputs.attempted || steps.apply_not_yet.outputs.attempted }}
       cognito_user_pool_id_before: ${{ steps.registration_snapshot.outputs.user_pool_id }}
       public_registration_enabled_before: ${{ steps.registration_snapshot.outputs.public_registration_enabled }}
       admin_create_user_only_before: ${{ steps.registration_snapshot.outputs.admin_create_user_only }}
@@ -256,6 +260,21 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
+
+      - name: Note that no apply has run yet
+        id: apply_not_yet
+        # The negative half of the apply marker. Having BOTH halves is what
+        # makes the marker a three-state answer rather than a two-state one:
+        #
+        #   true   an apply started; production may have moved
+        #   false  this job got as far as init and never applied
+        #   (none) the job failed before even this step, and we do not know
+        #
+        # The rollback job below may only take its reassuring path on an
+        # explicit `false`. An ABSENT marker has to keep the old behaviour,
+        # because "we did not observe an apply" and "there was no apply" are
+        # not the same statement, and only one of them is safe to act on.
+        run: echo "attempted=false" >> "$GITHUB_OUTPUT"
 
       - name: Snapshot Cognito registration policy
         id: registration_snapshot
@@ -304,6 +323,21 @@ jobs:
           TF_VAR_posthog_host: ${{ vars.PRODUCTION_POSTHOG_HOST || 'https://us.i.posthog.com' }}
           TF_VAR_git_sha: ${{ needs.validate.outputs.commit_sha }}
         run: terraform plan -var-file=environments/production/terraform.tfvars -out=tfplan
+
+      - name: Record that an apply is about to run
+        id: apply_attempted
+        # Deliberately BEFORE the apply, and deliberately its own step.
+        #
+        # This marker answers one question for the rollback job: could this run
+        # have changed production's infrastructure? Written after a successful
+        # apply it would answer a different and more dangerous question, because
+        # an apply that fails PART WAY has already mutated whatever it got
+        # through — exactly the case where the Cognito policy needs restoring.
+        # Written here it is set whenever an apply starts, so every outcome of
+        # the apply itself keeps the recovery behaviour this workflow has
+        # always had, and only a failure BEFORE it (the plan, the snapshot, the
+        # credentials) is newly recognised as "nothing was touched".
+        run: echo "attempted=true" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
@@ -540,10 +574,43 @@ jobs:
           # What this build actually contains, as bucket keys.
           ( cd dist && find . -type f | sed 's|^\./||' ) | sort > /tmp/shipped.txt
 
-          # What the bucket holds, with last-modified, oldest first.
+          # What the bucket holds, key and last-modified, in ONE listing that
+          # both numbers below are derived from.
+          #
+          # The AWS CLI paginates `list-objects-v2` at 1,000 keys and applies
+          # `--query` to EACH PAGE, concatenating the results. A filter or a
+          # projection survives that — every page contributes its own rows. An
+          # AGGREGATE does not: past 1,000 objects `length(Contents)` prints one
+          # count per page, so `total` became e.g. `1000\n523` and the guard
+          # below evaluated `$(( 1000\n523 / 2 ))`. That is a bash arithmetic
+          # syntax error, `set -euo pipefail` fails the step, `deploy-frontend`
+          # fails, `smoke-tests` is skipped, and `rollback` — which fires on any
+          # smoke result that is not success — reverts a release that was fine,
+          # AFTER the sync above has already published it. The same per-page
+          # trap broke the v0.23.4 deploy through `list-versions-by-function`;
+          # this is the second instance of it in this file.
+          #
+          # Deriving both numbers from one listing also removes a real
+          # inconsistency: they used to be two separate listings, so an upload
+          # landing between them could leave `count` describing a bucket that
+          # `total` never saw.
           aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
-            --query "Contents[?LastModified<'${cutoff}'].Key" --output text \
-            | tr '\t' '\n' | sed '/^$/d' | sort > /tmp/stale.txt
+            --query 'Contents[].[Key,LastModified]' --output text > /tmp/objects.tsv
+          total=$(wc -l < /tmp/objects.tsv | tr -d ' ')
+
+          # A listing that came back empty is not an empty bucket: the sync
+          # above has just written this build into it. Refuse rather than
+          # compute a ratio against nothing.
+          if [ "$total" -eq 0 ]; then
+            echo "::error::the bucket listing returned no objects moments after this deploy wrote to it — refusing to prune against a listing that cannot be right."
+            exit 1
+          fi
+
+          # Older than the cutoff. Both sides are ISO-8601 with the same
+          # YYYY-MM-DDTHH:MM:SS prefix, so a lexicographic comparison orders
+          # them exactly as the JMESPath filter this replaces did.
+          awk -F'\t' -v cutoff="$cutoff" '$2 < cutoff { print $1 }' /tmp/objects.tsv \
+            | sed '/^$/d' | sort > /tmp/stale.txt
 
           # Only the ones this build does not ship.
           comm -23 /tmp/stale.txt /tmp/shipped.txt > /tmp/prune.txt
@@ -558,8 +625,8 @@ jobs:
           # the bucket means the diff is wrong — an empty dist/, a changed
           # prefix — not that the bucket is genuinely that stale. Deleting the
           # live site is not a recoverable mistake, so stop and say so.
-          total=$(aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
-            --query 'length(Contents)' --output text)
+          # `total` is the line count of the listing above, so it stays a single
+          # integer however many pages the bucket takes.
           if [ "$count" -gt $(( total / 2 )) ]; then
             echo "::error::prune wants to delete ${count} of ${total} objects — refusing. The build/bucket diff is wrong, not the bucket."
             exit 1
@@ -1058,9 +1125,24 @@ jobs:
           terraform_version: 1.5.7
           terraform_wrapper: false
 
+      # Skipped only on an explicit `apply_attempted == 'false'`. When the
+      # terraform job got to init and then failed BEFORE its apply — a plan
+      # refused by a precondition, an expired credential, an unreadable
+      # snapshot — production's infrastructure is exactly as it was, and this
+      # step used to run anyway: a targeted `plan -target=... && apply` against
+      # the live Cognito pool, to undo a change nobody had made. It then failed
+      # for the same reason the original plan did, `verify_rollback` failed with
+      # it, and the run ended by telling the operator that "production may be
+      # running broken code". Measured on the v0.24.0 tag, whose Terraform Plan
+      # failed and whose rollback reported exactly that.
+      #
+      # `!= 'false'` rather than `== 'true'`, deliberately: an absent marker
+      # means the terraform job died before it could say either way, and the
+      # only safe reading of "we do not know" is the old one — attempt the
+      # restore and fail loudly if it does not work.
       - name: Restore Cognito registration policy
         id: restore_registration
-        if: ${{ always() && steps.checkout.outcome == 'success' && steps.aws_credentials.outcome == 'success' && steps.terraform_setup.outcome == 'success' }}
+        if: ${{ always() && needs.terraform.outputs.apply_attempted != 'false' && steps.checkout.outcome == 'success' && steps.aws_credentials.outcome == 'success' && steps.terraform_setup.outcome == 'success' }}
         # allow-silenced-gate: other recovery branches must still run; the final outcome verifier re-fails this job
         continue-on-error: true
         working-directory: infrastructure
@@ -1195,6 +1277,7 @@ jobs:
         id: verify_rollback
         if: always()
         env:
+          APPLY_ATTEMPTED: ${{ needs.terraform.outputs.apply_attempted }}
           REGISTRATION_OUTCOME: ${{ steps.restore_registration.outcome }}
           FRONTEND_EXPECTED: ${{ needs.deploy-frontend.outputs.rollback_snapshot_ready }}
           FRONTEND_OUTCOME: ${{ steps.restore_frontend.outcome }}
@@ -1205,7 +1288,9 @@ jobs:
           set -euo pipefail
           failed=0
 
-          if [ "$REGISTRATION_OUTCOME" != "success" ]; then
+          if [ "$APPLY_ATTEMPTED" = "false" ]; then
+            echo "No terraform apply ran in this deploy, so the Cognito registration policy was never changed and there is nothing to restore."
+          elif [ "$REGISTRATION_OUTCOME" != "success" ]; then
             echo "::error::Cognito registration policy restore outcome: ${REGISTRATION_OUTCOME}"
             failed=1
           fi
@@ -1239,14 +1324,27 @@ jobs:
         # validate job's steps already use.
         env:
           VERSION: ${{ needs.validate.outputs.version }}
+          APPLY_ATTEMPTED: ${{ needs.terraform.outputs.apply_attempted }}
         run: |
-          echo "::warning::Production deploy of ${VERSION} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
+          if [ "$APPLY_ATTEMPTED" = "false" ]; then
+            echo "::warning::Production deploy of ${VERSION} failed before any infrastructure change was applied. Nothing was deployed and nothing needed restoring; production is still running the previous release. Fix the cause and re-tag."
+          else
+            echo "::warning::Production deploy of ${VERSION} failed. The rollback restored the pre-deploy Cognito policy and every available frontend/Lambda snapshot. Review the Playwright report before redeploying."
+          fi
 
   notify:
     name: Notify
     runs-on: ubuntu-latest
     needs:
-      [validate, deploy-frontend, deploy-backend, smoke-tests, cleanup-success-snapshot, rollback]
+      [
+        validate,
+        terraform,
+        deploy-frontend,
+        deploy-backend,
+        smoke-tests,
+        cleanup-success-snapshot,
+        rollback,
+      ]
     if: always()
     steps:
       - name: Deployment notification
@@ -1256,6 +1354,7 @@ jobs:
           CLEANUP_RESULT: ${{ needs.cleanup-success-snapshot.result }}
           ROLLBACK_RESULT: ${{ needs.rollback.result }}
           SMOKE_FLAKY: ${{ needs.smoke-tests.outputs.flaky }}
+          APPLY_ATTEMPTED: ${{ needs.terraform.outputs.apply_attempted }}
         run: |
           # #703. A smoke test that failed against this release and passed on its
           # retry keeps the release (`rollback` reads only smoke-tests.result),
@@ -1278,6 +1377,13 @@ jobs:
             echo "Production deployment of $VERSION successful!"
           elif [ "$SMOKE_RESULT" == "success" ]; then
             echo "Production deployment of $VERSION succeeded, but rollback-snapshot retention cleanup failed!"
+            exit 1
+          elif [ "$ROLLBACK_RESULT" == "success" ] && [ "$APPLY_ATTEMPTED" == "false" ]; then
+            # The deploy failed before terraform applied anything, so there was
+            # nothing to roll back and the previous release is still serving.
+            # Saying "rolled back" here reads as though production moved and
+            # came back; it never moved.
+            echo "Production deployment of $VERSION failed before anything was applied. Production is untouched and still running the previous release."
             exit 1
           elif [ "$ROLLBACK_RESULT" == "success" ]; then
             echo "Production deployment of $VERSION failed and was rolled back."

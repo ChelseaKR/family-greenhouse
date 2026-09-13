@@ -512,7 +512,7 @@
     "share": {
       "action": "Compartir esqueje",
       "title": "Comparte este esqueje",
-      "description": "Cualquiera con este enlace puede ver la ficha de la planta y añadir una copia a su propio invernadero. El enlace funciona durante 14 días.",
+      "description": "Cualquiera con este enlace puede ver el nombre de la planta, su foto y la regla de la casa, y añadir una copia a su propio invernadero. Tus notas privadas se quedan en tu hogar. El enlace funciona durante 14 días.",
       "copy": "Copiar enlace",
       "copied": "Enlace copiado",
       "copyFailed": "No se pudo copiar — selecciona el enlace y cópialo manualmente."
@@ -553,7 +553,7 @@
       "provenance": "Cultivada por {{name}}, ahora pasa a tus manos.",
       "invalid": "Este enlace no es válido o ha caducado.",
       "askForNew": "Pide un enlace nuevo a quien lo envió — caducan a los 14 días.",
-      "notesLabel": "Notas",
+      "houseRuleLabel": "Regla de la casa",
       "addToGreenhouse": "Añadir a mi invernadero",
       "added": "{{name}} añadida a tu invernadero",
       "graftHeading": "Empieza su próximo capítulo",
@@ -1458,7 +1458,7 @@
     "allowanceCounted": "{{used}} de {{max}} etiquetas en uso.",
     "allowanceUnlimited": "{{used}} etiquetas en uso; tu plan no tiene límite.",
     "pinOnNotice": "Hay un PIN activado: quien escanee una etiqueta tendrá que escribirlo antes de ver nada.",
-    "pinOffNotice": "No hay ningún PIN puesto, así que quien vea una etiqueta puede escanearla. Al escanearla se ven el nombre, la especie, la foto y la regla de la casa de esa planta, las tareas pendientes, y cuándo se cuidó por última vez y quién lo hizo (solo el nombre de pila), pero nunca sus Notas. Pon un PIN si prefieres que haya que escribirlo antes de ver nada de eso. Para una etiqueta dentro de casa, no suele hacer falta.",
+    "pinOffNotice": "No hay ningún PIN puesto, así que quien vea una etiqueta puede escanearla. Al escanearla se ven el nombre, la especie y la regla de la casa de esa planta, las tareas pendientes, y cuándo se cuidó por última vez y quién lo hizo (solo el nombre de pila), pero nunca sus Notas. Pon un PIN si prefieres que haya que escribirlo antes de ver nada de eso. Para una etiqueta dentro de casa, no suele hacer falta.",
     "pinSettingsLink": "Cambiar el PIN de escaneo en ajustes",
     "labelReady": "Etiqueta lista para imprimir",
     "reissue": "Código nuevo",
