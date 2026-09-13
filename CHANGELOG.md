@@ -16,6 +16,40 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **Help answers that were wrong about the product.** `helpContent.tsx` imports
+  nothing from the backend, so every figure and rule in it is hand-typed; eight
+  had drifted from the code, and each is now checked against the handler that
+  decides it:
+  - Leaf health was published as "capped at 200 checks per household per
+    calendar month". Production caps the free tier at 20
+    (`leaf_health_monthly_cap_seedling`), so the page overstated the free
+    allowance tenfold.
+  - Sitter links were listed under "admins alone can" three times.
+    `createSitterLink` carries no `requireAdmin` — any member can create one,
+    and the creator or an admin can revoke.
+  - "A sitter link they created stays active" after removing a member: removal
+    revokes their sitter links, plant tags and kiosk links (#449).
+  - "Plants → Import" is not a menu that exists; the only entry point is in
+    Settings → Account.
+  - "If the species is freehand text … you get nothing automatically":
+    `suggestTaskTemplate` matches the typed text, so freehand "monstera" gets
+    the full bundle.
+  - "One email always goes out regardless of preferences": three do — welcome,
+    account-deletion confirmation, and billing emails.
+  - "Two features do switch off with the tier" listed two of about ten.
+  - The `data` section's search-result description offered "photos and care
+    history"; neither export contains either.
+  - Menu paths: the billing tab reads **Plan status**, the account tab
+    **Account**.
+  - `delete-account` said "immediate and permanent" without the backup caveat
+    the deletion email itself discloses.
+- `backend/tests/unit/config/helpFigures.test.ts` re-derives the free-tier caps,
+  the three plant caps, the sitter windows, the identification allowances and
+  both leaf-health caps from `plans.ts`, `identifyBudget.ts` and the production
+  tfvars, and fails in both directions.
+
 ## [0.33.0] - 2026-09-13
 
 ### Security
