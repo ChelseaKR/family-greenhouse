@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WaterDropIcon } from '@/components/icons/WaterDropIcon';
@@ -306,5 +306,62 @@ describe('TasksPage filter announcements', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText(/tasks? shown/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('TasksPage completion keeps the keyboard where it was', () => {
+  const climate = http.get(`${API}/households/hh-1/climate`, () =>
+    HttpResponse.json({ configured: false, weather: null, tips: [] })
+  );
+
+  function signIn() {
+    useAuthStore.setState({
+      accessToken: 'access-1',
+      user: { id: 'u1', email: 'me@example.com', name: 'Me', householdId: 'hh-1' } as User,
+    });
+  }
+
+  const dueTask = {
+    id: 't-1',
+    plantId: 'p-1',
+    plantName: 'Monstera',
+    type: 'water',
+    customType: null,
+    frequency: 7,
+    lastCompleted: null,
+    nextDue: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+    assignedTo: null,
+    assignedToName: null,
+    notes: null,
+    createdBy: 'u1',
+    createdAt: '',
+  };
+
+  // `disabled` on the control the user is standing on is a focus bug, not a
+  // styling choice: the browser blurs a focused element the instant it is
+  // disabled, so pressing Done sent document.activeElement to <body> and the
+  // next task was a whole page of Tab presses away. Measured in Chromium on
+  // the local dev server before the fix. The in-flight state has to be
+  // expressed with aria-disabled, which AT reads identically and browsers do
+  // not blur.
+  it('marks the in-flight Done button aria-disabled rather than disabled', async () => {
+    signIn();
+    server.use(
+      http.get(`${API}/tasks`, () => HttpResponse.json([dueTask])),
+      climate,
+      http.get(`${API}/plants`, () => HttpResponse.json([])),
+      // Never settles: the button stays in its in-flight state for the
+      // assertions below.
+      http.post(`${API}/tasks/${dueTask.id}/complete`, () => new Promise<never>(() => {}))
+    );
+    renderTasksPage();
+
+    const done = await screen.findByRole('button', { name: /^Done$/ });
+    done.focus();
+    fireEvent.click(done);
+
+    await waitFor(() => expect(done).toHaveAttribute('aria-disabled', 'true'));
+    expect(done).not.toBeDisabled();
+    expect(document.activeElement).toBe(done);
   });
 });
