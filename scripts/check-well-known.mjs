@@ -6,11 +6,11 @@
  *
  * `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association`
  * are the two documents that let an installed app claim its own domain's
- * links. Neither is in the tree yet — the app-side half is blocked on values
- * this repository cannot supply — but the day someone drops one into
- * `frontend/public/.well-known/`, the deploy path has to carry it, and until
- * this gate existed it would not have. Three separate ways, none of which
- * reports an error:
+ * links. `apple-app-site-association` is now in the tree;
+ * `assetlinks.json` is not, because the Android half still needs the release
+ * keystore's SHA-256 fingerprint. Either way the deploy path has to carry
+ * them, and until this gate existed it would not have. Three separate ways,
+ * none of which reports an error:
  *
  *   1. The immutable asset sync in both CD workflows and `scripts/deploy.sh`
  *      excludes `*.json`, and the second sync is `--exclude "*" --include
@@ -51,14 +51,45 @@
  * nothing at all), and it must be valid JSON — both formats are JSON, and
  * Apple's is JSON despite having no extension.
  *
+ * ## The one thing it asserts about content: no placeholder Team ID ships
+ *
+ * An `appID` is `<Apple Team ID>.<bundle id>`. A Team ID that is not a Team ID
+ * is the worst possible defect this file can carry, because every layer below
+ * it reports success: the JSON parses, the deploy uploads it, S3 serves it as
+ * `application/json`, Apple's CDN fetches it happily — and every universal
+ * link silently keeps opening Safari. There is no server-side trace and the
+ * feedback loop is weeks long and lands on someone else's device. It is this
+ * repository's own "absence rendered as a value" defect at the layer where it
+ * is least visible.
+ *
+ * So `appleAppIdProblems()` refuses, on every gate run and in CI:
+ *
+ *   - the `TEAMID_PENDING` sentinel;
+ *   - a missing, empty, or non-string `appIDs` entry;
+ *   - anything that is not exactly ten uppercase alphanumerics before the
+ *     bundle identifier — a truncated paste, a lower-cased value, or the
+ *     Enrollment ID, which is a different number that looks like a Team ID.
+ *
+ * The sentinel is still named even though the real Team ID has landed. The
+ * failure it guards is a FUTURE placeholder — pasted in while standing up a
+ * second app or a staging domain, then forgotten — which is exactly when a
+ * sentinel gets committed. A gate retired the moment its first instance is
+ * fixed is a gate that only ever caught the bug someone already knew about.
+ *
+ * The three deploy paths carry the same refusal inline, and it is asserted
+ * here unconditionally, for the reason the whole file exists: CI is not the
+ * last thing that can publish this object. `scripts/deploy.sh` is run by hand.
+ *
  * ## What it deliberately does not check
  *
- * Nothing here asserts that a fingerprint or Team ID is correct, or that the
- * app-side half exists. Half a deep-link setup is worse than none — an
- * `intent-filter` with `autoVerify="true"` and no matching `assetlinks.json`
- * fails verification on Android 12+ — so this gate covers the serving side
- * only, which is the half the repository can be right about on its own. See
- * docs/mobile.md.
+ * Nothing here asserts that a fingerprint is correct, that a Team ID of the
+ * right SHAPE is the right team, or that the app-side half exists. Half a
+ * deep-link setup is worse than none — an `intent-filter` with
+ * `autoVerify="true"` and no matching `assetlinks.json` fails verification on
+ * Android 12+ — so this gate covers the serving side only, which is the half
+ * the repository can be right about on its own. Whether the Apple file's
+ * CLAIM matches the app's route table is `aasa:check`
+ * (frontend/scripts/build-app-site-association.mjs). See docs/mobile.md.
  *
  * This script reads. It never edits a workflow to match.
  */
@@ -68,6 +99,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
+import {
+  BUNDLE_ID,
+  TEAM_ID_PATTERN,
+  TEAM_ID_PLACEHOLDER,
+} from '../frontend/scripts/app-site-association.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
@@ -76,8 +113,25 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const ASSOCIATION_FILES = ['assetlinks.json', 'apple-app-site-association'];
 
+/** The one of the two whose `appID` names an Apple Team ID. */
+const APPLE_ASSOCIATION = 'apple-app-site-association';
+
 /** Where an association file would be committed, to be copied into `dist/`. */
 const PUBLIC_WELL_KNOWN = 'frontend/public/.well-known';
+
+/**
+ * Where the real Team ID comes from, said the same way everywhere it is said.
+ * Spelled out because the value has a convincing look-alike: the Enrollment ID
+ * shown while an application is pending is NOT a Team ID, and a file carrying
+ * one would parse, deploy, and fail verification silently.
+ */
+const TEAM_ID_SOURCE =
+  'The real value is at Apple Developer → Membership → Team ID: exactly 10 uppercase ' +
+  'alphanumeric characters, issued once a Developer Program enrollment is approved. It is ' +
+  'NOT the Enrollment ID, which is a different number of a similar shape shown while an ' +
+  'application is pending. Set it as TEAM_ID in frontend/scripts/app-site-association.mjs ' +
+  'and run `npm run aasa --workspace frontend` to regenerate the file — it is generated, so ' +
+  'hand-editing the appID is itself refused by `npm run aasa:check`.';
 
 /**
  * Every path that uploads `frontend/dist` to the frontend bucket, with the
@@ -144,6 +198,62 @@ function commandLines(text) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The Apple file's `appID`s, checked for the one thing that makes the file
+ * unshippable rather than merely wrong: a Team ID that is not a Team ID.
+ *
+ * Every appID has to be `<10-character Team ID>.<bundle id>`. The placeholder
+ * is called out by name because it is the expected state of this repository
+ * until enrollment completes, and the failure text has to be a handover note
+ * rather than a riddle. Anything else that fails the shape gets the same
+ * refusal — a truncated paste, a lower-cased value, or the Enrollment ID,
+ * which is the mistake this specific gate exists to catch.
+ *
+ * Deliberately NOT a check that the Team ID is the RIGHT one: nothing in this
+ * repository can know that. The claim being made is narrower and provable —
+ * that no value of a shape Apple never issues reaches the bucket.
+ */
+function appleAppIdProblems(parsed) {
+  const where = `${PUBLIC_WELL_KNOWN}/${APPLE_ASSOCIATION}`;
+  const appIds = parsed?.applinks?.details?.[0]?.appIDs;
+
+  if (!Array.isArray(appIds) || appIds.length === 0) {
+    return [
+      `${where}: applinks.details[0].appIDs is missing or empty. Without it the file claims ` +
+        'nothing for anyone, and iOS reports no error — it simply never associates the domain.',
+    ];
+  }
+
+  const found = [];
+  for (const appId of appIds) {
+    if (typeof appId !== 'string' || !appId.endsWith(`.${BUNDLE_ID}`)) {
+      found.push(
+        `${where}: appID ${JSON.stringify(appId)} does not end in ".${BUNDLE_ID}", the bundle ` +
+          'identifier the apps are built with (frontend/capacitor.config.ts, docs/mobile.md).'
+      );
+      continue;
+    }
+    const teamId = appId.slice(0, appId.length - BUNDLE_ID.length - 1);
+    if (teamId === TEAM_ID_PLACEHOLDER) {
+      found.push(
+        `${where}: the appID carries the placeholder Team ID \`${TEAM_ID_PLACEHOLDER}\`, so ` +
+          'this file CANNOT SHIP. Published as-is it parses, uploads, caches, and is fetched ' +
+          'successfully by Apple — and every universal link silently keeps opening Safari, ' +
+          `which is a failure with no server-side trace and a weeks-long feedback loop. ` +
+          TEAM_ID_SOURCE
+      );
+      continue;
+    }
+    if (!TEAM_ID_PATTERN.test(teamId)) {
+      found.push(
+        `${where}: appID ${JSON.stringify(appId)} does not start with an Apple Team ID — ` +
+          `\`${teamId}\` is not ${TEAM_ID_PATTERN.source}. ${TEAM_ID_SOURCE}`
+      );
+    }
+  }
+  return found;
 }
 
 // --- The deploy paths -------------------------------------------------------
@@ -220,6 +330,33 @@ for (const { file, dist } of DEPLOY_PATHS) {
           `as application/json.`
       );
     }
+    // The placeholder refusal. Asserted for the Apple file in every deploy
+    // path, present or absent, because a deploy is the last thing that can
+    // publish this object and `scripts/deploy.sh` is run by hand without CI.
+    // Both halves are required: a `grep` whose failure nobody acts on is a
+    // gate that cannot fail.
+    if (name === APPLE_ASSOCIATION) {
+      const refusalAt = commands.findIndex(
+        (line) =>
+          line.includes('grep') && line.includes(TEAM_ID_PLACEHOLDER) && line.includes(source)
+      );
+      if (refusalAt === -1) {
+        problems.push(
+          `${file}: nothing refuses to publish ${source} when it carries the placeholder Team ` +
+            `ID \`${TEAM_ID_PLACEHOLDER}\`. Add a guard that greps the file for the sentinel ` +
+            `and exits 1 before the upload. ${TEAM_ID_SOURCE}`
+        );
+      } else if (
+        !commands.slice(refusalAt + 1, refusalAt + 6).some((line) => /^exit 1$/.test(line))
+      ) {
+        problems.push(
+          `${file}: the \`${TEAM_ID_PLACEHOLDER}\` grep over ${source} is not followed by an ` +
+            `\`exit 1\`, so it reports the placeholder and publishes it anyway. A check whose ` +
+            'failure nothing acts on is a check that cannot fail.'
+        );
+      }
+    }
+
     const maxAge = upload.match(/--cache-control\s+"?max-age=(\d+)/);
     if (!maxAge) {
       problems.push(
@@ -284,14 +421,20 @@ if (existsSync(join(ROOT, PUBLIC_WELL_KNOWN))) {
       );
       continue;
     }
+    let parsed;
     try {
-      JSON.parse(read(`${PUBLIC_WELL_KNOWN}/${name}`));
+      parsed = JSON.parse(read(`${PUBLIC_WELL_KNOWN}/${name}`));
     } catch (error) {
       problems.push(
         `${PUBLIC_WELL_KNOWN}/${name}: is not valid JSON (${error.message}). It is served ` +
           `as application/json${name.includes('.') ? '' : ' despite having no extension'}, ` +
           `and both platforms fail verification on a parse error.`
       );
+      continue;
+    }
+
+    if (name === APPLE_ASSOCIATION) {
+      problems.push(...appleAppIdProblems(parsed));
     }
   }
 }
@@ -299,9 +442,9 @@ if (existsSync(join(ROOT, PUBLIC_WELL_KNOWN))) {
 // --- Report -----------------------------------------------------------------
 
 if (problems.length > 0) {
-  console.error('\n❌ The deep-link association files would not survive the deploy path:\n');
+  console.error('\n❌ The deep-link association files are not fit to deploy:\n');
   for (const problem of problems) console.error(`   ${problem}`);
-  console.error('\nFix the deploy path, not this gate. Background: docs/mobile.md.');
+  console.error('\nFix the deploy path or the file, not this gate. Background: docs/mobile.md.');
   process.exit(1);
 }
 

@@ -338,12 +338,24 @@ below any of them exits non-zero:
 
 ### The CloudFront edge function
 
-`frontend/scripts/spa-router.test.mjs` (`npm run test:edge`, `node --test`) covers
+`npm run test:edge` (`node --test scripts/*.test.mjs`) runs the `node:test`
+suites under `frontend/scripts/`. These are not vitest suites, so they are a
+separate step rather than part of `test:coverage`: the step runs in CI's
+`Test Frontend` job and as a step in `npm run verify`. The glob is deliberate —
+naming files individually is how the next suite here ends up run by nothing.
+
+`frontend/scripts/spa-router.test.mjs` covers
 `infrastructure/modules/frontend/functions/spa-router.js` — the viewer-request
 function that maps `/pricing` and the other prerendered routes onto their
-`index.html` objects. It is not a vitest suite, so it is a separate step rather
-than part of `test:coverage`: it runs in CI's `Test Frontend` job and as a step
-in `npm run verify`.
+`index.html` objects.
+
+`frontend/scripts/app-site-association.test.mjs` covers the wildcard semantics
+underneath `frontend/public/.well-known/apple-app-site-association`: that a
+component matches a whole path rather than a prefix, and that `*` is one path
+segment and never crosses a slash. Apple's own sources disagree on the second
+point, so the repository picks the reading that is correct under both — a
+choice that is invisible in the generated file and would otherwise silently
+widen or narrow what the iOS app claims. See docs/mobile.md.
 
 It used to run in neither. The suite existed and passed, its own header comment
 said it was "part of the frontend test gate", and a repo-wide grep for
