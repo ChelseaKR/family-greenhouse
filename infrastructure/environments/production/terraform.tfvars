@@ -124,10 +124,18 @@ stripe_price_id_identify_top_up = "price_1UExJSAhnUt8CMG0fGgIyAzZ"
 # currency usd, no recurring interval, metadata pack_id=identify-20 credits=20
 # validity_days=365 — which matches IDENTIFY_TOP_UP_PACK in
 # backend/src/models/identifyTopUp.ts. That is a machine verification of the
-# mode, which is the thing Terraform cannot check for itself. The owner
-# attestation above covers the first five ids only and must be re-made to
-# cover six before this is applied; stripe_price_ids_attested below is what
-# makes that enforceable rather than advisory.
+# mode, which is the thing Terraform cannot check for itself.
+#
+# Re-attested by the repository owner on 2026-09-13: the attestation now covers
+# all six ids named in stripe_price_ids_attested below, the sixth being
+# stripe_price_id_identify_top_up (price_1UExJSAhnUt8CMG0fGgIyAzZ).
+#
+# Note what this attestation is catching up with rather than authorising. That
+# id was already applied to production by the 2026-09-13 06:04Z deploy — the
+# run's Terraform Apply succeeded from commit ea48db2b, which carried the id —
+# so the pack has been on sale since this morning. Five ids were attested and
+# six were live, which is precisely the drift the list below exists to make
+# impossible, and precisely why a bare boolean could not catch it.
 stripe_price_ids_are_live = true
 
 # The SCOPE of that attestation, and the thing that makes it enforceable.
@@ -141,24 +149,21 @@ stripe_price_ids_are_live = true
 #
 # This list names the ids the attestation covers, and a precondition on
 # terraform_data.commercial_gate_guard FAILS THE PLAN when a configured price
-# id is missing from it. The five below are the ids attested on 2026-09-02.
+# id is missing from it. The first five were attested on 2026-09-02; the sixth
+# on 2026-09-13.
 #
-# stripe_price_id_identify_top_up is deliberately ABSENT. It is machine-
-# verified live-mode (see above) but it is not owner-attested, and this file is
-# where that distinction has to stay honest. Until the list names it, the
-# production plan fails with that id in the error message — which is the
-# intended behaviour, and the reason a sixth id cannot reach an apply by being
-# forgotten.
-#
-# Owner step to re-attest: confirm price_1UExJSAhnUt8CMG0fGgIyAzZ in the Stripe
-# LIVE dashboard, add it to this list, and extend the dated attestation comment
-# above to say the top-up id is covered too.
+# The list is one-directional on purpose: every id in use must be attested, but
+# a stale entry here is harmless, because a price nothing references cannot
+# charge anyone. It names ids rather than counting them, because a count
+# catches an id being ADDED and not one being SWAPPED — and pasting a test-mode
+# id over a live one is exactly what this attestation exists to prevent.
 stripe_price_ids_attested = [
   "price_1Tkur4AhnUt8CMG0b07WYF1t", # Garden monthly
   "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual (withdrawn from sale; existing subscribers still renew)
   "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime (withdrawn from sale)
   "price_1UB7JuAhnUt8CMG05o9ktQLa", # Greenhouse monthly
   "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual (withdrawn from sale; existing subscribers still renew)
+  "price_1UExJSAhnUt8CMG0fGgIyAzZ", # Identification top-up pack, 20 credits, $1.99 one-time (ADR 0019)
 ]
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
