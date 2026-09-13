@@ -334,6 +334,7 @@
     "confirmRecoveryTitle": "Continúa la confirmación del correo",
     "confirmRecoverySubtitle": "Introduce el correo con el que te registraste y enviaremos un código nuevo.",
     "resendConfirmation": "Enviar código de confirmación",
+    "haveConfirmationCode": "Ya tengo un código",
     "confirmDocumentTitle": "Confirmar correo",
     "confirmTitle": "Confirma tu correo",
     "confirmSentTo": "Enviamos un código de confirmación a",

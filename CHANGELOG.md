@@ -16,6 +16,49 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **A sign-up that never confirmed its email now gets one reminder, and only
+  one.** A self-service account starts `UNCONFIRMED` and receives one code that
+  is valid for 24 hours. Cognito never expires or deletes such an account: it
+  cannot sign in, the address cannot register again, and nothing ever
+  contacted the person again. The 2026-09-13 funnel measurement found 2 of 3
+  real sign-ups since 2026-09-01 stopped exactly there.
+
+  The hourly `reminders` Lambda gains a third pass,
+  `services/confirmReminders.ts`. It resends the confirmation code through
+  Cognito once, between 24 hours (when the first code expires) and 7 days after
+  sign-up. The CustomMessage trigger renders it as a reminder
+  ("Finish setting up Family Greenhouse — here is a new code"). Unconfirmed
+  accounts are still not let into the app.
+
+  - **Exactly once.** `POST /auth/signup` writes one row per sign-up, keyed by
+    the opaque Cognito `sub`. Before sending, the pass claims that row with a
+    conditional write, so concurrent runs, EventBridge retries and redeploys
+    cannot send twice. A crash after the claim loses a reminder rather than
+    doubling one.
+  - **Never emailed:** accounts created before this ships (they have no row),
+    anything not `UNCONFIRMED`, disabled or deleted accounts, and addresses on
+    either suppression list. The SES account-level list matters here because
+    Cognito sends with no configuration set, so a bounced confirmation email is
+    recorded only there.
+  - **Never a smoke fixture.** The post-deploy smoke run writes a
+    `TESTFIXTURE_SIGNUP#` marker, keyed by a hash of its address, before it
+    submits the public sign-up form. The pass skips any account with that
+    marker, even if the run died before teardown.
+  - **Measured, not tracked.** Two aggregate counts are published in Embedded
+    Metric Format under `FamilyGreenhouse/SignupConfirmation`:
+    `ConfirmRemindersSent` and `ConfirmedAfterReminder`. There is no pixel, no
+    redirect link, and no address or id in any log line.
+
+  `/confirm-email` opened with no session (from the reminder's link, in a new
+  browser) now offers "I already have a code". Before, it could only request
+  another code.
+
+  **Infrastructure:** the shared Lambda role gains the read-only
+  `ses:GetSuppressedDestination`, and the CustomMessage Lambda changes. Both
+  ship with the next `v*` tag, not on merge.
+
 ## [0.32.0] - 2026-09-13
 
 ### Fixed

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const EMAIL_TEMPLATE_TOKEN = '{tag}';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HOUSEHOLD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,7 +37,76 @@ export const TEST_FIXTURE = {
   /** Partition prefix of the claim row. */
   partitionPrefix: 'TESTFIXTURE#',
   entityType: 'TestFixtureRun',
+  /**
+   * Partition prefix of the sign-up address marker (see
+   * `buildSignupAddressFixtureMarker`). Deliberately NOT under `TESTFIXTURE#`:
+   * the sweeper treats every `TESTFIXTURE#` row as a run claim holding a
+   * Cognito sub, and this row holds none.
+   */
+  signupAddressPrefix: 'TESTFIXTURE_SIGNUP#',
+  signupAddressEntityType: 'TestFixtureSignupAddress',
 } as const;
+
+/**
+ * Seconds a sign-up address marker lives. It must stay far above the 7-day
+ * ceiling of the confirm-reminder pass (`REMIND_BEFORE_MS` in
+ * backend/src/services/confirmReminders.ts): the marker is written before the
+ * account exists, so for its whole life it is older than the account it
+ * protects, and a fixture account past that ceiling can no longer be selected.
+ */
+export const SIGNUP_ADDRESS_MARKER_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+/**
+ * Partition of the marker for one address: a SHA-256 of the address, trimmed
+ * and lower-cased exactly as the backend normalises it, so the operator's smoke
+ * mailbox is never written to the table in the clear.
+ */
+export function signupAddressMarkerPartition(email: string): string {
+  const digest = createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+  return `${TEST_FIXTURE.signupAddressPrefix}${digest}`;
+}
+
+/**
+ * The row that stops the hourly confirm-reminder pass from ever emailing the
+ * public sign-up fixture.
+ *
+ * The public registration smoke leaves its account UNCONFIRMED on purpose, and
+ * the reminder pass emails UNCONFIRMED accounts once they are a day old.
+ * Teardown deletes the account, but a run that is cancelled, times out or loses
+ * its runner never reaches teardown, which is exactly how 35 fixture
+ * households leaked before. So the address is marked BEFORE the sign-up form is
+ * submitted: there is no moment in which the account exists unmarked, and if
+ * this write fails the test stops before creating anything.
+ *
+ * Structural, like every other marker here: the backend matches this row's
+ * key, never the name "Public Signup Smoke" or the shape of the address.
+ */
+export function buildSignupAddressFixtureMarker(input: {
+  email: string;
+  runId: string;
+  createdAt: string;
+}): Record<string, { S: string } | { BOOL: boolean } | { N: string }> {
+  if (!EMAIL_PATTERN.test(input.email.trim())) {
+    throw new Error('Sign-up address marker needs a valid address');
+  }
+  if (!UUID_PATTERN.test(input.runId)) {
+    throw new Error('Sign-up address marker needs a run id UUID');
+  }
+  const createdMs = Date.parse(input.createdAt);
+  if (Number.isNaN(createdMs)) {
+    throw new Error('Sign-up address marker needs an ISO 8601 createdAt');
+  }
+  return {
+    PK: { S: signupAddressMarkerPartition(input.email) },
+    SK: { S: 'METADATA' },
+    entityType: { S: TEST_FIXTURE.signupAddressEntityType },
+    [TEST_FIXTURE.flag]: { BOOL: true },
+    [TEST_FIXTURE.runId]: { S: input.runId },
+    [TEST_FIXTURE.createdAt]: { S: input.createdAt },
+    [TEST_FIXTURE.source]: { S: TEST_FIXTURE.sourceValue },
+    ttl: { N: String(Math.floor(createdMs / 1000) + SIGNUP_ADDRESS_MARKER_TTL_SECONDS) },
+  };
+}
 
 /**
  * A claim row: one per smoke run, written BEFORE the browser flow starts.
