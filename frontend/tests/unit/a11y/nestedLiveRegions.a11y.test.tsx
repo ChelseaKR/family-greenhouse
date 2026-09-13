@@ -170,7 +170,6 @@ describe('no live region is nested inside another live region', () => {
     vi.mocked(publicTagService.getView).mockResolvedValue({
       plantName: 'Monstera',
       species: null,
-      imageUrl: null,
       careNote: null,
       careNoteSource: null,
       history: { status: 'ok', lastCare: null, lastWatered: null },
@@ -198,7 +197,6 @@ describe('no live region is nested inside another live region', () => {
     vi.mocked(publicTagService.getView).mockResolvedValue({
       plantName: 'Monstera',
       species: null,
-      imageUrl: null,
       careNote: null,
       careNoteSource: null,
       history: { status: 'ok', lastCare: null, lastWatered: null },

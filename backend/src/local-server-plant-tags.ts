@@ -90,7 +90,6 @@ export interface PlantTagDeps {
         householdId: string;
         name: string;
         species: string | null;
-        imageUrl: string | null;
         notes: string | null;
         careRule?: string | null;
         status: 'active' | 'died' | 'gave_away' | 'archived';
@@ -437,7 +436,6 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
     res.json({
       plantName: plant.name,
       species: plant.species,
-      imageUrl: plant.imageUrl,
       // House rule only, never notes, as in handlers/plantTags/handler.ts.
       ...resolveCareNote(plant),
       history: {
