@@ -40,7 +40,10 @@ test('a lockfile left a release behind fails, naming both versions', () => {
   const failures = evaluate({ manifests, lock });
   assert.equal(failures.length, 1);
   assert.match(failures[0], /top-level `version` is 0\.0\.1-stale/);
-  assert.match(failures[0], new RegExp(`says ${manifests[''].replace(/\./g, '\\.')}`));
+  assert.ok(
+    failures[0].includes(`package.json says ${manifests['']}`),
+    `failure did not name package.json's version: ${failures[0]}`
+  );
 });
 
 test('the root `""` entry drifting on its own fails', () => {
@@ -68,7 +71,7 @@ test('a workspace entry drifting fails, naming that workspace', () => {
 
   const failures = evaluate({ manifests, lock });
   assert.equal(failures.length, 1);
-  assert.match(failures[0], new RegExp(`workspace \`${workspace}\` says 0\\.0\\.3-stale`));
+  assert.ok(failures[0].includes(`workspace \`${workspace}\` says 0.0.3-stale`), failures[0]);
 });
 
 test('every one of the four recorded places is actually compared', () => {
@@ -107,7 +110,7 @@ test('a workspace missing from the lockfile fails rather than being skipped', ()
 
   const failures = evaluate({ manifests, lock });
   assert.equal(failures.length, 1);
-  assert.match(failures[0], new RegExp(`no entry for workspace \`${workspace}\``));
+  assert.ok(failures[0].includes(`no entry for workspace \`${workspace}\``), failures[0]);
 });
 
 test('an entry with no version at all fails', () => {
