@@ -88,6 +88,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   correction: the brief does carry the opaque household id, inside the signed
   photo URL's S3 key. (#732)
 
+- The privacy policy's effective date is now September 13, 2026, the day #732
+  changed its sitter-link paragraph; it had stayed at September 12.
+
 - **A post-deploy smoke test that failed and then passed on its retry no
   longer reads as a clean deploy.** The smoke config retries once in CI, and
   Playwright exits 0 on a flaky result, so a smoke test that failed against a
