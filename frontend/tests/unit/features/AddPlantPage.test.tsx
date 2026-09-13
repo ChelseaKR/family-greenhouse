@@ -402,13 +402,23 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
     vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
       Object.assign(new Error('boom'), {
         isAxiosError: true,
-        response: { status: 502, data: { message: 'Plant identification failed: upstream' } },
+        response: {
+          status: 502,
+          // The message the API actually sends now: it says the state of the
+          // world, and quotes no upstream or SDK error text.
+          data: {
+            message:
+              'Plant identification is temporarily unavailable. Nothing was charged — please try again.',
+          },
+        },
       })
     );
     renderPage();
     await pickPhotoAndTryIdentify();
 
-    expect(await screen.findByText('Plant identification failed: upstream')).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Plant identification is temporarily unavailable/)
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
   });
 });

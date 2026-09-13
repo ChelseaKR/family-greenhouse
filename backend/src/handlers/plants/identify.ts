@@ -117,12 +117,25 @@ export const identify = createHandler(
     try {
       result = await plantIdentification.identifyPlant(base64);
     } catch (err) {
-      // 5xx messages are hidden by http-error-handler unless explicitly
-      // exposed; this one is intentionally surfaced so the frontend can show
-      // why identification failed (e.g. upstream 503 / timeout).
-      throw createHttpError(502, `Plant identification failed: ${(err as Error).message}`, {
-        expose: true,
-      });
+      // 5xx messages are hidden unless explicitly exposed, and this one is
+      // exposed on purpose so the frontend can say the identification failed
+      // rather than showing a bare 502. What it may NOT do is interpolate the
+      // thrown message: that string is whatever the upstream client, the AWS
+      // SDK, or an unexpected TypeError produced, and none of them are written
+      // for a user of this app to read. `plantIdentification.identifyPlant`
+      // already logs the upstream status and body server-side and converts a
+      // non-ok response into a generic error for exactly this reason; the
+      // interpolation here handed the remaining cases (timeouts, SDK failures,
+      // internal errors) straight to the client anyway.
+      //
+      // The operator keeps the detail: it is logged here, with the same
+      // request id the access log carries.
+      logger.error({ err: (err as Error).message, bucketId }, 'plant_id_identify_failed');
+      throw createHttpError(
+        502,
+        'Plant identification is temporarily unavailable. Nothing was charged — please try again.',
+        { expose: true }
+      );
     }
 
     // Count only calls that actually consumed a Plant.id identification —
