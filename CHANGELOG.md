@@ -47,20 +47,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Staging's price id stays blank on purpose, so the fail-closed "not for sale
   in this environment" path keeps somewhere real to be exercised.
 
-  **Two things are deliberately left for the owner, and neither is enforced by
-  a gate.** First, `stripe_price_ids_are_live` is a hand-made attestation that
+  **One owner step is outstanding, and no gate enforces it.**
+  `stripe_price_ids_are_live` is a hand-made attestation that
   every non-blank price id was created in the same Stripe mode as the secret
   key — Terraform cannot check it, because a price id does not encode its mode.
   The attestation in `terraform.tfvars` is dated 2026-09-02 and covers five
   ids; there are six now. The sixth carries its own machine read-back in the
   file, so the gap is the attestation's scope rather than an unverified id, but
   `stripe_price_mode_confirmed` is a Terraform `check` block, and a check block
-  warns without stopping an apply. Second, the pull request that supplied the
-  price id argued that the product's refund terms and its price-change promises
-  belonged ahead of a new paid SKU. Half of that is answered in this same
-  release — the Refunds section below — and the price-change notice
-  ([#710](https://github.com/ChelseaKR/family-greenhouse/issues/710)) is still
-  open as this is written.
+  warns without stopping an apply.
+
+  On sequencing: the pull request that supplied the price id argued that the
+  product's refund terms and its price-change promises belonged ahead of a new
+  paid SKU. **Both are repaired in this same release** —
+  the Refunds section and the notice sentences below — so the pack does not go
+  on sale ahead of the terms that describe it.
+  [#426](https://github.com/ChelseaKR/family-greenhouse/issues/426) and
+  [#710](https://github.com/ChelseaKR/family-greenhouse/issues/710) both stay
+  open for the owner questions they still hold, which those two entries set
+  out.
   ([#712](https://github.com/ChelseaKR/family-greenhouse/issues/712))
 
 - **Alarms can now reach a person without an email address.** All thirty-three
@@ -185,6 +190,74 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   stays open for its four numbered questions, among them whether a household
   should be warned or repaid when deleting its last account erases unused pack
   credits with no warning and nothing returned.
+
+- **Five published sentences promised a notice this product cannot give, and one
+  of them it had already broken.** Four of them — in the Terms' agreement,
+  changes and price-change sections, and in the Privacy policy — promised an
+  **in-app** announcement before a material change, twice with a 14-day
+  minimum. There is no announcement mechanism here of any kind: no policy
+  version, no banner, no stored acknowledgement, and no billing-email kind for a
+  price change. Real cards have been charged since 2026-09-02.
+
+  **The price sentence came out of this stronger, not narrower, and that is
+  worth being clear about.** The old wording offered 14 days' in-app notice
+  before moving a subscriber onto a new price. The load-bearing half of it was
+  already true and architectural: `createCheckoutSession` sets the price once,
+  nothing in `backend/src` calls `subscriptions.update` or touches
+  `subscriptionItems`, and the plan catalog never migrates a live subscription.
+  So the section now says what the product actually does — a new price applies
+  to new subscriptions, a running subscription keeps the price it started at,
+  and we do not move a live subscription onto a different one. **"We never move
+  you onto a new price" is a better promise than "we will warn you 14 days
+  before we move you."** Where notice is still promised, it now names **email**
+  rather than in-app: it is the channel that exists, it is durable, and it
+  reaches the subscriber most likely to want to cancel — the one who has stopped
+  opening the app, for whom a banner is worth nothing.
+
+  **The fifth sentence was not in the issue, and the product had already broken
+  it.** `terms.fromUs.notice` read "Material features and usage limits are
+  stable for at least 14 days from announcement", and had done since at least
+  2026-07-05. On **2026-09-02**, the day after payments went live, ADR 0012 cut
+  the free tier's AI caps to 20 leaf-health checks, 1 identification and a
+  quarter of the chat budget — down from what had been the $9.99 tier's caps —
+  **with no announcement, because there was nowhere to make one.** That is the
+  strongest available evidence that the sentence was a bug rather than a policy.
+  It now states what ADR 0012 actually chose: a paid plan's features and usage
+  limits are not reduced during a period already paid for, and free-plan limits
+  can change, and have. The remaining three sentences describe the effective
+  date and the public revision history — the two things that exist — and say
+  outright that there is no in-app announcement today. Both locales; the Terms
+  and Privacy effective dates move to 2026-09-12.
+
+  `backend/tests/unit/config/priceChangeNotice.test.ts` is what stops the
+  sentences drifting back out of true. It pins every sellable price literal and
+  every live production Stripe price id — including the withdrawn annual and
+  lifetime ids, because existing subscribers still renew on them — fails if
+  anything in `backend/src` acquires `subscriptions.update` or
+  `subscriptionItems`, holds both locales to the published sentences, and
+  refuses the return of an in-app promise while no mechanism exists. Two
+  deliberate choices in it are worth recording. It matches the **affirmative**
+  promise phrasings rather than banning the words "in-app", because the honest
+  replacement copy uses those words to say the mechanism does not exist — a ban
+  would have failed the truthful sentence and passed on silence. And
+  `stripe_price_id_identify_top_up` is **left unpinned on purpose**: setting it
+  for the first time puts a product on sale and re-prices nobody, so it must not
+  be caught by a notice obligation that does not apply to it. Nothing in the
+  guard stands in the way of the pack above.
+
+  **It is a speed bump, not a notifier**, and it says so in its own header: it
+  cannot send anything and does not know whether a notice went out. Writing and
+  sending one is still a person's job, and there is no broadcast send path —
+  `docs/billing.md` records that rather than implying otherwise. One correction
+  to the issue's own suggested repair, made in passing: a seventh
+  billing-email kind would not have made the original sentence true, because the
+  sentence says _in-app_ and an email is not in-app; and it would not have been
+  small either, since all six existing kinds derive from a Stripe webhook event
+  and a price change 14 days out is not one.
+  [#710](https://github.com/ChelseaKR/family-greenhouse/issues/710) stays open
+  for the choice this release does not make: keep the narrowed sentences, or
+  build the in-app announcement the original four described. The cost of
+  building it is written up on the pull request.
 
 - **The landing page promised quiet hours for the one channel that ignores
   them.** The "Reminders where you'll see them" band read _"Pick the channel,
