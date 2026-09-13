@@ -1180,6 +1180,182 @@ describe('applyStripeEvent — identification top-up grant (ADR 0019)', () => {
   });
 });
 
+/**
+ * The portfolio's worst defect class, on the paid top-up path: money taken,
+ * nothing delivered, nobody alerted.
+ *
+ * `applyStripeEvent` has exactly ONE exit a settled payment can reach having
+ * granted nothing — the `return` after `deltaForStripeEvent` produces no
+ * delta. Every other early return logs its own reason first. An
+ * identification top-up whose `credits` metadata is broken took that exit:
+ * `identifyTopUpGrantFromEvent` returns null, `deltaForStripeEvent` returns
+ * null for every top-up session by design, and the household was charged
+ * $1.99, received no credits, and produced no log line at all — so the
+ * `stripe_webhook_no_grant` alarm had nothing to fire on.
+ *
+ * These tests assert both halves: that a paid-and-ungranted event is LOUD,
+ * and that the paths which are correctly silent stay silent. A no-grant
+ * alarm that fired on every unpaid or deferred session would be trained away
+ * inside a month, which is the same defect wearing the opposite sign.
+ */
+describe('applyStripeEvent — a PAID event that grants nothing is never silent', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  /**
+   * Read from the module rather than restated: this literal is half of a
+   * cross-language contract with the `stripe_webhook_no_grant` metric filter
+   * (scripts/check-observability.mjs asserts the other half), and a copy kept
+   * here would keep passing after a rename that un-alarmed production.
+   */
+  let PAID_NO_GRANT_LOG_MESSAGE: string;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    ({ PAID_NO_GRANT_LOG_MESSAGE } = await import('../../../src/services/billing.js'));
+    const { logger } = await import('../../../src/utils/logger.js');
+    errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => undefined) as never);
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  /** Every `msg` the code passed to logger.error during this test. */
+  const errorMessages = () => errorSpy.mock.calls.map((call) => call[1]);
+  /** The structured payload of the paid-no-grant line, if one was emitted. */
+  const paidNoGrantPayload = () =>
+    errorSpy.mock.calls.find((call) => call[1] === PAID_NO_GRANT_LOG_MESSAGE)?.[0] as
+      Record<string, unknown> | undefined;
+
+  function topUpSession(over: Record<string, unknown> = {}) {
+    return {
+      id: 'evt_topup_broken',
+      created: 1_756_857_600,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_topup_broken',
+          mode: 'payment',
+          payment_status: 'paid',
+          customer: 'cus_1',
+          metadata: { householdId: 'hh-1', purchase: 'identify_top_up', credits: '20' },
+          ...over,
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  async function apply(event: Stripe.Event) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({ Item: undefined });
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(event);
+    return vi.mocked(dynamodb.send).mock.calls;
+  }
+
+  it.each([
+    ['a non-numeric credits value', 'twenty'],
+    ['a missing credits value', undefined],
+    ['a zero credits value', '0'],
+    ['a negative credits value', '-20'],
+    ['a fractional credits value', '2.5'],
+    ['an absurd credits value', '100000'],
+  ])('shouts when a paid top-up carries %s', async (_label, credits) => {
+    const metadata: Record<string, string> = {
+      householdId: 'hh-1',
+      purchase: 'identify_top_up',
+    };
+    if (credits !== undefined) metadata.credits = credits;
+    const writes = await apply(topUpSession({ metadata }));
+    // Nothing was granted...
+    expect(writes).toHaveLength(0);
+    // ...and that fact is on the record, under the exact message the
+    // stripe_webhook_no_grant metric filter matches.
+    expect(errorMessages()).toContain(PAID_NO_GRANT_LOG_MESSAGE);
+  });
+
+  it('carries the session id and the metadata that broke, so the grant can be made by hand', async () => {
+    await apply(
+      topUpSession({
+        metadata: { householdId: 'hh-1', purchase: 'identify_top_up', credits: 'twenty' },
+      })
+    );
+    expect(paidNoGrantPayload()).toMatchObject({
+      stripeEventId: 'evt_topup_broken',
+      stripeSessionId: 'cs_topup_broken',
+      type: 'checkout.session.completed',
+      mode: 'payment',
+      householdId: 'hh-1',
+      purchase: 'identify_top_up',
+      credits: 'twenty',
+    });
+  });
+
+  it('shouts when a paid checkout carries no household identity at all', async () => {
+    // Not a top-up: the other way a settled payment produced no delta and no
+    // log line. `deltaForStripeEvent` returns null on a missing householdId
+    // before it ever looks at the plan.
+    await apply(topUpSession({ metadata: { planId: 'garden' }, client_reference_id: null }));
+    expect(errorMessages()).toContain(PAID_NO_GRANT_LOG_MESSAGE);
+    expect(paidNoGrantPayload()).toMatchObject({ householdId: null, clientReferenceId: null });
+  });
+
+  it('stays silent when the top-up grant SUCCEEDS', async () => {
+    const writes = await apply(topUpSession());
+    expect(writes.length).toBeGreaterThan(0);
+    expect(errorMessages()).not.toContain(PAID_NO_GRANT_LOG_MESSAGE);
+  });
+
+  it.each(['unpaid', 'no_payment_required'])(
+    'stays silent for a %s session — no money has moved',
+    async (paymentStatus) => {
+      await apply(
+        topUpSession({
+          payment_status: paymentStatus,
+          metadata: { householdId: 'hh-1', purchase: 'identify_top_up', credits: 'twenty' },
+        })
+      );
+      expect(errorMessages()).not.toContain(PAID_NO_GRANT_LOG_MESSAGE);
+    }
+  );
+
+  it('stays silent for subscription lifecycle events, which never carry a payment_status', async () => {
+    await apply({
+      id: 'evt_sub_nohh',
+      created: 1_756_857_600,
+      type: 'customer.subscription.updated',
+      data: { object: { id: 'sub_1', metadata: {}, status: 'active' } },
+    } as unknown as Stripe.Event);
+    expect(errorMessages()).not.toContain(PAID_NO_GRANT_LOG_MESSAGE);
+  });
+
+  it('stays silent for an invoice event, which is read only for billing emails', async () => {
+    await apply({
+      id: 'evt_inv',
+      created: 1_756_857_600,
+      type: 'invoice.paid',
+      data: { object: { id: 'in_1', status: 'paid' } },
+    } as unknown as Stripe.Event);
+    expect(errorMessages()).not.toContain(PAID_NO_GRANT_LOG_MESSAGE);
+  });
+
+  it('ALSO fires alongside the unknown-plan line, rather than trusting it to cover this exit', async () => {
+    // A paid subscription checkout with unrecognised plan metadata logs
+    // stripe_event_missing_or_unknown_plan_id and then takes the same exit.
+    // Both lines land on the same metric, and the alarm threshold is
+    // "more than zero", so the duplicate costs nothing — whereas making this
+    // guard defer to the other one would reintroduce the silent exit the
+    // moment a new branch returns null for a different reason.
+    await apply(
+      topUpSession({
+        mode: 'subscription',
+        metadata: { householdId: 'hh-1', planId: 'not-a-plan' },
+      })
+    );
+    expect(errorMessages()).toContain('stripe_event_missing_or_unknown_plan_id');
+    expect(errorMessages()).toContain(PAID_NO_GRANT_LOG_MESSAGE);
+  });
+});
+
 describe('applyStripeEvent — confirmed-conversion analytics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
