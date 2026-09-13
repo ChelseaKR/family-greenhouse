@@ -965,10 +965,12 @@ export const HELP_SECTIONS: HelpSection[] = [
             Email <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> with the date and amount
             and we&rsquo;ll investigate. Please don&rsquo;t send card details. Your invoices are in
             the billing portal behind <strong>Manage subscription</strong>. We don&rsquo;t publish a
-            refund policy, so anything in that territory is handled case by case — ask.
+            refund window, so anything in that territory is handled case by case — ask. The{' '}
+            <strong>Refunds</strong> section of the Terms says what cancelling does and does not
+            return.
           </p>
         ),
-        text: 'Email support with the date and amount and we will investigate. Please do not send card details. Your invoices are in the billing portal behind Manage subscription. We do not publish a refund policy, so anything in that territory is handled case by case; ask.',
+        text: 'Email support with the date and amount and we will investigate. Please do not send card details. Your invoices are in the billing portal behind Manage subscription. We do not publish a refund window, so anything in that territory is handled case by case; ask. The Refunds section of the Terms says what cancelling does and does not return.',
       },
       {
         id: 'care-assistant',

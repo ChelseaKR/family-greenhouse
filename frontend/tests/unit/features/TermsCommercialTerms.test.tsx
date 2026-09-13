@@ -13,8 +13,9 @@ import { TermsPage } from '@/features/legal/TermsPage';
 
 /**
  * The commercial terms on /legal/terms — renewal, cancelling, the trial,
- * price changes and one-time purchases — are the sentences a paying household
- * is held to, so these tests guard the two ways they can silently go wrong:
+ * price changes, one-time purchases and refunds — are the sentences a paying
+ * household is held to, so these tests guard the two ways they can silently
+ * go wrong:
  *
  *  1. A section that stops rendering. A missing auto-renewal clause on a page
  *     that charges cards is the gap this suite exists to catch, and it is
@@ -24,10 +25,12 @@ import { TermsPage } from '@/features/legal/TermsPage';
  *     appears in one locale and not the other is a page that says two
  *     different things about money.
  *
- * The refund assertion is deliberate and not a style rule: there is no refund
- * policy to publish (issue #426). Until the owner chooses one, a refund
- * sentence appearing here would be a commitment nobody agreed to, so the test
- * fails on the word rather than waiting for someone to notice it shipped.
+ * The refund assertions are deliberate and not a style rule. They used to
+ * fail on the word "refund" appearing at all, because there was no policy to
+ * publish (issue #426) and a stray sentence would have been a commitment
+ * nobody agreed to. The section now exists, so they assert its content
+ * instead — and the behaviour it describes is guarded on the backend side by
+ * `backend/tests/unit/config/refundPosture.test.ts`.
  *
  * The sentences themselves live in `locales/<lng>/legal.json`, not in
  * `translation.json`: `legal.*` is a deferred catalog fragment that App.tsx
@@ -71,7 +74,14 @@ function renderSpanish() {
   );
 }
 
-const SECTIONS = ['trial', 'renewal', 'cancellation', 'priceChanges', 'oneTimePurchases'] as const;
+const SECTIONS = [
+  'trial',
+  'renewal',
+  'cancellation',
+  'priceChanges',
+  'oneTimePurchases',
+  'refunds',
+] as const;
 
 describe('terms: the commercial sections render', () => {
   it.each(SECTIONS)('English has a heading for %s', (section) => {
@@ -122,13 +132,53 @@ describe('terms: the two locales agree about money', () => {
   });
 });
 
-describe('terms: no refund policy is published', () => {
+describe('terms: the refund section says what the billing code does', () => {
+  /**
+   * This block used to assert the opposite — that the word "refund" appeared
+   * nowhere — because until #426 there was no policy to publish and a stray
+   * refund sentence would have been a commitment nobody agreed to. A policy
+   * has now been written, so the guard flips: the section must render, and it
+   * must keep saying the two things that are true of the system rather than
+   * the one thing a reader might hope for.
+   *
+   * The behaviour half of the same guard lives in the backend, where the tree
+   * it describes can be walked:
+   * `backend/tests/unit/config/refundPosture.test.ts` fails if any path in
+   * `backend/src` acquires a Stripe refund call, or if the account-deletion
+   * cancellation starts asking Stripe to settle the unused period.
+   */
   it.each([
     ['English', renderEnglish, /refund/i],
-    ['Spanish', renderSpanish, /reembols|devoluci/i],
-  ])('%s publishes no refund term while #426 is open', (_locale, renderPage, pattern) => {
+    ['Spanish', renderSpanish, /reembols/i],
+  ])('%s publishes a refund section', (_locale, renderPage, pattern) => {
     const { container } = renderPage();
-    expect(container.textContent ?? '').not.toMatch(pattern);
+    expect(container.textContent ?? '').toMatch(pattern);
+  });
+
+  it('says in English that cancelling does not return a charge already made', () => {
+    const { container } = renderEnglish();
+    expect(container.textContent).toContain('it does not return a charge already made');
+  });
+
+  it('says in Spanish that cancelling does not return a charge already made', () => {
+    const { container } = renderSpanish();
+    expect(container.textContent).toContain('no devuelve un cobro ya realizado');
+  });
+
+  it.each([
+    ['English', renderEnglish, /we do not publish a refund window/i],
+    ['Spanish', renderSpanish, /no publicamos un plazo de reembolso/i],
+  ])('%s states no refund window, because nothing tracks one', (_locale, renderPage, pattern) => {
+    const { container } = renderPage();
+    expect(container.textContent ?? '').toMatch(pattern);
+  });
+
+  it.each([
+    ['English', renderEnglish, /right the law where you live already gives you/i],
+    ['Spanish', renderSpanish, /derechos que ya te otorgue la ley/i],
+  ])('%s keeps the statutory-rights sentence', (_locale, renderPage, pattern) => {
+    const { container } = renderPage();
+    expect(container.textContent ?? '').toMatch(pattern);
   });
 });
 
