@@ -203,6 +203,21 @@ jobs:
       - name: Verify observability and SLO contract
         run: npm run observability:check
 
+      # The two checks below ran ONLY in the local pre-push gate
+      # (scripts/gate-steps.mjs) and in no workflow, so nothing on a pull request
+      # could see either drift. They are what keeps the crawl surface honest, and
+      # since #719 the second one also decides which URLs answer 404 — a drift it
+      # cannot see is a real route answering 404 to a customer. They go in the
+      # required `Lint` job rather than a new one, for the reason the reads ratchet
+      # below gives: a check in an unrequired job cannot block a merge. Adding
+      # steps to an existing job needs no ruleset change. Separate steps, not one
+      # `run: |` block, so each reports its own verdict.
+      - name: The committed sitemap is what build-sitemap.mjs produces
+        run: npm run sitemap:check
+
+      - name: The CloudFront route table matches public-routes.mjs and App.tsx
+        run: npm run spa-router:check
+
       - name: Settled-read-state ratchet (a failed read must not render as an all-clear)
         # ADR 0010. Shared with `npm run verify` (root `reads:check`) so local
         # pre-push and CI run the identical check — the same both-places

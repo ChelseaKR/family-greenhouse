@@ -128,3 +128,45 @@ Unknown **routes** still answer 200 with that shell, and deliberately: an SPA
 route that the client resolves is not a 404 at the CDN. `/plants/{plantId}`
 also still relies on the surviving `403 → 200` rule, because the images cache
 behavior shares its path prefix.
+
+## Update — 2026-09-13 (issue #719)
+
+The last paragraph above was wrong in one word, and the word did the damage.
+
+"Unknown **routes** still answer 200" was written about SPA routes the client
+resolves — `/dashboard`, `/plants/{plantId}` — and that part is still right.
+But the function could not tell those from URLs that resolve to nothing, so
+the rule it actually implemented was _every_ extensionless path answers 200.
+Measured on the live host on 2026-09-13: `/definitely-not-a-page`,
+`/blog/no-such-post` and `/care/no-such-plant` all returned 200 with the same
+4,715-byte shell, on the only host of twelve in this portfolio that did.
+
+The shell is `noindex`, so this was never about the index. It is about
+machine-readability: a 200 asserts the resource exists, so nothing outside a
+browser could distinguish a care guide that is missing from one that is there —
+and a link check on this host could not fail. The crawl that filed #719 swept
+638 same-origin links, reported zero broken here, and could not have reported
+otherwise.
+
+The distinction the first sentence assumed now exists in the code. The
+viewer-request function carries a second generated list, `APP_EXACT` /
+`APP_PATTERNS`, derived from `src/App.tsx` by
+`frontend/scripts/app-routes.mjs` — the same `<Routes>` table React Router
+matches. A path in neither that list nor `PRERENDERED` is left alone, so S3
+answers 404. Every URL that moves from 200 to 404 is one React Router already
+resolved to its `*` route, so nothing that rendered a page stops rendering it.
+
+`/blog/:slug`, `/care/:slug` and `/help/:topicId` are deliberately excluded
+from `APP_PATTERNS`: every valid member is manifest-driven and already in
+`PRERENDERED`, which is what makes `/care/no-such-plant` answerable at all.
+
+What this still does not fix: the 404 **body** is S3's error document rather
+than a branded page. Serving the shell there needs a distribution-wide
+`error_code = 404` rule, which would also answer for `/assets/` — where the
+post-deploy smoke (`synthetic-page-check.mjs --missing-asset-404`) requires the
+body NOT to contain the string `aws_route53_health_check.site` matches, and
+where `observability:check` fails on `error_code = 404` reappearing in
+`modules/frontend/main.tf` for exactly that reason. Status and body are
+separable, and only the status changed here. `/plants/{plantId}` is also
+untouched: that prefix is served by the images cache behavior, which has no
+function association and still relies on the `403 → 200` rule.

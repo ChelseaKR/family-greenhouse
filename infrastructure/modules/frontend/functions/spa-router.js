@@ -9,7 +9,7 @@
 // NOT fill that gap — it only rewrites the bare `/`. Without this function the
 // prerendered marketing pages would be built, uploaded, and never served.
 //
-// This function now decides the WHOLE routing question, in three kinds:
+// This function now decides the WHOLE routing question, in four kinds:
 //
 //   1. `/assets/...`  content-addressed build output. Left alone, always. The
 //      name contains the hash of the bytes, so the object either exists or it
@@ -20,32 +20,30 @@
 //      would never see the file the deploy uploaded.
 //   2. A prerendered public page (PRERENDERED below). Mapped onto its object:
 //      `/care/monstera` -> `/care/monstera/index.html`.
-//   3. Any other extensionless path. Rewritten to `/app-shell.html` BY NAME —
-//      the object always exists, so the request is a hit rather than an error.
+//   3. An extensionless path the APP routes (APP_EXACT / APP_PATTERNS below).
+//      Rewritten to `/app-shell.html` BY NAME — the object always exists, so
+//      the request is a hit rather than an error.
+//   4. An extensionless path that is neither. Left alone, so S3 answers 404
+//      and the viewer is told the truth.
 //
 // Anything with a dot in its last segment is a file request and is left alone.
 //
-// WHY (3) IS A REWRITE AND NOT AN ERROR FALLBACK (issue #615)
+// WHY (4) EXISTS (issue #719)
 //
-// It used to be an error fallback: `/dashboard` was rewritten to
-// `/dashboard/index.html`, S3 answered 403, and the distribution's
-// `custom_error_response` turned that 403 into `200 /app-shell.html`. That
-// worked, and it also meant EVERY missing object under this distribution came
-// back as a 200 carrying the app shell — including `/assets/index-<hash>.js`.
-// A dropped JS bundle was therefore indistinguishable, by status code, from a
-// healthy deploy, and the Route 53 health check (which matches an `og:site_name`
-// tag that lives in that very shell) would have called it healthy.
-//
-// `custom_error_response` is a property of the DISTRIBUTION, not of a cache
-// behavior, so it cannot be scoped to exclude `/assets/`. The only way to stop
-// it rescuing asset misses is to stop routes depending on it — which is what
-// this function now does. See modules/frontend/main.tf for the rest of the
-// chain (the `s3:ListBucket` grant and the removed 404 rule).
+// (3) used to be "any other extensionless path", so this distribution answered
+// 200 to EVERY url. Measured live 2026-09-13: /definitely-not-a-page,
+// /blog/no-such-post and /care/no-such-plant all returned the same 4,715-byte
+// shell. A 200 asserts the resource exists, so nothing outside a browser could
+// tell a missing care guide from a real one, and a link check on this host
+// could not fail. (3) and (4) are split by the route table React Router itself
+// matches, so every url that moves to 404 is one the app already rendered as
+// "Nothing growing here". Full reasoning in frontend/scripts/app-routes.mjs.
 //
 // PRERENDERED is generated from frontend/scripts/public-routes.mjs — the same
-// list the sitemap and the prerenderer read. Regenerate with
+// list the sitemap and the prerenderer read. APP_EXACT and APP_PATTERNS are
+// generated from src/App.tsx. Regenerate both with
 // `npm run spa-router --workspace frontend`; `spa-router:check` fails the gate
-// if it drifts. `/` is not in the map because it is handled directly.
+// if either drifts. `/` is in no list because it is handled directly.
 //
 // Covered by frontend/scripts/spa-router.test.mjs — edit both together. The
 // test also asserts this file stays under CloudFront's 10 KB function limit,
@@ -114,6 +112,35 @@ var PRERENDERED = {
 };
 // --- end generated -----------------------------------------------------------
 
+// --- generated from App.tsx: do not edit by hand -----------------------------
+var APP_EXACT =
+  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
+var APP_PATTERNS = '/caretaker/* /join/* /kiosk/* /plants/* /shared/* /sit/* /sit/*/brief /tag/*';
+// --- end generated App.tsx ---------------------------------------------------
+
+// Space-delimited strings, not object literals: half the bytes, under a hard
+// 10 KB ceiling. `*` matches exactly one NON-EMPTY segment, as React Router's
+// `:param` does, so segment count + literal equality is exact.
+function isAppRoute(path) {
+  if ((' ' + APP_EXACT + ' ').indexOf(' ' + path + ' ') !== -1) return true;
+
+  var segments = path.split('/');
+  var patterns = APP_PATTERNS.split(' ');
+  for (var i = 0; i < patterns.length; i++) {
+    var parts = patterns[i].split('/');
+    if (parts.length !== segments.length) continue;
+    var matched = true;
+    for (var j = 1; j < parts.length; j++) {
+      if (segments[j] === '' || (parts[j] !== '*' && parts[j] !== segments[j])) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+  return false;
+}
+
 function handler(event) {
   var request = event.request;
   var uri = request.uri;
@@ -157,13 +184,29 @@ function handler(event) {
     return request;
   }
 
-  // (3) Everything else that looks like a route — the authenticated app, an
-  // unknown URL, a typo — gets the shell by name. The extension test looks
-  // only at the LAST path segment, so a directory with a dot in its name
-  // can't accidentally suppress the rewrite.
+  // The extension test looks only at the LAST path segment, so a directory
+  // with a dot in its name can't accidentally suppress the rewrite.
   var lastSegment = path.slice(path.lastIndexOf('/') + 1);
   if (lastSegment.indexOf('.') === -1) {
-    request.uri = '/app-shell.html';
+    // React Router matches case-insensitively (<Route caseSensitive> defaults
+    // to false), so the ROUTE question is asked of the lower-cased path.
+    // PRERENDERED above stays case-sensitive: `/Pricing` reaching the shell to
+    // be client-rendered is what already shipped. Every generated key is
+    // lower-case (asserted in spa-router.test.mjs), so this is a superset of
+    // that lookup, not a second disagreeing answer.
+    var lower = path.toLowerCase();
+
+    // (3) A path this app routes: the authenticated app, a token page, or a
+    // public page reached with different capitalisation. The shell by name.
+    if (PRERENDERED[lower] === 1 || isAppRoute(lower)) {
+      request.uri = '/app-shell.html';
+      return request;
+    }
+
+    // (4) Extensionless and matched by nothing. Leaving the URI alone asks S3
+    // for an object that is not there; the frontend bucket grants
+    // `s3:ListBucket`, so that is a 404, and the surviving
+    // `custom_error_response` covers 403 only.
     return request;
   }
 

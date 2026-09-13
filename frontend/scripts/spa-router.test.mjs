@@ -37,9 +37,18 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 
-import { committedRoutes, mappedRoutes } from './build-spa-router.mjs';
+import { appRoutes, declaredRoutePaths, sampleUrlFor } from './app-routes.mjs';
+import {
+  committedAppRoutes,
+  committedRoutes,
+  expectedAppRoutes,
+  mappedRoutes,
+  renderedRouterSource,
+} from './build-spa-router.mjs';
 import { FRONTEND_ROOT } from './public-routes.mjs';
 import { publicRoutePaths } from './public-routes.mjs';
+
+const APP_SOURCE = join(FRONTEND_ROOT, 'src', 'App.tsx');
 
 const SOURCE = join(
   FRONTEND_ROOT,
@@ -95,22 +104,151 @@ test('files with extensions pass through untouched', () => {
 // `custom_error_response` produced the shell. That worked for routes and was
 // indistinguishable, at the CDN, from a missing JS chunk. The rewrite is now
 // explicit, so the error path is free to mean "not found".
-test('routes with no prerendered page are rewritten to the shell by name', () => {
+test('app routes with no prerendered page are rewritten to the shell by name', () => {
   assert.equal(rewrite('/dashboard'), '/app-shell.html');
   assert.equal(rewrite('/settings/billing'), '/app-shell.html');
   assert.equal(rewrite('/plants/abc-123'), '/app-shell.html');
   assert.equal(rewrite('/login'), '/app-shell.html');
   assert.equal(rewrite('/register'), '/app-shell.html');
-  // A typo, a stale inbound link, an unknown deep path: all still boot the app,
-  // which renders its own not-found route.
-  assert.equal(rewrite('/pricinng'), '/app-shell.html');
-  assert.equal(rewrite('/a/b/c/d'), '/app-shell.html');
   // And with a trailing slash, which is the same route.
   assert.equal(rewrite('/dashboard/'), '/app-shell.html');
 });
 
+// ---------------------------------------------------------------------------
+// #719. The three assertions below used to read the other way round, and that
+// is the finding rather than a detail: this file asserted
+//
+//     assert.equal(rewrite('/pricinng'), '/app-shell.html');
+//     assert.equal(rewrite('/a/b/c/d'), '/app-shell.html');
+//
+// under the comment "a typo, a stale inbound link, an unknown deep path: all
+// still boot the app". The defect was written down as the intended behaviour,
+// so the only gate that could have caught it was pinned to it instead.
+// ---------------------------------------------------------------------------
+
+test('a path that is not a route is left alone, so S3 answers 404', () => {
+  // Exactly the paths the crawl measured returning 200 on the live host.
+  for (const uri of [
+    '/definitely-not-a-page',
+    '/blog/no-such-post',
+    '/care/no-such-plant',
+    '/help/no-such-topic',
+    '/pricinng',
+    '/a/b/c/d',
+  ]) {
+    assert.equal(rewrite(uri), uri, `not-a-route ${uri}`);
+  }
+  // A trailing slash is the same non-route. The URI is returned unchanged
+  // rather than normalised: either way S3 has no such object.
+  assert.equal(rewrite('/care/no-such-plant/'), '/care/no-such-plant/');
+});
+
+// The namespaces #719 calls out as where a stale external link lands. Every
+// valid member is manifest-driven and prerendered, so "not in PRERENDERED"
+// under one of these means "does not exist" — which is why they are excluded
+// from APP_PATTERNS even though App.tsx declares them as :param routes.
+test('the enumerated content namespaces 404 for a slug that is not published', () => {
+  for (const prefix of ['/blog/', '/care/', '/help/']) {
+    const real = publicRoutePaths().find((route) => route.startsWith(prefix));
+    assert.ok(real, `no published page under ${prefix}`);
+    assert.equal(rewrite(real), `${real}/index.html`);
+    assert.equal(rewrite(`${prefix}not-a-real-slug`), `${prefix}not-a-real-slug`);
+  }
+});
+
+// The property that makes this safe to ship: the set of URLs that now 404 is
+// exactly the set React Router already resolved to its `*` route. Walk every
+// route App.tsx declares and require the function to reach the app for it.
+test('every route App.tsx declares still reaches the app', () => {
+  const { enumerated } = expectedAppRoutes();
+  for (const route of declaredRoutePaths()) {
+    if (route === '*') continue;
+    const url = sampleUrlFor(route);
+    if (route === '/') {
+      assert.equal(rewrite(url), '/index.html');
+      continue;
+    }
+    if (enumerated.includes(route)) {
+      // Deliberately excluded: a sample slug under these does NOT exist, and
+      // the published ones are asserted by the PRERENDERED test above.
+      assert.equal(rewrite(url), url, `enumerated namespace ${route}`);
+      continue;
+    }
+    const expected = publicRoutePaths().includes(route) ? `${route}/index.html` : '/app-shell.html';
+    assert.equal(rewrite(url), expected, `declared route ${route} (as ${url})`);
+  }
+});
+
+// React Router's <Route caseSensitive> defaults to false, so `/DASHBOARD`
+// renders the dashboard in a browser. The function must not answer 404 for a
+// URL the app would have handled.
+test('route matching is case-insensitive, as React Router is', () => {
+  assert.equal(rewrite('/DASHBOARD'), '/app-shell.html');
+  assert.equal(rewrite('/Settings/Billing'), '/app-shell.html');
+  assert.equal(rewrite('/Pricing'), '/app-shell.html');
+  assert.equal(rewrite('/SIT/abc/brief'), '/app-shell.html');
+});
+
+// …which only works because every generated key is already lower-case. If one
+// were not, the lower-cased lookup in rule (3) would silently stop finding it.
+test('every generated route key is lower-case', () => {
+  for (const route of committedRoutes()) {
+    assert.equal(route, route.toLowerCase(), `PRERENDERED key ${route}`);
+  }
+  const { exact, patterns } = committedAppRoutes();
+  for (const route of exact.concat(patterns)) {
+    assert.equal(route, route.toLowerCase(), `app route ${route}`);
+  }
+});
+
+// A `:param` matches one non-empty segment, no more and no fewer.
+test('a parameterised route matches exactly one segment', () => {
+  assert.equal(rewrite('/sit/tok'), '/app-shell.html');
+  assert.equal(rewrite('/sit/tok/brief'), '/app-shell.html');
+  assert.equal(rewrite('/sit/tok/brief/extra'), '/sit/tok/brief/extra');
+  assert.equal(rewrite('/sit'), '/sit');
+  assert.equal(rewrite('/join/a/b'), '/join/a/b');
+});
+
 test('a dot in a non-final path segment does not suppress the rewrite', () => {
-  assert.equal(rewrite('/care/x.y/guide'), '/app-shell.html');
+  // A token can contain a dot; the extension test reads the LAST segment only.
+  assert.equal(rewrite('/sit/a.b/brief'), '/app-shell.html');
+});
+
+// The guard that the whole safety argument rests on: if the parser stops
+// seeing a route, that route answers 404 to customers. `[^>]*?` cannot cross
+// the `>` inside `element={<X />}`, so a <Route> that spells `element` before
+// `path` is invisible to the parser — and was invisible to the FIRST draft of
+// the counter too, because that draft reused the parser's own prefix. Counting
+// the bare attribute is what makes the comparison able to fail.
+test('a route the parser cannot see fails the build instead of shipping', () => {
+  const hidden = '<Route element={<X />} path="/hidden-from-the-parser" />';
+  assert.throws(
+    () => appRoutes(publicRoutePaths(), `${readFileSync(APP_SOURCE, 'utf8')}\n${hidden}`),
+    /path=/,
+    'appRoutes() accepted a <Route> it had not parsed'
+  );
+  // The same input under the parser's own prefix pattern counts 0 extra, which
+  // is why that pattern could not have caught it.
+  const prefixCount = (src) => [...src.matchAll(/<Route\b[^>]*?\bpath=/gs)].length;
+  assert.equal(prefixCount(hidden), 0);
+  assert.equal([...hidden.matchAll(/\bpath=/g)].length, 1);
+});
+
+test('the generated app-route lists match App.tsx', () => {
+  const expected = appRoutes(publicRoutePaths());
+  const actual = committedAppRoutes();
+  assert.deepEqual(actual.exact, expected.exact);
+  assert.deepEqual(actual.patterns, expected.patterns);
+});
+
+// The generator emits a shape Prettier leaves alone — it has to, because
+// `format:check` and `spa-router:check` are steps of the same gate and a
+// generator Prettier rewrites makes them unsatisfiable together. This pins
+// generator-output == committed-bytes; `format:check` pins committed ==
+// formatted; together they close the loop.
+test('the committed function is byte-identical to what the generator emits', () => {
+  assert.equal(readFileSync(SOURCE, 'utf8'), renderedRouterSource());
 });
 
 // The reason this file exists at all, after #615.
@@ -128,8 +266,18 @@ test('nothing under /assets/ is ever rewritten, so a missing chunk can 404', () 
 });
 
 // A prefix that merely starts with the same letters is NOT the asset prefix.
-test('a route that starts with "assets" is still a route', () => {
-  assert.equal(rewrite('/assetsomething'), '/app-shell.html');
+//
+// This asserted `/assetsomething` -> `/app-shell.html` until #719, and that
+// discriminator is gone: since a path matching no route is now left alone,
+// "wrongly treated as an asset" and "correctly treated as a non-route" produce
+// the same unchanged URI. No route in App.tsx begins with `assets`, so there is
+// no path left that tells the two apart. What survives is still worth pinning —
+// a prefix test that matched too broadly would have to answer the shell here —
+// and the narrowness of the prefix itself is asserted where it is observable:
+// `/assets/fonts/inter-latin` above is extensionless and must pass through.
+test('a path that merely starts with "assets" is not treated as a route', () => {
+  assert.notEqual(rewrite('/assetsomething'), '/app-shell.html');
+  assert.equal(rewrite('/assetsomething'), '/assetsomething');
 });
 
 // The deep-link association files. `apple-app-site-association` is
@@ -150,11 +298,14 @@ test('nothing under /.well-known/ is rewritten, so an association file is reacha
   }
 });
 
-// Same shape as the `/assetsomething` case: a path whose first segment merely
-// begins with the same letters is not the well-known prefix, and is still a
-// route.
-test('a route whose first segment starts with ".well-known" is still a route', () => {
-  assert.equal(rewrite('/.well-knownish/page'), '/app-shell.html');
+// Same shape as the `/assetsomething` case, and the same #719 caveat: no route
+// begins with `.well-known`, so this can no longer distinguish a too-broad
+// prefix test from a correct one. The `/.well-known/` prefix's narrowness is
+// asserted where it is observable — the extensionless
+// `apple-app-site-association` above must pass through unrewritten.
+test('a path whose first segment starts with ".well-known" is not a route', () => {
+  assert.notEqual(rewrite('/.well-knownish/page'), '/app-shell.html');
+  assert.equal(rewrite('/.well-knownish/page'), '/.well-knownish/page');
 });
 
 test('the generated route map matches the public route list', () => {
@@ -166,9 +317,13 @@ test('the generated route map matches the public route list', () => {
 // care guide. Failing here is a gate; failing at `terraform apply` is a release.
 test('the function stays inside CloudFront’s 10 KB source limit', () => {
   const bytes = statSync(SOURCE).size;
+  const limit = 10 * 1024;
   assert.ok(
-    bytes < 10 * 1024,
-    `spa-router.js is ${bytes} bytes; CloudFront's limit is ${10 * 1024}. ` +
-      'Trim the comments or move the route map to a leaner encoding.'
+    bytes < limit,
+    `spa-router.js is ${bytes} bytes; CloudFront's limit is ${limit}, ` +
+      `so it is over by ${bytes - limit}. The cheapest recovery is to move ` +
+      'explanation out to frontend/scripts/app-routes.mjs or ' +
+      'frontend/scripts/build-spa-router.mjs, neither of which has a size limit; ' +
+      'after that, a leaner encoding for the PRERENDERED map.'
   );
 });
