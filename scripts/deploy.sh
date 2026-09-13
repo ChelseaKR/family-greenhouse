@@ -119,6 +119,20 @@ if [[ -f frontend/dist/.well-known/assetlinks.json ]]; then
         --content-type "application/json" \
         --cache-control "max-age=300,public"
 fi
+# A placeholder Team ID must never reach the bucket. `TEAMID_PENDING` is the
+# sentinel the committed file carries while the Apple Developer enrollment is
+# pending (Apple Developer -> Membership -> Team ID issues the real one, ten
+# uppercase alphanumerics, only once the enrollment is APPROVED). Published
+# as-is the file parses, uploads, and is fetched successfully by Apple -- and
+# every universal link silently keeps opening Safari, with no server-side trace
+# and a weeks-long feedback loop. scripts/check-well-known.mjs asserts this
+# refusal exists in all three deploy paths whether or not a file is in the tree.
+if [[ -f frontend/dist/.well-known/apple-app-site-association ]] && \
+    grep -q "TEAMID_PENDING" frontend/dist/.well-known/apple-app-site-association; then
+    echo "frontend/dist/.well-known/apple-app-site-association still carries the placeholder Team ID TEAMID_PENDING." >&2
+    echo "Refusing to publish it: see docs/mobile.md." >&2
+    exit 1
+fi
 if [[ -f frontend/dist/.well-known/apple-app-site-association ]]; then
     aws s3 cp frontend/dist/.well-known/apple-app-site-association \
         "s3://${FRONTEND_BUCKET}/.well-known/apple-app-site-association" \

@@ -218,6 +218,28 @@ jobs:
       - name: The CloudFront route table matches public-routes.mjs and App.tsx
         run: npm run spa-router:check
 
+      - name: The deep-link association files survive the deploy path (#469)
+        # NEW HERE, not new to the repo: `well-known:check` has been a step of
+        # `npm run verify` since #658 and ran in NO workflow, so every
+        # assertion it makes about the CD workflows' own upload steps was
+        # enforced only on a laptop that happened to push. A gate that lives
+        # exclusively in a pre-push hook is one `--no-verify` from absent.
+        #
+        # It also now refuses an appID whose Team ID is not a Team ID — the
+        # `TEAMID_PENDING` sentinel, an empty entry, or anything that is not
+        # ten uppercase alphanumerics. That failure is invisible everywhere
+        # else: the file parses, uploads, and is fetched successfully by Apple
+        # while every universal link keeps opening Safari.
+        run: npm run well-known:check
+
+      - name: The iOS universal-link claim matches App.tsx (#469)
+        # Shared with `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical command. Two directions: a claimed
+        # path App.tsx no longer routes, and a public route the claim picks up
+        # by accident — /account-deletion sits one wildcard from /account, and
+        # App Review checks that account deletion is reachable in a browser.
+        run: npm run aasa:check
+
       - name: Settled-read-state ratchet (a failed read must not render as an all-clear)
         # ADR 0010. Shared with `npm run verify` (root `reads:check`) so local
         # pre-push and CI run the identical check — the same both-places
