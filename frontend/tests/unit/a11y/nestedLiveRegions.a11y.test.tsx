@@ -171,7 +171,8 @@ describe('no live region is nested inside another live region', () => {
       plantName: 'Monstera',
       species: null,
       imageUrl: null,
-      careNotes: null,
+      careNote: null,
+      careNoteSource: null,
       history: { status: 'ok', lastCare: null, lastWatered: null },
       tasks: [due],
     } as TagView);
@@ -198,7 +199,8 @@ describe('no live region is nested inside another live region', () => {
       plantName: 'Monstera',
       species: null,
       imageUrl: null,
-      careNotes: null,
+      careNote: null,
+      careNoteSource: null,
       history: { status: 'ok', lastCare: null, lastWatered: null },
       tasks: [
         {
