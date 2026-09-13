@@ -16,6 +16,43 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **One public page per plant with a cited verdict in the pet-toxicity table,
+  at `/pet-safe/<slug>`.** Funnel measurement on 2026-09-13 found the site's
+  problem is arrival: 12 interacting sessions and 3 real signups in 13 days,
+  with the guide, blog and help pages drawing almost none of them. These pages
+  answer the question people search ("is <plant> toxic to cats?") and are
+  generated from `backend/src/models/petToxicity.ts`, the same table behind
+  `GET /species/toxicity` and the assistant's pet-toxicity tool. Nothing about a
+  plant is typed into the template.
+
+  **A verdict is printed only beside the plant's own ASPCA listing that states
+  it.** The nine per-plant listings the #384 entries were verified against moved
+  from comments into data (`aspcaListing`). A blank, missing or unexpected field,
+  an entry with no listing, and a listing that is silent or disagrees all render
+  "Not assessed"; nothing defaults to "non-toxic". A plant with no cited verdict
+  gets no page, so **9 pages are generated from the 29 plants in the table**. The
+  other 20 carry verdicts but no per-plant source, and each gets its page the
+  moment a verified listing is recorded.
+
+  `scripts/check-plant-safety-pages.mjs` runs at the end of every prerender. It
+  re-derives each page's claims from the table and the English catalog and fails
+  the build if a page calls a plant non-toxic for an animal the table does not
+  positively record as non-toxic with a source, if any visible text has no table
+  field or catalog string behind it, if a citation or the note differs from the
+  table, or if the head or JSON-LD says something the body does not. Negative
+  controls in `PetSafePlantPage.test.tsx` show it failing on each.
+
+  The CloudFront function serves the namespace with one prefix rule instead of a
+  `PRERENDERED` entry per page, so its size does not depend on the number of
+  plants, and an unpublished slug is S3's 404. `spa-router.test.mjs` fails if a
+  per-plant entry is added. Sitemap `<lastmod>` for these pages comes from a
+  committed ledger that pins each date to a digest of the page's table fields;
+  a content change makes `sitemap:check` and `prebuild` refuse until
+  `npm run plant-pages:lastmod --workspace frontend` re-dates that page. The
+  routes are in the iOS association file's not-claimed set.
+
 ## [0.32.0] - 2026-09-13
 
 ### Fixed

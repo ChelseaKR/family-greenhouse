@@ -393,7 +393,46 @@
     "allGuides": "Ver todas las guías de cuidado",
     "readingHeading": "Más sobre plantas y mascotas",
     "readingSafeIntro": "¿Estás buscando una planta nueva?",
-    "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?"
+    "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?",
+    "citedPagesHeading": "Plantas con una página de veredicto citado",
+    "citedPagesLede": "Una página por planta, con cada veredicto junto a la ficha de la ASPCA de la que sale."
+  },
+  "plantSafetyPage": {
+    "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas. Gatos: {{cats}}. Perros: {{dogs}}.",
+    "eyebrow": "Mascotas y plantas",
+    "heading": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "verdictsHeading": "Los veredictos, con su fuente",
+    "animal": {
+      "cats": "Gatos",
+      "dogs": "Perros"
+    },
+    "verdict": {
+      "toxic": "Tóxica",
+      "nonToxic": "No tóxica",
+      "notAssessed": "Sin evaluar"
+    },
+    "sourceLabel": "Fuente:",
+    "citation": "ASPCA, «{{title}}» ({{scientificName}})",
+    "notAssessed": {
+      "cats": "Esta página no tiene un veredicto con fuente para gatos, así que no afirma nada en ningún sentido. Considéralo desconocido y mantén la planta fuera del alcance de tu gato hasta consultarlo con tu veterinario.",
+      "dogs": "Esta página no tiene un veredicto con fuente para perros, así que no afirma nada en ningún sentido. Considéralo desconocido y mantén la planta fuera del alcance de tu perro hasta consultarlo con tu veterinario."
+    },
+    "noteHeading": "Lo que añade nuestra tabla",
+    "emergencyHeading": "Si tu mascota ya se ha comido un trozo",
+    "emergencyBody": "No esperes a ver si aparecen síntomas. Llama a tu veterinario o a",
+    "poisonControlLink": "ASPCA Animal Poison Control",
+    "aboutHeading": "Cómo se hace esta página",
+    "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
+    "checkAnother": "Buscar otra planta",
+    "breadcrumbHome": "Inicio",
+    "breadcrumbHub": "Mascotas y plantas",
+    "signupTitle": "Que todo el hogar esté al tanto de tus plantas",
+    "signupBody": "Family Greenhouse reúne cada planta, sus cuidados y quién se encarga de ella en un solo lugar compartido. Puedes empezar gratis y sin tarjeta.",
+    "signupCta": "Empezar",
+    "unknownTitle": "No hay un veredicto con fuente para esta planta",
+    "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
+    "unknownCta": "Buscar una planta"
   },
   "plants": {
     "title": "Plantas",

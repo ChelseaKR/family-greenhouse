@@ -382,7 +382,46 @@
     "allGuides": "Browse all plant care guides",
     "readingHeading": "More on plants and pets",
     "readingSafeIntro": "Shopping for something new?",
-    "readingToxicIntro": "Already living with one from the second list?"
+    "readingToxicIntro": "Already living with one from the second list?",
+    "citedPagesHeading": "Plants with a cited verdict page",
+    "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
+  },
+  "plantSafetyPage": {
+    "metaTitle": "Is {{name}} toxic to cats and dogs?",
+    "metaDescription": "What the ASPCA listing says about {{name}} ({{scientificName}}) and pets. Cats: {{cats}}. Dogs: {{dogs}}.",
+    "eyebrow": "Pets and plants",
+    "heading": "Is {{name}} toxic to cats and dogs?",
+    "verdictsHeading": "The verdicts, with their source",
+    "animal": {
+      "cats": "Cats",
+      "dogs": "Dogs"
+    },
+    "verdict": {
+      "toxic": "Toxic",
+      "nonToxic": "Non-toxic",
+      "notAssessed": "Not assessed"
+    },
+    "sourceLabel": "Source:",
+    "citation": "ASPCA, “{{title}}” ({{scientificName}})",
+    "notAssessed": {
+      "cats": "This page has no cited verdict for cats, so it makes no claim either way. Treat it as unknown and keep the plant out of a cat’s reach until you have checked with your vet.",
+      "dogs": "This page has no cited verdict for dogs, so it makes no claim either way. Treat it as unknown and keep the plant out of a dog’s reach until you have checked with your vet."
+    },
+    "noteHeading": "What our table adds",
+    "emergencyHeading": "If your pet has already eaten some",
+    "emergencyBody": "Don’t wait to see whether symptoms appear. Call your vet, or",
+    "poisonControlLink": "ASPCA Animal Poison Control",
+    "aboutHeading": "How this page is made",
+    "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing.",
+    "checkAnother": "Look up another plant",
+    "breadcrumbHome": "Home",
+    "breadcrumbHub": "Pets and plants",
+    "signupTitle": "Keep the whole household on the same page about your plants",
+    "signupBody": "Family Greenhouse keeps every plant, its care, and who is looking after it in one shared place. Free to start, no card needed.",
+    "signupCta": "Get started",
+    "unknownTitle": "No cited verdict for this plant",
+    "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
+    "unknownCta": "Look up a plant"
   },
   "plants": {
     "title": "Plants",

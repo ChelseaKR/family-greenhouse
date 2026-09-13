@@ -16,6 +16,7 @@ import {
   type PetSafeGroupId,
   type PetSafetyLevel,
 } from './petSafeSpecies';
+import { PLANT_SAFETY_PAGES } from './plantSafetyPages';
 
 const PAGE_TITLE = 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker';
 const PAGE_DESCRIPTION =
@@ -346,6 +347,33 @@ function SpeciesDirectory() {
           </Link>
         </p>
       </section>
+
+      {/* The per-plant pages generated from the curated table. Names only: each
+          verdict lives on its own page, beside the ASPCA listing it rests on,
+          so this list makes no claim a crawler could read out of context. */}
+      {PLANT_SAFETY_PAGES.length > 0 && (
+        <section className="mt-12" aria-labelledby="pet-safe-cited-heading">
+          <h2
+            id="pet-safe-cited-heading"
+            className="font-serif text-xl tracking-tight text-ink sm:text-2xl"
+          >
+            {t('petSafeSpecies.citedPagesHeading')}
+          </h2>
+          <p className="mt-2 text-sm text-gray-700">{t('petSafeSpecies.citedPagesLede')}</p>
+          <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            {PLANT_SAFETY_PAGES.map((page) => (
+              <li key={page.slug}>
+                <Link
+                  to={`/pet-safe/${page.slug}`}
+                  className="text-primary-700 underline hover:text-primary-800"
+                >
+                  {page.commonName}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* The two posts that answer the question after this one — "so what do I
           buy instead?" — and the only two long-form pet-safety pages we have.

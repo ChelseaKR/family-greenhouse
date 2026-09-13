@@ -31,6 +31,14 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  LASTMOD_LEDGER,
+  PLANT_PAGE_PREFIX,
+  loadPetToxicityTable,
+  pageContentDigest,
+  publishedPlantPages,
+} from './pet-toxicity-table.mjs';
+
 /** Absolute path to `frontend/`. */
 export const FRONTEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -72,6 +80,83 @@ export const STATIC_ROUTES = [
   { path: '/support', priority: 0.4, changefreq: 'yearly' },
   { path: '/account-deletion', priority: 0.4, changefreq: 'yearly' },
 ];
+
+/**
+ * Namespaces whose pages the CloudFront function serves by PREFIX, not by one
+ * `PRERENDERED` entry per page.
+ *
+ * `spa-router.js` has a hard 10 KB source limit and every `PRERENDERED` entry
+ * costs about 30 bytes, so a namespace generated from a data table cannot be
+ * enumerated there: the per-plant pages alone would take most of the headroom
+ * left for blog posts and care guides. A prefix-served namespace costs a fixed
+ * few bytes instead. It stays honest because the function maps any one
+ * segment under the prefix onto its `index.html` object, and S3 answers 404
+ * when the prerender wrote no such object. `build-spa-router.mjs` keeps these
+ * routes out of `PRERENDERED`, and `spa-router.test.mjs` fails if one is added.
+ *
+ * Every route under a prefix must be exactly one segment below it, since that
+ * is all the edge rule maps; `build-spa-router.mjs` refuses anything else.
+ */
+export const PREFIX_SERVED_NAMESPACES = [PLANT_PAGE_PREFIX];
+
+/** Human-readable name of the plant-page lastmod ledger, for error messages. */
+const LEDGER_NAME = 'frontend/scripts/plant-pages-lastmod.json';
+
+/**
+ * The committed plant-page `<lastmod>` ledger: `{ pages: { <slug>: { content,
+ * lastmod } } }`. Absent is read as empty, which leaves every page unverified
+ * rather than silently dated.
+ */
+export function readPlantPagesLedger(path = LASTMOD_LEDGER) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return { pages: {} };
+    throw error;
+  }
+}
+
+/**
+ * One public route per published `/pet-safe/<slug>` page, in table order.
+ *
+ * `lastmod` is the date the ledger pins to that page's CONTENT: the ledger
+ * stores a digest of every table field the page shows, next to the date that
+ * digest was first seen. When the digest still matches, the date is the
+ * page's. When it does not, the route carries `unverifiedLastmod` (the reason)
+ * and no date — and `build-sitemap.mjs` refuses to write or pass a sitemap
+ * with one, in both modes, rather than falling back to today. The build date
+ * never reaches this field; the only way to move it is to change what the page
+ * says and run `npm run plant-pages:lastmod --workspace frontend`.
+ */
+export function plantPageRoutes(table = loadPetToxicityTable(), ledger = readPlantPagesLedger()) {
+  return publishedPlantPages(table).map((page) => {
+    const route = { path: page.path, priority: 0.7, changefreq: 'monthly' };
+    const recorded = ledger?.pages?.[page.slug];
+    if (
+      !recorded ||
+      typeof recorded.lastmod !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(recorded.lastmod)
+    ) {
+      return { ...route, unverifiedLastmod: `no dated entry in ${LEDGER_NAME}` };
+    }
+    if (recorded.content !== pageContentDigest(page.entry)) {
+      return {
+        ...route,
+        unverifiedLastmod: `its table entry changed after ${recorded.lastmod}, the date ${LEDGER_NAME} records`,
+      };
+    }
+    return { ...route, lastmod: recorded.lastmod };
+  });
+}
+
+/** Ledger slugs with no published page — a date kept for a page that is gone. */
+export function stalePlantPagesLedgerEntries(
+  table = loadPetToxicityTable(),
+  ledger = readPlantPagesLedger()
+) {
+  const published = new Set(publishedPlantPages(table).map((page) => page.slug));
+  return Object.keys(ledger?.pages ?? {}).filter((slug) => !published.has(slug));
+}
 
 /** Blog slugs → ISO publish date, read from the post manifest. */
 export function readBlogDates() {
@@ -165,7 +250,8 @@ export function readHelpTopics() {
  * also carries `undated` (the reason), because a `<lastmod>` that changes at
  * midnight makes the committed sitemap unreproducible: `build-sitemap.mjs
  * --check` refuses to verify those routes by name rather than silently skip
- * them.
+ * them. A `/pet-safe/<slug>` route instead carries `unverifiedLastmod` when its
+ * content no longer matches the date it was given (see `plantPageRoutes`).
  */
 export function publicRoutes() {
   const today = new Date().toISOString().slice(0, 10);
@@ -227,7 +313,7 @@ export function publicRoutes() {
     return lastmod ? { ...route, lastmod } : route;
   });
 
-  return [...staticEntries, ...blogEntries, ...careEntries, ...helpEntries];
+  return [...staticEntries, ...blogEntries, ...careEntries, ...plantPageRoutes(), ...helpEntries];
 }
 
 /** Just the paths — what the prerenderer and the coverage gate compare. */
