@@ -16,6 +16,113 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-09-13
+
+### Security
+
+- **A sitter link exposed a plant's private notes.** The handoff brief behind
+  a sitter link (`GET /sitter/{token}/brief`, the page at `/sit/{token}/brief`)
+  returned the plant's free-text `notes` word for word whenever the plant had
+  no house rule. That is the ordinary case, because the house rule is optional.
+  A sitter link is an unauthenticated bearer credential, so anyone holding one
+  could read those notes. Measured before the fix: a note reading "the spare
+  key is under the mat" came back verbatim. The privacy policy has always said
+  a sitter link does not expose plant private notes. The fallback shipped with
+  the brief in #420 (first tagged in 0.24.0). It affected links from
+  households whose plan includes the brief; on other plans the brief returns
+  a 404.
+
+  The fix is in code, not copy. `resolveCareNote` now reads the house rule
+  (`careRule`) and nothing else, so a plant with no rule shows "No note for
+  this plant." The brief page's "The household's note" heading is gone in
+  `en` and `es`. `backend/tests/integration/sitter-privacy.test.ts` fetches
+  both public sitter routes with nothing but the token and checks each clause
+  of the published privacy paragraph against the bytes that come back.
+
+  This stops further exposure and recalls nothing: a brief opened before this
+  release may already have shown those notes.
+  ([#709](https://github.com/ChelseaKR/family-greenhouse/issues/709))
+
+### Added
+
+- **`https://familygreenhouse.net/.well-known/apple-app-site-association` is
+  served for iOS universal links.** Before this release that URL returned
+  a 404. The file names the app `6X5YH93QNM.net.familygreenhouse.app` and is
+  generated from the `<Routes>` table in `frontend/src/App.tsx`
+  (`npm run aasa --workspace frontend`). It claims 24 of the 45 declared
+  routes, with 22 components: the signed-in app plus the token links
+  (`/sit/*`, `/sit/*/brief`, `/join/*`, `/shared/*`, `/tag/*`, `/kiosk/*`,
+  `/caretaker/*`). Marketing and content pages, the email-link auth routes
+  and `/account-deletion` stay in the browser. The only thing that uploads it
+  is an explicit `aws s3 cp` step with `--content-type "application/json"`
+  and `--cache-control "max-age=300,public"`, present in both CD workflows and
+  `scripts/deploy.sh`. All three refuse to upload a file that still carries
+  the `TEAMID_PENDING` placeholder.
+
+  **Nothing changes for users yet.** No installed app declares the Associated
+  Domains entitlement, so every link keeps opening in the browser. The file
+  has to be live and verifiable before that entitlement is added, and this
+  release does that part.
+
+  Two gates now run in CI's Lint job. `aasa:check` is new: it fails if the
+  committed file differs from the generator's output, if App.tsx declares a
+  route nobody classified, or if a public route such as `/account-deletion`
+  is claimed. `well-known:check` has existed since #658 but ran in no
+  workflow, only in the local pre-push gate. It now also refuses a Team ID
+  that is not exactly ten uppercase alphanumerics. (#731, refs
+  [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469))
+
+### Changed
+
+- **The privacy policy's sitter-link paragraph now lists everything a sitter
+  sees.** It named four things: due tasks, plant names, each plant's current
+  space and its placement note. On a plan that includes the Away Kit, the
+  same link also opens the brief. The brief adds each plant's house rule, its
+  entry in the verified pet-toxicity list, and its latest photo at an address
+  that stops working when the link does, and it lets the sitter send a photo
+  back to a plant's timeline. The paragraph now says all of that in `en` and
+  `es`. The sentence saying a link does not expose plant or task private
+  notes is unchanged, and is now true. The help page's sitter section and the
+  House rule hint on the plant form were brought into line; the hint now says
+  a sitter never sees the Notes field. ADR 0015 is amended, including one
+  correction: the brief does carry the opaque household id, inside the signed
+  photo URL's S3 key. (#732)
+
+- The privacy policy's effective date is now September 13, 2026, the day #732
+  changed its sitter-link paragraph; it had stayed at September 12.
+
+- **A post-deploy smoke test that failed and then passed on its retry no
+  longer reads as a clean deploy.** The smoke config retries once in CI, and
+  Playwright exits 0 on a flaky result, so a smoke test that failed against a
+  release and passed on the retry left only a log line. The smoke run now
+  writes a JSON report. A new step in `smoke-tests`
+  (`scripts/smoke-flaky-report.mjs`) names every retried test in the step
+  summary and sets a `flaky` output; it is `continue-on-error` and always
+  exits 0. `notify` fails the workflow run when that count is non-zero, empty
+  or `unknown`. `rollback` is unchanged and still keys only on
+  `smoke-tests.result`, so a retried pass keeps the release. A red `Notify`
+  job on a kept release means a retry happened, not that production rolled
+  back. `cd-production.yml` runs as of the tag, so this release is the first
+  deploy to run the new step.
+  ([#703](https://github.com/ChelseaKR/family-greenhouse/issues/703))
+
+- **The Terms' 14-day price-change notice can no longer be broken silently.**
+  The Terms promise that a running subscription keeps its price, and that if
+  it ever has to move, the household's admins are emailed at least 14 days
+  first. Nothing sends that email: billing emails go out only from Stripe
+  webhook events. No price change is planned, so this release neither
+  rewords the promise nor builds the emailer. Instead a backend test
+  (`priceChangeNoticeGate.ts`) scans `backend/src` for the nine Stripe calls
+  that can move a running subscription's price (`subscriptions.update`,
+  `subscriptionSchedules`, `invoiceItems` and six more; `backend/src` makes
+  none today). It fails the build unless each call is covered by a notice in
+  `docs/price-change-notices.json` with a real `emailedOn` date and an
+  `effectiveOn` at least 14 days later. A catalog or `stripe_price_id_*`
+  change is deliberately not gated: a new price applies only to new
+  subscriptions. `docs/billing.md`'s price-change section says what the gate
+  cannot see. No runtime behaviour changes.
+  ([#710](https://github.com/ChelseaKR/family-greenhouse/issues/710))
+
 ## [0.32.0] - 2026-09-13
 
 ### Fixed

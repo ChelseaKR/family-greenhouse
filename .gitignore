@@ -57,6 +57,8 @@ playwright-report/
 # playwright-report/ by CI's "E2E report (merged)" job.
 blob-report/
 test-results/
+# The post-deploy smoke's JSON report, read by scripts/smoke-flaky-report.mjs (#703).
+smoke-results/
 .lighthouseci/
 
 # Capacitor (native shells): the web bundle copied in by `npx cap sync` is a

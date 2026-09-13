@@ -756,23 +756,50 @@ enforced by the architecture:
   Terms say exactly that, and say that if an existing subscription ever does
   have to move, the household's admins are emailed at least 14 days first.
 
-**What is gated:** `backend/tests/unit/config/priceChangeNotice.test.ts` pins
-every sellable price literal and every live Stripe price id, fails if anything
-in `backend/src` acquires the ability to re-price a running subscription, holds
-both locales to the published sentences, and fails if an in-app notice promise
-comes back while no mechanism exists. It is a speed bump, not a notifier: it
-guarantees a price cannot move while nobody is looking, and knows nothing about
-whether a notice was sent. The top-up price id is deliberately left unpinned —
-setting it for the first time puts a new product on sale (ADR 0019), it
-re-prices nobody, and it must not be caught by a notice obligation that does
-not apply to it.
+**What is gated:** `backend/tests/unit/config/priceChangeNotice.test.ts`, with
+the pure evaluator beside it in `priceChangeNoticeGate.ts`:
 
-**What is manual:** writing and sending the notice. There is no broadcast send
-path. `services/billingEmails.ts` dispatches from a Stripe event; reaching every
-admin of every household on a given price would be a new send — the seventh
-notice kind plus a fan-out over subscribed households, in the shape
-`services/scheduledFanOut.ts` already provides — and it does not exist. Until
-it does, the 14-day email is a person's job.
+- **Every sellable price literal and every live Stripe price id is pinned.**
+  Moving one re-prices nobody — a running subscription holds its own Stripe
+  price, and Stripe does not allow a price's amount to be edited — so the pin
+  exists for deliberate change and for entitlement mapping
+  (`planIdFromPriceId` resolves renewals through these ids), not for notice.
+  The top-up price id is deliberately left unpinned: setting it for the first
+  time puts a new product on sale (ADR 0019) and re-prices nobody.
+- **Every Stripe call that can change what a running subscription is charged
+  is scanned for** across `backend/src`: editing a subscription or its items,
+  migrating it, scheduling it onto new phases, adding invoice items, editing
+  invoice lines, deleting a discount, adding to a customer balance, or a raw
+  request. Each pattern is proven against a sample it must match and a near
+  miss it must not, on every run.
+- **Each such call must be covered by a dated notice** in
+  `docs/price-change-notices.json`: an `emailedOn` that is not in the future,
+  an `effectiveOn` at least 14 days after it, and — while the call exists — an
+  `effectiveOn` that has already arrived, so the code cannot merge before the
+  date the email gave. A second call under a notice written for one, or a
+  notice for code that has gone without being marked `retired`, also fails.
+  The ledger is empty because no such call exists. The evaluator's own failure
+  cases run on every build, so it is shown to fail rather than assumed to.
+- **Both locales are held to the published sentences**, and an in-app notice
+  promise cannot come back while no mechanism exists.
+
+**Why the notice is tied to those calls and not to the catalog.** The Terms say
+a new price applies to new subscriptions, and need no notice for that. A gate
+demanding a 14-day notice before any catalog change would block a change the
+Terms allow and invite a notice record for an email nobody had to send — a gate
+satisfied by ceremony. The calls above are the only way this codebase could move
+a running subscription, so that is where the notice is required.
+
+**What it cannot see, and what stays manual.** `emailedOn` is an attestation;
+no test can see an inbox. No repository gate can see the Stripe Dashboard,
+where a person can migrate subscriptions without a line of code changing. And
+there is still no send path: `services/billingEmails.ts` dispatches from a
+Stripe event, and reaching every admin of every household on a given price
+would be a new send — a seventh notice kind plus a fan-out in the shape
+`services/scheduledFanOut.ts` provides. It is deliberately not built ahead of
+need: no price change is planned. What the gate guarantees is that the email
+is sent — by that path once it exists, or by hand — and recorded before any
+code that moves a running subscription can merge.
 
 **What was already not kept.** The sentence
 `legal.terms.fromUs.notice` used to promise that "material features and usage
