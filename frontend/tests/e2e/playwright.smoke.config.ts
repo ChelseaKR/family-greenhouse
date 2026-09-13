@@ -19,7 +19,21 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
+  // `failOnFlakyTests` is deliberately NOT set, unlike ../../playwright.config.ts:
+  // a red smoke-tests job rolls production back, and a smoke that failed once
+  // against a release and then passed on the retry above is not by itself a
+  // reason to revert it. The JSON report is what keeps that retry from reading
+  // as a clean pass: scripts/smoke-flaky-report.mjs reads it, names every
+  // retried test in the step summary, and cd-production.yml's `notify` job
+  // fails the run on it without touching `rollback` (#703). Relative to this
+  // file, so it lands at frontend/tests/e2e/smoke-results/results.json.
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['json', { outputFile: 'smoke-results/results.json' }],
+        ['html', { open: 'never' }],
+      ]
+    : 'html',
   timeout: 60_000,
   use: {
     baseURL,

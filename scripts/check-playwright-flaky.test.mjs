@@ -23,8 +23,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const EXEMPT = {
   'frontend/tests/e2e/playwright.smoke.config.ts':
-    'post-deploy smoke: a red run rolls production back, so failing it on a ' +
-    'flaky result is an owner decision (#703)',
+    'post-deploy smoke: a red run rolls production back, so a retried pass keeps ' +
+    'the release and is reported instead (scripts/smoke-flaky-report.mjs, #703)',
 };
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'playwright-report', 'test-results']);

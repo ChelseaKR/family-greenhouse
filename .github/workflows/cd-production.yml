@@ -755,6 +755,11 @@ jobs:
     name: Post-deploy smoke (Playwright e2e against prod)
     runs-on: ubuntu-latest
     needs: [validate, terraform, deploy-frontend, deploy-backend]
+    outputs:
+      # How many smoke tests failed against this release and passed only on
+      # their retry, or `unknown` when that could not be read (#703). `notify`
+      # reads it. `rollback` must not: a retried pass keeps the release.
+      flaky: ${{ steps.smoke-flaky.outputs.flaky }}
     # OIDC: assumes AWS_PRODUCTION_ROLE_ARN for Cognito test-user create+delete.
     permissions:
       id-token: write
@@ -832,6 +837,18 @@ jobs:
           E2E_TABLE_NAME: ${{ needs.terraform.outputs.dynamodb_table_name }}
           E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE: ${{ secrets.E2E_PUBLIC_SIGNUP_EMAIL_TEMPLATE }}
         run: npx playwright test --config tests/e2e/playwright.smoke.config.ts
+
+      # #703. The smoke config retries once and does not fail on a flaky
+      # result, because a failed smoke-tests job rolls production back. Without
+      # this step a smoke test that failed against the release and passed on its
+      # retry was indistinguishable from a clean pass. It names each retried test
+      # in the step summary and sets `flaky` for `notify`, and it always exits 0.
+      - name: Report smoke tests that passed only on their retry (#703)
+        id: smoke-flaky
+        if: always()
+        # allow-silenced-gate: a reporting step inside smoke-tests must never fail that job, because a failed smoke-tests job rolls production back; the verdict belongs to notify, which fails the run on a retried or unreadable count
+        continue-on-error: true
+        run: node scripts/smoke-flaky-report.mjs frontend/tests/e2e/smoke-results/results.json
 
       - name: Upload Playwright report
         if: always()
@@ -1212,8 +1229,26 @@ jobs:
           SMOKE_RESULT: ${{ needs.smoke-tests.result }}
           CLEANUP_RESULT: ${{ needs.cleanup-success-snapshot.result }}
           ROLLBACK_RESULT: ${{ needs.rollback.result }}
+          SMOKE_FLAKY: ${{ needs.smoke-tests.outputs.flaky }}
         run: |
+          # #703. A smoke test that failed against this release and passed on its
+          # retry keeps the release (`rollback` reads only smoke-tests.result),
+          # but the run must not read as a clean deploy. An empty or `unknown`
+          # count is not zero: it means the smoke report could not be read.
+          smoke_retried=false
+          if [ "$SMOKE_RESULT" == "success" ] && [ "$SMOKE_FLAKY" != "0" ]; then
+            smoke_retried=true
+            if [ -z "$SMOKE_FLAKY" ] || [ "$SMOKE_FLAKY" == "unknown" ]; then
+              echo "::warning::$VERSION was kept, but whether any post-deploy smoke test needed its retry could not be read (#703)."
+            else
+              echo "::warning::$VERSION was kept, but $SMOKE_FLAKY post-deploy smoke test(s) failed against it and passed only on a retry (#703). See the smoke-tests step summary."
+            fi
+          fi
           if [ "$SMOKE_RESULT" == "success" ] && [ "$CLEANUP_RESULT" == "success" ]; then
+            if [ "$smoke_retried" == "true" ]; then
+              echo "Production deployment of $VERSION succeeded and was kept, but its post-deploy smoke did not pass cleanly on the first attempt."
+              exit 1
+            fi
             echo "Production deployment of $VERSION successful!"
           elif [ "$SMOKE_RESULT" == "success" ]; then
             echo "Production deployment of $VERSION succeeded, but rollback-snapshot retention cleanup failed!"
