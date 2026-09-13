@@ -152,7 +152,7 @@ describe('auth handler', () => {
       const res = (await signup(
         buildEvent({
           body: JSON.stringify({
-            email: 'new@example.com',
+            email: 'new-account@example.invalid',
             password: 'Passw0rd!1234',
             name: 'New User',
           }),
@@ -173,7 +173,7 @@ describe('auth handler', () => {
       const res = (await signup(
         buildEvent({
           body: JSON.stringify({
-            email: 'taken@example.com',
+            email: 'taken-account@example.invalid',
             password: 'Passw0rd!1234',
             name: 'Taken',
           }),
