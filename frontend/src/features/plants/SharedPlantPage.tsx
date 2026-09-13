@@ -37,9 +37,10 @@ import { setPendingShareCode } from './pendingShareCode';
  *   - logged in + household   → card + "Add to my greenhouse"
  *
  * PII safety: the public payload only ever exposes the plant snapshot
- * (name/species/notes/imageUrl/tags) and the sharing household's DISPLAY name —
- * no emails, member rosters, household ids, or location. We render exactly that
- * and nothing more.
+ * (name/species/careRule/imageUrl/tags) and the sharing household's DISPLAY
+ * name — no emails, member rosters, household ids, or location, and none of
+ * the plant's free-text notes, which the backend snapshot does not carry. We
+ * render exactly that and nothing more.
  *
  * SPA-SEO note: this is a client-rendered SPA, so the per-cutting og:image /
  * og:title set below are only seen by scrapers that execute JS. Crawlers that
@@ -193,12 +194,12 @@ export function SharedPlantPage() {
               </div>
             )}
 
-            {plant.notes && (
+            {plant.careRule && (
               <div className="rounded-lg border border-primary-100/70 bg-white/60 p-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-600">
-                  {t('plants.shared.notesLabel')}
+                  {t('plants.shared.houseRuleLabel')}
                 </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{plant.notes}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{plant.careRule}</p>
               </div>
             )}
 

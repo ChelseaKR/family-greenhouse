@@ -282,7 +282,9 @@ interface PlantShare {
   plantSnapshot: {
     name: string;
     species: string | null;
-    notes: string | null;
+    /** The house rule, never the plant's free-text notes — see
+     *  plantService.PlantShareSnapshot. */
+    careRule: string | null;
     imageUrl: string | null;
     tags: string[];
   };
@@ -3945,7 +3947,9 @@ app.post('/plants/:id/share', authMiddleware, requireHousehold, (req, res) => {
     plantSnapshot: {
       name: plant.name,
       species: plant.species,
-      notes: plant.notes,
+      // resolveCareNote, like the real service: the house rule if there is
+      // one, otherwise no care note at all. Never `plant.notes`.
+      careRule: resolveCareNote(plant).careNote,
       imageUrl: plant.imageUrl,
       tags: [...plant.tags],
     },
@@ -4587,10 +4591,10 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
   }
 
   const fromName = db.households.get(share.householdId)?.name ?? 'another household';
-  const prefix = `Cutting from ${fromName}`;
-  const notes = (
-    share.plantSnapshot.notes ? `${prefix}\n\n${share.plantSnapshot.notes}` : prefix
-  ).slice(0, 1000);
+  // Provenance only. The source household's free-text notes are not on the
+  // card (see plantService.PlantShareSnapshot), so they cannot be copied; the
+  // house rule travels in its own field below.
+  const notes = `Cutting from ${fromName}`.slice(0, 1000);
 
   const plantId = uuidv4();
   const now = new Date().toISOString();
@@ -4606,6 +4610,7 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     winterSpaceId: null,
     imageUrl: null,
     notes,
+    careRule: share.plantSnapshot.careRule,
     status: 'active',
     statusChangedAt: null,
     tags: [...share.plantSnapshot.tags],

@@ -21,6 +21,9 @@ import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { atCap, type Limit } from '../models/plans.js';
 import { Plant, PlantStatus, SpeciesSource, DynamoDBItem } from '../models/types.js';
+// The same resolver the sitter brief uses, so "which of the household's own
+// words may leave the household" has ONE answer across every link we mint.
+import { resolveCareNote } from '../models/sitterBriefFields.js';
 import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -1106,10 +1109,23 @@ export async function getLineage(
 /** How long a share link stays redeemable. */
 const SHARE_TTL_DAYS = 14;
 
+/**
+ * The frozen card a cutting link hands to whoever opens it.
+ *
+ * `careRule` — the short house rule, written to be handed to whoever does the
+ * task — is the ONE field of the household's own care words that travels.
+ * The plant's free-text `notes` deliberately do NOT: `GET /plants/shared/{code}`
+ * is an unauthenticated route whose link is pasted into group chats, and the
+ * long-form note is where a household keeps the things it wrote for itself.
+ * This is the same line the sitter brief holds (`models/sitterBriefFields.ts`,
+ * #709) and for the same reason — the share dialog tells the sharer the card
+ * carries the plant and its house rule, and nothing here may outrun that.
+ */
 export interface PlantShareSnapshot {
   name: string;
   species: string | null;
-  notes: string | null;
+  /** The household's short house rule, or null when none is set. */
+  careRule: string | null;
   imageUrl: string | null;
   tags: string[];
 }
@@ -1158,7 +1174,8 @@ export async function createPlantShare(
     plantSnapshot: {
       name: plant.name,
       species: plant.species,
-      notes: plant.notes,
+      // The house rule, never the free-text notes — see PlantShareSnapshot.
+      careRule: resolveCareNote(plant).careNote,
       imageUrl: plant.imageUrl,
       tags: plant.tags,
     },
@@ -1199,6 +1216,11 @@ export async function getPlantShare(code: string): Promise<PlantShare | null> {
 
   if (!result.Item) return null;
 
+  // Field-by-field, never a spread: rows minted before the house-rule change
+  // still carry a `notes` key in their stored snapshot, and this projection is
+  // what keeps those links from serving it for the rest of their 14-day life.
+  // A legacy row has no `careRule`, so it degrades to no care note at all —
+  // the fail-closed direction.
   const snapshot = (result.Item.plantSnapshot ?? {}) as Partial<PlantShareSnapshot>;
   const share: PlantShare = {
     code: result.Item.code as string,
@@ -1207,7 +1229,7 @@ export async function getPlantShare(code: string): Promise<PlantShare | null> {
     plantSnapshot: {
       name: (snapshot.name as string) ?? '',
       species: snapshot.species ?? null,
-      notes: snapshot.notes ?? null,
+      careRule: snapshot.careRule ?? null,
       imageUrl: snapshot.imageUrl ?? null,
       tags: snapshot.tags ?? [],
     },

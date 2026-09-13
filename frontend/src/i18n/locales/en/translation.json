@@ -500,7 +500,7 @@
     "share": {
       "action": "Share cutting",
       "title": "Share this cutting",
-      "description": "Anyone with this link can see the plant card and add a copy to their own greenhouse. The link works for 14 days.",
+      "description": "Anyone with this link can see the plant’s name, photo and house rule, and add a copy to their own greenhouse. Your private notes stay in your household. The link works for 14 days.",
       "copy": "Copy link",
       "copied": "Link copied",
       "copyFailed": "Could not copy — select the link and copy it manually."
@@ -541,7 +541,7 @@
       "provenance": "Grown by {{name}}, passed on to you.",
       "invalid": "This share link is invalid or has expired.",
       "askForNew": "Ask the sender for a fresh link — they expire after 14 days.",
-      "notesLabel": "Notes",
+      "houseRuleLabel": "House rule",
       "addToGreenhouse": "Add to my greenhouse",
       "added": "{{name}} added to your greenhouse",
       "graftHeading": "Start its next chapter",
