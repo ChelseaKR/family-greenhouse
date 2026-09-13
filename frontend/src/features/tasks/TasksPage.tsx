@@ -150,6 +150,15 @@ export function TasksPage() {
   // let every task quietly read "Unplaced" — the placement is unknown, not
   // absent.
   const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
+  // The same three states for the PLANTS read. `plantsById` is empty both
+  // while the read is in flight and after it fails, and every task whose
+  // plant is missing from it used to fall through to "Unplaced" — a
+  // placement claim about every plant in the household, computed from
+  // nothing, with no error anywhere on the page to contradict it (the page
+  // error only binds `plantsError` when a room filter is active).
+  const plantsUnavailable = Boolean(plantsError);
+  const unplacedGroupName =
+    spacesUnavailable || plantsUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
   const activeSpaceFilter =
     requestedSpaceFilter === 'unplaced' ||
     (requestedSpaceFilter != null && spacesById.has(requestedSpaceFilter))
@@ -198,10 +207,14 @@ export function TasksPage() {
 
   const rowExtras: TaskRowExtras = {
     skipReasonFor,
-    locationFor: (task) =>
-      plantsById.has(task.plantId)
-        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
-        : unplacedLabel,
+    locationFor: (task) => {
+      const plant = plantsById.get(task.plantId);
+      if (plant) return plantLocationLabel(plant, spacesById, unplacedLabel);
+      // No plant row to read a placement from. In flight is "we have not
+      // looked yet" and says nothing; settled without one is "we cannot
+      // tell". Neither is "this plant is unplaced".
+      return plantsLoading && !plantsUnavailable ? null : t('spaces.locationUnknown');
+    },
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
     onAsk: (task) => setAskTarget(task),
@@ -251,9 +264,13 @@ export function TasksPage() {
       ? ''
       : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
 
+  // The round's own fallback group name carries the same distinction: with
+  // the rooms (or the plants) unread, every task collapses into one group,
+  // and calling that group "Unplaced" states a placement for the whole
+  // household that nothing computed.
   const careRoundGroups = useMemo(
-    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, t('spaces.unplaced')),
-    [plants, sortedTasks, spaces, t]
+    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, unplacedGroupName),
+    [plants, sortedTasks, spaces, unplacedGroupName]
   );
 
   return (
@@ -495,10 +512,17 @@ export function TasksPage() {
   );
 }
 
+/** A placement we do not have yet is rendered as nothing at all. */
+function TaskLocationOrNothing({ label }: { label: string | null }) {
+  if (label === null) return null;
+  return <TaskLocation label={label} />;
+}
+
 /** Claim / vacation / climate-skip plumbing shared by every section row. */
 interface TaskRowExtras {
   skipReasonFor: (task: TaskWithCoverage) => Extract<SnoozeReason, 'rain' | 'frost'> | null;
-  locationFor: (task: TaskWithCoverage) => string;
+  /** `null` while the plants read is still in flight: say nothing. */
+  locationFor: (task: TaskWithCoverage) => string | null;
   onClaim: (taskId: string) => void;
   onUnclaim: (taskId: string) => void;
   onAsk: (task: TaskWithCoverage) => void;
@@ -584,7 +608,7 @@ function TaskSection({
                     </span>
                     {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
                   </p>
-                  <TaskLocation label={extras.locationFor(task)} />
+                  <TaskLocationOrNothing label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       {!task.assignedTo &&
