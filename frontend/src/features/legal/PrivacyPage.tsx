@@ -70,6 +70,9 @@ export function PrivacyPage() {
         <li>
           <Trans i18nKey="legal.privacy.collect.chat" components={strong} />
         </li>
+        <li>
+          <Trans i18nKey="legal.privacy.collect.caretaker" components={strong} />
+        </li>
       </ul>
 
       <p>{t('legal.privacy.collect.telemetryIntro')}</p>
@@ -135,6 +138,8 @@ export function PrivacyPage() {
       <h2>{t('legal.privacy.sitter.heading')}</h2>
       <p>{t('legal.privacy.sitter.body')}</p>
 
+      <h2>{t('legal.privacy.otherLinks.heading')}</h2>
+      <p>{t('legal.privacy.otherLinks.body')}</p>
       <h2>{t('legal.privacy.rights.heading')}</h2>
       <ul>
         <li>
