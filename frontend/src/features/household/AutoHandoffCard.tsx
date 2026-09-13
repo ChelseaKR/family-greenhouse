@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { householdService, type Household } from '@/services/householdService';
 import { getErrorMessage } from '@/services/api';
 import { Alert } from '@/components/Alert';
@@ -55,7 +55,7 @@ export function AutoHandoffCard({ householdId, household }: AutoHandoffCardProps
   const checking = plansQuery.isLoading || subscriptionQuery.isLoading;
   const plan =
     plansQuery.data && subscriptionQuery.data
-      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      ? plansQuery.data.plans.find((p) => p.id === effectivePlanId(subscriptionQuery.data))
       : undefined;
   const available: boolean | undefined = plan?.householdToolkit;
 

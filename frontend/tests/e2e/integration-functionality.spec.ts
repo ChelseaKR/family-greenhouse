@@ -194,7 +194,10 @@ test('a cutting link previews publicly and grafts into a signed-in greenhouse', 
     plant: {
       name: 'Mother Pothos',
       species: 'Epipremnum aureum',
-      notes: 'A healthy parent vine.',
+      // The private note and the house rule, so the public card can be
+      // checked for both: it must carry the rule and must not carry the note.
+      notes: 'A healthy parent vine. Spare key is under the mat.',
+      careRule: 'Bottom-water only',
     },
   });
   await uiLogin(page, account.email, account.password);
@@ -212,7 +215,13 @@ test('a cutting link previews publicly and grafts into a signed-in greenhouse', 
     await visitor.goto(shareUrl);
     await expect(visitor.getByRole('heading', { name: 'Mother Pothos' })).toBeVisible();
     await expect(visitor.getByText(/Propagation House/)).toBeVisible();
-    await expect(visitor.getByText(/A healthy parent vine/)).toBeVisible();
+    // The house rule is the care text a cutting card carries...
+    await expect(visitor.getByText(/Bottom-water only/)).toBeVisible();
+    // ...and the plant's private note is not, anywhere on the page. Asserted
+    // against the rendered document rather than a field, in a real browser
+    // with no session at all, which is how a recipient opens this link.
+    await expect(visitor.getByText(/Spare key is under the mat/)).toHaveCount(0);
+    expect(await visitor.content()).not.toContain('Spare key is under the mat');
   } finally {
     await visitorContext.close();
   }

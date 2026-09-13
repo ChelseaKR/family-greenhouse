@@ -46,7 +46,9 @@ export async function provisionAccount(opts: {
    * Seed the new household's plan. Checkout is a 503 in the local server (it
    * mirrors production's commercial hold), so a spec that needs a paid
    * entitlement — a Greenhouse `limits.homes` of unlimited, say — asks the
-   * `__test__` fixture route for it. Defaults to the free tier.
+   * `__test__` fixture route for it. Omitted, the household keeps the no-card
+   * Garden trial every new household starts (ADR 0027); pass `seedling` for
+   * the free tier.
    */
   plan?: 'seedling' | 'garden' | 'greenhouse';
   space?: {
@@ -56,7 +58,15 @@ export async function provisionAccount(opts: {
     lightLevel?: 'low' | 'medium' | 'bright';
     petAccess?: boolean;
   };
-  plant?: { name: string; species?: string; location?: string; notes?: string };
+  plant?: {
+    name: string;
+    species?: string;
+    location?: string;
+    /** The household's long-form private note. */
+    notes?: string;
+    /** The short house rule, which is the only care text a public link shows. */
+    careRule?: string;
+  };
   /** Requires `plant`. `nextDue` defaults to "now" (today bucket). */
   waterTask?: { frequency?: number; nextDue?: string };
 }): Promise<ProvisionedAccount> {
@@ -91,7 +101,10 @@ export async function provisionAccount(opts: {
       householdId: household.id,
     };
 
-    if (opts.plan && opts.plan !== 'seedling') {
+    // Any requested plan is seeded, Seedling included. A household created
+    // above starts the no-card Garden trial (ADR 0027), and seeding a plan ends
+    // it, so a spec that asks for Seedling gets Seedling.
+    if (opts.plan) {
       res = await api.post(`${API_URL}/__test__/households/${household.id}/plan`, {
         headers,
         data: { planId: opts.plan },

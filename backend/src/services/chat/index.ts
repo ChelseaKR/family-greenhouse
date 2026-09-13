@@ -18,7 +18,7 @@ import {
   type SproutCitation,
   type SproutCoverage,
 } from '../sprout.js';
-import { featureOf, getEntitledPlan } from '../../models/plans.js';
+import { featureOf, getEntitledPlan, getMeteredPlanId } from '../../models/plans.js';
 import {
   invokeChatModel,
   invokeChatModelStream,
@@ -573,7 +573,8 @@ async function* turnEvents(
   // feature it was not granted produces no error and no log line, just a
   // working chat, one Bedrock turn at a time. The choke-point property above
   // is what would have made the leak uniform rather than partial.
-  const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));
+  const billingState = await billing.getHouseholdSubscription(householdId);
+  const plan = getEntitledPlan(billingState);
   if (!featureOf(plan, 'chat')) {
     throw createHttpError(
       402,
@@ -585,7 +586,11 @@ async function* turnEvents(
   // Derived from the plan already in hand, so tiering adds no read to the
   // turn; until a per-tier value is configured this is the flat BUDGET_CONFIG
   // object itself.
-  const budgetConfig = budgetConfigForPlan(plan.id);
+  // METERED, not entitled (ADR 0027). A household on the no-card Garden trial
+  // passes the Garden gate above and is then held to Seedling's token budget,
+  // which production sets at a quarter of the paid one for exactly this case.
+  // Reading `plan.id` here would hand every trial the full paid-tier budget.
+  const budgetConfig = budgetConfigForPlan(getMeteredPlanId(billingState));
 
   // Idempotency (#3): replay an already-completed turn instead of running it
   // again. Closes the stream→sync fallback double-charge — a stream that

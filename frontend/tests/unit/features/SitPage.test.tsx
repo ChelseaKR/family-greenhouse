@@ -158,3 +158,54 @@ describe('SitPage', () => {
     expect(await screen.findByText(/no longer active/i)).toBeInTheDocument();
   });
 });
+
+describe('SitPage completion hands the sitter something to hold on to', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const second: SitterTask = {
+    taskId: 't2',
+    plantName: 'Fern',
+    taskType: 'water',
+    dueDate: new Date(Date.now() + 86_400_000).toISOString(),
+    spaceName: 'Kitchen',
+    placementNote: null,
+    overdue: false,
+  };
+
+  // The completed row is removed from the list. Both of the things that row
+  // carried have to be replaced deliberately: a polite region announces
+  // insertions and says nothing at all about a deletion, and the focus the
+  // removed <li> held falls to <body>. This page is a single interaction
+  // repeated, for a guest with no account and no other way back in.
+  it('moves focus to the next task and says what was done', async () => {
+    getView.mockResolvedValue({ ...view, tasks: [waterTask, second] });
+    completeTask.mockResolvedValue(undefined as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    const first = await screen.findByRole('button', { name: /Water the Monstera/i });
+    await user.click(first);
+
+    const next = await screen.findByRole('button', { name: /Water the Fern/i });
+    await waitFor(() => expect(document.activeElement).toBe(next));
+    expect(screen.getByText('Marked as done: Monstera.')).toBeInTheDocument();
+  });
+
+  it('moves focus to the closing summary when that was the last task', async () => {
+    getView.mockResolvedValue({ ...view, tasks: [waterTask] });
+    completeTask.mockResolvedValue(undefined as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Water the Monstera/i }));
+
+    const summaryTitle = await screen.findByText(/All caught up/i);
+    await waitFor(() => {
+      // `<body>` contains everything, so "contains the summary" alone would
+      // pass on exactly the bug this asserts against.
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toHaveAttribute('tabindex', '-1');
+      expect(document.activeElement?.contains(summaryTitle)).toBe(true);
+    });
+  });
+});

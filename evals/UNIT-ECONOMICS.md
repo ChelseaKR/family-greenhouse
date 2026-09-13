@@ -260,6 +260,42 @@ Seedling, after      20 × $0.0059  +  $0.55 × 0.25  +  1 × $0.0585  =  $0.31
 — an 84% cut at ceiling ($1.29 → $0.25 with typical leaf-health photos), on
 the tier that has the most households and no revenue.
 
+### 4a. The no-card Garden trial (ADR 0027)
+
+**Added 2026-09-13.** Every new household gets 14 days of Garden with no card
+([ADR 0027](../docs/adr/0027-no-card-garden-trial.md)). Its caps and features are
+Garden's; its three metered AI budgets are Seedling's (`getMeteredPlanId` in
+`backend/src/models/plans.ts`). That makes Seedling's chat budget, which Seedling's
+own 402 kept at zero spend, live for trial households.
+
+Ceiling of one trial household, from production `terraform.tfvars` and the §2
+per-call ceilings:
+
+```
+per UTC month, metered at Seedling
+  leaf-health   20 × $0.0059             = $0.11800
+  chat input    62,500 × $1.10 / MTok    = $0.06875
+  chat output   12,500 × $5.50 / MTok    = $0.06875
+  identify      1 × $0.0585              = $0.05850
+                                           ────────
+                                           $0.31400
+
+14 days overlap at most two UTC months; every meter resets on the 1st
+  at the caps   2 × $0.31400             = $0.62800
+```
+
+Chat reserves 8,000 input and 2,048 output tokens per turn and reconciles to
+actual, so admitted turns can pass the cap. The output side is bounded: at most
+6 model calls of 1,024 output tokens per turn, and at most 6 turns admitted
+together under 12,500, so at most 37,076 output tokens in a month. That is $0.20392,
+or $0.13517 over the cap, and $0.27034 over two months. **Including it, the worst
+case is $0.89834.** The input side has no constant ceiling in the code, so its
+overshoot is not stated as a number. The derivation is in the ADR.
+
+Metering the trial at Garden's allowances would instead be
+`200 × $0.0059 + $0.55 + 30 × $0.0585 = $3.485` a month, `$6.97` over a window that
+crosses a month boundary.
+
 ---
 
 ## 5. Findings, in priority order

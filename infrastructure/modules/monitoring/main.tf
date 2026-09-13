@@ -858,19 +858,111 @@ resource "aws_cloudwatch_metric_alarm" "application_5xx" {
   treat_missing_data  = "notBreaching"
 }
 
-resource "aws_cloudwatch_metric_alarm" "application_latency_p95" {
+# ---------------------------------------------------------------------------
+# Latency SLO: p95 <= 500 ms over 28 days (observability/slos.yaml)
+#
+# Until 2026-09-13 this objective was alarmed as a POINT statistic — p95 of
+# ApplicationLatency over one five-minute period, breaching in two of three.
+# Measured against 28 days of production access logs (2026-08-16 -> 09-13,
+# 3,694 non-health requests) that alarm could not work at this traffic volume:
+#
+#   * Non-health traffic exists in 825 of 8,880 five-minute periods (9.3%).
+#   * Of the periods that DO have traffic, 81% hold two requests or fewer and
+#     5% hold exactly one. A p95 over n <= 2 is the slower of two requests: a
+#     maximum wearing a percentile's name.
+#   * So it fired on single cold starts. 94 OK -> ALARM transitions in 30 days,
+#     median 10 minutes in ALARM, 40 of them on one day — 94 of the 100
+#     transitions recorded across all 33 alarms in this stack. Each one emails
+#     the alerts topic twice (alarm_actions and ok_actions), down a four-hop
+#     path ending at a single address that can unsubscribe all 33 with one
+#     click. That is the cost of the noise, and it is why this is not a
+#     cosmetic fix.
+#
+# No threshold or window repairs a percentile here. Requiring five samples
+# before judging leaves 1.07% of periods judgeable, and only 1 hour in 740
+# contains eight such periods — not a calmer alarm, one that cannot fire.
+# `evaluate_low_sample_count_percentile = "ignore"`, the obvious one-liner, is
+# worse: CloudWatch's low-sample rule for p95 wants 10/(1-0.95) = 200 samples
+# in a period and the busiest five-minute period in 28 days held 157.
+#
+# What IS well defined at n = 1 is the objective's own error budget. "p95 <=
+# 500 ms" means at most 5% of requests may exceed 500 ms, and that fraction is
+# exact whether the period held two requests or two hundred. CloudWatch computes
+# it directly from the metric already being collected: PR(500:) is the
+# percentage of ApplicationLatency samples above 500. Percentile rank excludes
+# its lower bound, so a request of exactly 500 ms counts as within the
+# objective, which is what the objective says. No metric math, no new metric
+# filter, no change to the access-log format.
+#
+# PR(500:) rather than a TC(500:) / SampleCount expression. They are the same
+# number: identical in all 134 half-hour buckets for 2026-09-11 -> 13 read with
+# get-metric-data, maximum difference 0.0000. But PutMetricAlarm's API
+# reference lists PR(n:m) with metric values as a valid alarm statistic, and
+# lists TC only with percentage bounds. A statistic the alarm API rejected
+# would fail the production release at its Terraform step, so the documented
+# form wins.
+#
+# A log metric filter could not have done it anyway. API Gateway's JSON access
+# log writes responseLatency as a QUOTED STRING, and
+# `{ $.responseLatency > 500 }` matches nothing — verified 2026-09-13 with
+# `aws logs test-metric-filter`. Equality coerces a quoted number, inequality
+# does not, which is why the sibling 5xx filter above uses the string wildcard
+# `5*` rather than `>= 500`. A slow-request filter written the obvious way
+# would have published a permanent zero and alarmed on nothing.
+#
+# The burn rates and windows mirror the availability SLO below multiplier for
+# multiplier, and scripts/check-observability.mjs reads both the 500 ms
+# boundary and the two rates out of observability/slos.yaml and asserts they
+# appear here, so the alarms cannot drift from the objective they implement.
+#
+#   fast — 14.4x burn: >72% of requests over 500 ms across most of an hour
+#   slow —  6x  burn: >30% of requests over 500 ms across most of six hours
+#
+# Replayed over the same 28 days of real data: fast fires 0 times, slow fires
+# once, on 2026-09-11 — the day the old alarm flapped 40 times. 94 pages
+# become 1, and the 1 is the day something actually happened.
+#
+# This is NOT a relaxation of the objective. The 28-day p95 is 1,673 ms
+# against a 500 ms target, 21.8% of requests are over budget, and the SLO is
+# burning at 4.4x continuously. That standing fact is issue #730 and it wants
+# the cold starts fixed; it does not want a pager repeating it every ten
+# minutes until nobody reads the pager.
+# ---------------------------------------------------------------------------
+resource "aws_cloudwatch_metric_alarm" "latency_fast_burn" {
   count = var.enable_alarms ? 1 : 0
 
-  alarm_name          = "${var.project_name}-application-latency-p95-${var.environment}"
+  alarm_name          = "${var.project_name}-latency-fast-burn-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 3
-  datapoints_to_alarm = 2
+  evaluation_periods  = 12
+  datapoints_to_alarm = 10
   metric_name         = "ApplicationLatency"
   namespace           = "FamilyGreenhouse/API/${var.environment}"
   period              = 300
-  extended_statistic  = "p95"
-  threshold           = 500
-  alarm_description   = "Application p95 response latency exceeded the 500ms SLO in two of three periods; GET /health is excluded"
+  extended_statistic  = "PR(500:)"
+  threshold           = 72
+  alarm_description   = "500ms p95 latency SLO fast burn: >72% of application requests over 500ms across most of an hour; GET /health is excluded"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  # A period with no application traffic publishes no ApplicationLatency
+  # sample, and no traffic is not a latency fault. Total absence of traffic is
+  # watched from outside the stack entirely — see "External availability
+  # checks" in docs/observability.md.
+  treat_missing_data = "notBreaching"
+}
+
+resource "aws_cloudwatch_metric_alarm" "latency_slow_burn" {
+  count = var.enable_alarms ? 1 : 0
+
+  alarm_name          = "${var.project_name}-latency-slow-burn-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 12
+  datapoints_to_alarm = 10
+  metric_name         = "ApplicationLatency"
+  namespace           = "FamilyGreenhouse/API/${var.environment}"
+  period              = 1800
+  extended_statistic  = "PR(500:)"
+  threshold           = 30
+  alarm_description   = "500ms p95 latency SLO slow burn: >30% of application requests over 500ms across most of six hours; GET /health is excluded"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
@@ -1508,11 +1600,6 @@ moved {
 moved {
   from = aws_cloudwatch_metric_alarm.application_5xx
   to   = aws_cloudwatch_metric_alarm.application_5xx[0]
-}
-
-moved {
-  from = aws_cloudwatch_metric_alarm.application_latency_p95
-  to   = aws_cloudwatch_metric_alarm.application_latency_p95[0]
 }
 
 moved {
