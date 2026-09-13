@@ -22,12 +22,13 @@
  *     - The task-complete path checks that the task belongs to the tag's
  *       PLANT, not merely its household — a forged taskId for the household's
  *       other plants is refused.
- *     - The response exposes the plant's name, species, photo, notes, due
- *       tasks and the FIRST NAME of whoever last did each — that last line is
- *       the feature ("last watered Tuesday by Dad"), and the PIN exists for
- *       households that don't want it readable off a photographed label.
- *       Never member ids/emails, never other plants, never the household's
- *       saved location.
+ *     - The response exposes the plant's name, species, photo, house rule,
+ *       due tasks and the FIRST NAME of whoever last did each — that last
+ *       line is the feature ("last watered Tuesday by Dad"), and the PIN
+ *       exists for households that don't want it readable off a photographed
+ *       label. Never the plant's free-text `notes` (see getTagView), never
+ *       member ids/emails, never other plants, never the household's saved
+ *       location.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
@@ -48,6 +49,7 @@ import * as taskService from '../../services/taskService.js';
 import * as billing from '../../services/billing.js';
 import { recordActivity } from '../../services/activity.js';
 import { getEntitledPlan, plantTagAllowance } from '../../models/plans.js';
+import { resolveCareNote } from '../../models/sitterBriefFields.js';
 import type { Plant, TaskCompletion } from '../../models/types.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -381,8 +383,8 @@ async function enforcePin(tag: plantTagService.PlantTag, event: APIGatewayProxyE
 
 // GET /tag/:token
 //
-// The scan page: plant name, "last watered <when> by <first name>", the care
-// notes (house rules, brief §4.10), and this plant's due/overdue tasks.
+// The scan page: plant name, "last watered <when> by <first name>", the
+// plant's house rule, and this plant's due/overdue tasks.
 export const getTagView = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { tag, plant } = await resolveScan(event.pathParameters?.token ?? '');
@@ -403,9 +405,13 @@ export const getTagView = createHandler(
       plantName: plant.name,
       species: plant.species,
       imageUrl: plant.imageUrl,
-      // `careRule` (structured house rules, brief §4.10) does not exist yet;
-      // the free-text notes are the household's care conventions today.
-      careNotes: plant.notes,
+      // The house rule, through the SAME resolver the sitter brief uses, and
+      // never the plant's free-text `notes`. Anyone who can see the label can
+      // read this (the PIN is off by default), so it may not carry what the
+      // brief withholds from a sitter link (#709).
+      // tests/integration/tag-scan-privacy.test.ts measures this response
+      // against the brief's entry for the same plant.
+      ...resolveCareNote(plant),
       history,
       tasks: tasks
         .filter((task) => task.nextDue <= cutoffIso)

@@ -178,3 +178,29 @@ plants would drown, and the activity feed already shows every completion).
 - **A tag dies with its plant.** Deleting a plant revokes its tag; a tag whose
   plant is archived, died, or was given away stops resolving, so nobody is
   invited to water something the household stopped caring for.
+
+## Amendment — 2026-09-13: a scan shows the house rule, not the plant's notes
+
+The first release of the scan returned `careNotes: plant.notes`, the plant's
+free-text notes, because the structured house rule did not exist yet. It does
+now, and #732 withdrew the same notes from the sitter brief because the privacy
+policy says a sitter link never carries them. A scan is readable by anyone who
+can see the label, and the PIN is off by default, so keeping notes on it put
+more in front of the less trusted reader than the trusted one.
+
+- `GET /tag/{token}` returns `careNote` and `careNoteSource` from
+  `resolveCareNote` (`models/sitterBriefFields.ts`), the resolver the brief
+  uses, in place of `careNotes`. The dev-server mirror does the same.
+- Item 1 of "What the holder of a leaked token can do" should now read: the
+  plant's name, species, photo URL, **house rule**, due tasks, and who last
+  cared for it by first name. The sentence under **Scope** that a tag can never
+  read private notes was not true of the first release; it is now.
+- Two things stay on the scan that a sitter link does not carry: `species`, and
+  the last-care `history` with its first names. The PIN-off notice on the tags
+  page names both and says a scan never shows Notes.
+- The privacy policy's sharing sentence named a sitter link as the only
+  exception. It now names every sharing tool, plant tags among them.
+- `backend/tests/integration/tag-scan-privacy.test.ts` compares the real scan
+  response with the real brief entry for the same plant, by shape, value and
+  bytes, and fails on any scan field that is neither in the brief nor disclosed
+  in the notice.

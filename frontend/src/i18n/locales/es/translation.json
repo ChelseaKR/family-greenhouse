@@ -407,7 +407,7 @@
     "careRule": {
       "label": "Regla de la casa",
       "placeholder": "p. ej., regar solo por abajo",
-      "hint": "Una línea corta que verá quien vaya a hacer una tarea de esta planta, incluida la persona que cuide las plantas, que nunca ve el campo Notas.",
+      "hint": "Una línea corta que verá quien vaya a hacer una tarea de esta planta, incluida la persona que cuide las plantas y quien escanee la etiqueta de la planta. Ninguna de las dos ve nunca el campo Notas.",
       "counter": "{{used}} de {{max}} caracteres.",
       "tooLong": "La regla de la casa no puede superar los {{max}} caracteres"
     },
@@ -1458,7 +1458,7 @@
     "allowanceCounted": "{{used}} de {{max}} etiquetas en uso.",
     "allowanceUnlimited": "{{used}} etiquetas en uso; tu plan no tiene límite.",
     "pinOnNotice": "Hay un PIN activado: quien escanee una etiqueta tendrá que escribirlo antes de ver nada.",
-    "pinOffNotice": "No hay ningún PIN puesto, así que quien vea una etiqueta puede escanearla. Suele ser lo que quieres para una etiqueta dentro de casa.",
+    "pinOffNotice": "No hay ningún PIN puesto, así que quien vea una etiqueta puede escanearla. Al escanearla se ven el nombre, la especie, la foto y la regla de la casa de esa planta, las tareas pendientes, y cuándo se cuidó por última vez y quién lo hizo (solo el nombre de pila), pero nunca sus Notas. Pon un PIN si prefieres que haya que escribirlo antes de ver nada de eso. Para una etiqueta dentro de casa, no suele hacer falta.",
     "pinSettingsLink": "Cambiar el PIN de escaneo en ajustes",
     "labelReady": "Etiqueta lista para imprimir",
     "reissue": "Código nuevo",
