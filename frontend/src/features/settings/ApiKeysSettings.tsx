@@ -19,7 +19,7 @@ import {
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { getErrorMessage } from '@/services/api';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { LockedFeature } from '@/components/LockedFeature';
 
 /**
@@ -79,7 +79,8 @@ export function ApiKeysSettings() {
     enabled: !!householdId,
     staleTime: 60_000,
   });
-  const issuingLocked = subQuery.data !== undefined && subQuery.data.planId !== 'greenhouse';
+  const issuingLocked =
+    subQuery.data !== undefined && effectivePlanId(subQuery.data) !== 'greenhouse';
 
   const createMutation = useMutation({
     mutationFn: (vars: { label: string; scopes: ApiScope[] }) =>

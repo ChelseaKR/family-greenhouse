@@ -38,6 +38,11 @@ async function createUserWithHousehold(email: string, householdName: string): Pr
     .set('Authorization', `Bearer ${token}`)
     .send({ name: householdName });
   expect(hh.status).toBe(201);
+  // On the free tier, not the no-card Garden trial a new household starts with
+  // (ADR 0027): this helper exists for tests about Seedling's caps. The trial
+  // has its own tests.
+  const created = db.households.get(hh.body.id as string);
+  if (created) delete created.noCardTrialEndsAt;
   return token;
 }
 

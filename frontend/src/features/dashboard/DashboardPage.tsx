@@ -45,6 +45,7 @@ import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyActivity } from '@/components/illustrations/EmptyActivity';
 import { Alert } from '@/components/Alert';
+import { NoCardTrialNotice } from '@/features/billing/NoCardTrialNotice';
 import { SprigDivider } from '@/components/brand/SprigDivider';
 import { DashboardHeaderArt } from '@/components/headers/DashboardHeaderArt';
 import { PlantImage } from '@/components/PlantImage';
@@ -227,6 +228,8 @@ export function DashboardPage() {
           emphasis={overdueCount && overdueCount > 0 ? 'alert' : undefined}
         />
       </dl>
+
+      <NoCardTrialNotice placement="dashboard" />
 
       <SharedCarePulse />
 

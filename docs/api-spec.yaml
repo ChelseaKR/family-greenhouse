@@ -2839,6 +2839,19 @@ components:
             household that has had one before and resubscribes. Derived from an internal timestamp
             that is never published. Absent from older backends, where it means UNKNOWN — a client
             must not read a missing field as false.
+        noCardTrial:
+          description: >-
+            The household's no-card Garden trial (ADR 0027), as the server's clock sees it. `null` when
+            there is none to describe: the household never had one, or Stripe owns its entitlement.
+            Absent from older backends.
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [state, endsAt]
+              properties:
+                state: { type: string, enum: [active, ended] }
+                endsAt: { type: string, format: date-time }
         identifyCredits:
           description: >-
             Identification top-up credits (ADR 0019). `null` means the balance could not be read and is

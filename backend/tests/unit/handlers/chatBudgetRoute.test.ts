@@ -126,6 +126,20 @@ describe('GET /chat/budget', () => {
     expect(JSON.parse(res.body)).toMatchObject({ inputTokensCap: 250000, outputTokensCap: 50000 });
   });
 
+  it("reports Seedling's cap for a household on the no-card Garden trial, the cap its turns are held to (ADR 0027)", async () => {
+    process.env.CHAT_BUDGET_INPUT_TOKENS_SEEDLING = '62500';
+    process.env.CHAT_BUDGET_OUTPUT_TOKENS_SEEDLING = '12500';
+    const getChatBudget = await subject();
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+      planId: 'seedling',
+      noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+    } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
+
+    const res = (await getChatBudget(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ inputTokensCap: 62500, outputTokensCap: 12500 });
+  });
+
   it('reports the ENTITLED tier cap, not the plan row, once a card has failed (#476)', async () => {
     // The turn itself is enforced against getEntitledPlan (services/chat/
     // index.ts), so a past_due Greenhouse household is refused outright. This

@@ -48,7 +48,13 @@ describe('householdService', () => {
     };
     expect(cmd.kind).toBe('TransactWrite');
     const items = cmd.input.TransactItems.map((t) => t.Put.Item);
-    expect(items).toHaveLength(2);
+    // Household, admin member, and the account's one no-card trial claim
+    // (ADR 0027), all in the same transaction.
+    expect(items).toHaveLength(3);
+    expect(items.find((i) => i.entityType === 'NoCardTrialClaim')).toMatchObject({
+      PK: 'USER#user-1',
+      SK: 'NO_CARD_TRIAL',
+    });
     const memberItem = items.find((i) => i.entityType === 'HouseholdMember');
     expect(memberItem?.role).toBe('admin');
     // Plan-cap counters are born initialized: the creator is the first
