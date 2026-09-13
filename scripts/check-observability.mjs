@@ -177,6 +177,30 @@ const paidNoGrantMessage =
   /^export const PAID_NO_GRANT_LOG_MESSAGE = '([a-z_]+)';$/mu.exec(billingService)?.[1] ?? null;
 const billingCode = stripComments(billingService);
 
+/**
+ * The latency objective and its burn-rate alerts, read OUT of
+ * observability/slos.yaml rather than restated here, so the two checks below
+ * are genuinely "Terraform implements the objective". Moving the objective to
+ * 800ms without moving the alarms' PR() boundary with it fails here, instead
+ * of leaving a pair of alarms quietly measuring a number the SLO no longer
+ * states.
+ */
+const latencyObjectiveMs = Number(/objective:\s*p95 <= (\d+)ms/u.exec(slo)?.[1] ?? Number.NaN);
+const latencySloBlock = slo.slice(slo.indexOf('  latency:'), slo.indexOf('  saturation:'));
+const latencyBurnRates = [
+  ...latencySloBlock.matchAll(
+    /-\s*name:\s*(\w+)[\s\S]*?slow_rate_percent:\s*([\d.]+)[\s\S]*?window_minutes:\s*(\d+)/gu
+  ),
+].map(([, name, percent, minutes]) => ({
+  name,
+  percent: Number(percent),
+  minutes: Number(minutes),
+}));
+const latencyBurnAlarms = {
+  fast: tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'latency_fast_burn'),
+  slow: tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'latency_slow_burn'),
+};
+
 const checks = [
   ['28-day SLO window', /window_days:\s*28/u.test(slo)],
   ['99.5% availability target', /target_percent:\s*99\.5/u.test(slo)],
@@ -188,10 +212,37 @@ const checks = [
   ['legacy REST error metric names removed', !/(?:4XXError|5XXError)/u.test(monitoring)],
   ['application health exclusion filter', /routeKey != \\"GET \/health\\"/u.test(monitoring)],
   [
-    'latency SLO metric and p95 alarm',
-    /ApplicationLatency/u.test(monitoring) &&
-      /extended_statistic\s*=\s*"p95"/u.test(monitoring) &&
-      /threshold\s*=\s*500/u.test(monitoring),
+    'latency SLO alarmed as an error-budget burn rate, not a five-minute percentile',
+    Number.isFinite(latencyObjectiveMs) &&
+      // The old point alarm is gone, not merely joined. A p95 over a period
+      // holding a median of two requests is the slower of two requests, and
+      // it produced 94 of this stack's 100 alarm transitions in 30 days.
+      !/"aws_cloudwatch_metric_alarm" "application_latency_p95"/u.test(monitoring) &&
+      Object.values(latencyBurnAlarms).every(
+        (alarm) =>
+          alarm !== '' &&
+          /metric_name\s*=\s*"ApplicationLatency"/u.test(alarm) &&
+          // PR(n:) is the percentage of samples above n, read straight from the
+          // metric: the objective's over-budget share, and a statistic
+          // PutMetricAlarm documents for alarms with a metric-value bound.
+          new RegExp(`extended_statistic\\s*=\\s*"PR\\(${latencyObjectiveMs}:\\)"`, 'u').test(
+            alarm
+          ) &&
+          !/metric_query/u.test(alarm)
+      ),
+  ],
+  [
+    'latency burn-rate thresholds and windows match observability/slos.yaml',
+    latencyBurnRates.length === 2 &&
+      latencyBurnRates.every(({ name, percent, minutes }) => {
+        const alarm = latencyBurnAlarms[name] ?? '';
+        const evaluationPeriods = Number(
+          /evaluation_periods\s*=\s*(\d+)/u.exec(alarm)?.[1] ?? Number.NaN
+        );
+        const periodSeconds = Number(/\n\s+period\s*=\s*(\d+)/u.exec(alarm)?.[1] ?? Number.NaN);
+        const threshold = Number(/threshold\s*=\s*([\d.]+)/u.exec(alarm)?.[1] ?? Number.NaN);
+        return threshold === percent && evaluationPeriods * periodSeconds === minutes * 60;
+      }),
   ],
   ['access-log latency fields', /responseLatency[\s\S]*integrationLatency/u.test(apiTf)],
   [
