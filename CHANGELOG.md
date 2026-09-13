@@ -16,6 +16,33 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The site was indexed twice, once per hostname.** `www.familygreenhouse.net`
+  is a second CloudFront alias over the same bucket, so both hostnames answered
+  `200` with identical content and no redirect. Google treated them as two
+  sites. Measured in Search Console on 2026-09-11 over the preceding three
+  months: 7 paths were indexed **only** under `www.` (`/care`, `/care/zz-plant`,
+  `/care/monstera`, `/care/snake-plant`, `/care/spider-plant`,
+  `/care/peace-lily`, `/care/heartleaf-philodendron`), 15 **only** under the
+  apex, and none on both — one site's ranking signal split across two
+  hostnames, with the `www.` half sitting at average position 55-75 while the
+  apex homepage sat at 6.2.
+
+  Every page already emitted a self-canonical naming the apex. That was not
+  enough, and this is the point: a canonical is a hint a crawler may ignore,
+  and here it was ignored. The CloudFront function now answers `301` to the
+  apex for any `www.` host, preserving path and querystring, as rule 0 — before
+  the rewrites, so it covers even `/assets/*`, which rule 1 passes through
+  untouched.
+
+  The function is 10,149 bytes of CloudFront's 10,240 limit, so the long
+  explanation lives in `frontend/scripts/build-spa-router.mjs`, which has no
+  size limit, exactly as the size test's failure message prescribes. **91 bytes
+  of headroom remain**, and the generated route map grows by one line per care
+  guide and blog post: the next few pages will need the leaner map encoding
+  that test also names.
+
 ### Changed
 
 - **The latency SLO is now alarmed as an error-budget burn rate instead of a
