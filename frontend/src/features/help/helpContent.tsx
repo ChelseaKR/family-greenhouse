@@ -755,9 +755,10 @@ export const HELP_SECTIONS: HelpSection[] = [
             <ul>
               <li>the plant&rsquo;s latest photo</li>
               <li>
-                your care rule for it &mdash; or, if you never wrote one,{' '}
-                <strong>the plant&rsquo;s own notes</strong>, word for word, under the heading
-                &ldquo;The household&rsquo;s note&rdquo;
+                <strong>your house rule</strong> for it, word for word &mdash; the one-line rule
+                from the plant form. If you never wrote one, the brief says the plant has no note.
+                It does <strong>not</strong> fall back to the plant&rsquo;s own notes: those stay in
+                the household, which is what the privacy policy promises.
               </li>
               <li>its entry in our verified pet-toxicity list, where it has one</li>
             </ul>
@@ -768,14 +769,16 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
             <p>
               The caveat you control: plant names, space names, placement notes and custom task
-              names are your own free text, and the sitter sees them verbatim &mdash; as are plant
-              notes and plant photos once you are on Garden or Greenhouse. A door code, where the
+              names are your own free text, and the sitter sees them verbatim &mdash; as are house
+              rules and plant photos once you are on Garden or Greenhouse. A door code, where the
               spare key lives, or anything else you would not hand to a neighbour does not belong in
               any of those fields while a sitter link is live. Move it, or rename the plant, first.
+              Your plant <strong>notes</strong> are not in that list: no sitter link has shown them
+              since we removed that fallback, and the privacy policy says so.
             </p>
           </>
         ),
-        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your care rule for it, or, if you never wrote one, the plant's own notes word for word under the heading “The household's note”; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are plant notes and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first.",
+        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your house rule for it, word for word, and if you never wrote one the brief says the plant has no note rather than falling back to the plant's own notes; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, plant notes, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are house rules and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first.",
       },
       {
         id: 'sitter-can-do',

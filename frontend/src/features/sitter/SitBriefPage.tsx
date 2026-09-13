@@ -67,10 +67,12 @@ function PlantCard({ plant }: { plant: SitterBriefPlant }) {
       <div className="mt-4">
         {plant.careNote ? (
           <>
+            {/* Always the house rule: the brief carries `careRule` and nothing
+                else. It used to fall back to the plant's private notes under a
+                second heading, which contradicted the privacy policy's sitter
+                paragraph — see #709 and backend/src/models/sitterBriefFields.ts. */}
             <h3 className="text-xs font-medium uppercase tracking-wide text-gray-600">
-              {plant.careNoteSource === 'rule'
-                ? t('sitterBrief.houseRule')
-                : t('sitterBrief.householdNote')}
+              {t('sitterBrief.houseRule')}
             </h3>
             <p className="mt-1 text-sm text-ink">{plant.careNote}</p>
           </>

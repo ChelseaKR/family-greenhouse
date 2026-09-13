@@ -49,7 +49,8 @@ function plant(over: Record<string, unknown> = {}) {
     spaceId: 's1',
     placementNote: 'east window, top shelf',
     imageUrl: 'https://cdn.example/plants/hh-1/p1/abc123.jpg',
-    notes: 'Bottom-water this one',
+    notes: 'PRIVATE plant note — the spare key is under the mat',
+    careRule: 'Bottom-water this one',
     status: 'active',
     ...over,
   };
@@ -99,7 +100,7 @@ describe('buildSitterBrief', () => {
       spaceName: 'Living Room',
       placementNote: 'east window, top shelf',
       careNote: 'Bottom-water this one',
-      careNoteSource: 'notes',
+      careNoteSource: 'rule',
       photoUrl: 'https://signed.example/plants/hh-1/p1/abc123.jpg?ttl=3600',
     });
     expect(entry.tasks).toEqual([
@@ -107,9 +108,13 @@ describe('buildSitterBrief', () => {
     ]);
     // Task-level private notes never reach the sitter.
     expect(JSON.stringify(brief)).not.toContain('private task note');
+    // Nor do PLANT-level private notes (#709): the privacy policy says a
+    // sitter link does not expose them, and `careRule` is the only care text
+    // the brief may carry.
+    expect(JSON.stringify(brief)).not.toContain('the spare key is under the mat');
   });
 
-  it('prefers a structured care rule over free-text notes, and says which it used', async () => {
+  it('takes the care note from the house rule, and says which field it used', async () => {
     const { buildSitterBrief } = await load(
       [plant({ careRule: 'Bottom-water only, never from the top' })],
       []
@@ -119,9 +124,21 @@ describe('buildSitterBrief', () => {
     expect(entry.careNoteSource).toBe('rule');
   });
 
+  it('NEVER falls back to the plant’s private notes when there is no house rule (#709)', async () => {
+    const { buildSitterBrief } = await load(
+      [plant({ careRule: null, notes: 'PRIVATE — alarm code 4821' })],
+      []
+    );
+    const brief = await buildSitterBrief(LINK, NOW);
+    const [entry] = brief.plants;
+    expect(entry.careNote).toBeNull();
+    expect(entry.careNoteSource).toBeNull();
+    expect(JSON.stringify(brief)).not.toContain('alarm code 4821');
+  });
+
   it('leaves an empty note EMPTY — no invented care text, and whitespace is not a note', async () => {
     const { buildSitterBrief } = await load(
-      [plant({ notes: '   ', careRule: null, placementNote: '  ' })],
+      [plant({ notes: '   ', careRule: '  ', placementNote: '  ' })],
       []
     );
     const [entry] = (await buildSitterBrief(LINK, NOW)).plants;

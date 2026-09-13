@@ -60,10 +60,13 @@ export interface SitterBriefPlant {
   name: string;
   spaceName: string | null;
   placementNote: string | null;
-  /** The household's own care words. `null` means they wrote none — the page
-   *  says so plainly and never fills the gap with generated advice. */
+  /** The plant's house rule — the household's own care words, from the one
+   *  field written to be shared with whoever does the task. `null` means they
+   *  wrote none: the page says so plainly and never fills the gap with
+   *  generated advice, and never with the plant's private notes, which the
+   *  privacy policy promises a sitter link does not expose (#709). */
   careNote: string | null;
-  careNoteSource: 'rule' | 'notes' | null;
+  careNoteSource: 'rule' | null;
   photoUrl: string | null;
   petSafety: SitterBriefPetSafety | null;
   tasks: SitterBriefTask[];

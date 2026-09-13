@@ -81,9 +81,10 @@ schema's absolute ceiling, so a crafted request cannot outrun the plan check.
 
 **(d) The brief is a template render, and its silences are load-bearing.**
 `GET /sitter/{token}/brief` returns, per plant: name, space name, placement
-note, the household's own care words (`careRule` when present, else `notes`,
-with `careNoteSource` saying which), the latest photo, the verified
-pet-toxicity entry, and the tasks due inside the window. No inference, no
+note, the household's own care words (`careRule`; see the 2026-09-13 amendment
+below — the `notes` fallback this decision shipped has been withdrawn), the
+latest photo, the verified pet-toxicity entry, and the tasks due inside the
+window. No inference, no
 model call, nothing generated. Two absences are rendered as absences:
 
 - a plant with no note **says it has no note**. A sitter cannot tell invented
@@ -128,18 +129,69 @@ plant read says it could not check rather than reporting zero gaps (ADR 0010).
 - **The unauthenticated read surface grows by one route.** It is rate-limited
   tighter than the task view (30/min per IP vs 60), validates the token on
   every call, and returns the same PII-free posture: no member identity, no
-  household id, no saved climate location, no task notes.
+  saved climate location, no task notes. ("No household id" was also claimed
+  here and is not true: the opaque id is inside the signed photo URL, because
+  the S3 key contains it and a presigned URL cannot hide the key it signs. See
+  the 2026-09-13 amendment.)
 - **The brief shows plant care notes to the sitter, which the task view never
   did.** That is a deliberate change to what a sitter link exposes, and the
-  privacy page now says so. Task-level notes remain private.
+  privacy page now says so. Task-level notes remain private. **Superseded by
+  the 2026-09-13 amendment below: the privacy page never said so, and the
+  `notes` half of this has been withdrawn.**
 - **More people can mint tokens.** Accepted, with the revocation model and the
   activity events above as the control. If abuse ever appears, the next lever
   is a per-member live-link cap, not re-closing the door to members.
 - **`careRule` is read defensively.** The structured per-plant care rule (the
   House Rules idea) may land separately; until it does, the brief falls back to
-  `notes` and labels which field it used.
+  `notes` and labels which field it used. **That "until it does" has arrived —
+  see the amendment below.**
 - **Two client-side mirrors of plan numbers now exist** (the create form's cap
   copy and the gap prompt's field checks). The backend remains the authority
   and refuses an over-cap request regardless; the mirrors exist so the wall is
   visible while typing rather than after submitting. They must be kept in step
   with `plans.ts`, and both files say so.
+
+## Amendment — 2026-09-13: the `notes` fallback is withdrawn (#709)
+
+**(d) above shipped a fallback that the published privacy policy forbade.**
+`legal.privacy.sitter.body` has said, since before this ADR was written, that
+"sitter links do not expose your saved household location, plant or task
+private notes, or household member identity and contact details." This ADR's
+consequence list claims "the privacy page now says so"; the commit that shipped
+the brief did not touch the privacy page, and the sentence was never changed.
+Measured end to end against the real handlers, a plant whose `careRule` was
+empty returned its `notes` word for word to an unauthenticated bearer link.
+
+**The fallback is removed, not the sentence.** A privacy policy is not edited
+to match a leak. `resolveCareNote` now reads `careRule` only, and a plant with
+no rule renders as the absence it already rendered when both fields were empty
+— the "a missing note stays missing" rule in (d) was always the fallback's own
+safety net, so nothing new had to be invented for it. This is also this ADR's
+own exit condition, taken: the bullet above kept the fallback only "until
+[`careRule`] lands", and it has — the House rule field is on the plant form, in
+`createPlantSchema`/`updatePlantSchema`, and on `Plant`.
+
+**The policy's positive enumeration was separately incomplete**, and that half
+was fixed in the copy, because completing it discloses more rather than less.
+The paragraph listed only what the free task view shows; the paid brief also
+carries the house rule, the curated pet-toxicity entry and a signed photo URL,
+and lets the sitter write (a photo back to a plant's timeline). All of it is
+now named in `legal.privacy.sitter.body` in both locales.
+
+**What holds the line now:** `backend/tests/integration/sitter-privacy.test.ts`
+builds a real link through the real handlers, fetches both sitter endpoints
+anonymously, and asserts each clause of the published paragraph against the
+actual payload — including that a plant's `notes` never appear in it. It fails
+if the fallback returns.
+
+**One claim corrected rather than fixed.** The consequence list above said the
+brief returns "no household id". It does return one — inside the signed photo
+URL, since the S3 key is `plants/{householdId}/{plantId}/{file}` and a
+presigned URL cannot hide the key it signs. That is not a promise the privacy
+page makes (an opaque household UUID is not a saved location, a private note,
+or a member identity), it grants nothing on its own (`authMiddleware`
+re-validates an `X-Household-Id` override against the membership row), and it
+reaches only a holder of a live token for that same household. Hiding it would
+mean proxying every photo read through the API, which is a different decision
+from this one. The sentence is corrected here and in the handler comment, and
+the test pins the true shape: the id appears in the photo URL and nowhere else.

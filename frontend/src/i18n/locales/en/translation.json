@@ -396,7 +396,7 @@
     "careRule": {
       "label": "House rule",
       "placeholder": "e.g., bottom-water only",
-      "hint": "One short line, shown to whoever is about to do a task for this plant.",
+      "hint": "One short line, shown to whoever is about to do a task for this plant \u2014 including a plant sitter, who never sees the Notes field.",
       "counter": "{{used}} of {{max}} characters.",
       "tooLong": "Keep the house rule to {{max}} characters"
     },
@@ -873,7 +873,6 @@
     "noPlants": "There are no plants on this brief yet.",
     "noPlace": "No placement note — ask where this one lives.",
     "houseRule": "House rule",
-    "householdNote": "The household’s note",
     "noCareNote": "No note for this plant.",
     "whileYoureHere": "While you’re here",
     "nothingDue": "Nothing due during your window.",
