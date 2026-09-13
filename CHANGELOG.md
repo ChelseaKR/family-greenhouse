@@ -40,9 +40,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   of the published privacy paragraph against the bytes that come back.
 
   This stops further exposure and recalls nothing: a brief opened before this
-  release may already have shown those notes. It covers sitter links only.
-  Plant tags (`/tag/{token}`) still show a plant's notes to whoever holds the
-  tag, and the privacy policy's sharing sentence names only sitter links.
+  release may already have shown those notes.
   ([#709](https://github.com/ChelseaKR/family-greenhouse/issues/709))
 
 ### Added
