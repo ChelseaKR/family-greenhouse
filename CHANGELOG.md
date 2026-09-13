@@ -16,6 +16,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **`sitemap.xml` advertised a freshness `/changelog` did not have.** Measured
+  live on 2026-09-13: `<lastmod>2026-09-12</lastmod>` against a page whose
+  newest visible entry was `2026-09-02`. The date was read from the newest
+  `## [x.y.z] - YYYY-MM-DD` heading in this file, which is a different
+  document on a different cadence — several releases a week against a
+  hand-curated page that gains an entry every few weeks. `lastmod` is the one
+  sitemap field that is a factual claim about the content, and recrawls that
+  find nothing new are how a host's `lastmod` stops being trusted for every
+  URL on it.
+
+  It now comes from the `date:` literals in `ChangelogPage.tsx`'s own
+  `ENTRIES`, taking the maximum — the same `max(children)` rule `/blog` and
+  `/care` already use, applied to the entries `/changelog` actually renders.
+  `sitemap:check` could not have caught this: it byte-compares the committed
+  sitemap against what the generator produces, so both sides read the same
+  wrong source, and it can only tell a stale file from a fresh one.
+
 ## [0.31.0] - 2026-09-12
 
 ### Added
