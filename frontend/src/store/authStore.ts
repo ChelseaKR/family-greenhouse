@@ -6,10 +6,17 @@
  * Storage model (post-2026-05-31 OWASP A07 hardening):
  *   - Short-lived `idToken` + `accessToken` go to `localStorage` so the
  *     session survives page reloads.
- *   - Long-lived `refreshToken` goes to `sessionStorage` so closing the tab
- *     ends the 30-day grant window — an XSS that exfiltrates the access
- *     token only gets at most one hour of access (Cognito's access-token
- *     TTL) instead of pivoting into a 30-day account hijack.
+ *   - Long-lived `refreshToken` goes to `sessionStorage` BY DEFAULT, so
+ *     closing the tab ends the 30-day grant window — an XSS that exfiltrates
+ *     the access token only gets at most one hour of access (Cognito's
+ *     access-token TTL) instead of pivoting into a 30-day account hijack.
+ *   - Opt-in exception (2026-09-13): ticking "keep me signed in" at login
+ *     sets `rememberMe`, which routes the refresh token to `localStorage`
+ *     instead, so that person stays signed in after closing the browser.
+ *     The 30-day XSS blast radius of finding 7.1 applies to exactly those
+ *     sessions and nobody else's; the hardened path stays the default for
+ *     anyone who doesn't ask. Cognito does not rotate refresh tokens, so a
+ *     stolen one is good until logout or its 30 days run out.
  *   - A `storage` event listener propagates logout across tabs: a logout
  *     in one tab triggers logout in all other tabs of the same origin.
  *
@@ -63,10 +70,17 @@ interface AuthState {
    *  Cognito-claim householdId. The api interceptor sends this as
    *  `X-Household-Id` so backend services scope to it. */
   activeHouseholdId: string | null;
+  /** "Keep me signed in", chosen at login. When true the refresh token is
+   *  persisted to localStorage so the session outlives a closed browser.
+   *  Defaults false — the hardened sessionStorage-only path. */
+  rememberMe: boolean;
   setUser: (user: User | null) => void;
   setTokens: (idToken: string, accessToken: string, refreshToken: string) => void;
   setHousehold: (householdId: string, role: 'admin' | 'member') => void;
   setActiveHouseholdId: (id: string | null) => void;
+  /** Set BEFORE setTokens at login: the storage adapter reads this flag off
+   *  the payload it writes, so the tokens land in the right place. */
+  setRememberMe: (rememberMe: boolean) => void;
   logout: () => void;
   /**
    * Clears THIS tab's in-memory session without touching the persisted
@@ -85,11 +99,25 @@ interface AuthState {
 // sessionStorage (long-lived secrets). The bracketing here is the
 // JSON-payload field name inside the persisted state, not the storage key.
 const SESSION_FIELDS = new Set(['refreshToken']);
+// An empty set means "hold nothing back" — every field, refresh token
+// included, persists to localStorage.
+const NO_SESSION_FIELDS = new Set<string>();
 
-function splitJsonByField(json: string, fields: Set<string>): { local: string; session: string } {
+/**
+ * Which fields this write holds back to sessionStorage. Read from the
+ * payload being written rather than from a closure, so the decision always
+ * matches the state actually being persisted (a token refresh writes through
+ * this path too, long after login set the flag).
+ */
+function sessionFieldsFor(state: Record<string, unknown>): Set<string> {
+  return state.rememberMe === true ? NO_SESSION_FIELDS : SESSION_FIELDS;
+}
+
+function splitJsonByField(json: string): { local: string; session: string } {
   try {
     const parsed = JSON.parse(json) as { state?: Record<string, unknown> };
     const state = (parsed.state ?? {}) as Record<string, unknown>;
+    const fields = sessionFieldsFor(state);
     const localState: Record<string, unknown> = {};
     const sessionState: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(state)) {
@@ -139,7 +167,7 @@ const splitStorage: StateStorage = {
   },
   setItem: (name, value) => {
     if (typeof window === 'undefined' || suppressPersistWrites) return;
-    const { local, session } = splitJsonByField(value, SESSION_FIELDS);
+    const { local, session } = splitJsonByField(value);
     window.localStorage.setItem(name, local);
     window.sessionStorage.setItem(`${name}-session`, session);
   },
@@ -160,6 +188,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       activeHouseholdId: null,
+      rememberMe: false,
+
+      setRememberMe: (rememberMe) => set({ rememberMe }),
 
       setActiveHouseholdId: (activeHouseholdId) => {
         set({ activeHouseholdId });
@@ -215,6 +246,9 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           isLoading: false,
           activeHouseholdId: null,
+          // Never sticky across accounts: the next person to sign in on this
+          // browser opts in again, or gets the hardened default.
+          rememberMe: false,
         });
       },
 
@@ -233,6 +267,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             activeHouseholdId: null,
+            rememberMe: false,
           });
         } finally {
           suppressPersistWrites = false;
@@ -361,6 +396,7 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         activeHouseholdId: state.activeHouseholdId,
+        rememberMe: state.rememberMe,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

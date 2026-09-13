@@ -295,6 +295,7 @@
     "email": "Email address",
     "password": "Password",
     "forgotPassword": "Forgot your password?",
+    "keepSignedIn": "Keep me signed in on this device",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required",
     "signUpFree": "Sign up free",
@@ -396,7 +397,7 @@
     "careRule": {
       "label": "House rule",
       "placeholder": "e.g., bottom-water only",
-      "hint": "One short line, shown to whoever is about to do a task for this plant \u2014 including a plant sitter, and anyone who scans this plant’s tag. Neither ever sees the Notes field.",
+      "hint": "One short line, shown to whoever is about to do a task for this plant — including a plant sitter, and anyone who scans this plant’s tag. Neither ever sees the Notes field.",
       "counter": "{{used}} of {{max}} characters.",
       "tooLong": "Keep the house rule to {{max}} characters"
     },
