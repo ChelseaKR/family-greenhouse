@@ -49,28 +49,80 @@ review notes before and neither is true:
   (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
   The PWA offline story is a web-only feature.
 
-Not present anywhere in the tree: deep links. The only Android `intent-filter`
-is `MAIN`/`LAUNCHER`; `ios/App/App/App.entitlements` exists but declares only
-`aps-environment`, no Associated Domains; and no `assetlinks.json` or
-`apple-app-site-association` is served. So every link the backend mails —
-invites, sitter links, the `/tasks?filter=due` reminder link, unsubscribe, the
-calendar feed — opens the browser even for a user who has the app installed,
-and asks them to sign in again. Closing that needs three things this repo
-cannot supply on its own: `@capacitor/app` (nothing else delivers `appUrlOpen`
-to the WebView), the release signing certificate's SHA-256 fingerprint for
-`assetlinks.json`, and the Apple Team ID for `apple-app-site-association`.
-Half of it is worse than none: an `intent-filter` with `autoVerify="true"` and
-no matching `assetlinks.json` fails verification on Android 12+, so links keep
-opening the browser while the manifest claims otherwise. Tracked in
+Deep links are half present. `frontend/public/.well-known/apple-app-site-association`
+is now in the tree and carries the real Apple Team ID, so the SERVING side of
+iOS universal links is done. Nothing else is: the only Android `intent-filter`
+is `MAIN`/`LAUNCHER`; `ios/App/App/App.entitlements` declares only
+`aps-environment` and no Associated Domains; there is no `assetlinks.json`;
+and `@capacitor/app` is not installed, so nothing delivers `appUrlOpen` to the
+WebView. Until those land, every link the backend mails — invites, sitter
+links, the `/tasks?filter=due` reminder link, unsubscribe, the calendar feed —
+still opens the browser for a user who has the app installed, and asks them to
+sign in again.
+
+Half of it is worse than none, which is why the remaining pieces are staged in
+a fixed order: an `intent-filter` with `autoVerify="true"` and no matching
+`assetlinks.json` fails verification on Android 12+, so links keep opening the
+browser while the manifest claims otherwise. The association file has to be
+LIVE and verifiable at the domain before the entitlement or the intent-filter
+is enabled, never the other way round. Tracked in
 [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
+
+### The iOS association file
+
+`frontend/public/.well-known/apple-app-site-association` is **generated**, not
+hand-written: `npm run aasa --workspace frontend` derives it from the
+`<Routes>` table in `src/App.tsx` via `frontend/scripts/app-site-association.mjs`,
+and `npm run aasa:check` (a step of `npm run verify` and of CI's Lint job)
+fails if the committed bytes are not what the generator produces. The file is
+a second copy of the route table, and every second copy in this repository has
+drifted (#615, #719, #721); the two directions it would drift in are a claimed
+path the app no longer routes (the app opens onto "Nothing growing here") and
+a new route nobody claimed (its links keep opening Safari).
+
+**What is claimed, and what is deliberately not.** The claim is a decision per
+declared route, recorded in `ROUTE_POLICY`; a route App.tsx declares and the
+policy does not classify fails the gate, so "no" is never the silent default.
+24 of the 45 declared routes are claimed by 22 components. The 21 that stay in
+the browser are the marketing and content pages, the email-link auth routes
+(`/login`, `/register`, `/confirm-email`, `/reset-password`,
+`/forgot-password`, `/welcome`) — a confirmation link is followed once, often
+on a device that does not have the app — and `/account-deletion`. That last
+one is not a judgement call: App Review checks that account deletion is
+reachable, and a deletion route that opens the app strands the person who
+cannot sign in and wants their data gone. It sits one wildcard away from the
+claimed `/account`, so the gate asserts explicitly that no component matches
+it.
+
+**Wildcards are read the conservative way.** Apple's two primary sources
+disagree about whether `*` crosses a `/` — the documentation's example
+comments read as prefix matching, while WWDC19 session 717 says matching works
+"the same way it is in terminal". The generator treats `*` as one path segment
+that never crosses a slash, which is correct under either reading: the extra
+components that reading emits are harmless supersets if Apple is more
+permissive, whereas the opposite choice is wrong-and-silent if Apple is
+stricter. The visible consequence is that `/sit/:token/brief` gets its own
+component, while `/plants/new`, `/plants/import` and
+`/household/caretaker-report` are each one segment below a claimed prefix and
+are covered by `/plants/*` and `/household/*` without being restated.
+
+**The Team ID cannot be a placeholder.** `scripts/check-well-known.mjs` fails
+on the `TEAMID_PENDING` sentinel, on a missing or empty `appIDs`, and on
+anything that is not exactly ten uppercase alphanumerics before the bundle
+identifier — including the Enrollment ID, which is a different number of a
+similar shape. All three deploy paths carry the same refusal inline, because
+`scripts/deploy.sh` is run by hand and CI is not the last thing that can
+publish this object. A wrong Team ID is the most expensive defect the file can
+carry: it parses, uploads, caches, and is fetched successfully by Apple while
+every universal link silently keeps opening Safari.
 
 ### The serving half is ready; the app half is not
 
-The deploy and CDN path for the two association files is now wired and gated,
-so the day the values above exist, publishing them is a one-file change rather
-than a debugging session. Nothing app-side was enabled — no entitlement, no
-`autoVerify` intent-filter, no invented fingerprint or Team ID — precisely
-because half a setup is worse than none.
+The deploy and CDN path for both association files is wired and gated, so
+`assetlinks.json` remains a one-file change the day the Android fingerprint
+exists. Nothing app-side was enabled — no entitlement, no `autoVerify`
+intent-filter, no invented fingerprint — precisely because half a setup is
+worse than none.
 
 **What is ready.** Drop a file at `frontend/public/.well-known/assetlinks.json`
 or `frontend/public/.well-known/apple-app-site-association`, and:
@@ -97,14 +149,15 @@ or `frontend/public/.well-known/apple-app-site-association`, and:
   `frontend/public/.well-known/` that the deploy path does not name or that is
   not valid JSON.
 
-**What is still blocked, and on whom.** All three are maintainer-held values;
-none can be derived from this repository:
+**What is still blocked, and on whom.** These are maintainer-held values; none
+can be derived from this repository. The Apple Team ID has since landed and is
+kept in the table so the row that unblocked the iOS file is not lost:
 
-| Needed                                                        | Where it comes from                                                                                    | What it unblocks                                                                                                     |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity      | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter                                               |
-| Apple Team ID                                                 | Apple Developer → Membership                                                                           | `apple-app-site-association` (`<TeamID>.net.familygreenhouse.app`), and only then the Associated Domains entitlement |
-| `@capacitor/app`                                              | `npm i @capacitor/app` in `frontend`, plus a row in the plugin table above and an `appUrlOpen` handler | the WebView actually navigating to the incoming URL instead of opening cold                                          |
+| Needed                                                        | Where it comes from                                                                                    | What it unblocks                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity      | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter             |
+| Apple Team ID — **done**, `6X5YH93QNM`                        | Apple Developer → Membership → Team ID                                                                 | `apple-app-site-association` (shipped); next is the Associated Domains entitlement |
+| `@capacitor/app`                                              | `npm i @capacitor/app` in `frontend`, plus a row in the plugin table above and an `appUrlOpen` handler | the WebView actually navigating to the incoming URL instead of opening cold        |
 
 The order matters and is the whole reason the app half is not staged here: the
 association file has to be **live and verifiable at the domain first**, then

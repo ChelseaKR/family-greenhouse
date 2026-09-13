@@ -21,6 +21,9 @@ import type { RecordActivityInput } from './services/activity.js';
 // utils/dynamodb.ts, which calls requireEnv('TABLE_NAME') at import time and
 // would take this whole dev server down before it could serve a request.
 import { PIN_MAX_FAILURES, PIN_LOCKOUT_MS, PIN_RE, TAG_ACTOR_PREFIX } from './models/plantTags.js';
+// The pure resolver the handler and the sitter brief share; models/ keeps it
+// free of DynamoDB, for the same reason as the import above.
+import { resolveCareNote } from './models/sitterBriefFields.js';
 
 /** Mirrors plantTagService.PlantTag (PLANTTAG#{token} row). */
 export interface LocalPlantTag {
@@ -89,6 +92,7 @@ export interface PlantTagDeps {
         species: string | null;
         imageUrl: string | null;
         notes: string | null;
+        careRule?: string | null;
         status: 'active' | 'died' | 'gave_away' | 'archived';
       }
     >;
@@ -434,7 +438,8 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       plantName: plant.name,
       species: plant.species,
       imageUrl: plant.imageUrl,
-      careNotes: plant.notes,
+      // House rule only, never notes, as in handlers/plantTags/handler.ts.
+      ...resolveCareNote(plant),
       history: {
         status: 'ok',
         lastCare: project(completions[0]),

@@ -941,7 +941,10 @@ export const listVacations = createHandler(
 //   - The response exposes ONLY the minimal SitterTask projection — no member
 //     names/emails, no other households, no full plant records, no private
 //     plant/task notes, and no household climate location. Current space and
-//     placement note are intentionally shared as care directions.
+//     placement note are intentionally shared as care directions, as is the
+//     plant's house rule (`careRule`) on the brief. The plant's free-text
+//     `notes` are NOT: the privacy policy promises they are not exposed, and
+//     the brief's fallback to them was withdrawn in #709.
 
 // GET /sitter/{token}
 //
@@ -986,10 +989,20 @@ export const getSitterView = createHandler(
 // GET /sitter/{token}/brief
 //
 // The handoff brief: the same household, seen plant by plant instead of task
-// by task — space, placement, the household's own care words, the verified
+// by task — space, placement, the plant's house rule, the verified
 // pet-toxicity entry, the latest photo, and the tasks due inside the window.
 // Same token, same generic 404, same PII posture as the task view: no member
-// identity, no household id, no saved climate location, no task notes.
+// identity, no saved climate location, no task notes — and, since #709, no
+// plant notes either. Everything in this list is named in the privacy policy's
+// sitter-link paragraph; nothing here may outrun it, and
+// tests/integration/sitter-privacy.test.ts checks the payload against the
+// published sentence rather than against a snapshot.
+//
+// One correction to what this comment used to claim: the opaque household id
+// IS in the response, inside the signed photo URL, because the S3 key is
+// `plants/{householdId}/{plantId}/{file}` and a presigned URL cannot hide the
+// key it signs. It is not a member identity and it grants nothing on its own
+// (authMiddleware re-validates `X-Household-Id` against the membership row).
 //
 // The brief is the paid half of the Away Kit (ADR 0015). On a plan that does
 // not include it we answer the SAME generic 404 as an invalid token rather

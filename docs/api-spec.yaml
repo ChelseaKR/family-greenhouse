@@ -1747,7 +1747,7 @@ paths:
 
   /tag/{token}:
     get:
-      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, photo, care notes, this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
+      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, photo, house rule (`careNote`, from the same resolver as the sitter brief; never the plant's private notes), this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
       tags: [Plants]
       security: []
       parameters:
@@ -1769,7 +1769,8 @@ paths:
                   plantName: { type: string }
                   species: { type: string, nullable: true }
                   imageUrl: { type: string, nullable: true }
-                  careNotes: { type: string, nullable: true }
+                  careNote: { type: string, nullable: true }
+                  careNoteSource: { type: string, nullable: true, enum: [rule] }
                   history:
                     type: object
                     properties:

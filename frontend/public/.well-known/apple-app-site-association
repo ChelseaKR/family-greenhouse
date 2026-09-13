@@ -1,0 +1,101 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "6X5YH93QNM.net.familygreenhouse.app"
+        ],
+        "components": [
+          {
+            "/": "/account",
+            "comment": "Opens /account in the app."
+          },
+          {
+            "/": "/analytics",
+            "comment": "Opens /analytics in the app."
+          },
+          {
+            "/": "/away-recap",
+            "comment": "Opens /away-recap in the app."
+          },
+          {
+            "/": "/caretaker/*",
+            "comment": "Opens /caretaker/:token in the app."
+          },
+          {
+            "/": "/chat",
+            "comment": "Opens /chat in the app."
+          },
+          {
+            "/": "/dashboard",
+            "comment": "Opens /dashboard in the app."
+          },
+          {
+            "/": "/household",
+            "comment": "Opens /household in the app."
+          },
+          {
+            "/": "/household/*",
+            "comment": "Opens /household/caretaker-report in the app."
+          },
+          {
+            "/": "/join/*",
+            "comment": "Opens /join/:inviteCode in the app."
+          },
+          {
+            "/": "/kiosk/*",
+            "comment": "Opens /kiosk/:token in the app."
+          },
+          {
+            "/": "/onboarding",
+            "comment": "Opens /onboarding in the app."
+          },
+          {
+            "/": "/plants",
+            "comment": "Opens /plants in the app."
+          },
+          {
+            "/": "/plants/*",
+            "comment": "Opens /plants/new, /plants/import, /plants/:plantId in the app."
+          },
+          {
+            "/": "/settings",
+            "comment": "Opens /settings in the app."
+          },
+          {
+            "/": "/settings/*",
+            "comment": "Opens /settings/billing in the app."
+          },
+          {
+            "/": "/shared/*",
+            "comment": "Opens /shared/:code in the app."
+          },
+          {
+            "/": "/sit/*",
+            "comment": "Opens /sit/:token in the app."
+          },
+          {
+            "/": "/sit/*/brief",
+            "comment": "Opens /sit/:token/brief in the app."
+          },
+          {
+            "/": "/tag/*",
+            "comment": "Opens /tag/:token in the app."
+          },
+          {
+            "/": "/tags",
+            "comment": "Opens /tags in the app."
+          },
+          {
+            "/": "/tasks",
+            "comment": "Opens /tasks in the app."
+          },
+          {
+            "/": "/today",
+            "comment": "Opens /today in the app."
+          }
+        ]
+      }
+    ]
+  }
+}

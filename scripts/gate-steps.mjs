@@ -237,6 +237,13 @@ export const STEPS = [
     why: 'the CloudFront router’s generated route map drifting from the route table — a prerendered page served as the empty shell (#615)',
   },
   {
+    id: 'aasa:check',
+    script: 'aasa:check',
+    workspace: 'frontend',
+    weight: 0,
+    why: 'the iOS universal-link claim drifting from App.tsx — a claimed path the app no longer routes opens the app onto "Nothing growing here", and a public entry point that gets claimed by accident (/account-deletion is one wildcard from /account) becomes unreachable for anyone without the app',
+  },
+  {
     id: 'brand:check',
     script: 'brand:check',
     workspace: 'frontend',

@@ -12,12 +12,15 @@ const AWS_DATA_PRIVACY_URL = 'https://aws.amazon.com/compliance/data-privacy/';
  * what we collect, why, who we share with, and the user's rights. Updates
  * here should bump the effective date.
  *
- * There is no in-app policy-change banner, and since #710 this page no longer
+ * There is no in-app policy-change banner, and since #714 this page no longer
  * says there is: `legal.privacy.changes.body` promises the effective date and
- * the public revision history, which are the two things that exist. Building
- * a policy-version + first-login banner is the alternative repair and is
- * tracked on #710 (it was previously said to be tracked in docs/roadmap.md,
- * which never mentioned it).
+ * the public revision history, which are the two things that exist. A
+ * policy-version + first-login banner was the alternative repair; #714 chose
+ * the narrower sentences instead and #710 closes on that basis, so the banner
+ * is not built, not planned, and not tracked anywhere. (This comment once
+ * pointed at docs/roadmap.md, which never mentioned it.) If it is ever built,
+ * the in-app assertions in backend/tests/unit/config/priceChangeNotice.test.ts
+ * are the ones to delete in that change.
  *
  * App-store reviewers (Apple/Google) expect a public privacy URL; this
  * is it. Keep the language readable enough that a non-lawyer can
@@ -37,7 +40,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-12">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-13">
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"

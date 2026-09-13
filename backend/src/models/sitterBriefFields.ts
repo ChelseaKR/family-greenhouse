@@ -18,18 +18,30 @@
 import { lookupToxicity, type PetToxicityMatch } from './petToxicity.js';
 
 /**
- * A plant's care words, preferring a structured care rule ("we bottom-water
- * this one") over free-text notes. `careRule` is read defensively: it is not
- * on every deployment's Plant row yet, and a brief must work either way.
+ * The one field of a plant's care words a sitter link may carry: `careRule`,
+ * the short house rule written to be handed to whoever does the task.
+ *
+ * It used to fall back to `plant.notes` when no rule was set (ADR 0015 (d)),
+ * which made the brief return the long-form private note word for word — and
+ * the published privacy policy says, in as many words, that a sitter link does
+ * not expose plant private notes (#709). A published promise outranks a
+ * fallback, so the fallback is gone: no rule means no care note, and the brief
+ * renders that absence as an absence exactly as it always has.
+ *
+ * ADR 0015 kept the fallback only "until [careRule] lands". It has: the House
+ * rule field is on the plant form, in `createPlantSchema` / `updatePlantSchema`
+ * and on `Plant`. This is that ADR's own exit condition, taken.
+ *
+ * `careRule` is still read defensively — it is not on every legacy Plant row —
+ * and `careNoteSource` still names the field the text came from, so the page
+ * attributes it rather than implying the household wrote something it did not.
  */
-export function resolveCareNote(plant: { notes?: string | null; careRule?: string | null }): {
+export function resolveCareNote(plant: { careRule?: string | null }): {
   careNote: string | null;
-  careNoteSource: 'rule' | 'notes' | null;
+  careNoteSource: 'rule' | null;
 } {
   const rule = plant.careRule?.trim();
   if (rule) return { careNote: rule, careNoteSource: 'rule' };
-  const notes = plant.notes?.trim();
-  if (notes) return { careNote: notes, careNoteSource: 'notes' };
   return { careNote: null, careNoteSource: null };
 }
 
