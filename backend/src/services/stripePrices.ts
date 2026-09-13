@@ -26,9 +26,25 @@
  */
 import type Stripe from 'stripe';
 import { PLANS, type Plan, type PlanId } from '../models/plans.js';
+import { IDENTIFY_TOP_UP_PACK } from '../models/identifyTopUp.js';
 
-/** Cadences a catalog price can be sold at. Mirrors `BillingInterval`. */
-export type PriceCadence = 'month' | 'year' | 'lifetime';
+/**
+ * Cadences a catalog price can be sold at. `month`/`year`/`lifetime` mirror
+ * `BillingInterval`; `one_time` is for the amounts that are not plan
+ * cadences at all (the identification top-up pack), which Stripe reports the
+ * same way as `lifetime` — `recurring: null` — but which must not be
+ * DESCRIBED as a lifetime tier in an operator-facing message.
+ */
+export type PriceCadence = 'month' | 'year' | 'lifetime' | 'one_time';
+
+/**
+ * Everything this repository charges for. Plan tiers come from `PLANS`; the
+ * identification top-up pack is deliberately not a plan (it grants credits,
+ * not entitlement — see `models/identifyTopUp.ts`) but it is still a
+ * published amount that a Stripe price can silently contradict, so it
+ * reconciles through exactly the same comparison as every plan price.
+ */
+export type CatalogItemId = PlanId | typeof IDENTIFY_TOP_UP_PACK.id;
 
 /**
  * Every published Family Greenhouse amount is in US dollars: `plans.ts`
@@ -41,7 +57,7 @@ export const CATALOG_CURRENCY = 'usd';
 
 /** One catalog amount, expanded into what Stripe should report for it. */
 export interface ExpectedPrice {
-  planId: PlanId;
+  itemId: CatalogItemId;
   cadence: PriceCadence;
   /** Env var the price id is read from at runtime. */
   env: string;
@@ -54,7 +70,7 @@ export interface ExpectedPrice {
 export type PriceReconciliationStatus = 'ok' | 'mismatch' | 'unretrievable' | 'unconfigured';
 
 export interface PriceReconciliation {
-  planId: PlanId;
+  itemId: CatalogItemId;
   cadence: PriceCadence;
   env: string;
   status: PriceReconciliationStatus;
@@ -76,7 +92,7 @@ export function expectedPricesForPlan(plan: Plan): ExpectedPrice[] {
   const push = (cadence: PriceCadence, dollars: number | undefined, env: string | undefined) => {
     if (dollars === undefined || !env) return;
     rows.push({
-      planId: plan.id,
+      itemId: plan.id,
       cadence,
       env,
       dollars,
@@ -91,9 +107,35 @@ export function expectedPricesForPlan(plan: Plan): ExpectedPrice[] {
   return rows;
 }
 
-/** Every catalog amount across every plan. */
+/**
+ * The catalog row for the identification top-up pack.
+ *
+ * Derived from `IDENTIFY_TOP_UP_PACK` rather than restating $1.99, for the
+ * same reason the plan rows read through `PLANS`: a change to the published
+ * price must move this reconciliation with it, never leave it checking a
+ * stale copy. The pack is a single one-time charge, so Stripe must report
+ * `recurring: null` — a recurring price in that slot would bill a household
+ * $1.99 forever for twenty identifications it bought once.
+ */
+export function identifyTopUpExpectedPrice(): ExpectedPrice {
+  return {
+    itemId: IDENTIFY_TOP_UP_PACK.id,
+    cadence: 'one_time',
+    env: IDENTIFY_TOP_UP_PACK.stripePriceEnv,
+    dollars: IDENTIFY_TOP_UP_PACK.priceUsd,
+    unitAmount: unitAmountFor(IDENTIFY_TOP_UP_PACK.priceUsd),
+  };
+}
+
+/**
+ * Every catalog amount we charge for: the plan cadences, plus the one-time
+ * packs that are not plans. The top-up belongs here and not only on its own
+ * assert path — `reconcileConfiguredPrices` is the sweep that answers "is
+ * anything configured to charge what we never published", and a row missing
+ * from it is a row the sweep silently declares clean.
+ */
 export function expectedPrices(): ExpectedPrice[] {
-  return Object.values(PLANS).flatMap(expectedPricesForPlan);
+  return [...Object.values(PLANS).flatMap(expectedPricesForPlan), identifyTopUpExpectedPrice()];
 }
 
 /** The one catalog row for a (plan, cadence) pair, or null if none is sold. */
@@ -126,10 +168,10 @@ export function comparePriceToCatalog(expected: ExpectedPrice, price: Stripe.Pri
     );
   }
 
-  if (expected.cadence === 'lifetime') {
+  if (expected.cadence === 'lifetime' || expected.cadence === 'one_time') {
     if (price.recurring) {
       problems.push(
-        `${expected.env}: the lifetime tier is a one-time charge but Stripe reports a recurring ` +
+        `${expected.env}: this is sold as a one-time charge but Stripe reports a recurring ` +
           `price (interval "${String(price.recurring.interval)}")`
       );
     }
@@ -178,7 +220,7 @@ export async function reconcilePrice(
     price = await stripe.prices.retrieve(priceId);
   } catch (err) {
     return {
-      planId: expected.planId,
+      itemId: expected.itemId,
       cadence: expected.cadence,
       env: expected.env,
       status: 'unretrievable',
@@ -192,7 +234,7 @@ export async function reconcilePrice(
 
   const problems = comparePriceToCatalog(expected, price);
   return {
-    planId: expected.planId,
+    itemId: expected.itemId,
     cadence: expected.cadence,
     env: expected.env,
     status: problems.length === 0 ? 'ok' : 'mismatch',
@@ -219,7 +261,7 @@ export async function reconcileConfiguredPrices(
     const priceId = env[expected.env];
     if (!priceId) {
       results.push({
-        planId: expected.planId,
+        itemId: expected.itemId,
         cadence: expected.cadence,
         env: expected.env,
         status: 'unconfigured',
@@ -272,7 +314,7 @@ export async function assertPriceMatchesCatalog(
   const expected = expectedPriceFor(planId, cadence);
   if (!expected) {
     throw new PriceReconciliationError({
-      planId,
+      itemId: planId,
       cadence,
       env: '(none)',
       status: 'mismatch',
@@ -280,5 +322,24 @@ export async function assertPriceMatchesCatalog(
     });
   }
   const result = await reconcilePrice(stripe, expected, priceId);
+  if (result.status !== 'ok') throw new PriceReconciliationError(result);
+}
+
+/**
+ * The same gate for the identification top-up pack.
+ *
+ * Separate from `assertPriceMatchesCatalog` only because the pack has no
+ * `PlanId` and no cadence to look up — the comparison, the fail-closed
+ * posture, and the thrown error are identical. It matters MORE here than on
+ * the subscription path, not less: the webhook grants credits from the
+ * metadata stamped at checkout, so a wrong price id charges whatever that
+ * price says and still hands over twenty identifications, with nothing
+ * anywhere comparing the two numbers.
+ */
+export async function assertIdentifyTopUpPriceMatchesCatalog(
+  stripe: Pick<Stripe, 'prices'>,
+  priceId: string
+): Promise<void> {
+  const result = await reconcilePrice(stripe, identifyTopUpExpectedPrice(), priceId);
   if (result.status !== 'ok') throw new PriceReconciliationError(result);
 }

@@ -1,11 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { sessionsCreate } = vi.hoisted(() => ({ sessionsCreate: vi.fn() }));
+const { sessionsCreate, pricesRetrieve } = vi.hoisted(() => ({
+  sessionsCreate: vi.fn(),
+  pricesRetrieve: vi.fn(),
+}));
 vi.mock('stripe', () => ({
   default: vi.fn(function () {
-    return { checkout: { sessions: { create: sessionsCreate } } };
+    return {
+      checkout: { sessions: { create: sessionsCreate } },
+      prices: { retrieve: pricesRetrieve },
+    };
   }),
 }));
+
+/**
+ * What Stripe reports for a correctly configured top-up price: $1.99, USD,
+ * one-time. `createIdentifyTopUpCheckoutSession` reconciles the price it is
+ * about to charge before minting a Session, so every test that reaches Stripe
+ * needs the catalog to agree — which is the point. A test that stops agreeing
+ * is a test that just caught a mispriced pack.
+ */
+const CATALOG_TOP_UP_PRICE = {
+  id: 'price_topup',
+  unit_amount: 199,
+  currency: 'usd',
+  active: true,
+  recurring: null,
+};
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
@@ -55,6 +76,7 @@ describe('createIdentifyTopUpCheckoutSession', () => {
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+    pricesRetrieve.mockResolvedValue(CATALOG_TOP_UP_PRICE);
     sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/topup' });
   });
   afterEach(() => {
@@ -85,6 +107,7 @@ describe('createIdentifyTopUpCheckoutSession', () => {
         new RegExp(`^${TOP_UP_NOT_CONFIGURED}`)
       );
       expect(dynamodb.send).not.toHaveBeenCalled();
+      expect(pricesRetrieve).not.toHaveBeenCalled();
       expect(sessionsCreate).not.toHaveBeenCalled();
     }
   );
@@ -159,5 +182,92 @@ describe('createIdentifyTopUpCheckoutSession', () => {
     const { createIdentifyTopUpCheckoutSession } =
       await import('../../../src/services/identifyTopUp.js');
     await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toThrow(/checkout URL/);
+  });
+
+  /**
+   * The pack is sold at $1.99 and grants twenty identifications, but the
+   * webhook reads the credit count from the METADATA stamped below, never
+   * from what Stripe charged. So a wrong or transposed `price_…` in tfvars
+   * bills whatever that price bills and STILL hands over twenty
+   * identifications: the amount charged and the value delivered never meet.
+   * `stripe_price_ids_are_live` cannot see it either — a price id encodes
+   * neither the amount nor whether it recurs.
+   */
+  describe('reconciles the price against the catalog before charging', () => {
+    it('retrieves the configured price BEFORE the Session is created', async () => {
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await createIdentifyTopUpCheckoutSession(ARGS);
+      expect(pricesRetrieve).toHaveBeenCalledWith('price_topup');
+      expect(pricesRetrieve.mock.invocationCallOrder[0]).toBeLessThan(
+        sessionsCreate.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('refuses when Stripe would charge an amount the pack never published', async () => {
+      // A transposed id: the UI says $1.99 once, Stripe says $79.99 a year.
+      pricesRetrieve.mockResolvedValueOnce({
+        id: 'price_topup',
+        unit_amount: 7999,
+        currency: 'usd',
+        active: true,
+        recurring: { interval: 'year', interval_count: 1 },
+      });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toMatchObject({
+        code: 'PRICE_RECONCILIATION_FAILED',
+      });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a RECURRING price standing in for the one-time pack', async () => {
+      pricesRetrieve.mockResolvedValueOnce({
+        ...CATALOG_TOP_UP_PRICE,
+        recurring: { interval: 'month', interval_count: 1 },
+      });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toMatchObject({
+        code: 'PRICE_RECONCILIATION_FAILED',
+      });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED when the price cannot be retrieved at all', async () => {
+      pricesRetrieve.mockRejectedValueOnce(new Error('Stripe unreachable'));
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toMatchObject({
+        code: 'PRICE_RECONCILIATION_FAILED',
+      });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a foreign-currency price even when the digits match', async () => {
+      pricesRetrieve.mockResolvedValueOnce({ ...CATALOG_TOP_UP_PRICE, currency: 'gbp' });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toMatchObject({
+        code: 'PRICE_RECONCILIATION_FAILED',
+      });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses an ARCHIVED price, which Stripe would reject at Session creation anyway', async () => {
+      pricesRetrieve.mockResolvedValueOnce({ ...CATALOG_TOP_UP_PRICE, active: false });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+      const { createIdentifyTopUpCheckoutSession } =
+        await import('../../../src/services/identifyTopUp.js');
+      await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toMatchObject({
+        code: 'PRICE_RECONCILIATION_FAILED',
+      });
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
   });
 });
