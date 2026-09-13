@@ -189,7 +189,22 @@ function baseUrl(appUrl: string): string {
   return appUrl.replace(/\/+$/u, '');
 }
 
-/** Assemble greeting + body + link + signoff + footer, dropping empty slots. */
+/**
+ * Assemble greeting + body + link + signoff + footer, dropping empty slots.
+ *
+ * Both links must be paths `frontend/src/App.tsx` actually declares.
+ * `/settings/billing` is a route; the notifications tab is NOT — it is a tab
+ * inside `/settings`, selected by the `section` query parameter, exactly as
+ * `SettingsPage.selectTab()` builds it. This footer used to say
+ * `/settings/notifications`, which matched no route, fell through to the
+ * catch-all and rendered "Nothing growing here" — on every billing email, in
+ * both locales, the one class of message that deliberately offers no
+ * unsubscribe link and so leaves this as its only control (#721).
+ *
+ * `scripts/check-app-links.mjs` now re-derives that claim on every build,
+ * because the check had been done once (see the header of
+ * `services/email/links.ts`) and then not applied to a link composed here.
+ */
 function envelope(locale: BillingEmailLocale, appUrl: string, body: string[]): string {
   const phrases = PHRASES[locale];
   const base = baseUrl(appUrl);
@@ -203,7 +218,7 @@ function envelope(locale: BillingEmailLocale, appUrl: string, body: string[]): s
     ...phrases.signoff,
     '',
     '--',
-    phrases.footer(`${base}/settings/notifications`),
+    phrases.footer(`${base}/settings?section=notifications`),
   ].join('\n');
 }
 

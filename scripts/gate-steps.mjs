@@ -211,6 +211,12 @@ export const STEPS = [
     why: 'handler routes missing from the API spec',
   },
   {
+    id: 'links:check',
+    script: 'links:check',
+    weight: 0,
+    why: 'a backend-built URL that is not a route the SPA declares — every billing email linked to /settings/notifications, which React Router matched with its catch-all, so a customer who had just been charged landed on "Nothing growing here" (#721)',
+  },
+  {
     id: 'sitemap:check',
     script: 'sitemap:check',
     workspace: 'frontend',
