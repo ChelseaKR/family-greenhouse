@@ -251,7 +251,15 @@ export const exportMe = createHandler(
       body: JSON.stringify(payload, null, 2),
     };
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  // The heaviest read in the API: every plant and every task of every
+  // household the caller belongs to, in one response, with no pagination.
+  // Nothing legitimate exports more than a few times an hour — a person
+  // downloads their data, not a loop — while an unbounded one costs real
+  // DynamoDB reads and Lambda seconds per call. Per USER, not per IP, so a
+  // household behind one NAT cannot spend another member's allowance.
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 6 }));
 
 // GET /me/households
 // All households the caller is a member of, regardless of which one is
@@ -312,7 +320,13 @@ export const calendarIcs = createHandler(
     const hemisphere = await taskService.hemisphereForTasks(user.householdId, tasks);
     return icsResponse(buildIcs(tasks, new Date(), hemisphere));
   }
-).use(authMiddleware());
+)
+  .use(authMiddleware())
+  // Reads the household's whole task list on every call. The PUBLIC feed that
+  // serves the same bytes is capped at 60/min per IP for exactly this reason
+  // (see calendarFeed below); this authenticated twin had no cap at all, which
+  // made the cheaper route to the same read the uncapped one.
+  .use(userRateLimit({ perWindowMs: 60_000, max: 60 }));
 
 // ---------------------------------------------------------------------------
 // Calendar-feed link: a per-user, per-household capability URL
