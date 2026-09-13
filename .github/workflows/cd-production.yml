@@ -531,10 +531,43 @@ jobs:
           # What this build actually contains, as bucket keys.
           ( cd dist && find . -type f | sed 's|^\./||' ) | sort > /tmp/shipped.txt
 
-          # What the bucket holds, with last-modified, oldest first.
+          # What the bucket holds, key and last-modified, in ONE listing that
+          # both numbers below are derived from.
+          #
+          # The AWS CLI paginates `list-objects-v2` at 1,000 keys and applies
+          # `--query` to EACH PAGE, concatenating the results. A filter or a
+          # projection survives that — every page contributes its own rows. An
+          # AGGREGATE does not: past 1,000 objects `length(Contents)` prints one
+          # count per page, so `total` became e.g. `1000\n523` and the guard
+          # below evaluated `$(( 1000\n523 / 2 ))`. That is a bash arithmetic
+          # syntax error, `set -euo pipefail` fails the step, `deploy-frontend`
+          # fails, `smoke-tests` is skipped, and `rollback` — which fires on any
+          # smoke result that is not success — reverts a release that was fine,
+          # AFTER the sync above has already published it. The same per-page
+          # trap broke the v0.23.4 deploy through `list-versions-by-function`;
+          # this is the second instance of it in this file.
+          #
+          # Deriving both numbers from one listing also removes a real
+          # inconsistency: they used to be two separate listings, so an upload
+          # landing between them could leave `count` describing a bucket that
+          # `total` never saw.
           aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
-            --query "Contents[?LastModified<'${cutoff}'].Key" --output text \
-            | tr '\t' '\n' | sed '/^$/d' | sort > /tmp/stale.txt
+            --query 'Contents[].[Key,LastModified]' --output text > /tmp/objects.tsv
+          total=$(wc -l < /tmp/objects.tsv | tr -d ' ')
+
+          # A listing that came back empty is not an empty bucket: the sync
+          # above has just written this build into it. Refuse rather than
+          # compute a ratio against nothing.
+          if [ "$total" -eq 0 ]; then
+            echo "::error::the bucket listing returned no objects moments after this deploy wrote to it — refusing to prune against a listing that cannot be right."
+            exit 1
+          fi
+
+          # Older than the cutoff. Both sides are ISO-8601 with the same
+          # YYYY-MM-DDTHH:MM:SS prefix, so a lexicographic comparison orders
+          # them exactly as the JMESPath filter this replaces did.
+          awk -F'\t' -v cutoff="$cutoff" '$2 < cutoff { print $1 }' /tmp/objects.tsv \
+            | sed '/^$/d' | sort > /tmp/stale.txt
 
           # Only the ones this build does not ship.
           comm -23 /tmp/stale.txt /tmp/shipped.txt > /tmp/prune.txt
@@ -549,8 +582,8 @@ jobs:
           # the bucket means the diff is wrong — an empty dist/, a changed
           # prefix — not that the bucket is genuinely that stale. Deleting the
           # live site is not a recoverable mistake, so stop and say so.
-          total=$(aws s3api list-objects-v2 --bucket "${FRONTEND_BUCKET}" \
-            --query 'length(Contents)' --output text)
+          # `total` is the line count of the listing above, so it stays a single
+          # integer however many pages the bucket takes.
           if [ "$count" -gt $(( total / 2 )) ]; then
             echo "::error::prune wants to delete ${count} of ${total} objects — refusing. The build/bucket diff is wrong, not the bucket."
             exit 1
