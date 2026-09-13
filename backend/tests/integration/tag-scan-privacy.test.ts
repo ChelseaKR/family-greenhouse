@@ -96,24 +96,19 @@ const TAG_ONLY = {
 } as const;
 
 /**
- * The scan and the brief name two shared fields differently. Each rename says
- * how the two values are shown to be the SAME datum, so this map cannot be
- * used to pass an unrelated field under a borrowed name.
+ * The scan and the brief name one shared field differently. The rename says how
+ * the two values are shown to be the SAME datum, so this map cannot be used to
+ * pass an unrelated field under a borrowed name.
+ *
+ * `imageUrl` used to be here, mapped to the brief's `photoUrl`. The scan no
+ * longer returns a photo at all: the page never rendered one, and the address
+ * it handed out did not expire, while the brief's does (#453).
  */
 const RENAMED: Record<
   string,
   { briefField: string; sameDatum: (tag: unknown, brief: unknown) => boolean }
 > = {
   plantName: { briefField: 'name', sameDatum: (tag, brief) => tag === brief },
-  // The brief hands out a short-lived signed address for the photo; the scan
-  // hands out the stored one. Same object either way.
-  imageUrl: {
-    briefField: 'photoUrl',
-    sameDatum: (tag, brief) =>
-      typeof tag === 'string' &&
-      typeof brief === 'string' &&
-      new URL(tag).pathname === new URL(brief).pathname,
-  },
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -462,5 +457,15 @@ describe('a tag scan exposes nothing the sitter brief does not, except what the 
     // The one piece of member identity a scan does carry, and the reason
     // `history` is disclosed rather than covered: a first name.
     expect(tagWire).toContain('MELFIRST-4R7');
+  });
+
+  it('carries no photo address, though the plant has a photo the brief hands out', async () => {
+    const { tagWire, briefEntry } = await readBothSurfaces(await seedEverything());
+    // The brief signs an address that expires with the link (#453); the scan
+    // page renders no photo, so the scan returns none rather than the stored
+    // address, which would outlive the revocation that is a tag's only remedy.
+    expect(String(briefEntry.photoUrl)).toContain('pic1.jpg');
+    expect(tagWire).not.toContain('pic1.jpg');
+    expect(tagWire).not.toContain('cdn.fixture.invalid');
   });
 });

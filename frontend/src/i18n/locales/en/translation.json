@@ -1415,7 +1415,7 @@
     "allowanceCounted": "{{used}} of {{max}} labels in use.",
     "allowanceUnlimited": "{{used}} labels in use — your plan has no limit.",
     "pinOnNotice": "A PIN is switched on: anyone scanning a label has to type it before they see anything.",
-    "pinOffNotice": "No PIN is set, so anyone who can see a label can scan it. A scan shows that plant’s name, species, photo and house rule, the tasks that are due, and when it was last looked after and by whom (first name only), but never its Notes. Set a PIN if you’d rather scanners type it before they see any of that. For a label inside your home, no PIN is usually fine.",
+    "pinOffNotice": "No PIN is set, so anyone who can see a label can scan it. A scan shows that plant’s name, species and house rule, the tasks that are due, and when it was last looked after and by whom (first name only), but never its Notes. Set a PIN if you’d rather scanners type it before they see any of that. For a label inside your home, no PIN is usually fine.",
     "pinSettingsLink": "Change the scan PIN in settings",
     "labelReady": "Label ready to print",
     "reissue": "New code",
