@@ -37,7 +37,7 @@ export const FRONTEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '.
 const POSTS = join(FRONTEND_ROOT, 'src', 'features', 'blog', 'posts', 'index.ts');
 const CARE = join(FRONTEND_ROOT, 'src', 'features', 'care', 'careGuides.ts');
 const HELP = join(FRONTEND_ROOT, 'src', 'features', 'help', 'helpContent.tsx');
-const CHANGELOG = join(FRONTEND_ROOT, '..', 'CHANGELOG.md');
+const CHANGELOG_PAGE = join(FRONTEND_ROOT, 'src', 'features', 'changelog', 'ChangelogPage.tsx');
 
 /**
  * Canonical production origin. MUST match `src/config/site.ts` (SITE_URL) —
@@ -107,15 +107,46 @@ export function readCareGuides() {
  * iOS/Android shells only, and the store builds are not what a crawler reads.
  */
 /**
- * The date of the newest released CHANGELOG entry, for /changelog's lastmod.
- * Matches `## [x.y.z] - YYYY-MM-DD` and ignores `## [Unreleased]`, which
- * carries no date and would otherwise read as the newest thing on the page.
- * Returns undefined if the format ever changes, which omits the tag rather
- * than emitting a wrong one.
+ * The `date:` of every entry rendered by `/changelog`, read from the page's own
+ * `ENTRIES` array.
+ *
+ * This used to read the newest `## [x.y.z] - YYYY-MM-DD` heading in the repo's
+ * CHANGELOG.md, and that is a different document. `/changelog` is a
+ * hand-curated customer-facing page — an entry every few weeks, in product
+ * language — while CHANGELOG.md gains a section on every release, several a
+ * week. So the sitemap advertised a freshness the page did not have: measured
+ * live on 2026-09-13, `<lastmod>2026-09-12</lastmod>` (0.31.0's release date)
+ * against a page whose newest visible entry was 2026-09-02. `lastmod` is the
+ * one sitemap field that is a factual claim about the content, and repeated
+ * recrawls that find nothing new are how a host's `lastmod` stops being
+ * trusted for every URL on it.
+ *
+ * Matched on the indented `date: 'YYYY-MM-DD',` literals in the ENTRIES array,
+ * the same regex-over-the-manifest approach the blog and care lists use and
+ * for the same reason (see the module header). The `date: string;` line in the
+ * `Entry` interface cannot match: it carries no date literal.
+ *
+ * THROWS when it finds nothing. The page has twenty entries; zero parsed means
+ * the parser broke, not that the page emptied — and the failure mode that
+ * matters is the silent one, where `/changelog` quietly loses its `<lastmod>`
+ * and no gate notices, because `sitemap:check` only compares the committed
+ * bytes against what this code produces. It cannot tell a right date from a
+ * wrong one; it can only tell a stale file from a fresh one.
  */
-export function readChangelogDate() {
-  const src = readFileSync(CHANGELOG, 'utf8');
-  return /^## \[\d+\.\d+\.\d+\][^\n]*?(\d{4}-\d{2}-\d{2})/m.exec(src)?.[1];
+export function readChangelogEntryDates() {
+  const src = readFileSync(CHANGELOG_PAGE, 'utf8');
+  const re = /^\s+date: '(\d{4}-\d{2}-\d{2})',$/gm;
+  const dates = [];
+  let m;
+  while ((m = re.exec(src)) !== null) dates.push(m[1]);
+  if (dates.length === 0) {
+    throw new Error(
+      `No entry dates found in ${CHANGELOG_PAGE}. /changelog's <lastmod> is derived ` +
+        "from the ENTRIES array's `date:` literals; if that shape changed, update this " +
+        'parser rather than shipping a sitemap that omits or guesses the date.'
+    );
+  }
+  return dates;
 }
 
 export function readHelpTopics() {
@@ -175,6 +206,12 @@ export function publicRoutes() {
   // newest child does. Reproducible for the same reason the child entries
   // are, so `--check` still byte-compares.
   //
+  // /changelog is the same rule applied to the page's own entries: the newest
+  // `date:` in ChangelogPage.tsx is the newest thing a reader can see there.
+  // It is NOT the newest CHANGELOG.md release — that is a different document
+  // on a different cadence, and deriving from it is what made the sitemap
+  // claim ten days of freshness the page did not have (issue #718).
+  //
   // The remaining static routes keep no lastmod on purpose, for the reason
   // the help entries above give: there is no honest source for one, and a
   // date that moves at midnight is both a lie and unverifiable.
@@ -182,7 +219,7 @@ export function publicRoutes() {
   const hubLastmod = new Map([
     ['/blog', newest(readBlogDates().values())],
     ['/care', newest(readCareGuides().values())],
-    ['/changelog', readChangelogDate()],
+    ['/changelog', newest(readChangelogEntryDates())],
   ]);
 
   const staticEntries = STATIC_ROUTES.map((route) => {
