@@ -170,7 +170,7 @@
       },
       "sitter": {
         "heading": "Sitter links",
-        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 90 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
+        "body": "A household member can create a temporary sitter link without creating an account for the sitter. Anyone who has that link can see due care tasks, plant names, each plant’s current space, and its short placement note, and can mark those tasks complete during the coverage window you selected. On a plan that includes the Away Kit, the same link also opens a care brief, which adds three things per plant — the short house rule you wrote for it, its entry in our verified pet-toxicity list, and its latest photo, as an address that stops working when the link does — and lets the sitter send a photo back to a plant’s timeline. Sitter links do not expose your saved household location, plant or task private notes, or household member identity and contact details. The link is a bearer credential, so only send it to someone you trust. It expires after at most 90 days and a household member can revoke it sooner. We do not ask for or store the sitter’s identity."
       },
       "rights": {
         "heading": "Your rights",

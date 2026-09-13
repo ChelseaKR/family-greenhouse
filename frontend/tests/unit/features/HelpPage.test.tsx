@@ -99,42 +99,58 @@ describe('help content', () => {
     expect(articleText('billing', 'whats-free')).toMatch(/up to 3 members/i);
   });
 
-  // Not a stale number this time, but a privacy assurance a household acts on.
-  // The Away Kit brief (backend/src/services/sitterBrief.ts) hands the sitter
-  // the plant's photo and, through `resolveCareNote`, its care rule OR — when
-  // no rule was written — its free-text notes, gated on `planIncludesAwayKit`,
-  // i.e. Garden and Greenhouse. This answer told every household flatly that a
-  // sitter sees no "plant or task notes, photos", and it is the paragraph
-  // someone reads before deciding where to keep a door code. #609.
-  it('discloses the plant notes and photos the Away Kit brief shows a sitter', () => {
+  // Not a stale number this time, but a privacy assurance a household acts on,
+  // and it has now been rewritten twice in opposite directions — so read the
+  // history before changing it again.
+  //
+  // #609 found this answer telling every household flatly that a sitter sees
+  // no "plant or task notes, photos", while the Away Kit brief was in fact
+  // handing over the photo and, through `resolveCareNote`, the plant's
+  // free-text notes whenever no care rule was written. The fix then was to
+  // make the help page disclose the notes, and this test was written to hold
+  // it there.
+  //
+  // #709 settled it the other way, and settled it in code: the privacy policy
+  // had always promised that a sitter link does not expose plant private
+  // notes, and a published promise outranks a fallback, so the fallback was
+  // removed rather than the sentence. The brief now carries the house rule
+  // (`careRule`) and nothing else, and a plant without one reads as having no
+  // note. So the assertions below are inverted ON PURPOSE: what this test used
+  // to require the page to admit, it now requires the page to deny, because
+  // the behaviour underneath it changed. The photo half is untouched — a
+  // sitter on Garden or Greenhouse does still see it.
+  it('says the Away Kit brief shows the house rule and the photo, and NOT the plant’s notes', () => {
     const article = articleText('sitters', 'sitter-sees');
 
-    // The retired absolutes. Both were false on Garden and Greenhouse: the
-    // brief shows notes and photos, and it lists every plant in active care,
-    // not only the ones with a task due.
+    // The absolutes retired by #609 stay retired: the brief does show photos,
+    // and it lists every plant in active care, not only the ones with a task
+    // due.
     expect(article).not.toMatch(/plant or task notes, photos/i);
     expect(article).not.toMatch(/cannot even see plants that have nothing due/i);
 
-    // Task notes really are private on both surfaces — a brief task carries
-    // only taskId, type, due date and overdue — so that half must survive.
+    // Task notes are private on both surfaces — a brief task carries only
+    // taskId, type, due date and overdue — and since #709 plant notes are too.
     expect(article).toMatch(/task notes/i);
+    expect(article).toMatch(/plant notes/i);
 
     // What the brief adds, and which plans add it.
     expect(article).toMatch(/Garden and Greenhouse/);
     expect(article).toMatch(/latest photo/i);
-    expect(article).toMatch(/own notes/i);
-    // The "caveat you control" paragraph is the one that does the real work —
-    // it must enumerate notes and photos, not only the names it used to.
-    expect(article).toMatch(/plant notes and plant photos/i);
+    expect(article).toMatch(/house rule/i);
+
+    // The claim that must not come back: the notes fallback, in either the
+    // page's words or the ones #609 put here.
+    expect(article).not.toMatch(/plant notes and plant photos/i);
+    expect(article).not.toMatch(/the plant.s own notes,? word for word/i);
 
     // Rule 2 of helpContent.tsx: `text` is a plain-text twin of `a`. A twin
-    // that kept the old promise would publish it as FAQPage JSON-LD under a
+    // that kept the old disclosure would publish it as FAQPage JSON-LD under a
     // corrected on-page answer, which is the worse half to get wrong.
     const rendered = renderAt('/help/sitters').container.textContent ?? '';
     expect(rendered).toMatch(/Garden and Greenhouse/);
     expect(rendered).toMatch(/latest photo/i);
-    expect(rendered).toMatch(/own notes/i);
-    expect(rendered).toMatch(/plant notes and plant photos/i);
+    expect(rendered).toMatch(/house rule/i);
+    expect(rendered).not.toMatch(/plant notes and plant photos/i);
   });
 
   it('does not promise a sitter cannot send photos, which the Away Kit lets them do', () => {

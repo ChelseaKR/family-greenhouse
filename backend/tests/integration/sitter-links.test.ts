@@ -430,10 +430,11 @@ describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
     return res.body.token as string;
   }
 
-  it('renders the household’s own notes, place, photo and window tasks — no auth, no PII', async () => {
+  it('renders the household’s house rule, place, photo and window tasks — no auth, no PII', async () => {
     const plant = db.plants.get(seedPlantId)!;
     plant.placementNote = 'east window, top shelf';
-    plant.notes = 'Bottom-water this one';
+    plant.careRule = 'Bottom-water this one';
+    plant.notes = 'PRIVATE plant note — the spare key is under the mat';
     plant.species = 'Monstera deliciosa';
     db.tasks.get(seedTaskId)!.notes = 'Use the private measuring cup';
     db.households.get(seedHouseholdId)!.location = { city: 'Private Climate City', lat: 1, lon: 2 };
@@ -449,7 +450,7 @@ describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
       spaceName: 'Living Room',
       placementNote: 'east window, top shelf',
       careNote: 'Bottom-water this one',
-      careNoteSource: 'notes',
+      careNoteSource: 'rule',
     });
     // Verdicts come from the curated table, never generated.
     expect(entry.petSafety).toMatchObject({ slug: 'monstera', cats: 'toxic', dogs: 'toxic' });
@@ -461,12 +462,15 @@ describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
     expect(blob).not.toContain(seedHouseholdId);
     expect(blob).not.toContain('Private Climate City');
     expect(blob).not.toContain('Use the private measuring cup');
+    // Plant-level private notes are as private as task-level ones (#709).
+    expect(blob).not.toContain('the spare key is under the mat');
   });
 
-  it('renders a plant with no notes as having none, and no toxicity verdict it cannot source', async () => {
+  it('renders a plant with no house rule as having no note, and never falls back to its notes (#709)', async () => {
     const plant = db.plants.get(seedPlantId)!;
     plant.placementNote = null;
-    plant.notes = null;
+    plant.careRule = null;
+    plant.notes = 'PRIVATE — alarm code 4821';
     plant.species = 'Nothing recognisable here';
     plant.name = 'Doris';
 
@@ -478,6 +482,7 @@ describe('sitter handoff brief (public, paid half of the Away Kit)', () => {
     expect(entry.careNoteSource).toBeNull();
     expect(entry.placementNote).toBeNull();
     expect(entry.petSafety).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain('alarm code 4821');
   });
 
   it('answers the same generic 404 on a free plan as it does for a bad token', async () => {

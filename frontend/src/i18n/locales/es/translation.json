@@ -407,7 +407,7 @@
     "careRule": {
       "label": "Regla de la casa",
       "placeholder": "p. ej., regar solo por abajo",
-      "hint": "Una línea corta que verá quien vaya a hacer una tarea de esta planta.",
+      "hint": "Una línea corta que verá quien vaya a hacer una tarea de esta planta, incluida la persona que cuide las plantas, que nunca ve el campo Notas.",
       "counter": "{{used}} de {{max}} caracteres.",
       "tooLong": "La regla de la casa no puede superar los {{max}} caracteres"
     },
@@ -902,7 +902,6 @@
     "noPlants": "Todavía no hay plantas en esta guía.",
     "noPlace": "Sin nota de ubicación: pregunta dónde vive esta planta.",
     "houseRule": "Norma de la casa",
-    "householdNote": "La nota del hogar",
     "noCareNote": "Sin nota para esta planta.",
     "whileYoureHere": "Mientras estés aquí",
     "nothingDue": "No hay nada pendiente durante tu periodo.",

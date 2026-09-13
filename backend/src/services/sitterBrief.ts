@@ -2,8 +2,10 @@
  * The handoff brief: everything the person covering the plants needs, built
  * ENTIRELY from what the household already recorded (ADR 0015). No inference,
  * no generated care text — a template render over `Plant`, `PlantSpace.name`,
- * `placementNote`, the plant's care rule / notes, the verified pet-toxicity
- * table, the plant's latest photo, and the tasks due inside the link window.
+ * `placementNote`, the plant's house rule (`careRule`, and never the private
+ * `notes` — see #709 and `models/sitterBriefFields.ts`), the verified
+ * pet-toxicity table, the plant's latest photo, and the tasks due inside the
+ * link window.
  *
  * Two rules this module exists to keep:
  *
@@ -55,11 +57,15 @@ export interface SitterBriefPlant {
   spaceName: string | null;
   /** Where in that space, e.g. "east window, top shelf". Null when unset. */
   placementNote: string | null;
-  /** The household's own care words. Null when they wrote none. */
+  /** The plant's house rule — the household's own care words, from the one
+   *  field written to be shared. Null when they wrote none. NEVER the plant's
+   *  private `notes`: the privacy policy says a sitter link does not expose
+   *  those, so `resolveCareNote` no longer falls back to them (#709). */
   careNote: string | null;
-  /** Which field `careNote` came from — a structured care rule, or the
-   *  plant's free-text notes. Null when there is no care note at all. */
-  careNoteSource: 'rule' | 'notes' | null;
+  /** Which field `careNote` came from. Only ever the house rule today; kept as
+   *  a named provenance so the page attributes the words rather than implying
+   *  the household wrote something it did not. Null when there is no rule. */
+  careNoteSource: 'rule' | null;
   /**
    * Latest photo (the plant row tracks the most recent one), as a signed URL
    * that expires with — or before — the sitter link. Null when the plant has
