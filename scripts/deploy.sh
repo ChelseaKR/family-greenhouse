@@ -188,11 +188,22 @@ for handler in "${HANDLERS[@]}"; do
 
     WORK=$(mktemp -d)
     cp "$SRC" "${WORK}/handler.mjs"
-    # `|| true` because errexit applies to the last command of an `&&` list: a
-    # bundle built without a source map made this line return 1 and killed the
-    # whole script mid-deploy, after some functions had already been published.
-    # Both CD workflows already carry the `|| true` for this reason.
-    [[ -f "${SRC}.map" ]] && cp "${SRC}.map" "${WORK}/handler.mjs.map" || true
+    # An `if`, not `[[ ... ]] && cp ... || true`. Errexit applies to the last
+    # command of an `&&` list, so the bare `[[ ... ]] && cp` this replaces
+    # returned 1 on a bundle built without a source map and killed the whole
+    # script mid-deploy, after some functions had already been published. The
+    # `|| true` both CD workflows use fixes that, but SC2015 fires on it under
+    # the analyser version the CI runner ships and not under the newer one a
+    # laptop may have, so the gate's verdict would depend on which machine ran
+    # it. An `if` suspends errexit in its condition and reads the same to every
+    # version.
+    #
+    # (And this comment does not begin a line with the analyser's own name:
+    # that is read as a directive, and a malformed one silently stops the file
+    # being checked at all — see the header of scripts/check-shell.mjs.)
+    if [[ -f "${SRC}.map" ]]; then
+        cp "${SRC}.map" "${WORK}/handler.mjs.map"
+    fi
     ZIP="$(pwd)/.deploy-${handler}.zip"
     (cd "$WORK" && zip -q -r "$ZIP" .)
 
