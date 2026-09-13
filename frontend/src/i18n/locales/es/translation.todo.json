@@ -10,6 +10,7 @@
   ],
   "intentionallyEqual": [
     "awayRecap.noteLine",
+    "household.onboarding.joinLinkPlaceholder",
     "awayRecap.taskLine",
     "caretaker.page.instructionOther",
     "caretaker.report.byCaretakerRange",
