@@ -91,7 +91,8 @@ function activePlant(overrides: Record<string, unknown> = {}) {
     name: 'Monstera',
     species: 'Monstera deliciosa',
     imageUrl: null,
-    notes: 'Bottom-water only',
+    notes: 'Private household free text',
+    careRule: 'Bottom-water only',
     status: 'active',
     tags: [],
     ...overrides,
@@ -601,7 +602,7 @@ describe('GET /tag/{token} (public)', () => {
     expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
   });
 
-  it('serves the scan view anonymously: plant, notes, due tasks, and last care by FIRST name', async () => {
+  it('serves the scan view anonymously: plant, house rule, due tasks, and last care by FIRST name', async () => {
     await arrange();
     const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');
     const res = (await getTagView(
@@ -612,7 +613,15 @@ describe('GET /tag/{token} (public)', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.plantName).toBe('Monstera');
-    expect(body.careNotes).toBe('Bottom-water only');
+    // INVERTED on purpose. This test used to pin the plant's free-text notes
+    // on the public scan (`careNotes`), which put in front of anyone holding
+    // the label what #709 withdrew from a sitter link. The scan now carries
+    // the house rule, through the resolver the sitter brief uses, and never
+    // the notes.
+    expect(body.careNote).toBe('Bottom-water only');
+    expect(body.careNoteSource).toBe('rule');
+    expect(body).not.toHaveProperty('careNotes');
+    expect(res.body).not.toContain('Private household free text');
     expect(body.history.status).toBe('ok');
     // Member names are cut to a first name; a tag scanner's typed name is kept.
     expect(body.history.lastCare).toEqual({
@@ -635,6 +644,21 @@ describe('GET /tag/{token} (public)', () => {
     expect(res.body).not.toContain('user-2');
     expect(res.body).not.toContain('hh-1');
     expect(res.body).not.toContain('Smith');
+  });
+
+  it('a plant with notes but no house rule scans with no care note, never the notes', async () => {
+    await arrange({ plant: { careRule: null } });
+    const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await getTagView(
+      anonEvent({ path: `/tag/${TOKEN}`, pathParameters: { token: TOKEN } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.careNote).toBeNull();
+    expect(body.careNoteSource).toBeNull();
+    expect(res.body).not.toContain('Private household free text');
   });
 
   it('reports a FAILED history read as unavailable — never as "never watered"', async () => {

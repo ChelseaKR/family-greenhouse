@@ -24,7 +24,7 @@ import {
  *
  * Someone in the house points a phone camera at the label in the pot and
  * lands here. No account, no app, no invite: they see what the plant is, when
- * it was last watered and by whom, the household's own care conventions, and
+ * it was last watered and by whom, the plant's house rule (never its Notes), and
  * one button that marks the due task done under a name they type once.
  *
  * Two honesty rules the page is built around:
@@ -249,10 +249,10 @@ export function ScanTagPage() {
                   : t('plantTags.scan.noCareYet')}
           </p>
 
-          {view.careNotes && (
+          {view.careNote && (
             <section className="mt-6 rounded-xl border border-primary-100/80 bg-paper p-4">
               <h2 className="text-sm font-medium text-ink">{t('plantTags.scan.houseRules')}</h2>
-              <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{view.careNotes}</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{view.careNote}</p>
             </section>
           )}
 
