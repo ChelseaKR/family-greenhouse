@@ -132,9 +132,22 @@ export const checkPlantHealth = createHandler(
           { expose: true }
         );
       }
-      throw createHttpError(502, `Leaf health check failed: ${(err as Error).message}`, {
-        expose: true,
-      });
+      // Everything else: a Bedrock SDK failure (throttling, a validation
+      // error naming the model), the provider's own error envelope, or an
+      // unexpected internal error. The status is exposed, the STRING is not —
+      // it is written by a provider SDK for an operator, and it can carry
+      // model identifiers and other deployment detail that a plant-care user
+      // has no use for and we have no reason to publish. Logged instead, where
+      // the api-5xx alarm and the request id can reach it.
+      logger.error(
+        { err: (err as Error).message, householdId: user.householdId },
+        'leaf_health.check_failed'
+      );
+      throw createHttpError(
+        502,
+        'Could not check this photo just now. Please try again in a moment.',
+        { expose: true }
+      );
     }
 
     // The explicit demo fallback means Bedrock rejected the deployment before

@@ -303,16 +303,22 @@ describe('plants health-check handler', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
-  it('surfaces transport failures as an exposed 502 message and records no activity', async () => {
+  it('surfaces a transport failure as an exposed 502 that does not quote the SDK error', async () => {
+    // The shape a Bedrock SDK failure actually has: a model identifier and an
+    // account-scoped ARN. The user can do nothing with either, and publishing
+    // them describes the deployment to anyone with an account.
     vi.mocked(leafHealth.assessLeafHealth).mockRejectedValue(
-      new Error('Bedrock timed out after 5000ms')
+      new Error(
+        'ValidationException: model arn:aws:bedrock:us-west-2:123456789012:foundation-model/claude-x is not available'
+      )
     );
     const checkPlantHealth = await subject();
 
     const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 
     expect(res.statusCode).toBe(502);
-    expect(res.body).toMatch(/Leaf health check failed: Bedrock timed out/);
+    expect(res.body).toMatch(/Could not check this photo just now/);
+    expect(res.body).not.toMatch(/arn:aws:bedrock|123456789012|ValidationException/);
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 

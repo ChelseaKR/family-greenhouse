@@ -464,16 +464,21 @@ describe('plants identify handler', () => {
     }
   );
 
-  it('surfaces upstream failures as an exposed 502 message', async () => {
+  it('surfaces an upstream failure as an exposed 502 that does not quote the thrown error', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
+    // A thrown message with the shape of internal detail: a host, a port, and
+    // a deployment-specific string. Whatever the upstream client or the SDK
+    // puts in here is written for an operator, not for a plant-care user.
     vi.mocked(plantIdentification.identifyPlant).mockRejectedValueOnce(
-      new Error('plant.id timed out after 5000ms')
+      new Error('connect ECONNREFUSED 10.0.3.17:443 (fg-prod-identify-egress)')
     );
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(502);
-    // The 502 is intentionally exposed so the frontend can show the cause.
-    expect(res.body).toMatch(/Plant identification failed: plant\.id timed out/);
+    // Exposed, so the frontend can say the identification failed...
+    expect(res.body).toMatch(/Plant identification is temporarily unavailable/);
+    // ...but the thrown string itself never reaches the client.
+    expect(res.body).not.toMatch(/ECONNREFUSED|10\.0\.3\.17|fg-prod-identify-egress/);
     // A failed call consumed nothing and must not be metered.
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });
