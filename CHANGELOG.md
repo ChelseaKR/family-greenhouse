@@ -16,6 +16,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **The latency SLO is now alarmed as an error-budget burn rate instead of a
+  five-minute percentile.** `family-greenhouse-application-latency-p95-production`
+  evaluated p95 of `ApplicationLatency` over a 300-second period. Measured over
+  28 days of production access logs (2026-08-16 → 09-13, 3,694 non-health
+  requests), only 9.3% of five-minute periods contain any application traffic
+  at all and 81% of the ones that do hold two requests or fewer — so that
+  "p95" was, most of the time, the slower of two requests, and it fired on
+  single Lambda cold starts. It recorded **94 `OK -> ALARM` transitions in 30
+  days** (median 10 minutes in ALARM, 40 of them on 2026-09-11), which is 94
+  of the 100 transitions recorded across all 33 alarms in the stack, each one
+  emailing the alerts topic twice.
+
+  It is replaced by `latency-fast-burn` (>72% of requests over 500 ms across
+  most of an hour, a 14.4x burn) and `latency-slow-burn` (>30% across most of
+  six hours, a 6x burn), mirroring the availability burn alarms multiplier for
+  multiplier. Both read the share of requests above the objective as
+  `PR(500:)`, a percentile-rank statistic on the metric already collected, so
+  no metric math, no new metric filter and no access-log change was needed. Replayed over the same 28 days: fast fires 0
+  times, slow fires once. The objective itself is unchanged at `p95 <= 500ms`;
+  `scripts/check-observability.mjs` now reads the 500 ms boundary and both
+  burn rates out of `observability/slos.yaml` and asserts the Terraform
+  carries them, so the alarms cannot drift from the SLO they implement.
+
+  The SLO is currently missed — the 28-day p95 is 1,673 ms and 21.8% of
+  requests exceed 500 ms, a sustained 4.4x burn caused by cold starts. That is
+  tracked as a product problem in #730 rather than as a repeating page.
+
 ### Fixed
 
 - **Help answers that were wrong about the product.** `helpContent.tsx` imports

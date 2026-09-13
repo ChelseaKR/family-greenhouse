@@ -14,7 +14,7 @@ name: Alert relay
 # That path works today. It is also four hops long, self-referential (the
 # alarms that watch the mail forwarder can only reach a human THROUGH the mail
 # forwarder), and one accidental click on the unsubscribe link that SNS puts in
-# every alert email silences all thirty-three alarms permanently and silently.
+# every alert email silences every alarm in this stack permanently and silently.
 # The `alarms_have_a_notification_destination` check in
 # infrastructure/modules/monitoring/main.tf catches a topic with no subscriber,
 # but only when someone runs `terraform plan`.
