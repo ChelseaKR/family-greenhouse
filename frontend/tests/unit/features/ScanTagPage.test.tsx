@@ -56,7 +56,8 @@ function view(overrides: Partial<TagView> = {}): TagView {
     plantName: 'Monstera',
     species: 'Monstera deliciosa',
     imageUrl: null,
-    careNotes: 'We bottom-water this one.',
+    careNote: 'We bottom-water this one.',
+    careNoteSource: 'rule',
     history: {
       status: 'ok',
       lastCare: null,
@@ -84,9 +85,17 @@ describe('ScanTagPage', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Monstera' })).toBeInTheDocument();
     expect(screen.getByTestId('last-care')).toHaveTextContent('Last watered 2 days ago by Dad.');
-    // The household's own care convention travels with the label (§4.10).
+    // The plant's house rule travels with the label.
     expect(screen.getByText('We bottom-water this one.')).toBeInTheDocument();
     expect(getView).toHaveBeenCalledWith(TOKEN, undefined, expect.anything());
+  });
+
+  it('shows no house-rule section when the household wrote no rule', async () => {
+    getView.mockResolvedValue(view({ careNote: null, careNoteSource: null }));
+    renderPage();
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Monstera' })).toBeInTheDocument();
+    expect(screen.queryByText('How this household does it')).not.toBeInTheDocument();
   });
 
   it('says the care history could not be loaded — never "never watered"', async () => {

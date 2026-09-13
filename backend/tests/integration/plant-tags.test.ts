@@ -96,18 +96,25 @@ describe('public scan + complete', () => {
     onGarden();
     const { token } = await issueSeedTag(auth);
     db.households.get(seedHouseholdId)!.location = { city: 'Austin', lat: 30.27, lon: -97.74 };
+    db.plants.get(seedPlantId)!.careRule = 'Bottom-water only';
 
     const scan = await request(app).get(`/tag/${token}`);
     expect(scan.status).toBe(200);
     expect(scan.body.plantName).toBe('Monstera');
-    expect(scan.body.careNotes).toBe('Needs indirect light');
+    // INVERTED on purpose: this used to pin the seed plant's free-text notes
+    // ("Needs indirect light") on the public scan. The dev server mirrors the
+    // handler, so it now shows the house rule and never the notes.
+    expect(scan.body.careNote).toBe('Bottom-water only');
+    expect(scan.body).not.toHaveProperty('careNotes');
     // Real absence, reported as such: nothing has been done to this plant.
     expect(scan.body.history).toEqual({ status: 'ok', lastCare: null, lastWatered: null });
     expect(scan.body.tasks).toEqual([
       expect.objectContaining({ taskId: seedTaskId, taskType: 'water' }),
     ]);
-    // PII-free: no member ids/emails, no household id, no saved location.
+    // PII-free: no member ids/emails, no household id, no saved location,
+    // and not the plant's free-text notes.
     const raw = JSON.stringify(scan.body);
+    expect(raw).not.toContain('Needs indirect light');
     expect(raw).not.toContain(seedUserId);
     expect(raw).not.toContain(seedHouseholdId);
     expect(raw).not.toContain('test@example.com');

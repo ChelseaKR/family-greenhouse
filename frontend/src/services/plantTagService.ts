@@ -99,8 +99,10 @@ export interface TagView {
   plantName: string;
   species: string | null;
   imageUrl: string | null;
-  /** The household's care conventions for this plant ("we bottom-water it"). */
-  careNotes: string | null;
+  /** The plant's house rule, the same text the sitter brief shows. Never the
+   *  plant's private Notes. Null when the household wrote no rule. */
+  careNote: string | null;
+  careNoteSource: 'rule' | null;
   history: TagHistory;
   tasks: TagDueTask[];
 }
