@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+// The route table, read from `frontend/src/App.tsx` by the same code the
+// `links:check` gate uses. Importing it rather than restating the paths here
+// is the point: this file used to assert a literal URL, and the literal it
+// asserted was broken (see "links somewhere that exists" below).
+import { declaredRoutes, matchesRoute } from '../../../../scripts/check-app-links.mjs';
 import type { BillingNotice } from '../../../src/models/billingNotices.js';
 import { getPlan } from '../../../src/models/plans.js';
 import {
@@ -115,6 +120,13 @@ describe('Intl formatting', () => {
 });
 
 describe('every billing email', () => {
+  // Derived, not restated. The previous version of this suite asserted the
+  // literal `https://familygreenhouse.net/settings/notifications` for every
+  // notice kind in both locales — and that URL was not a route, so the test
+  // pinned the defect rather than catching it (#721). Deriving from the
+  // router's own declarations is what makes it fail on the NEXT bad link.
+  const routes = declaredRoutes().paths;
+
   for (const locale of ['en', 'es'] as const) {
     for (const notice of ALL_NOTICES) {
       it(`${notice.kind} (${locale}) is transactional: no unsubscribe, and says why`, () => {
@@ -127,9 +139,24 @@ describe('every billing email', () => {
           locale === 'es' ? /no lleva enlace para darte de baja/u : /no unsubscribe link/u
         );
         expect(text).toContain('https://familygreenhouse.net/settings/billing');
-        expect(text).toContain('https://familygreenhouse.net/settings/notifications');
         // The trailing slash on appUrl must not survive into a link.
         expect(text).not.toContain('familygreenhouse.net//');
+      });
+
+      it(`${notice.kind} (${locale}) links somewhere that exists`, () => {
+        const { text } = composeBillingEmail(notice, ctx(locale));
+        const urls = [...text.matchAll(/https:\/\/familygreenhouse\.net(\/\S*)/gu)].map(
+          (m) => m[1]
+        );
+        // A billing email with no link at all would pass a per-URL check
+        // vacuously, and this footer is the only control these messages offer.
+        expect(urls.length).toBeGreaterThan(0);
+        for (const path of urls) {
+          expect(
+            matchesRoute(path, routes),
+            `${path} matches no route declared in frontend/src/App.tsx`
+          ).toBe(true);
+        }
       });
     }
   }

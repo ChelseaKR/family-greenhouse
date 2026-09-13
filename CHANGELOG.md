@@ -16,6 +16,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **Every billing email linked to a page that does not exist.** The footer on
+  every transactional billing message, in `en` and `es`, ended with
+  `familygreenhouse.net/settings/notifications`. `frontend/src/App.tsx`
+  declares `/settings` and `/settings/billing` and nothing between them, so
+  React Router matched the catch-all and rendered "Nothing growing here" — and
+  once #719's CloudFront change lands it would be a hard 404. A customer who
+  had just been charged, following the only control those emails offer (they
+  deliberately carry no unsubscribe link), landed on a not-found page. The
+  notifications tab is reached by query parameter, not by path, so the link is
+  now `/settings?section=notifications`, which is what `SettingsPage` has
+  always built. The footer's own unit test asserted the broken URL for every
+  notice kind in both locales, so the suite pinned the defect instead of
+  catching it; it now derives the claim from the router's declarations. New
+  `links:check` gate (`scripts/check-app-links.mjs`, in `npm run verify` and in
+  CI's required Lint job) fails the build on any backend-built URL that is not
+  a declared route. Swept at 39 of 39 paths resolving. (#721)
+
 - **`sitemap.xml` advertised a freshness `/changelog` did not have.** Measured
   live on 2026-09-13: `<lastmod>2026-09-12</lastmod>` against a page whose
   newest visible entry was `2026-09-02`. The date was read from the newest

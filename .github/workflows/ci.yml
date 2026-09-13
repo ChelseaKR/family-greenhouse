@@ -168,6 +168,21 @@ jobs:
       - name: Verify API spec covers every handler route
         run: node scripts/check-api-spec.mjs
 
+      - name: Every backend-built URL is a route the SPA declares (#721)
+        # Shared with `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
+        #
+        # Every billing email ended with a link to /settings/notifications,
+        # which frontend/src/App.tsx does not declare: React Router matched it
+        # with the catch-all and rendered "Nothing growing here", so a customer
+        # who had just been charged, following the only control those emails
+        # offer, landed on a not-found page. The unit test for that footer
+        # asserted the broken URL, so the suite pinned the defect. This step
+        # re-derives the claim from the router's own declarations, and fails on
+        # the next link built without checking rather than only on that one.
+        run: npm run links:check
+
       - name: Verify docs/testing.md matches the suite it documents
         # Shared with `npm run verify` (scripts/check-docs-testing.mjs) so local
         # pre-push and CI run the identical check — see CICD-27. Guards the
