@@ -412,6 +412,16 @@ Operational notes:
   claim/send/finalize lease `welcomeEmail` uses. It is a _different sort key_
   from the ledger's `METADATA` row on purpose: that row is written after the
   apply so a failed apply stays retryable, and an email must not claim it.
+  The finalize is allowed to FAIL, and that is the case the marker has to
+  survive: a slot left in `sending` still carries a five-minute lease, and the
+  claim treats an expired lease as reclaimable, so a Lambda timeout between
+  SES accepting and the finalize landing would collect a Stripe retry and send
+  a second receipt for one charge. `forceCloseSlot` therefore closes the slot
+  unconditionally on that path (`finalizeRecovered: true` on the row marks
+  it), because suppressing a receipt is recoverable — replay the event from
+  the Stripe dashboard — and un-sending one is not. If BOTH writes fail the
+  slot really is reclaimable, and `billing_email_marker_left_reclaimable` says
+  so rather than leaving it to be discovered by a customer.
 - **Dispatch never throws.** A 5xx would make Stripe redeliver an already
   applied event. A failed send releases its marker, so replaying the event from
   the Stripe dashboard delivers it.
@@ -505,7 +515,28 @@ mode) when the hold was lifted; it is the procedure for any new environment.
    https://ux8jg1lns0.execute-api.us-east-1.amazonaws.com/production/billing/webhook
    ```
 6. Add the endpoint's signing secret (`whsec_…`) as the `STRIPE_WEBHOOK_SECRET` GitHub Actions repo secret.
-7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices.
+7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices, **and update subscriptions** — listing the Garden and Greenhouse **monthly** prices as the products a customer may switch between, with prorations on so an upgrade takes effect immediately.
+
+   The last capability is not optional, and it is the one that is off by
+   default. Changing tier is portal-only by design: `POST /billing/checkout`
+   refuses a second purchase on a live subscription with a 409
+   (`ALREADY_SUBSCRIBED`, so a household is never billed for two concurrent
+   subscriptions), and `BillingSettings` answers a subscribed household with
+   "Use 'Manage subscription' above to switch to X" rather than a buy button.
+   With subscription updates left off, that sentence opens a portal with no
+   such control and an existing subscriber has **no route to a higher tier at
+   all** — the checklist's own verification step ("a plan change made there
+   re-resolves entitlement from the price id",
+   [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md)) cannot be performed, and
+   the webhook's `planIdFromPriceId` — which exists only to resolve a
+   portal-initiated switch — is unreachable.
+
+   Leave the **withdrawn** cadences out of the switchable list (Garden annual
+   and lifetime, Greenhouse annual): they are not sold to anyone new, and
+   offering them in the portal would start one from the surface that checkout
+   refuses. Their prices stay live so existing subscriptions keep renewing —
+   see § _Withdrawn cadences_ above.
+
 8. Open the two gates — `commercialHoldActive: false` and
    `payments_enabled = "1"` — with the reviews and approvals in
    [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).

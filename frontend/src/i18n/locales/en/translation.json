@@ -7,6 +7,7 @@
     "add": "Add",
     "done": "Done",
     "loading": "Loading…",
+    "skipToMain": "Skip to main content",
     "error": "Something went wrong",
     "retry": "Try again",
     "close": "Close",
@@ -73,7 +74,7 @@
     "fieldLabel": "Space (optional)",
     "placementNoteLabel": "Placement note",
     "placementNotePlaceholder": "e.g., east window, top shelf",
-    "placementNoteSitterHint": "Shared with anyone who has an active sitter link.",
+    "placementNoteSitterHint": "Shared with anyone helping through a link: a plant sitter, a caretaker seat, or the wall display.",
     "createAction": "Create space",
     "nameLabel": "Space name",
     "namePlaceholder": "e.g., Living room or Back patio",
@@ -303,6 +304,7 @@
     "email": "Email address",
     "password": "Password",
     "forgotPassword": "Forgot your password?",
+    "keepSignedIn": "Keep me signed in on this device",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required",
     "signUpFree": "Sign up free",
@@ -395,6 +397,7 @@
   },
   "plants": {
     "title": "Plants",
+    "loading": "Loading plants…",
     "addPlant": "Add plant",
     "addFirst": "Add your first plant",
     "none": "No plants yet",
@@ -405,7 +408,7 @@
     "careRule": {
       "label": "House rule",
       "placeholder": "e.g., bottom-water only",
-      "hint": "One short line, shown to whoever is about to do a task for this plant \u2014 including a plant sitter, and anyone who scans this plant’s tag. Neither ever sees the Notes field.",
+      "hint": "One short line, shown to whoever is about to do a task for this plant — including a plant sitter, and anyone who scans this plant’s tag. Neither ever sees the Notes field.",
       "counter": "{{used}} of {{max}} characters.",
       "tooLong": "Keep the house rule to {{max}} characters"
     },
@@ -478,7 +481,7 @@
     },
     "archive": {
       "dialogTitle": "Move {{name}} out of active care?",
-      "dialogDescription": "Archive it to keep every task, photo, and care note without receiving reminders. You can restore it whenever you’re ready.",
+      "dialogDescription": "Archive it to keep every task, photo, and care note without receiving reminders. You can restore it whenever you’re ready, as long as your plan has room for another active plant.",
       "action": "Archive for later",
       "outcomePrompt": "Or record what happened",
       "gaveAway": "I gave it away",
@@ -610,7 +613,7 @@
       "skipped_one": "1 row skipped",
       "skippedRowsTitle": "Skipped rows",
       "skippedRowLabel": "Row {{row}} — {{name}}",
-      "planLimit": "You reached your current plan’s plant limit, so the remaining rows were skipped. Paid plan changes are paused.",
+      "planLimit": "You reached your current plan’s plant limit, so the remaining rows were skipped. Archive a plant you are not caring for, or move up a plan, then import the rest.",
       "viewPlants": "View my plants"
     }
   },
@@ -712,6 +715,30 @@
     "completedToast": "Done: {{plant}} at {{name}}"
   },
   "household": {
+    "onboarding": {
+      "chooseTitle": "Set up your household",
+      "chooseTitleAnother": "Add another household",
+      "chooseLede": "A household keeps your plant care in one place — just you, or shared with others. Create one to start fresh, or if someone already invited you, paste their link below.",
+      "createCardTitle": "Create a new household",
+      "createCardBody": "Start fresh on your own — invite family any time you like",
+      "joinCardTitle": "Join an existing household",
+      "joinCardBody": "Use an invite link from a family member",
+      "createTitle": "Create your household",
+      "createTitleAnother": "Name your new household",
+      "createLede": "Flying solo? Name it after yourself or your home — it’s just for you, and you can invite people whenever you're ready.",
+      "nameLabel": "Household name",
+      "namePlaceholder": "e.g., The Smith Family",
+      "nameRequired": "Household name is required",
+      "back": "Back",
+      "createSubmit": "Create household",
+      "joinTitle": "Join a household",
+      "joinLede": "Paste the invite link a household admin sent you, and we’ll take you straight there.",
+      "joinLinkLabel": "Invite link or code",
+      "joinLinkPlaceholder": "https://familygreenhouse.net/join/…",
+      "joinSubmit": "Open the invite",
+      "joinInvalid": "That doesn’t look like an invite link. Paste the whole link, or just the code at the end of it.",
+      "joinNoLink": "No link yet? Ask whoever set up the household to send you one — it works for seven days."
+    },
     "share": {
       "copy": "Copy",
       "copied": "Copied!",
@@ -726,7 +753,7 @@
     "inviteByEmailSend": "Send invite",
     "inviteByEmailHint": "They get an email from you naming this household, with a link that works for seven days.",
     "inviteByEmailSent": "Invitation sent. The link below is the same one, if you'd rather also send it yourself.",
-    "inviteByEmailCooldown": "That address was already invited to this household today. The link below still works.",
+    "inviteByEmailCooldown": "That address was invited to this household in the last 24 hours. The link below still works.",
     "inviteByEmailUnavailable": "We couldn't send that email, so we haven't said it went out. Copy the link below and send it yourself.",
     "climateCheckFailed": "Climate availability could not be checked. Location changes are paused; try again later.",
     "climateUnavailable": "Climate-aware tips are unavailable right now. Location setup will return when the weather integration is enabled.",
@@ -770,7 +797,7 @@
         "lockedBody": "Longer sitter windows, a printable handoff brief, photos back while you’re away, and a recap when you return."
       }
     },
-    "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now — any links you created earlier are still active.",
+    "sitterLinksLoadFailed": "We couldn’t load your existing sitter links just now. Nothing changed: a link that was working a moment ago still is, until it expires or someone revokes it.",
     "careLoad": {
       "title": "Who’s carrying the care",
       "description": "Everyone in the household sees this, and it’s here so the work can be shared out — not scored.",
@@ -884,7 +911,7 @@
     "title": "The plant-care brief",
     "titleLabelled": "{{label}}: the plant-care brief",
     "window": "Covering {{start}} to {{end}}.",
-    "intro": "Everything below was written by the household — nothing here is generated advice. If a plant has no note, it says so, and your judgement is as good as ours.",
+    "intro": "Every care note below was written by the household — nothing here is generated advice. The one thing we add is the pet-safety line, from our verified list. If a plant has no note, it says so, and your judgement is as good as ours.",
     "print": "Print",
     "loading": "Loading the plant-care brief…",
     "backToList": "Back to what needs doing today",
@@ -945,7 +972,7 @@
     "settings": {
       "title": "Wall display",
       "description": "Turn a spare tablet or screen into a household plant-care display: what’s due today, tap to mark it done, no login.",
-      "securityNotice": "The web address on the display is the password. Anyone who can see or photograph the screen can see the same task list and mark tasks done — they can’t see your notes, your members, or anything else. If the screen gets photographed, issue a new link: it revokes the old one immediately.",
+      "securityNotice": "The web address on the display is the password. Anyone who can see or photograph the screen can see the same task list — each plant’s name, where it lives and its placement note — and mark tasks done. They can’t see your private plant notes, your members, or anything else. If the screen gets photographed, issue a new link: it revokes the old one immediately.",
       "issue": "Set up a wall display",
       "reissue": "Issue a new link (revokes the old one)",
       "revoke": "Turn the display off",
@@ -993,8 +1020,8 @@
     },
     "apiKeys": {
       "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",
-      "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Any key issued earlier is still active until you revoke it.",
-      "lockedBody": "Keys let scripts and Home Assistant read your household data, with write access as an explicit grant. Keys issued earlier keep working; issuing new ones is part of the Greenhouse plan."
+      "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Nothing changed: a key that was working a moment ago still is, until you revoke it, the member who issued it leaves, or the household leaves Greenhouse.",
+      "lockedBody": "Keys let scripts and Home Assistant read your household data, with write access as an explicit grant. Issuing and using keys is part of the Greenhouse plan: a key already issued stops working while the household is off that plan, and works again on upgrade."
     },
     "calendarFeed": {
       "title": "Calendar feed",
@@ -1098,7 +1125,13 @@
       "plantsUsageUnlimited": "{{n}} plants · no limit",
       "plantsCountUnavailable": "Plants — usage unavailable",
       "membersUsageUnlimited": "{{n}} members · no limit",
-      "membersCountUnavailable": "Members — usage unavailable"
+      "membersCountUnavailable": "Members — usage unavailable",
+      "checkoutPendingTitle": "Payment received — finishing up",
+      "checkoutPendingBody": "Your payment went through. Your plan updates here as soon as our payment provider confirms it, which usually takes a few seconds. Please do not check out again — a second purchase would start a second subscription and charge you twice.",
+      "checkoutStalledTitle": "Your payment went through, but your plan has not updated",
+      "checkoutStalledBody": "We have not had confirmation from our payment provider yet. Nothing is lost — the payment is recorded with them — but this household is still showing its old plan. Please do not check out again: a second purchase would start a second subscription and charge you twice. Reload this page in a minute or two.",
+      "checkoutStalledContact": "If it still has not updated, email us and we will apply it by hand:",
+      "purchaseInFlight": "Waiting for your last purchase to be confirmed. Buying again would charge you twice."
     }
   },
   "notifications": {
@@ -1382,7 +1415,7 @@
     "includedWith": "Included with {{plan}}",
     "includedWithPrice": "Included with {{plan}} — {{price}} a month for the whole household",
     "adminChangePlan": "Change plan",
-    "adminHint": "You’re an admin, so you can change the household’s plan in Settings → Billing.",
+    "adminHint": "You’re an admin, so you can change the household’s plan in Settings → Plan status.",
     "ask": "Ask {{names}} to upgrade",
     "askAdmin": "Ask your household admin to upgrade",
     "onceAWeek": "Sends them a note in the app and by email naming this feature. One ask per feature per week; nothing is charged unless an admin upgrades.",
@@ -1540,7 +1573,7 @@
     "body": "Buy a one-time pack of extra plant identifications. Credits are used only after your plan's monthly allowance runs out, and nothing renews automatically.",
     "exhaustedTitle": "This month's identifications are used up",
     "exhaustedBody": "Your plan's monthly identification allowance is spent and your household has no credits left. Buy a pack to keep identifying, or upgrade your plan for a higher monthly allowance.",
-    "exhaustedNoPack": "This month's plant identifications are used up. Your allowance resets next month, and a higher plan includes more each month.",
+    "exhaustedNoPack": "This month's plant identifications are used up. Your allowance resets at the start of next month.",
     "offer": "{{credits}} identifications for {{price}}",
     "terms": "One-time purchase. Credits are valid for {{days}} days from purchase and are used only after your plan's monthly allowance. Nothing renews automatically.",
     "termsNoDays": "One-time purchase. Credits are used only after your plan's monthly allowance. Nothing renews automatically.",

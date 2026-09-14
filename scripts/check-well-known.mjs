@@ -99,6 +99,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
+import { artifactHiddenFileProblems } from './artifact-hidden-files.mjs';
 import {
   BUNDLE_ID,
   TEAM_ID_PATTERN,
@@ -142,10 +143,26 @@ const TEAM_ID_SOURCE =
  * a one-year immutable cache (#644).
  */
 const DEPLOY_PATHS = [
-  { file: '.github/workflows/cd-production.yml', dist: 'dist' },
-  { file: '.github/workflows/cd-staging.yml', dist: 'dist' },
-  { file: 'scripts/deploy.sh', dist: 'frontend/dist' },
+  { file: '.github/workflows/cd-production.yml', dist: 'dist', viaArtifact: true },
+  { file: '.github/workflows/cd-staging.yml', dist: 'dist', viaArtifact: true },
+  { file: 'scripts/deploy.sh', dist: 'frontend/dist', viaArtifact: false },
 ];
+
+/**
+ * `.well-known/` is a HIDDEN directory, and `actions/upload-artifact` drops
+ * hidden files unless this is set. A workflow that builds the association file
+ * into `dist/` and then hands `dist/` to another job through an artifact loses
+ * it in transit: the build is green, the upload step's `if [ -f ... ]` guard
+ * finds nothing, and the deploy is green too. Nothing anywhere says the file
+ * was dropped. That is exactly how v0.33.0 deployed successfully while
+ * https://familygreenhouse.net/.well-known/apple-app-site-association
+ * answered 404 (331 objects uploaded, none of them under .well-known/).
+ *
+ * `scripts/deploy.sh` reads `frontend/dist` in place and never crosses an
+ * artifact, so it is exempt.
+ */
+// The assertion itself lives in ./artifact-hidden-files.mjs so it can be
+// unit-tested; this gate runs at import time and cannot be imported.
 
 /** The filter that keeps the immutable sync off `.well-known/`. */
 const WELL_KNOWN_EXCLUDE = '--exclude ".well-known/*"';
@@ -258,9 +275,13 @@ function appleAppIdProblems(parsed) {
 
 // --- The deploy paths -------------------------------------------------------
 
-for (const { file, dist } of DEPLOY_PATHS) {
+for (const { file, dist, viaArtifact } of DEPLOY_PATHS) {
   const text = read(file);
   const commands = commandLines(text);
+
+  // A `dist/` that travels through an artifact must carry hidden files, or
+  // `.well-known/` never reaches the job that uploads it to S3.
+  if (viaArtifact) problems.push(...artifactHiddenFileProblems(file, text, dist));
 
   // The immutable sync must not claim `.well-known/`. Without this the
   // extensionless Apple file rides it up with a 1-year immutable cache and a
