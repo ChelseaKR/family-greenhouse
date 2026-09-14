@@ -732,6 +732,14 @@
     "completedToast": "Hecho: {{plant}} en {{name}}"
   },
   "household": {
+    "share": {
+      "copy": "Copiar",
+      "copied": "¡Copiado!",
+      "copiedAnnouncement": "Enlace copiado al portapapeles.",
+      "copyFailed": "No hemos podido copiarlo automáticamente. Selecciona el enlace y cópialo a mano.",
+      "inviteLinkLabel": "Enlace de invitación",
+      "sitterLinkLabel": "Enlace para quien cuide las plantas"
+    },
     "climateChecking": "Comprobando la disponibilidad del clima…",
     "inviteByEmailLabel": "Enviar una invitación por correo",
     "inviteByEmailPlaceholder": "su@correo.com",

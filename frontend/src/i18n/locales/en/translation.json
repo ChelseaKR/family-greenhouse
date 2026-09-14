@@ -712,6 +712,14 @@
     "completedToast": "Done: {{plant}} at {{name}}"
   },
   "household": {
+    "share": {
+      "copy": "Copy",
+      "copied": "Copied!",
+      "copiedAnnouncement": "Link copied to your clipboard.",
+      "copyFailed": "Could not copy automatically. Select the link and copy it manually.",
+      "inviteLinkLabel": "Invite link",
+      "sitterLinkLabel": "Plant-sitter link"
+    },
     "climateChecking": "Checking climate availability…",
     "inviteByEmailLabel": "Send an invitation by email",
     "inviteByEmailPlaceholder": "their@email.com",
