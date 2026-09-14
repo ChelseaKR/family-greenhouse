@@ -14,6 +14,8 @@
     "smoke:parse": "node scripts/check-smoke-spec-parses.mjs",
     "sitemap": "node scripts/build-sitemap.mjs",
     "sitemap:check": "node scripts/build-sitemap.mjs --check",
+    "plant-pages:lastmod": "node scripts/build-plant-pages-lastmod.mjs",
+    "plant-pages:check": "node scripts/check-plant-safety-pages.mjs",
     "aasa": "node scripts/build-app-site-association.mjs",
     "aasa:check": "node scripts/build-app-site-association.mjs --check",
     "spa-router": "node scripts/build-spa-router.mjs",

@@ -50,7 +50,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { FRONTEND_ROOT } from './public-routes.mjs';
+import { FRONTEND_ROOT, PREFIX_SERVED_NAMESPACES } from './public-routes.mjs';
 
 const APP = join(FRONTEND_ROOT, 'src', 'App.tsx');
 
@@ -72,6 +72,23 @@ const APP = join(FRONTEND_ROOT, 'src', 'App.tsx');
  * revisited instead of silently 404ing real pages.
  */
 export const ENUMERATED_NAMESPACE_ROUTES = ['/blog/:slug', '/care/:slug', '/help/:topicId'];
+
+/**
+ * Dynamic routes whose valid members are served at the edge by PREFIX (see
+ * `PREFIX_SERVED_NAMESPACES` in public-routes.mjs), and which are therefore
+ * also NOT "any segment reaches the app".
+ *
+ * `/pet-safe/:slug` is generated from the curated pet-toxicity table. Its pages
+ * are prerendered like the three namespaces above, but they are not listed in
+ * `PRERENDERED` one by one (the function's 10 KB limit); the function maps any
+ * single segment under the prefix onto its object, and a slug that was never
+ * published is S3's 404. Routing it to the shell instead would answer 200 for
+ * every plant name anyone types, which is #719 again.
+ *
+ * `appRoutes()` throws if one of these stops being a route, or stops matching a
+ * prefix in `PREFIX_SERVED_NAMESPACES`.
+ */
+export const PREFIX_SERVED_NAMESPACE_ROUTES = ['/pet-safe/:slug'];
 
 /** Every `path="…"` on a `<Route>` in App.tsx, in source order. */
 export function declaredRoutePaths(source = readFileSync(APP, 'utf8')) {
@@ -109,6 +126,7 @@ export function declaredPathAttributeCount(source = readFileSync(APP, 'utf8')) {
  *                segment. React Router matches one non-empty segment per
  *                `:param`, so segment count plus literal equality is exact.
  * - `enumerated` — ENUMERATED_NAMESPACE_ROUTES, excluded on purpose.
+ * - `prefixServed` — PREFIX_SERVED_NAMESPACE_ROUTES, excluded on purpose.
  * - `skipped`  — `/` (the function resolves it directly) and `*` (the
  *                catch-all, which is precisely what must stop meaning 200).
  *
@@ -137,6 +155,23 @@ export function appRoutes(prerenderedPaths, source = readFileSync(APP, 'utf8')) 
     );
   }
 
+  const unservedPrefix = PREFIX_SERVED_NAMESPACE_ROUTES.filter(
+    (route) =>
+      !declared.includes(route) || !PREFIX_SERVED_NAMESPACES.includes(route.replace(/:[^/]+$/, ''))
+  );
+  if (
+    unservedPrefix.length > 0 ||
+    PREFIX_SERVED_NAMESPACES.length !== PREFIX_SERVED_NAMESPACE_ROUTES.length
+  ) {
+    throw new Error(
+      `PREFIX_SERVED_NAMESPACE_ROUTES (${PREFIX_SERVED_NAMESPACE_ROUTES.join(', ')}) must each be a ` +
+        'route App.tsx declares, one `:param` below a prefix in PREFIX_SERVED_NAMESPACES ' +
+        `(${PREFIX_SERVED_NAMESPACES.join(', ')}), and the two lists must pair up. A prefix the ` +
+        'function serves with no route behind it, or a route with no prefix, answers 404 or 200 ' +
+        'for the wrong URLs.'
+    );
+  }
+
   const publicSet = new Set(prerenderedPaths);
   const exact = [];
   const patterns = [];
@@ -144,6 +179,7 @@ export function appRoutes(prerenderedPaths, source = readFileSync(APP, 'utf8')) 
   for (const path of declared) {
     if (path === '/' || path === '*') continue;
     if (ENUMERATED_NAMESPACE_ROUTES.includes(path)) continue;
+    if (PREFIX_SERVED_NAMESPACE_ROUTES.includes(path)) continue;
     if (path.includes(':')) {
       const pattern = path.replace(/:[^/]+/g, '*');
       if (!patterns.includes(pattern)) patterns.push(pattern);
@@ -157,7 +193,13 @@ export function appRoutes(prerenderedPaths, source = readFileSync(APP, 'utf8')) 
 
   exact.sort();
   patterns.sort();
-  return { exact, patterns, enumerated: [...ENUMERATED_NAMESPACE_ROUTES], declared };
+  return {
+    exact,
+    patterns,
+    enumerated: [...ENUMERATED_NAMESPACE_ROUTES],
+    prefixServed: [...PREFIX_SERVED_NAMESPACE_ROUTES],
+    declared,
+  };
 }
 
 /**

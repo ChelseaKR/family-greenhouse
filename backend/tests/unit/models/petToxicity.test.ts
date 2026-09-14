@@ -103,6 +103,59 @@ describe('pet toxicity catalog integrity', () => {
   });
 });
 
+/**
+ * `aspcaListing` is what lets a `/pet-safe/<slug>` page print a verdict: the
+ * page shows a verdict only beside the listing that states it. So a listing
+ * that disagrees with its own entry is not a curiosity, it is a verdict that
+ * silently stops being published (the page falls back to "not assessed") —
+ * and more likely a verdict someone edited without re-reading the source.
+ */
+describe('per-plant ASPCA listings', () => {
+  const listed = PET_TOXICITY.filter((e) => e.aspcaListing !== undefined);
+
+  it('records at least the listings the #384 care-guide entries were verified against', () => {
+    expect(listed.map((e) => e.slug).sort()).toEqual(
+      [
+        'anthurium',
+        'bird-of-paradise',
+        'chinese-evergreen',
+        'christmas-cactus',
+        'english-ivy',
+        'hoya',
+        'money-tree',
+        'nerve-plant',
+        'parlor-palm',
+      ].sort()
+    );
+  });
+
+  it('every listing names a title, a species and a well-formed ASPCA path', () => {
+    for (const e of listed) {
+      const listing = e.aspcaListing!;
+      expect(listing.title.trim().length, `${e.slug}: title`).toBeGreaterThan(0);
+      expect(listing.scientificName.trim().length, `${e.slug}: scientificName`).toBeGreaterThan(0);
+      expect(listing.path, `${e.slug}: path`).toMatch(
+        /^\/toxic-and-non-toxic-plants\/[a-z0-9]+(-[a-z0-9]+)*$/
+      );
+    }
+  });
+
+  it('every verdict a listing states is the verdict its entry records', () => {
+    for (const e of listed) {
+      const { listed: verdicts } = e.aspcaListing!;
+      for (const animal of ['cats', 'dogs'] as const) {
+        if (verdicts[animal] === undefined) continue;
+        expect(verdicts[animal], `${e.slug}: ${animal} listing vs entry`).toBe(e[animal]);
+      }
+    }
+  });
+
+  it('no listing path is shared by two entries', () => {
+    const paths = listed.map((e) => e.aspcaListing!.path);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});
+
 describe('normalizeName', () => {
   it('lowercases, strips punctuation, and collapses whitespace', () => {
     expect(normalizeName('Snake-Plant!')).toBe('snake plant');

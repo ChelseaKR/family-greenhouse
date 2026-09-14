@@ -20,6 +20,7 @@
 //      would never see the file the deploy uploaded.
 //   2. A prerendered public page (PRERENDERED below). Mapped onto its object:
 //      `/care/monstera` -> `/care/monstera/index.html`.
+//   2b. One segment under a PREFIXED namespace, mapped the same way unlisted.
 //   3. An extensionless path the APP routes (APP_EXACT / APP_PATTERNS below).
 //      Rewritten to `/app-shell.html` BY NAME — the object always exists, so
 //      the request is a hit rather than an error.
@@ -28,16 +29,9 @@
 //
 // Anything with a dot in its last segment is a file request and is left alone.
 //
-// WHY (4) EXISTS (issue #719)
-//
-// (3) used to be "any other extensionless path", so this distribution answered
-// 200 to EVERY url. Measured live 2026-09-13: /definitely-not-a-page,
-// /blog/no-such-post and /care/no-such-plant all returned the same 4,715-byte
-// shell. A 200 asserts the resource exists, so nothing outside a browser could
-// tell a missing care guide from a real one, and a link check on this host
-// could not fail. (3) and (4) are split by the route table React Router itself
-// matches, so every url that moves to 404 is one the app already rendered as
-// "Nothing growing here". Full reasoning in frontend/scripts/app-routes.mjs.
+// WHY (4) EXISTS (issue #719): (3) used to take every extensionless path, so
+// every url answered 200. (3) and (4) split on App.tsx's routes, so a url that
+// now 404s already rendered "Nothing growing here". See app-routes.mjs.
 //
 // PRERENDERED is generated from frontend/scripts/public-routes.mjs — the same
 // list the sitemap and the prerenderer read. APP_EXACT and APP_PATTERNS are
@@ -110,6 +104,7 @@ var PRERENDERED = {
   '/help/data': 1,
   '/help/limits': 1,
 };
+var PREFIXED = '/pet-safe/';
 // --- end generated -----------------------------------------------------------
 
 // --- generated from App.tsx: do not edit by hand -----------------------------
@@ -199,6 +194,14 @@ function handler(event) {
   // (2) A prerendered public page.
   if (PRERENDERED[path] === 1) {
     request.uri = path + '/index.html';
+    return request;
+  }
+
+  // (2b) No object, S3's 404. Why: build-spa-router.mjs prefixServedRoutes().
+  var cut = path.lastIndexOf('/') + 1;
+  var ns = path.slice(0, cut).toLowerCase();
+  if (cut < path.length && path.indexOf('.', cut) < 0 && PREFIXED.split(' ').indexOf(ns) >= 0) {
+    request.uri = path.toLowerCase() + '/index.html';
     return request;
   }
 

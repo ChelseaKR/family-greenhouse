@@ -19,6 +19,33 @@
 
 export type ToxicityVerdict = 'toxic' | 'non-toxic';
 
+/**
+ * Where an ASPCA listing path is rooted. `aspcaListing.path` is appended to it.
+ */
+export const ASPCA_ANIMAL_POISON_CONTROL_URL =
+  'https://www.aspca.org/pet-care/animal-poison-control';
+
+/**
+ * The plant's OWN ASPCA listing, recorded when its verdicts were read off it.
+ *
+ * This used to live in a comment above each entry, where nothing could read
+ * it. It is data now because the public per-plant pages (`/pet-safe/<slug>`)
+ * print a verdict only next to the source that supports it: an entry with no
+ * listing, or whose listing does not state a verdict for an animal, or states
+ * a different one, renders that animal as "not assessed". So recording a
+ * listing is what publishes a page — verify it against the live listing first.
+ */
+export interface AspcaListing {
+  /** The listing's title, as ASPCA shows it. */
+  title: string;
+  /** The species that listing names, which can be narrower than this entry's. */
+  scientificName: string;
+  /** Path under ASPCA_ANIMAL_POISON_CONTROL_URL. */
+  path: string;
+  /** What the listing states, per animal. An animal it does not state is left out. */
+  listed: Partial<Record<'cats' | 'dogs', ToxicityVerdict>>;
+}
+
 export interface PetToxicityEntry {
   /** Stable lookup slug (kebab-case, unique). */
   slug: string;
@@ -30,6 +57,8 @@ export interface PetToxicityEntry {
   dogs: ToxicityVerdict;
   /** One plain, warm sentence: what happens, and the honest caveat. */
   note: string;
+  /** The per-plant source for `cats`/`dogs`. Absent: no page makes a claim. */
+  aspcaListing?: AspcaListing;
 }
 
 export const PET_TOXICITY: PetToxicityEntry[] = [
@@ -235,16 +264,22 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
   },
   // ---------------------------------------------------------------------
   // Added to cover the /care/<plant> guides shipped in #384. Every verdict
-  // below was read off that plant's own ASPCA entry page (URL noted per
-  // entry), not inferred from the slug or from the care guide's prose.
+  // below was read off that plant's own ASPCA entry page (recorded per entry
+  // as `aspcaListing`), not inferred from the slug or from the care guide's
+  // prose. The entries above this line carry no per-plant listing, so no
+  // `/pet-safe/<slug>` page is generated for them.
   // ---------------------------------------------------------------------
   {
     slug: 'bird-of-paradise',
     commonName: 'Bird of paradise',
     scientificName: 'Strelitzia reginae',
-    // ASPCA "Bird of Paradise Flower" (Strelitzia reginae): Toxic to Dogs,
-    // Toxic to Cats, Toxic to Horses.
-    // /toxic-and-non-toxic-plants/bird-paradise-flower
+    // The listing also states Toxic to Horses; this table records cats and dogs.
+    aspcaListing: {
+      title: 'Bird of Paradise Flower',
+      scientificName: 'Strelitzia reginae',
+      path: '/toxic-and-non-toxic-plants/bird-paradise-flower',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     //
     // ⚠️ TWO different plants are sold as "bird of paradise". ASPCA's entry
     // titled plain "Bird of Paradise" is Caesalpinia gilliesii — a DIFFERENT,
@@ -263,8 +298,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'anthurium',
     commonName: 'Anthurium',
     scientificName: 'Anthurium',
-    // ASPCA "Flamingo Flower" (Anthurium scherzeranum): Toxic to Dogs, Toxic
-    // to Cats, Toxic to Horses. /toxic-and-non-toxic-plants/flamingo-flower
+    aspcaListing: {
+      title: 'Flamingo Flower',
+      scientificName: 'Anthurium scherzeranum',
+      path: '/toxic-and-non-toxic-plants/flamingo-flower',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     // Kept at genus level because the care guide covers A. andraeanum while
     // ASPCA lists A. scherzeranum; the insoluble-calcium-oxalate toxicity is
     // an Araceae family trait shared across the genus, so the verdict holds
@@ -286,8 +325,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'chinese-evergreen',
     commonName: 'Chinese evergreen',
     scientificName: 'Aglaonema',
-    // ASPCA "Chinese Evergreen" (Aglaonema modestum): Toxic to Dogs, Toxic to
-    // Cats, Toxic to Horses. /toxic-and-non-toxic-plants/chinese-evergreen
+    aspcaListing: {
+      title: 'Chinese Evergreen',
+      scientificName: 'Aglaonema modestum',
+      path: '/toxic-and-non-toxic-plants/chinese-evergreen',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['aglaonema', 'aglaonema modestum', 'silver queen'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -297,8 +340,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'english-ivy',
     commonName: 'English ivy',
     scientificName: 'Hedera helix',
-    // ASPCA "English Ivy" (Hedera helix): Toxic to Dogs, Toxic to Cats, Toxic
-    // to Horses. /toxic-and-non-toxic-plants/english-ivy
+    aspcaListing: {
+      title: 'English Ivy',
+      scientificName: 'Hedera helix',
+      path: '/toxic-and-non-toxic-plants/english-ivy',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     // The bare 'ivy' alias is safe here in a way a bare 'fern' or 'palm'
     // alias would not be: every ivy-named row in this table (this one and
     // pothos's "devil's ivy") is toxic, so an ambiguous "ivy" query cannot
@@ -323,8 +370,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'money-tree',
     commonName: 'Money tree',
     scientificName: 'Pachira aquatica',
-    // ASPCA "Money Tree" (Pachira aquatica): Non-Toxic to Dogs, Non-Toxic to
-    // Cats, Non-Toxic to Horses. /toxic-and-non-toxic-plants/money-tree
+    aspcaListing: {
+      title: 'Money Tree',
+      scientificName: 'Pachira aquatica',
+      path: '/toxic-and-non-toxic-plants/money-tree',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     //
     // ⚠️ DELIBERATELY NO 'money plant' ALIAS — this is the highest-stakes
     // alias trap in the table. ASPCA does list "Money Plant" as an additional
@@ -343,9 +394,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'christmas-cactus',
     commonName: 'Christmas cactus',
     scientificName: 'Schlumbergera',
-    // ASPCA "Christmas Cactus" (Schlumbergera bridgesii): Non-Toxic to Dogs,
-    // Non-Toxic to Cats, Non-Toxic to Horses.
-    // /toxic-and-non-toxic-plants/christmas-cactus
+    aspcaListing: {
+      title: 'Christmas Cactus',
+      scientificName: 'Schlumbergera bridgesii',
+      path: '/toxic-and-non-toxic-plants/christmas-cactus',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     // No bare 'christmas' alias: poinsettia (toxic) is the other Christmas
     // plant in this table and must not be out-ranked by a non-toxic row on a
     // generic seasonal query.
@@ -364,8 +418,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'parlor-palm',
     commonName: 'Parlor palm',
     scientificName: 'Chamaedorea elegans',
-    // ASPCA "Parlor Palm" (Chamaedorea elegans): Non-Toxic to Dogs, Non-Toxic
-    // to Cats. /toxic-and-non-toxic-plants/parlor-palm
+    aspcaListing: {
+      title: 'Parlor Palm',
+      scientificName: 'Chamaedorea elegans',
+      path: '/toxic-and-non-toxic-plants/parlor-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     //
     // ⚠️ DELIBERATELY NO BARE 'palm' ALIAS, for the same reason asparagus
     // fern carries no bare 'fern' alias — only far more serious. The sago
@@ -389,8 +447,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'hoya',
     commonName: 'Hoya',
     scientificName: 'Hoya carnosa',
-    // ASPCA "Wax Plant" (Hoya carnosa 'krinkle kurl'): Non-Toxic to Dogs,
-    // Non-Toxic to Cats. /toxic-and-non-toxic-plants/wax-plant
+    aspcaListing: {
+      title: 'Wax Plant',
+      scientificName: "Hoya carnosa 'krinkle kurl'",
+      path: '/toxic-and-non-toxic-plants/wax-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['hoya carnosa', 'wax plant', 'porcelain flower', 'hindu rope plant', 'hindu rope'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -400,9 +462,13 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'nerve-plant',
     commonName: 'Nerve plant',
     scientificName: 'Fittonia albivenis',
-    // ASPCA "Nerve Plant" (listed as Fittonia verschaffeltii, a synonym of
-    // the accepted F. albivenis): Non-Toxic to Dogs, Non-Toxic to Cats,
-    // Non-Toxic to Horses. /toxic-and-non-toxic-plants/nerve-plant
+    // Listed under Fittonia verschaffeltii, a synonym of the accepted F. albivenis.
+    aspcaListing: {
+      title: 'Nerve Plant',
+      scientificName: 'Fittonia verschaffeltii',
+      path: '/toxic-and-non-toxic-plants/nerve-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['fittonia', 'fittonia albivenis', 'fittonia verschaffeltii', 'mosaic plant'],
     cats: 'non-toxic',
     dogs: 'non-toxic',

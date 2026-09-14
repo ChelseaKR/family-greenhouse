@@ -122,4 +122,11 @@ await writeFile(
 const { checkPrerenderCoverage } = await import('./check-prerender-coverage.mjs');
 checkPrerenderCoverage();
 
+// Every /pet-safe/<slug> page says only what the curated pet-toxicity table
+// supports, and never calls a plant safe for an animal the table does not
+// positively record as safe, with its source. Runs on the files just written,
+// for the same reason as the coverage check above.
+const { checkPlantSafetyPages } = await import('./check-plant-safety-pages.mjs');
+checkPlantSafetyPages();
+
 console.log(`prerender: ${rendered} public routes + app-shell.html written to dist/`);

@@ -221,6 +221,9 @@ export const ROUTE_POLICY = {
   '/legal/privacy': 'web',
   '/legal/terms': 'web',
   '/pet-safe': 'web',
+  // One public page per plant in the curated pet-toxicity table. Content, found
+  // by search, read by people who do not have the app: never claimed.
+  '/pet-safe/:slug': 'web',
   '/pricing': 'web',
   '/status': 'web',
   '/support': 'web',

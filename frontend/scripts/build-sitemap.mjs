@@ -32,7 +32,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { FRONTEND_ROOT, SITE, publicRoutes } from './public-routes.mjs';
+import {
+  FRONTEND_ROOT,
+  SITE,
+  publicRoutes,
+  stalePlantPagesLedgerEntries,
+} from './public-routes.mjs';
 
 const OUT = join(FRONTEND_ROOT, 'public', 'sitemap.xml');
 
@@ -78,17 +83,46 @@ function buildSitemap() {
     '',
   ].join('\n');
 
-  return { xml, count: all.length, undated };
+  const unverified = all
+    .filter((route) => route.unverifiedLastmod)
+    .map((route) => `${route.path} (${route.unverifiedLastmod})`)
+    .concat(
+      stalePlantPagesLedgerEntries().map(
+        (slug) => `${slug} (dated in plant-pages-lastmod.json but has no published page)`
+      )
+    );
+
+  return { xml, count: all.length, undated, unverified };
+}
+
+/**
+ * The plant pages' `<lastmod>` is pinned to their content, and there is no
+ * honest fallback when the pin does not match: today's date would be the
+ * build date, and omitting the field would hide that the page changed. So,
+ * unlike `undated` above, this refuses in BOTH modes — `prebuild` included —
+ * and names the one command that re-dates exactly the pages that changed.
+ */
+function refuseUnverified(unverified) {
+  if (unverified.length === 0) return;
+  console.error(
+    `\n❌ sitemap: ${unverified.length} plant page lastmod(s) do not match their content:\n` +
+      unverified.map((u) => `   ${u}`).join('\n') +
+      `\n\nRe-date the pages whose content changed with:\n` +
+      `   npm run plant-pages:lastmod --workspace frontend\n`
+  );
+  process.exit(1);
 }
 
 function write() {
-  const { xml, count } = buildSitemap();
+  const { xml, count, unverified } = buildSitemap();
+  refuseUnverified(unverified);
   writeFileSync(OUT, xml);
   console.log(`Wrote sitemap with ${count} URLs to ${OUT}`);
 }
 
 function check() {
-  const { xml, count, undated } = buildSitemap();
+  const { xml, count, undated, unverified } = buildSitemap();
+  refuseUnverified(unverified);
 
   if (undated.length > 0) {
     console.error(

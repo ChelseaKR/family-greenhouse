@@ -40,12 +40,13 @@ import { runInNewContext } from 'node:vm';
 import { appRoutes, declaredRoutePaths, sampleUrlFor } from './app-routes.mjs';
 import {
   committedAppRoutes,
+  committedPrefixes,
   committedRoutes,
   expectedAppRoutes,
   mappedRoutes,
   renderedRouterSource,
 } from './build-spa-router.mjs';
-import { FRONTEND_ROOT } from './public-routes.mjs';
+import { FRONTEND_ROOT, PREFIX_SERVED_NAMESPACES } from './public-routes.mjs';
 import { publicRoutePaths } from './public-routes.mjs';
 
 const APP_SOURCE = join(FRONTEND_ROOT, 'src', 'App.tsx');
@@ -202,7 +203,7 @@ test('the enumerated content namespaces 404 for a slug that is not published', (
 // exactly the set React Router already resolved to its `*` route. Walk every
 // route App.tsx declares and require the function to reach the app for it.
 test('every route App.tsx declares still reaches the app', () => {
-  const { enumerated } = expectedAppRoutes();
+  const { enumerated, prefixServed } = expectedAppRoutes();
   for (const route of declaredRoutePaths()) {
     if (route === '*') continue;
     const url = sampleUrlFor(route);
@@ -214,6 +215,12 @@ test('every route App.tsx declares still reaches the app', () => {
       // Deliberately excluded: a sample slug under these does NOT exist, and
       // the published ones are asserted by the PRERENDERED test above.
       assert.equal(rewrite(url), url, `enumerated namespace ${route}`);
+      continue;
+    }
+    if (prefixServed.includes(route)) {
+      // Mapped onto the object it WOULD be; a sample slug has none, so S3
+      // answers 404. The published ones are asserted by the PRERENDERED test.
+      assert.equal(rewrite(url), `${url}/index.html`, `prefix-served namespace ${route}`);
       continue;
     }
     const expected = publicRoutePaths().includes(route) ? `${route}/index.html` : '/app-shell.html';
@@ -368,4 +375,70 @@ test('the function stays inside CloudFront’s 10 KB source limit', () => {
       'frontend/scripts/build-spa-router.mjs, neither of which has a size limit; ' +
       'after that, a leaner encoding for the PRERENDERED map.'
   );
+});
+
+// ---------------------------------------------------------------------------
+// Prefix-served namespaces: `/pet-safe/<slug>`, one page per plant in the
+// curated pet-toxicity table. Served by one `PREFIXED` rule, never by
+// `PRERENDERED` entries, because the function has a 10 KB ceiling and a
+// table-generated namespace would spend it page by page. The three tests below
+// are what hold that line: a per-plant entry in the map, or a generator that
+// starts emitting one, fails here rather than at `terraform apply`.
+// ---------------------------------------------------------------------------
+
+test('a prefix-served namespace maps one segment onto its object, published or not', () => {
+  const published = publicRoutePaths().filter((route) => route.startsWith('/pet-safe/'));
+  assert.ok(published.length > 0, 'no /pet-safe/<slug> page is published');
+  for (const route of published) {
+    assert.equal(rewrite(route), `${route}/index.html`, `published plant page ${route}`);
+  }
+
+  // Unpublished: mapped the same way. No object was written for it, so S3
+  // answers 404 — the function does not need to know which slugs exist.
+  assert.ok(!publicRoutePaths().includes('/pet-safe/not-a-real-plant'));
+  assert.equal(rewrite('/pet-safe/not-a-real-plant'), '/pet-safe/not-a-real-plant/index.html');
+
+  // Trailing slash and capitalisation reach the same object.
+  assert.equal(rewrite(`${published[0]}/`), `${published[0]}/index.html`);
+  assert.equal(rewrite(published[0].toUpperCase()), `${published[0]}/index.html`);
+
+  // Exactly one segment, never a file, never a lookalike prefix, never the hub.
+  assert.equal(rewrite(`${published[0]}/extra`), `${published[0]}/extra`);
+  assert.equal(rewrite('/pet-safe/og-image.png'), '/pet-safe/og-image.png');
+  assert.equal(rewrite('/pet-safe-ish/pothos'), '/pet-safe-ish/pothos');
+  assert.equal(rewrite('/pet-safe//'), '/pet-safe//');
+  assert.equal(rewrite('/pet-safe'), '/pet-safe/index.html');
+  assert.equal(rewrite('/pet-safe/'), '/pet-safe/index.html');
+});
+
+test('the committed PREFIXED list matches PREFIX_SERVED_NAMESPACES', () => {
+  assert.deepEqual(committedPrefixes(), PREFIX_SERVED_NAMESPACES);
+});
+
+test('no PRERENDERED key sits under a prefix-served namespace', () => {
+  const offenders = committedRoutes().filter((route) =>
+    PREFIX_SERVED_NAMESPACES.some((prefix) => route.startsWith(prefix))
+  );
+  assert.deepEqual(
+    offenders,
+    [],
+    'spa-router.js lists pages that the PREFIXED rule already serves. Each entry spends ~30 ' +
+      "bytes of CloudFront's 10 KB function limit per page for nothing; serve the namespace " +
+      'by prefix (build-spa-router.mjs) and leave it out of PRERENDERED.'
+  );
+});
+
+test('the function does not grow with the number of prefix-served pages', () => {
+  const paths = publicRoutePaths();
+  const synthetic = Array.from({ length: 500 }, (_, i) => `/pet-safe/synthetic-plant-${i}`);
+  const asPublished = renderedRouterSource(undefined, paths);
+  const with500More = renderedRouterSource(undefined, [...paths, ...synthetic]);
+  assert.equal(
+    Buffer.byteLength(with500More),
+    Buffer.byteLength(asPublished),
+    `adding 500 plant pages grew spa-router.js by ` +
+      `${Buffer.byteLength(with500More) - Buffer.byteLength(asPublished)} bytes; a prefix-served ` +
+      'page must cost the function nothing.'
+  );
+  assert.equal(with500More, asPublished);
 });

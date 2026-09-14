@@ -100,6 +100,10 @@ const BlogPost = lazyNamed(() => import('@/features/blog/BlogPost'), 'BlogPost')
 const CareIndex = lazyNamed(() => import('@/features/care/CareIndex'), 'CareIndex');
 const CareGuidePage = lazyNamed(() => import('@/features/care/CareGuidePage'), 'CareGuidePage');
 const PetSafePage = lazyNamed(() => import('@/features/petsafe/PetSafePage'), 'PetSafePage');
+const PetSafePlantPage = lazyNamed(
+  () => import('@/features/petsafe/PetSafePlantPage'),
+  'PetSafePlantPage'
+);
 const SitPage = lazyNamed(() => import('@/features/sitter/SitPage'), 'SitPage');
 const SitBriefPage = lazyNamed(() => import('@/features/sitter/SitBriefPage'), 'SitBriefPage');
 const KioskPage = lazyNamed(() => import('@/features/kiosk/KioskPage'), 'KioskPage');
@@ -215,6 +219,10 @@ function App() {
               <Route path="/care" element={<CareIndex />} />
               <Route path="/care/:slug" element={<CareGuidePage />} />
               <Route path="/pet-safe" element={<PetSafePage />} />
+              {/* One page per plant with a cited verdict in the curated pet-toxicity
+                  table. Served at the edge by prefix, not by route-map entry (see
+                  frontend/scripts/build-spa-router.mjs). */}
+              <Route path="/pet-safe/:slug" element={<PetSafePlantPage />} />
               {/* Public, no-account plant-sitting page — works logged-out (the
                   sitter endpoints have no auth; the token is the credential). */}
               <Route path="/sit/:token" element={<SitPage />} />

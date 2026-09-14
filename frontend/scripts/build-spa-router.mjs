@@ -75,7 +75,7 @@ import process from 'node:process';
 import { runInNewContext } from 'node:vm';
 
 import { appRoutes } from './app-routes.mjs';
-import { FRONTEND_ROOT, publicRoutePaths } from './public-routes.mjs';
+import { FRONTEND_ROOT, PREFIX_SERVED_NAMESPACES, publicRoutePaths } from './public-routes.mjs';
 
 export const ROUTER = join(
   FRONTEND_ROOT,
@@ -94,12 +94,63 @@ const APP_BEGIN =
   '// --- generated from App.tsx: do not edit by hand -----------------------------';
 const APP_END = '// --- end generated App.tsx ---------------------------------------------------';
 
+/** The prefix a route sits under, or undefined. */
+function prefixOf(route, prefixes = PREFIX_SERVED_NAMESPACES) {
+  return prefixes.find((prefix) => route.startsWith(prefix));
+}
+
+/**
+ * The public routes the function serves by PREFIX rather than by map entry
+ * (`PREFIX_SERVED_NAMESPACES`, public-routes.mjs).
+ *
+ * ## Why a prefix rule, and why it stays honest (the per-plant pages)
+ *
+ * `/pet-safe/<slug>` is one page per plant in the curated pet-toxicity table.
+ * Listing each in `PRERENDERED` would cost ~30 bytes a page against the 10 KB
+ * CloudFront source limit — the same budget every future blog post and care
+ * guide draws on. So the function carries the prefix once (`PREFIXED`) and
+ * maps ANY single segment under it onto `<path>/index.html`, lower-cased as
+ * React Router matches. It does not need to know which slugs exist: the
+ * prerender writes an object only for a published page, the frontend bucket
+ * grants `s3:ListBucket`, and a missing object is therefore a 404 — exactly
+ * what #719 wants for `/pet-safe/no-such-plant`. The function's size is the
+ * same for one plant page or five hundred, and `spa-router.test.mjs` asserts
+ * that by generating it both ways.
+ *
+ * THROWS for a route the edge rule cannot serve: more than one segment below
+ * its prefix, an empty segment, a dot (the function leaves dotted paths to
+ * S3 as files), or upper case (the rule lower-cases before mapping).
+ */
+export function prefixServedRoutes(
+  paths = publicRoutePaths(),
+  prefixes = PREFIX_SERVED_NAMESPACES
+) {
+  const bad = prefixes.filter((prefix) => !/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/.test(prefix));
+  if (bad.length > 0) {
+    throw new Error(`PREFIX_SERVED_NAMESPACES entries must look like "/name/": ${bad.join(', ')}`);
+  }
+  const served = paths.filter((route) => prefixOf(route, prefixes) !== undefined);
+  const unservable = served.filter((route) => {
+    const rest = route.slice(prefixOf(route, prefixes).length);
+    return rest === '' || /[/.]/.test(rest) || rest !== rest.toLowerCase();
+  });
+  if (unservable.length > 0) {
+    throw new Error(
+      `spa-router: ${unservable.join(', ')} cannot be served by the prefix rule — it maps exactly ` +
+        'one lower-case, dot-free segment under a PREFIX_SERVED_NAMESPACES prefix.'
+    );
+  }
+  return served;
+}
+
 /**
  * The routes the function needs a map entry for: every public route except
- * `/`, which the function resolves directly to `/index.html`.
+ * `/`, which the function resolves directly to `/index.html`, and the routes
+ * a prefix rule serves (see `prefixServedRoutes`).
  */
-export function mappedRoutes() {
-  return publicRoutePaths().filter((route) => route !== '/');
+export function mappedRoutes(paths = publicRoutePaths(), prefixes = PREFIX_SERVED_NAMESPACES) {
+  prefixServedRoutes(paths, prefixes);
+  return paths.filter((route) => route !== '/' && prefixOf(route, prefixes) === undefined);
 }
 
 /**
@@ -116,6 +167,16 @@ export function committedRoutes(source = readFileSync(ROUTER, 'utf8')) {
     throw new Error('spa-router.js does not define a PRERENDERED object');
   }
   return Object.keys(map);
+}
+
+/** The prefixes the committed function actually serves, read by evaluating it. */
+export function committedPrefixes(source = readFileSync(ROUTER, 'utf8')) {
+  const sandbox = {};
+  runInNewContext(source, sandbox, { filename: 'spa-router.js' });
+  if (typeof sandbox.PREFIXED !== 'string') {
+    throw new Error('spa-router.js does not define a PREFIXED string');
+  }
+  return sandbox.PREFIXED === '' ? [] : sandbox.PREFIXED.split(' ');
 }
 
 /**
@@ -135,14 +196,14 @@ export function committedAppRoutes(source = readFileSync(ROUTER, 'utf8')) {
 }
 
 /** What App.tsx says the app routes are, minus what PRERENDERED already covers. */
-export function expectedAppRoutes() {
-  return appRoutes(publicRoutePaths());
+export function expectedAppRoutes(paths = publicRoutePaths()) {
+  return appRoutes(paths);
 }
 
 /** The generated block, formatted the way Prettier formats it. */
-function generatedBlock(routes) {
+function generatedBlock(routes, prefixes) {
   const entries = routes.map((route) => `  '${route}': 1,`).join('\n');
-  return `${BEGIN}\nvar PRERENDERED = {\n${entries}\n};\n${END}`;
+  return `${BEGIN}\nvar PRERENDERED = {\n${entries}\n};\nvar PREFIXED = '${prefixes.join(' ')}';\n${END}`;
 }
 
 /**
@@ -179,14 +240,20 @@ function spliceBlock(source, begin, end, block) {
   return source.slice(0, start) + block + source.slice(stop + end.length);
 }
 
-function replaceBlock(source, routes, app) {
-  const withRoutes = spliceBlock(source, BEGIN, END, generatedBlock(routes));
+function replaceBlock(source, routes, app, prefixes = PREFIX_SERVED_NAMESPACES) {
+  const withRoutes = spliceBlock(source, BEGIN, END, generatedBlock(routes, prefixes));
   return spliceBlock(withRoutes, APP_BEGIN, APP_END, generatedAppBlock(app));
 }
 
-/** Exactly what `write()` would put on disk, without writing it. */
-export function renderedRouterSource(source = readFileSync(ROUTER, 'utf8')) {
-  return replaceBlock(source, mappedRoutes(), expectedAppRoutes());
+/**
+ * Exactly what `write()` would put on disk, without writing it. `paths` is
+ * injectable so a test can ask what the function would be with more pages.
+ */
+export function renderedRouterSource(
+  source = readFileSync(ROUTER, 'utf8'),
+  paths = publicRoutePaths()
+) {
+  return replaceBlock(source, mappedRoutes(paths), expectedAppRoutes(paths));
 }
 
 function reportDrift(label, expected, actual, consequence) {
@@ -213,6 +280,13 @@ function check() {
         'and then served as the empty SPA shell — the failure ADR 0013 exists to prevent.'
     ),
     reportDrift(
+      'the CloudFront function disagrees with PREFIX_SERVED_NAMESPACES.',
+      PREFIX_SERVED_NAMESPACES,
+      committedPrefixes(),
+      'A prefix missing here is prerendered and advertised in the sitemap, and then every\n' +
+        'page under it answers 404 in production.'
+    ),
+    reportDrift(
       'the CloudFront function disagrees with App.tsx (exact routes).',
       expectedApp.exact,
       actualApp.exact,
@@ -234,7 +308,8 @@ function check() {
   }
 
   console.log(
-    `spa-router:check OK — ${committedRoutes().length} prerendered routes match ` +
+    `spa-router:check OK — ${committedRoutes().length} prerendered routes and ` +
+      `${committedPrefixes().length} prefix (${prefixServedRoutes().length} pages) match ` +
       `public-routes, and ${actualApp.exact.length} exact + ${actualApp.patterns.length} ` +
       'parameterised app routes match App.tsx.'
   );
@@ -244,7 +319,7 @@ function write() {
   const routes = mappedRoutes();
   const app = expectedAppRoutes();
   const source = readFileSync(ROUTER, 'utf8');
-  const next = replaceBlock(source, routes, app);
+  const next = replaceBlock(source, routes, app, PREFIX_SERVED_NAMESPACES);
   const counts = `${routes.length} prerendered + ${app.exact.length}/${app.patterns.length} app`;
   if (next === source) {
     console.log(`spa-router: already up to date (${counts} routes).`);
