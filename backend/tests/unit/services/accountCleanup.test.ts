@@ -28,6 +28,9 @@ vi.mock('../../../src/services/billing.js', () => ({
 vi.mock('../../../src/services/plantTagService.js', () => ({ revokeTagsCreatedBy: vi.fn() }));
 vi.mock('../../../src/services/sitterService.js', () => ({ revokeSitterLinksCreatedBy: vi.fn() }));
 vi.mock('../../../src/services/kioskService.js', () => ({ revokeKioskLinksCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/plantService.js', () => ({
+  revokePlantSharesCreatedBy: vi.fn(),
+}));
 
 describe('account cleanup', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -207,7 +210,7 @@ describe('account cleanup', () => {
     ]);
   });
 
-  it('deletes sitter + kiosk + caretaker credentials, plant tags, and every abandoned-household partition row', async () => {
+  it('deletes sitter + kiosk + caretaker credentials, plant tags, cutting shares, and every abandoned-household partition row', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
       const command = raw as unknown as {
@@ -228,7 +231,9 @@ describe('account cleanup', () => {
                 ? [{ PK: 'PLANTTAG#secret', SK: 'METADATA' }]
                 : pk === 'HOUSEHOLD#hh#CARETAKER'
                   ? [{ PK: 'CARETAKER#secret', SK: 'METADATA' }]
-                  : [{ PK: 'SITTER#secret', SK: 'METADATA' }],
+                  : pk === 'HOUSEHOLD#hh#SHARE'
+                    ? [{ PK: 'SHARE#secret', SK: 'METADATA' }]
+                    : [{ PK: 'SITTER#secret', SK: 'METADATA' }],
         } as never;
       }
       if (pk === 'HOUSEHOLD#hh#ACTIVITY') {
@@ -266,11 +271,13 @@ describe('account cleanup', () => {
           };
         }
     );
-    // Seven partitions: sitter links, the kiosk link, caretaker seats,
-    // caretaker visits, plant tags, activity, and the base household
-    // partition. Credentials that live outside the household's own partition
-    // are exactly the rows a partition-only sweep would leave usable.
-    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(7);
+    // Eight partitions: sitter links, the kiosk link, caretaker seats,
+    // caretaker visits, plant tags, public cutting shares, activity, and the
+    // base household partition. Credentials that live outside the household's
+    // own partition are exactly the rows a partition-only sweep would leave
+    // usable — and the cutting share is the one of them that needs no
+    // credential to open.
+    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(8);
     expect(
       commands.filter((command) => command.kind === 'Delete').map((command) => command.input.Key)
     ).toEqual(
@@ -279,6 +286,7 @@ describe('account cleanup', () => {
         { PK: 'KIOSK#secret', SK: 'METADATA' },
         { PK: 'PLANTTAG#secret', SK: 'METADATA' },
         { PK: 'CARETAKER#secret', SK: 'METADATA' },
+        { PK: 'SHARE#secret', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh#CARETAKER_VISIT', SK: 'VISIT#1' },
         { PK: 'HOUSEHOLD#hh#ACTIVITY', SK: 'EVENT#1' },
         { PK: 'HOUSEHOLD#hh', SK: 'METADATA' },
@@ -442,28 +450,36 @@ describe('revokeCredentialsCreatedBy', () => {
     const plantTagService = await import('../../../src/services/plantTagService.js');
     const sitterService = await import('../../../src/services/sitterService.js');
     const kioskService = await import('../../../src/services/kioskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(plantTagService.revokeTagsCreatedBy).mockResolvedValue(3);
     vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(1);
     vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(1);
+    vi.mocked(plantService.revokePlantSharesCreatedBy).mockResolvedValue(2);
 
     const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
     await expect(revokeCredentialsCreatedBy('hh', 'u1')).resolves.toEqual({
       plantTags: 3,
       sitterLinks: 1,
       kioskLinks: 1,
+      // The public one. A cutting link needs no credential at all, so a
+      // departure that left it live left the widest door of the four open.
+      cuttingShares: 2,
     });
     expect(plantTagService.revokeTagsCreatedBy).toHaveBeenCalledWith('hh', 'u1');
     expect(sitterService.revokeSitterLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
     expect(kioskService.revokeKioskLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
+    expect(plantService.revokePlantSharesCreatedBy).toHaveBeenCalledWith('hh', 'u1');
   });
 
   it('propagates a failure rather than reporting a partial revocation as done', async () => {
     const plantTagService = await import('../../../src/services/plantTagService.js');
     const sitterService = await import('../../../src/services/sitterService.js');
     const kioskService = await import('../../../src/services/kioskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(plantTagService.revokeTagsCreatedBy).mockRejectedValue(new Error('ddb throttled'));
     vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(0);
     vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(0);
+    vi.mocked(plantService.revokePlantSharesCreatedBy).mockResolvedValue(0);
 
     const { revokeCredentialsCreatedBy } = await import('../../../src/services/accountCleanup.js');
     await expect(revokeCredentialsCreatedBy('hh', 'u1')).rejects.toThrow('ddb throttled');

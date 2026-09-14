@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { LockedFeature } from '@/components/LockedFeature';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { tripLengthDays } from './localDates';
 
 /**
@@ -76,7 +76,7 @@ export function TripSitterOffer({ householdId, startDate, endDate }: TripSitterO
 
   const plan =
     plansQuery.data && subscriptionQuery.data
-      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      ? plansQuery.data.plans.find((p) => p.id === effectivePlanId(subscriptionQuery.data))
       : undefined;
   const capDays = plan?.limits?.sitterLinkMaxDays;
   const overCap = typeof capDays === 'number' && tripDays > capDays;

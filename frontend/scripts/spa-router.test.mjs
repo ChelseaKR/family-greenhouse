@@ -67,6 +67,48 @@ const { handler } = sandbox;
 
 const rewrite = (uri) => handler({ request: { uri } }).uri;
 
+/** Run the function as CloudFront does, with a Host header and a querystring. */
+const respond = (host, uri, querystring = {}) =>
+  handler({ request: { uri, headers: { host: { value: host } }, querystring } });
+
+// Rule 0. `www.` and the apex both resolve to this distribution, so without a
+// redirect both answered 200 and Google indexed the site twice — on 2026-09-11
+// seven paths were indexed only under `www.` and fifteen only under the apex,
+// none on both. The pages' self-canonical did not prevent it.
+test('www is redirected to the apex, permanently', () => {
+  const res = respond('www.familygreenhouse.net', '/care/zz-plant');
+  assert.equal(res.statusCode, 301);
+  assert.equal(res.headers.location.value, 'https://familygreenhouse.net/care/zz-plant');
+});
+
+test('the redirect preserves the path and the querystring', () => {
+  const res = respond('www.familygreenhouse.net', '/pricing', {
+    ref: { value: 'abc' },
+    flag: { value: '' },
+  });
+  assert.equal(res.headers.location.value, 'https://familygreenhouse.net/pricing?ref=abc&flag');
+});
+
+test('the redirect happens before any rewriting, so it covers every path', () => {
+  // /assets/* is rule 1's untouched passthrough and would otherwise never be
+  // reached by a later rule; a duplicate host has to be settled first.
+  for (const uri of ['/assets/app.js', '/', '/care/zz-plant', '/nope']) {
+    assert.equal(respond('www.familygreenhouse.net', uri).statusCode, 301, uri);
+  }
+});
+
+test('the apex is never redirected', () => {
+  for (const uri of ['/', '/care/zz-plant', '/assets/app.js']) {
+    assert.equal(respond('familygreenhouse.net', uri).statusCode, undefined, uri);
+  }
+});
+
+test('a request with no Host header still routes rather than throwing', () => {
+  // CloudFront always sends one; the fixtures in this file do not, and a
+  // throw here would be a 503 on every request.
+  assert.equal(handler({ request: { uri: '/care/zz-plant' } }).uri, '/care/zz-plant/index.html');
+});
+
 test('the bare root resolves to the prerendered homepage', () => {
   assert.equal(rewrite('/'), '/index.html');
 });

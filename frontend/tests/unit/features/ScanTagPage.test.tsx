@@ -55,7 +55,6 @@ function view(overrides: Partial<TagView> = {}): TagView {
   return {
     plantName: 'Monstera',
     species: 'Monstera deliciosa',
-    imageUrl: null,
     careNote: 'We bottom-water this one.',
     careNoteSource: 'rule',
     history: {

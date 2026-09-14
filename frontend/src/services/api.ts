@@ -89,6 +89,16 @@ api.interceptors.request.use(
 // Resolves with the bearer token to retry with; rejects if the refresh failed.
 let refreshPromise: Promise<string> | null = null;
 
+/**
+ * Did the server answer, and refuse? An axios error carries a `response`
+ * only when one arrived; a request error (no `response`) is a network
+ * failure. Anything that is not an axios error at all is a bug in our own
+ * code rather than a verdict on the session, so it is not a refusal either.
+ */
+function refreshWasRefused(error: unknown): boolean {
+  return axios.isAxiosError(error) && Boolean(error.response);
+}
+
 function startRefresh(refreshToken: string): Promise<string> {
   return axios
     .post(`${API_URL}/auth/refresh`, { refreshToken })
@@ -99,10 +109,16 @@ function startRefresh(refreshToken: string): Promise<string> {
       // that only carry an access token, mirroring the request interceptor.
       return (idToken ?? accessToken) as string;
     })
-    .catch((refreshError) => {
+    .catch((refreshError: unknown) => {
       // Fires once, here, no matter how many requests are waiting.
       // Silently logout - don't force redirect, let ProtectedRoute handle it.
-      useAuthStore.getState().logout();
+      //
+      // But only when the server actually refused. A refresh that never got
+      // an answer — offline, DNS, a dropped connection, a timeout — says
+      // nothing about whether this session is still good, and treating it as
+      // a refusal threw the user out of the app for the duration of a tunnel.
+      // The session stays; the next answered 401 still ends it.
+      if (refreshWasRefused(refreshError)) useAuthStore.getState().logout();
       throw refreshError;
     })
     .finally(() => {

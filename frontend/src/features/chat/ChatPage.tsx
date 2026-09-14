@@ -18,7 +18,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { ProposalCard } from './ProposalCard';
 import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
 import { ReportResponseControl } from './ReportResponseControl';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { Alert } from '@/components/Alert';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -58,8 +58,10 @@ export function ChatPage() {
     enabled: Boolean(householdId),
     staleTime: 60_000,
   });
-  const chatAvailable =
-    subscriptionQuery.data?.planId === 'garden' || subscriptionQuery.data?.planId === 'greenhouse';
+  // The tier whose features apply now, so a no-card Garden trial counts; not
+  // merely the plan on file (ADR 0027).
+  const chatPlanId = effectivePlanId(subscriptionQuery.data);
+  const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
 
   // Per-household, per-tab conversation continuity: remember the thread id in
   // sessionStorage and replay its history (including proposal cards) on

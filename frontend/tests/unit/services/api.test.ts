@@ -248,3 +248,35 @@ describe('getErrorMessage', () => {
     });
   });
 });
+
+/**
+ * The same distinction one layer up: the axios interceptor's refresh.
+ * A refusal ends the session (the test above). A refresh that never got an
+ * answer must not — that is what logged people out mid-tunnel, and what
+ * emptied the stored session on an offline reload of the installed app.
+ */
+describe('refresh that never reached the server', () => {
+  it('keeps the session when the refresh fails with a network error', async () => {
+    useAuthStore.setState({
+      idToken: 'expired-id',
+      accessToken: 'expired',
+      refreshToken: 'good-refresh',
+      isAuthenticated: true,
+      user: { id: 'u', email: 'someone@example.invalid', name: 'n' },
+    } as never);
+
+    server.use(
+      http.get(`${API}/plants`, () =>
+        HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      ),
+      http.post(`${API}/auth/refresh`, () => HttpResponse.error())
+    );
+
+    await expect(api.get('/plants')).rejects.toBeDefined();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.refreshToken).toBe('good-refresh');
+    expect(state.idToken).toBe('expired-id');
+  });
+});
