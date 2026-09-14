@@ -1231,4 +1231,20 @@ describe('returning from a subscription checkout before the webhook lands', () =
       screen.getByText(/credits will show here as soon as the payment is confirmed/i)
     ).toBeInTheDocument();
   });
+
+  it('leaves the gift return to its own notice, not the plan-checkout one', async () => {
+    // A gift checkout buys a code for someone ELSE's household. The purchaser's
+    // own plan never changes, so `returnedFromPlanCheckout` — and the "Payment
+    // received — finishing up" / "Buying again would charge you twice" copy
+    // that goes with it — must not fire here just because `status=success` and
+    // it is not a top-up.
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true },
+      { paid: true, route: '/settings/billing?status=success&purchase=gift' }
+    );
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Buying again would charge you twice/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+  });
 });

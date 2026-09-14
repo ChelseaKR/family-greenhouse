@@ -101,6 +101,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Gift subscriptions (ADR 0028).** Any signed-in member can pay once, on
+  their own card, for 1–12 months of Garden or Greenhouse for another
+  household — priced at the monthly rate times the months, no discount — and
+  gets a code in Settings → Billing to pass on. A household admin redeems the
+  code there; the gift runs from that day, ends on the clock with nothing
+  deleted, and is metered exactly as the paid tier. A code stays valid for a
+  year, is consumed only when a household actually receives the gift, and is
+  refused (unspent) on a household with a running subscription, a running
+  gift, or a lifetime tier at or above it. `POST /billing/gift/checkout`,
+  `POST /billing/gift/redeem`, `GET /billing/gift/purchases`; `gift` on
+  `GET /billing/me`; `giftSubscriptions` on `GET /billing/plans`. Nothing is
+  for sale until the owner creates the two one-time Stripe prices and sets
+  `stripe_price_id_gift_garden_month` / `stripe_price_id_gift_greenhouse_month`.
 - **A sign-up that never confirmed its email now gets one reminder, and only
   one.** A self-service account starts `UNCONFIRMED` and receives one code that
   is valid for 24 hours. Cognito never expires or deletes such an account: it

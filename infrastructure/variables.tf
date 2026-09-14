@@ -535,6 +535,18 @@ variable "stripe_price_id_identify_top_up" {
   default     = ""
 }
 
+variable "stripe_price_id_gift_garden_month" {
+  description = "Stripe ONE-TIME price ID for ONE gift month of Garden ($4.99, the monthly price; ADR 0028). Charged with quantity = months. Optional: blank means Garden cannot be given as a gift and POST /billing/gift/checkout answers 400 GIFT_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_gift_greenhouse_month" {
+  description = "Stripe ONE-TIME price ID for ONE gift month of Greenhouse ($9.99, the monthly price; ADR 0028). Charged with quantity = months. Optional: blank means Greenhouse cannot be given as a gift and POST /billing/gift/checkout answers 400 GIFT_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+  default     = ""
+}
+
 variable "stripe_automatic_tax_enabled" {
   description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured."
   type        = string

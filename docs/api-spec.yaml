@@ -2286,6 +2286,100 @@ paths:
           }
         '403': { description: Admin-only }
         '503': { description: Payments paused }
+  /billing/gift/checkout:
+    post:
+      summary: Start a one-time Stripe checkout for a gift subscription (any signed-in member)
+      description: >-
+        Sells `months` (1–12) of a paid tier for somebody else (ADR 0028), priced at the tier's
+        monthly price times the months with no discount, charged to the caller's own card. The
+        Session carries no household: the buyer's household is neither granted nor receipted. The
+        Stripe webhook creates the gift and its code, idempotently on the Checkout Session id; the
+        code is then listed by GET /billing/gift/purchases. Fails CLOSED: when no Stripe price is
+        configured for that tier's gift month the answer is a 400 whose `details.code` is
+        `GIFT_NOT_CONFIGURED` — never a fallback price, never a free gift.
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId, months]
+              properties:
+                planId: { type: string, enum: [garden, greenhouse] }
+                months: { type: integer, minimum: 1, maximum: 12 }
+                checkoutAttemptId:
+                  type: string
+                  format: uuid
+                  description: Generated once per click; forwarded as Stripe's idempotency key.
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400':
+          {
+            description: Tier cannot be given in this environment (`details.code` = GIFT_NOT_CONFIGURED) or months out of range (GIFT_MONTHS_INVALID),
+          }
+        '503': { description: Payments paused }
+  /billing/gift/redeem:
+    post:
+      summary: Redeem a gift code onto the active household (admin only)
+      description: >-
+        Places the gift on the household: `giftPlanId` / `giftEndsAt` on its METADATA row, read by
+        entitlement on every request and ending on the clock (ADR 0028). The code is consumed only in
+        the same transaction that places the gift. Every refusal leaves the code unspent and carries
+        `details.code`: `GIFT_CODE_INVALID` / `GIFT_CODE_EXPIRED` (400); `GIFT_CODE_REDEEMED`,
+        `GIFT_HOUSEHOLD_SUBSCRIBED` (a live Stripe subscription is on file), `GIFT_ALREADY_ACTIVE`
+        (with `details.endsAt`), `GIFT_ADDS_NOTHING` (a lifetime tier at or above the gift), or
+        `GIFT_REDEEM_CONFLICT` (409). Rate-limited per IP and per user; the code is never logged.
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  {
+                    type: string,
+                    maxLength: 64,
+                    description: 'Case, spaces and dashes are ignored.',
+                  }
+      responses:
+        '200':
+          description: The gift now running on the household
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [planId, endsAt]
+                properties:
+                  planId: { type: string, enum: [garden, greenhouse] }
+                  endsAt: { type: string, format: date-time }
+        '400': { description: Code not valid or past its redeem-by date }
+        '403': { description: Admin-only }
+        '409': { description: The household cannot take this gift right now; the code is unspent }
+        '429': { description: Rate limited }
+  /billing/gift/purchases:
+    get:
+      summary: The gifts this account has bought, with their codes
+      description: >-
+        The caller's own purchases only, newest first. A failed read is a 502, never an empty list;
+        a gift whose status could not be read is listed with `status: unknown`.
+      tags: [Billing]
+      responses:
+        '200':
+          description: The caller's gift purchases
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchases]
+                properties:
+                  purchases:
+                    type: array
+                    items: { $ref: '#/components/schemas/GiftPurchase' }
+        '502': { description: Purchases could not be read }
   /billing/portal:
     post:
       summary: Open the Stripe customer portal for plan management
@@ -2859,6 +2953,37 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/IdentifyCreditBalance'
+
+    GiftPurchase:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          stripeSessionId,
+          code,
+          planId,
+          months,
+          purchasedAt,
+          redeemBy,
+          status,
+          redeemedAt,
+          giftEndsAt,
+        ]
+      properties:
+        stripeSessionId: { type: string }
+        code:
+          type: string
+          description: 'Display form, `FG-XXXX-XXXX-XXXX-XXXX`. Shown only to the buying account.'
+        planId: { type: string, enum: [garden, greenhouse] }
+        months: { type: integer, minimum: 1, maximum: 12 }
+        purchasedAt: { type: string, format: date-time }
+        redeemBy: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [unredeemed, redeemed, expired, unknown]
+          description: '`unknown` means the gift row could not be read; the code is still shown.'
+        redeemedAt: { type: [string, 'null'], format: date-time }
+        giftEndsAt: { type: [string, 'null'], format: date-time }
 
     IdentifyCreditBalance:
       type: object

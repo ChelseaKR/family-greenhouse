@@ -446,10 +446,15 @@ locals {
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
     STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
-    STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
-    PAYMENTS_ENABLED                  = var.payments_enabled
-    POSTHOG_KEY                       = var.posthog_key
-    POSTHOG_HOST                      = var.posthog_host
+    # Gift subscriptions (ADR 0028): ONE-TIME prices for one gift month of each
+    # paid tier, charged with quantity = months. Blank = that tier cannot be
+    # given here; checkout answers 400 GIFT_NOT_CONFIGURED.
+    STRIPE_PRICE_ID_GIFT_GARDEN_MONTH     = var.stripe_price_id_gift_garden_month
+    STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH = var.stripe_price_id_gift_greenhouse_month
+    STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
+    PAYMENTS_ENABLED                      = var.payments_enabled
+    POSTHOG_KEY                           = var.posthog_key
+    POSTHOG_HOST                          = var.posthog_host
   }
 
   email_environment = {
@@ -1146,6 +1151,9 @@ locals {
     "GET /billing/me"               = { group = "billing", auth = "jwt" }
     "POST /billing/checkout"        = { group = "billing", auth = "jwt" }
     "POST /billing/top-up/checkout" = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/checkout"   = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/redeem"     = { group = "billing", auth = "jwt" }
+    "GET /billing/gift/purchases"   = { group = "billing", auth = "jwt" }
     "POST /billing/portal"          = { group = "billing", auth = "jwt" }
     "POST /billing/webhook"         = { group = "billing", auth = "none" }
 
