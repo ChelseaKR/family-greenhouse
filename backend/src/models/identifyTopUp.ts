@@ -60,7 +60,14 @@ export function isIdentifyTopUpConfigured(): boolean {
 }
 
 export interface IdentifyTopUpSummary {
-  /** True only when payments are on AND a Stripe price is configured. */
+  /**
+   * True only when payments are on, a Stripe price is configured, AND the
+   * identification vendor itself is configured in the process answering.
+   * Credits nobody can spend are not for sale: with `PLANT_ID_API_KEY`
+   * absent, `POST /plants/identify` answers "not configured" and consumes
+   * nothing, so a pack bought in that state is $1.99 for twenty
+   * identifications that cannot be made.
+   */
   available: boolean;
   credits: number;
   validityDays: number;
@@ -72,10 +79,23 @@ export interface IdentifyTopUpSummary {
 /**
  * Client-facing projection of the offer. Mirrors `planSummary`'s contract:
  * amounts appear only once the caller has proved payments are available.
+ *
+ * `identificationConfigured` is an argument rather than a read of
+ * `PLANT_ID_API_KEY` here for two reasons. This module is pure and shared
+ * (the webhook and the dev server import it), and the variable's owner is
+ * `services/plantIdentification.isPlantIdentificationConfigured` — one
+ * authority, passed in. And the answer is per-PROCESS: the Lambda that
+ * publishes this offer is not the Lambda that identifies plants, and it can
+ * only vouch for the key it was given. A caller that has not been given it
+ * says so, and the offer reads as unavailable — never as available on the
+ * assumption that some other process has it.
  */
-export function identifyTopUpSummary(paymentsAvailable: boolean): IdentifyTopUpSummary {
+export function identifyTopUpSummary(
+  paymentsAvailable: boolean,
+  identificationConfigured: boolean
+): IdentifyTopUpSummary {
   const summary: IdentifyTopUpSummary = {
-    available: paymentsAvailable && isIdentifyTopUpConfigured(),
+    available: paymentsAvailable && isIdentifyTopUpConfigured() && identificationConfigured,
     credits: IDENTIFY_TOP_UP_PACK.credits,
     validityDays: IDENTIFY_TOP_UP_PACK.validityDays,
   };

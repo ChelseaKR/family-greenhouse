@@ -1044,6 +1044,170 @@ describe('recordStripeEventOnce / applyStripeEvent idempotency', () => {
   });
 });
 
+describe('applyStripeEvent — the pending-checkout marker is released by what Stripe reports', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+  });
+
+  type Sent = { kind: string; input: Record<string, any> };
+  const sentCalls = async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    return vi.mocked(dynamodb.send).mock.calls.map((c) => c[0] as unknown as Sent);
+  };
+  const conditionErr = () =>
+    Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' });
+
+  const expiredEvent = (object: Record<string, unknown>) =>
+    ({
+      id: 'evt_expired',
+      created: 1_700_000_000,
+      type: 'checkout.session.expired',
+      data: { object: { status: 'expired', ...object } },
+    }) as unknown as Stripe.Event;
+
+  it('a settled subscription checkout clears the marker in the SAME write that records the subscription', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_settled',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_pending',
+          mode: 'subscription',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          customer: 'cus_1',
+          subscription: 'sub_new',
+        },
+      },
+    } as unknown as Stripe.Event);
+    const apply = (await sentCalls())[0];
+    expect(apply.kind).toBe('Update');
+    // One write: the subscription id lands and the hold lifts together, so
+    // there is no moment at which the row says neither.
+    expect(apply.input.UpdateExpression).toContain('#stripeSubscriptionId = :stripeSubscriptionId');
+    expect(apply.input.UpdateExpression).toMatch(/REMOVE .*#pendingCheckoutSessionId/);
+    expect(apply.input.UpdateExpression).toMatch(/REMOVE .*#pendingCheckoutAt/);
+    expect(apply.input.ExpressionAttributeNames['#pendingCheckoutSessionId']).toBe(
+      'pendingCheckoutSessionId'
+    );
+    expect(apply.input.ExpressionAttributeNames['#pendingCheckoutAt']).toBe('pendingCheckoutAt');
+    // Still under the out-of-order guard every entitlement write carries.
+    expect(apply.input.ConditionExpression).toContain('lastStripeEventCreated');
+  });
+
+  it('a paid lifetime checkout clears it too, beside the subscription ids it already clears', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_lifetime_settled',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_lifetime',
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'lifetime' },
+          customer: 'cus_1',
+        },
+      },
+    } as unknown as Stripe.Event);
+    const apply = (await sentCalls()).find((c) =>
+      c.input.UpdateExpression?.includes('#planId = :planId')
+    );
+    expect(apply).toBeDefined();
+    expect(apply!.input.UpdateExpression).toContain('REMOVE #stripeSubscriptionId');
+    expect(apply!.input.UpdateExpression).toMatch(/REMOVE .*#pendingCheckoutSessionId/);
+    expect(apply!.input.UpdateExpression).toMatch(/REMOVE .*#pendingCheckoutAt/);
+  });
+
+  it('an unsettled completion leaves the marker alone — nothing was recorded, and the hold lapses on its own', async () => {
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent({
+      id: 'evt_unpaid',
+      created: 1_700_000_000,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_pending',
+          mode: 'subscription',
+          payment_status: 'unpaid',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+          customer: 'cus_1',
+          subscription: 'sub_incomplete',
+        },
+      },
+    } as unknown as Stripe.Event);
+    expect(await sentCalls()).toHaveLength(0);
+  });
+
+  it('checkout.session.expired releases the marker for THAT Session only, and grants nothing', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      expiredEvent({
+        id: 'cs_abandoned',
+        mode: 'subscription',
+        metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+        client_reference_id: 'hh-1',
+      })
+    );
+    const calls = await sentCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].kind).toBe('Update');
+    expect(calls[0].input.Key).toEqual({ PK: 'HOUSEHOLD#hh-1', SK: 'METADATA' });
+    expect(calls[0].input.UpdateExpression).toBe(
+      'REMOVE #pendingCheckoutSessionId, #pendingCheckoutAt'
+    );
+    // Named, never "whatever is pending": a late or redelivered expiry must
+    // not release the hold a newer Session holds.
+    expect(calls[0].input.ConditionExpression).toBe('#pendingCheckoutSessionId = :id');
+    expect(calls[0].input.ExpressionAttributeValues).toEqual({ ':id': 'cs_abandoned' });
+    // No ledger row, no entitlement write, no conversion.
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('an expiry for a Session that is no longer the pending one is a silent no-op', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(conditionErr());
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(
+      applyStripeEvent(
+        expiredEvent({
+          id: 'cs_older',
+          mode: 'subscription',
+          metadata: { householdId: 'hh-1', planId: 'garden', interval: 'month' },
+        })
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('an expiry for a top-up Session touches nothing — a pack holds no marker', async () => {
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(
+      expiredEvent({
+        id: 'cs_topup',
+        mode: 'payment',
+        metadata: { householdId: 'hh-1', purchase: 'identify_top_up', credits: '20' },
+      })
+    );
+    expect(await sentCalls()).toHaveLength(0);
+  });
+
+  it('an expiry that names no household touches nothing', async () => {
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(expiredEvent({ id: 'cs_orphan', mode: 'subscription', metadata: {} }));
+    expect(await sentCalls()).toHaveLength(0);
+  });
+});
+
 describe('applyStripeEvent — identification top-up grant (ADR 0019)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -2048,7 +2212,7 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
-    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
   });
 
@@ -2300,7 +2464,7 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
-    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
   });
 
@@ -2404,6 +2568,223 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
   });
 });
 
+describe('createCheckoutSession — one plan checkout at a time (the pending-checkout marker)', () => {
+  // Between Stripe redirecting a buyer back and `checkout.session.completed`
+  // landing, the household row carried nothing about the purchase: the
+  // live-subscription guard reads `stripeSubscriptionId`, which is written by
+  // that webhook. A second click in the window passed it and minted a second
+  // Session — two subscriptions, both renewing. These tests cover the marker
+  // `createCheckoutSession` now writes the instant a Session exists, and the
+  // window inside which it refuses.
+  const NOW = Date.parse('2026-09-13T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    sessionsCreate.mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type Sent = { kind: string; input: Record<string, any> };
+  const sentCalls = async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    return vi.mocked(dynamodb.send).mock.calls.map((c) => c[0] as unknown as Sent);
+  };
+  const conditionErr = () =>
+    Object.assign(new Error('cond'), { name: 'ConditionalCheckFailedException' });
+
+  const checkoutArgs = {
+    householdId: 'hh-1',
+    customerEmail: 'a@b.test',
+    planId: 'garden' as const,
+    interval: 'month' as const,
+    successUrl: 's',
+    cancelUrl: 'c',
+  };
+
+  async function runCheckout(item: Record<string, unknown> | undefined) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: item });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    return createCheckoutSession(checkoutArgs);
+  }
+
+  describe('pendingCheckoutState (four states, never two)', () => {
+    it('is none without a marker', async () => {
+      const { pendingCheckoutState } = await import('../../../src/services/billing.js');
+      expect(pendingCheckoutState({}, NOW)).toBe('none');
+      expect(pendingCheckoutState({ pendingCheckoutAt: new Date(NOW).toISOString() }, NOW)).toBe(
+        'none'
+      );
+    });
+
+    it('is fresh inside the window and stale from its edge', async () => {
+      const { pendingCheckoutState, PENDING_CHECKOUT_WINDOW_MS } =
+        await import('../../../src/services/billing.js');
+      const marker = (agoMs: number) => ({
+        pendingCheckoutSessionId: 'cs_1',
+        pendingCheckoutAt: new Date(NOW - agoMs).toISOString(),
+      });
+      expect(pendingCheckoutState(marker(0), NOW)).toBe('fresh');
+      expect(pendingCheckoutState(marker(PENDING_CHECKOUT_WINDOW_MS - 1), NOW)).toBe('fresh');
+      expect(pendingCheckoutState(marker(PENDING_CHECKOUT_WINDOW_MS), NOW)).toBe('stale');
+      // A marker from the future (a skewed clock) is fresh, never stale: it
+      // resolves as time passes, and the alternative is a second Session.
+      expect(pendingCheckoutState(marker(-60_000), NOW)).toBe('fresh');
+    });
+
+    it('is undated for a marker with no usable timestamp — never none', async () => {
+      const { pendingCheckoutState } = await import('../../../src/services/billing.js');
+      expect(pendingCheckoutState({ pendingCheckoutSessionId: 'cs_1' }, NOW)).toBe('undated');
+      expect(
+        pendingCheckoutState(
+          { pendingCheckoutSessionId: 'cs_1', pendingCheckoutAt: 'not a date' },
+          NOW
+        )
+      ).toBe('undated');
+    });
+
+    it('keeps the window under the hour the web copy promises, and longer than a Session can live', async () => {
+      const { PENDING_CHECKOUT_WINDOW_MS, CHECKOUT_SESSION_LIFETIME_SECONDS } =
+        await import('../../../src/services/billing.js');
+      // `settings.billing.errorCheckoutPending` says an unfinished checkout
+      // "releases on its own within the hour". Lengthen this and that copy
+      // becomes a lie.
+      expect(PENDING_CHECKOUT_WINDOW_MS).toBeLessThanOrEqual(60 * 60 * 1000);
+      // A Session that can still be paid must still be guarded.
+      expect(PENDING_CHECKOUT_WINDOW_MS).toBeGreaterThan(CHECKOUT_SESSION_LIFETIME_SECONDS * 1000);
+      // Stripe's minimum `expires_at` is 30 minutes after creation.
+      expect(CHECKOUT_SESSION_LIFETIME_SECONDS).toBe(30 * 60);
+    });
+  });
+
+  it('refuses a second plan checkout while the marker is fresh — before the price is read or Stripe is touched', async () => {
+    await expect(
+      runCheckout({
+        planId: 'seedling',
+        pendingCheckoutSessionId: 'cs_pending',
+        pendingCheckoutAt: new Date(NOW - 5 * 60_000).toISOString(),
+      })
+    ).rejects.toThrow(/^CHECKOUT_PENDING:/);
+    expect(pricesRetrieve).not.toHaveBeenCalled();
+    expect(sessionsCreate).not.toHaveBeenCalled();
+    // The household read, and nothing written.
+    expect(await sentCalls()).toHaveLength(1);
+  });
+
+  it('lets a household through once the marker is older than the window — an abandoned checkout is not a ban', async () => {
+    const { PENDING_CHECKOUT_WINDOW_MS } = await import('../../../src/services/billing.js');
+    const result = await runCheckout({
+      planId: 'seedling',
+      pendingCheckoutSessionId: 'cs_abandoned',
+      pendingCheckoutAt: new Date(NOW - PENDING_CHECKOUT_WINDOW_MS).toISOString(),
+    });
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses, and says so in the log, when the marker cannot be dated — never reads it as "nothing pending"', async () => {
+    const { logger } = await import('../../../src/utils/logger.js');
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => undefined) as never);
+    try {
+      await expect(
+        runCheckout({ planId: 'seedling', pendingCheckoutSessionId: 'cs_mystery' })
+      ).rejects.toThrow(/^CHECKOUT_PENDING:/);
+      expect(sessionsCreate).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ householdId: 'hh-1', stripeSessionId: 'cs_mystery' }),
+        'pending_checkout_marker_undated_refusing'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('bounds the Session to the 30-minute minimum Stripe allows, so the refusal window can be short', async () => {
+    await runCheckout(undefined);
+    const params = sessionsCreate.mock.calls[0][0] as { expires_at?: number; mode?: string };
+    expect(params.mode).toBe('subscription');
+    expect(params.expires_at).toBe(Math.floor(NOW / 1000) + 30 * 60);
+  });
+
+  it('records the Session it handed out — after Stripe minted it, atomically, admitting only absent, same-id or stale', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { PENDING_CHECKOUT_WINDOW_MS } = await import('../../../src/services/billing.js');
+    const result = await runCheckout(undefined);
+    expect(result.url).toBe('https://checkout.stripe.test/cs');
+
+    const calls = await sentCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[0].kind).toBe('Get');
+    const claim = calls[1];
+    expect(claim.kind).toBe('Update');
+    expect(claim.input.Key).toEqual({ PK: 'HOUSEHOLD#hh-1', SK: 'METADATA' });
+    expect(claim.input.UpdateExpression).toBe(
+      'SET #pendingCheckoutSessionId = :id, #pendingCheckoutAt = :at'
+    );
+    expect(claim.input.ExpressionAttributeValues).toEqual({
+      ':id': 'cs_new',
+      ':at': new Date(NOW).toISOString(),
+      ':staleBefore': new Date(NOW - PENDING_CHECKOUT_WINDOW_MS).toISOString(),
+    });
+    // Exactly three admissions: no marker, this very Session (a safe HTTP
+    // retry gets the same Session back from Stripe), or a marker whose
+    // Session has expired. A missing timestamp fails the comparison — the
+    // `undated` refusal, expressed in DynamoDB.
+    expect(claim.input.ConditionExpression).toBe(
+      'attribute_not_exists(#pendingCheckoutSessionId) OR #pendingCheckoutSessionId = :id OR #pendingCheckoutAt < :staleBefore'
+    );
+    // The claim names the Session, so it can only follow its creation.
+    expect(vi.mocked(dynamodb.send).mock.invocationCallOrder[1]).toBeGreaterThan(
+      sessionsCreate.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('hands out no Session when a concurrent request claimed first — two reads of "nothing pending", one URL', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: undefined })
+      .mockRejectedValueOnce(conditionErr());
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await expect(createCheckoutSession(checkoutArgs)).rejects.toThrow(/^CHECKOUT_PENDING:/);
+    // A Session was minted and is now unreachable: its URL never left this
+    // function, and `expires_at` retires it.
+    expect(sessionsCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands out no Session its row could not record — a failed marker write is a refusal, not "nothing pending"', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => undefined) as never);
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: undefined })
+      .mockRejectedValueOnce(new Error('dynamo down'));
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    try {
+      await expect(createCheckoutSession(checkoutArgs)).rejects.toThrow('dynamo down');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ householdId: 'hh-1', stripeSessionId: 'cs_new' }),
+        'pending_checkout_marker_write_failed'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('refuses a Session Stripe returned without an id, before any marker write', async () => {
+    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    await expect(runCheckout(undefined)).rejects.toThrow('checkout session id');
+    expect(await sentCalls()).toHaveLength(1);
+  });
+});
+
 describe('createPortalSession — shares the payment-activity gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -2481,6 +2862,28 @@ describe('getHouseholdSubscription', () => {
     });
   });
 
+  it('never exposes the pending-checkout marker — a Session id has no business on GET /billing/me', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        planId: 'seedling',
+        pendingCheckoutSessionId: 'cs_private_pending',
+        pendingCheckoutAt: '2026-09-13T12:00:00.000Z',
+      },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const published = await getHouseholdSubscription('hh-1');
+    expect(published).toEqual({
+      planId: 'seedling',
+      stripeCustomerId: undefined,
+      stripeSubscriptionId: undefined,
+      status: undefined,
+      currentPeriodEnd: undefined,
+      trialAvailable: true,
+    });
+    expect(JSON.stringify(published)).not.toContain('cs_private_pending');
+  });
+
   it('reads stored plan + Stripe ids', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({
@@ -2506,7 +2909,7 @@ describe('the free trial is once per household, not once per checkout', () => {
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
-    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
   });
 
@@ -2790,7 +3193,7 @@ describe('createCheckoutSession — refuses to charge an unreconciled price', ()
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
-    sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/cs' });
+    sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
   });
 

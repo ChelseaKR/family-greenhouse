@@ -94,7 +94,9 @@ export const identify = createHandler(
           // price is configured. `credits` is the balance the refusal saw —
           // a real 0, or null when no household could hold a pack. A failed
           // credit read never reaches here (it is the 503 below).
-          const topUp = user.householdId ? identifyTopUpSummary(paymentsAreAvailable()) : null;
+          const topUp = user.householdId
+            ? identifyTopUpSummary(paymentsAreAvailable(), upstreamConfigured)
+            : null;
           const topUpAvailable = topUp?.available === true;
           const trialAllowance = `During the no-card Garden trial, identifications use the free plan's allowance of ${allowance} a month, and this month's ${allowance === 1 ? 'is' : 'are'} used up.`;
           throw createHttpError(

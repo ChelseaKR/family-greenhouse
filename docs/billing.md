@@ -193,15 +193,15 @@ Stripe webhook → POST /billing/webhook
 DDB household row updated (planId, status, stripeCustomerId, ...)
 ```
 
-**The client half of this flow no longer exists.** `billingService`
-(`frontend/src/services/billingService.ts`) exports exactly `listPlans` and
-`getCurrentSubscription`; the purchase UI and its `startCheckout` / `openPortal`
-callers were removed with the paid-plan surfaces. The diagram above therefore
-describes the retained BACKEND path plus the frontend that would have to be
-rebuilt, not code you can call today. Restoring it is part of the UI-restoration
-step in [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not a loose end.
+The client half of this flow is live. `billingService`
+(`frontend/src/services/billingService.ts`) exports `listPlans`,
+`getCurrentSubscription`, `createCheckout`, `createTopUpCheckout` and
+`createPortalSession`; `BillingSettings` calls them (an earlier revision of this
+paragraph, written under the commercial hold, said the purchase UI had been
+removed — see [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md) for the hold's
+history).
 
-Historically, the "Upgrade to X" button on `BillingSettings` did:
+The "Switch to X" button on `BillingSettings` does:
 
 1. Call the backend `POST /billing/checkout`, which creates a Stripe Checkout Session and returns its URL
 2. Frontend `window.location.href = result.url` → user lands on Stripe-hosted checkout
@@ -209,6 +209,74 @@ Historically, the "Upgrade to X" button on `BillingSettings` did:
 4. The settings page reads the query string and shows a friendly notice
 
 The portal flow ("Manage subscription") was the same shape — `POST /billing/portal` returns a Stripe Customer Portal URL, frontend redirects there. Cancel + payment-method updates happen in Stripe's UI. Both endpoints answer 503 while the hold is active.
+
+### One plan checkout at a time
+
+Every billing field on the household row is written by the **webhook**, and
+`createCheckoutSession` used to write nothing. So between Stripe redirecting a
+buyer back (step 3) and `checkout.session.completed` landing, the row said
+nothing about the purchase — and the guard that refuses a second concurrent
+subscription keys off `stripeSubscriptionId`, exactly the field the webhook had
+not written yet. A second click in that window passed it and minted a second
+Session: two subscriptions, both renewing, until somebody noticed the extra
+charge. (`checkoutAttemptId` is a fresh UUID per click, so Stripe's idempotency
+key did not collapse it either.)
+
+`createCheckoutSession` now records the Session it hands out on the row
+(`pendingCheckoutSessionId` + `pendingCheckoutAt`, internal — never on
+`GET /billing/me`) and refuses another plan checkout while that marker is
+**fresh**. The rules, all in `services/billing.ts`:
+
+- **The Session is bounded.** Every plan Session carries
+  `expires_at` = creation + `CHECKOUT_SESSION_LIFETIME_SECONDS` (30 minutes,
+  the shortest Stripe allows; its default is 24 hours). A Session that can
+  still be paid must still be guarded, so the refusal has to hold at least this
+  long — and the only signal that a buyer simply closed the Stripe tab is that
+  no signal ever comes. At the 24-hour default the same logic would lock a
+  household that abandoned a checkout out of buying for a day.
+- **The refusal is bounded.** `PENDING_CHECKOUT_WINDOW_MS` is the Session's
+  lifetime plus fifteen minutes for the webhook that follows a completion in
+  the last moments of it (normally seconds; the allowance covers Stripe's first
+  retries). Forty-five minutes is the longest a household can be refused for a
+  checkout it walked away from. Any finite window leaves the case of a webhook
+  later than that; the settings page tells a returning buyer not to check out
+  again in exactly that case (`awaitingEntitlement`), and this guard is what
+  makes the instruction unnecessary for the ordinary one.
+- **Four states, never two** (`pendingCheckoutState`): `none`, `fresh`
+  (refuse), `stale` (older than the window: expired at Stripe by construction —
+  proceed), and `undated` — a Session id with no usable timestamp. The claim
+  writes both in one update, so `undated` only comes from a hand-edited row; it
+  is **refused** and logged (`pending_checkout_marker_undated_refusing`)
+  rather than read as "nothing pending", because a marker that cannot be dated
+  is a checkout that cannot be ruled out, and a visible lockout an operator can
+  clear beats a silent second subscription.
+- **The read is the early refusal; the write is the guard.** The marker is
+  written with a conditional update that admits only no marker, a stale
+  marker, or the same Session id (a safe HTTP retry gets the same Session back
+  from Stripe). Two requests that both read "nothing pending" cannot both hand
+  out a URL: the loser is refused, and its Session — never handed to anyone —
+  expires on its own.
+- **Failure direction: a Session the row could not record is not handed
+  out.** If the marker write fails, the caller gets an error, not a URL, and
+  logs `pending_checkout_marker_write_failed` with the Session id. Nobody has
+  that Session's URL, so nobody can complete it.
+- **Released by what Stripe reports.** A settled `checkout.session.completed`
+  (or `async_payment_succeeded`) clears the marker **in the same write** that
+  records the subscription or lifetime tier, so there is no moment at which the
+  row says neither. `checkout.session.expired` releases it early, for the
+  Session named and no other — optional on the endpoint (see
+  [`external-services-setup.md`](./external-services-setup.md)); without it an
+  abandoned checkout's hold lifts when the window lapses. An **unsettled**
+  completion (`payment_status` neither `paid` nor `no_payment_required`) grants
+  nothing and leaves the marker to lapse.
+- **The refusal is its own error.** The service throws `CHECKOUT_PENDING:`;
+  `POST /billing/checkout` maps it to **409 `details.code: CHECKOUT_PENDING`**
+  with a message quoting the window, and the web client shows
+  `settings.billing.errorCheckoutPending` — not "already subscribed" (the row
+  does not say so yet) and not "provider failed" (nothing failed).
+- **Identification top-ups are outside it.** A second pack is a second pack,
+  delivered; it is not a renewing liability. The top-up path keeps its own
+  rules (below).
 
 ### Members ask, admins buy
 
@@ -351,6 +419,7 @@ Webhook events we handle:
 - `checkout.session.completed` / `checkout.session.async_payment_succeeded` → record customer + subscription IDs and planId from the session metadata, **but only once Stripe says the money settled**. A completed Session is not proof of payment: when a first subscription invoice fails, Stripe still completes the Session with `payment_status: 'unpaid'` while the subscription itself is `incomplete`. `payment_status === 'paid'` implies `active`; `no_payment_required` (a trial) implies `trialing`; anything else grants nothing at all, logs `stripe_checkout_session_unsettled_no_grant`, and waits for the subscription events. **Status is still never guessed** — where Stripe expanded the subscription onto the Session, its status wins over the value implied by `payment_status`, and the subscription events remain the authoritative source afterwards (otherwise every trialing household was recorded as `active`). The async event completes delayed one-time payment methods. A lifetime (`mode: 'payment'`) session is the exception: it has no subscription, so it writes `active` and clears the subscription ids.
 - `customer.subscription.created` / `customer.subscription.updated` → record latest status + period-end + planId
 - `customer.subscription.deleted` → reset to seedling, status canceled
+- `checkout.session.expired` → no delta. Releases the household's pending-checkout marker if — and only if — it names the Session that expired (§ _One plan checkout at a time_). Optional on the endpoint; without it the marker lapses on its own.
 
 Anything else is acknowledged and ignored.
 
@@ -593,14 +662,28 @@ $1.99**, one-time, valid 12 months from purchase, never auto-renewed.
 
 - **Offer:** `GET /billing/plans` publishes `identifyTopUp`
   (`{ available, credits, validityDays, priceUsd? }`). `available` is true
-  only when payments are on AND `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` is set;
-  `priceUsd` appears only when payments are on — the same fail-closed rule
-  as the plan prices.
+  only when payments are on AND `STRIPE_PRICE_ID_IDENTIFY_TOP_UP` is set AND
+  the process answering holds `PLANT_ID_API_KEY`; `priceUsd` appears only
+  when payments are on — the same fail-closed rule as the plan prices.
+  **Credits nobody can spend are not for sale:** with no vendor key,
+  `POST /plants/identify` answers "not configured" and consumes nothing, so
+  a pack sold in that state is $1.99 for twenty identifications that cannot
+  be made (found 2026-09-13, when the key had length 0 in production and the
+  pack was still offered). The answer is per process — the `billing` Lambda
+  must be given the key too (`infrastructure/modules/api/main.tf`, the
+  `billing` entry of `handler_integration_environment`; it receives only the
+  Stripe and email values today) or it publishes the pack as unavailable and
+  refuses to sell it, which is the correct answer for a process that cannot
+  vouch for the key.
 - **Purchase:** `POST /billing/top-up/checkout` (admin only) opens a
   `mode: 'payment'` Checkout Session with `purchase: identify_top_up` and
-  `credits: 20` stamped on its metadata. With the env var blank it answers
-  **400 `details.code: TOP_UP_NOT_CONFIGURED`** before touching Stripe —
-  never a fallback price, never a free credit.
+  `credits: 20` stamped on its metadata. With the price env var blank it
+  answers **400 `details.code: TOP_UP_NOT_CONFIGURED`**, and with no
+  `PLANT_ID_API_KEY` in its process **400
+  `details.code: IDENTIFICATION_NOT_CONFIGURED`** — both before touching
+  DynamoDB or Stripe — never a fallback price, never a free credit, never a
+  credit that cannot be spent. The card shows
+  `identifyTopUp.errorIdentificationNotConfigured` for the second.
 - **Grant:** the webhook grants on a PAID `checkout.session.completed` (or
   the later `async_payment_succeeded` for deferred methods) by creating one
   pack row `HOUSEHOLD#{id}` / `IDCREDIT#{sessionId}` with a conditional put.

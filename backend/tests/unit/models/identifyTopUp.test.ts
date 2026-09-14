@@ -88,7 +88,7 @@ describe('identifyTopUp model', () => {
   describe('identifyTopUpSummary', () => {
     it('withholds the amount and is unavailable while payments are off', () => {
       process.env[IDENTIFY_TOP_UP_PACK.stripePriceEnv] = 'price_topup';
-      expect(identifyTopUpSummary(false)).toEqual({
+      expect(identifyTopUpSummary(false, true)).toEqual({
         available: false,
         credits: 20,
         validityDays: 365,
@@ -96,7 +96,7 @@ describe('identifyTopUp model', () => {
     });
 
     it('publishes the amount but stays unavailable when no price is configured', () => {
-      expect(identifyTopUpSummary(true)).toEqual({
+      expect(identifyTopUpSummary(true, true)).toEqual({
         available: false,
         credits: 20,
         validityDays: 365,
@@ -106,8 +106,21 @@ describe('identifyTopUp model', () => {
 
     it('is available only when payments are on AND a price is configured', () => {
       process.env[IDENTIFY_TOP_UP_PACK.stripePriceEnv] = 'price_topup';
-      expect(identifyTopUpSummary(true)).toEqual({
+      expect(identifyTopUpSummary(true, true)).toEqual({
         available: true,
+        credits: 20,
+        validityDays: 365,
+        priceUsd: 1.99,
+      });
+    });
+
+    it('stays unavailable when identification itself is not configured — priced, payable, and not for sale', () => {
+      // Credits nobody can spend. With no vendor key, POST /plants/identify
+      // answers "not configured" and consumes nothing, so a pack sold here is
+      // $1.99 for twenty identifications that cannot be made.
+      process.env[IDENTIFY_TOP_UP_PACK.stripePriceEnv] = 'price_topup';
+      expect(identifyTopUpSummary(true, false)).toEqual({
+        available: false,
         credits: 20,
         validityDays: 365,
         priceUsd: 1.99,

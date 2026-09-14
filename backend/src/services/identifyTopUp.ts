@@ -24,6 +24,7 @@ import {
   identifyTopUpPriceId,
 } from '../models/identifyTopUp.js';
 import { getHouseholdSubscription, getStripe } from './billing.js';
+import { isPlantIdentificationConfigured } from './plantIdentification.js';
 import { assertIdentifyTopUpPriceMatchesCatalog } from './stripePrices.js';
 
 export interface IdentifyTopUpCheckoutArgs {
@@ -40,6 +41,16 @@ export interface IdentifyTopUpCheckoutArgs {
  * convention as `INTERVAL_WITHDRAWN` / `ALREADY_SUBSCRIBED` in billing.ts.
  */
 export const TOP_UP_NOT_CONFIGURED = 'TOP_UP_NOT_CONFIGURED';
+/**
+ * The pack is priced and payable, but the identifications it buys cannot be
+ * made: `PLANT_ID_API_KEY` is absent from this process. Distinct from
+ * `TOP_UP_NOT_CONFIGURED` because the fix is different (the vendor key, not
+ * the Stripe price) and because the client copy must say which promise
+ * cannot be kept. A pack sold in this state is a real charge for credits
+ * `POST /plants/identify` would never draw on — it answers "not configured"
+ * and consumes nothing.
+ */
+export const IDENTIFICATION_NOT_CONFIGURED = 'IDENTIFICATION_NOT_CONFIGURED';
 
 export async function createIdentifyTopUpCheckoutSession(
   args: IdentifyTopUpCheckoutArgs
@@ -51,6 +62,17 @@ export async function createIdentifyTopUpCheckoutSession(
   if (!priceId) {
     throw new Error(
       `${TOP_UP_NOT_CONFIGURED}: ${IDENTIFY_TOP_UP_PACK.stripePriceEnv} is not set; the identification top-up pack is not for sale in this environment.`
+    );
+  }
+  // Credits nobody can spend are not for sale. Checked here, in the process
+  // that would take the money, on the variable THIS process holds: the
+  // Lambda that sells the pack is not the Lambda that identifies plants, and
+  // it must be given the key too (infrastructure/modules/api/main.tf, the
+  // `billing` entry of handler_integration_environment) or this refuses —
+  // which is the correct answer for a process that cannot vouch for it.
+  if (!isPlantIdentificationConfigured()) {
+    throw new Error(
+      `${IDENTIFICATION_NOT_CONFIGURED}: PLANT_ID_API_KEY is not set in this process; identification packs are not for sale where identifications cannot be made.`
     );
   }
   // Reuse the household's Stripe customer when one exists so the purchase

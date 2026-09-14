@@ -93,12 +93,23 @@ const UNPAID_SUBSCRIPTION_STATUSES = new Set([
 function purchaseErrorKey(error: unknown): string {
   const status = (error as { response?: { status?: number } })?.response?.status;
   if (status === 409) {
-    // Two different 409s: already subscribed (fix: use the portal) and already
-    // owned outright (fix: nothing, there is nothing left to buy). Telling a
-    // lifetime owner to "use Manage subscription to change plans" would send
-    // them somewhere that cannot help them.
-    const detail = (error as { response?: { data?: { error?: string; message?: string } } })
-      ?.response?.data;
+    // Three different 409s: already subscribed (fix: use the portal), already
+    // owned outright (fix: nothing, there is nothing left to buy), and a
+    // checkout this household was already handed that Stripe has not reported
+    // on yet (fix: wait). Telling a lifetime owner to "use Manage subscription
+    // to change plans" would send them somewhere that cannot help them; telling
+    // a household that just paid it is "already subscribed" would contradict
+    // the plan card beside it, which the webhook has not updated yet.
+    const detail = (
+      error as {
+        response?: {
+          data?: { error?: string; message?: string; details?: { code?: string } };
+        };
+      }
+    )?.response?.data;
+    if (detail?.details?.code === 'CHECKOUT_PENDING') {
+      return 'settings.billing.errorCheckoutPending';
+    }
     return /permanently/i.test(`${detail?.error ?? ''} ${detail?.message ?? ''}`)
       ? 'settings.billing.errorLifetimeOwned'
       : 'settings.billing.errorAlreadySubscribed';

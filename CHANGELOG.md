@@ -261,6 +261,40 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
 
 ### Fixed
 
+- **The server can now refuse a second plan checkout while the first is
+  unreported by Stripe.** Every billing field on the household row is written
+  by the webhook, and `createCheckoutSession` wrote nothing — so between Stripe
+  redirecting a buyer back and `checkout.session.completed` landing, the guard
+  against a second concurrent subscription read `stripeSubscriptionId`, the one
+  field the webhook had not written yet, and passed. A second click in that
+  window minted a second Session: two subscriptions, both renewing. The
+  Session handed out is now recorded on the row the instant it exists
+  (`pendingCheckoutSessionId` + `pendingCheckoutAt`, internal — never on
+  `GET /billing/me`) with a conditional write, so two concurrent requests
+  cannot both hand out a URL; another plan checkout is refused while the marker
+  is under 45 minutes old (the Session itself now expires after 30, Stripe's
+  minimum, which is what keeps an abandoned checkout from locking a household
+  out for the 24-hour default); the settled webhook clears it in the same write
+  that records the subscription, and `checkout.session.expired` — optional on
+  the endpoint — releases it early. A marker the row could not write means no
+  URL is handed out, and a marker that cannot be dated is refused, never read
+  as "nothing pending". The refusal is a 409 with `details.code:
+CHECKOUT_PENDING`; the web client says a checkout is already in progress and
+  not to check out again. `docs/billing.md` § _One plan checkout at a time_.
+- **The $1.99 identification top-up was for sale where identifications could
+  not be made.** `PLANT_ID_API_KEY` had length 0 in production;
+  `POST /plants/identify` answered "not configured" and consumed nothing, which
+  is correct — and nothing on the checkout path checked it, so a buyer paid for
+  twenty credits nothing would ever draw on. `identifyTopUpSummary` now takes
+  whether identification is configured in the process answering, so
+  `GET /billing/plans` publishes the pack as unavailable and the card is not
+  shown; `POST /billing/top-up/checkout` refuses with 400
+  `details.code: IDENTIFICATION_NOT_CONFIGURED` before DynamoDB or Stripe. The
+  answer is per process: the `billing` Lambda is not given the key today
+  (`infrastructure/modules/api/main.tf`, `handler_integration_environment`),
+  so the pack stays off there until it is — the correct answer for a process
+  that cannot vouch for it.
+
 - **`/blog`, `/blog/<slug>` and `/changelog` showed US readers the day before
   the date they publish.** Each rendered its `date:` literal with
   `new Date(iso).toLocaleDateString()`: a date-only string parses as UTC

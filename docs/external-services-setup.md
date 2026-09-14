@@ -117,6 +117,11 @@ reactivation runbook before changing any of these controls.
    - Events to send — **billing emails** (ADR 0023; the app is silent without these):
      `invoice.paid`, `invoice.upcoming`, `invoice.payment_failed`,
      `customer.source.expiring`
+   - Events to send — **optional**: `checkout.session.expired`. Releases a
+     household's hold on a second plan checkout at the 30-minute mark when it
+     abandoned the first (`docs/billing.md` § _One plan checkout at a time_);
+     without it the hold lifts on its own after 45 minutes. Nothing else reads
+     it.
    - After creation, reveal + copy the **Signing secret** (`whsec_…`).
 5. **API key**: Developers → API keys → copy the **Secret key** (`sk_test_…` for test mode).
 6. tfvars:

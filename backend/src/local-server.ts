@@ -106,8 +106,11 @@ import {
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
 import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import {
+  IDENTIFICATION_CONFIDENCE_FLOOR,
+  isPlantIdentificationConfigured,
+} from './services/plantIdentification.js';
 import { giftSubscriptionSummary } from './models/giftSubscriptions.js';
-import { IDENTIFICATION_CONFIDENCE_FLOOR } from './services/plantIdentification.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
 // Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
 import { computeCoverage } from './services/coverageMath.js';
@@ -5675,7 +5678,7 @@ app.get('/billing/plans', (_req, res) => {
       effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
     },
     plans: Object.values(PLANS).map((plan) => planSummary(plan, paymentsAvailable)),
-    identifyTopUp: identifyTopUpSummary(paymentsAvailable),
+    identifyTopUp: identifyTopUpSummary(paymentsAvailable, isPlantIdentificationConfigured()),
     giftSubscriptions: giftSubscriptionSummary(paymentsAvailable),
   });
 });

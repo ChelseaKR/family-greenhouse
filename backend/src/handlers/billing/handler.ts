@@ -19,8 +19,10 @@ import { getHouseholdCounters } from '../../services/householdUsage.js';
 import { getCreditBalance } from '../../services/identifyCredits.js';
 import {
   createIdentifyTopUpCheckoutSession,
+  IDENTIFICATION_NOT_CONFIGURED,
   TOP_UP_NOT_CONFIGURED,
 } from '../../services/identifyTopUp.js';
+import { isPlantIdentificationConfigured } from '../../services/plantIdentification.js';
 import {
   createGiftCheckoutSession,
   GIFT_MONTHS_INVALID,
@@ -83,6 +85,14 @@ const checkoutSchema = z
 
 type CheckoutInput = z.infer<typeof checkoutSchema>;
 
+/**
+ * `details.code` on the 409 for a plan checkout refused because one this
+ * household was already handed is still unreported by Stripe. Same shape as
+ * `TOP_UP_NOT_CONFIGURED`: a stable token the client branches on, beside a
+ * message it may show verbatim.
+ */
+export const CHECKOUT_PENDING = 'CHECKOUT_PENDING';
+
 // Body of POST /billing/top-up/checkout. There is exactly one pack, so the
 // body carries nothing but the per-click idempotency key; `{}` and a missing
 // body are both fine.
@@ -130,10 +140,11 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
         },
         plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable)),
         // The identification top-up offer, on the same fail-closed terms as
-        // the plan prices: `available` is true only when payments are on AND
-        // a Stripe price is configured; the amount appears only when
+        // the plan prices: `available` is true only when payments are on, a
+        // Stripe price is configured, AND this process holds the vendor key
+        // the credits would be spent against; the amount appears only when
         // payments are on.
-        identifyTopUp: identifyTopUpSummary(paymentsAvailable),
+        identifyTopUp: identifyTopUpSummary(paymentsAvailable, isPlantIdentificationConfigured()),
         // Gift subscriptions (ADR 0028), on the same terms. The per-month
         // amount is the tier's monthlyPrice above; this says only which tiers
         // can be given here and for how long.
@@ -255,6 +266,20 @@ export const checkout = createHandler(
           { expose: true }
         );
       }
+      // Not client-correctable right now, and the one refusal a buyer who
+      // has just PAID can hit: a plan checkout this household was handed is
+      // still unreported by Stripe. The code lets the client say "in
+      // progress" rather than "already subscribed" (the row does not say
+      // that yet) or "provider failed" (nothing failed). The window is the
+      // service's, so the message quotes it rather than restating it.
+      if ((err as Error).message?.startsWith('CHECKOUT_PENDING')) {
+        const minutes = Math.ceil(billing.PENDING_CHECKOUT_WINDOW_MS / 60_000);
+        throw createHttpError(
+          409,
+          `A checkout for this household is already in progress. If you just paid, your plan updates as soon as our payment provider confirms it — do not check out again. An unfinished checkout releases on its own within ${minutes} minutes.`,
+          { expose: true, details: { code: CHECKOUT_PENDING } }
+        );
+      }
       // Client-correctable: already has a live subscription. Map to a clear
       // 409 pointing at the portal, rather than the generic Stripe-failure
       // 502 below (see createCheckoutSession's ALREADY_SUBSCRIBED guard).
@@ -303,6 +328,18 @@ export const topUpCheckout = createHandler(
     // DynamoDB or Stripe for a product it does not sell. The service checks
     // again (after the payments gate) for any path around this handler.
     if (!isIdentifyTopUpConfigured()) throw notConfigured();
+    // Priced and payable is not sellable: the pack buys identifications, and
+    // without the vendor key none can be made. A distinct code, because the
+    // client must say which promise it cannot keep, and a 400 like the price
+    // case — this is the environment's state, not the buyer's mistake and
+    // not a provider failure.
+    const identificationNotConfigured = () =>
+      createHttpError(
+        400,
+        'Plant identification is not set up in this environment, so identification packs are not for sale.',
+        { expose: true, details: { code: IDENTIFICATION_NOT_CONFIGURED } }
+      );
+    if (!isPlantIdentificationConfigured()) throw identificationNotConfigured();
     try {
       const session = await createIdentifyTopUpCheckoutSession({
         householdId: user.householdId!,
@@ -319,6 +356,9 @@ export const topUpCheckout = createHandler(
         throw createHttpError(503, 'Payments are currently paused.', { expose: true });
       }
       if ((err as Error).message?.startsWith(TOP_UP_NOT_CONFIGURED)) throw notConfigured();
+      if ((err as Error).message?.startsWith(IDENTIFICATION_NOT_CONFIGURED)) {
+        throw identificationNotConfigured();
+      }
       logger.error({ err }, 'stripe_top_up_checkout_failed');
       throw createHttpError(502, 'Stripe checkout failed. Please try again shortly.', {
         expose: true,
