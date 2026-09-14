@@ -59,3 +59,56 @@ describe('CareGuidePage inline links', () => {
     expect(answers).toMatch(/free pet-safe (checker|tool)/i);
   });
 });
+
+/**
+ * The dates a care guide publishes.
+ *
+ * `reviewed` (facts last checked) was being emitted as `datePublished` AND
+ * `dateModified` AND the sitemap's `<lastmod>`, so an edit that did not
+ * re-verify anything left all three behind the content — 80 days behind on
+ * six guides after #649 and #651 landed. `updated` is now the modification
+ * date, and the page prints both so the claim is one a reader can check.
+ */
+describe('CareGuidePage content dates', () => {
+  const graphOf = (container: HTMLElement) => {
+    const script = container.ownerDocument.querySelector('script[type="application/ld+json"]');
+    return JSON.parse(script!.textContent!)['@graph'] as Record<string, unknown>[];
+  };
+
+  /** A guide whose content changed after it was last reviewed. */
+  const DRIFTED = CARE_GUIDES.find((g) => g.updated !== g.reviewed)!;
+
+  it('reports the modification date, not the review date, as dateModified', () => {
+    const { container } = renderGuide(DRIFTED.slug);
+    const article = graphOf(container).find((n) => n['@type'] === 'Article')!;
+    expect(article.dateModified).toBe(DRIFTED.updated);
+    expect(article.dateModified).not.toBe(DRIFTED.reviewed);
+  });
+
+  it('emits article:modified_time from the same field', () => {
+    const { container } = renderGuide(DRIFTED.slug);
+    const tag = container.ownerDocument.querySelector('meta[property="article:modified_time"]');
+    expect(tag?.getAttribute('content')).toBe(DRIFTED.updated);
+  });
+
+  it('shows the reader the dates its markup claims', () => {
+    const { container } = renderGuide(DRIFTED.slug);
+    const times = [...container.querySelectorAll('time')].map((t) => t.getAttribute('datetime'));
+    expect(times).toContain(DRIFTED.reviewed);
+    expect(times).toContain(DRIFTED.updated);
+  });
+
+  it('prints the day the date literal names, not the day before it', () => {
+    // `new Date('2026-09-05').toLocaleDateString()` is UTC midnight rendered
+    // in the host's zone, so it prints the 4th anywhere west of UTC — every
+    // US reader, and a mismatch between the UTC-built prerender and the same
+    // page after hydration. vitest.config.ts pins TZ to America/New_York, so
+    // this assertion is live: the naive call fails it.
+    const { container } = renderGuide(DRIFTED.slug);
+    const [year, , day] = DRIFTED.updated.split('-');
+    const rendered = [...container.querySelectorAll('time')].find(
+      (t) => t.getAttribute('datetime') === DRIFTED.updated
+    )!.textContent!;
+    expect(rendered).toMatch(new RegExp(`\\b${Number(day)}, ${year}\\b`));
+  });
+});

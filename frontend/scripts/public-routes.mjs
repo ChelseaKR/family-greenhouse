@@ -168,10 +168,23 @@ export function readBlogDates() {
   return out;
 }
 
-/** Care-guide slugs → ISO review date, read from the care manifest. */
+/**
+ * Care-guide slugs → the ISO date that guide's content last CHANGED, read
+ * from the care manifest's `updated` field.
+ *
+ * Deliberately `updated` and not `reviewed`, which sits one line above it and
+ * is what this read before. `reviewed` is the date a human last checked the
+ * guide's FACTS; `<lastmod>` is a claim about the file. The two only agree
+ * until an edit lands between reviews, and two did (#649 rewrote six
+ * `metaTitle`s, #651 added links to twelve guides, both 2026-09-05, neither
+ * touching `reviewed`) — so six URLs, zz-plant among them, advertised a
+ * `<lastmod>` 80 days older than their own content. Understating `lastmod`
+ * is not the safe direction: it is the value a crawler uses to decide a URL
+ * whose title just changed does not need refetching.
+ */
 export function readCareGuides() {
   const src = readFileSync(CARE, 'utf8');
-  const re = /slug:\s*'([^']+)'[\s\S]*?reviewed:\s*'([^']+)'/g;
+  const re = /slug:\s*'([^']+)'[\s\S]*?updated:\s*'([^']+)'/g;
   const out = new Map();
   let m;
   while ((m = re.exec(src)) !== null) out.set(m[1], m[2]);
@@ -264,12 +277,12 @@ export function publicRoutes() {
     ...(date ? {} : { undated: 'no `date:` in posts/index.ts' }),
   }));
 
-  const careEntries = [...readCareGuides().entries()].map(([slug, reviewed]) => ({
+  const careEntries = [...readCareGuides().entries()].map(([slug, updated]) => ({
     path: `/care/${slug}`,
     priority: 0.7,
     changefreq: 'monthly',
-    lastmod: reviewed ?? today,
-    ...(reviewed ? {} : { undated: 'no `reviewed:` in careGuides.ts' }),
+    lastmod: updated ?? today,
+    ...(updated ? {} : { undated: 'no `updated:` in careGuides.ts' }),
   }));
 
   // No `lastmod`: help answers are edited continuously and carry no review

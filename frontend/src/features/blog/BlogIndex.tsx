@@ -3,6 +3,7 @@ import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { POSTS } from './posts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
+import { formatContentDate } from '@/utils/contentDate';
 
 const PAGE_TITLE = 'Blog — Family Greenhouse';
 const PAGE_DESCRIPTION =
@@ -35,12 +36,7 @@ export function BlogIndex() {
             <li key={post.slug} className="py-8 first:pt-0 last:pb-0">
               <Link to={`/blog/${post.slug}`} className="group block">
                 <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700">
-                  {new Date(post.date).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}{' '}
-                  · {post.readingMinutes} min read
+                  {formatContentDate(post.date)} · {post.readingMinutes} min read
                 </p>
                 <h2 className="mt-2 font-serif text-2xl tracking-tight text-ink group-hover:text-primary-700 transition-colors">
                   {post.title}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -29,6 +29,15 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
+// Lazy: the checkout/redemption flow is real weight (~430 lines) that most
+// visits to this page never touch -- it only renders once plansQuery has
+// resolved and giftSubscriptions is on the offer, so it costs nothing on
+// first paint even for the households that do have it.
+const GiftSubscriptionCard = lazy(() =>
+  import('@/features/billing/GiftSubscriptionCard').then((m) => ({
+    default: m.GiftSubscriptionCard,
+  }))
+);
 import { isNativeApp } from '@/lib/platform';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
@@ -49,6 +58,34 @@ const planRank = (id: PlanId) => PLAN_ORDER.indexOf(id);
  *  in one of these must change plans through the portal: the API rejects a
  *  second purchase with 409 precisely to avoid double-billing. */
 const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+
+/**
+ * Statuses that mean the subscription EXISTS but is not being paid for — the
+ * complement of `ENTITLED_SUBSCRIPTION_STATUSES` in
+ * `backend/src/models/plans.ts`, which entitles `active` and `trialing` only.
+ *
+ * The distinction is invisible on this page without it, and that is the whole
+ * reason it exists. `planId` keeps saying `garden` through dunning — Stripe
+ * only rewrites it to `seedling` when it finally gives up and deletes the
+ * subscription, weeks later — while the server has ALREADY dropped the
+ * household to Seedling's caps (`getEntitledPlan`, #364/#540). So the page
+ * said "Your household is on the Garden plan" over meters showing Seedling's
+ * numbers, and, if the household was over them, an over-limit warning that
+ * blamed "your current plan" for a cap that plan does not have. The one fact
+ * that explains all of it — the card was declined — appeared nowhere in the
+ * app at all; the only notice was an email, which depends on the Stripe
+ * endpoint subscribing `invoice.payment_failed` and on SES.
+ *
+ * `paused` is deliberately absent: it is a live subscription Stripe is not
+ * billing on purpose, not a failed payment, and it is not something this
+ * product can put a household into today.
+ */
+const UNPAID_SUBSCRIPTION_STATUSES = new Set([
+  'past_due',
+  'unpaid',
+  'incomplete',
+  'incomplete_expired',
+]);
 
 /** Map the API's failure modes onto something a household can act on. The
  *  server is the authority on all three; none of them are recoverable by
@@ -95,10 +132,17 @@ export function BillingSettings() {
   // lag the redirect by a moment — say so rather than show an unchanged 0.
   const returnedFromTopUp =
     searchParams.get('status') === 'success' && searchParams.get('purchase') === 'identify-top-up';
+  // A gift checkout returns with `purchase=gift`; the code is created by the
+  // webhook, so the purchase list polls for a moment (ADR 0028).
+  const returnedFromGift =
+    searchParams.get('status') === 'success' && searchParams.get('purchase') === 'gift';
   // A SUBSCRIPTION checkout returns here with the same `status=success` and no
   // `purchase` marker. Stripe only redirects to `success_url` once the Session
   // has completed, so reaching this page with it set means a card was taken.
-  const returnedFromPlanCheckout = searchParams.get('status') === 'success' && !returnedFromTopUp;
+  // Excludes both other `status=success` returns (top-up, gift): neither buys
+  // a plan, and each has its own pending/settled notice below.
+  const returnedFromPlanCheckout =
+    searchParams.get('status') === 'success' && !returnedFromTopUp && !returnedFromGift;
   // Has the poll window below closed? Kept in state rather than read from
   // `Date.now()` at render time because nothing else re-renders when the
   // window lapses: without this the page would sit on the "finishing up"
@@ -236,6 +280,15 @@ export function BillingSettings() {
   const purchaseSettled = hasLiveSubscription || !!subQuery.data?.lifetimePlanId;
   const awaitingEntitlement =
     returnedFromPlanCheckout && subQuery.isSuccess && !purchaseSettled && !native;
+  // Reads a status Stripe actually sent. An ABSENT status is never dunning:
+  // `checkout.session.completed` records the subscription id before any status
+  // is known, and calling that window "your payment failed" would be a worse
+  // lie than the silence it replaces.
+  const paymentFailing =
+    !!subQuery.data?.status && UNPAID_SUBSCRIPTION_STATUSES.has(subQuery.data.status);
+  // Exactly the condition the portal button below renders on, so the notice
+  // never tells someone to press a control that is not on their screen.
+  const canOpenPortal = paymentsAvailable && !native && !!subQuery.data?.stripeCustomerId;
   // The free trial is once per HOUSEHOLD, not once per checkout, so the
   // sentence above the purchase buttons cannot be unconditional (#602): a
   // household that cancelled — or was dunned to the end of its subscription —
@@ -331,7 +384,31 @@ export function BillingSettings() {
       />
       <Card>
         <CardHeader title="Plan status" description="View your household's current plan limits." />
-        {limits.overall === 'over' && (
+        {/* Named before anything else on the card, because every other line
+            here is a consequence of it. */}
+        {paymentFailing && (
+          <Alert
+            variant="warning"
+            title={t('settings.billing.paymentFailedTitle')}
+            className="mb-4"
+          >
+            <p>{t('settings.billing.paymentFailedBody')}</p>
+            {canOpenPortal && (
+              <p className="mt-2">
+                {isAdmin
+                  ? t('settings.billing.paymentFailedActionAdmin')
+                  : t('settings.billing.adminOnlyBilling')}
+              </p>
+            )}
+            {native && <p className="mt-2">{t('settings.billing.paymentFailedActionNative')}</p>}
+          </Alert>
+        )}
+        {/* Suppressed while the payment is failing: the caps really are
+            Seedling's, but "more than your current plan includes" names the
+            wrong cause, and the notice above already states the cap effect.
+            Two warnings, one of them misattributing the other, is how a
+            household concludes it has been downgraded rather than dunned. */}
+        {limits.overall === 'over' && !paymentFailing && (
           <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
             <p>{t('settings.billing.overLimitBody')}</p>
           </Alert>
@@ -354,12 +431,14 @@ export function BillingSettings() {
           <p className="text-sm text-gray-600" data-testid="current-plan">
             {subQuery.data?.status === 'trialing'
               ? t('settings.billing.currentPlanTrial', { plan: planRead.planName })
-              : subQuery.data?.noCardTrial?.state === 'active'
-                ? t('settings.billing.noCardTrial.currentPlan', {
-                    plan: planRead.planName,
-                    date: formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' }),
-                  })
-                : t('settings.billing.currentPlan', { plan: planRead.planName })}
+              : paymentFailing
+                ? t('settings.billing.currentPlanUnpaid', { plan: planRead.planName })
+                : subQuery.data?.noCardTrial?.state === 'active'
+                  ? t('settings.billing.noCardTrial.currentPlan', {
+                      plan: planRead.planName,
+                      date: formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' }),
+                    })
+                  : t('settings.billing.currentPlan', { plan: planRead.planName })}
           </p>
         ) : null}
         {/* A trial that does not say when it ends is a surprise charge with
@@ -440,6 +519,20 @@ export function BillingSettings() {
             balance={identifyCredits === undefined ? null : identifyCredits}
           />
         </div>
+      )}
+
+      {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
+          then nothing renders. Not on native: no purchase surface is. */}
+      {!native && plansQuery.data?.giftSubscriptions && (
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <GiftSubscriptionCard
+            offer={plansQuery.data.giftSubscriptions}
+            plans={plansQuery.data.plans}
+            paymentsAvailable={paymentsAvailable}
+            gift={subQuery.data?.gift}
+            returnedFromPurchase={returnedFromGift}
+          />
+        </Suspense>
       )}
 
       {paymentsAvailable && !native && (

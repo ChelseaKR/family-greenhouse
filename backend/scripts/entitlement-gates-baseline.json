@@ -112,6 +112,14 @@
     "services/stripePrices.ts::expectedPriceFor::PLANS[]": {
       "reason": "Not entitlement. `planId` is a PlanId parameter naming which catalog row to read the expected Stripe amounts from, so the price-drift check can compare the catalog against the live Price objects. No household is in scope — the function takes a tier and a cadence and returns a price row. Newly listed because the gate now sees catalog indexing, not because this code changed.",
       "arg": "planId"
+    },
+    "services/stripePrices.ts::giftExpectedPrice::PLANS[]": {
+      "reason": "Not entitlement. `planId` is the GiftablePlanId whose MONTHLY amount a gift month is priced at (ADR 0028): the same price-table read as expectedPriceFor above, one tier, no household in scope, returning the row the gift checkout reconciles Stripe's one-time price against before charging. Reading the amount through the catalog rather than restating it is what keeps a gift month equal to a subscription month.",
+      "arg": "planId"
+    },
+    "models/giftSubscriptions.ts::giftAmountCents::PLANS[]": {
+      "reason": "Not entitlement. `planId` is the GiftablePlanId being BOUGHT as a gift, already validated by the request schema, and the index reads that tier's `monthlyPrice` to compute the gift's amount in integer cents (ADR 0028). A price lookup on a resolved id, with no household in scope and nothing granted; the grant is made by the webhook from the Session, never from this number.",
+      "arg": "planId"
     }
   }
 }

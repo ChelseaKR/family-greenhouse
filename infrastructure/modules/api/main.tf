@@ -446,10 +446,15 @@ locals {
     STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
     STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
     STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
-    STRIPE_AUTOMATIC_TAX_ENABLED      = var.stripe_automatic_tax_enabled
-    PAYMENTS_ENABLED                  = var.payments_enabled
-    POSTHOG_KEY                       = var.posthog_key
-    POSTHOG_HOST                      = var.posthog_host
+    # Gift subscriptions (ADR 0028): ONE-TIME prices for one gift month of each
+    # paid tier, charged with quantity = months. Blank = that tier cannot be
+    # given here; checkout answers 400 GIFT_NOT_CONFIGURED.
+    STRIPE_PRICE_ID_GIFT_GARDEN_MONTH     = var.stripe_price_id_gift_garden_month
+    STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH = var.stripe_price_id_gift_greenhouse_month
+    STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
+    PAYMENTS_ENABLED                      = var.payments_enabled
+    POSTHOG_KEY                           = var.posthog_key
+    POSTHOG_HOST                          = var.posthog_host
   }
 
   email_environment = {
@@ -493,6 +498,23 @@ locals {
     LEAF_HEALTH_DEMO = var.leaf_health_demo ? "1" : "0"
   }
 
+  # The identification pack is SOLD by `billing` and OFFERED by `plants` (the
+  # 402 at the monthly cap). Each needs exactly one fact from the other's
+  # world, and until 2026-09-13 neither had it: `billing` could not tell whether
+  # identification was configured at all, so it sold credits nobody could spend
+  # (PLANT_ID_API_KEY had length 0 in production while the $1.99 pack was on
+  # sale — #772 makes the sale refuse); and `plants` had neither the pack's
+  # price id nor PAYMENTS_ENABLED, so its 402 never offered the pack in
+  # production. Exactly those facts cross over — not the vendor's full
+  # environment into billing, and not the Stripe secret into plants.
+  identify_configured_environment = {
+    PLANT_ID_API_KEY = var.plant_id_api_key
+  }
+  identify_top_up_offer_environment = {
+    STRIPE_PRICE_ID_IDENTIFY_TOP_UP = var.stripe_price_id_identify_top_up
+    PAYMENTS_ENABLED                = var.payments_enabled
+  }
+
   weather_environment = {
     OPENWEATHER_API_KEY      = var.openweather_api_key
     OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
@@ -525,7 +547,7 @@ locals {
 
   handler_integration_environment = {
     auth   = {}
-    plants = merge(local.plant_integration_environment, local.perenual_environment)
+    plants = merge(local.plant_integration_environment, local.perenual_environment, local.identify_top_up_offer_environment)
     tasks  = {}
     # Email for the welcome mail + member upgrade requests; VAPID so the
     # upgrade request can also reach admins as a browser/native push.
@@ -539,7 +561,7 @@ locals {
     # money-lifecycle emails (receipt, renewal notice, payment failure, card
     # expiring, cancellation — ADR 0023). Merged rather than replaced so the
     # Stripe keys are untouched.
-    billing = merge(local.stripe_environment, local.email_environment)
+    billing = merge(local.stripe_environment, local.email_environment, local.identify_configured_environment)
     species = local.perenual_environment
     climate = local.weather_environment
     apiKeys = {}
@@ -1129,6 +1151,9 @@ locals {
     "GET /billing/me"               = { group = "billing", auth = "jwt" }
     "POST /billing/checkout"        = { group = "billing", auth = "jwt" }
     "POST /billing/top-up/checkout" = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/checkout"   = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/redeem"     = { group = "billing", auth = "jwt" }
+    "GET /billing/gift/purchases"   = { group = "billing", auth = "jwt" }
     "POST /billing/portal"          = { group = "billing", auth = "jwt" }
     "POST /billing/webhook"         = { group = "billing", auth = "none" }
 

@@ -9,8 +9,9 @@
  * Entries are GROUNDED: the facts (watering interval, light, toxicity) come
  * from the species catalog / Perenual, the prose is original. The generator
  * prompt that produces this shape is `docs/growth/prompts/02-species-care-page.md`.
- * These three are a hand-reviewed SAMPLE so the content quality and the
- * architecture can be judged before scaling to ~150 species.
+ * The first three were a hand-reviewed sample so the content quality and the
+ * architecture could be judged before scaling; there are 24 now, still short
+ * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
  * for every entry before publishing: `quickFacts.water` and `quickFacts.toxicity`
@@ -23,8 +24,42 @@ export interface CareGuide {
   alsoKnownAs: string[];
   metaTitle: string;
   metaDescription: string;
-  /** ISO date — drives "last reviewed" + sitemap lastmod. */
+  /**
+   * ISO date a human last checked this guide's FACTS against source data —
+   * the review discipline the module header demands, especially for
+   * `quickFacts.water` and `quickFacts.toxicity`. Feeds `datePublished`.
+   *
+   * It is deliberately NOT the page's modification date: see `updated`.
+   */
   reviewed: string;
+  /**
+   * ISO date this guide's content last CHANGED — the page's modification
+   * date. Feeds `dateModified`, `article:modified_time`, the visible "Last
+   * updated" line, and the sitemap's `<lastmod>`.
+   *
+   * Split out from `reviewed` because one field was answering two different
+   * questions and drifted on the second. `reviewed` means "somebody verified
+   * these facts"; a copy edit changes the page without re-verifying anything,
+   * and re-verifying changes nothing on the page. Publishing one as the other
+   * is only harmless while no edit happens between reviews — and two did:
+   *
+   *   #649 (2026-09-05) rewrote the `metaTitle` of six guides
+   *   #651 (2026-09-05) turned twelve prose mentions of /pet-safe into links
+   *
+   * Neither touched `reviewed`, so twelve guides went on advertising a
+   * `<lastmod>` and a `dateModified` older than their own content — by 80
+   * days on peace-lily, heartleaf-philodendron, zz-plant, aloe-vera,
+   * dieffenbachia and calathea. `<lastmod>` is the one sitemap field that is
+   * a factual claim, and understating it is how a crawler decides a URL whose
+   * title just changed does not need refetching.
+   *
+   * MUST be bumped to the ship date whenever any content field below changes.
+   * Values here were reconstructed from `git log` over this file; the four
+   * guides whose only recorded write is the repository's root commit
+   * (2026-07-05, history begins there) keep `reviewed`, because no change to
+   * them is on record and inventing a later date would overstate freshness.
+   */
+  updated: string;
   summary: string;
   quickFacts: {
     water: string;
@@ -55,6 +90,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a pothos, how much light it needs, why the leaves go yellow, and how to keep one alive in a shared home.',
     reviewed: '2026-06-08',
+    updated: '2026-06-08',
     summary:
       'Pothos is the plant people mean when they say “I can’t keep anything alive, except this one.” It’s forgiving, fast-growing, and tells you clearly when something’s wrong — if you know what to look for.',
     quickFacts: {
@@ -115,6 +151,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a snake plant, the light it needs, why the leaves go mushy or wrinkled, and how to share its care without drowning it.',
     reviewed: '2026-06-08',
+    updated: '2026-06-08',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
@@ -175,6 +212,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a monstera, the light it needs to grow holes (fenestrations), why leaves yellow or brown, and sharing its care at home.',
     reviewed: '2026-06-08',
+    updated: '2026-06-08',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
@@ -235,6 +273,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a spider plant, the light it likes, why the leaf tips go brown, and what to do with all the babies it keeps making.',
     reviewed: '2026-06-12',
+    updated: '2026-06-12',
     summary:
       'The spider plant forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
     quickFacts: {
@@ -295,6 +334,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a peace lily, the light it actually wants, why the leaves droop or brown, and whether it’s safe around cats and dogs.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
     quickFacts: {
@@ -355,6 +395,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a heartleaf philodendron, the light it likes, why the leaves yellow or go leggy, and whether it’s safe around pets.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'The heartleaf philodendron is the plant people confuse with pothos, and for good reason — same trailing habit, same near-indestructible temperament, same forgiving nature. It’s one of the genuinely easy ones, and a great vine for a beginner who wants something prettier than they had to work for.',
     quickFacts: {
@@ -415,6 +456,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a ZZ plant, the light it tolerates, why the stems go yellow or mushy, and whether it’s safe around cats and dogs.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {
@@ -475,6 +517,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
@@ -535,6 +578,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a dieffenbachia, the light it likes, why the leaves yellow or brown, and why it’s one to keep away from pets and kids.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'Dieffenbachia gives you big, splashy, tropical leaves for not much effort — a lot of visual payoff for an easy plant. The catch is in the old name, dumb cane: its sap is among the harsher of the common houseplants, so it’s a striking plant that comes with a real keep-out-of-reach asterisk.',
     quickFacts: {
@@ -595,6 +639,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a calathea, the humidity and water quality it demands, why the leaves curl or crisp, and why it’s a pet-safe choice.',
     reviewed: '2026-06-17',
+    updated: '2026-09-05',
     summary:
       'Calatheas have the most beautiful foliage of any common houseplant and the shortest temper. The trade-off is honest: stunning patterned leaves that fold up at night like praying hands, in exchange for fussiness about water, humidity, and what comes out of your tap. The pay-off, if you want it, is real.',
     quickFacts: {
@@ -655,6 +700,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a fiddle leaf fig, the light it actually needs, why the leaves get brown spots or drop, and how to keep one alive in a shared home.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'The fiddle leaf fig is the most photographed and most returned houseplant there is. It isn’t difficult so much as inflexible: it wants one bright spot and the same routine every week, and it registers a complaint about anything else.',
     quickFacts: {
@@ -715,6 +761,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a rubber plant, how much light it needs, why the leaves drop or yellow, and how to share the care of one without overwatering it.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'A rubber plant is what you buy when you want the drama of a fiddle leaf fig without the temperament. Same big glossy leaves, same architectural shape, a fraction of the sulking — it’s the easiest large statement plant you can own.',
     quickFacts: {
@@ -775,6 +822,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a bird of paradise, how much light it needs indoors, why the leaves split or brown, and whether it is safe around cats and dogs.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
@@ -835,6 +883,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
     quickFacts: {
@@ -895,6 +944,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a Chinese evergreen, why it thrives in low light, what yellow or curling leaves mean, and whether aglaonema is safe for pets.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'If you have a room with bad light and you’ve already killed something in it, this is the plant. Aglaonema is the best-looking thing that genuinely tolerates a dim corner, and it comes in pink and red varieties that look like they ought to be much harder.',
     quickFacts: {
@@ -955,6 +1005,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a jade plant, the light it needs, why the leaves drop or wrinkle, and why it is not a pet-safe choice.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
     quickFacts: {
@@ -1015,6 +1066,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water English ivy indoors, the cool bright conditions it prefers, how to deal with spider mites, and why it is not pet-safe.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants cool, bright and humid, and in a warm dry living room it gets spider mites and sulks.',
     quickFacts: {
@@ -1075,6 +1127,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a Boston fern, the humidity it needs, why the fronds go brown and shed everywhere, and why it is a genuinely pet-safe choice.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
     quickFacts: {
@@ -1135,6 +1188,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a money tree, the light it needs, why the leaves go yellow or drop, and why Pachira aquatica is one of the pet-safe options.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'The braided money tree is a genuinely good houseplant hiding behind a gimmicky presentation. It’s easy, it’s forgiving, and — unusually for a plant this size — the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1195,6 +1249,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1255,6 +1310,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
     quickFacts: {
@@ -1315,6 +1371,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'The supermarket orchid is not a delicate specialist plant — it’s an easy plant that almost everybody waters wrong. Get the watering right and a phalaenopsis will flower for months, rest, and then do it again for years.',
     quickFacts: {
@@ -1375,6 +1432,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a hoya, the light it needs to flower, why the leaves wrinkle or yellow, and why Hoya carnosa is a pet-safe trailing plant.',
     reviewed: '2026-09-02',
+    updated: '2026-09-03',
     summary:
       'A hoya is a trailing plant with thick, almost plastic-feeling leaves that stores its own water and asks very little of you. It’s slow, it’s nearly indestructible, and Hoya carnosa is on the ASPCA non-toxic list — which makes it the pet-safe answer to a hanging pothos.',
     quickFacts: {
@@ -1435,6 +1493,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
     reviewed: '2026-09-02',
+    updated: '2026-09-05',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {

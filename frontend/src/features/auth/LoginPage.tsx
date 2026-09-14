@@ -34,9 +34,13 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { setUser, setTokens } = useAuthStore();
+  const { setUser, setTokens, setRememberMe } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Default off: staying signed in after the browser closes means the
+  // long-lived refresh token is persisted to localStorage, so it is asked for
+  // rather than assumed. See the storage model in store/authStore.ts.
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
 
   // An explicit ?redirect= (e.g. from a shared cutting card) wins, then the
   // ProtectedRoute's saved location, then the dashboard. Only same-origin
@@ -70,6 +74,9 @@ export function LoginPage() {
 
     try {
       const response = await authService.login(data);
+      // BEFORE setTokens: the persist adapter reads this flag off the payload
+      // it is writing, so it decides where the refresh token lands.
+      setRememberMe(keepSignedIn);
       setTokens(response.idToken, response.accessToken, response.refreshToken);
       setUser(response.user);
       navigate(from, { replace: true });
@@ -127,7 +134,16 @@ export function LoginPage() {
           {...register('password')}
         />
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary-700"
+              checked={keepSignedIn}
+              onChange={(event) => setKeepSignedIn(event.target.checked)}
+            />
+            <span className="text-sm text-gray-700">{t('auth.keepSignedIn')}</span>
+          </label>
           <Link
             to="/forgot-password"
             className="text-sm font-medium text-primary-700 hover:text-primary-600"

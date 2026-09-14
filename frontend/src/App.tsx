@@ -1,5 +1,6 @@
 import { Suspense, lazy, type MouseEvent } from 'react';
 import { Routes, Route, Navigate, useSearchParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
 import { Layout } from '@/components/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -146,10 +147,11 @@ function OnboardingGate({ hasHousehold }: { hasHousehold: boolean }) {
 }
 
 function RouteFallback() {
+  const { t } = useTranslation();
   return (
     <div className="flex min-h-[60vh] items-center justify-center" role="status">
       <LoadingSpinner size="lg" />
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t('common.loading')}</span>
     </div>
   );
 }
@@ -172,6 +174,7 @@ function focusPrimaryContent(event: MouseEvent<HTMLAnchorElement>) {
 }
 
 function App() {
+  const { t } = useTranslation();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const hasHousehold = user?.householdId != null;
@@ -183,7 +186,7 @@ function App() {
           keep the fragment target on the Suspense wrapper as a loading-state
           fallback; activation moves focus to the rendered main landmark. */}
       <a href="#main-content" className="skip-link" onClick={focusPrimaryContent}>
-        Skip to main content
+        {t('common.skipToMain')}
       </a>
       <Toaster />
       <RouteErrorBoundary>

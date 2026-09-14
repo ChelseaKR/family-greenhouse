@@ -136,8 +136,57 @@ export const TEAM_ID = '6X5YH93QNM';
  */
 export const TEAM_ID_PLACEHOLDER = 'TEAMID_PENDING';
 
+/**
+ * The Enrollment ID for this account — the one wrong value that is NOT caught
+ * by shape.
+ *
+ * Apple shows an Enrollment ID while a Developer Program application is
+ * pending, and issues the Team ID when it is approved. Both are ten uppercase
+ * alphanumerics, so `TEAM_ID_PATTERN` accepts both, and both are shown in the
+ * same corner of the same portal, months apart, to the same person. The
+ * comments around this gate used to claim the shape check caught the
+ * Enrollment ID; it does not, and it cannot — that is a statement about a
+ * regex that admits 36^10 values, one of which is on file.
+ *
+ * Publishing the Enrollment ID is the most expensive defect this file can
+ * carry, and the quietest: the JSON parses, the deploy uploads it, S3 serves
+ * `application/json`, Apple's CDN fetches it with a 200 — and every universal
+ * link keeps opening Safari, with no server-side trace, on someone else's
+ * device, weeks later.
+ *
+ * So the specific known-wrong value is named here and refused by value rather
+ * than by shape. This is not a secret (neither ID is), and it is not a guess
+ * about which ID is right — it is the one substitution this repository has
+ * enough information to rule out.
+ */
+export const ENROLLMENT_ID = 'ACKGM9XK9V';
+
 /** The shape Apple issues: ten characters, uppercase letters and digits. */
 export const TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
+
+/**
+ * Why `teamId` cannot be published, or `null` if it can.
+ *
+ * Shared by the generator (so `npm run aasa` refuses to WRITE a bad file) and
+ * by `scripts/check-well-known.mjs` (so a file already on disk is refused
+ * before it ships). One predicate, two callers: a second copy of this rule is
+ * how the two ends drift into disagreeing about what is publishable.
+ */
+export function teamIdProblem(teamId) {
+  if (teamId === TEAM_ID_PLACEHOLDER) {
+    return `it is the placeholder sentinel \`${TEAM_ID_PLACEHOLDER}\``;
+  }
+  if (teamId === ENROLLMENT_ID) {
+    return (
+      `\`${ENROLLMENT_ID}\` is this account's ENROLLMENT ID, not its Team ID — and being ` +
+      'exactly ten uppercase alphanumerics, it passes every shape check'
+    );
+  }
+  if (!TEAM_ID_PATTERN.test(teamId)) {
+    return `\`${teamId}\` is not ${TEAM_ID_PATTERN.source}`;
+  }
+  return null;
+}
 
 /** Where the association file is committed, to be copied into `dist/`. */
 export const ASSOCIATION_PATH = join(
@@ -349,6 +398,18 @@ function routesCoveredBy(pattern, claimed) {
  * none" failure docs/mobile.md is about.
  */
 export function associationDocument(teamId = TEAM_ID, declared = declaredRoutePaths()) {
+  // Refused at the point of WRITING, not only at the point of checking. The
+  // committed file is byte-compared against this generator's output, so a bad
+  // TEAM_ID edited in above would otherwise regenerate cleanly and leave every
+  // gate green — which is exactly the shape of failure this file is about.
+  const problem = teamIdProblem(teamId);
+  if (problem !== null) {
+    throw new Error(
+      `Refusing to build an association file whose appID names ${teamId}: ${problem}. ` +
+        'The real value is at Apple Developer → Membership → Team ID.'
+    );
+  }
+
   const { claimed } = partitionRoutes(declared);
   const patterns = componentPatterns(declared);
 

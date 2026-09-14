@@ -27,6 +27,8 @@ import {
   type IdentifyTopUpGrant,
 } from '../models/identifyTopUp.js';
 import { grantCreditPack } from './identifyCredits.js';
+import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSubscriptions.js';
+import { grantGiftPurchase } from './giftCodes.js';
 import { assertPriceMatchesCatalog } from './stripePrices.js';
 
 let cachedClient: Stripe | null = null;
@@ -109,6 +111,17 @@ export interface HouseholdSubscription {
    * than this raw value.
    */
   noCardTrialEndsAt?: string;
+  /**
+   * A redeemed gift (ADR 0028): the tier it grants and when it ends, ISO 8601.
+   *
+   * Written together, once per redemption, by `giftCodes.redeemGift` in the
+   * same transaction that consumes the code. No Stripe path writes or clears
+   * either (`SubscriptionWriteField` excludes them). Entitlement reads them
+   * only through `giftState` in models/plans.ts. GET /billing/me publishes the
+   * derived state beside the raw end date, the way it does the trial.
+   */
+  giftPlanId?: PlanId;
+  giftEndsAt?: string;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -143,6 +156,8 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
     trialConsumedAt: item.trialConsumedAt as string | undefined,
     noCardTrialEndsAt: item.noCardTrialEndsAt as string | undefined,
+    giftPlanId: isPlanId(item.giftPlanId) ? item.giftPlanId : undefined,
+    giftEndsAt: item.giftEndsAt as string | undefined,
   };
 }
 
@@ -164,6 +179,8 @@ export async function getHouseholdSubscription(
     // condition `createCheckoutSession` applies below, read off the same row.
     trialAvailable: !state.trialConsumedAt,
     noCardTrialEndsAt: state.noCardTrialEndsAt,
+    giftPlanId: state.giftPlanId,
+    giftEndsAt: state.giftEndsAt,
   };
 }
 
@@ -179,9 +196,16 @@ export async function getHouseholdSubscription(
  * (ADR 0027). It is written once, at household creation, and a webhook that
  * could touch it could extend, restart or end an app-side trial that Stripe
  * knows nothing about.
+ *
+ * `giftPlanId` / `giftEndsAt` are excluded for the same reason (ADR 0028):
+ * they are written by the redemption transaction, and a Stripe event that
+ * could touch them could end a gift somebody paid for.
  */
 type SubscriptionWriteField =
-  | Exclude<keyof HouseholdSubscription, 'trialAvailable' | 'noCardTrialEndsAt'>
+  | Exclude<
+      keyof HouseholdSubscription,
+      'trialAvailable' | 'noCardTrialEndsAt' | 'giftPlanId' | 'giftEndsAt'
+    >
   | 'pendingStripeCancellationId';
 
 /**
@@ -290,7 +314,28 @@ export type { BillingInterval } from '../models/plans.js';
 // as opposed to 'canceled'/'incomplete_expired', which are terminal. Used to
 // decide whether a NEW checkout would create a second, concurrent
 // subscription alongside one that's already charging the customer.
-const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+export const LIVE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'active',
+  'trialing',
+  'past_due',
+  'unpaid',
+  'paused',
+]);
+
+/**
+ * "Would a new checkout create a second, concurrent subscription?" — the
+ * rule `createCheckoutSession` applies inline below, named so gift
+ * redemption (ADR 0028) can ask the same question of the same row. A known-
+ * dead status is the only thing that says no; an unknown one fails closed.
+ */
+export function hasLiveStripeSubscription(sub: {
+  stripeSubscriptionId?: string | null;
+  status?: string | null;
+}): boolean {
+  return Boolean(
+    sub.stripeSubscriptionId && (!sub.status || LIVE_SUBSCRIPTION_STATUSES.has(sub.status))
+  );
+}
 
 /** Length of the free trial offered on a household's FIRST paid subscription. */
 export const TRIAL_PERIOD_DAYS = 14;
@@ -1151,6 +1196,49 @@ async function applyIdentifyTopUpGrant(
   });
 }
 
+/**
+ * Apply a paid gift purchase (ADR 0028): create the gift and its code, once.
+ * Same shape as `applyIdentifyTopUpGrant`: the grant is exactly-once by
+ * construction (the Session id keys the gift row), the ledger is written
+ * after it, and the audit line is gated on the gift actually having been
+ * created. Never touches any household METADATA row — a purchase is not a
+ * redemption, and the buyer's household is not the recipient.
+ */
+async function applyGiftPurchase(event: Stripe.Event, grant: GiftPurchaseGrant): Promise<void> {
+  const granted = await grantGiftPurchase(grant);
+  const isNew = await recordStripeEventOnce(event.id);
+  if (!isNew) {
+    logger.info({ stripeEventId: event.id, type: event.type }, 'stripe_event_duplicate_reapplied');
+  }
+  if (!granted) {
+    logger.info(
+      { stripeEventId: event.id, stripeSessionId: grant.stripeSessionId },
+      'gift_subscription_duplicate_grant_skipped'
+    );
+    return;
+  }
+  logger.info(
+    {
+      stripeSessionId: grant.stripeSessionId,
+      planId: grant.planId,
+      months: grant.months,
+      buyerUserId: grant.buyerUserId,
+      purchasedAt: grant.purchasedAt,
+    },
+    'gift_subscription_granted'
+  );
+  audit('billing.gift_subscription_granted', {
+    actorId: grant.buyerUserId,
+    metadata: {
+      stripeEventType: event.type,
+      stripeSessionId: grant.stripeSessionId,
+      planId: grant.planId,
+      months: grant.months,
+      purchasedAt: grant.purchasedAt,
+    },
+  });
+}
+
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // Money-lifecycle emails, `charge` phase (ADR 0023): receipt, renewal
   // notice, payment failure, card expiring. Dispatched BEFORE any branch
@@ -1183,6 +1271,17 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   const topUpGrant = identifyTopUpGrantFromEvent(event);
   if (topUpGrant) {
     await applyIdentifyTopUpGrant(event, topUpGrant);
+    return;
+  }
+
+  // A paid gift purchase (ADR 0028) is likewise its own apply path: a gift
+  // row and a code, never a household. A gift Session carries no householdId
+  // and no client_reference_id, so an UNPAID one falls through the delta
+  // below to a silent null, and a PAID one whose metadata is broken reaches
+  // `warnPaidEventGrantedNothing` — the alarmed path — instead of a guess.
+  const giftGrant = giftPurchaseFromEvent(event);
+  if (giftGrant) {
+    await applyGiftPurchase(event, giftGrant);
     return;
   }
 
