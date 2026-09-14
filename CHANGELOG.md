@@ -18,6 +18,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **The blog named the care guides' plants fifty times and linked to a care
+  guide zero times.** Twelve of the fourteen posts name at least one plant
+  that has a `/care/<slug>` guide — the toxic-plants post names eleven, the
+  pet-safe post ten — and none of them linked one, so every guide's inbound
+  links from this site were the `/care` index and three rotated siblings,
+  four in all, however often the site's own articles discussed the plant.
+  The first body-text mention of each named guide in each post is now a link
+  (50 anchors across 12 posts, in the plain form the posts already use for
+  `/pet-safe` and for each other); one post named a plant only in a heading
+  and gained a body clause to carry the link.
+  `frontend/tests/unit/features/blogLinksToCareGuides.test.tsx` renders every
+  post and holds it to the rule — a named guide is linked at least once, and
+  every `/care/` link resolves to a guide that exists — so a guide added
+  later, or a post that starts naming one, fails there until it links.
+
 - **The site was indexed twice, once per hostname.** `www.familygreenhouse.net`
   is a second CloudFront alias over the same bucket, so both hostnames answered
   `200` with identical content and no redirect. Google treated them as two

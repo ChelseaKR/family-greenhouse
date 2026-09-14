@@ -33,8 +33,9 @@ export default function SplitPlantCare() {
 
       <h3>1. Split by plant</h3>
       <p>
-        Each plant belongs to one person. Your monstera, their fern. You water yours, they water
-        theirs, and neither of you touches the other&rsquo;s without asking.
+        Each plant belongs to one person. Your <a href="/care/monstera">monstera</a>, their fern.
+        You water yours, they water theirs, and neither of you touches the other&rsquo;s without
+        asking.
       </p>
       <p>
         <strong>Works when</strong> the collection came from two people who each brought plants, or
