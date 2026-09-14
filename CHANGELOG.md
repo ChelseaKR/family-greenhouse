@@ -90,6 +90,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **`/blog`, `/blog/<slug>` and `/changelog` showed US readers the day before
+  the date they publish.** Each rendered its `date:` literal with
+  `new Date(iso).toLocaleDateString()`: a date-only string parses as UTC
+  midnight, and rendering that instant in the browser's zone lands on the
+  previous day anywhere west of UTC. The post dated 2026-07-01 read
+  "June 30, 2026" under an `article:published_time` of 2026-07-01, the three
+  changelog entries dated 2026-09-02 read "Sep 1", and a changelog entry on
+  the 1st of a month would have been filed under the month before. The
+  prerender runs in UTC and wrote the right day into the HTML; hydration in
+  a US browser then rewrote it wrong, so the page a crawler read and the
+  page a reader saw disagreed by a day. All four call sites now go through
+  `formatContentDate`, which the care guides adopted first.
+  `frontend/tests/unit/features/publicContentDates.test.tsx` renders the three
+  pages under the test suite's pinned America/New_York zone and holds the
+  1st to the 1st, the 2nd to the 2nd, and a first-of-month entry to its own
+  month.
 - **Every care guide published its fact-review date as its modification date,
   and six of them were 80 days stale.** `reviewed` — the day a human last checked
   a guide's facts — fed `dateModified`, `article:modified_time` and the

@@ -1,6 +1,8 @@
 import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { formatContentDate } from '@/utils/contentDate';
+import { groupByMonth } from './groupByMonth';
 
 /**
  * Public changelog. Lightweight transparency move — show what changed,
@@ -286,20 +288,6 @@ const ENTRIES: Entry[] = [
   },
 ];
 
-function groupByMonth(entries: Entry[]): Map<string, Entry[]> {
-  const out = new Map<string, Entry[]>();
-  for (const e of entries) {
-    const month = new Date(e.date).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-    });
-    const list = out.get(month) ?? [];
-    list.push(e);
-    out.set(month, list);
-  }
-  return out;
-}
-
 export function ChangelogPage() {
   useMetaTags({
     title: 'Changelog — Family Greenhouse',
@@ -330,10 +318,7 @@ export function ChangelogPage() {
                       {e.category}
                     </span>
                     <span className="text-gray-600 normal-case tracking-normal">
-                      {new Date(e.date).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                      {formatContentDate(e.date, 'short')}
                     </span>
                   </div>
                   <h3 className="mt-2 font-serif text-xl tracking-tight text-ink">{e.title}</h3>
