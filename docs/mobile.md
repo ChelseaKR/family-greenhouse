@@ -106,11 +106,18 @@ component, while `/plants/new`, `/plants/import` and
 `/household/caretaker-report` are each one segment below a claimed prefix and
 are covered by `/plants/*` and `/household/*` without being restated.
 
-**The Team ID cannot be a placeholder.** `scripts/check-well-known.mjs` fails
-on the `TEAMID_PENDING` sentinel, on a missing or empty `appIDs`, and on
-anything that is not exactly ten uppercase alphanumerics before the bundle
-identifier — including the Enrollment ID, which is a different number of a
-similar shape. All three deploy paths carry the same refusal inline, because
+**The Team ID cannot be a placeholder — or the Enrollment ID.**
+`scripts/check-well-known.mjs` fails on the `TEAMID_PENDING` sentinel, on a
+missing or empty `appIDs`, and on anything that is not exactly ten uppercase
+alphanumerics before the bundle identifier. It used to say that last rule also
+caught the Enrollment ID. It did not: `ACKGM9XK9V` is also ten uppercase
+alphanumerics, and substituting it for `TEAM_ID` left `npm run aasa`,
+`npm run aasa:check` and `npm run well-known:check` all green while the
+published file claimed the wrong team. The Enrollment ID is now refused BY
+VALUE (`ENROLLMENT_ID` and `teamIdProblem()` in
+`frontend/scripts/app-site-association.mjs`), in the generator as well as the
+checker, so `npm run aasa` refuses to write the file rather than only refusing
+to bless it afterwards. All three deploy paths carry the same refusal inline, because
 `scripts/deploy.sh` is run by hand and CI is not the last thing that can
 publish this object. A wrong Team ID is the most expensive defect the file can
 carry: it parses, uploads, caches, and is fetched successfully by Apple while
@@ -198,7 +205,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 
 | Area               | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Billing            | All purchase UI is hidden (`BillingSettings.tsx` gates on `isNativeApp()`). Native shows the current plan + usage read-only. See "Store payment rules" below — do not add purchase links without reading it.                                                                                                                                                                                                                                     |
+| Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only. That is NOT the same as "all purchase UI is hidden", which this row used to claim: `LockedFeature`/`AskToUpgrade` is not native-gated. See "Store payment rules" below — do not add purchase links without reading it.                                                                                                                                       |
 | Push notifications | Web push does not exist in the WebViews. Native push UI is hidden until APNs/FCM delivery is complete, so store builds do not promise reminders that cannot arrive. See "Push notifications" below.                                                                                                                                                                                                                                              |
 | Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS. |
 | Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` padding on `body` (index.css) and the sticky mobile header (Layout.tsx) keep content clear of the notch/status bar/home indicator.                                                                                                                                                                                                                                                               |
@@ -224,6 +231,32 @@ entitlement without directing users to a purchase flow.
 
 The native `/pricing` route is purchase-free plan information; web prices and
 billing help are not rendered inside the shells.
+
+**One surface is not gated, and it is the one a reviewer reaches first.**
+`LockedFeature` (`frontend/src/components/LockedFeature.tsx`) renders on
+`/chat` (`feature="chat"`), on the trip-sitter offer (`away_kit`) and in API
+key settings (`api_keys`), and it checks the household's plan, not
+`isNativeApp()`. Inside the shells it therefore shows, to a Seedling
+household:
+
+- `locked.includedWithPrice` — "Included with Garden — $4.99 a month for the
+  whole household". A subscription price, in the app, for something that
+  cannot be bought with In-App Purchase.
+- to an admin, a **Change plan** button linking to `/settings/billing`. That
+  destination is native-gated and says plan changes are unavailable, so the
+  button does not reach a purchase mechanism — but it is still a call to
+  action about buying a subscription.
+- to a member, **"Ask <admin> to upgrade"**, which mails the admins asking
+  them to buy.
+
+Store builds install at the free tier, so the reviewer's path is: read
+"a plant care assistant answers questions about your plants" in the
+description → tap Chat → land on a priced upgrade prompt. That is the
+2.3.1 (accurate metadata) and 3.1.1 (in-app purchase) surfaces arriving on
+the same screen. Gating `LockedFeature` on `isNativeApp()` — showing what the
+feature is and that it is not included, with no price and no ask — is the
+change that makes the "Billing" row above true as written. Not done here:
+it changes what paying members see in the app, which is a product decision.
 
 ## Push notifications
 
@@ -293,8 +326,10 @@ Remaining work for delivery:
 
 ### One-time setup
 
-- [ ] **Apple Developer Program** — $99/year, <https://developer.apple.com>.
-      Enrollment verification can take a few days.
+- [x] **Apple Developer Program** — $99/year, <https://developer.apple.com>.
+      Enrolled and approved; Team ID `6X5YH93QNM`. The Enrollment ID shown
+      while the application was pending is a different number of the same
+      shape — see "The iOS association file".
 - [ ] **Google Play Console** — $25 one-time, <https://play.google.com/console>.
       New personal accounts must run a closed test (≥12 testers for 14 days)
       before production access is granted — start this early.
@@ -323,8 +358,13 @@ Remaining work for delivery:
 - [ ] Privacy policy (`/legal/privacy`), support (`/support`), and account
       deletion (`/account-deletion`) URLs filled in on both store listings.
 - [ ] Apple "App Privacy" + Play "Data safety" forms: declare account data
-      (email, name), phone number (optional, SMS reminders), photos users
-      upload, and crash/analytics telemetry (Sentry; self-hosted analytics).
+      (email, name), phone number (optional, SMS reminders) and photos users
+      upload — the seven types `ios/App/App/PrivacyInfo.xcprivacy` declares,
+      and nothing under Analytics. That is true only once the analytics and
+      telemetry rails are removed from the bundle: no Sentry DSN, PostHog key
+      or GTM container is configured today, but the first-party
+      `/telemetry/*` posts still fire from the shells. See the privacy
+      manifest item in `docs/mobile-release-checklist.md`.
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra

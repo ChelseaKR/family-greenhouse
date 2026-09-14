@@ -67,8 +67,15 @@
  *   - the `TEAMID_PENDING` sentinel;
  *   - a missing, empty, or non-string `appIDs` entry;
  *   - anything that is not exactly ten uppercase alphanumerics before the
- *     bundle identifier — a truncated paste, a lower-cased value, or the
- *     Enrollment ID, which is a different number that looks like a Team ID.
+ *     bundle identifier — a truncated paste or a lower-cased value;
+ *   - this account's Enrollment ID, BY VALUE.
+ *
+ * That last one used to be listed as something the shape check caught. It is
+ * not, and it cannot be: an Enrollment ID is also ten uppercase alphanumerics,
+ * so the regex accepts it, and swapping one in left this gate and `aasa:check`
+ * both green while the published file claimed the wrong team. The refusal now
+ * names the value (`ENROLLMENT_ID`), which is the only way to refuse a wrong
+ * answer that has the right shape.
  *
  * The sentinel is still named even though the real Team ID has landed. The
  * failure it guards is a FUTURE placeholder — pasted in while standing up a
@@ -101,8 +108,8 @@ import { runInNewContext } from 'node:vm';
 
 import {
   BUNDLE_ID,
-  TEAM_ID_PATTERN,
   TEAM_ID_PLACEHOLDER,
+  teamIdProblem,
 } from '../frontend/scripts/app-site-association.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -207,13 +214,15 @@ function escapeRegExp(value) {
  * Every appID has to be `<10-character Team ID>.<bundle id>`. The placeholder
  * is called out by name because it is the expected state of this repository
  * until enrollment completes, and the failure text has to be a handover note
- * rather than a riddle. Anything else that fails the shape gets the same
- * refusal — a truncated paste, a lower-cased value, or the Enrollment ID,
- * which is the mistake this specific gate exists to catch.
+ * rather than a riddle. A truncated paste or a lower-cased value gets the same
+ * refusal from the shape check, and this account's Enrollment ID gets it BY
+ * VALUE — shape cannot separate the two, which is why `teamIdProblem()` names
+ * the one wrong value this repository actually knows.
  *
- * Deliberately NOT a check that the Team ID is the RIGHT one: nothing in this
- * repository can know that. The claim being made is narrower and provable —
- * that no value of a shape Apple never issues reaches the bucket.
+ * Still deliberately NOT a check that the Team ID is the RIGHT one: nothing
+ * here can know that. The claim is narrower and provable — that no value of a
+ * shape Apple never issues, and no value this repository knows to be the wrong
+ * one, reaches the bucket.
  */
 function appleAppIdProblems(parsed) {
   const where = `${PUBLIC_WELL_KNOWN}/${APPLE_ASSOCIATION}`;
@@ -236,20 +245,15 @@ function appleAppIdProblems(parsed) {
       continue;
     }
     const teamId = appId.slice(0, appId.length - BUNDLE_ID.length - 1);
-    if (teamId === TEAM_ID_PLACEHOLDER) {
+    // One predicate, shared with the generator, so the thing that WRITES the
+    // file and the thing that CHECKS it cannot disagree about what may ship.
+    const problem = teamIdProblem(teamId);
+    if (problem !== null) {
       found.push(
-        `${where}: the appID carries the placeholder Team ID \`${TEAM_ID_PLACEHOLDER}\`, so ` +
-          'this file CANNOT SHIP. Published as-is it parses, uploads, caches, and is fetched ' +
-          'successfully by Apple — and every universal link silently keeps opening Safari, ' +
-          `which is a failure with no server-side trace and a weeks-long feedback loop. ` +
-          TEAM_ID_SOURCE
-      );
-      continue;
-    }
-    if (!TEAM_ID_PATTERN.test(teamId)) {
-      found.push(
-        `${where}: appID ${JSON.stringify(appId)} does not start with an Apple Team ID — ` +
-          `\`${teamId}\` is not ${TEAM_ID_PATTERN.source}. ${TEAM_ID_SOURCE}`
+        `${where}: this file CANNOT SHIP — ${problem}. Published as-is it parses, uploads, ` +
+          'caches, and is fetched successfully by Apple, and every universal link silently ' +
+          'keeps opening Safari: a failure with no server-side trace and a weeks-long ' +
+          `feedback loop. ${TEAM_ID_SOURCE}`
       );
     }
   }

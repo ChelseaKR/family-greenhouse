@@ -61,6 +61,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The iOS project commits the Apple team, and the mobile docs no longer
+  claim a purchase guard the app does not have.**
+  `frontend/ios/App/App.xcodeproj/project.pbxproj` set `CODE_SIGN_STYLE =
+Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
+  stopped at "Signing for 'App' requires a development team" and the fix lived
+  in one person's Xcode rather than in the repository; `DEVELOPMENT_TEAM =
+6X5YH93QNM` is now in both build configurations, pinned by
+  `tests/unit/config/iosEntitlements.test.ts` against `TEAM_ID` (not a literal)
+  so this second copy cannot drift, and against `ENROLLMENT_ID` so the
+  look-alike cannot be signed with either. Separately, `docs/mobile.md` said
+  "All purchase UI is hidden (`BillingSettings.tsx` gates on `isNativeApp()`)".
+  `LockedFeature` is not native-gated: on `/chat`, the trip-sitter offer and API
+  key settings it renders a subscription price ("Included with Garden — $4.99 a
+  month for the whole household") and an upgrade call to action inside the
+  shells, which is what a store reviewer on the free tier reaches by following
+  the listing's own description of the care assistant. The docs now say what is
+  actually gated; gating `LockedFeature` is a product decision and is not made
+  here. The release checklist also now records that the privacy manifest's
+  seven data types are the intended truth once the analytics and telemetry
+  rails are removed, and that the removal lands before any TestFlight build;
+  and `docs/mobile.md` no longer lists Apple Developer Program enrollment as
+  undone.
+
 - **The latency SLO is now alarmed as an error-budget burn rate instead of a
   five-minute percentile.** `family-greenhouse-application-latency-p95-production`
   evaluated p95 of `ApplicationLatency` over a 300-second period. Measured over
@@ -89,6 +112,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   tracked as a product problem in #730 rather than as a repeating page.
 
 ### Fixed
+
+- **The deep-link gates could not tell this account's Enrollment ID from its
+  Team ID.** An `appID` is `<Team ID>.<bundle id>`, and
+  `scripts/check-well-known.mjs` refused a Team ID that was not exactly ten
+  uppercase alphanumerics — with a comment saying that rule also caught the
+  Enrollment ID, the look-alike number Apple shows while an application is
+  pending. It did not. `ACKGM9XK9V` is ten uppercase alphanumerics too:
+  substituting it for `TEAM_ID` and regenerating left `npm run aasa`,
+  `npm run aasa:check` **and** `npm run well-known:check` all green, and would
+  have published a file that parses, uploads, caches, and is fetched by Apple
+  with a 200 while every universal link silently kept opening Safari — no
+  server-side trace, weeks of feedback loop, on someone else's device. A wrong
+  answer of the right shape cannot be refused by shape, so it is now refused by
+  value: `ENROLLMENT_ID` and a shared `teamIdProblem()` in
+  `frontend/scripts/app-site-association.mjs`, used by the generator (so
+  `npm run aasa` refuses to WRITE the file) as well as by the checker (so a
+  file already on disk is refused before it ships). One predicate, two callers,
+  because the thing that writes this file and the thing that blesses it drifting
+  apart is the same class of bug one layer up.
 
 - **The privacy policy described one account-free surface and the product has
   three.** It had a section for sitter links and nothing for the wall display
