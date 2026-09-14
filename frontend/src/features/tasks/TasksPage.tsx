@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +45,14 @@ import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
+
+/**
+ * How long after a completion the page may still put focus back on that
+ * task's Done button. Long enough for the invalidated list to come back and
+ * re-bucket the row; short enough that a background refetch minutes later
+ * can never yank the caret out of somewhere else.
+ */
+const FOCUS_RESTORE_WINDOW_MS = 5_000;
 
 function filterFromSearchParam(value: string | null): FilterType {
   // Notification links historically used `filter=due`; keep those links
@@ -150,6 +158,15 @@ export function TasksPage() {
   // let every task quietly read "Unplaced" — the placement is unknown, not
   // absent.
   const unplacedLabel = spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
+  // The same three states for the PLANTS read. `plantsById` is empty both
+  // while the read is in flight and after it fails, and every task whose
+  // plant is missing from it used to fall through to "Unplaced" — a
+  // placement claim about every plant in the household, computed from
+  // nothing, with no error anywhere on the page to contradict it (the page
+  // error only binds `plantsError` when a room filter is active).
+  const plantsUnavailable = Boolean(plantsError);
+  const unplacedGroupName =
+    spacesUnavailable || plantsUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced');
   const activeSpaceFilter =
     requestedSpaceFilter === 'unplaced' ||
     (requestedSpaceFilter != null && spacesById.has(requestedSpaceFilter))
@@ -176,13 +193,46 @@ export function TasksPage() {
     tasksLoading || (Boolean(requestedSpaceFilter) && (plantsLoading || spacesLoading));
   const error = tasksError || (requestedSpaceFilter ? (plantsError ?? spacesError) : null);
 
+  // Completing a task re-buckets it — a task due today lands in Upcoming —
+  // which unmounts the row the keyboard was standing on and drops focus to
+  // <body>, a whole page of Tab presses from the next task. Remember which
+  // task was completed and put focus back on its Done button once the list
+  // has settled in its new shape.
+  const doneButtons = useRef(new Map<string, HTMLButtonElement>());
+  const [focusAfterComplete, setFocusAfterComplete] = useState<{
+    taskId: string;
+    at: number;
+  } | null>(null);
+
   const completeTaskMutation = useCompleteTaskMutation(householdId);
   // House rule gate: a plant with a care rule shows it before the completion
   // goes through; with no rule the click completes exactly as before.
   const careRuleGate = useCareRuleGate<TaskWithCoverage>(
     (task) => careRuleFor(plantsById.get(task.plantId)),
-    (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
+    (task) => {
+      setFocusAfterComplete({ taskId: task.id, at: Date.now() });
+      completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue });
+    }
   );
+
+  useEffect(() => {
+    if (!focusAfterComplete) return;
+    // A completion that cost nobody their place must not move anything, and
+    // the intent must not outlive the interaction that created it: the row
+    // can take a moment to re-bucket, but after that this is just a stale
+    // claim on the user's focus.
+    if (Date.now() - focusAfterComplete.at > FOCUS_RESTORE_WINDOW_MS) {
+      setFocusAfterComplete(null);
+      return;
+    }
+    // Only ever take focus back from nobody — i.e. when the row that held it
+    // has been unmounted and the browser dropped focus to <body>.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const button = doneButtons.current.get(focusAfterComplete.taskId);
+    if (!button) return;
+    button.focus();
+    setFocusAfterComplete(null);
+  }, [focusAfterComplete, tasks]);
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -198,14 +248,22 @@ export function TasksPage() {
 
   const rowExtras: TaskRowExtras = {
     skipReasonFor,
-    locationFor: (task) =>
-      plantsById.has(task.plantId)
-        ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
-        : unplacedLabel,
+    locationFor: (task) => {
+      const plant = plantsById.get(task.plantId);
+      if (plant) return plantLocationLabel(plant, spacesById, unplacedLabel);
+      // No plant row to read a placement from. In flight is "we have not
+      // looked yet" and says nothing; settled without one is "we cannot
+      // tell". Neither is "this plant is unplaced".
+      return plantsLoading && !plantsUnavailable ? null : t('spaces.locationUnknown');
+    },
     onClaim: (id) => claimMutation.mutate(id),
     onUnclaim: (id) => unclaimMutation.mutate(id),
     onAsk: (task) => setAskTarget(task),
     onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
+    registerDone: (taskId, node) => {
+      if (node) doneButtons.current.set(taskId, node);
+      else doneButtons.current.delete(taskId);
+    },
     claimPending: claimMutation.isPending || unclaimMutation.isPending,
     askPending: askMutation.isPending,
     skipPending: skipMutation.isPending,
@@ -251,9 +309,13 @@ export function TasksPage() {
       ? ''
       : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
 
+  // The round's own fallback group name carries the same distinction: with
+  // the rooms (or the plants) unread, every task collapses into one group,
+  // and calling that group "Unplaced" states a placement for the whole
+  // household that nothing computed.
   const careRoundGroups = useMemo(
-    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, t('spaces.unplaced')),
-    [plants, sortedTasks, spaces, t]
+    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, unplacedGroupName),
+    [plants, sortedTasks, spaces, unplacedGroupName]
   );
 
   return (
@@ -495,14 +557,23 @@ export function TasksPage() {
   );
 }
 
+/** A placement we do not have yet is rendered as nothing at all. */
+function TaskLocationOrNothing({ label }: { label: string | null }) {
+  if (label === null) return null;
+  return <TaskLocation label={label} />;
+}
+
 /** Claim / vacation / climate-skip plumbing shared by every section row. */
 interface TaskRowExtras {
   skipReasonFor: (task: TaskWithCoverage) => Extract<SnoozeReason, 'rain' | 'frost'> | null;
-  locationFor: (task: TaskWithCoverage) => string;
+  /** `null` while the plants read is still in flight: say nothing. */
+  locationFor: (task: TaskWithCoverage) => string | null;
   onClaim: (taskId: string) => void;
   onUnclaim: (taskId: string) => void;
   onAsk: (task: TaskWithCoverage) => void;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
+  /** Where each row's Done button is, so focus can be put back on it. */
+  registerDone: (taskId: string, node: HTMLButtonElement | null) => void;
   claimPending: boolean;
   askPending: boolean;
   skipPending: boolean;
@@ -584,7 +655,7 @@ function TaskSection({
                     </span>
                     {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
                   </p>
-                  <TaskLocation label={extras.locationFor(task)} />
+                  <TaskLocationOrNothing label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       {!task.assignedTo &&
@@ -617,11 +688,24 @@ function TaskSection({
                   isPending={extras.claimPending}
                 />
                 <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
+                {/* `aria-disabled` while the completion is in flight, never
+                    `disabled`. A browser blurs a focused element the moment it
+                    becomes disabled, so the keyboard user who had just pressed
+                    Done was thrown out of the row to the top of the document
+                    (measured in Chromium: document.activeElement === body) and
+                    had to Tab back through the whole page to reach the next
+                    task. The button stays focusable and still announces itself
+                    as unavailable; the handler is what refuses a second press. */}
                 <Button
+                  ref={(node) => extras.registerDone(task.id, node)}
                   variant="secondary"
                   size="sm"
-                  onClick={() => onComplete(task)}
-                  disabled={completingTaskId === task.id}
+                  onClick={() => {
+                    if (completingTaskId === task.id) return;
+                    onComplete(task);
+                  }}
+                  aria-disabled={completingTaskId === task.id}
+                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                   leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
                 >
                   Done

@@ -12,7 +12,7 @@ import * as leafHealthBudget from '../../services/leafHealthBudget.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as billing from '../../services/billing.js';
-import { getEntitledPlan } from '../../models/plans.js';
+import { getMeteredPlanId } from '../../models/plans.js';
 import { successResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 
@@ -68,8 +68,11 @@ export const checkPlantHealth = createHandler(
     // is the same treatment a downgrade already gets (identify.ts does this).
     let cap: number;
     try {
-      cap = await leafHealthBudget.resolveMonthlyCap(
-        async () => getEntitledPlan(await billing.getHouseholdSubscription(user.householdId!)).id
+      // METERED, not merely entitled (ADR 0027): a household on the no-card
+      // Garden trial spends Seedling's leaf-health allowance. For every other
+      // household this is the entitled tier.
+      cap = await leafHealthBudget.resolveMonthlyCap(async () =>
+        getMeteredPlanId(await billing.getHouseholdSubscription(user.householdId!))
       );
     } catch (err) {
       logger.error(
@@ -132,9 +135,22 @@ export const checkPlantHealth = createHandler(
           { expose: true }
         );
       }
-      throw createHttpError(502, `Leaf health check failed: ${(err as Error).message}`, {
-        expose: true,
-      });
+      // Everything else: a Bedrock SDK failure (throttling, a validation
+      // error naming the model), the provider's own error envelope, or an
+      // unexpected internal error. The status is exposed, the STRING is not —
+      // it is written by a provider SDK for an operator, and it can carry
+      // model identifiers and other deployment detail that a plant-care user
+      // has no use for and we have no reason to publish. Logged instead, where
+      // the api-5xx alarm and the request id can reach it.
+      logger.error(
+        { err: (err as Error).message, householdId: user.householdId },
+        'leaf_health.check_failed'
+      );
+      throw createHttpError(
+        502,
+        'Could not check this photo just now. Please try again in a moment.',
+        { expose: true }
+      );
     }
 
     // The explicit demo fallback means Bedrock rejected the deployment before

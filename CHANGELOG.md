@@ -45,6 +45,49 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   real workflows carry the flag, so removing it fails a test rather than a
   deploy six weeks later.
 
+### Added
+
+- **A sign-up that never confirmed its email now gets one reminder, and only
+  one.** A self-service account starts `UNCONFIRMED` and receives one code that
+  is valid for 24 hours. Cognito never expires or deletes such an account: it
+  cannot sign in, the address cannot register again, and nothing ever
+  contacted the person again. The 2026-09-13 funnel measurement found 2 of 3
+  real sign-ups since 2026-09-01 stopped exactly there.
+
+  The hourly `reminders` Lambda gains a third pass,
+  `services/confirmReminders.ts`. It resends the confirmation code through
+  Cognito once, between 24 hours (when the first code expires) and 7 days after
+  sign-up. The CustomMessage trigger renders it as a reminder
+  ("Finish setting up Family Greenhouse — here is a new code"). Unconfirmed
+  accounts are still not let into the app.
+
+  - **Exactly once.** `POST /auth/signup` writes one row per sign-up, keyed by
+    the opaque Cognito `sub`. Before sending, the pass claims that row with a
+    conditional write, so concurrent runs, EventBridge retries and redeploys
+    cannot send twice. A crash after the claim loses a reminder rather than
+    doubling one.
+  - **Never emailed:** accounts created before this ships (they have no row),
+    anything not `UNCONFIRMED`, disabled or deleted accounts, and addresses on
+    either suppression list. The SES account-level list matters here because
+    Cognito sends with no configuration set, so a bounced confirmation email is
+    recorded only there.
+  - **Never a smoke fixture.** The post-deploy smoke run writes a
+    `TESTFIXTURE_SIGNUP#` marker, keyed by a hash of its address, before it
+    submits the public sign-up form. The pass skips any account with that
+    marker, even if the run died before teardown.
+  - **Measured, not tracked.** Two aggregate counts are published in Embedded
+    Metric Format under `FamilyGreenhouse/SignupConfirmation`:
+    `ConfirmRemindersSent` and `ConfirmedAfterReminder`. There is no pixel, no
+    redirect link, and no address or id in any log line.
+
+  `/confirm-email` opened with no session (from the reminder's link, in a new
+  browser) now offers "I already have a code". Before, it could only request
+  another code.
+
+  **Infrastructure:** the shared Lambda role gains the read-only
+  `ses:GetSuppressedDestination`, and the CustomMessage Lambda changes. Both
+  ship with the next `v*` tag, not on merge.
+
 ### Changed
 
 - **The latency SLO is now alarmed as an error-budget burn rate instead of a
@@ -73,6 +116,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   The SLO is currently missed — the 28-day p95 is 1,673 ms and 21.8% of
   requests exceed 500 ms, a sustained 4.4x burn caused by cold starts. That is
   tracked as a product problem in #730 rather than as a repeating page.
+
+### Fixed
+
+- **The privacy policy described one account-free surface and the product has
+  three.** It had a section for sitter links and nothing for the wall display
+  or caretaker seats — even though a caretaker seat collects a third party's
+  name, typed by the household and kept on every visit record, and a wall
+  display link never expires. The policy now says what each link shows, what
+  neither shows, and how long a seat can run; the Stripe paragraph now lists
+  the billing fields actually stored (a scheduled cancellation, a tier bought
+  outright, the date a free trial was first used), not a subset of them.
+  `backend/tests/unit/config/privacyTokenSurfaces.test.ts` holds the new
+  sentences to `caretakerService` and `kioskService`.
+- **`docs/analytics.md` was one event short of what the product captures.**
+  `upgrade_requested` shipped in the browser union and the API accept-list and
+  was documented nowhere, while the privacy policy sends readers to that file
+  for the full list. `scripts/check-doc-figures.mjs` now re-derives the three
+  event vocabularies and fails in both directions.
+- **`docs/security.md` published a CSP the app stopped shipping.** It stated
+  `script-src 'self'` with no third-party origins; the shipped policy admits
+  Google Tag Manager and two Analytics hosts. The document now quotes the
+  policy from `frontend/index.html` and the same gate keeps them equal.
+- **`docs/multi-household.md` said account deletion keeps the departing user's
+  name** on activity events and completions. It does not:
+  `accountCleanup.anonymizeUserInHousehold` rewrites both to "Former member",
+  which is what the privacy policy and `docs/support.md` already said.
+- **`README.md` credited household authorization to Cognito custom claims**,
+  the one input `middleware/auth.ts` documents as untrusted. The membership row
+  is the authority.
 
 ## [0.33.0] - 2026-09-13
 

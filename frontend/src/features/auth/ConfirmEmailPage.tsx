@@ -38,10 +38,14 @@ export function ConfirmEmailPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
+  // Set when someone with no session (the reminder email's link, a new
+  // browser) says they already hold a code. Kept in state as well as in
+  // sessionStorage, because storage can be unavailable in private browsing.
+  const [enteredEmail, setEnteredEmail] = useState<string | null>(null);
 
   const state = (location.state as { email?: string; redirect?: string }) ?? {};
   const pending = getPendingConfirmation();
-  const email = state.email ?? pending?.email;
+  const email = state.email ?? pending?.email ?? enteredEmail ?? undefined;
   const redirect = state.redirect ?? pending?.redirect ?? undefined;
   const safeRedirect = safeAppRedirect(redirect);
   const loginHref = safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login';
@@ -107,6 +111,25 @@ export function ConfirmEmailPage() {
           />
           <Button type="submit" className="w-full" isLoading={isResending}>
             {t('auth.resendConfirmation')}
+          </Button>
+          {/* The confirm-reminder email carries a fresh code and links here. Go
+              straight to code entry rather than requesting yet another code. */}
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={(event) => {
+              const form = event.currentTarget.form;
+              if (form && !form.reportValidity()) return;
+              const target = recoveryEmail.trim();
+              if (!target) return;
+              setError(null);
+              setInfo(null);
+              setPendingConfirmation({ email: target, redirect: safeRedirect });
+              setEnteredEmail(target);
+            }}
+          >
+            {t('auth.haveConfirmationCode')}
           </Button>
         </form>
         <div className="mt-4 text-center text-sm text-gray-700">

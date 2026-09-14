@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildSignupAddressFixtureMarker,
   buildSmokeEmail,
   householdIdFromCreateResponse,
   householdIdFromMembershipItem,
@@ -9,9 +10,57 @@ import {
   runAllCleanupSteps,
   s3ObjectTargetFromPresignedUrl,
   safeResponseDiagnostic,
+  SIGNUP_ADDRESS_MARKER_TTL_SECONDS,
+  TEST_FIXTURE,
 } from '../../e2e/post-deploy-smoke-support';
 
 describe('post-deploy smoke support', () => {
+  describe('buildSignupAddressFixtureMarker', () => {
+    const RUN_ID = '550e8400-e29b-41d4-a716-446655440000';
+    const CREATED_AT = '2026-10-06T17:23:41.000Z';
+    const SMOKE_ADDRESS = 'fg-smoke+public-a1b2c3d4e5f6@example.invalid';
+    const build = (email: string) =>
+      buildSignupAddressFixtureMarker({ email, runId: RUN_ID, createdAt: CREATED_AT });
+
+    it('keys the marker by a hash of the address, pinned to the key the backend reads', () => {
+      // backend/tests/unit/services/confirmReminders.test.ts pins this SAME
+      // literal for this SAME address from the reading side. If either side
+      // changes how it hashes or normalises, one of the two tests fails.
+      const marker = build(SMOKE_ADDRESS);
+      expect(marker.PK).toEqual({
+        S: 'TESTFIXTURE_SIGNUP#34e63f1c859fdffbffff40bc22cec2be4ab64424a10872be815f0d9c3ec5cc43',
+      });
+      expect(marker.SK).toEqual({ S: 'METADATA' });
+      // The operator's smoke mailbox never reaches the table in the clear.
+      expect(JSON.stringify(marker)).not.toContain('example.invalid');
+    });
+
+    it('normalises case and surrounding whitespace the way the backend does', () => {
+      expect(build('  FG-Smoke+Public-A1B2C3D4E5F6@Example.INVALID ').PK).toEqual(
+        build(SMOKE_ADDRESS).PK
+      );
+    });
+
+    it('is a structural fixture marker that outlives the 7-day reminder window', () => {
+      const marker = build(SMOKE_ADDRESS);
+      expect(marker[TEST_FIXTURE.flag]).toEqual({ BOOL: true });
+      expect(marker[TEST_FIXTURE.source]).toEqual({ S: 'post-deploy-smoke' });
+      expect(SIGNUP_ADDRESS_MARKER_TTL_SECONDS).toBe(2_592_000);
+      expect(marker.ttl).toEqual({ N: String(Date.parse(CREATED_AT) / 1000 + 2_592_000) });
+      // Not under the claim prefix: the sweeper reads every TESTFIXTURE# row as
+      // a run claim that holds a Cognito sub, and this row holds none.
+      expect((marker.PK as { S: string }).S.startsWith(TEST_FIXTURE.partitionPrefix)).toBe(false);
+    });
+
+    it.each([
+      [{ email: 'not-an-address', runId: RUN_ID, createdAt: CREATED_AT }, /valid address/i],
+      [{ email: SMOKE_ADDRESS, runId: 'run-1', createdAt: CREATED_AT }, /UUID/],
+      [{ email: SMOKE_ADDRESS, runId: RUN_ID, createdAt: 'yesterday' }, /ISO 8601/],
+    ])('refuses to write a marker it cannot key or age: %o', (input, message) => {
+      expect(() => buildSignupAddressFixtureMarker(input)).toThrow(message);
+    });
+  });
+
   describe('buildSmokeEmail', () => {
     it('builds a unique address from a configured deliverable template', () => {
       expect(buildSmokeEmail('fg-smoke+{tag}@example.com', 'public-a1b2')).toBe(
