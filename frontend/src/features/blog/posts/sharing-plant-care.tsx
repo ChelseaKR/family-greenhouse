@@ -95,8 +95,8 @@ export default function SharingPlantCare() {
       </p>
       <p>
         This is the hidden value of an activity feed. It removes the need to ask &ldquo;did you
-        water the monstera?&rdquo; because you can just see that yes, your partner did, on Tuesday
-        at 8pm. Conversation eliminated. Trust preserved.
+        water the <a href="/care/monstera">monstera</a>?&rdquo; because you can just see that yes,
+        your partner did, on Tuesday at 8pm. Conversation eliminated. Trust preserved.
       </p>
 
       <h2>The relationship math</h2>

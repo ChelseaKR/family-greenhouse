@@ -43,14 +43,16 @@ export default function MovingWithPlants() {
       <p>For each plant, decide which of three categories it&rsquo;s in:</p>
       <ul>
         <li>
-          <strong>Tall + leafy</strong> (fiddle leaf, monstera): tape stretchy clear bags loosely
-          over the leaves to keep them from snagging on doorways. Wrap the pot in a plastic bag,
-          secured with a rubber band around the stem, so soil doesn&rsquo;t escape.
+          <strong>Tall + leafy</strong> (fiddle leaf, <a href="/care/monstera">monstera</a>): tape
+          stretchy clear bags loosely over the leaves to keep them from snagging on doorways. Wrap
+          the pot in a plastic bag, secured with a rubber band around the stem, so soil
+          doesn&rsquo;t escape.
         </li>
         <li>
-          <strong>Medium tabletop</strong> (snake plant, pothos): pack three to a copy-paper-box,
-          separated with crumpled paper. Tape the leaves loosely; they don&rsquo;t need to be
-          immobilized, just guided.
+          <strong>Medium tabletop</strong> (<a href="/care/snake-plant">snake plant</a>,{' '}
+          <a href="/care/pothos">pothos</a>): pack three to a copy-paper-box, separated with
+          crumpled paper. Tape the leaves loosely; they don&rsquo;t need to be immobilized, just
+          guided.
         </li>
         <li>
           <strong>Small + fragile</strong> (succulents, cuttings): pack each in a paper coffee cup
@@ -87,9 +89,10 @@ export default function MovingWithPlants() {
       <h2>Long-distance: the freeze problem</h2>
       <p>
         Anything over a few hours in a vehicle in winter is dangerous. Tropicals start dying below
-        50°F; succulents below 40°F; a few species (jade, ZZ) tolerate brief 35°F. The number that
-        matters isn&rsquo;t the outdoor temperature — it&rsquo;s the temperature at the bottom of a
-        parked car overnight, which can be 10–20°F colder than the air.
+        50°F; succulents below 40°F; a few species (jade, <a href="/care/zz-plant">ZZ</a>) tolerate
+        brief 35°F. The number that matters isn&rsquo;t the outdoor temperature — it&rsquo;s the
+        temperature at the bottom of a parked car overnight, which can be 10–20°F colder than the
+        air.
       </p>
       <p>If you can&rsquo;t move plants in a heated cab, your options are:</p>
       <ul>

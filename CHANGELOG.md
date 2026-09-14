@@ -18,6 +18,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **The blog named the care guides' plants fifty times and linked to a care
+  guide zero times.** Twelve of the fourteen posts name at least one plant
+  that has a `/care/<slug>` guide — the toxic-plants post names eleven, the
+  pet-safe post ten — and none of them linked one, so every guide's inbound
+  links from this site were the `/care` index and three rotated siblings,
+  four in all, however often the site's own articles discussed the plant.
+  The first body-text mention of each named guide in each post is now a link
+  (50 anchors across 12 posts, in the plain form the posts already use for
+  `/pet-safe` and for each other); one post named a plant only in a heading
+  and gained a body clause to carry the link.
+  `frontend/tests/unit/features/blogLinksToCareGuides.test.tsx` renders every
+  post and holds it to the rule — a named guide is linked at least once, and
+  every `/care/` link resolves to a guide that exists — so a guide added
+  later, or a post that starts naming one, fails there until it links.
+
 - **The site was indexed twice, once per hostname.** `www.familygreenhouse.net`
   is a second CloudFront alias over the same bucket, so both hostnames answered
   `200` with identical content and no redirect. Google treated them as two
@@ -157,6 +172,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The iOS project commits the Apple team, and the mobile docs no longer
+  claim a purchase guard the app does not have.**
+  `frontend/ios/App/App.xcodeproj/project.pbxproj` set `CODE_SIGN_STYLE =
+Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
+  stopped at "Signing for 'App' requires a development team" and the fix lived
+  in one person's Xcode rather than in the repository; `DEVELOPMENT_TEAM =
+6X5YH93QNM` is now in both build configurations, pinned by
+  `tests/unit/config/iosEntitlements.test.ts` against `TEAM_ID` (not a literal)
+  so this second copy cannot drift, and against `ENROLLMENT_ID` so the
+  look-alike cannot be signed with either. Separately, `docs/mobile.md` said
+  "All purchase UI is hidden (`BillingSettings.tsx` gates on `isNativeApp()`)".
+  `LockedFeature` is not native-gated: on `/chat`, the trip-sitter offer and API
+  key settings it renders a subscription price ("Included with Garden — $4.99 a
+  month for the whole household") and an upgrade call to action inside the
+  shells, which is what a store reviewer on the free tier reaches by following
+  the listing's own description of the care assistant. The docs now say what is
+  actually gated; gating `LockedFeature` is a product decision and is not made
+  here. The release checklist also now records what the privacy manifest has
+  to declare beyond its seven types before a TestFlight build — the shells'
+  product and frontend telemetry, and the analytics rail being turned on —
+  and `docs/mobile.md` no longer lists Apple Developer Program enrollment as
+  undone.
+
 - **The latency SLO is now alarmed as an error-budget burn rate instead of a
   five-minute percentile.** `family-greenhouse-application-latency-p95-production`
   evaluated p95 of `ApplicationLatency` over a 300-second period. Measured over
@@ -219,6 +257,53 @@ CHECKOUT_PENDING`; the web client says a checkout is already in progress and
   (`infrastructure/modules/api/main.tf`, `handler_integration_environment`),
   so the pack stays off there until it is — the correct answer for a process
   that cannot vouch for it.
+
+- **Every care guide published its fact-review date as its modification date,
+  and six of them were 80 days stale.** `reviewed` — the day a human last checked
+  a guide's facts — fed `dateModified`, `article:modified_time` and the
+  sitemap's `<lastmod>` as well as `datePublished`. Two edits then landed
+  without touching it (#649 rewrote six `metaTitle`s, #651 linked twelve guides
+  to `/pet-safe`, both 2026-09-05), so `/care/zz-plant`, `/care/peace-lily`,
+  `/care/aloe-vera`, `/care/calathea`, `/care/dieffenbachia` and
+  `/care/heartleaf-philodendron` advertised `<lastmod>2026-06-17</lastmod>` for
+  content that changed on 2026-09-05, and the other eighteen ran one to three
+  days behind. `lastmod` is the one sitemap field a crawler still reads, and it
+  reads it to decide whether a URL is worth refetching — understating it is the
+  direction that skips the recrawl of a page whose title just changed.
+  `CareGuide` now carries a separate `updated` date, reconstructed from
+  `git log` over `careGuides.ts` (a guide whose only recorded write is the
+  repository's root commit keeps its review date rather than an invented later
+  one), and that field — not `reviewed` — drives `dateModified`,
+  `article:modified_time` and `<lastmod>`. The page prints both dates under
+  the FAQ, so the claim the markup makes is one a reader can see and a
+  proofreader can catch going stale. `careGuides.test.ts` refuses an
+  `updated` earlier than its `reviewed`, a date in the future, or a registry
+  in which the two have quietly collapsed back into one; `CareGuidePage.test.tsx`
+  holds the JSON-LD, the Open Graph tag and the visible `<time>` to the same
+  literal and checks the printed day is the day the literal names — a naive
+  `toLocaleDateString` on a `YYYY-MM-DD` string prints the day before,
+  anywhere west of UTC. The renderer that gets this right is
+  `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
+  blog and changelog can stop making the same mistake.
+
+- **The deep-link gates could not tell this account's Enrollment ID from its
+  Team ID.** An `appID` is `<Team ID>.<bundle id>`, and
+  `scripts/check-well-known.mjs` refused a Team ID that was not exactly ten
+  uppercase alphanumerics — with a comment saying that rule also caught the
+  Enrollment ID, the look-alike number Apple shows while an application is
+  pending. It did not. `ACKGM9XK9V` is ten uppercase alphanumerics too:
+  substituting it for `TEAM_ID` and regenerating left `npm run aasa`,
+  `npm run aasa:check` **and** `npm run well-known:check` all green, and would
+  have published a file that parses, uploads, caches, and is fetched by Apple
+  with a 200 while every universal link silently kept opening Safari — no
+  server-side trace, weeks of feedback loop, on someone else's device. A wrong
+  answer of the right shape cannot be refused by shape, so it is now refused by
+  value: `ENROLLMENT_ID` and a shared `teamIdProblem()` in
+  `frontend/scripts/app-site-association.mjs`, used by the generator (so
+  `npm run aasa` refuses to WRITE the file) as well as by the checker (so a
+  file already on disk is refused before it ships). One predicate, two callers,
+  because the thing that writes this file and the thing that blesses it drifting
+  apart is the same class of bug one layer up.
 
 - **In-app copy that promised what the code refuses.** Eleven strings in both
   locales, each checked against the handler that decides it:

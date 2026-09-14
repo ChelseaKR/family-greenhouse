@@ -51,8 +51,8 @@ export default function NonPlantPeople() {
       </p>
       <p>
         Start with three, and start with the forgiving ones. If the first plant somebody is put in
-        charge of is a calathea, they will conclude they&rsquo;re bad at this, and they will be
-        right, because everyone is bad at calatheas.
+        charge of is a <a href="/care/calathea">calathea</a>, they will conclude they&rsquo;re bad
+        at this, and they will be right, because everyone is bad at calatheas.
       </p>
 
       <h3>Attach the job to something they already do</h3>
@@ -111,7 +111,8 @@ export default function NonPlantPeople() {
       <p>
         The alternative &mdash; one person holding the whole model in their head, doing everything
         themselves, and being mildly resentful about it &mdash; produces better plants and a worse
-        household. Most people, asked directly, would take the second-best pothos.
+        household. Most people, asked directly, would take the second-best{' '}
+        <a href="/care/pothos">pothos</a>.
       </p>
 
       <h2>When it&rsquo;s not going to work</h2>

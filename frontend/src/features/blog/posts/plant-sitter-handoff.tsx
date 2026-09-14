@@ -12,8 +12,8 @@ export default function PlantSitterHandoff() {
         The reason plant-sitting goes wrong is almost never that the sitter didn&rsquo;t care.
         It&rsquo;s that they were handed instructions written by someone who already knows the
         answer. &ldquo;Water when the top inch is dry&rdquo; is a perfectly good rule and a terrible
-        instruction, because it asks a person who has never met your monstera to make a judgement
-        call and be confident about it.
+        instruction, because it asks a person who has never met your{' '}
+        <a href="/care/monstera">monstera</a> to make a judgement call and be confident about it.
       </p>
 
       <h2>Write actions, not conditions</h2>
@@ -100,7 +100,8 @@ export default function PlantSitterHandoff() {
         </li>
         <li>
           <strong>Explanations.</strong> You do not need to teach them why. A paragraph on why the
-          calathea wants filtered water gives a person one more thing to get wrong.
+          <a href="/care/calathea">calathea</a> wants filtered water gives a person one more thing
+          to get wrong.
         </li>
       </ul>
 

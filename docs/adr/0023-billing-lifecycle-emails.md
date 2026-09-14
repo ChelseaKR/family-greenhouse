@@ -208,6 +208,14 @@ retrying, the subscription will not continue, and nothing the household created
 is deleted whatever plan it ends up on. When #364 lands, this copy is still
 correct; if the dashboard setting changes, it is still correct.
 
+> **Update (2026-09-13).** #364 and #540 have landed, so the second of those
+> two unknowns is settled: `getEntitledPlan` entitles `active` and `trialing`
+> only, and a household left `past_due`/`unpaid` has Seedling's caps
+> immediately rather than keeping its paid ones until deletion. The copy above
+> needed no change, which was the point of writing it that way. The app now
+> states the same thing on `Settings → Billing`, so the email is no longer the
+> only place a household can learn its card was declined.
+
 ### 5. Recipients are the household's admins
 
 Only an admin can reach checkout or the billing portal (`requireAdmin` on
