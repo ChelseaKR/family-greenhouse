@@ -412,6 +412,16 @@ Operational notes:
   claim/send/finalize lease `welcomeEmail` uses. It is a _different sort key_
   from the ledger's `METADATA` row on purpose: that row is written after the
   apply so a failed apply stays retryable, and an email must not claim it.
+  The finalize is allowed to FAIL, and that is the case the marker has to
+  survive: a slot left in `sending` still carries a five-minute lease, and the
+  claim treats an expired lease as reclaimable, so a Lambda timeout between
+  SES accepting and the finalize landing would collect a Stripe retry and send
+  a second receipt for one charge. `forceCloseSlot` therefore closes the slot
+  unconditionally on that path (`finalizeRecovered: true` on the row marks
+  it), because suppressing a receipt is recoverable — replay the event from
+  the Stripe dashboard — and un-sending one is not. If BOTH writes fail the
+  slot really is reclaimable, and `billing_email_marker_left_reclaimable` says
+  so rather than leaving it to be discovered by a customer.
 - **Dispatch never throws.** A 5xx would make Stripe redeliver an already
   applied event. A failed send releases its marker, so replaying the event from
   the Stripe dashboard delivers it.
