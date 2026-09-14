@@ -7,6 +7,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { formatContentDate } from '@/utils/contentDate';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -123,12 +124,7 @@ export function BlogPost() {
 
       <header className="mt-6 mb-10">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700">
-          {new Date(post.date).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}{' '}
-          · {post.readingMinutes} min read
+          {formatContentDate(post.date)} · {post.readingMinutes} min read
         </p>
         <h1 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl">
           {post.title}

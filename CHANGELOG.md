@@ -224,6 +224,23 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
 
 ### Fixed
 
+- **`/blog`, `/blog/<slug>` and `/changelog` showed US readers the day before
+  the date they publish.** Each rendered its `date:` literal with
+  `new Date(iso).toLocaleDateString()`: a date-only string parses as UTC
+  midnight, and rendering that instant in the browser's zone lands on the
+  previous day anywhere west of UTC. The post dated 2026-07-01 read
+  "June 30, 2026" under an `article:published_time` of 2026-07-01, the three
+  changelog entries dated 2026-09-02 read "Sep 1", and a changelog entry on
+  the 1st of a month would have been filed under the month before. The
+  prerender runs in UTC and wrote the right day into the HTML; hydration in
+  a US browser then rewrote it wrong, so the page a crawler read and the
+  page a reader saw disagreed by a day. All four call sites now go through
+  `formatContentDate`, which the care guides adopted first.
+  `frontend/tests/unit/features/publicContentDates.test.tsx` renders the three
+  pages under the test suite's pinned America/New_York zone and holds the
+  1st to the 1st, the 2nd to the 2nd, and a first-of-month entry to its own
+  month.
+
 - **Every care guide published its fact-review date as its modification date,
   and six of them were 80 days stale.** `reviewed` — the day a human last checked
   a guide's facts — fed `dateModified`, `article:modified_time` and the
@@ -251,6 +268,8 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
   anywhere west of UTC. The renderer that gets this right is
   `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
   blog and changelog can stop making the same mistake.
+  <<<<<<< HEAD
+  \=======
 
 - **The deep-link gates could not tell this account's Enrollment ID from its
   Team ID.** An `appID` is `<Team ID>.<bundle id>`, and
@@ -354,6 +373,8 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
 - `scripts/check-plan-copy.mjs` (new, in `npm run verify` and in CI) re-derives
   the free plan's caps from `backend/src/models/plans.ts` and checks all
   fifteen public statements of them, failing in both directions.
+
+> > > > > > > origin/main
 
 - **The privacy policy described one account-free surface and the product has
   three.** It had a section for sitter links and nothing for the wall display
