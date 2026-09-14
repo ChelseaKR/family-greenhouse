@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -76,7 +76,7 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
     staleTime: 60_000,
   });
   const limits = subscriptionQuery.isSuccess
-    ? sitterLinkLimitsFor(subscriptionQuery.data.planId)
+    ? sitterLinkLimitsFor(effectivePlanId(subscriptionQuery.data))
     : null;
   const maxDays = limits?.maxDays ?? SITTER_LINK_MAX_DAYS_CEILING;
   const shownDays =
@@ -163,19 +163,27 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
               readOnly
               value={created.url}
               className="input flex-1 bg-gray-50"
-              aria-label="Plant-sitter link"
+              aria-label={t('household.share.sitterLinkLabel')}
             />
             <Button
               variant="secondary"
               onClick={handleCopy}
               leftIcon={<ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />}
             >
-              {copied ? 'Copied!' : 'Copy'}
+              {copied ? t('household.share.copied') : t('household.share.copy')}
             </Button>
           </div>
+          {/* Same as the invite link above: the copy SUCCEEDING was announced
+              nowhere — only the button's label changed — while the failure
+              already had an alert. This link is shown once and never again
+              ("for security, we won't show the full link again"), so a sitter
+              handoff can be lost on a copy nobody heard land. */}
+          <p className="text-sm text-primary-800" role="status">
+            {copied ? t('household.share.copiedAnnouncement') : ''}
+          </p>
           {copyError && (
             <p className="text-sm text-red-700" role="alert">
-              Could not copy automatically. Select the link and copy it manually.
+              {t('household.share.copyFailed')}
             </p>
           )}
           <p className="text-xs text-gray-600">

@@ -67,6 +67,10 @@ the second question, and the gates listed below use it rather than
 | none recorded (free tier, one-time lifetime grant)                             | the plan on file |
 | `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused`, `canceled` | Seedling         |
 
+A household with **no** Stripe state at all and a running no-card trial resolves
+to Garden; a household with any Stripe state resolves by the table above and
+nothing else. See [The no-card Garden trial](#the-no-card-garden-trial).
+
 **There is no grace period, and that is an assumption, not a published policy.**
 Nothing in this repository states one — not this file, not
 [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not the ADRs — so any number
@@ -585,6 +589,101 @@ $1.99**, one-time, valid 12 months from purchase, never auto-renewed.
 - **Balance:** `GET /billing/me` carries `identifyCredits`
   (`{ remaining, expiresAt }`), or `null` when the read failed — unknown is
   never published as zero.
+
+## The no-card Garden trial
+
+Decided 2026-09-13 ([ADR 0027](adr/0027-no-card-garden-trial.md)). Every **new**
+household starts 14 days of Garden with no card. When the 14 days end it resolves
+to Seedling on its own. Nothing is charged, and no card is asked for to start it.
+
+- **App-side only.** The trial is two attributes on the household METADATA row,
+  `noCardTrialStartedAt` and `noCardTrialEndsAt`, written once by
+  `householdService.createHousehold`. No Stripe customer, subscription, trial,
+  price or checkout session is created to start, run or end it. No Stripe path
+  reads or writes those attributes: `SubscriptionWriteField` excludes them.
+- **Ends on the clock.** `noCardTrialState` (`models/plans.ts`) compares the time
+  with `noCardTrialEndsAt` on every read. There is no job and no write at day 14.
+- **Never combined with Stripe.** `hasStripeEntitlementState` is true for a
+  household with a subscription status, a subscription id, a lifetime purchase or
+  a paid plan on file. Such a household resolves exactly as before, whatever
+  trial attributes its row carries, and is metered at its own tier. The household
+  that has been on a card-based Garden trial since 2026-09-03 is one of these.
+- **One per account.** The same transaction writes `USER#{userId} / NO_CARD_TRIAL`,
+  conditional on it not existing, so an account's second household has no trial.
+  Deleting the account's data deletes the claim, so the bound is one trial per
+  confirmed account.
+- **New households only.** Nothing backfills. A household created before this
+  shipped has neither attribute and resolves as it always did.
+- **AI is metered at Seedling.** A trial household gets Garden's caps and
+  features, the care assistant included, but `getMeteredPlanId` hands identify,
+  leaf-health and chat Seedling's allowances. The worst case is worked in
+  `evals/UNIT-ECONOMICS.md` §4a.
+- **Subscribing during the trial** goes through checkout unchanged: a household
+  that has not consumed the card trial still gets `trial_period_days: 14`, and
+  once Stripe state exists the no-card trial is no longer consulted.
+
+### What a trial household keeps at day 14
+
+The downgrade contract in the next section applies unchanged. Nothing is deleted.
+
+| Made during the trial         | After day 14                                                                                                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plants past Seedling's 20     | Kept, readable and editable. Adding a plant, or reactivating one, is refused with a 402 until fewer than 20 are active.                                                                     |
+| Members past 3                | Everyone stays. Nobody new can join until the household has fewer than 3.                                                                                                                   |
+| Plant tags                    | Printed tags still work when scanned: the scan routes check no plan. The tags page shows the locked state instead of the list, and issuing a tag is refused. Revoking is not plan-gated.    |
+| Sitter links                  | Live until their own expiry, with their task list. The handoff brief and photo-back stop, as at a cancelled subscription's period end. A new link follows Seedling's 1 live link of 7 days. |
+| Away Kit recap, coverage view | Refused with a 402. The care history they read is kept.                                                                                                                                     |
+| Auto-handoff rule             | The stored setting is kept and not acted on. It cannot be turned on.                                                                                                                        |
+| Move day                      | A season already claimed stays claimed. The card is locked.                                                                                                                                 |
+| Analytics                     | The window narrows to Seedling's 30 days. Older rows are kept.                                                                                                                              |
+| Care assistant                | New turns are refused with a 402. Past conversations keep their usual 30-day expiry.                                                                                                        |
+
+`backend/tests/unit/handlers/noCardTrialFallback.test.ts` time-travels a trial
+household past day 14 through the real plants, plant-tag and sitter handlers and
+fails if any delete, remove, archive, revoke, purge or clear is called.
+
+### What the household is told, and where
+
+`frontend/src/features/billing/NoCardTrialNotice.tsx` renders on the dashboard
+and in Settings → Billing, with every figure read from the plan catalog:
+
+- **While it runs:** what Garden adds, that no card is needed, that AI allowances
+  stay at the free plan's, and the end date.
+- **In its last 3 days:** the end date and the list of what changes.
+- **After it ends:** what changed. The dashboard shows it for 7 days; Settings →
+  Billing keeps it.
+
+No email is sent about the trial, and a trial ending is not a price change: no
+price, charge or subscription moves.
+
+### Measuring it without new tracking
+
+The success measure is an aggregate count from logs that already exist, per
+weekly cohort of first households:
+
+- **Cohort:** `product_event` with `productEvent = "household_created"` and
+  `properties.ordinal = "first"`, created on or after the release that ships this.
+  Every one of them starts a trial, except an account's second household.
+- **Activated:** the same household's `plant_added` with `ordinal = "first"`.
+- **Outcome within 21 days:** the same household's `subscription_upgraded`, which
+  the client sends when checkout starts.
+
+```
+filter msg = "product_event" and productEvent in ["household_created", "plant_added", "subscription_upgraded"]
+| stats sum(productEvent = "household_created" and properties.ordinal = "first") as created,
+        sum(productEvent = "plant_added" and properties.ordinal = "first") as activated,
+        sum(productEvent = "subscription_upgraded") as checkoutStarts by householdId
+| filter created > 0 and activated > 0
+| stats count(*) as activatedHouseholds, sum(checkoutStarts > 0) as startedCheckout
+```
+
+Run it over a window from the cohort week's start to 21 days past its end. The
+`householdId` values are collapsed by the second `stats` and never returned.
+
+**Not measurable per household today:** opening Settings → Billing. `GET /billing/me`
+is also fetched by the app shell on every page, so it does not mean the billing page
+was opened, and frontend route telemetry carries no household. Distinct sessions
+rendering `/settings/billing` are available only as an unattributed total.
 
 ## Plan caps and downgrades
 

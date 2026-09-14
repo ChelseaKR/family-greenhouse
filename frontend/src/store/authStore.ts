@@ -278,12 +278,13 @@ export const useAuthStore = create<AuthState>()(
          * shared axios instance. An expired short-lived idToken does NOT mean
          * the session is over — the 30-day refresh token this tab holds may
          * still be good, and a page reload (when this runs) is exactly when
-         * the idToken is most likely to have expired. Returns the retried
-         * `/auth/me` response on a successful refresh, null on any failure
-         * (no refresh token, refresh 401s, or a network error) — the caller
-         * then fails the session exactly as it would have without a retry.
+         * the idToken is most likely to have expired.
+         *
+         * The outcome is three-state on purpose (see `unreachable` below):
+         * a refused refresh and one we never managed to send are different
+         * answers, and only one of them is about the session.
          */
-        async function refreshAndRetry(): Promise<Response | null> {
+        async function refreshAndRetry(): Promise<Response | null | 'unreachable'> {
           if (!refreshToken) return null;
           try {
             const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
@@ -298,11 +299,13 @@ export const useAuthStore = create<AuthState>()(
             setTokens(data.idToken, data.accessToken, data.refreshToken ?? refreshToken);
             return await fetchMe(newBearer);
           } catch {
-            return null;
+            // `fetch` rejects for exactly one reason: the request never got
+            // an answer. The server did not refuse anything.
+            return 'unreachable';
           }
         }
 
-        let response: Response | null;
+        let response: Response | null | 'unreachable';
         try {
           response = await fetchMe(authToken);
           // Refresh only means "the bearer expired" for a 401. Retrying a
@@ -312,8 +315,25 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // The initial /auth/me call itself threw (network error) — still
           // worth trying a refresh (a flaky first request shouldn't cost an
-          // otherwise-valid 30-day session) before failing safe.
+          // otherwise-valid 30-day session) before deciding anything.
           response = await refreshAndRetry();
+          // No refresh token to try with, and the one call we made never
+          // reached the server: that is not a verdict on this session.
+          if (response === null && !refreshToken) response = 'unreachable';
+        }
+
+        if (response === 'unreachable') {
+          // WE COULD NOT ASK is not THE SERVER SAID NO. Ending the session
+          // here is what logged people out of the installed app every time
+          // they opened it without a network: measured on the production
+          // build's service worker, an offline reload left `auth-storage`
+          // holding `user: null` and the tab sitting on /login, and coming
+          // back online did not bring the session back — it was gone from
+          // storage. The persisted session stays exactly as it was; the
+          // pages' own reads report the outage, and a token that really has
+          // expired still ends the session at the first answered 401.
+          setLoading(false);
+          return;
         }
 
         if (!response || !response.ok) {

@@ -21,30 +21,35 @@ import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { CommandPalette } from './CommandPalette';
 import { SidebarPattern } from './brand/SidebarPattern';
 import { MemorialFrame } from './brand/MemorialFrame';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
 import clsx from 'clsx';
 
+/**
+ * The sidebar, in catalog keys only.
+ *
+ * Eight of these labels used to be English string literals in this array,
+ * with `nav.today` the single exception — added with a comment noting that a
+ * `labelKey` keeps the label out of "this file's hardcoded-string baseline".
+ * That is exactly the hole: the hardcoded-string ratchet reads JSX text nodes
+ * and the attributes a screen reader speaks, so a label sitting in a module
+ * constant is invisible to it. The gate was green, `nav.dashboard` … had
+ * Spanish sitting in both catalogs unused, and the primary navigation of every
+ * authenticated screen rendered in English under `es`.
+ */
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Plants', href: '/plants', icon: PlantIcon },
-  { name: 'Tasks', href: '/tasks', icon: ClipboardDocumentListIcon },
+  { labelKey: 'nav.dashboard', href: '/dashboard', icon: HomeIcon },
+  { labelKey: 'nav.plants', href: '/plants', icon: PlantIcon },
+  { labelKey: 'nav.tasks', href: '/tasks', icon: ClipboardDocumentListIcon },
   // Cross-home Today (ADR 0017). Shown to every tier: the page itself
-  // renders the Greenhouse explanation for the others, never a 404. The
-  // label goes through the catalog (`labelKey`) rather than joining this
-  // file's hardcoded-string baseline.
-  {
-    name: 'Today, across your homes',
-    labelKey: 'nav.today',
-    href: '/today',
-    icon: HomeModernIcon,
-  },
-  { name: 'Chat', href: '/chat', icon: SparklesIcon },
-  { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
-  { name: 'Household', href: '/household', icon: UserGroupIcon },
-  { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
-  { name: 'Help', href: '/help', icon: QuestionMarkCircleIcon },
+  // renders the Greenhouse explanation for the others, never a 404.
+  { labelKey: 'nav.today', href: '/today', icon: HomeModernIcon },
+  { labelKey: 'nav.chat', href: '/chat', icon: SparklesIcon },
+  { labelKey: 'nav.analytics', href: '/analytics', icon: ChartBarIcon },
+  { labelKey: 'nav.household', href: '/household', icon: UserGroupIcon },
+  { labelKey: 'nav.settings', href: '/settings', icon: Cog6ToothIcon },
+  { labelKey: 'nav.help', href: '/help', icon: QuestionMarkCircleIcon },
 ];
 
 function PlantIcon({ className }: { className?: string }) {
@@ -76,6 +81,7 @@ export function Layout() {
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const householdId = useActiveHouseholdId();
   const { data: subscription } = useQuery({
     queryKey: ['subscription', householdId],
@@ -86,7 +92,9 @@ export function Layout() {
   // The backend rejects Seedling chat turns with 402. Hide the navigation
   // until the household is proven to hold an existing chat entitlement so a
   // free user never lands on a working-looking composer that cannot send.
-  const chatAvailable = subscription?.planId === 'garden' || subscription?.planId === 'greenhouse';
+  // A no-card Garden trial counts (ADR 0027): the tier whose features apply now.
+  const chatPlanId = effectivePlanId(subscription);
+  const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
   const isChatRoute = location.pathname === '/chat' && chatAvailable;
 
   const handleLogout = () => {
@@ -138,7 +146,7 @@ export function Layout() {
                       className="-m-2.5 p-2.5"
                       onClick={() => setSidebarOpen(false)}
                     >
-                      <span className="sr-only">Close sidebar</span>
+                      <span className="sr-only">{t('nav.closeSidebar')}</span>
                       <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
                     </button>
                   </div>
@@ -182,7 +190,7 @@ export function Layout() {
             className="-m-2.5 p-2.5 text-gray-700"
             onClick={() => setSidebarOpen(true)}
           >
-            <span className="sr-only">Open sidebar</span>
+            <span className="sr-only">{t('nav.openSidebar')}</span>
             <Bars3Icon className="h-6 w-6" aria-hidden="true" />
           </button>
 
@@ -244,14 +252,14 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
         <HouseholdSwitcher />
       </div>
 
-      <nav className="relative flex flex-1 flex-col" aria-label="Main navigation">
+      <nav className="relative flex flex-1 flex-col" aria-label={t('nav.mainNavigation')}>
         <ul className="flex flex-1 flex-col gap-y-7">
           <li>
             <ul className="-mx-2 space-y-1">
               {navigation
                 .filter((item) => item.href !== '/chat' || chatAvailable)
                 .map((item) => (
-                  <li key={item.name}>
+                  <li key={item.href}>
                     <NavLink
                       to={item.href}
                       onClick={onNavigate}
@@ -265,7 +273,7 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
                       }
                     >
                       <item.icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                      {item.labelKey ? t(item.labelKey) : item.name}
+                      {t(item.labelKey)}
                     </NavLink>
                   </li>
                 ))}
@@ -290,7 +298,7 @@ function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarCo
               onClick={onLogout}
               className="mt-2 inline-flex min-h-touch w-full items-center justify-center rounded-lg border border-primary-600/80 bg-primary-950/35 px-4 py-2 text-sm font-medium text-primary-100 transition-colors hover:bg-primary-700/75 hover:text-white focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-900"
             >
-              Sign out
+              {t('nav.signOut')}
             </button>
           </li>
         </ul>

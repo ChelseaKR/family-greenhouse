@@ -19,7 +19,7 @@ import {
   type CoverageReport,
 } from '@/services/householdService';
 import { taskService, type TaskWithCoverage } from '@/services/taskService';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { formatDate } from '@/i18n/format';
 import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
@@ -107,7 +107,7 @@ export function CoverageCard() {
   const checkingPlan = plansQuery.isPending || subscriptionQuery.isPending;
   const plan =
     plansQuery.data && subscriptionQuery.data
-      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      ? plansQuery.data.plans.find((p) => p.id === effectivePlanId(subscriptionQuery.data))
       : undefined;
   // `features` is the catalog map; the bare `householdToolkit` is the legacy
   // name an older backend publishes. Neither present means UNKNOWN, not false.
