@@ -1,87 +1,53 @@
 /**
  * Frontend analytics shim. Authenticated product events always go to our
- * first-party `/telemetry/product` endpoint and can optionally fan out to
- * PostHog/GTM when those integrations are configured. Strongly typed so adding a
- * new event means adding a member to the `EventName` union; misspellings
- * fail at compile time instead of becoming a forever-orphan event in the
- * PostHog UI.
+ * first-party `/telemetry/product` endpoint and fan out to PostHog when a
+ * project key is configured. Strongly typed so adding a new event means adding
+ * a member to the `EventName` union; misspellings fail at compile time instead
+ * of becoming a forever-orphan event in the PostHog UI.
  *
- * Optional vendor activation: set `VITE_POSTHOG_KEY` (project API key) and
- * optionally `VITE_POSTHOG_HOST` (defaults to https://us.i.posthog.com).
- * With the key unset, only the PostHog rail is skipped; authenticated
- * first-party events still reach our API.
+ * Vendor activation: set `VITE_POSTHOG_KEY` (project API key) and optionally
+ * `VITE_POSTHOG_HOST` (defaults to https://us.i.posthog.com). With the key
+ * unset only the PostHog rail is skipped; authenticated first-party events
+ * still reach our API. In production the key is the `PRODUCTION_POSTHOG_KEY`
+ * repository secret — see docs/analytics.md, "Turning PostHog on".
  *
- * Why not posthog-js: it's ~50KB gzipped and we don't need session replay,
- * autocapture, or feature flags yet. A 30-line fetch shim covers the
- * actual use case (manual lifecycle events) without paying that cost.
+ * Why not posthog-js: it is ~50KB gzipped and we do not need session replay,
+ * autocapture, feature flags or surveys. A fetch shim covers the actual use
+ * case (manual lifecycle events) without paying that cost — and, more to the
+ * point, it is COOKIELESS BY CONSTRUCTION. Nothing in this module reads or
+ * writes a cookie, localStorage or sessionStorage. The only identity is the
+ * Cognito `sub` handed in by `identify()` after sign-in and held in module
+ * memory (what posthog-js would call `persistence: 'memory'`). There is no
+ * anonymous id, no device id, no cross-site identifier and nothing that
+ * survives a page load, which is why this rail needs no consent banner.
  *
- * Privacy:
- *  - We send the user's Cognito sub as the `distinct_id`. We do not send
+ * Privacy (docs/analytics.md is the full statement; keep the two in step):
+ *  - `distinct_id` is the Cognito sub, set only after sign-in. We never send
  *    email, name, plant names, or any household-identifying free text.
- *  - We attach a `household` GROUP key (`$groups.household`) to every event
- *    when a household is active — an opaque UUID, exactly analogous to the
- *    Cognito-sub distinct_id. "No household-identifying free text" means no
- *    names/addresses; a UUID grouping key can't be reversed to a person,
- *    home, or address, so it carries the same (negligible) privacy weight
- *    as the distinct_id and is fine to send. It's what makes the
- *    collaboration funnel (does a household get a 2nd active member?)
- *    measurable across different users — see `setActiveHousehold` and
- *    docs/analytics.md.
- *  - Event properties are limited to enum-like discriminators (e.g. plan
- *    id, member count buckets) — never user-supplied strings.
- *  - The shim respects browser Do-Not-Track when `navigator.doNotTrack`
- *    is `'1'`.
+ *  - `$groups.household` is the opaque household UUID — see
+ *    `setActiveHousehold`. A UUID grouping key cannot be reversed to a
+ *    person, home or address; it is what makes the collaboration funnel
+ *    (does a household get a 2nd active member?) measurable across users.
+ *  - Event properties are enum-like discriminators (plan id, count buckets,
+ *    a route family) — never user-supplied strings. The API accept-list in
+ *    backend/src/models/telemetry.ts has the same shape.
+ *  - No page views, no autocapture, no form contents, no session recording.
+ *  - `$geoip_disable: true` rides on every PostHog payload so PostHog does not
+ *    derive a city or region from the request's IP address.
+ *  - Opt-out: the in-app switch (Settings → Preferences), Global Privacy
+ *    Control (`navigator.globalPrivacyControl`) or Do Not Track
+ *    (`navigator.doNotTrack === '1'`) each silence EVERY rail in this module —
+ *    PostHog and the first-party endpoint alike; see `analyticsOptedOut`.
+ *    Under any of them nothing is sent, nothing is queued and nothing is
+ *    stored. GPC is a legally binding opt-out for California residents
+ *    (CCPA/CPRA), and the post-deploy smoke test declares it, which is how
+ *    test fixtures stay out of the dashboards. The switch exists because the
+ *    iOS shell can send neither signal.
  */
 
 const HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
 const KEY = import.meta.env.VITE_POSTHOG_KEY;
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-/**
- * Google Tag Manager container ID — e.g. "GTM-XXXXXX". When set, every
- * `track()` call also pushes the event to `window.dataLayer`, where GTM
- * forwards it to whichever destinations are configured (typically GA4).
- *
- * GTM-side responsibility: in tagmanager.google.com, configure a GA4
- * Configuration tag on your GA4 measurement ID, then add a GA4 Event tag
- * that fires on a "Custom Event" trigger matching the EventName union.
- * See docs/external-services-setup.md for the step-by-step.
- *
- * Privacy: same Do-Not-Track gating as the PostHog path. GTM's own
- * "Consent Mode" is not configured here — surface a cookie banner before
- * flipping this on for an audience that includes EU users.
- */
-const GTM_ID: string | undefined = import.meta.env.VITE_GTM_ID;
-
-declare global {
-  interface Window {
-    dataLayer?: Array<Record<string, unknown>>;
-  }
-}
-
-let gtmInitialized = false;
-function ensureGtm(): void {
-  if (gtmInitialized || !GTM_ID) return;
-  if (typeof window === 'undefined') return;
-  if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return;
-  gtmInitialized = true;
-  window.dataLayer = window.dataLayer ?? [];
-  window.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
-  // Inject GTM async loader (avoids the standard inline snippet so we
-  // don't have to allow 'unsafe-inline' in our CSP).
-  const s = document.createElement('script');
-  s.async = true;
-  s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(GTM_ID)}`;
-  document.head.appendChild(s);
-}
-
-function pushToDataLayer(event: string, properties: Record<string, unknown>): void {
-  if (!GTM_ID) return;
-  if (typeof window === 'undefined') return;
-  if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return;
-  window.dataLayer = window.dataLayer ?? [];
-  window.dataLayer.push({ event, ...properties });
-}
 
 /**
  * The full set of events we capture. Each one represents a step in the
@@ -90,6 +56,7 @@ function pushToDataLayer(event: string, properties: Record<string, unknown>): vo
  * to answer with it.
  */
 export type EventName =
+  | 'signup_started' // Registration form accepted by the API (account exists, unconfirmed). Held and replayed at first sign-in.
   | 'signup_completed' // User confirmed their email; the backend records the trusted first-party event.
   | 'household_created' // First or additional household.
   | 'household_joined' // Joined an existing household via an invite link.
@@ -103,7 +70,9 @@ export type EventName =
   | 'task_completed' // Includes `completionNumber` so we can chart "first task completed" funnel.
   | 'task_snoozed'
   | 'photo_uploaded'
-  | 'subscription_upgraded' // Stripe checkout started (currently dormant during the commercial hold).
+  | 'plan_limit_hit' // The API refused a request with 402: a plan cap reached or a locked feature met. `context` is the route family.
+  | 'billing_opened' // Settings → Billing rendered. The one page-level event; it is the step before checkout.
+  | 'subscription_upgraded' // Stripe checkout session created — checkout STARTED, not paid.
   | 'subscription_canceled' // User clicked through to cancel in the Stripe portal.
   | 'data_exported' // CSV download triggered.
   | 'plant_identified' // Plant.id flow completed and a suggestion was accepted.
@@ -136,6 +105,67 @@ export interface EventProps {
   /** For `experiment_viewed` — which experiment and assigned variant. */
   experiment?: string;
   variant?: 'A' | 'B';
+}
+
+/**
+ * The browser's opt-out signals. Either one silences every rail in this
+ * module.
+ *
+ * Global Privacy Control is the signal the CCPA/CPRA regulations name as a
+ * valid request to opt out of sale or sharing, so it is honoured as exactly
+ * that: no product event leaves the device for PostHog or for our own API.
+ * Do Not Track has no legal weight but the privacy page has promised to honour
+ * it since the first release, and it also gates the first-party operational
+ * rail (`frontendTelemetry.ts`), which GPC deliberately does not: error
+ * summaries and Web Vitals identify no one, so they are not a "share".
+ *
+ * Read at call time, never cached, so a signal that appears mid-session (a
+ * browser setting flipped in another tab) takes effect on the next event.
+ */
+export function analyticsOptedOut(): boolean {
+  if (analyticsOptOutStored()) return true;
+  if (typeof navigator === 'undefined') return false;
+  if (navigator.doNotTrack === '1') return true;
+  // Not in lib.dom yet; Firefox, Brave and DuckDuckGo expose it as a boolean.
+  // `'1'` is accepted too: erring towards opt-out is the safe direction.
+  const gpc = (navigator as Navigator & { globalPrivacyControl?: unknown }).globalPrivacyControl;
+  return gpc === true || gpc === '1';
+}
+
+/**
+ * The in-app opt-out: Settings → Preferences → Product analytics.
+ *
+ * A per-device flag, because the two browser signals do not exist everywhere.
+ * WKWebView never sends `DNT: 1` and WebKit has no Global Privacy Control, so
+ * inside the iOS shell this switch is the ONLY way to opt out; in a browser it
+ * is the way for someone who has not configured either signal. It is the one
+ * thing this module ever writes to the device, and only when the person asks
+ * for it — a preference, not an identifier — so the cookieless claim above
+ * still holds: nothing here can be used to recognise anyone.
+ */
+export const ANALYTICS_OPT_OUT_STORAGE_KEY = 'fg-analytics-opt-out';
+
+export function analyticsOptOutStored(): boolean {
+  try {
+    return localStorage.getItem(ANALYTICS_OPT_OUT_STORAGE_KEY) === '1';
+  } catch {
+    // Storage unavailable (private mode, quota, no window): only the browser
+    // signals remain, and they are checked separately.
+    return false;
+  }
+}
+
+export function setAnalyticsOptOut(optOut: boolean): void {
+  try {
+    if (optOut) localStorage.setItem(ANALYTICS_OPT_OUT_STORAGE_KEY, '1');
+    else localStorage.removeItem(ANALYTICS_OPT_OUT_STORAGE_KEY);
+  } catch {
+    // Nothing to do: the preference could not be kept, and the next render of
+    // the switch reads the stored value back, so the UI cannot claim otherwise.
+  }
+  // Opting out also drops anything held for replay: an event queued before the
+  // person said no is still an event they said no to.
+  if (optOut) pendingPreIdentity = [];
 }
 
 /** Ambient distinct id — set by `identify`, cleared by `reset`. */
@@ -192,23 +222,25 @@ const groupIdentified = new Set<string>();
  *
  * Every rail here is identity-gated — PostHog needs a `distinct_id` and the
  * first-party `/telemetry/product` endpoint needs a JWT — so an event fired by
- * a signed-out visitor previously evaporated. Two events do exactly that:
- * `experiment_viewed` (the landing hero A/B test) and `cutting_graft_started`
- * (the graft CTA on a public cutting card). Both were dead instrumentation:
- * present in the code, documented in the vocabulary, and producing zero rows.
+ * a signed-out visitor would otherwise evaporate. Four events do exactly that:
+ * `signup_started` (the register form), `signup_completed` (the confirmation
+ * code), `experiment_viewed` (the landing hero A/B test) and
+ * `cutting_graft_started` (the graft CTA on a public cutting card).
  *
  * The fix is deferral, not anonymous beaconing. Nothing is sent while the
  * visitor is anonymous — the privacy posture is unchanged, and the
  * characterization tests in analytics.test.ts still assert zero network
- * traffic before `identify()`. The event is replayed once the SAME browser
+ * traffic before `identify()`. The event is replayed once the SAME browser tab
  * signs in, which is the only point at which we have an identity to attach it
- * to.
+ * to. Register → confirm → sign in is one tab by design, so the two sign-up
+ * steps normally survive; a visitor who confirms from a reminder email in a
+ * fresh tab loses `signup_started` (the server's own log still has it).
  *
  * What this buys and what it does not: the numerator becomes measurable
  * ("of the people who signed up, how many saw variant B?"), the denominator
  * does not ("how many people saw variant B?"). Impressions by visitors who
  * never sign in remain unmeasurable, and making them measurable is the
- * top-of-funnel privacy decision in docs/analytics.md, not this change.
+ * top-of-funnel privacy decision in docs/analytics.md, not this module.
  */
 interface PendingEvent {
   event: EventName;
@@ -228,10 +260,9 @@ const MAX_PENDING_PRE_IDENTITY = 5;
  * Replay anything queued while anonymous, once BOTH identity halves exist.
  *
  * Both are required. `distinctId` alone opens only the PostHog rail, and
- * flushing then would consume the queue before the first-party rail — the only
- * rail configured in production — could ever see it. `authStore` sets the
- * token and calls `identify()` together on login and on session restore, so
- * whichever lands second triggers the flush.
+ * flushing then would consume the queue before the first-party rail could see
+ * it. `authStore` sets the token and calls `identify()` together on login and
+ * on session restore, so whichever lands second triggers the flush.
  */
 function flushPendingPreIdentity(): void {
   if (!distinctId || !telemetryToken) return;
@@ -239,11 +270,67 @@ function flushPendingPreIdentity(): void {
   const queued = pendingPreIdentity;
   pendingPreIdentity = [];
   for (const item of queued) {
-    // `replay: true` suppresses a second GTM dataLayer push: the anonymous
-    // `track()` already pushed there (that rail is not identity-gated), and
-    // pushing again would double-count the event for a configured container.
-    void send(item.event, item.properties, { replay: true });
+    void send(item.event, item.properties);
   }
+}
+
+/**
+ * `plan_limit_hit` bookkeeping. The axios response interceptor calls
+ * `planLimitHitContext` for every 402 so the funnel's "hit a limit" step is
+ * counted once for every gated surface — plant cap, member cap, homes cap,
+ * API keys, chat, cross-home Today, the identify allowance — without each call
+ * site remembering to instrument it.
+ *
+ * The context is the route FAMILY, never the route: ids and tokens are
+ * dropped, at most two static segments survive, and the result is forced into
+ * the server's `context` alphabet (`^[a-z][a-z0-9_-]{0,31}$`) so nothing a
+ * user typed can ride along. `/households/<uuid>/members` → `households_members`.
+ *
+ * Deduped per context for a short window because a react-query read that
+ * answers 402 may be retried, and three retries of one refusal are one limit
+ * hit, not three.
+ */
+const PLAN_LIMIT_DEDUPE_MS = 10_000;
+const recentPlanLimitHits = new Map<string, number>();
+const CONTEXT_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
+
+function looksLikeIdentifier(segment: string): boolean {
+  return (
+    /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(segment) ||
+    /^\d+$/u.test(segment) ||
+    /^[A-Za-z0-9_-]{24,}$/u.test(segment)
+  );
+}
+
+/** The bounded route family of a request URL — exported for its tests. */
+export function planLimitContext(url: string | undefined): string {
+  let pathname: string;
+  try {
+    pathname = new URL(url ?? '', 'http://request.invalid').pathname;
+  } catch {
+    return 'other';
+  }
+  const context = pathname
+    .split('/')
+    .filter((segment) => segment.length > 0 && !looksLikeIdentifier(segment))
+    .slice(0, 2)
+    .map((segment) => segment.toLowerCase().replace(/[^a-z0-9_-]/gu, ''))
+    .filter((segment) => segment.length > 0)
+    .join('_')
+    .slice(0, 32);
+  return CONTEXT_PATTERN.test(context) ? context : 'other';
+}
+
+/**
+ * The `context` to record for a 402 answered at `url`, or `null` when the same
+ * route family was already counted within the dedupe window.
+ */
+export function planLimitHitContext(url: string | undefined, now = Date.now()): string | null {
+  const context = planLimitContext(url);
+  const last = recentPlanLimitHits.get(context);
+  if (last !== undefined && now - last < PLAN_LIMIT_DEDUPE_MS) return null;
+  recentPlanLimitHits.set(context, now);
+  return context;
 }
 
 /**
@@ -274,6 +361,7 @@ export function setActiveHousehold(householdId: string | null): void {
         $group_type: 'household',
         $group_key: householdId,
         $group_set: {},
+        $geoip_disable: true,
       },
       timestamp: new Date().toISOString(),
     }),
@@ -283,31 +371,19 @@ export function setActiveHousehold(householdId: string | null): void {
 
 function isEnabled(): boolean {
   if (!KEY) return false;
-  if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return false;
-  return true;
+  return !analyticsOptedOut();
 }
 
-async function send(
-  event: EventName,
-  properties: Record<string, unknown>,
-  options: { replay?: boolean } = {}
-): Promise<void> {
-  if (typeof navigator !== 'undefined' && navigator.doNotTrack === '1') return;
+async function send(event: EventName, properties: Record<string, unknown>): Promise<void> {
+  // Opted out: nothing is sent, nothing is queued. Checked before the queue on
+  // purpose — holding an event for later would be storing what the visitor
+  // asked us not to collect.
+  if (analyticsOptedOut()) return;
   const withSuper = { ...superProps, ...properties };
-  // The household group key rides on both rails: `$groups.household` for
-  // PostHog group analytics, and a plain `household` field on the GTM
-  // dataLayer payload (GTM has no notion of PostHog groups).
-  const dataLayerProps = activeHouseholdId
-    ? { ...withSuper, household: activeHouseholdId }
-    : withSuper;
-  // GTM dataLayer push runs whether or not PostHog is configured — they're
-  // independent rails. The DNT check is inside pushToDataLayer. Skipped on a
-  // replay, which already pushed here when it was first fired.
-  if (!options.replay) pushToDataLayer(event, dataLayerProps);
 
-  // No identity yet: both remaining rails are identity-gated, so this event
-  // would vanish. Hold it for replay after sign-in instead of dropping it —
-  // and send NOTHING now (see pendingPreIdentity: no anonymous beaconing).
+  // No identity yet: both rails are identity-gated, so this event would
+  // vanish. Hold it for replay after sign-in instead of dropping it — and
+  // send NOTHING now (see pendingPreIdentity: no anonymous beaconing).
   if (!distinctId) {
     if (pendingPreIdentity.length < MAX_PENDING_PRE_IDENTITY) {
       pendingPreIdentity.push({ event, properties });
@@ -348,8 +424,9 @@ async function send(
         ...(activeHouseholdId ? { $groups: { household: activeHouseholdId } } : {}),
         properties: {
           ...withSuper,
+          $geoip_disable: true,
           $lib: 'family-greenhouse-shim',
-          $lib_version: '1.0.0',
+          $lib_version: '1.1.0',
         },
         timestamp: new Date().toISOString(),
       }),
@@ -366,19 +443,9 @@ async function send(
  */
 export function identify(userId: string, traits?: { plan?: EventProps['plan'] }): void {
   distinctId = userId;
-  // Initialize GTM once we have a known user — keeps an anonymous landing-
-  // page visitor from triggering the script load until they're logged in.
-  ensureGtm();
-  pushToDataLayer('user_identified', {
-    userId,
-    ...superProps,
-    ...(traits ?? {}),
-    ...(activeHouseholdId ? { household: activeHouseholdId } : {}),
-  });
   // Release anything the visitor generated before identity existed. This runs
-  // BEFORE the PostHog gate below: PostHog is not configured in production, so
-  // flushing after `isEnabled()` would mean the replay never happens on the one
-  // rail (first-party) that is actually live.
+  // BEFORE the PostHog gate below so the replay happens on the first-party
+  // rail whether or not PostHog is configured.
   flushPendingPreIdentity();
   if (!isEnabled()) return;
   void fetch(`${HOST}/capture/`, {
@@ -393,7 +460,7 @@ export function identify(userId: string, traits?: { plan?: EventProps['plan'] })
       ...(activeHouseholdId ? { $groups: { household: activeHouseholdId } } : {}),
       // Persist the experiment assignment (and any other super-props) on the
       // person so the eventual signup is attributable to the variant seen.
-      properties: { $set: { ...superProps, ...(traits ?? {}) } },
+      properties: { $set: { ...superProps, ...(traits ?? {}) }, $geoip_disable: true },
       timestamp: new Date().toISOString(),
     }),
     keepalive: true,
@@ -414,6 +481,7 @@ export function reset(): void {
   pendingPreIdentity = [];
   // Allow a re-login to re-`$groupidentify`; cheap and keeps logout total.
   groupIdentified.clear();
+  recentPlanLimitHits.clear();
 }
 
 export function track(event: EventName, props: EventProps = {}): void {

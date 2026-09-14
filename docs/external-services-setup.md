@@ -260,48 +260,92 @@ aws sesv2 get-email-identity \
 
 ---
 
-## Google Tag Manager + GA4
+## PostHog — product analytics
 
-**What we use it for:** Independent analytics rail alongside the PostHog shim. When `VITE_GTM_ID` is set at build time, every `track()` event in `frontend/src/services/analytics.ts` pushes to `window.dataLayer`, and GTM forwards to GA4 (and anywhere else you configure tags for).
+**What we use it for:** the conversion funnel — sign-up → confirm → activate →
+hit a limit → open billing → checkout started → checkout completed — per real
+household, without reading CloudFront logs by hand. `docs/analytics.md` is the
+full design (what leaves the device, to whom, for how long, and how a visitor
+opts out); this section is only the setup.
+
+Two rails share one project key. The browser shim
+(`frontend/src/services/analytics.ts`, a `fetch` POST to PostHog's capture
+endpoint — no `posthog-js`, no cookie, no script) reads `VITE_POSTHOG_KEY` at
+build time. The Stripe-webhook emitter (`backend/src/utils/serverAnalytics.ts`)
+reads `POSTHOG_KEY` from the Lambda environment, which Terraform sets from the
+same GitHub secret. That second rail is how "checkout completed"
+(`subscription_activated`) reaches the same funnel as the browser steps.
 
 ### Setup
 
-1. **Google Analytics 4**:
-   - https://analytics.google.com/ → Admin → Create property → "Family Greenhouse"
-   - Set up a Web data stream → enter `https://familygreenhouse.net` → submit
-   - Copy the **Measurement ID** (`G-XXXXXXXXXX`) — you'll use it inside GTM, NOT in our env.
+1. https://us.posthog.com/ → create an organization and a project on the
+   **US cloud**. (The privacy page says events go to `us.i.posthog.com` and are
+   stored in the United States. Choosing the EU cloud means changing that page
+   and setting `PRODUCTION_POSTHOG_HOST` to `https://eu.i.posthog.com` — the
+   CloudFront CSP already admits both.)
+2. In the project: **Settings → Project → General → "IP data capture
+   configuration"** → choose **discard**. Every event the shim sends already
+   carries `$geoip_disable: true`, so PostHog derives no city or region from
+   the request; this setting also stops the IP itself being stored on the
+   event. The privacy page promises both.
+3. Leave session replay, autocapture, heatmaps and surveys off. None of them
+   can activate — there is no SDK in the page to run them — but the project
+   settings should say what the code does.
+4. Copy the **project API key** (`phc_…`). It is a write-only key by design
+   and ships inside the public bundle; that is normal for PostHog.
+5. In a terminal, never through an agent session:
 
-2. **Google Tag Manager**:
-   - https://tagmanager.google.com/ → Create account → container type **Web**
-   - Copy the **Container ID** (`GTM-XXXXXXX`).
+   ```bash
+   gh secret set PRODUCTION_POSTHOG_KEY --repo ChelseaKR/family-greenhouse
+   ```
 
-3. **Wire GTM → GA4 inside the GTM UI**:
-   - In GTM, Tags → New → Tag Type "Google Analytics: GA4 Configuration" → Measurement ID = the GA4 `G-` value → Trigger "All Pages".
-   - Tags → New → Tag Type "Google Analytics: GA4 Event" → Event Name `{{Event}}` (built-in variable) → Trigger "Custom Event" with regex `.*`. This forwards every event we push to `dataLayer` as a GA4 event with the same name.
-   - **Publish** the container (top-right "Submit").
+   as a **repository** secret. The `build` job in `cd-production.yml` runs with
+   no `environment:`, so an environment-scoped secret would reach it empty and
+   analytics would ship dark behind a green deploy
+   (`backend/tests/unit/config/externalIntegrationWiring.test.ts` pins this
+   shape). Staging uses `STAGING_POSTHOG_KEY` and should point at a separate
+   project or stay unset.
 
-4. Set the `PRODUCTION_GTM_ID` GitHub Actions repository variable to the
-   container id (and `STAGING_GTM_ID` for staging). The deploy workflow maps it
-   to `VITE_GTM_ID` in the frontend build.
-
-5. CloudFront's CSP already allows `googletagmanager.com` + `google-analytics.com` endpoints. If you ever tighten CSP later, keep these script-src + connect-src + img-src allowances.
+6. Deploy (tag a release). The next build embeds the key; the Terraform apply
+   in the same run puts it in the API Lambda environment.
 
 ### Verify
 
-- Visit https://familygreenhouse.net/ in a private window.
-- Sign in (the `identify` call initializes GTM — landing-page visitors don't trigger the load until they're logged in).
-- Sign up a new plant or complete a task.
-- In GA4, Reports → Real-time → check that the events appear under "Event count by event name".
+- Sign in to https://familygreenhouse.net/ in a normal window (no GPC, no DNT).
+  In PostHog → **Activity**, a `$identify` for your Cognito sub appears within
+  a minute, followed by whatever you do — `billing_opened` when you open
+  Settings → Billing, `plan_limit_hit` if you trip a cap.
+- Watch the next post-deploy smoke run: it must produce **no** PostHog events
+  and no `POST /telemetry/product`. The smoke browser declares Global Privacy
+  Control and the spec asserts nothing left it
+  (`frontend/tests/e2e/post-deploy-smoke.spec.ts`). Events from a "Smoke Test
+  Household" in PostHog mean that control has failed, and the release is rolled
+  back by the same assertion.
+- Build the two funnels described in `docs/analytics.md` ("Funnels worth
+  building") — the person-level sign-up funnel and the household-level
+  activation-to-paid funnel aggregated by the `household` group.
 
 ### Privacy notes
 
-- The shim respects browser Do-Not-Track (`navigator.doNotTrack === '1'` → all GTM + PostHog events are dropped).
-- GTM's Consent Mode is NOT configured here. If you take EU traffic, surface a cookie banner before enabling GTM, and configure Consent Mode v2 in GTM to gate the GA4 tag on user consent.
-- The events we push include `plan_id`, `task_type`, `member_count` buckets, and Cognito sub as the user identifier. No plant names, no household names, no email addresses.
+- Cookieless: the shim keeps the Cognito sub in module memory only; nothing is
+  written to cookies or web storage, so this rail needs no consent banner.
+- Global Privacy Control and Do Not Track each silence the shim entirely — no
+  PostHog event, no first-party event, nothing queued.
+- Only closed-vocabulary properties leave the browser; the API accept-list in
+  `backend/src/models/telemetry.ts` has the same shape.
+- Account deletion does not delete the PostHog person. A deletion request that
+  names analytics is handled by hand in the PostHog UI (Persons → delete).
 
 ### Disabling
 
-Unset `VITE_GTM_ID` and redeploy. The shim short-circuits to no-op; the GTM script never loads.
+Delete the `PRODUCTION_POSTHOG_KEY` secret and redeploy. Both rails read the key
+at build/deploy time and no-op without it; the first-party `/telemetry/product`
+events keep flowing to CloudWatch.
+
+There is no Google Tag Manager rail. One shipped, unkeyed, until 2026-09-13;
+GTM/GA4 set cookies and would have voided the cookieless posture above, so it
+was removed rather than left one repository variable away from re-enabling
+itself.
 
 ---
 

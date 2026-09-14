@@ -83,7 +83,7 @@ export function PrivacyPage() {
         <li>{t('legal.privacy.collect.telemetryRum')}</li>
       </ul>
       <p>
-        <Trans i18nKey="legal.privacy.collect.dnt" components={{ code: <code /> }} />
+        <Trans i18nKey="legal.privacy.collect.optOut" components={{ code: <code />, em: <em /> }} />
       </p>
 
       <h2>{t('legal.privacy.thirdParties.heading')}</h2>
@@ -115,19 +115,17 @@ export function PrivacyPage() {
           <Trans i18nKey="legal.privacy.thirdParties.openWeatherMap" components={strong} />
         </li>
         <li>
-          <Trans i18nKey="legal.privacy.thirdParties.posthog" components={strong} />
+          <Trans
+            i18nKey="legal.privacy.thirdParties.posthog"
+            values={{ supportEmail: SUPPORT_EMAIL }}
+            components={{ strong: <strong />, code: <code />, supportLink }}
+          />
         </li>
         <li>
           <Trans i18nKey="legal.privacy.thirdParties.push" components={strong} />
         </li>
         <li>
           <Trans i18nKey="legal.privacy.thirdParties.sentry" components={strong} />
-        </li>
-        <li>
-          <Trans
-            i18nKey="legal.privacy.thirdParties.gtm"
-            components={{ strong: <strong />, code: <code /> }}
-          />
         </li>
       </ul>
       <p>{t('legal.privacy.thirdParties.noSale')}</p>

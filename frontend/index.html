@@ -92,13 +92,17 @@
         - 'unsafe-inline' on style-src is required because we ship inline
           `style` attributes for progress bars + marketing clipPath.
         - connect-src includes https: so Stripe Checkout + plant-id can call
-          out. Tighten to specific origins once the prod domain is final.
+          out. Tighten to specific origins once the prod domain is final. The
+          PostHog capture endpoint (src/services/analytics.ts) rides on it; the
+          CloudFront policy names that host explicitly.
+        - script-src is 'self' alone: no third-party script is loaded, ever.
+          Product analytics is a fetch shim, not a vendor SDK.
         - We don't allow `frame-src` because we don't embed iframes; Stripe
           Checkout runs as a redirect, not an embedded iframe.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   </head>

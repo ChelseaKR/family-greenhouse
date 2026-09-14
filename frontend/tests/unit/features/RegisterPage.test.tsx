@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { track } from '@/services/analytics';
 import { server } from '../../msw/server';
+
+vi.mock('@/services/analytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/analytics')>();
+  return { ...actual, track: vi.fn() };
+});
 
 const API = 'http://localhost:4000';
 
@@ -99,5 +105,37 @@ describe('RegisterPage', () => {
         password: 'Password1234',
       });
     });
+  });
+
+  it('reports the sign-up as started only once the API has accepted the account', async () => {
+    // The first funnel stage (docs/analytics.md). A refused sign-up is not a
+    // sign-up started, so the event must wait for the 201.
+    vi.mocked(track).mockClear();
+    server.use(
+      http.post(`${API}/auth/signup`, () =>
+        HttpResponse.json({ message: 'An account with this email already exists' }, { status: 400 })
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByLabelText(/full name/i), 'Ada Lovelace');
+    await user.type(screen.getByLabelText(/email address/i), 'ada@example.com');
+    await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'Password1234');
+    await user.type(screen.getByLabelText(/confirm password/i), 'Password1234');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/already exists/i);
+    expect(track).not.toHaveBeenCalled();
+
+    server.use(
+      http.post(`${API}/auth/signup`, () =>
+        HttpResponse.json({ message: 'Check your email' }, { status: 201 })
+      )
+    );
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    await waitFor(() => expect(track).toHaveBeenCalledWith('signup_started'));
+    expect(track).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { useLocation, useNavigate } from 'react-router';
+import { track } from '@/services/analytics';
 import { NotificationSettings } from './NotificationSettings';
 import { BillingSettings } from './BillingSettings';
 import { PreferencesSettings } from './PreferencesSettings';
@@ -45,6 +47,13 @@ export function SettingsPage() {
     : TABS.includes(requestedSection as Tab)
       ? (requestedSection as Tab)
       : 'preferences';
+
+  // The upgrade funnel's "opened billing" step (docs/analytics.md). Keyed on
+  // the resolved tab rather than the tab click, so a deep link or a redirect
+  // to /settings/billing counts the same as choosing the tab.
+  useEffect(() => {
+    if (tab === 'billing') track('billing_opened');
+  }, [tab]);
 
   function selectTab(nextTab: Tab) {
     if (nextTab === 'billing') {

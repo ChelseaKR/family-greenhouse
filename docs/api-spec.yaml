@@ -3212,6 +3212,7 @@ components:
         event:
           type: string
           enum:
+            - signup_started
             - signup_completed
             - household_created
             - household_joined
@@ -3225,6 +3226,8 @@ components:
             - task_completed
             - task_snoozed
             - photo_uploaded
+            - plan_limit_hit
+            - billing_opened
             - subscription_upgraded
             - subscription_canceled
             - data_exported
@@ -3237,6 +3240,7 @@ components:
             - shared_care_pulse_action
             - climate_location_set
             - experiment_viewed
+            - upgrade_requested
         properties:
           type: object
           description: Enum-like event discriminators only; never user-entered text.

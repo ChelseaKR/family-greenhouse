@@ -2,8 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
 import { AxiosError } from 'axios';
 import { api, getErrorMessage } from '@/services/api';
+import { track } from '@/services/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { server, handlers } from '../../msw/server';
+
+// `track` is stubbed; everything else in the shim (identify, reset, the
+// plan-limit dedupe ledger the interceptor consults) stays real, so the
+// 402 tests below exercise the actual dedupe rather than a mock of it.
+vi.mock('@/services/analytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/analytics')>();
+  return { ...actual, track: vi.fn() };
+});
 
 const API = 'http://localhost:4000';
 
@@ -278,5 +287,62 @@ describe('refresh that never reached the server', () => {
     expect(state.isAuthenticated).toBe(true);
     expect(state.refreshToken).toBe('good-refresh');
     expect(state.idToken).toBe('expired-id');
+  });
+});
+
+/**
+ * The funnel's "hit a limit" step. Every plan cap and locked feature answers
+ * 402 from one place in the API, so it is recorded from one place here — the
+ * interceptor — rather than at each of the dozen call sites.
+ */
+describe('plan-limit refusals (402)', () => {
+  it('records the refusal once as plan_limit_hit, with the route family it refused', async () => {
+    vi.mocked(track).mockClear();
+    server.use(
+      http.post(`${API}/plants`, () =>
+        HttpResponse.json({ message: 'Plan limit reached' }, { status: 402 })
+      )
+    );
+
+    await expect(api.post('/plants', { name: 'Pothos' })).rejects.toMatchObject({
+      response: { status: 402 },
+    });
+    // A react-query retry of the same read is the same refusal.
+    await expect(api.post('/plants', { name: 'Pothos' })).rejects.toMatchObject({
+      response: { status: 402 },
+    });
+
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith('plan_limit_hit', { context: 'plants' });
+  });
+
+  it('never carries the id from the refused route', async () => {
+    vi.mocked(track).mockClear();
+    server.use(
+      http.post(`${API}/households/a0000000-0000-4000-8000-000000000001/invites`, () =>
+        HttpResponse.json({ message: 'Member cap' }, { status: 402 })
+      )
+    );
+
+    await expect(
+      api.post('/households/a0000000-0000-4000-8000-000000000001/invites', {})
+    ).rejects.toMatchObject({ response: { status: 402 } });
+
+    expect(track).toHaveBeenCalledWith('plan_limit_hit', { context: 'households_invites' });
+  });
+
+  it('leaves every other status alone', async () => {
+    vi.mocked(track).mockClear();
+    server.use(
+      http.post(`${API}/billing/checkout`, () =>
+        HttpResponse.json({ message: 'Already subscribed' }, { status: 409 })
+      )
+    );
+
+    await expect(api.post('/billing/checkout', {})).rejects.toMatchObject({
+      response: { status: 409 },
+    });
+
+    expect(track).not.toHaveBeenCalled();
   });
 });

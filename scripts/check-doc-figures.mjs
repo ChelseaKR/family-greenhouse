@@ -44,7 +44,7 @@
  * repairs its own subject makes drift invisible instead of loud.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -402,6 +402,70 @@ for (const name of documentedEvents) {
   }
 }
 
+// --- docs/analytics.md: every funnel stage still has a live emitter ---------
+// The funnel table under `## The funnel` is the contract the PostHog dashboards
+// are built on: sign-up → confirm → activate → hit a limit → open billing →
+// checkout started → checkout completed. Each row names the event and the file
+// that emits it. A stage whose call site is refactored away does not fail a
+// type check (the union member still exists), does not fail the vocabulary
+// checks above (the name is still declared everywhere), and does not fail at
+// runtime (nothing calls it). It shows up as a permanent zero on a funnel
+// step, which reads as "nobody reaches this stage" — the most expensive
+// misreading a conversion dashboard can produce.
+//
+// So each named file must still contain the event literal in CODE. Comments
+// are stripped first: four conformance checks once passed on tool names that
+// only appeared in comments, and this gate is not going to be the fifth.
+const FUNNEL_HEADING = '## The funnel';
+const FUNNEL_STAGES_EXPECTED = 7;
+const analyticsDoc = read(ANALYTICS);
+const funnelStart = analyticsDoc.indexOf(FUNNEL_HEADING);
+if (funnelStart === -1) {
+  problems.push(
+    `${ANALYTICS}: no \`${FUNNEL_HEADING}\` section — the funnel table is the contract this ` +
+      `gate holds the call sites to.`
+  );
+} else {
+  const afterHeading = analyticsDoc.slice(funnelStart + FUNNEL_HEADING.length);
+  const nextHeading = afterHeading.search(/^## /m);
+  const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
+  const funnelRows = [
+    ...section.matchAll(/^\|\s*\d+\s*\|[^|]*\|\s*`([a-z][a-z0-9_]*)`\s*\|\s*`([^`]+)`\s*\|/gm),
+  ].map(([, event, file]) => ({ event, file }));
+
+  if (funnelRows.length !== FUNNEL_STAGES_EXPECTED) {
+    problems.push(
+      `${ANALYTICS}: the funnel table has ${funnelRows.length} stage rows, expected ` +
+        `${FUNNEL_STAGES_EXPECTED} (| n | stage | \`event\` | \`path/to/emitter\` | ...). A stage ` +
+        `dropped from the table is a stage nobody is watching; add or remove one deliberately, ` +
+        `in the same change as FUNNEL_STAGES_EXPECTED.`
+    );
+  }
+  for (const { event, file } of funnelRows) {
+    if (!capturable.includes(event)) {
+      problems.push(
+        `${ANALYTICS}: funnel stage \`${event}\` is not an event the code can capture.`
+      );
+      continue;
+    }
+    if (!existsSync(join(ROOT, file))) {
+      problems.push(`${ANALYTICS}: funnel stage \`${event}\` names ${file}, which does not exist.`);
+      continue;
+    }
+    const code = read(file)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    if (!code.includes(`'${event}'`)) {
+      problems.push(
+        `${ANALYTICS}: funnel stage \`${event}\` is documented as emitted by ${file}, but that ` +
+          `file no longer emits it (the literal '${event}' is not in its code; comments do not ` +
+          `count). The funnel dashboard would show this stage as a permanent zero. Restore the ` +
+          `call, or move the row to the file that now emits it.`
+      );
+    }
+  }
+}
+
 if (problems.length > 0) {
   console.error('\n❌ Stated figures no longer match the repository:\n');
   for (const p of problems) console.error(`   ${p}`);
@@ -412,6 +476,7 @@ if (problems.length > 0) {
 console.log(
   `Doc figures OK — quality-audit.md states no hand-maintained route count ` +
     `(${routeCount} handler routes on disk, via --print), README's aligned version ` +
-    `(${distinct[0]}), billing.md's six plan caps and analytics.md's ${capturable.length} ` +
-    `capturable events all re-derived from the repository.`
+    `(${distinct[0]}), billing.md's six plan caps, analytics.md's ${capturable.length} ` +
+    `capturable events and its ${FUNNEL_STAGES_EXPECTED}-stage funnel's call sites all ` +
+    `re-derived from the repository.`
 );

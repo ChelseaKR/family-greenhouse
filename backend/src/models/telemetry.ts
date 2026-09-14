@@ -108,6 +108,7 @@ export const frontendTelemetrySchema = z.discriminatedUnion('kind', [
 export type FrontendTelemetryInput = z.infer<typeof frontendTelemetrySchema>;
 
 export const productEventNames = [
+  'signup_started',
   'signup_completed',
   'household_created',
   'household_joined',
@@ -121,6 +122,8 @@ export const productEventNames = [
   'task_completed',
   'task_snoozed',
   'photo_uploaded',
+  'plan_limit_hit',
+  'billing_opened',
   'subscription_upgraded',
   'subscription_canceled',
   'data_exported',

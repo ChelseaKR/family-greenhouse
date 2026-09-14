@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { Card, CardHeader } from '@/components/Card';
 import { applyDensity, Density, LangCode, usePrefsStore } from '@/store/prefsStore';
 import { ensureLanguageCatalog, isRTL, SUPPORTED_LANGS } from '@/i18n';
+import { analyticsOptOutStored, setAnalyticsOptOut } from '@/services/analytics';
 import clsx from 'clsx';
 
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
@@ -21,6 +23,16 @@ export function PreferencesSettings() {
   const language = usePrefsStore((s) => s.language);
   const setDensity = usePrefsStore((s) => s.setDensity);
   const setLanguage = usePrefsStore((s) => s.setLanguage);
+  // The product-analytics opt-out lives with the shim, not in the prefs store:
+  // it is a per-device flag the shim reads on every event (docs/analytics.md,
+  // "Opt-out signals"), and the ONLY opt-out that works inside the iOS shell,
+  // where the browser signals never fire. Read once on mount; the shim is the
+  // source of truth and this state just mirrors it for the checkbox.
+  const [analyticsShared, setAnalyticsShared] = useState(() => !analyticsOptOutStored());
+  const onAnalyticsChange = (shared: boolean) => {
+    setAnalyticsOptOut(!shared);
+    setAnalyticsShared(!analyticsOptOutStored());
+  };
 
   // Mirror prefs to the DOM whenever they change in this tab.
   useEffect(() => applyDensity(density), [density]);
@@ -101,6 +113,31 @@ export function PreferencesSettings() {
             </select>
           </div>
         )}
+
+        {/* Product analytics — the in-app opt-out the privacy page names. */}
+        <fieldset>
+          <legend className="label">{t('settings.preferences.analytics')}</legend>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <label htmlFor="analytics-shared" className="text-sm font-medium text-gray-900">
+                {t('settings.preferences.analyticsToggle')}
+              </label>
+              <p className="mt-1 text-sm text-gray-600">
+                {t('settings.preferences.analyticsDescription')}{' '}
+                <Link to="/privacy" className="underline">
+                  {t('settings.preferences.analyticsPrivacyLink')}
+                </Link>
+              </p>
+            </div>
+            <input
+              id="analytics-shared"
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0 accent-primary-700"
+              checked={analyticsShared}
+              onChange={(e) => onAnalyticsChange(e.target.checked)}
+            />
+          </div>
+        </fieldset>
       </div>
     </Card>
   );

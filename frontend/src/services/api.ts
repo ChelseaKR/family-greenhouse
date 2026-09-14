@@ -21,6 +21,7 @@
  */
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
+import { planLimitHitContext, track } from '@/services/analytics';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -131,6 +132,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // A 402 is the API saying "your plan does not include this" — a cap
+    // reached or a locked feature met. It is the funnel's "hit a limit" step
+    // (docs/analytics.md), recorded here once for every gated surface rather
+    // than at each call site, so a newly gated route is counted without anyone
+    // remembering to instrument it. The context is the route family, never
+    // the route (ids dropped), and retries of one refusal count once.
+    if (error.response?.status === 402) {
+      const context = planLimitHitContext(originalRequest?.url);
+      if (context) track('plan_limit_hit', { context });
+    }
 
     // Only handle 401 once per request and don't handle auth endpoints
     if (
