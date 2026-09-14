@@ -33,8 +33,11 @@ describe('CARE_GUIDES registry', () => {
       expect(g.scientificName.length).toBeGreaterThan(0);
       expect(g.metaTitle.length).toBeGreaterThan(0);
       expect(g.metaDescription.length).toBeGreaterThan(0);
-      // ISO date for "last reviewed" + sitemap lastmod.
+      // ISO date the facts were last checked — drives `datePublished`.
       expect(g.reviewed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // ISO date the content last changed — drives `dateModified`,
+      // `article:modified_time` and the sitemap's `<lastmod>`.
+      expect(g.updated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(g.summary.length).toBeGreaterThan(20);
 
       for (const fact of Object.values(g.quickFacts)) {
@@ -102,5 +105,41 @@ describe('inline links in guide prose', () => {
       // Descriptive anchor text, not "here" or a bare path.
       expect(withLink).toMatch(/\[free pet-safe (?:checker|tool)\]\(\/pet-safe\)/);
     }
+  });
+});
+
+/**
+ * `reviewed` and `updated` answer different questions and must not collapse
+ * back into one. Six guides shipped a `<lastmod>` and a `dateModified` 80
+ * days behind their own content because a single field was serving both.
+ */
+describe('CARE_GUIDES content dates', () => {
+  it('never dates a change before the review it followed', () => {
+    // A guide is reviewed, then edited — so `updated` is the review date or
+    // later, never earlier. An earlier one means somebody mistyped a date or
+    // reused the wrong field.
+    for (const g of CARE_GUIDES) {
+      expect(
+        g.updated >= g.reviewed,
+        `${g.slug}: updated ${g.updated} predates reviewed ${g.reviewed}`
+      ).toBe(true);
+    }
+  });
+
+  it('dates no guide in the future', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const g of CARE_GUIDES) {
+      expect(g.updated <= today, `${g.slug}: updated ${g.updated} is in the future`).toBe(true);
+      expect(g.reviewed <= today, `${g.slug}: reviewed ${g.reviewed} is in the future`).toBe(true);
+    }
+  });
+
+  it('still records the drift the split was introduced to fix', () => {
+    // If this ever drops to zero, either every guide was genuinely re-reviewed
+    // after its last edit — or somebody "tidied" `updated` back onto
+    // `reviewed` and re-created the bug. Six guides are known to have been
+    // edited (#649, #651) long after their last review.
+    const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
+    expect(drifted.length).toBeGreaterThanOrEqual(6);
   });
 });

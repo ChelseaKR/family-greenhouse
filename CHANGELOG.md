@@ -209,6 +209,34 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
 
 ### Fixed
 
+- **Every care guide published its fact-review date as its modification date,
+  and six of them were 80 days stale.** `reviewed` — the day a human last checked
+  a guide's facts — fed `dateModified`, `article:modified_time` and the
+  sitemap's `<lastmod>` as well as `datePublished`. Two edits then landed
+  without touching it (#649 rewrote six `metaTitle`s, #651 linked twelve guides
+  to `/pet-safe`, both 2026-09-05), so `/care/zz-plant`, `/care/peace-lily`,
+  `/care/aloe-vera`, `/care/calathea`, `/care/dieffenbachia` and
+  `/care/heartleaf-philodendron` advertised `<lastmod>2026-06-17</lastmod>` for
+  content that changed on 2026-09-05, and the other eighteen ran one to three
+  days behind. `lastmod` is the one sitemap field a crawler still reads, and it
+  reads it to decide whether a URL is worth refetching — understating it is the
+  direction that skips the recrawl of a page whose title just changed.
+  `CareGuide` now carries a separate `updated` date, reconstructed from
+  `git log` over `careGuides.ts` (a guide whose only recorded write is the
+  repository's root commit keeps its review date rather than an invented later
+  one), and that field — not `reviewed` — drives `dateModified`,
+  `article:modified_time` and `<lastmod>`. The page prints both dates under
+  the FAQ, so the claim the markup makes is one a reader can see and a
+  proofreader can catch going stale. `careGuides.test.ts` refuses an
+  `updated` earlier than its `reviewed`, a date in the future, or a registry
+  in which the two have quietly collapsed back into one; `CareGuidePage.test.tsx`
+  holds the JSON-LD, the Open Graph tag and the visible `<time>` to the same
+  literal and checks the printed day is the day the literal names — a naive
+  `toLocaleDateString` on a `YYYY-MM-DD` string prints the day before,
+  anywhere west of UTC. The renderer that gets this right is
+  `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
+  blog and changelog can stop making the same mistake.
+
 - **The deep-link gates could not tell this account's Enrollment ID from its
   Team ID.** An `appID` is `<Team ID>.<bundle id>`, and
   `scripts/check-well-known.mjs` refused a Team ID that was not exactly ten
