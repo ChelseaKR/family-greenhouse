@@ -230,16 +230,18 @@ module "api" {
   # Stripe. See variables.tf — these must be declared at THIS level too, or
   # Terraform silently drops the tfvars/TF_VAR_* values (undeclared variable
   # is only a warning) and every Lambda sees "" regardless of what's set.
-  stripe_secret_key                 = var.stripe_secret_key
-  stripe_webhook_secret             = var.stripe_webhook_secret
-  stripe_price_id_garden            = var.stripe_price_id_garden
-  stripe_price_id_garden_annual     = var.stripe_price_id_garden_annual
-  stripe_price_id_garden_lifetime   = var.stripe_price_id_garden_lifetime
-  stripe_price_id_greenhouse        = var.stripe_price_id_greenhouse
-  stripe_price_id_greenhouse_annual = var.stripe_price_id_greenhouse_annual
-  stripe_price_id_identify_top_up   = var.stripe_price_id_identify_top_up
-  stripe_automatic_tax_enabled      = var.stripe_automatic_tax_enabled
-  payments_enabled                  = var.payments_enabled
+  stripe_secret_key                     = var.stripe_secret_key
+  stripe_webhook_secret                 = var.stripe_webhook_secret
+  stripe_price_id_garden                = var.stripe_price_id_garden
+  stripe_price_id_garden_annual         = var.stripe_price_id_garden_annual
+  stripe_price_id_garden_lifetime       = var.stripe_price_id_garden_lifetime
+  stripe_price_id_greenhouse            = var.stripe_price_id_greenhouse
+  stripe_price_id_greenhouse_annual     = var.stripe_price_id_greenhouse_annual
+  stripe_price_id_identify_top_up       = var.stripe_price_id_identify_top_up
+  stripe_price_id_gift_garden_month     = var.stripe_price_id_gift_garden_month
+  stripe_price_id_gift_greenhouse_month = var.stripe_price_id_gift_greenhouse_month
+  stripe_automatic_tax_enabled          = var.stripe_automatic_tax_enabled
+  payments_enabled                      = var.payments_enabled
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is
@@ -267,6 +269,8 @@ locals {
     var.stripe_price_id_greenhouse,
     var.stripe_price_id_greenhouse_annual,
     var.stripe_price_id_identify_top_up,
+    var.stripe_price_id_gift_garden_month,
+    var.stripe_price_id_gift_greenhouse_month,
   ]))
 
   # Configured ids the owner attestation does not cover. Non-empty means an id

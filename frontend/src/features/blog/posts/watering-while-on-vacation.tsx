@@ -134,11 +134,11 @@ export default function WateringWhileOnVacation() {
       </p>
       <p>
         <a href="/">Family Greenhouse</a> handles the handover directly: you can share a time-boxed
-        link with a sitter, who sees only the tasks that are actually due while you&rsquo;re gone
-        and taps them off as they go, without creating an account or joining your household. When
-        you get back, the log tells you exactly what happened. A note on the kitchen table does the
-        same job for four plants; it&rsquo;s the fourteen-plant version where the tooling starts to
-        pay.
+        link with a sitter &mdash; up to a week free, up to 90 days on a paid plan &mdash; who sees
+        the tasks due while you&rsquo;re gone, and anything already overdue, and taps them off as
+        they go, without creating an account or joining your household. When you get back, the log
+        tells you exactly what happened. A note on the kitchen table does the same job for four
+        plants; it&rsquo;s the fourteen-plant version where the tooling starts to pay.
       </p>
     </article>
   );

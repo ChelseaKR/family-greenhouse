@@ -27,6 +27,10 @@ export type AuditEvent =
   | 'billing.subscription_changed'
   | 'billing.upgrade_requested'
   | 'billing.identify_top_up_granted'
+  // Gift subscriptions (ADR 0028): a paid gift created with its code, and a
+  // code placed on a household. Neither line carries the code.
+  | 'billing.gift_subscription_granted'
+  | 'billing.gift_redeemed'
   // Outbound-mail deliverability (services/emailSuppression.ts). Suppressing
   // an address stops every product email to it, and clearing one puts it back
   // on the send list — both are consequential enough to leave a trail.

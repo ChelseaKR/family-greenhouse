@@ -8,6 +8,7 @@ import {
   comparePriceToCatalog,
   expectedPriceFor,
   expectedPrices,
+  giftExpectedPrice,
   identifyTopUpExpectedPrice,
   isPriceReconciliationError,
   reconcileConfiguredPrices,
@@ -55,21 +56,39 @@ describe('catalog expansion', () => {
     expect(unitAmountFor(149)).toBe(14900);
   });
 
-  it('expands every sellable amount — the five plan cadences AND the top-up pack — and skips the free tier', () => {
-    // The pack is in this list on purpose. `reconcileConfiguredPrices` sweeps
-    // exactly what `expectedPrices()` returns, so a sellable amount missing
-    // from here is one the sweep reports nothing about and therefore declares
-    // clean. The pack takes real money ($1.99) on a path whose credits come
-    // from checkout metadata, not from what Stripe charged.
+  it('expands every sellable amount — the five plan cadences, the top-up pack AND the two gift months — and skips the free tier', () => {
+    // The pack and the gift months are in this list on purpose.
+    // `reconcileConfiguredPrices` sweeps exactly what `expectedPrices()`
+    // returns, so a sellable amount missing from here is one the sweep
+    // reports nothing about and therefore declares clean. All three take real
+    // money on paths whose grant comes from checkout metadata, not from what
+    // Stripe charged.
     const rows = expectedPrices().map((r) => `${r.itemId}:${r.cadence}`);
     expect(rows.sort()).toEqual([
       'garden:lifetime',
       'garden:month',
       'garden:year',
+      'gift-garden-month:one_time',
+      'gift-greenhouse-month:one_time',
       'greenhouse:month',
       'greenhouse:year',
       'identify-20:one_time',
     ]);
+  });
+
+  it('prices a gift month at the tier’s monthly price, read from the catalog (ADR 0028)', () => {
+    expect(giftExpectedPrice('garden')).toEqual({
+      itemId: 'gift-garden-month',
+      cadence: 'one_time',
+      env: 'STRIPE_PRICE_ID_GIFT_GARDEN_MONTH',
+      dollars: PLANS.garden.monthlyPrice,
+      unitAmount: 499,
+    });
+    expect(giftExpectedPrice('greenhouse')).toMatchObject({
+      env: 'STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH',
+      dollars: PLANS.greenhouse.monthlyPrice,
+      unitAmount: 999,
+    });
   });
 
   it('derives the top-up row from the pack rather than restating $1.99', () => {
@@ -245,6 +264,10 @@ describe('reconcileConfiguredPrices', () => {
         recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
       }),
       p_topup: priceLike({ unit_amount: 199, recurring: null }),
+      p_gift_garden: priceLike({ unit_amount: 499, recurring: null }),
+      // A recurring price in a gift slot would bill the buyer monthly for a
+      // one-time gift: a mismatch, not a lifetime tier.
+      p_gift_gh: priceLike({ unit_amount: 999 }),
     });
     const results = await reconcileConfiguredPrices(stripe, {
       STRIPE_PRICE_ID_GARDEN: 'p_garden_m',
@@ -253,9 +276,11 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GREENHOUSE: 'p_gh_m',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'p_gh_y',
       STRIPE_PRICE_ID_IDENTIFY_TOP_UP: 'p_topup',
+      STRIPE_PRICE_ID_GIFT_GARDEN_MONTH: 'p_gift_garden',
+      STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH: 'p_gift_gh',
     });
 
-    expect(retrieve).toHaveBeenCalledTimes(6);
+    expect(retrieve).toHaveBeenCalledTimes(8);
     const byEnv = Object.fromEntries(results.map((r) => [r.env, r.status]));
     expect(byEnv).toEqual({
       STRIPE_PRICE_ID_GARDEN: 'ok',
@@ -264,6 +289,8 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GREENHOUSE: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'ok',
       STRIPE_PRICE_ID_IDENTIFY_TOP_UP: 'ok',
+      STRIPE_PRICE_ID_GIFT_GARDEN_MONTH: 'ok',
+      STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH: 'mismatch',
     });
   });
 
@@ -272,7 +299,7 @@ describe('reconcileConfiguredPrices', () => {
     // production price id is blank on purpose (docs/billing.md).
     const { stripe, retrieve } = fakeStripe({});
     const results = await reconcileConfiguredPrices(stripe, {});
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(8);
     expect(results.every((r) => r.status === 'unconfigured')).toBe(true);
     expect(retrieve).not.toHaveBeenCalled();
   });

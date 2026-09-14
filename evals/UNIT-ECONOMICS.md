@@ -296,6 +296,27 @@ Metering the trial at Garden's allowances would instead be
 `200 × $0.0059 + $0.55 + 30 × $0.0585 = $3.485` a month, `$6.97` over a window that
 crosses a month boundary.
 
+### 4b. Gift subscriptions (ADR 0028)
+
+A gift is N months of a paid tier, priced at the tier's monthly price times N
+with **no discount**, and metered at the gifted tier. Its economics are therefore
+the monthly plan's, row for row in the §4 table: a gift month of Garden receives
+$4.99 against a $3.49 ceiling (70% gross), a gift month of Greenhouse $9.99
+against $7.58 (76%). Stripe's fee is taken once per gift rather than once per
+month, so net of Stripe a 3-month Garden gift is $14.97 − $0.73 = $14.24 for
+three months at ceiling $10.47 (74%), better than three monthly charges (77%).
+
+The number that decided the shape: a 12-month gift at the withdrawn annual
+price ($39.99) would be $3.33/month against the same $3.49 ceiling — 105%, the
+figure that withdrew annual. Who pays does not change what the recipient's usage
+costs, so a gift discount is a discount on the wrong line.
+
+Two things a gift changes that a subscription does not. The months are paid up
+front and run from redemption, so the exposure of one code is bounded at
+purchase: at most 12 × $7.58 = $90.96 of AI cost against $119.88 received. And a
+gift cannot sit under a running subscription (the redemption refuses it), so a
+household never holds two paid entitlements for one month.
+
 ---
 
 ## 5. Findings, in priority order

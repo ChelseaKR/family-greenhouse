@@ -205,6 +205,12 @@ export const STEPS = [
     why: 'documentation figures that no longer match their source',
   },
   {
+    id: 'plan-copy:check',
+    script: 'plan-copy:check',
+    weight: 0,
+    why: 'the free plan\u2019s caps, stated in fifteen places a prospective customer reads (page metadata, the PWA manifest, the landing page, the blog CTA) and derived from plans.ts in none of them',
+  },
+  {
     id: 'api:check',
     script: 'api:check',
     weight: 0,

@@ -12,6 +12,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { formatContentDate } from '@/utils/contentDate';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
 
 const SITE = SITE_URL;
@@ -89,9 +90,11 @@ export function CareGuidePage() {
           description: guide.metaDescription,
           canonical: `${SITE}/care/${guide.slug}`,
           ogType: 'article',
-          // Only modifiedTime: `reviewed` is a REVIEW date, not a publish
-          // date, and the guides carry no record of when they first shipped.
-          article: { modifiedTime: guide.reviewed, section: 'Plant care' },
+          // Only modifiedTime: the guides carry no record of when they first
+          // shipped — the repository's history begins at its root commit
+          // (2026-07-05) and ten of them are already in it — so there is no
+          // honest `publishedTime` to emit.
+          article: { modifiedTime: guide.updated, section: 'Plant care' },
           jsonLd: {
             '@context': 'https://schema.org',
             '@graph': [
@@ -110,8 +113,13 @@ export function CareGuidePage() {
                   width: 1200,
                   height: 630,
                 },
+                // Two dates, two fields, because they answer two questions:
+                // `reviewed` is when the facts were last checked, `updated`
+                // is when the page last changed. Publishing `reviewed` as
+                // both left six guides claiming a `dateModified` 80 days
+                // older than their own content (see careGuides.ts).
                 datePublished: guide.reviewed,
-                dateModified: guide.reviewed,
+                dateModified: guide.updated,
                 author: { '@type': 'Organization', name: 'Family Greenhouse' },
                 publisher: {
                   '@type': 'Organization',
@@ -268,6 +276,23 @@ export function CareGuidePage() {
           ))}
         </dl>
       </article>
+
+      {/* The page's own copy of the dates its markup publishes. Without this
+          the guides emitted `dateModified` and `article:modified_time` while
+          showing the reader no date at all — a claim only a machine could
+          see, and one nobody proofreading the page could catch going stale.
+          Both <time> values are the literals fed to the JSON-LD above. */}
+      <p className="mt-10 text-sm text-gray-600">
+        Facts last reviewed{' '}
+        <time dateTime={guide.reviewed}>{formatContentDate(guide.reviewed)}</time>
+        {guide.updated !== guide.reviewed && (
+          <>
+            {' '}
+            · page last updated{' '}
+            <time dateTime={guide.updated}>{formatContentDate(guide.updated)}</time>
+          </>
+        )}
+      </p>
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
         <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
