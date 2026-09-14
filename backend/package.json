@@ -47,11 +47,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/aws-lambda": "^8.10.136",
+    "@types/aws-lambda": "^8.10.163",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/http-errors": "^2.0.4",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.4.1",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.11",
     "cors": "^2.8.5",
