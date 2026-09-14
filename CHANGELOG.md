@@ -148,6 +148,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **In-app copy that promised what the code refuses.** Eleven strings in both
+  locales, each checked against the handler that decides it:
+  - API keys: "Keys issued earlier keep working" while the household is off
+    Greenhouse — `middleware/apiKey.ts` re-checks entitlement AND the issuer's
+    membership on every use and 403s with "This household has downgraded". The
+    read-failure notice named revocation as the only way a key stops working.
+  - Plant import: "Paid plan changes are paused" rendered unconditionally on a
+    plan-limit hit, with no commercial-hold guard, months after the hold was
+    lifted (`commercial-status.json`).
+  - Archiving: "You can restore it whenever you're ready" — restoring is
+    cap-checked exactly like creating and 402s at the plant cap.
+  - Wall display: "they can't see your notes" — the kiosk payload carries each
+    plant's space and placement note. The placement-note field hint said the
+    note is shared with sitter links only; caretaker seats and the wall
+    display receive it too.
+  - Identifications: "a higher plan includes more each month" was shown to
+    Greenhouse households, which have no higher plan.
+  - Sitter brief: "Everything below was written by the household" — the same
+    page prints our pet-safety line.
+  - Invites: "already invited today" is a rolling 24 hours.
+  - `Settings → Billing` is labelled **Plan status** in the UI.
+- **Spanish copy that differed from English on facts**: the analytics note and
+  three caretaker-seat strings named a "plan Jardín" and a "Configuración"
+  menu that do not exist (plan names ship untranslated; the menu is "Ajustes"),
+  and the caretaker Revoke control read "Cancelar", the same word as Cancel.
+
 - **Help answers that were wrong about the product.** `helpContent.tsx` imports
   nothing from the backend, so every figure and rule in it is hand-typed; eight
   had drifted from the code, and each is now checked against the handler that
