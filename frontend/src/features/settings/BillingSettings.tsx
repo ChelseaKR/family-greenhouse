@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -29,7 +29,15 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
-import { GiftSubscriptionCard } from '@/features/billing/GiftSubscriptionCard';
+// Lazy: the checkout/redemption flow is real weight (~430 lines) that most
+// visits to this page never touch -- it only renders once plansQuery has
+// resolved and giftSubscriptions is on the offer, so it costs nothing on
+// first paint even for the households that do have it.
+const GiftSubscriptionCard = lazy(() =>
+  import('@/features/billing/GiftSubscriptionCard').then((m) => ({
+    default: m.GiftSubscriptionCard,
+  }))
+);
 import { isNativeApp } from '@/lib/platform';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
@@ -453,13 +461,15 @@ export function BillingSettings() {
       {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
           then nothing renders. Not on native: no purchase surface is. */}
       {!native && plansQuery.data?.giftSubscriptions && (
-        <GiftSubscriptionCard
-          offer={plansQuery.data.giftSubscriptions}
-          plans={plansQuery.data.plans}
-          paymentsAvailable={paymentsAvailable}
-          gift={subQuery.data?.gift}
-          returnedFromPurchase={returnedFromGift}
-        />
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <GiftSubscriptionCard
+            offer={plansQuery.data.giftSubscriptions}
+            plans={plansQuery.data.plans}
+            paymentsAvailable={paymentsAvailable}
+            gift={subQuery.data?.gift}
+            returnedFromPurchase={returnedFromGift}
+          />
+        </Suspense>
       )}
 
       {paymentsAvailable && !native && (
