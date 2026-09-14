@@ -9,7 +9,12 @@ import { IMAGE_BODY_MAX_BYTES } from '../../middleware/bodySize.js';
 import * as plantIdentification from '../../services/plantIdentification.js';
 import * as identifyBudget from '../../services/identifyBudget.js';
 import * as billing from '../../services/billing.js';
-import { getEntitledPlan, getPlan } from '../../models/plans.js';
+import {
+  getEntitledPlan,
+  getMeteredPlanId,
+  getPlan,
+  noCardTrialState,
+} from '../../models/plans.js';
 import {
   PLANT_ID_CREDITS_PER_IDENTIFICATION,
   PLANT_ID_USD_PER_CREDIT,
@@ -46,13 +51,19 @@ export const identify = createHandler(
     // and returned; blocking only happens when IDENTIFY_METERING_ENABLED=1
     // (default off — beta is unaffected).
     const bucketId = user.householdId ?? `user:${user.userId}`;
-    const plan = user.householdId
+    const sub = user.householdId ? await billing.getHouseholdSubscription(user.householdId) : null;
+    const plan = sub
       ? // Entitlement, not the plan row — Plant.id calls cost real money, and
         // an unpaid subscription should not buy a larger allowance. See
         // getEntitledPlan.
-        getEntitledPlan(await billing.getHouseholdSubscription(user.householdId))
+        getEntitledPlan(sub)
       : getPlan('seedling');
-    const allowance = identifyBudget.allowanceForPlan(plan.id);
+    // The METERED plan, not the entitled one (ADR 0027). A household on the
+    // no-card Garden trial has Garden's features and Seedling's allowance:
+    // every identification spends a prepaid Plant.id credit, and a trial earns
+    // nothing. For every other household the two are the same tier.
+    const onNoCardTrial = sub !== null && noCardTrialState(sub) === 'active';
+    const allowance = identifyBudget.allowanceForPlan(sub ? getMeteredPlanId(sub) : plan.id);
     const meteringEnabled = identifyBudget.meteringEnabled();
     const upstreamConfigured = plantIdentification.isPlantIdentificationConfigured();
     // `null` = we could not read/write an authoritative total. It is published
@@ -85,11 +96,16 @@ export const identify = createHandler(
           // credit read never reaches here (it is the 503 below).
           const topUp = user.householdId ? identifyTopUpSummary(paymentsAreAvailable()) : null;
           const topUpAvailable = topUp?.available === true;
+          const trialAllowance = `During the no-card Garden trial, identifications use the free plan's allowance of ${allowance} a month, and this month's ${allowance === 1 ? 'is' : 'are'} used up.`;
           throw createHttpError(
             402,
-            topUpAvailable
-              ? `Your ${plan.name} plan's ${allowance} plant identifications for this month are used up. Buy a top-up pack of ${topUp.credits} identifications, or upgrade for a higher monthly allowance.`
-              : `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+            onNoCardTrial
+              ? topUpAvailable
+                ? `${trialAllowance} Buy a top-up pack of ${topUp.credits} identifications, or choose a paid plan for a higher monthly allowance.`
+                : `${trialAllowance} Choose a paid plan for a higher monthly allowance.`
+              : topUpAvailable
+                ? `Your ${plan.name} plan's ${allowance} plant identifications for this month are used up. Buy a top-up pack of ${topUp.credits} identifications, or upgrade for a higher monthly allowance.`
+                : `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
             {
               details: {
                 code: 'IDENTIFY_BUDGET_EXHAUSTED',
@@ -117,12 +133,25 @@ export const identify = createHandler(
     try {
       result = await plantIdentification.identifyPlant(base64);
     } catch (err) {
-      // 5xx messages are hidden by http-error-handler unless explicitly
-      // exposed; this one is intentionally surfaced so the frontend can show
-      // why identification failed (e.g. upstream 503 / timeout).
-      throw createHttpError(502, `Plant identification failed: ${(err as Error).message}`, {
-        expose: true,
-      });
+      // 5xx messages are hidden unless explicitly exposed, and this one is
+      // exposed on purpose so the frontend can say the identification failed
+      // rather than showing a bare 502. What it may NOT do is interpolate the
+      // thrown message: that string is whatever the upstream client, the AWS
+      // SDK, or an unexpected TypeError produced, and none of them are written
+      // for a user of this app to read. `plantIdentification.identifyPlant`
+      // already logs the upstream status and body server-side and converts a
+      // non-ok response into a generic error for exactly this reason; the
+      // interpolation here handed the remaining cases (timeouts, SDK failures,
+      // internal errors) straight to the client anyway.
+      //
+      // The operator keeps the detail: it is logged here, with the same
+      // request id the access log carries.
+      logger.error({ err: (err as Error).message, bucketId }, 'plant_id_identify_failed');
+      throw createHttpError(
+        502,
+        'Plant identification is temporarily unavailable. Nothing was charged — please try again.',
+        { expose: true }
+      );
     }
 
     // Count only calls that actually consumed a Plant.id identification —

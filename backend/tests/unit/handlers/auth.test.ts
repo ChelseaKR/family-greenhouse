@@ -16,6 +16,9 @@ vi.mock('../../../src/services/cognitoUsers.js', () => ({
 vi.mock('../../../src/services/householdService.js', () => ({
   updateMemberNameAcrossHouseholds: vi.fn(),
 }));
+vi.mock('../../../src/services/signupConfirmRecord.js', () => ({
+  recordSignup: vi.fn(),
+}));
 const commercialStatus = vi.hoisted(() => ({ registrationAvailable: true }));
 vi.mock('../../../src/config/commercialStatus.js', () => ({
   publicRegistrationIsAvailable: () => commercialStatus.registrationAvailable,
@@ -108,10 +111,12 @@ describe('auth handler', () => {
       expect(cognito.send).not.toHaveBeenCalled();
     });
 
-    it('returns 201 on successful Cognito SignUp', async () => {
+    it('returns 201 on successful Cognito SignUp and records the sign-up by its sub', async () => {
       const { cognito } = await import('../../../src/utils/cognito.js');
+      const { recordSignup } = await import('../../../src/services/signupConfirmRecord.js');
       const { signup } = await import('../../../src/handlers/auth/handler.js');
-      vi.mocked(cognito.send).mockResolvedValueOnce({} as never);
+      vi.mocked(cognito.send).mockResolvedValueOnce({ UserSub: 'sub-new' } as never);
+      vi.mocked(recordSignup).mockResolvedValueOnce(true);
 
       const res = (await signup(
         buildEvent({
@@ -129,6 +134,56 @@ describe('auth handler', () => {
       expect(JSON.parse(res.body)).toMatchObject({
         message: expect.stringContaining('check your email'),
       });
+      // The confirm-reminder pass finds the account by this row. It is keyed
+      // by the opaque Cognito sub only; the address never reaches it.
+      expect(recordSignup).toHaveBeenCalledTimes(1);
+      expect(recordSignup).toHaveBeenCalledWith('sub-new');
+    });
+
+    it('still returns 201 when the sign-up row cannot be written', async () => {
+      // The account already exists in Cognito. A lost row costs that account
+      // its reminder, never its sign-up.
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { recordSignup } = await import('../../../src/services/signupConfirmRecord.js');
+      const { signup } = await import('../../../src/handlers/auth/handler.js');
+      vi.mocked(cognito.send).mockResolvedValueOnce({ UserSub: 'sub-new' } as never);
+      vi.mocked(recordSignup).mockResolvedValueOnce(false);
+
+      const res = (await signup(
+        buildEvent({
+          body: JSON.stringify({
+            email: 'new-account@example.invalid',
+            password: 'Passw0rd!1234',
+            name: 'New User',
+          }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it('records nothing when Cognito refuses the sign-up', async () => {
+      const { cognito } = await import('../../../src/utils/cognito.js');
+      const { recordSignup } = await import('../../../src/services/signupConfirmRecord.js');
+      const { signup } = await import('../../../src/handlers/auth/handler.js');
+      vi.mocked(cognito.send).mockRejectedValueOnce(new CognitoError('UsernameExistsException'));
+
+      const res = (await signup(
+        buildEvent({
+          body: JSON.stringify({
+            email: 'taken-account@example.invalid',
+            password: 'Passw0rd!1234',
+            name: 'Taken',
+          }),
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(400);
+      expect(recordSignup).not.toHaveBeenCalled();
     });
 
     it('translates UsernameExistsException to 400', async () => {

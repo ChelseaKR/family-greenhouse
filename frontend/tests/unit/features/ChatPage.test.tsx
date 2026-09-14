@@ -11,7 +11,11 @@ vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
 }));
 
-vi.mock('@/services/billingService', () => ({
+vi.mock('@/services/billingService', async () => ({
+  // The real tier resolver: the page gates on it (ADR 0027).
+  effectivePlanId: (
+    await vi.importActual<typeof import('@/services/billingService')>('@/services/billingService')
+  ).effectivePlanId,
   billingService: {
     getCurrentSubscription: vi.fn(),
     // The locked-feature card reads the catalog to say which plan includes
@@ -142,6 +146,29 @@ describe('ChatPage plan availability', () => {
 
     expect(await screen.findByLabelText('Chat message')).toBeInTheDocument();
     expect(chatService.getBudget).toHaveBeenCalledOnce();
+  });
+
+  it('renders the composer for a household on the no-card Garden trial (ADR 0027)', async () => {
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+      planId: 'seedling',
+      noCardTrial: { state: 'active', endsAt: '2999-01-01T00:00:00.000Z' },
+    });
+    renderPage();
+
+    expect(await screen.findByLabelText('Chat message')).toBeInTheDocument();
+  });
+
+  it('shows the unavailable state again once the no-card trial has ended (ADR 0027)', async () => {
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+      planId: 'seedling',
+      noCardTrial: { state: 'ended', endsAt: '2026-01-01T00:00:00.000Z' },
+    });
+    renderPage();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Plant care chat isn’t available on Seedling' })
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Chat message')).not.toBeInTheDocument();
   });
 
   /**

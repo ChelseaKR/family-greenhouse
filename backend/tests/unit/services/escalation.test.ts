@@ -169,8 +169,10 @@ describe('escalation — rule storage', () => {
     expect(sent).toHaveLength(1);
     // #476: subscriptionStatus and lifetimePlanId ride along on the SAME
     // GetItem, so consulting payment status costs no extra read.
+    // ADR 0027: the no-card trial resolves off stripeSubscriptionId and
+    // noCardTrialEndsAt, which ride the same GetItem for the same reason.
     expect(sent[0].input.ProjectionExpression).toBe(
-      'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId'
+      'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId, stripeSubscriptionId, noCardTrialEndsAt'
     );
   });
 

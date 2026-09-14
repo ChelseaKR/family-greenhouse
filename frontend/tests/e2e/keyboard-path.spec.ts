@@ -142,5 +142,19 @@ test.describe('Keyboard-only paths', () => {
     // leaves the "Today" bucket (same contract task-completion.spec.ts
     // asserts for the pointer path).
     await expect(taskRow.getByText(/^today$/i)).toHaveCount(0);
+
+    // And the keyboard is still on the button it was pressed on. The
+    // in-flight state used to set `disabled`, which browsers respond to by
+    // blurring the focused element: focus landed on <body> and the next task
+    // was a whole page of Tab presses away. jsdom does not model that blur,
+    // so this assertion is the one that can see it.
+    const focused = await page.evaluate(() => ({
+      tag: document.activeElement?.tagName ?? 'none',
+      text: document.activeElement?.textContent?.trim().slice(0, 40) ?? '',
+    }));
+    expect(
+      `${focused.tag}:${focused.text.toLowerCase()}`,
+      "focus must stay on the completed task's Done button"
+    ).toBe('BUTTON:done');
   });
 });

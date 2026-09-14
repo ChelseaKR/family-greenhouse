@@ -261,6 +261,43 @@ describe('plants identify handler', () => {
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
   }
 
+  describe('the no-card Garden trial (ADR 0027)', () => {
+    async function exhaustedFor(sub: Awaited<ReturnType<typeof billing.getHouseholdSubscription>>) {
+      await warmHousehold();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue(sub);
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+      Object.assign(exceeded, { credits: { remaining: 0, expiresAt: null } });
+      vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+      const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      return JSON.parse(res.body) as { message: string };
+    }
+
+    it("meters a household on the no-card trial at Seedling's one identification a month, not Garden's thirty", async () => {
+      const body = await exhaustedFor({
+        planId: 'seedling',
+        noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+      });
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 1, 'hh-1');
+      expect(body.message).toMatch(
+        /During the no-card Garden trial, identifications use the free plan's allowance of 1 a month/
+      );
+      expect(body.message).not.toMatch(/Garden plan/);
+    });
+
+    it("keeps Garden's thirty for a household on a card-based Stripe Garden trial, whatever its row carries", async () => {
+      const body = await exhaustedFor({
+        planId: 'garden',
+        status: 'trialing',
+        stripeSubscriptionId: 'sub_synthetic_card_trial',
+        noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+      });
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
+      expect(body.message).toMatch(/Your Garden plan is limited to 30 plant identifications/);
+    });
+  });
+
   it('offers the top-up pack in the 402 when the household can actually buy one (ADR 0019)', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     await warmHousehold();
@@ -464,16 +501,21 @@ describe('plants identify handler', () => {
     }
   );
 
-  it('surfaces upstream failures as an exposed 502 message', async () => {
+  it('surfaces an upstream failure as an exposed 502 that does not quote the thrown error', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
+    // A thrown message with the shape of internal detail: a host, a port, and
+    // a deployment-specific string. Whatever the upstream client or the SDK
+    // puts in here is written for an operator, not for a plant-care user.
     vi.mocked(plantIdentification.identifyPlant).mockRejectedValueOnce(
-      new Error('plant.id timed out after 5000ms')
+      new Error('connect ECONNREFUSED 10.0.3.17:443 (fg-prod-identify-egress)')
     );
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(502);
-    // The 502 is intentionally exposed so the frontend can show the cause.
-    expect(res.body).toMatch(/Plant identification failed: plant\.id timed out/);
+    // Exposed, so the frontend can say the identification failed...
+    expect(res.body).toMatch(/Plant identification is temporarily unavailable/);
+    // ...but the thrown string itself never reaches the client.
+    expect(res.body).not.toMatch(/ECONNREFUSED|10\.0\.3\.17|fg-prod-identify-egress/);
     // A failed call consumed nothing and must not be metered.
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });

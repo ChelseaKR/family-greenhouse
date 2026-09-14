@@ -97,6 +97,18 @@ export interface HouseholdSubscription {
    * `getHouseholdSubscription` always sets it.
    */
   trialAvailable?: boolean;
+  /**
+   * End of the household's no-card Garden trial (ADR 0027), ISO 8601.
+   *
+   * Written once, by `householdService.createHousehold`, on a NEW household
+   * whose creating account had not had one. No Stripe path writes or clears it
+   * (`SubscriptionWriteField` excludes it), and it is absent on every household
+   * created before the trial existed. Entitlement reads it only through
+   * `noCardTrialState` in models/plans.ts, which ignores it whenever the row
+   * carries Stripe state. GET /billing/me publishes its derived state rather
+   * than this raw value.
+   */
+  noCardTrialEndsAt?: string;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -130,6 +142,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
     trialConsumedAt: item.trialConsumedAt as string | undefined,
+    noCardTrialEndsAt: item.noCardTrialEndsAt as string | undefined,
   };
 }
 
@@ -150,6 +163,7 @@ export async function getHouseholdSubscription(
     // learns about the trial: the answer, never the date. This is exactly the
     // condition `createCheckoutSession` applies below, read off the same row.
     trialAvailable: !state.trialConsumedAt,
+    noCardTrialEndsAt: state.noCardTrialEndsAt,
   };
 }
 
@@ -160,9 +174,15 @@ export async function getHouseholdSubscription(
  * `trialConsumedAt` and has no attribute of its own. Leaving it in would let a
  * caller persist a second, staler copy of the same fact — and the row already
  * has one authority for it, written write-once by `markTrialConsumed`.
+ *
+ * `noCardTrialEndsAt` is excluded because no Stripe path may write or clear it
+ * (ADR 0027). It is written once, at household creation, and a webhook that
+ * could touch it could extend, restart or end an app-side trial that Stripe
+ * knows nothing about.
  */
 type SubscriptionWriteField =
-  Exclude<keyof HouseholdSubscription, 'trialAvailable'> | 'pendingStripeCancellationId';
+  | Exclude<keyof HouseholdSubscription, 'trialAvailable' | 'noCardTrialEndsAt'>
+  | 'pendingStripeCancellationId';
 
 /**
  * Write subscription fields onto the household metadata row.

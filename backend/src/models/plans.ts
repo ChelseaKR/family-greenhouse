@@ -447,6 +447,19 @@ export interface EntitlementSubscription {
   planId?: string | null;
   status?: string | null;
   lifetimePlanId?: string | null;
+  /**
+   * The Stripe subscription id on file. Read only to answer "does Stripe own
+   * this household's entitlement?" (`hasStripeEntitlementState`):
+   * `checkout.session.completed` records the id before any status arrives, so
+   * reading status alone would leave a window in which a paying household
+   * looked like one with no Stripe state at all.
+   */
+  stripeSubscriptionId?: string | null;
+  /**
+   * End of the household's no-card Garden trial (ADR 0027), ISO 8601. Absent
+   * on every household that never had one. Read through `noCardTrialState`.
+   */
+  noCardTrialEndsAt?: string | null;
 }
 
 /**
@@ -466,6 +479,112 @@ function withLifetimeFloor(resolved: Plan, lifetimePlanId?: string | null): Plan
   return planRank(resolved.id) >= planRank(owned.id) ? resolved : owned;
 }
 
+// ---------------------------------------------------------------------------
+// The no-card Garden trial (ADR 0027)
+// ---------------------------------------------------------------------------
+
+/** How long a NEW household's no-card Garden trial lasts, in days. */
+export const NO_CARD_TRIAL_DAYS = 14;
+
+/**
+ * The tier a running no-card trial grants.
+ *
+ * App-side entitlement only. No Stripe customer, subscription, price or
+ * checkout session stands behind it, so nothing at Stripe can renew it, charge
+ * for it, or end it. It is two attributes on the household row, written once
+ * when the household is created, and it ends because the clock passes one of
+ * them.
+ */
+export const NO_CARD_TRIAL_PLAN: Plan = PLANS.garden;
+
+/**
+ * The tier whose METERED allowances a household on a running no-card trial
+ * spends against: plant identifications (a prepaid Plant.id credit each),
+ * leaf-health checks and chat tokens (Bedrock).
+ *
+ * The trial grants Garden's structural caps and features, which cost nothing
+ * to serve, and the care assistant, which does not. The upstream-cost budgets
+ * stay at what $0 buys (ADR 0012), which is what production's Seedling chat
+ * budget floor was configured for. `evals/UNIT-ECONOMICS.md` has the numbers.
+ */
+export const NO_CARD_TRIAL_METERING_PLAN_ID: PlanId = PLANS.seedling.id;
+
+/**
+ * Where a household stands on its no-card trial.
+ *
+ *   - `none`   no trial on the row, an unreadable end date, or Stripe state
+ *              owns this household's entitlement (see below).
+ *   - `active` now is before `noCardTrialEndsAt`.
+ *   - `ended`  now is at or after it: the household is back on Seedling.
+ */
+export type NoCardTrialState = 'active' | 'ended' | 'none';
+
+/**
+ * True when Stripe owns this household's entitlement: a subscription status is
+ * recorded, a subscription id is on file, a lifetime purchase exists, or a
+ * paid plan is on file.
+ *
+ * The no-card trial and Stripe billing are mutually exclusive, and this is the
+ * one place that says so. A household with any Stripe state resolves exactly
+ * as it did before the trial existed, whatever trial attributes its row may
+ * carry, so no trial logic can raise, lower or re-meter a household that is
+ * paying, trialling on a card, in dunning, or cancelled.
+ */
+export function hasStripeEntitlementState(sub: EntitlementSubscription): boolean {
+  return (
+    Boolean(sub.status) ||
+    Boolean(sub.stripeSubscriptionId) ||
+    Boolean(sub.lifetimePlanId) ||
+    (isPlanId(sub.planId) && planRank(sub.planId) > planRank(PLANS.seedling.id))
+  );
+}
+
+/**
+ * The household's no-card trial state at `now`.
+ *
+ * Derived on every read and never stored. The fallback at day 14 IS this
+ * comparison: there is no scheduled job to miss, no write that can fail half
+ * way, and no code at the boundary that could delete anything. Past the end
+ * the household resolves to Seedling, and Seedling's caps limit new growth
+ * only (`atCap`).
+ *
+ * An end date that does not parse grants nothing. This codebase writes it, so
+ * an unreadable one is a defect, and that defect should cost a household on
+ * Seedling, not an unmetered one.
+ */
+export function noCardTrialState(
+  sub: EntitlementSubscription,
+  now: Date = new Date()
+): NoCardTrialState {
+  if (!sub.noCardTrialEndsAt) return 'none';
+  if (hasStripeEntitlementState(sub)) return 'none';
+  const endsAt = Date.parse(sub.noCardTrialEndsAt);
+  if (!Number.isFinite(endsAt)) return 'none';
+  return now.getTime() < endsAt ? 'active' : 'ended';
+}
+
+/** Raise `resolved` to the trial tier while a no-card trial runs. Never lowers it. */
+function withNoCardTrial(resolved: Plan, sub: EntitlementSubscription, now: Date): Plan {
+  if (noCardTrialState(sub, now) !== 'active') return resolved;
+  return planRank(resolved.id) >= planRank(NO_CARD_TRIAL_PLAN.id) ? resolved : NO_CARD_TRIAL_PLAN;
+}
+
+/**
+ * The tier whose monthly allowances a household SPENDS against: identify
+ * (`identifyBudget.allowanceForPlan`), leaf-health (`resolveMonthlyCap`) and
+ * chat (`budgetConfigForPlan` / `resolveBudgetConfig`).
+ *
+ * For every household except one on a running no-card trial this is exactly
+ * `getEntitledPlan(sub).id`. A trial household is metered at
+ * `NO_CARD_TRIAL_METERING_PLAN_ID`: Garden's features, Seedling's upstream-cost
+ * budgets. Every AI guard reads this rather than the entitled plan, or a trial
+ * would silently buy a paid tier's AI spend.
+ */
+export function getMeteredPlanId(sub: EntitlementSubscription, now: Date = new Date()): PlanId {
+  if (noCardTrialState(sub, now) === 'active') return NO_CARD_TRIAL_METERING_PLAN_ID;
+  return getEntitledPlan(sub, now).id;
+}
+
 /**
  * The plan a household may START something new on.
  *
@@ -479,9 +598,9 @@ function withLifetimeFloor(resolved: Plan, lifetimePlanId?: string | null): Plan
  * `getEntitledPlanForIssuedGrant` only where the pair of functions below says
  * to.
  */
-export function getEntitledPlan(sub: EntitlementSubscription): Plan {
+export function getEntitledPlan(sub: EntitlementSubscription, now: Date = new Date()): Plan {
   const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
-  return withLifetimeFloor(subscribed, sub.lifetimePlanId);
+  return withNoCardTrial(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now);
 }
 
 /**
@@ -517,8 +636,17 @@ export function getEntitledPlan(sub: EntitlementSubscription): Plan {
  * by `getEntitledPlan`; revoking them is gated by nothing, which is the
  * control.
  */
-export function getEntitledPlanForIssuedGrant(sub: EntitlementSubscription): Plan {
-  return withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
+export function getEntitledPlanForIssuedGrant(
+  sub: EntitlementSubscription,
+  now: Date = new Date()
+): Plan {
+  // The no-card trial is a floor here too, and only while it runs: a sitter
+  // link minted on day 10 still shows its brief on day 12. There is no dunning
+  // period to carry a grant through, because the trial has no card to fail, so
+  // at day 14 an issued grant falls back exactly as it does when a cancelled
+  // subscription reaches its period end and `planId` is reset to Seedling.
+  const floored = withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
+  return withNoCardTrial(floored, sub, now);
 }
 
 /** True iff `id` names a real plan in the catalog. */

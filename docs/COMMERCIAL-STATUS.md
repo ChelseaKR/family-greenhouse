@@ -17,6 +17,13 @@ resubscribes is charged at once), and a household admin manages
 the plan from Settings → Billing via the Stripe customer portal. Paid plans are
 not sold inside the mobile apps.
 
+Every **new** household also starts a 14-day Garden trial that needs no card
+([ADR 0027](adr/0027-no-card-garden-trial.md)). It is app-side entitlement only:
+no Stripe object is created, nothing is charged, and when the 14 days end the
+household is on Seedling again with nothing deleted. It is one per account, it is
+never granted to a household that already existed, and it is never applied to a
+household with any Stripe subscription state.
+
 Garden annual, Greenhouse annual, and the one-time Garden Lifetime purchase were
 withdrawn from sale on 2026-09-02 by [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md):
 at the verified Plant.id per-identification cost, each of those cadences earns
