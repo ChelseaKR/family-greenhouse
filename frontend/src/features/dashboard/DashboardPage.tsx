@@ -152,6 +152,17 @@ export function DashboardPage() {
     const spaceId = plantsById.get(task.plantId)?.spaceId;
     return spaceId ? spacesById.get(spaceId) : undefined;
   };
+  /**
+   * Where a task's plant lives, in three states (ADR 0010). `plantsById` is
+   * empty both while `GET /plants` is in flight and after it fails, and every
+   * row used to read the emptiness as "Unplaced" — a placement claim about
+   * every plant in the household that nobody computed.
+   */
+  const taskLocationLabel = (plantId: string): string | null => {
+    const plant = plantsById.get(plantId);
+    if (plant) return plantLocationLabel(plant, spacesById, unplacedLabel);
+    return plantsLoading && !plantsError ? null : t('spaces.locationUnknown');
+  };
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -294,11 +305,7 @@ export function DashboardPage() {
               <TaskItem
                 key={task.id}
                 task={task}
-                locationLabel={
-                  plantsById.has(task.plantId)
-                    ? plantLocationLabel(plantsById.get(task.plantId)!, spacesById, unplacedLabel)
-                    : unplacedLabel
-                }
+                locationLabel={taskLocationLabel(task.plantId)}
                 onComplete={careRuleGate.request}
                 isCompleting={
                   completeTaskMutation.isPending &&
@@ -749,7 +756,8 @@ function ActivityRow({ event }: ActivityRowProps) {
 
 interface TaskItemProps {
   task: TaskWithCoverage;
-  locationLabel: string;
+  /** `null` while the plants read is still in flight: say nothing. */
+  locationLabel: string | null;
   onComplete: (task: TaskWithCoverage) => void;
   isCompleting: boolean;
   skipReason: Extract<SnoozeReason, 'rain' | 'frost'> | null;
@@ -803,7 +811,7 @@ function TaskItem({
             </span>
             {task.assignedToName && ` • ${task.assignedToName}`}
           </p>
-          <TaskLocation label={locationLabel} />
+          {locationLabel !== null && <TaskLocation label={locationLabel} />}
           {(!task.assignedTo || task.coveringFor || skipReason) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {!task.assignedTo &&
