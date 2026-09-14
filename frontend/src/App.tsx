@@ -130,6 +130,10 @@ const SupportPage = lazyLegal(() => import('@/features/legal/SupportPage'), 'Sup
 const TermsPage = lazyLegal(() => import('@/features/legal/TermsPage'), 'TermsPage');
 const StatusPage = lazyNamed(() => import('@/features/status/StatusPage'), 'StatusPage');
 const PricingPage = lazyNamed(() => import('@/features/pricing/PricingPage'), 'PricingPage');
+const GiftLandingPage = lazyNamed(
+  () => import('@/features/gift/GiftLandingPage'),
+  'GiftLandingPage'
+);
 
 /**
  * Single source of truth for the /onboarding route gate. Default: bounce
@@ -253,6 +257,12 @@ function App() {
               <Route path="/help" element={<HelpPage />} />
               <Route path="/help/:topicId" element={<HelpTopicPage />} />
               <Route path="/pricing" element={<PricingPage />} />
+              {/* Public gift-subscription landing page (ADR 0028): a giver
+                  buying this for someone else's household has no reason to
+                  have signed up for their own first, so this must be
+                  reachable and readable with no login wall — the checkout
+                  mutation itself still requires a signed-in buyer. */}
+              <Route path="/gift" element={<GiftLandingPage />} />
 
               {/* Protected routes */}
               <Route element={<ProtectedRoute />}>

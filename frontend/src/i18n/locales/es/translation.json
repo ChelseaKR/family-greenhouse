@@ -1433,6 +1433,7 @@
     "featureImportExport": "Importación, exportación y calendario (CSV, JSON, .ics)",
     "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Aparte, la primera suscripción de pago de un hogar empieza con una prueba de 14 días: el proceso de pago pide una tarjeta por adelantado, no se te cobra hasta que pasan los 14 días y cancelar antes no cuesta nada. La prueba de la suscripción es una sola por hogar: un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse.",
     "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Facturación. En esta página no se compra nada.",
+    "giftNote": "¿Es para regalar?",
     "whyHeading": "Por qué un plan de pago",
     "whyHouseholdTitle": "Una sola factura para toda la casa",
     "whyHouseholdBody": "Un plan cubre todo el hogar con una única suscripción. Las personas con las que compartes tus plantas son miembros de tu plan, no puestos adicionales que haya que comprar.",
@@ -1735,6 +1736,24 @@
       "rateLimited": "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
       "generic": "No hemos podido canjear el código en este momento. No se ha usado nada; inténtalo de nuevo en unos minutos."
     }
+  },
+  "giftLanding": {
+    "eyebrow": "Regalos",
+    "title": "Regala una suscripción a Family Greenhouse",
+    "lede": "Paga una sola vez varios meses de Garden o Greenhouse para el hogar de otra persona. Recibirá un código de canje para introducir en Ajustes → Facturación; no necesitas tener tu propio hogar para enviarlo.",
+    "howItWorksHeading": "Cómo funciona",
+    "step1Title": "Elige un plan y la duración",
+    "step1Body": "Garden o Greenhouse, de 1 a 12 meses.",
+    "step2Title": "Paga una sola vez, con tu propia tarjeta",
+    "step2Body": "Un único pago, nada se renueva. Te enviamos un recibo y un código de canje para que se lo entregues.",
+    "step3Title": "Esa persona lo canjea",
+    "step3Body": "Quien reciba el regalo introduce el código en Ajustes → Facturación, y el regalo empieza ese mismo día.",
+    "signInHeading": "Inicia sesión para enviar un regalo",
+    "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
+    "signInCta": "Iniciar sesión",
+    "registerCta": "Crear una cuenta gratuita",
+    "nativeNotice": "Regalar no está disponible en la aplicación. Abre familygreenhouse.net en la web para enviar un regalo.",
+    "navLink": "Regalar una suscripción"
   },
   "caretaker": {
     "seats": {

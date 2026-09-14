@@ -46,6 +46,7 @@
 // --- generated from public-routes.mjs: do not edit by hand -------------------
 var PRERENDERED = {
   '/pricing': 1,
+  '/gift': 1,
   '/blog': 1,
   '/care': 1,
   '/help': 1,

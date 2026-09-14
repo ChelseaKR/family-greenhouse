@@ -633,6 +633,12 @@ export function LandingPage() {
             >
               Plans
             </a>
+            <Link
+              to="/gift"
+              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
+            >
+              {t('giftLanding.navLink')}
+            </Link>
           </div>
           <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
             <Link
@@ -994,6 +1000,11 @@ export function LandingPage() {
                   <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
                     Plans
                   </a>
+                </li>
+                <li>
+                  <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
+                    {t('giftLanding.navLink')}
+                  </Link>
                 </li>
               </ul>
             </div>

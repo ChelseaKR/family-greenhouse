@@ -1040,6 +1040,37 @@ describe('billing handler', () => {
         });
       });
 
+      it('does not require a household — a gift-only buyer returns to /gift, not /settings/billing', async () => {
+        process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH = 'price_gift_garden';
+        const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(createGiftCheckoutSession).mockResolvedValueOnce({
+          url: 'https://checkout.stripe.test/gift-no-household',
+        });
+        const noHousehold = buildEvent({
+          body: JSON.stringify({
+            planId: 'garden',
+            months: 3,
+            checkoutAttemptId: '0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
+          }),
+          headers: { 'content-type': 'application/json' },
+          requestContext: {
+            authorizer: { claims: { sub: 'user-2', email: 'giver@example.com' } },
+            identity: { sourceIp: '127.0.0.1' },
+          } as APIGatewayProxyEvent['requestContext'],
+        });
+        const res = (await giftCheckout(noHousehold, ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        expect(createGiftCheckoutSession).toHaveBeenCalledWith({
+          buyerUserId: 'user-2',
+          buyerEmail: 'giver@example.com',
+          planId: 'garden',
+          months: 3,
+          successUrl: expect.stringContaining('/gift?status=success&purchase=gift'),
+          cancelUrl: expect.stringContaining('/gift?status=cancel'),
+          idempotencyKey: 'gift:user-2:0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
+        });
+      });
+
       it('rejects months outside 1..12, a free tier, and a malformed attempt id at the validation layer', async () => {
         process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH = 'price_gift_garden';
         const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
@@ -1231,6 +1262,23 @@ describe('billing handler', () => {
         )) as APIGatewayProxyResult;
         expect(res.statusCode).toBe(502);
         expect(res.body).not.toContain('"purchases"');
+      });
+
+      it('does not require a household — a gift-only buyer can still read the codes they paid for', async () => {
+        const { giftPurchases } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(listGiftPurchases).mockResolvedValueOnce([]);
+        const res = (await giftPurchases(
+          buildEvent({
+            httpMethod: 'GET',
+            requestContext: {
+              authorizer: { claims: { sub: 'user-2', email: 'giver@example.com' } },
+            } as APIGatewayProxyEvent['requestContext'],
+          }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        expect(listGiftPurchases).toHaveBeenCalledWith('user-2');
       });
     });
   });
