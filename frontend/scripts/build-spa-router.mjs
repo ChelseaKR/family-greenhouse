@@ -46,6 +46,30 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
+/**
+ * Why the CloudFront function 301s `www.` to the apex (rule 0 in
+ * spa-router.js, which keeps only a pointer because it is under a 10 KB
+ * limit and this file is not).
+ *
+ * `www.<domain>` is a second alias on the same distribution over the same
+ * bucket (`include_www_alias`), so both hostnames answered 200 with identical
+ * content. Google treated them as two sites. Measured in Search Console on
+ * 2026-09-11, over the preceding three months:
+ *
+ *   - 7 paths were indexed ONLY under `www.` (/care, /care/zz-plant,
+ *     /care/monstera, /care/snake-plant, /care/spider-plant, /care/peace-lily,
+ *     /care/heartleaf-philodendron)
+ *   - 15 paths were indexed ONLY under the apex
+ *   - 0 paths on both
+ *
+ * So one site's ranking signal was split across two hostnames, and the `www.`
+ * half sat at average position 55-75 while the apex homepage sat at 6.2.
+ *
+ * Every page already emits a self-canonical naming the apex, and that was not
+ * enough: a canonical is a hint a crawler may ignore, and here it did. A 301
+ * is not a hint. It is rule 0 because it has to apply to every path, including
+ * the ones later rules rewrite or pass through untouched.
+ */
 import { join } from 'node:path';
 import process from 'node:process';
 import { runInNewContext } from 'node:vm';

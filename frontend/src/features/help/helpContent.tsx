@@ -27,10 +27,11 @@ import { Link } from 'react-router';
  *   lands last wins. The branch `fix/trial-status-from-stripe` changes this.
  *   Until it lands, no answer here promises what the plan card will say during
  *   a trial, or that a trial-end date is shown.
- * - The calendar (.ics) feed. `GET /me/calendar.ics` sits behind the Cognito
- *   JWT authorizer and the URL offered in Settings carries no credential, so
- *   there is no evidence a calendar app can subscribe to it. Documenting it
- *   would send people to a broken flow.
+ * - Native push notifications, below. (The calendar feed used to be listed
+ *   here, on the grounds that `GET /me/calendar.ics` sits behind the Cognito
+ *   authorizer and the Settings URL carries no credential. That is stale:
+ *   `GET /calendar/{token}/family-greenhouse.ics` is a working public token
+ *   feed with no plan gate, and `whats-free` already advertises it.)
  * - Native push notifications. Device tokens are captured but nothing sends to
  *   them, and the settings UI hides the controls on purpose.
  */
@@ -121,8 +122,13 @@ export const HELP_SECTIONS: HelpSection[] = [
                 get a single watering task on that cadence.
               </li>
               <li>
-                If the species is freehand text, or the species data has no watering cadence, you
-                get nothing automatically.
+                Freehand species text still counts: the bundles are matched on the words you typed,
+                so &ldquo;monstera&rdquo; or &ldquo;cactus&rdquo; picks one up even if you never
+                chose a species from the list.
+              </li>
+              <li>
+                If the text matches no bundle and the species data has no watering cadence, you get
+                nothing automatically — we would rather leave it to you than invent a schedule.
               </li>
             </ul>
             <p>
@@ -131,7 +137,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'When you add a plant with Add suggested care tasks ticked and a recognised species, we set up a routine. If the species matches one of our curated care bundles such as tropical houseplant or succulent and cactus, you get that whole bundle, typically watering, fertilising and pruning. If it does not match a bundle but our species data has a watering cadence, you get a single watering task on that cadence. If the species is freehand text, or the species data has no watering cadence, you get nothing automatically. You can always add tasks by hand from the plant page.',
+        text: 'When you add a plant with Add suggested care tasks ticked and a recognised species, we set up a routine. If the species matches one of our curated care bundles such as tropical houseplant or succulent and cactus, you get that whole bundle, typically watering, fertilising and pruning. If it does not match a bundle but our species data has a watering cadence, you get a single watering task on that cadence. Freehand species text still counts: the bundles are matched on the words you typed, so monstera or cactus picks one up even if you never chose a species from the list. If the text matches no bundle and the species data has no watering cadence, you get nothing automatically. You can always add tasks by hand from the plant page.',
       },
       {
         id: 'no-care-guide',
@@ -240,14 +246,15 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Can I import a lot of plants at once?',
         a: (
           <p>
-            Yes — <strong>Plants → Import</strong> takes a CSV or JSON file, up to 100 plants per
+            Yes — <em>Settings → Account</em> has{' '}
+            <strong>Import plants from a CSV or JSON file</strong>, which takes up to 100 plants per
             import with up to 10 care tasks each. An import is partial-success by design: if you hit
             your plan&rsquo;s plant limit part-way through, the rows already created are kept, the
             rest are reported as skipped, and you are told which. Run it again after freeing space
             and only the skipped rows need re-adding.
           </p>
         ),
-        text: 'Yes. Plants then Import takes a CSV or JSON file, up to 100 plants per import with up to 10 care tasks each. An import is partial-success by design: if you hit your plan plant limit part-way through, the rows already created are kept, the rest are reported as skipped, and you are told which. Run it again after freeing space and only the skipped rows need re-adding.',
+        text: 'Yes. Settings then Account has Import plants from a CSV or JSON file, which takes up to 100 plants per import with up to 10 care tasks each. An import is partial-success by design: if you hit your plan plant limit part-way through, the rows already created are kept, the rest are reported as skipped, and you are told which. Run it again after freeing space and only the skipped rows need re-adding.',
       },
       {
         id: 'identify-photo',
@@ -291,9 +298,10 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
             <p>
               It is available on every plan, including free, and requires a household. It is capped
-              at 200 checks per household per calendar month, resetting on the 1st. Running a check
-              adds an entry to your household&rsquo;s activity feed, so other members can see that
-              you ran one and what the verdict was.
+              per household per calendar month, resetting on the 1st: 200 checks on Garden and
+              Greenhouse, 20 on the free Seedling plan. Running a check adds an entry to your
+              household&rsquo;s activity feed, so other members can see that you ran one and what
+              the verdict was.
             </p>
             <p>
               If the server can&rsquo;t reach the model you are told so — the check fails with
@@ -304,7 +312,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped at 200 checks per household per calendar month, resetting on the 1st. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analysed; on a demo or preview server you instead get a clearly labelled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
+        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped per household per calendar month, resetting on the 1st: 200 checks on Garden and Greenhouse, 20 on the free Seedling plan. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analysed; on a demo or preview server you instead get a clearly labelled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
       },
     ],
   },
@@ -500,8 +508,11 @@ export const HELP_SECTIONS: HelpSection[] = [
               <strong>Email</strong> stops everything, including task reminders — those carry no
               unsubscribe link of their own, because they are answering a task you created. If you
               want reminders but not the Monday summary, untick just{' '}
-              <strong>Weekly plant digest</strong> and leave email on. One email always goes out
-              regardless of preferences: the welcome message when you first create a household.
+              <strong>Weekly plant digest</strong> and leave email on. Three kinds of email go out
+              regardless of preferences, because each one is a record of something that happened to
+              your account rather than a notification you asked for: the welcome message when you
+              first create a household, the confirmation that your account was deleted, and billing
+              and payment emails.
             </p>
             <p>
               If you can&rsquo;t sign in and have no recent digest to unsubscribe from, email{' '}
@@ -509,7 +520,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'The weekly digest and the annual recap carry an Unsubscribe from these link in the footer, and they are sent with the headers that put a one-click Unsubscribe button at the top of the message in Gmail, Apple Mail and other clients that support them. Either one works in a single click, and neither needs you to be signed in. For finer control, open Settings then Notifications. Unticking Email stops everything, including task reminders, which carry no unsubscribe link of their own because they are answering a task you created. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. One email always goes out regardless of preferences: the welcome message when you first create a household. If you cannot sign in and have no recent digest to unsubscribe from, email support and we will do it for you.',
+        text: 'The weekly digest and the annual recap carry an Unsubscribe from these link in the footer, and they are sent with the headers that put a one-click Unsubscribe button at the top of the message in Gmail, Apple Mail and other clients that support them. Either one works in a single click, and neither needs you to be signed in. For finer control, open Settings then Notifications. Unticking Email stops everything, including task reminders, which carry no unsubscribe link of their own because they are answering a task you created. If you want reminders but not the Monday summary, untick just Weekly plant digest and leave email on. Three kinds of email go out regardless of preferences, because each is a record of something that happened to your account rather than a notification you asked for: the welcome message when you first create a household, the confirmation that your account was deleted, and billing and payment emails. If you cannot sign in and have no recent digest to unsubscribe from, email support and we will do it for you.',
       },
       {
         id: 'weekly-digest',
@@ -600,18 +611,21 @@ export const HELP_SECTIONS: HelpSection[] = [
             <ul>
               <li>Generate invite links</li>
               <li>Change someone&rsquo;s role, and remove members</li>
-              <li>Create and revoke plant-sitter links</li>
               <li>Buy, change or cancel the household&rsquo;s plan</li>
               <li>Create and revoke API keys</li>
+              <li>Issue and revoke wall-display links, caretaker seats and printed plant tags</li>
+              <li>Set the household&rsquo;s time zone, its location, and auto-handoff</li>
             </ul>
             <p>
               Everything else — adding and editing plants, completing, snoozing and claiming tasks,
-              photos, activity and analytics — is open to every member. Roles are per household, so
-              you can be an admin in one and a member in another.
+              photos, activity and analytics — is open to every member, and so are plant-sitter
+              links: any member can create one, revoke their own, and an admin can revoke
+              anyone&rsquo;s. Roles are per household, so you can be an admin in one and a member in
+              another.
             </p>
           </>
         ),
-        text: 'Admins alone can generate invite links, change someone role and remove members, create and revoke plant-sitter links, buy change or cancel the household plan, and create and revoke API keys. Everything else — adding and editing plants, completing, snoozing and claiming tasks, photos, activity and analytics — is open to every member. Roles are per household, so you can be an admin in one and a member in another.',
+        text: 'Admins alone can generate invite links, change someone role and remove members, buy change or cancel the household plan, create and revoke API keys, issue and revoke wall-display links, caretaker seats and printed plant tags, and set the household time zone, location and auto-handoff. Everything else — adding and editing plants, completing, snoozing and claiming tasks, photos, activity and analytics — is open to every member, and so are plant-sitter links: any member can create one and revoke their own, and an admin can revoke anyone else. Roles are per household, so you can be an admin in one and a member in another.',
       },
       {
         id: 'remove-member',
@@ -635,12 +649,13 @@ export const HELP_SECTIONS: HelpSection[] = [
               Their history stays, anonymised. Past completions and activity remain so the
               household&rsquo;s care record stays intact, but their name is replaced with{' '}
               <strong>&ldquo;Former member&rdquo;</strong>. Anything currently assigned to them
-              becomes unassigned. Worth knowing: a sitter link they created stays active — revoke it
-              separately if you no longer want it working.
+              becomes unassigned. Worth knowing: removing someone also revokes the credentials they
+              minted — their sitter links, printed plant tags and wall-display links stop working at
+              once, so a helper they had set up will need a new link from whoever stays.
             </p>
           </>
         ),
-        text: 'An admin removes them from the Household page. They immediately lose access to that household plants and tasks; their own account and any other households are untouched. Two rules are enforced: you cannot remove yourself, and you cannot remove the last admin of a household that still has other members, so promote someone else first. Their history stays, anonymised: past completions and activity remain so the household care record stays intact, but their name is replaced with Former member, and anything currently assigned to them becomes unassigned. A sitter link they created stays active, so revoke it separately if you no longer want it working.',
+        text: 'An admin removes them from the Household page. They immediately lose access to that household plants and tasks; their own account and any other households are untouched. Two rules are enforced: you cannot remove yourself, and you cannot remove the last admin of a household that still has other members, so promote someone else first. Their history stays, anonymised: past completions and activity remain so the household care record stays intact, but their name is replaced with Former member, and anything currently assigned to them becomes unassigned. Removing someone also revokes the credentials they minted: their sitter links, printed plant tags and wall-display links stop working at once, so a helper they had set up will need a new link from whoever stays.',
       },
       {
         id: 'leave-household',
@@ -711,16 +726,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'How do I set up a plant sitter?',
         a: (
           <p>
-            An admin creates a sitter link on the <strong>Household</strong> page, choosing how long
-            it should last — up to 7 days on the free <strong>Seedling</strong> plan, and up to 90
-            on <strong>Garden</strong> and <strong>Greenhouse</strong>. The form suggests 14, or
-            your plan&rsquo;s maximum where that is lower. You send that link to your sitter — they
-            need no account, no password and no app. The link is shown{' '}
+            Any household member creates a sitter link on the <strong>Household</strong> page,
+            choosing how long it should last — up to 7 days on the free <strong>Seedling</strong>{' '}
+            plan, and up to 90 on <strong>Garden</strong> and <strong>Greenhouse</strong>. The form
+            suggests 14, or your plan&rsquo;s maximum where that is lower. You send that link to
+            your sitter — they need no account, no password and no app. The link is shown{' '}
             <strong>once, at the moment you create it</strong>, so copy it then; we cannot show it
             to you again afterwards.
           </p>
         ),
-        text: 'An admin creates a sitter link on the Household page, choosing how long it should last: up to 7 days on the free Seedling plan, and up to 90 on Garden and Greenhouse. The form suggests 14, or your plan maximum where that is lower. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
+        text: 'Any household member creates a sitter link on the Household page, choosing how long it should last: up to 7 days on the free Seedling plan, and up to 90 on Garden and Greenhouse. The form suggests 14, or your plan maximum where that is lower. You send that link to your sitter: they need no account, no password and no app. The link is shown once, at the moment you create it, so copy it then; we cannot show it to you again afterwards.',
       },
       {
         id: 'sitter-sees',
@@ -778,7 +793,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your house rule for it, word for word, and if you never wrote one the brief says the plant has no note rather than falling back to the plant's own notes; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, plant notes, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are house rules and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first.",
+        text: "It depends on your plan, because Garden and Greenhouse give the sitter a second page. On every plan they get a to-do list. For each task due before the link expires, or already overdue, it shows the plant's name, what needs doing (water, fertilise, prune, repot, or your custom task name), when it is due and whether it is overdue, and which space the plant is in with its placement note. How far ahead it reaches is the link's own window, not a fixed week: a 7-day link on Seedling lists the next 7 days, a 90-day one on Garden or Greenhouse lists all 90. Plants with nothing due are not on this list at all. On Garden and Greenhouse the Away Kit adds a printable plant-care brief, linked from that list. It covers every plant in your active care, not only the ones with something due, and for each one it adds three things the list does not show: the plant's latest photo; your house rule for it, word for word, and if you never wrote one the brief says the plant has no note rather than falling back to the plant's own notes; and its entry in our verified pet-toxicity list, where it has one. On neither page can they see your household members' names or contact details, your saved location, task notes, the activity feed, analytics, your billing, or any other household. The caveat you control: plant names, space names, placement notes and custom task names are your own free text and the sitter sees them verbatim, as are house rules and plant photos once you are on Garden or Greenhouse. A door code, where the spare key lives, or anything else you would not hand to a neighbour does not belong in any of those fields while a sitter link is live. Move it, or rename the plant, first. Your plant notes are not in that list: no sitter link has shown them since we removed that fallback, and the privacy policy says so.",
       },
       {
         id: 'sitter-can-do',
@@ -803,14 +818,15 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'How do I cut off a sitter’s access?',
         a: (
           <p>
-            An admin revokes the link on the <strong>Household</strong> page and it stops working
-            immediately. Otherwise it expires by itself on the date you chose — at most 7 days out
-            on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the
-            link can use it — it is the credential, so only send it to someone you trust, and revoke
-            it if you forward it to the wrong person.
+            Whoever created the link revokes it on the <strong>Household</strong> page, and an admin
+            can revoke anyone&rsquo;s and it stops working immediately. Otherwise it expires by
+            itself on the date you chose — at most 7 days out on the free Seedling plan, and at most
+            90 on Garden and Greenhouse. Anyone holding the link can use it — it is the credential,
+            so only send it to someone you trust, and revoke it if you forward it to the wrong
+            person.
           </p>
         ),
-        text: 'An admin revokes the link on the Household page and it stops working immediately. Otherwise it expires by itself on the date you chose: at most 7 days out on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
+        text: 'Whoever created the link revokes it on the Household page, and an admin can revoke anyone else, and it stops working immediately. Otherwise it expires by itself on the date you chose: at most 7 days out on the free Seedling plan, and at most 90 on Garden and Greenhouse. Anyone holding the link can use it, because it is the credential, so only send it to someone you trust and revoke it if you forward it to the wrong person.',
       },
     ],
   },
@@ -855,13 +871,13 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Who can buy or change the plan?',
         a: (
           <p>
-            Only an <strong>admin of that household</strong>, from <em>Settings → Billing</em> on
-            the web. Plans belong to households, not to people: one subscription covers everyone in
-            that household, and if you belong to two households each has its own plan. Purchases are
-            not available inside the iOS and Android apps.
+            Only an <strong>admin of that household</strong>, from <em>Settings → Plan status</em>{' '}
+            on the web. Plans belong to households, not to people: one subscription covers everyone
+            in that household, and if you belong to two households each has its own plan. Purchases
+            are not available inside the iOS and Android apps.
           </p>
         ),
-        text: 'Only an admin of that household, from Settings then Billing on the web. Plans belong to households, not to people: one subscription covers everyone in that household, and if you belong to two households each has its own plan. Purchases are not available inside the iOS and Android apps.',
+        text: 'Only an admin of that household, from Settings then Plan status on the web. Plans belong to households, not to people: one subscription covers everyone in that household, and if you belong to two households each has its own plan. Purchases are not available inside the iOS and Android apps.',
       },
       {
         id: 'billing-cadence',
@@ -913,8 +929,8 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              Go to <em>Settings → Billing</em> and press <strong>Manage subscription</strong>. That
-              opens our payment provider&rsquo;s billing portal, which is the only place a live
+              Go to <em>Settings → Plan status</em> and press <strong>Manage subscription</strong>.
+              That opens our payment provider&rsquo;s billing portal, which is the only place a live
               subscription can be changed or cancelled — you must be an admin of the household.
             </p>
             <p>
@@ -928,7 +944,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'Go to Settings then Billing and press Manage subscription. That opens our payment provider billing portal, which is the only place a live subscription can be changed or cancelled, and you must be an admin of the household. Cancelling does not cut you off on the spot: you keep the paid plan until the end of the period you have already paid for, and the billing page shows the date it ends. After that the household drops to the free Seedling plan. The same Manage subscription button stays available after you cancel, so you can still reach your invoices and receipts.',
+        text: 'Go to Settings then Plan status and press Manage subscription. That opens our payment provider billing portal, which is the only place a live subscription can be changed or cancelled, and you must be an admin of the household. Cancelling does not cut you off on the spot: you keep the paid plan until the end of the period you have already paid for, and the billing page shows the date it ends. After that the household drops to the free Seedling plan. The same Manage subscription button stays available after you cancel, so you can still reach your invoices and receipts.',
       },
       {
         id: 'after-cancel',
@@ -947,12 +963,17 @@ export const HELP_SECTIONS: HelpSection[] = [
               back under a plant cap.
             </p>
             <p>
-              Two features do switch off with the tier: the AI care assistant needs Garden or above,
-              and API keys need Greenhouse.
+              What does move with the tier is which features are switched on. Dropping to the free
+              Seedling plan turns off the AI care assistant, the Away Kit (the sitter brief, the
+              sitter photo-back and the return recap), the household toolkit, printed plant tags and
+              Move Day; analytics go back to the last 30 days; and sitter links go back to one live
+              link of up to seven days. Dropping out of Greenhouse also turns off API keys, the wall
+              display, caretaker seats and the cross-home Today list. Nothing you made with any of
+              them is deleted.
             </p>
           </>
         ),
-        text: 'Nothing is deleted, ever. If you drop to a plan whose caps you are over, every plant and every member stays exactly where it is, and all of it stays readable and editable. Your tasks keep running and your reminders keep arriving. The only thing that changes is that you cannot add more plants or members until you are back under the cap, and the billing page shows a warning telling you where you stand. Archiving plants you are no longer caring for is the quickest way back under a plant cap. Two features do switch off with the tier: the AI care assistant needs Garden or above, and API keys need Greenhouse.',
+        text: 'Nothing is deleted, ever. If you drop to a plan whose caps you are over, every plant and every member stays exactly where it is, and all of it stays readable and editable. Your tasks keep running and your reminders keep arriving. The only thing that changes is that you cannot add more plants or members until you are back under the cap, and the billing page shows a warning telling you where you stand. Archiving plants you are no longer caring for is the quickest way back under a plant cap. What does move with the tier is which features are switched on. Dropping to the free Seedling plan turns off the AI care assistant, the Away Kit (the sitter brief, the sitter photo-back and the return recap), the household toolkit, printed plant tags and Move Day; analytics go back to the last 30 days; and sitter links go back to one live link of up to seven days. Dropping out of Greenhouse also turns off API keys, the wall display, caretaker seats and the cross-home Today list. Nothing you made with any of them is deleted.',
       },
       {
         id: 'change-plan',
@@ -1019,7 +1040,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     description: 'Getting it out, and deleting it for good.',
     metaTitle: 'Export or Delete Your Plant Data — Family Greenhouse',
     metaDescription:
-      'Download a copy of your plants, photos and care history, and permanently delete your Family Greenhouse account and everything in it.',
+      'Download a copy of your plants and tasks, and permanently delete your Family Greenhouse account and everything in it.',
     articles: [
       {
         id: 'export',
@@ -1027,7 +1048,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              From <em>Settings → Account &amp; data</em>, two different downloads:
+              From <em>Settings → Account</em>, two different downloads:
             </p>
             <ul>
               <li>
@@ -1049,7 +1070,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'From Settings then Account and data there are two different downloads. Download full data (JSON) is the complete one: your profile, your notification preferences, and for every household you belong to its name, your role, all plants including archived, died and given-away ones, and all tasks. CSV gives two spreadsheet files, one of plants and one of tasks, for your currently selected household only. Both download straight to your device; nothing is emailed and there is no waiting. Neither export includes photo image files, task completion history, the activity feed, or other members details; plants carry a link to their current photo, not the image itself.',
+        text: 'From Settings then Account there are two different downloads. Download full data (JSON) is the complete one: your profile, your notification preferences, and for every household you belong to its name, your role, all plants including archived, died and given-away ones, and all tasks. CSV gives two spreadsheet files, one of plants and one of tasks, for your currently selected household only. Both download straight to your device; nothing is emailed and there is no waiting. Neither export includes photo image files, task completion history, the activity feed, or other members details; plants carry a link to their current photo, not the image itself.',
       },
       {
         id: 'delete-account',
@@ -1057,9 +1078,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              <em>Settings → Account &amp; data → Delete my account</em>. It is{' '}
+              <em>Settings → Account → Delete my account</em>. It is{' '}
               <strong>immediate and permanent</strong> — there is no grace period and no undo, so
-              export first if you want a copy.
+              export first if you want a copy. The one caveat, which the confirmation email states
+              too: our database backups roll for their retention window, so a copy can persist there
+              until it ages out. Nothing reads those backups except a disaster recovery.
             </p>
             <p>
               Deleted outright: your login, your notification preferences and phone verification,
@@ -1082,7 +1105,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'Settings then Account and data then Delete my account. It is immediate and permanent, with no grace period and no undo, so export first if you want a copy. Deleted outright: your login, your notification preferences and phone verification, your browser notification subscriptions, and your delivery history. For a household where you were the only member, the whole household goes with you: plants, tasks, photos, spaces, chat, sitter links and activity. For a household with other people in it, the shared record survives without you. Plants, tasks and photos you created stay, and past completions and activity stay so the household history remains intact, but your name on them is replaced with Former member, and anything assigned to you becomes unassigned. One blocker: if you are the only admin of a household that still has other members, deletion is refused until you promote someone else.',
+        text: 'Settings then Account then Delete my account. It is immediate and permanent, with no grace period and no undo, so export first if you want a copy. The one caveat, which the confirmation email states too, is that our database backups roll for their retention window, so a copy can persist there until it ages out. Deleted outright: your login, your notification preferences and phone verification, your browser notification subscriptions, and your delivery history. For a household where you were the only member, the whole household goes with you: plants, tasks, photos, spaces, chat, sitter links and activity. For a household with other people in it, the shared record survives without you. Plants, tasks and photos you created stay, and past completions and activity stay so the household history remains intact, but your name on them is replaced with Former member, and anything assigned to you becomes unassigned. One blocker: if you are the only admin of a household that still has other members, deletion is refused until you promote someone else.',
       },
       {
         id: 'cancel-before-delete',
@@ -1104,15 +1127,15 @@ export const HELP_SECTIONS: HelpSection[] = [
             <p>
               One thing to know: cancelling this way is <strong>immediate</strong>, not at the end
               of the period. If you would rather use the time you have already paid for, go to{' '}
-              <em>Settings → Billing</em>, press <strong>Manage subscription</strong>, cancel there,
-              and delete your account once the period runs out. If you have already deleted an
-              account and think you are still being charged, email{' '}
+              <em>Settings → Plan status</em>, press <strong>Manage subscription</strong>, cancel
+              there, and delete your account once the period runs out. If you have already deleted
+              an account and think you are still being charged, email{' '}
               <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> straight away and we will sort
               it out.
             </p>
           </>
         ),
-        text: 'Only for a household you are the last member of. Plans belong to households, not to people. Before anything is deleted we cancel the subscription of every household where you are the only member, and if our payment provider does not confirm it, the deletion is refused and nothing is touched. A household with other people in it keeps its plan and keeps being billed; you are just no longer in it. And if you are the only admin of that household, deletion is refused until you promote someone else, so a plan is never left running where nobody can cancel it. One thing to know: cancelling this way is immediate, not at the end of the period. If you would rather use the time you have already paid for, go to Settings then Billing, press Manage subscription, cancel there, and delete your account once the period runs out. If you have already deleted an account and think you are still being charged, email support straight away and we will sort it out.',
+        text: 'Only for a household you are the last member of. Plans belong to households, not to people. Before anything is deleted we cancel the subscription of every household where you are the only member, and if our payment provider does not confirm it, the deletion is refused and nothing is touched. A household with other people in it keeps its plan and keeps being billed; you are just no longer in it. And if you are the only admin of that household, deletion is refused until you promote someone else, so a plan is never left running where nobody can cancel it. One thing to know: cancelling this way is immediate, not at the end of the period. If you would rather use the time you have already paid for, go to Settings then Plan status, press Manage subscription, cancel there, and delete your account once the period runs out. If you have already deleted an account and think you are still being charged, email support straight away and we will sort it out.',
       },
       {
         id: 'delete-locked-out',

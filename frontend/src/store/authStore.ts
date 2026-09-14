@@ -6,10 +6,17 @@
  * Storage model (post-2026-05-31 OWASP A07 hardening):
  *   - Short-lived `idToken` + `accessToken` go to `localStorage` so the
  *     session survives page reloads.
- *   - Long-lived `refreshToken` goes to `sessionStorage` so closing the tab
- *     ends the 30-day grant window — an XSS that exfiltrates the access
- *     token only gets at most one hour of access (Cognito's access-token
- *     TTL) instead of pivoting into a 30-day account hijack.
+ *   - Long-lived `refreshToken` goes to `sessionStorage` BY DEFAULT, so
+ *     closing the tab ends the 30-day grant window — an XSS that exfiltrates
+ *     the access token only gets at most one hour of access (Cognito's
+ *     access-token TTL) instead of pivoting into a 30-day account hijack.
+ *   - Opt-in exception (2026-09-13): ticking "keep me signed in" at login
+ *     sets `rememberMe`, which routes the refresh token to `localStorage`
+ *     instead, so that person stays signed in after closing the browser.
+ *     The 30-day XSS blast radius of finding 7.1 applies to exactly those
+ *     sessions and nobody else's; the hardened path stays the default for
+ *     anyone who doesn't ask. Cognito does not rotate refresh tokens, so a
+ *     stolen one is good until logout or its 30 days run out.
  *   - A `storage` event listener propagates logout across tabs: a logout
  *     in one tab triggers logout in all other tabs of the same origin.
  *
@@ -63,10 +70,17 @@ interface AuthState {
    *  Cognito-claim householdId. The api interceptor sends this as
    *  `X-Household-Id` so backend services scope to it. */
   activeHouseholdId: string | null;
+  /** "Keep me signed in", chosen at login. When true the refresh token is
+   *  persisted to localStorage so the session outlives a closed browser.
+   *  Defaults false — the hardened sessionStorage-only path. */
+  rememberMe: boolean;
   setUser: (user: User | null) => void;
   setTokens: (idToken: string, accessToken: string, refreshToken: string) => void;
   setHousehold: (householdId: string, role: 'admin' | 'member') => void;
   setActiveHouseholdId: (id: string | null) => void;
+  /** Set BEFORE setTokens at login: the storage adapter reads this flag off
+   *  the payload it writes, so the tokens land in the right place. */
+  setRememberMe: (rememberMe: boolean) => void;
   logout: () => void;
   /**
    * Clears THIS tab's in-memory session without touching the persisted
@@ -85,11 +99,25 @@ interface AuthState {
 // sessionStorage (long-lived secrets). The bracketing here is the
 // JSON-payload field name inside the persisted state, not the storage key.
 const SESSION_FIELDS = new Set(['refreshToken']);
+// An empty set means "hold nothing back" — every field, refresh token
+// included, persists to localStorage.
+const NO_SESSION_FIELDS = new Set<string>();
 
-function splitJsonByField(json: string, fields: Set<string>): { local: string; session: string } {
+/**
+ * Which fields this write holds back to sessionStorage. Read from the
+ * payload being written rather than from a closure, so the decision always
+ * matches the state actually being persisted (a token refresh writes through
+ * this path too, long after login set the flag).
+ */
+function sessionFieldsFor(state: Record<string, unknown>): Set<string> {
+  return state.rememberMe === true ? NO_SESSION_FIELDS : SESSION_FIELDS;
+}
+
+function splitJsonByField(json: string): { local: string; session: string } {
   try {
     const parsed = JSON.parse(json) as { state?: Record<string, unknown> };
     const state = (parsed.state ?? {}) as Record<string, unknown>;
+    const fields = sessionFieldsFor(state);
     const localState: Record<string, unknown> = {};
     const sessionState: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(state)) {
@@ -139,7 +167,7 @@ const splitStorage: StateStorage = {
   },
   setItem: (name, value) => {
     if (typeof window === 'undefined' || suppressPersistWrites) return;
-    const { local, session } = splitJsonByField(value, SESSION_FIELDS);
+    const { local, session } = splitJsonByField(value);
     window.localStorage.setItem(name, local);
     window.sessionStorage.setItem(`${name}-session`, session);
   },
@@ -160,6 +188,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
       activeHouseholdId: null,
+      rememberMe: false,
+
+      setRememberMe: (rememberMe) => set({ rememberMe }),
 
       setActiveHouseholdId: (activeHouseholdId) => {
         set({ activeHouseholdId });
@@ -215,6 +246,9 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           isLoading: false,
           activeHouseholdId: null,
+          // Never sticky across accounts: the next person to sign in on this
+          // browser opts in again, or gets the hardened default.
+          rememberMe: false,
         });
       },
 
@@ -233,6 +267,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             activeHouseholdId: null,
+            rememberMe: false,
           });
         } finally {
           suppressPersistWrites = false;
@@ -278,12 +313,13 @@ export const useAuthStore = create<AuthState>()(
          * shared axios instance. An expired short-lived idToken does NOT mean
          * the session is over — the 30-day refresh token this tab holds may
          * still be good, and a page reload (when this runs) is exactly when
-         * the idToken is most likely to have expired. Returns the retried
-         * `/auth/me` response on a successful refresh, null on any failure
-         * (no refresh token, refresh 401s, or a network error) — the caller
-         * then fails the session exactly as it would have without a retry.
+         * the idToken is most likely to have expired.
+         *
+         * The outcome is three-state on purpose (see `unreachable` below):
+         * a refused refresh and one we never managed to send are different
+         * answers, and only one of them is about the session.
          */
-        async function refreshAndRetry(): Promise<Response | null> {
+        async function refreshAndRetry(): Promise<Response | null | 'unreachable'> {
           if (!refreshToken) return null;
           try {
             const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
@@ -298,11 +334,13 @@ export const useAuthStore = create<AuthState>()(
             setTokens(data.idToken, data.accessToken, data.refreshToken ?? refreshToken);
             return await fetchMe(newBearer);
           } catch {
-            return null;
+            // `fetch` rejects for exactly one reason: the request never got
+            // an answer. The server did not refuse anything.
+            return 'unreachable';
           }
         }
 
-        let response: Response | null;
+        let response: Response | null | 'unreachable';
         try {
           response = await fetchMe(authToken);
           // Refresh only means "the bearer expired" for a 401. Retrying a
@@ -312,8 +350,25 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // The initial /auth/me call itself threw (network error) — still
           // worth trying a refresh (a flaky first request shouldn't cost an
-          // otherwise-valid 30-day session) before failing safe.
+          // otherwise-valid 30-day session) before deciding anything.
           response = await refreshAndRetry();
+          // No refresh token to try with, and the one call we made never
+          // reached the server: that is not a verdict on this session.
+          if (response === null && !refreshToken) response = 'unreachable';
+        }
+
+        if (response === 'unreachable') {
+          // WE COULD NOT ASK is not THE SERVER SAID NO. Ending the session
+          // here is what logged people out of the installed app every time
+          // they opened it without a network: measured on the production
+          // build's service worker, an offline reload left `auth-storage`
+          // holding `user: null` and the tab sitting on /login, and coming
+          // back online did not bring the session back — it was gone from
+          // storage. The persisted session stays exactly as it was; the
+          // pages' own reads report the outage, and a token that really has
+          // expired still ends the session at the first answered 401.
+          setLoading(false);
+          return;
         }
 
         if (!response || !response.ok) {
@@ -361,6 +416,7 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         activeHouseholdId: state.activeHouseholdId,
+        rememberMe: state.rememberMe,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

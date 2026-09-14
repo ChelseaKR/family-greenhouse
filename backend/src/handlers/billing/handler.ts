@@ -24,13 +24,30 @@ import {
 } from '../../services/identifyTopUp.js';
 import { isPlantIdentificationConfigured } from '../../services/plantIdentification.js';
 import {
+  createGiftCheckoutSession,
+  GIFT_MONTHS_INVALID,
+  GIFT_NOT_CONFIGURED,
+  isGiftRedeemError,
+  redeemGiftCode,
+  type GiftRedeemErrorCode,
+} from '../../services/giftSubscriptions.js';
+import { listGiftPurchases } from '../../services/giftCodes.js';
+import {
   getEntitledPlan,
   getPlan,
+  giftState,
   isIntervalOffered,
   limitOf,
   noCardTrialState,
 } from '../../models/plans.js';
 import { identifyTopUpSummary, isIdentifyTopUpConfigured } from '../../models/identifyTopUp.js';
+import {
+  GIFT_MAX_MONTHS,
+  GIFT_MIN_MONTHS,
+  giftSubscriptionSummary,
+  isGiftConfigured,
+} from '../../models/giftSubscriptions.js';
+import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 import {
@@ -88,6 +105,25 @@ const topUpCheckoutSchema = z
 
 type TopUpCheckoutInput = z.infer<typeof topUpCheckoutSchema>;
 
+// Body of POST /billing/gift/checkout (ADR 0028): which tier, for how many
+// months. The months bound is the catalog's, so the schema and the service
+// refuse the same range.
+const giftCheckoutSchema = z.object({
+  planId: z.enum(['garden', 'greenhouse']),
+  months: z.number().int().min(GIFT_MIN_MONTHS).max(GIFT_MAX_MONTHS),
+  checkoutAttemptId: z.string().uuid().optional(),
+});
+
+type GiftCheckoutInput = z.infer<typeof giftCheckoutSchema>;
+
+// Body of POST /billing/gift/redeem. The code is normalised by the service
+// (case, spaces, dashes); the schema only bounds what reaches it.
+const giftRedeemSchema = z.object({
+  code: z.string().min(1).max(64),
+});
+
+type GiftRedeemInput = z.infer<typeof giftRedeemSchema>;
+
 // GET /billing/plans  (public, no auth)
 // Plans rarely change. Cacheable publicly for 5 minutes — long enough that
 // CloudFront absorbs landing-page traffic, short enough that a price-change
@@ -109,6 +145,10 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
         // the credits would be spent against; the amount appears only when
         // payments are on.
         identifyTopUp: identifyTopUpSummary(paymentsAvailable, isPlantIdentificationConfigured()),
+        // Gift subscriptions (ADR 0028), on the same terms. The per-month
+        // amount is the tier's monthlyPrice above; this says only which tiers
+        // can be given here and for how long.
+        giftSubscriptions: giftSubscriptionSummary(paymentsAvailable),
       },
       {
         maxAgeSeconds: 300,
@@ -162,8 +202,11 @@ export const getCurrentSubscription = createHandler(
     // whether the household is on the trial. `null` means there is no no-card
     // trial to describe: the household never had one, or Stripe owns its
     // entitlement.
-    const { noCardTrialEndsAt, ...published } = sub;
+    const { noCardTrialEndsAt, giftPlanId, giftEndsAt, ...published } = sub;
     const trialState = noCardTrialState(sub, now);
+    // A redeemed gift (ADR 0028) goes out the same way: the server's clock
+    // decides its state. `null` means there is no gift to describe.
+    const giftNow = giftState(sub, now);
     return successResponse({
       ...published,
       ...(usage ? { usage } : {}),
@@ -173,6 +216,10 @@ export const getCurrentSubscription = createHandler(
         trialState === 'none' || !noCardTrialEndsAt
           ? null
           : { state: trialState, endsAt: noCardTrialEndsAt },
+      gift:
+        giftNow === 'none' || !giftPlanId || !giftEndsAt
+          ? null
+          : { planId: giftPlanId, endsAt: giftEndsAt, state: giftNow },
     });
   }
 )
@@ -324,6 +371,139 @@ export const topUpCheckout = createHandler(
   .use(requireAdmin())
   .use(validateBody(topUpCheckoutSchema));
 
+// POST /billing/gift/checkout
+//
+// One-time Stripe Checkout for a gift subscription (models/giftSubscriptions.ts,
+// ADR 0028): N months of a paid tier for somebody else. Any signed-in member
+// may buy one — it charges the buyer's own card and changes nothing about the
+// buyer's household — which is why this is the one purchase route without
+// `requireAdmin`. Fails CLOSED on configuration exactly like the top-up.
+export const giftCheckout = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<GiftCheckoutInput>;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const notConfigured = () =>
+      createHttpError(400, 'Gift subscriptions are not available in this environment.', {
+        expose: true,
+        details: { code: GIFT_NOT_CONFIGURED },
+      });
+    if (!isGiftConfigured(validatedBody.planId)) throw notConfigured();
+    try {
+      const session = await createGiftCheckoutSession({
+        buyerUserId: user.userId,
+        buyerEmail: user.email,
+        planId: validatedBody.planId,
+        months: validatedBody.months,
+        successUrl: `${baseUrl}/settings/billing?status=success&purchase=gift`,
+        cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
+        idempotencyKey: validatedBody.checkoutAttemptId
+          ? `gift:${user.userId}:${validatedBody.checkoutAttemptId}`
+          : undefined,
+      });
+      return successResponse(session);
+    } catch (err) {
+      if (isPaymentActivityDisabledError(err)) {
+        throw createHttpError(503, 'Payments are currently paused.', { expose: true });
+      }
+      if ((err as Error).message?.startsWith(GIFT_NOT_CONFIGURED)) throw notConfigured();
+      if ((err as Error).message?.startsWith(GIFT_MONTHS_INVALID)) {
+        throw createHttpError(400, 'A gift is between 1 and 12 months.', {
+          expose: true,
+          details: { code: GIFT_MONTHS_INVALID },
+        });
+      }
+      logger.error({ err }, 'stripe_gift_checkout_failed');
+      throw createHttpError(502, 'Stripe checkout failed. Please try again shortly.', {
+        expose: true,
+      });
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 10 }))
+  .use(validateBody(giftCheckoutSchema));
+
+/**
+ * HTTP status for each redemption refusal. 400s are things about the code
+ * itself; 409s are things about the household, which a different household
+ * (or the same one, later) would not hit. None consume the code.
+ */
+const GIFT_REDEEM_STATUS: Record<GiftRedeemErrorCode, number> = {
+  GIFT_CODE_INVALID: 400,
+  GIFT_CODE_EXPIRED: 400,
+  GIFT_CODE_REDEEMED: 409,
+  GIFT_HOUSEHOLD_SUBSCRIBED: 409,
+  GIFT_ALREADY_ACTIVE: 409,
+  GIFT_ADDS_NOTHING: 409,
+  GIFT_REDEEM_CONFLICT: 409,
+};
+
+// POST /billing/gift/redeem
+//
+// Places a gift on the caller's household (ADR 0028). Admin-only: it changes
+// the household's plan, which is the admin's call everywhere else. The code
+// is a bearer credential, so the route is rate-limited by IP (before auth
+// would be better, but the limiter needs the route; it runs first in the
+// chain) and per user, and the body is never logged.
+export const giftRedeem = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<GiftRedeemInput>;
+    try {
+      const redemption = await redeemGiftCode({
+        code: validatedBody.code,
+        householdId: user.householdId!,
+      });
+      return successResponse(redemption);
+    } catch (err) {
+      if (isGiftRedeemError(err)) {
+        throw createHttpError(
+          GIFT_REDEEM_STATUS[err.code],
+          'This gift code could not be redeemed.',
+          {
+            expose: true,
+            details: { code: err.code, ...err.details },
+          }
+        );
+      }
+      logger.error({ err: (err as Error).message }, 'gift_redeem_failed');
+      throw createHttpError(502, 'The gift could not be redeemed right now. Please try again.', {
+        expose: true,
+      });
+    }
+  }
+)
+  .use(rateLimit({ perWindowMs: 60_000, max: 5 }))
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin())
+  .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 20 }))
+  .use(validateBody(giftRedeemSchema));
+
+// GET /billing/gift/purchases
+//
+// The gifts this account has bought, with their codes and whether each has
+// been redeemed. The buyer's own rows only; a failed read is a 502, never an
+// empty list.
+export const giftPurchases = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    try {
+      const purchases = await listGiftPurchases(user.userId);
+      return successResponse({ purchases });
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, 'gift_purchases_read_failed');
+      throw createHttpError(502, 'Your gifts could not be read right now. Please try again.', {
+        expose: true,
+      });
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold());
+
 // POST /billing/portal
 export const portal = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -409,6 +589,9 @@ export const handler = createRouter({
   'GET /billing/me': getCurrentSubscription,
   'POST /billing/checkout': checkout,
   'POST /billing/top-up/checkout': topUpCheckout,
+  'POST /billing/gift/checkout': giftCheckout,
+  'POST /billing/gift/redeem': giftRedeem,
+  'GET /billing/gift/purchases': giftPurchases,
   'POST /billing/portal': portal,
   'POST /billing/webhook': webhook,
 });

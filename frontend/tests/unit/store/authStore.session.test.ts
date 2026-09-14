@@ -9,7 +9,9 @@ const API = 'http://localhost:4000';
  * Security-critical session logic for the auth store (review M10):
  *   - verifySession token preference + invalid/valid/error paths
  *   - the localStorage / sessionStorage token split (refreshToken is
- *     sessionStorage-only so a closed tab ends the long-lived grant)
+ *     sessionStorage-only so a closed tab ends the long-lived grant) UNLESS
+ *     the person ticked "keep me signed in", which is the whole point of the
+ *     opt-in: the default must stay hardened
  *   - the cross-tab `storage`-event logout listener
  *
  * onRehydrateStorage's two branches (access-token-only kick-out and the
@@ -28,6 +30,9 @@ describe('authStore — verifySession', () => {
       isAuthenticated: false,
       isLoading: true,
       activeHouseholdId: null,
+      // Reset explicitly: it persists by design, so without this a test that
+      // opts in leaks `true` into every test after it.
+      rememberMe: false,
     });
   });
 
@@ -229,10 +234,13 @@ describe('authStore — localStorage / sessionStorage token split', () => {
       isAuthenticated: false,
       isLoading: true,
       activeHouseholdId: null,
+      // Reset explicitly: it persists by design, so without this a test that
+      // opts in leaks `true` into every test after it.
+      rememberMe: false,
     });
   });
 
-  it('keeps the refresh token in sessionStorage and out of localStorage', () => {
+  it('keeps the refresh token in sessionStorage and out of localStorage by default', () => {
     useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
 
     const local = localStorage.getItem('auth-storage') ?? '';
@@ -269,6 +277,51 @@ describe('authStore — localStorage / sessionStorage token split', () => {
     const session = sessionStorage.getItem('auth-storage-session') ?? '';
     expect(local).not.toContain('id-1');
     expect(session).not.toContain('refresh-secret');
+  });
+
+  it('persists the refresh token to localStorage when rememberMe is set', () => {
+    // Order matters and is the one thing that can silently break this: the
+    // persist adapter decides where the token goes from the payload it is
+    // writing, so the flag has to be in state before setTokens runs.
+    useAuthStore.getState().setRememberMe(true);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+
+    const local = localStorage.getItem('auth-storage') ?? '';
+    const session = sessionStorage.getItem('auth-storage-session') ?? '';
+    expect(local).toContain('refresh-secret');
+    expect(session).not.toContain('refresh-secret');
+  });
+
+  it('a remembered session survives closing the browser', () => {
+    useAuthStore.getState().setRememberMe(true);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+
+    // Closing the browser is exactly this: sessionStorage is dropped and
+    // localStorage is kept. What the next visit can read is what is left.
+    sessionStorage.clear();
+
+    const survived = localStorage.getItem('auth-storage') ?? '';
+    expect(survived).toContain('refresh-secret');
+  });
+
+  it('an unremembered session does NOT survive closing the browser', () => {
+    // The hardened default, stated as a test so opting in cannot quietly
+    // become the default for everyone.
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+    sessionStorage.clear();
+
+    const survived = localStorage.getItem('auth-storage') ?? '';
+    expect(survived).not.toContain('refresh-secret');
+  });
+
+  it('logout clears the preference, so the next person is not opted in', () => {
+    useAuthStore.getState().setRememberMe(true);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+    useAuthStore.getState().logout();
+
+    expect(useAuthStore.getState().rememberMe).toBe(false);
+    useAuthStore.getState().setTokens('id-2', 'access-2', 'refresh-2');
+    expect(localStorage.getItem('auth-storage') ?? '').not.toContain('refresh-2');
   });
 });
 
@@ -340,5 +393,88 @@ describe('authStore — onRehydrateStorage guard (access-token-only sessions)', 
     expect(logoutSpy).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     logoutSpy.mockRestore();
+  });
+});
+
+/**
+ * Opening the installed app without a network used to sign people out.
+ *
+ * Measured against the production build and its service worker on
+ * 2026-09-13: the shell was served from the cache, `GET /auth/me` and then
+ * `POST /auth/refresh` both failed with ERR_INTERNET_DISCONNECTED, and
+ * `verifySession` read that as "the session is over" — `auth-storage` went
+ * from a real user to `{"user":null,"idToken":null,…}` and the tab landed on
+ * /login. Coming back online did not restore it: the tokens were gone from
+ * storage, so the 30-day session was ended by being offline for a moment.
+ *
+ * "We could not ask" is not "the server said no".
+ */
+describe('authStore — verifySession with an unreachable server', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    useAuthStore.setState({
+      user: null,
+      idToken: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isLoading: true,
+      activeHouseholdId: null,
+    });
+  });
+
+  const offline = [
+    http.get(`${API}/auth/me`, () => HttpResponse.error()),
+    http.post(`${API}/auth/refresh`, () => HttpResponse.error()),
+  ];
+
+  it('keeps the session when neither call reaches the server', async () => {
+    server.use(...offline);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: 'u1', email: 'someone@example.invalid', name: 'Someone' },
+    } as never);
+
+    await useAuthStore.getState().verifySession();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.idToken).toBe('id-1');
+    expect(state.user).not.toBeNull();
+    expect(state.isLoading).toBe(false);
+    expect(localStorage.getItem('auth-storage')).toContain('id-1');
+  });
+
+  it('keeps the session in a tab that has no refresh token to try with', async () => {
+    server.use(...offline);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+    useAuthStore.setState({
+      refreshToken: null,
+      isAuthenticated: true,
+      user: { id: 'u1', email: 'someone@example.invalid', name: 'Someone' },
+    } as never);
+
+    await useAuthStore.getState().verifySession();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.idToken).toBe('id-1');
+    expect(state.isLoading).toBe(false);
+  });
+
+  it('still ends the session when the server answers and refuses', async () => {
+    server.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 })),
+      http.post(`${API}/auth/refresh`, () => HttpResponse.json({ message: 'no' }, { status: 401 }))
+    );
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+    useAuthStore.setState({ isAuthenticated: true } as never);
+
+    await useAuthStore.getState().verifySession();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().idToken).toBeNull();
   });
 });

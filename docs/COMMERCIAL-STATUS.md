@@ -24,6 +24,15 @@ household is on Seedling again with nothing deleted. It is one per account, it i
 never granted to a household that already existed, and it is never applied to a
 household with any Stripe subscription state.
 
+Gift subscriptions ([ADR 0028](adr/0028-gift-subscriptions.md), proposed
+2026-09-13) let a signed-in member pay once, on their own card, for 1–12 months of
+Garden or Greenhouse for another household, at the monthly price times the months
+with no discount; the recipient's admin redeems a code and the gift ends on the
+clock. **Nothing is for sale on that path until the owner creates the two
+one-time Stripe prices** (`stripe_price_id_gift_garden_month`,
+`stripe_price_id_gift_greenhouse_month`) and attests them; until then
+`POST /billing/gift/checkout` answers 400 `GIFT_NOT_CONFIGURED`.
+
 Garden annual, Greenhouse annual, and the one-time Garden Lifetime purchase were
 withdrawn from sale on 2026-09-02 by [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md):
 at the verified Plant.id per-identification cost, each of those cadences earns

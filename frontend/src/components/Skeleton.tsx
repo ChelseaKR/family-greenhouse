@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Base shimmer block. Content-shaped skeletons (below) compose these so a
@@ -29,16 +30,17 @@ function PlantCardSkeleton() {
 
 /** Grid of plant-card placeholders mirroring the real PlantsPage grid. */
 export function PlantGridSkeleton({ count = 10 }: { count?: number }) {
+  const { t } = useTranslation();
   return (
     <div
       className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
       role="status"
-      aria-label="Loading plants"
+      aria-label={t('plants.loading')}
     >
       {Array.from({ length: count }).map((_, i) => (
         <PlantCardSkeleton key={i} />
       ))}
-      <span className="sr-only">Loading plants…</span>
+      <span className="sr-only">{t('plants.loading')}</span>
     </div>
   );
 }
@@ -57,12 +59,13 @@ function ListRowSkeleton() {
 
 /** Stack of row placeholders for task/activity lists. */
 export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  const { t } = useTranslation();
   return (
-    <div role="status" aria-label="Loading">
+    <div role="status" aria-label={t('common.loading')}>
       {Array.from({ length: rows }).map((_, i) => (
         <ListRowSkeleton key={i} />
       ))}
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t('common.loading')}</span>
     </div>
   );
 }

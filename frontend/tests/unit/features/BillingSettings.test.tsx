@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { act, render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -1124,5 +1124,152 @@ describe('BillingSettings — a failed read is never rendered as the free plan',
 
     expect(screen.getByText(/your greenhouse plan ends on/i)).toBeInTheDocument();
     expect(screen.queryByText(/your Seedling plan ends/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('returning from a subscription checkout before the webhook lands', () => {
+  const TOP_UP_OFFER: IdentifyTopUpOffer = {
+    available: true,
+    credits: 20,
+    validityDays: 365,
+    priceUsd: 1.99,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  /**
+   * The window this covers: `createCheckoutSession` writes NOTHING to the
+   * household row, so between Stripe redirecting to `?status=success` and the
+   * webhook landing, `GET /billing/me` still answers with the pre-purchase
+   * tier. The page used to render that as a flat statement of fact with no
+   * acknowledgement of the payment anywhere, above a live purchase button —
+   * and the server guard that refuses a second concurrent subscription keys
+   * off `stripeSubscriptionId`, the one field the webhook has not written, so
+   * that second checkout is accepted and bills the household twice.
+   */
+  it('acknowledges the payment instead of restating the pre-purchase plan as fact', async () => {
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    expect(screen.getByText('Payment received — finishing up')).toBeInTheDocument();
+    expect(screen.getByTestId('checkout-pending-body').textContent).toMatch(
+      /Your payment went through/
+    );
+  });
+
+  it('withholds every purchase button while a paid checkout is unconfirmed', async () => {
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    // Not "the tier they bought" — the page cannot know which tier that was,
+    // and buying ANY of them here starts a second subscription.
+    expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Switch to Greenhouse' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Buying again would charge you twice/).length).toBeGreaterThan(0);
+  });
+
+  it('says so plainly once the wait has lapsed, and names somewhere to write to', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await renderBilling(
+        { planId: 'seedling', trialAvailable: true },
+        { paid: true, route: '/settings/billing?status=success' }
+      );
+      expect(screen.getByText('Payment received — finishing up')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(21_000);
+      });
+
+      expect(
+        screen.getByText('Your payment went through, but your plan has not updated')
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('checkout-pending-body').textContent).toMatch(
+        /the payment is recorded with them/
+      );
+      expect(
+        screen.getByRole('link', { name: 'support@familygreenhouse.net' })
+      ).toBeInTheDocument();
+      // Still no way to buy twice.
+      expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says nothing once the webhook has actually granted the plan', async () => {
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(screen.getByTestId('current-plan').textContent).toMatch(/Garden/);
+  });
+
+  it('does not tell a lifetime owner their purchase is still pending', async () => {
+    // A lifetime purchase CLEARS the subscription id by design, so the
+    // live-subscription test can never settle it; `lifetimePlanId` is what
+    // proves the money landed.
+    await renderBilling(
+      { planId: 'garden', stripeCustomerId: 'cus_1', lifetimePlanId: 'garden' },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Buying again would charge you twice/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a normal visit to the billing page alone', async () => {
+    await renderBilling({ planId: 'seedling', trialAvailable: true }, { paid: true });
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+  });
+
+  it('leaves the top-up return to its own notice', async () => {
+    // A top-up grants credits, not entitlement: the household's plan is not
+    // supposed to change, so the plan-checkout notice must not claim it is.
+    await renderBilling(
+      { planId: 'seedling', identifyCredits: { remaining: 0, expiresAt: null } },
+      {
+        paid: true,
+        identifyTopUp: TOP_UP_OFFER,
+        route: '/settings/billing?status=success&purchase=identify-top-up',
+      }
+    );
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/credits will show here as soon as the payment is confirmed/i)
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the gift return to its own notice, not the plan-checkout one', async () => {
+    // A gift checkout buys a code for someone ELSE's household. The purchaser's
+    // own plan never changes, so `returnedFromPlanCheckout` — and the "Payment
+    // received — finishing up" / "Buying again would charge you twice" copy
+    // that goes with it — must not fire here just because `status=success` and
+    // it is not a top-up.
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true },
+      { paid: true, route: '/settings/billing?status=success&purchase=gift' }
+    );
+
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Buying again would charge you twice/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
   });
 });

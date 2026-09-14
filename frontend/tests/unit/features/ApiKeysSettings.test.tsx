@@ -142,8 +142,18 @@ describe('ApiKeysSettings', () => {
 
     // The count is unknown, so the copy must not let "we could not read" be
     // taken for "nothing is out there".
-    expect(
-      await screen.findByText(/still active until you revoke it/i, { exact: false })
-    ).toBeInTheDocument();
+    const notice = await screen.findByText(/Nothing changed/i, { exact: false });
+    expect(notice).toBeInTheDocument();
+
+    // ...and it must not overstate the other way either. The sentence used to
+    // end "still active until you revoke it", which named revocation as the
+    // only way a key stops working. `middleware/apiKey.ts` re-checks BOTH the
+    // household's Greenhouse entitlement and the issuer's membership on every
+    // single use, so a key also dies on downgrade or when its issuer leaves —
+    // the two cases an admin reading this during an outage most needs to know
+    // are possible.
+    expect(notice.textContent).toMatch(/revoke it/i);
+    expect(notice.textContent).toMatch(/leaves/i);
+    expect(notice.textContent).toMatch(/Greenhouse/i);
   });
 });

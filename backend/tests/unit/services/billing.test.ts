@@ -1362,6 +1362,129 @@ describe('applyStripeEvent — identification top-up grant (ADR 0019)', () => {
  * alarm that fired on every unpaid or deferred session would be trained away
  * inside a month, which is the same defect wearing the opposite sign.
  */
+describe('applyStripeEvent — gift subscription purchase (ADR 0028)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const cancelledTx = (codes: string[]) =>
+    Object.assign(new Error('cancelled'), {
+      name: 'TransactionCanceledException',
+      CancellationReasons: codes.map((Code) => ({ Code })),
+    });
+
+  function giftEvent(
+    over: {
+      id?: string;
+      payment_status?: string;
+      type?: string;
+      metadata?: Record<string, string>;
+    } = {}
+  ) {
+    return {
+      id: over.id ?? 'evt_gift_1',
+      created: 1_756_857_600,
+      type: over.type ?? 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_gift_1',
+          mode: 'payment',
+          payment_status: over.payment_status ?? 'paid',
+          metadata: over.metadata ?? {
+            purchase: 'gift_subscription',
+            giftPlanId: 'garden',
+            months: '3',
+            buyerUserId: 'user-buyer',
+          },
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  type Sent = { kind: string; input: Record<string, any> };
+  const sentCalls = async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    return vi.mocked(dynamodb.send).mock.calls.map((c) => c[0] as unknown as Sent);
+  };
+
+  it('creates the gift and its code in one transaction keyed by the Session, then the ledger — and touches no household row', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(giftEvent());
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['TransactWrite', 'Put']);
+    const puts = calls[0].input.TransactItems.map((i: { Put: Record<string, any> }) => i.Put);
+    expect(puts.map((p: { Item: { PK: string } }) => p.Item.PK)).toEqual([
+      'GIFT#cs_gift_1',
+      expect.stringMatching(/^GIFTCODE#[0-9a-f]{64}$/),
+      'USER#user-buyer',
+    ]);
+    expect(puts[0].ConditionExpression).toBe('attribute_not_exists(PK)');
+    expect(puts[0].Item).toMatchObject({ planId: 'garden', months: 3, buyerUserId: 'user-buyer' });
+    expect(calls[1].input.Item.PK).toBe('STRIPE_EVENT#evt_gift_1');
+    // No household METADATA write of any kind: a purchase is not a redemption.
+    expect(calls.some((c) => c.kind === 'Update')).toBe(false);
+    expect(JSON.stringify(calls)).not.toContain('HOUSEHOLD#');
+    expect(captureMock).not.toHaveBeenCalled();
+  });
+
+  it('a second delivery creates nothing and mints no second code, whatever the ledger says', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockRejectedValueOnce(cancelledTx(['ConditionalCheckFailed', 'None', 'None']))
+      .mockResolvedValueOnce({});
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(applyStripeEvent(giftEvent())).resolves.toBeUndefined();
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['TransactWrite', 'Put']);
+  });
+
+  it('a failed grant write propagates so Stripe retries, and leaves no ledger row behind', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('DDB throttled'));
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await expect(applyStripeEvent(giftEvent())).rejects.toThrow('DDB throttled');
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('an UNPAID gift checkout grants nothing, writes nothing, and is not read as a malformed lifetime purchase', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent, deltaForStripeEvent } =
+      await import('../../../src/services/billing.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const errorSpy = vi.spyOn(logger, 'error');
+    const unpaid = giftEvent({ payment_status: 'unpaid' });
+    expect(deltaForStripeEvent(unpaid)).toBeNull();
+    await applyStripeEvent(unpaid);
+    expect(vi.mocked(dynamodb.send)).not.toHaveBeenCalled();
+    // A gift Session names no household, so the delta path finds nothing to
+    // resolve and logs nothing — no `stripe_event_missing_or_unknown_plan_id`,
+    // and no paid-no-grant, because nothing was paid.
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('a PAID gift whose metadata is broken reaches the alarmed paid-no-grant line instead of inventing a gift', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent, PAID_NO_GRANT_LOG_MESSAGE } =
+      await import('../../../src/services/billing.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const errorSpy = vi.spyOn(logger, 'error');
+    await applyStripeEvent(
+      giftEvent({
+        metadata: { purchase: 'gift_subscription', giftPlanId: 'garden', months: 'three' },
+      })
+    );
+    expect(vi.mocked(dynamodb.send)).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ stripeSessionId: 'cs_gift_1', purchase: 'gift_subscription' }),
+      PAID_NO_GRANT_LOG_MESSAGE
+    );
+    errorSpy.mockRestore();
+  });
+});
+
 describe('applyStripeEvent — a PAID event that grants nothing is never silent', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
   /**
