@@ -27,6 +27,11 @@
 import type Stripe from 'stripe';
 import { PLANS, type Plan, type PlanId } from '../models/plans.js';
 import { IDENTIFY_TOP_UP_PACK } from '../models/identifyTopUp.js';
+import {
+  GIFTABLE_PLAN_IDS,
+  GIFT_PRICE_ENV,
+  type GiftablePlanId,
+} from '../models/giftSubscriptions.js';
 
 /**
  * Cadences a catalog price can be sold at. `month`/`year`/`lifetime` mirror
@@ -44,7 +49,10 @@ export type PriceCadence = 'month' | 'year' | 'lifetime' | 'one_time';
  * published amount that a Stripe price can silently contradict, so it
  * reconciles through exactly the same comparison as every plan price.
  */
-export type CatalogItemId = PlanId | typeof IDENTIFY_TOP_UP_PACK.id;
+export type CatalogItemId = PlanId | typeof IDENTIFY_TOP_UP_PACK.id | GiftCatalogItemId;
+
+/** A gift month of a tier: `gift-garden-month`, `gift-greenhouse-month`. */
+export type GiftCatalogItemId = `gift-${GiftablePlanId}-month`;
 
 /**
  * Every published Family Greenhouse amount is in US dollars: `plans.ts`
@@ -134,8 +142,31 @@ export function identifyTopUpExpectedPrice(): ExpectedPrice {
  * anything configured to charge what we never published", and a row missing
  * from it is a row the sweep silently declares clean.
  */
+/**
+ * The catalog row for ONE gift month of a tier (ADR 0028). Its amount is the
+ * tier's `monthlyPrice` — read through `PLANS`, never restated — because a
+ * gift is priced at the monthly rate times the months, with no discount. A
+ * checkout charges this price with `quantity: months`, so a Stripe price
+ * that recurs, or that carries any other amount, would bill the buyer
+ * something the UI never showed.
+ */
+export function giftExpectedPrice(planId: GiftablePlanId): ExpectedPrice {
+  const dollars = PLANS[planId].monthlyPrice;
+  return {
+    itemId: `gift-${planId}-month`,
+    cadence: 'one_time',
+    env: GIFT_PRICE_ENV[planId],
+    dollars,
+    unitAmount: unitAmountFor(dollars),
+  };
+}
+
 export function expectedPrices(): ExpectedPrice[] {
-  return [...Object.values(PLANS).flatMap(expectedPricesForPlan), identifyTopUpExpectedPrice()];
+  return [
+    ...Object.values(PLANS).flatMap(expectedPricesForPlan),
+    identifyTopUpExpectedPrice(),
+    ...GIFTABLE_PLAN_IDS.map(giftExpectedPrice),
+  ];
 }
 
 /** The one catalog row for a (plan, cadence) pair, or null if none is sold. */
@@ -341,5 +372,19 @@ export async function assertIdentifyTopUpPriceMatchesCatalog(
   priceId: string
 ): Promise<void> {
   const result = await reconcilePrice(stripe, identifyTopUpExpectedPrice(), priceId);
+  if (result.status !== 'ok') throw new PriceReconciliationError(result);
+}
+
+/**
+ * The same gate for a gift month (ADR 0028). The webhook grants `months`
+ * from checkout metadata, not from the amount charged, so this is the only
+ * place the two numbers meet — exactly the top-up's situation.
+ */
+export async function assertGiftPriceMatchesCatalog(
+  stripe: Pick<Stripe, 'prices'>,
+  planId: GiftablePlanId,
+  priceId: string
+): Promise<void> {
+  const result = await reconcilePrice(stripe, giftExpectedPrice(planId), priceId);
   if (result.status !== 'ok') throw new PriceReconciliationError(result);
 }

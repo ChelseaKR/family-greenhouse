@@ -9,9 +9,10 @@ export default function MergingCollections() {
     <article className="prose-fg">
       <p className="lead">
         Two people moving in together bring two plant collections, two sets of habits, and two
-        completely different beliefs about how often a pothos needs water. The plants are usually
-        the easiest part of the move and the first thing to go wrong afterwards, because a merged
-        collection has a caretaker gap that neither person notices until something dies.
+        completely different beliefs about how often a <a href="/care/pothos">pothos</a> needs
+        water. The plants are usually the easiest part of the move and the first thing to go wrong
+        afterwards, because a merged collection has a caretaker gap that neither person notices
+        until something dies.
       </p>
 
       <h2>First: the new place is a different place</h2>
@@ -48,8 +49,9 @@ export default function MergingCollections() {
 
       <h2>The duplicate problem</h2>
       <p>
-        You will both have a pothos. You will both have a snake plant. Two mediocre specimens of the
-        same plant take up two spots and produce a vaguely dispiriting effect.
+        You will both have a pothos. You will both have a{' '}
+        <a href="/care/snake-plant">snake plant</a>. Two mediocre specimens of the same plant take
+        up two spots and produce a vaguely dispiriting effect.
       </p>
       <p>
         Keep the healthier one, and give the other to a friend or a housemate or the office.

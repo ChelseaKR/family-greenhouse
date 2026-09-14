@@ -20,8 +20,9 @@ export default function LowWaterPlants() {
       <ol>
         <li>
           <strong>It survives a missed watering.</strong> Plants like ferns punish a single dry-out
-          by dropping fronds and never quite recovering. A snake plant will sit in dry soil for a
-          month and shrug it off.
+          by dropping fronds and never quite recovering. A{' '}
+          <a href="/care/snake-plant">snake plant</a> will sit in dry soil for a month and shrug it
+          off.
         </li>
         <li>
           <strong>It tolerates lighting you actually have.</strong> Bright indirect light is what
@@ -40,8 +41,9 @@ export default function LowWaterPlants() {
       <h3>1. ZZ plant (Zamioculcas zamiifolia)</h3>
       <p>
         The plant equivalent of a houseguest who never asks for anything. The rhizome stores water
-        for weeks. Tolerates low light cheerfully. The only way to kill a ZZ plant is to overwater
-        it, which is almost impossible if you&rsquo;re the kind of person reading this article.
+        for weeks. Tolerates low light cheerfully. The only way to kill a{' '}
+        <a href="/care/zz-plant">ZZ plant</a> is to overwater it, which is almost impossible if
+        you&rsquo;re the kind of person reading this article.
       </p>
 
       <h3>2. Snake plant (Dracaena trifasciata)</h3>
@@ -56,7 +58,8 @@ export default function LowWaterPlants() {
       <p>
         Thrives on neglect and has the courtesy to wilt visibly when you finally need to pay
         attention. Within a day of watering it&rsquo;s back to normal. The cuttings root in plain
-        water in about a week, which means one pothos quickly becomes ten. Everyone has a pothos.
+        water in about a week, which means one <a href="/care/pothos">pothos</a> quickly becomes
+        ten. Everyone has a pothos.
       </p>
 
       <h3>4. Cast iron plant (Aspidistra elatior)</h3>
@@ -70,40 +73,50 @@ export default function LowWaterPlants() {
       <p>
         More forgiving than its delicate appearance suggests. Wilts when thirsty (recoverable),
         produces baby plants on long stems (free new plants), tolerates a wide range of light. The
-        one downside: cats find it irresistible. If you have a cat and a spider plant, you really
-        only have a cat.
+        one downside: cats find it irresistible. If you have a cat and a{' '}
+        <a href="/care/spider-plant">spider plant</a>, you really only have a cat.
       </p>
 
       <h3>6. Philodendron heartleaf (Philodendron hederaceum)</h3>
       <p>
-        A pothos&rsquo;s slightly classier cousin. Same neglect-tolerance, prettier leaves, vines
-        beautifully. If you want a plant that looks like you&rsquo;re putting in effort but you
-        actually aren&rsquo;t, this is it.
+        The <a href="/care/heartleaf-philodendron">heartleaf philodendron</a> is a pothos&rsquo;s
+        slightly classier cousin. Same neglect-tolerance, prettier leaves, vines beautifully. If you
+        want a plant that looks like you&rsquo;re putting in effort but you actually aren&rsquo;t,
+        this is it.
       </p>
 
       <h3>7. Jade plant (Crassula ovata)</h3>
       <p>
         A succulent shrub that wants <em>less</em> water than you think. Watering it weekly will
-        kill it; watering it every three weeks will make it thrive. A jade plant is the test of
-        whether you&rsquo;ve learned that more attention isn&rsquo;t always better attention.
+        kill it; watering it every three weeks will make it thrive. A{' '}
+        <a href="/care/jade-plant">jade plant</a> is the test of whether you&rsquo;ve learned that
+        more attention isn&rsquo;t always better attention.
       </p>
 
       <h2>Plants that masquerade as low-maintenance</h2>
       <p>Some plants get put on every &ldquo;low maintenance&rdquo; list and do not belong:</p>
       <ul>
         <li>
-          <strong>Fiddle leaf fig.</strong> The most-photographed plant on Instagram is also one of
-          the most temperamental. They drop leaves if you move them, change the light, or breathe
-          wrong. Skip until you&rsquo;ve mastered the boring plants.
+          <strong>
+            <a href="/care/fiddle-leaf-fig">Fiddle leaf fig</a>.
+          </strong>{' '}
+          The most-photographed plant on Instagram is also one of the most temperamental. They drop
+          leaves if you move them, change the light, or breathe wrong. Skip until you&rsquo;ve
+          mastered the boring plants.
         </li>
         <li>
-          <strong>Boston fern.</strong> Wants high humidity, even moisture, and bright indirect
-          light. None of those words describe an apartment in winter. Beautiful, demanding,
-          frequently dead.
+          <strong>
+            <a href="/care/boston-fern">Boston fern</a>.
+          </strong>{' '}
+          Wants high humidity, even moisture, and bright indirect light. None of those words
+          describe an apartment in winter. Beautiful, demanding, frequently dead.
         </li>
         <li>
-          <strong>Calathea.</strong> Striking foliage. Will let you know it hates you with brown
-          crispy leaf edges within forty-eight hours.
+          <strong>
+            <a href="/care/calathea">Calathea</a>.
+          </strong>{' '}
+          Striking foliage. Will let you know it hates you with brown crispy leaf edges within
+          forty-eight hours.
         </li>
       </ul>
 

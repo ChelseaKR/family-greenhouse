@@ -95,8 +95,8 @@ export default function SharingPlantCare() {
       </p>
       <p>
         This is the hidden value of an activity feed. It removes the need to ask &ldquo;did you
-        water the monstera?&rdquo; because you can just see that yes, your partner did, on Tuesday
-        at 8pm. Conversation eliminated. Trust preserved.
+        water the <a href="/care/monstera">monstera</a>?&rdquo; because you can just see that yes,
+        your partner did, on Tuesday at 8pm. Conversation eliminated. Trust preserved.
       </p>
 
       <h2>The relationship math</h2>
@@ -122,8 +122,8 @@ export default function SharingPlantCare() {
       <p>
         You don&rsquo;t need our app. You need a shared system that meets the three criteria above.{' '}
         <a href="/">Family Greenhouse</a> happens to be the one I built &mdash; collaborative by
-        default and structured around exactly this dynamic. It is free for households with up to 20
-        plants. If a Google Sheet works for you, use the Google Sheet.
+        default and structured around exactly this dynamic. It is free for one home with up to 3
+        people and 20 plants. If a Google Sheet works for you, use the Google Sheet.
       </p>
       <p>
         The point isn&rsquo;t the tool. The point is that you stop having the same argument every
