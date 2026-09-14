@@ -712,6 +712,30 @@
     "completedToast": "Done: {{plant}} at {{name}}"
   },
   "household": {
+    "onboarding": {
+      "chooseTitle": "Set up your household",
+      "chooseTitleAnother": "Add another household",
+      "chooseLede": "A household keeps your plant care in one place — just you, or shared with others. Create one to start fresh, or if someone already invited you, paste their link below.",
+      "createCardTitle": "Create a new household",
+      "createCardBody": "Start fresh on your own — invite family any time you like",
+      "joinCardTitle": "Join an existing household",
+      "joinCardBody": "Use an invite link from a family member",
+      "createTitle": "Create your household",
+      "createTitleAnother": "Name your new household",
+      "createLede": "Flying solo? Name it after yourself or your home — it’s just for you, and you can invite people whenever you're ready.",
+      "nameLabel": "Household name",
+      "namePlaceholder": "e.g., The Smith Family",
+      "nameRequired": "Household name is required",
+      "back": "Back",
+      "createSubmit": "Create household",
+      "joinTitle": "Join a household",
+      "joinLede": "Paste the invite link a household admin sent you, and we’ll take you straight there.",
+      "joinLinkLabel": "Invite link or code",
+      "joinLinkPlaceholder": "https://familygreenhouse.net/join/…",
+      "joinSubmit": "Open the invite",
+      "joinInvalid": "That doesn’t look like an invite link. Paste the whole link, or just the code at the end of it.",
+      "joinNoLink": "No link yet? Ask whoever set up the household to send you one — it works for seven days."
+    },
     "share": {
       "copy": "Copy",
       "copied": "Copied!",
