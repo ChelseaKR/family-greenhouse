@@ -7,6 +7,7 @@
     "add": "Add",
     "done": "Done",
     "loading": "Loading…",
+    "skipToMain": "Skip to main content",
     "error": "Something went wrong",
     "retry": "Try again",
     "close": "Close",
@@ -395,6 +396,7 @@
   },
   "plants": {
     "title": "Plants",
+    "loading": "Loading plants…",
     "addPlant": "Add plant",
     "addFirst": "Add your first plant",
     "none": "No plants yet",
