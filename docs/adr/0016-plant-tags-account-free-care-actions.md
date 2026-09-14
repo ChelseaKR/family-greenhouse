@@ -192,9 +192,14 @@ more in front of the less trusted reader than the trusted one.
   `resolveCareNote` (`models/sitterBriefFields.ts`), the resolver the brief
   uses, in place of `careNotes`. The dev-server mirror does the same.
 - Item 1 of "What the holder of a leaked token can do" should now read: the
-  plant's name, species, photo URL, **house rule**, due tasks, and who last
-  cared for it by first name. The sentence under **Scope** that a tag can never
-  read private notes was not true of the first release; it is now.
+  plant's name, species, **house rule**, due tasks, and who last cared for it
+  by first name. The sentence under **Scope** that a tag can never read private
+  notes was not true of the first release; it is now.
+- **No photo.** The scan returned the plant's stored photo address, which does
+  not expire, while the brief hands a sitter one that dies with the link
+  (#453). The scan page has never rendered a photo, so the field is gone rather
+  than signed: a stored address would have outlived the revocation that is a
+  tag's only remedy.
 - Two things stay on the scan that a sitter link does not carry: `species`, and
   the last-care `history` with its first names. The PIN-off notice on the tags
   page names both and says a scan never shows Notes.

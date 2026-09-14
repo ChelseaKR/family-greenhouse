@@ -16,6 +16,107 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **A household that had just paid was told it was still on the free plan, with
+  a button to buy again.** `createCheckoutSession` writes nothing to the
+  household row — entitlement arrives only when the Stripe webhook does — so
+  between the redirect back to `/settings/billing?status=success` and that
+  webhook landing, `GET /billing/me` still answers with the pre-purchase tier.
+  Settings → Billing rendered that answer as a flat statement of fact ("Your
+  household is on the Seedling plan."), with **no acknowledgement of the
+  payment anywhere on the page**, directly above a live "Switch to Garden"
+  button. The identification top-up path two cards below has said "this can
+  take a moment" since it shipped; the subscription path, the one that costs
+  $4.99–$9.99 a month, said nothing — and `docs/billing.md` has described step
+  4 of this flow as "the settings page reads the query string and shows a
+  friendly notice" the whole time.
+
+  The button was not only confusing. The server guard that refuses a second
+  concurrent subscription keys off `stripeSubscriptionId` — exactly the field
+  the webhook has not written yet — so a second checkout started in that window
+  is accepted, and the household ends up paying for two subscriptions that both
+  keep renewing.
+
+  The page now says "Payment received — finishing up" while the webhook is
+  plausibly still in flight, withholds every tier's purchase button while a
+  paid checkout is unconfirmed, and — once the 20-second poll window lapses
+  without entitlement — escalates to "Your payment went through, but your plan
+  has not updated", naming the support address so the grant can be made by
+  hand. A lifetime purchase counts as settled through `lifetimePlanId` (it
+  clears the subscription id by design), and the top-up return keeps its own
+  notice.
+
+- **The iOS app-site-association file was never published, and every deploy
+  said it was.** `frontend/public/.well-known/apple-app-site-association` has
+  carried the real Team ID since #731 and is built into `dist/` correctly, but
+  `.well-known/` is a hidden directory and `actions/upload-artifact` drops
+  hidden files unless told not to. The build job recorded
+  `include-hidden-files: false`, the artifact reached the deploy job without
+  `.well-known/`, and the deploy's deliberately-guarded
+  `if [ -f dist/.well-known/apple-app-site-association ]` found nothing to
+  copy. Nothing failed: `Deploy to Production` for `v0.33.0` uploaded 331
+  objects, none of them under `.well-known/`, and reported success while
+  `https://familygreenhouse.net/.well-known/apple-app-site-association`
+  answered `404 NoSuchKey`. Universal links cannot be verified against a 404,
+  so this blocked the iOS Associated Domains work behind a green deploy.
+
+  Both workflows that hand `frontend/dist` to a deploy job now set
+  `include-hidden-files: true`. `scripts/deploy.sh` reads `frontend/dist` in
+  place and never crosses an artifact, so it was never affected.
+
+  `scripts/check-well-known.mjs` could not have caught this: it verified that
+  the file is committed and that each deploy path names it with the right
+  content type, but nothing asserted the file survives the trip. The assertion
+  now lives in `scripts/artifact-hidden-files.mjs`, in its own module because
+  the gate runs at import time and cannot be imported by a test, and
+  `scripts/artifact-hidden-files.test.mjs` covers it — including that both
+  real workflows carry the flag, so removing it fails a test rather than a
+  deploy six weeks later.
+
+### Added
+
+- **A sign-up that never confirmed its email now gets one reminder, and only
+  one.** A self-service account starts `UNCONFIRMED` and receives one code that
+  is valid for 24 hours. Cognito never expires or deletes such an account: it
+  cannot sign in, the address cannot register again, and nothing ever
+  contacted the person again. The 2026-09-13 funnel measurement found 2 of 3
+  real sign-ups since 2026-09-01 stopped exactly there.
+
+  The hourly `reminders` Lambda gains a third pass,
+  `services/confirmReminders.ts`. It resends the confirmation code through
+  Cognito once, between 24 hours (when the first code expires) and 7 days after
+  sign-up. The CustomMessage trigger renders it as a reminder
+  ("Finish setting up Family Greenhouse — here is a new code"). Unconfirmed
+  accounts are still not let into the app.
+
+  - **Exactly once.** `POST /auth/signup` writes one row per sign-up, keyed by
+    the opaque Cognito `sub`. Before sending, the pass claims that row with a
+    conditional write, so concurrent runs, EventBridge retries and redeploys
+    cannot send twice. A crash after the claim loses a reminder rather than
+    doubling one.
+  - **Never emailed:** accounts created before this ships (they have no row),
+    anything not `UNCONFIRMED`, disabled or deleted accounts, and addresses on
+    either suppression list. The SES account-level list matters here because
+    Cognito sends with no configuration set, so a bounced confirmation email is
+    recorded only there.
+  - **Never a smoke fixture.** The post-deploy smoke run writes a
+    `TESTFIXTURE_SIGNUP#` marker, keyed by a hash of its address, before it
+    submits the public sign-up form. The pass skips any account with that
+    marker, even if the run died before teardown.
+  - **Measured, not tracked.** Two aggregate counts are published in Embedded
+    Metric Format under `FamilyGreenhouse/SignupConfirmation`:
+    `ConfirmRemindersSent` and `ConfirmedAfterReminder`. There is no pixel, no
+    redirect link, and no address or id in any log line.
+
+  `/confirm-email` opened with no session (from the reminder's link, in a new
+  browser) now offers "I already have a code". Before, it could only request
+  another code.
+
+  **Infrastructure:** the shared Lambda role gains the read-only
+  `ses:GetSuppressedDestination`, and the CustomMessage Lambda changes. Both
+  ship with the next `v*` tag, not on merge.
+
 ### Changed
 
 - **The latency SLO is now alarmed as an error-budget burn rate instead of a
@@ -78,6 +179,59 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the three plant caps, the sitter windows, the identification allowances and
   both leaf-health caps from `plans.ts`, `identifyBudget.ts` and the production
   tfvars, and fails in both directions.
+
+- **Public copy that overstated what the free plan and the app do.** Each
+  sentence now matches the code that decides it:
+  - Two blog posts said "free for households with up to 20 plants", naming the
+    cap least relevant to a post about _shared_ care and omitting the 1-home
+    and 3-member caps.
+  - Two sitter posts promised a link that shows "only the tasks actually due
+    while you're away", with no mention that the free window is a week (not 90
+    days) and that anything already overdue is on the list too.
+  - A post said the app "assigns each task to one person instead of reminding
+    everybody"; unassigned tasks remind every member.
+  - The landing page offered "export all of it"; the export is profile,
+    notification preferences, memberships, plants and tasks — no completion
+    history, activity feed or photo files. And "A year, looked back on" is a
+    30-day window on the free plan.
+  - The store listings advertised the care assistant with no plan qualifier
+    (it is Garden and up, bought on the web), a sitter link that "expires on a
+    date you choose" (a week on free), and identification with no allowance.
+  - `store-assets/README.md` described the demo household's four due-today
+    tasks as spread "across three people"; one is deliberately unclaimed.
+  - `docs/accessibility.md` published a conformance table reading "(none
+    currently) — all previously documented gaps closed" while the same
+    document lists five open gaps.
+- `scripts/check-plan-copy.mjs` (new, in `npm run verify` and in CI) re-derives
+  the free plan's caps from `backend/src/models/plans.ts` and checks all
+  fifteen public statements of them, failing in both directions.
+
+- **The privacy policy described one account-free surface and the product has
+  three.** It had a section for sitter links and nothing for the wall display
+  or caretaker seats — even though a caretaker seat collects a third party's
+  name, typed by the household and kept on every visit record, and a wall
+  display link never expires. The policy now says what each link shows, what
+  neither shows, and how long a seat can run; the Stripe paragraph now lists
+  the billing fields actually stored (a scheduled cancellation, a tier bought
+  outright, the date a free trial was first used), not a subset of them.
+  `backend/tests/unit/config/privacyTokenSurfaces.test.ts` holds the new
+  sentences to `caretakerService` and `kioskService`.
+- **`docs/analytics.md` was one event short of what the product captures.**
+  `upgrade_requested` shipped in the browser union and the API accept-list and
+  was documented nowhere, while the privacy policy sends readers to that file
+  for the full list. `scripts/check-doc-figures.mjs` now re-derives the three
+  event vocabularies and fails in both directions.
+- **`docs/security.md` published a CSP the app stopped shipping.** It stated
+  `script-src 'self'` with no third-party origins; the shipped policy admits
+  Google Tag Manager and two Analytics hosts. The document now quotes the
+  policy from `frontend/index.html` and the same gate keeps them equal.
+- **`docs/multi-household.md` said account deletion keeps the departing user's
+  name** on activity events and completions. It does not:
+  `accountCleanup.anonymizeUserInHousehold` rewrites both to "Former member",
+  which is what the privacy policy and `docs/support.md` already said.
+- **`README.md` credited household authorization to Cognito custom claims**,
+  the one input `middleware/auth.ts` documents as untrusted. The membership row
+  is the authority.
 
 ## [0.33.0] - 2026-09-13
 

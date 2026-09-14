@@ -39,6 +39,15 @@ export async function seedHousehold(
     members?: Array<Omit<SeededMember, 'role'> & { role?: 'admin' | 'member' }>;
     /** Plan member cap passed to addMember (defaults high enough to not trip). */
     maxMembers?: number;
+    /**
+     * Keep the no-card Garden trial that `createHousehold` gives a NEW
+     * household (ADR 0027). Default false: a seeded household stands for one
+     * that already exists, and a fixture that quietly carried a trial would
+     * make every "free tier" expectation in these suites resolve to Garden —
+     * exactly what happened to the plant-cap and double-care suites when the
+     * trial landed.
+     */
+    noCardTrial?: boolean;
   }
 ): Promise<SeededHousehold> {
   const householdService = await import('../../../src/services/householdService.js');
@@ -50,6 +59,18 @@ export async function seedHousehold(
     opts.admin.name,
     opts.admin.email
   );
+
+  if (!opts.noCardTrial) {
+    const meta = store
+      .all()
+      .find((i) => i.PK === `HOUSEHOLD#${household.id}` && i.SK === 'METADATA');
+    if (meta) {
+      const withoutTrial = { ...meta };
+      delete withoutTrial.noCardTrialStartedAt;
+      delete withoutTrial.noCardTrialEndsAt;
+      store.put(withoutTrial);
+    }
+  }
 
   const members: SeededMember[] = [{ ...opts.admin, role: 'admin' }];
 
@@ -74,6 +95,10 @@ export async function seedHousehold(
  * Set the household's plan by writing planId onto the METADATA row. The
  * default (no row attribute) resolves to the free "seedling" plan (10-plant
  * cap), so call this only when a test needs a different tier.
+ *
+ * Any no-card Garden trial on the row goes with it, the same way the dev
+ * server's `__test__` plan fixture ends one (ADR 0027): the plan a test asks
+ * for is the plan it gets, not a trial on top of it.
  */
 export async function setHouseholdPlan(
   store: InMemoryDynamo,
@@ -83,7 +108,10 @@ export async function setHouseholdPlan(
   const all = store.all();
   const meta = all.find((i) => i.PK === `HOUSEHOLD#${householdId}` && i.SK === 'METADATA');
   if (!meta) throw new Error(`No METADATA row for household ${householdId}`);
-  store.put({ ...meta, planId });
+  const next = { ...meta, planId };
+  delete next.noCardTrialStartedAt;
+  delete next.noCardTrialEndsAt;
+  store.put(next);
 }
 
 /** Seed an active plant row directly via the real plantService. */

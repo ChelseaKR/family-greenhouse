@@ -37,6 +37,7 @@ import {
 } from '../../models/schemas.js';
 import { cognito, CLIENT_ID } from '../../utils/cognito.js';
 import { getUserName } from '../../services/cognitoUsers.js';
+import { recordSignup } from '../../services/signupConfirmRecord.js';
 import { successResponse, createdResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
@@ -54,7 +55,7 @@ export const signup = createHandler(
     }
 
     try {
-      await cognito.send(
+      const created = await cognito.send(
         new SignUpCommand({
           ClientId: CLIENT_ID,
           Username: validatedBody.email,
@@ -67,6 +68,13 @@ export const signup = createHandler(
       );
 
       audit('auth.signup', { actorEmail: validatedBody.email });
+
+      // One row per sign-up, keyed by the opaque Cognito sub, so the hourly
+      // confirm-reminder pass can send its ONE reminder if this account is
+      // still unconfirmed a day later (services/confirmReminders.ts). Never
+      // throws: the account already exists, and a missing row only means no
+      // reminder.
+      await recordSignup(created?.UserSub ?? '');
 
       return createdResponse({
         message: 'User created. Please check your email for confirmation code.',

@@ -899,7 +899,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              Yes — a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
+              Yes, two kinds. Every <strong>new household</strong> starts with{' '}
+              <strong>14 days of Garden with no card</strong>. Nothing is charged, and when the 14
+              days end the household moves to the free Seedling plan on its own. Nothing you added
+              is deleted: anything over Seedling&rsquo;s limits stays and can still be edited, and
+              only adding more waits. Identifications, leaf-health checks and the care assistant use
+              the free plan&rsquo;s monthly allowances during those 14 days, and each account gets
+              one such trial.
+            </p>
+            <p>
+              Separately, a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
               <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
               begins when the trial ends unless you cancel before then. Cancelling during the trial
               leaves you on the free Seedling plan.
@@ -912,7 +921,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: "Yes. A household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
+        text: "Yes, two kinds. Every new household starts with 14 days of Garden with no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own. Nothing you added is deleted: anything over Seedling's limits stays and can still be edited, and only adding more waits. Identifications, leaf-health checks and the care assistant use the free plan's monthly allowances during those 14 days, and each account gets one such trial. Separately, a household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
       },
       {
         id: 'cancel',

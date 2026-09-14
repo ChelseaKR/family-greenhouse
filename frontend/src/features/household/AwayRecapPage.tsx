@@ -9,7 +9,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { awayRecapService, type AwayRecap } from '@/services/awayRecapService';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { formatDate } from '@/i18n/format';
 
 /**
@@ -192,7 +192,7 @@ export function AwayRecapPage() {
   const checkingPlan = plansQuery.isPending || subscriptionQuery.isPending;
   const plan =
     plansQuery.data && subscriptionQuery.data
-      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      ? plansQuery.data.plans.find((p) => p.id === effectivePlanId(subscriptionQuery.data))
       : undefined;
   // `undefined` is "we could not determine it" — a failed catalog read, or an
   // older backend whose plan summary carries no feature map. It is NOT
