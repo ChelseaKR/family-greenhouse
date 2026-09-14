@@ -6,8 +6,7 @@
     "components/Button.tsx": 1,
     "components/CommandPalette.tsx": 7,
     "components/Footer.tsx": 4,
-    "components/HouseholdSwitcher.tsx": 2,
-    "components/Layout.tsx": 4,
+    "components/Layout.tsx": 1,
     "components/NotFoundPage.tsx": 3,
     "components/ProtectedRoute.tsx": 1,
     "components/RouteErrorBoundary.tsx": 3,
@@ -51,7 +50,6 @@
   "attributes": {
     "components/CommandPalette.tsx": 1,
     "components/Footer.tsx": 1,
-    "components/Layout.tsx": 1,
     "components/PublicShell.tsx": 2,
     "components/Skeleton.tsx": 2,
     "components/Toaster.tsx": 2,

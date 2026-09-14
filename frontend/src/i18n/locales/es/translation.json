@@ -276,6 +276,14 @@
     }
   },
   "nav": {
+    "chat": "Chat",
+    "analytics": "Estadísticas",
+    "help": "Ayuda",
+    "mainNavigation": "Navegación principal",
+    "openSidebar": "Abrir la barra lateral",
+    "closeSidebar": "Cerrar la barra lateral",
+    "activeHousehold": "Hogar activo",
+    "addHousehold": "Añadir un hogar",
     "dashboard": "Panel",
     "plants": "Plantas",
     "tasks": "Tareas",
