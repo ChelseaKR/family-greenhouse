@@ -72,14 +72,16 @@ or support signal.
 - Body size guard: 256 KiB cap before JSON parse so a hostile client can't exhaust Lambda memory.
 - Public S3 bucket policy denies all anonymous access except via CloudFront OAI. Lifecycle rule cleans up unused image objects (configure in Terraform).
 
-**Resolved**: a strict CSP now ships via `<meta http-equiv="Content-Security-Policy">` in `index.html` as defense-in-depth alongside the CloudFront response-headers policy. Directives:
+**Resolved**: a CSP ships via `<meta http-equiv="Content-Security-Policy">` in `frontend/index.html` as defense-in-depth alongside the CloudFront response-headers policy. The shipped policy, quoted from that file and held to it by `scripts/check-doc-figures.mjs` (so this block cannot go stale while looking authoritative):
 
-- `default-src 'self'`
-- `script-src 'self'` (no `unsafe-eval` or `unsafe-inline`)
-- `style-src 'self' 'unsafe-inline'` (required for our inline `style=` attributes)
-- `img-src 'self' data: https:` (S3 image bucket + identicons)
-- `connect-src 'self' http://localhost:4000 https:` (API + Stripe)
-- `object-src 'none'`, `base-uri 'self'`, `form-action 'self' https:`
+```
+default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https: https://www.googletagmanager.com https://www.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'
+```
+
+`__API_ORIGIN__` is substituted with the deployed API origin at build time. Two things this policy does that a reader should not have to infer:
+
+- **`script-src` is not `'self'` alone.** It admits `https://www.googletagmanager.com`, and `connect-src` admits Tag Manager and Google Analytics endpoints, because `frontend/src/services/analytics.ts` injects GTM when `VITE_GTM_ID` is set at build time. No container id is set in any deployed environment today (the privacy policy says so too), so nothing is loaded from those origins — but the policy would permit it, and Consent Mode is not configured, so the cookie-banner question in `docs/analytics.md` has to be settled before that variable is ever populated for an audience that includes EU users.
+- `style-src` keeps `'unsafe-inline'`, required for the inline `style=` attributes the app sets; `script-src` carries neither `'unsafe-inline'` nor `'unsafe-eval'`.
 
 ## A06:2021 — Vulnerable and Outdated Components
 
