@@ -305,6 +305,47 @@ Unset `VITE_GTM_ID` and redeploy. The shim short-circuits to no-op; the GTM scri
 
 ---
 
+## Google Ads & Meta Conversions API — paid ad conversion reporting
+
+**What we use it for:** `backend/src/utils/adConversions.ts` reports two conversions server-side, from the same trusted backend seams the first-party analytics rail (`capture()`) already uses — `signup_completed` (Cognito email confirmation) and `subscription_paid` (the Stripe webhook, the first time a subscription becomes `active`). See `docs/paid-acquisition-readiness.md` for the full paid-acquisition plan (keywords, ad copy, creative briefs, budget) this supports.
+
+**Without it:** both env vars are unset in every environment today, so `reportAdConversion` is a complete no-op — no network call, not even a log line past a trace. Nothing here creates an ad account or spends money; that's on you, in the ad platforms' own consoles, before any of this does anything.
+
+**Known limitation before you turn this on:** neither platform can actually attribute a conversion to an ad without a click identifier (Google's `gclid`, Meta's `fbclid`/`fbc`), and this app does not capture one yet (see docs/paid-acquisition-readiness.md §5 for that follow-up). Turning these env vars on before that's built will log conversions in each platform's UI, but with degraded-to-absent ad attribution — useful for confirming the pipe works, not yet for optimizing a campaign.
+
+### Setup — Meta Conversions API (implemented, just needs real values)
+
+1. Create the ad account first (business.facebook.com → Events Manager → your Pixel). This repo does not create it.
+2. In Events Manager → your Pixel → Settings, generate a **Conversions API access token**.
+3. Set `META_CAPI_PIXEL_ID` (the Pixel ID) and `META_CAPI_ACCESS_TOKEN` (the token from step 2) as GitHub Actions secrets, then map them into the backend Lambda environment the same way `STRIPE_SECRET_KEY` and the other backend secrets are wired (see "Production secrets" below) — these are credentials, not `VITE_`-prefixed build-time values, so they belong on the backend, never in the frontend bundle.
+4. Deploy. The next signup confirmation or first paid conversion posts to `https://graph.facebook.com/v21.0/{pixel_id}/events` with a SHA-256-hashed email as the only match key (no cookie, no click id yet — see the limitation above).
+
+### Setup — Google Ads Enhanced Conversions (NOT implemented — stub only)
+
+`sendToGoogleAds` in `adConversions.ts` is a documented no-op: Google's conversion-upload path needs OAuth2 (client id/secret + a refresh token from the ad account owner), a developer token (Google's own manual approval process, can take days), and a customer id — none of which can exist before the ad account does. Once you have those:
+
+1. Create the Google Ads account and a **Conversion action** for each of "signup" and "subscribe" (Tools → Conversions).
+2. Apply for a developer token (Tools → API Center) — do this early, approval isn't instant.
+3. Create an OAuth2 client (Google Cloud Console) and generate a refresh token for the ad account.
+4. Come back to `sendToGoogleAds` and wire the `ConversionUploadService.UploadClickConversions` call using those credentials; `GOOGLE_ADS_CONVERSION_ID` already gates it, so setting that var alone will not silently under-report — the stub logs a warning and sends nothing until the call itself is written.
+
+### Verify
+
+- Meta: Events Manager → your Pixel → Test Events, confirm a `CompleteRegistration` (signup) or `Subscribe` (paid conversion) event lands with `action_source: system_generated` and a hashed email — no raw email, ever.
+- Both: `docs/paid-acquisition-readiness.md` §5 has the exact log line names (`ad_conversion_report`) to grep in CloudWatch if a platform's own UI is slow to show test traffic.
+
+### Privacy notes
+
+- Server-side only — no client pixel, no browser cookie, consistent with the cookieless posture documented for PostHog above.
+- The only identifier ever sent is a SHA-256 hash of a lower-cased, trimmed email (`hashEmail` in `adConversions.ts`). The raw email never leaves the process this hook runs in.
+- Never throws to its caller — a bad credential or a platform outage cannot fail a real signup confirmation or a real Stripe webhook delivery.
+
+### Disabling
+
+Unset `META_CAPI_PIXEL_ID` / `META_CAPI_ACCESS_TOKEN` (and leave `GOOGLE_ADS_CONVERSION_ID` unset). `reportAdConversion` short-circuits to a true no-op.
+
+---
+
 ## Production secrets — the right way
 
 This doc keeps it simple by putting secrets directly in `terraform.tfvars`. That works but isn't ideal — tfvars can leak via screenshots, terminal scrollback, accidental git adds. The proper path:

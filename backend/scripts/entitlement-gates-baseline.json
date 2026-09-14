@@ -77,6 +77,10 @@
       "reason": "Not entitlement — analytics, the churn event. Losing the free tier is not churn, so the free tier is excluded from the count. It revokes nothing; the downgrade itself is applied by the delta above.",
       "arg": "churnedFromPlan !== 'seedling'"
     },
+    "services/billing.ts::applyStripeEvent::getPlan": {
+      "reason": "Not entitlement — an upsell target, same shape as models/upgradeFeatures.ts's two getPlan entries below. `paidPlan` is the tier that JUST became active (same value the PlanId=== entry above already excludes 'seedling' from), read only for its catalog `monthlyPrice` to pass as the ad-conversion `valueUsd` to reportAdConversion (adConversions.ts, docs/paid-acquisition-readiness.md). Nothing is granted, refused, or displayed to the household from this read; access was decided upstream by the subscription-status guard this same block already sits behind.",
+      "arg": "paidPlan"
+    },
     "services/billing.ts::createCheckoutSession::getPlan": {
       "reason": "Not entitlement. `args.planId` is the tier being PURCHASED, used to look up its Stripe price and cadence. Nothing is granted here; the grant arrives on the webhook.",
       "arg": "args.planId"

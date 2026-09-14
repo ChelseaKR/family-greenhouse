@@ -18,6 +18,7 @@ import {
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
 import type { ServerEventProps } from '../utils/serverAnalytics.js';
+import { reportAdConversion } from '../utils/adConversions.js';
 import { assertPaymentActivityAllowed } from '../config/commercialStatus.js';
 import { dispatchBillingEmails } from './billingEmails.js';
 import {
@@ -1844,6 +1845,20 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
         plan: paidPlan,
         interval: intervalFromEvent(event),
         from: bucketPreviousStatus(previousStatus),
+      });
+
+      // Ad-conversion report (docs/paid-acquisition-readiness.md). Same
+      // guard as `capture` above — fires exactly once per household's first
+      // paid transition, never on a webhook redelivery. Inert until a real
+      // GOOGLE_ADS_*/META_CAPI_* credential is configured; see
+      // adConversions.ts. No email hash is available at this seam (the
+      // webhook carries a Stripe customer id, not the household admin's
+      // email), so match quality here is lower than at signup until a
+      // future pass reads it through — documented as a known gap, not
+      // silently assumed away.
+      void reportAdConversion('subscription_paid', {
+        plan: paidPlan,
+        valueUsd: getPlan(paidPlan).monthlyPrice,
       });
     }
 
