@@ -78,9 +78,9 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
   shells, which is what a store reviewer on the free tier reaches by following
   the listing's own description of the care assistant. The docs now say what is
   actually gated; gating `LockedFeature` is a product decision and is not made
-  here. The release checklist also now records that the privacy manifest's
-  seven data types are the intended truth once the analytics and telemetry
-  rails are removed, and that the removal lands before any TestFlight build;
+  here. The release checklist also now records what the privacy manifest has
+  to declare beyond its seven types before a TestFlight build — the shells'
+  product and frontend telemetry, and the analytics rail being turned on —
   and `docs/mobile.md` no longer lists Apple Developer Program enrollment as
   undone.
 

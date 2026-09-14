@@ -11,16 +11,21 @@
       `LockedFeature` is not, so `/chat` shows a Seedling household a
       subscription price and an upgrade call to action inside the app. See
       `docs/mobile.md`, "Store payment rules".
-- [ ] `ios/App/App/PrivacyInfo.xcprivacy` matches what the app collects. Its
-      7 data types are the intended truth: the analytics and telemetry rails
-      (the PostHog shim, Sentry DSNs, the GTM/analytics hosts in the CSP, and
-      the Cognito-sub-keyed `/telemetry/product` and `/telemetry/frontend`
-      posts) are being REMOVED rather than declared. Until that removal lands,
-      the shells — the same web bundle, with none of it `isNativeApp()`-gated
-      — still post Product Interaction, Performance and Crash/Diagnostic data
-      the manifest does not name, and `validate-store-release.mjs` only asserts
-      the 7 present types. So the removal PR merges before any TestFlight
-      build.
+- [ ] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send. It
+      lists 7 data types, all App Functionality, with `NSPrivacyTracking`
+      false. The shells run the same web bundle with none of it
+      `isNativeApp()`-gated, so they also post `/telemetry/product` (keyed to
+      the Cognito sub and the household id) and `/telemetry/frontend` (error
+      summaries and web vitals, keyed to a session id): Product Interaction,
+      Performance Data and Crash Data, none of them declared. A product
+      analytics rail is being turned on, which adds the Analytics purpose to
+      those types and to `UserID`. If any of it is linked to a person for
+      advertising, ad measurement or a data broker, `NSPrivacyTracking` is
+      true, the domains go in `NSPrivacyTrackingDomains`, and App Tracking
+      Transparency applies (a native prompt the WebView cannot show).
+      `validate-store-release.mjs` asserts only the 7 present types, so the
+      manifest is checked by hand against what that rail ships, before any
+      TestFlight build.
 - [x] Store icons, Play feature graphic, metadata, and review-safe screenshots validate.
 - [x] Screenshots are re-captured from a seeded store-demo household
       (`backend/src/local-server-store-demo.ts`, `SEED_STORE_DEMO=1`): the

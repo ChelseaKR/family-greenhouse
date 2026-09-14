@@ -358,13 +358,12 @@ Remaining work for delivery:
 - [ ] Privacy policy (`/legal/privacy`), support (`/support`), and account
       deletion (`/account-deletion`) URLs filled in on both store listings.
 - [ ] Apple "App Privacy" + Play "Data safety" forms: declare account data
-      (email, name), phone number (optional, SMS reminders) and photos users
-      upload — the seven types `ios/App/App/PrivacyInfo.xcprivacy` declares,
-      and nothing under Analytics. That is true only once the analytics and
-      telemetry rails are removed from the bundle: no Sentry DSN, PostHog key
-      or GTM container is configured today, but the first-party
-      `/telemetry/*` posts still fire from the shells. See the privacy
-      manifest item in `docs/mobile-release-checklist.md`.
+      (email, name), phone number (optional, SMS reminders), photos users
+      upload, and the analytics rails as they actually ship — product
+      interaction keyed to the account id, crash and performance data — under
+      the Analytics purpose, matching `ios/App/App/PrivacyInfo.xcprivacy`
+      entry for entry. Sentry only if a DSN is configured for the store build.
+      See the privacy manifest item in `docs/mobile-release-checklist.md`.
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
