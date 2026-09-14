@@ -531,6 +531,72 @@ describe('purchase controls once payment activity is available', () => {
     expect(screen.getByText(/You will not be charged before then/)).toBeInTheDocument();
   });
 
+  it('names the failed payment when the first charge after a trial is declined', async () => {
+    // The scenario this exists for: a card-based trial converts, Stripe cannot
+    // take the money, and the subscription goes trialing -> past_due. `planId`
+    // still says garden (Stripe only rewrites it to seedling weeks later, when
+    // dunning gives up), while the server has already dropped the household to
+    // Seedling's caps. Before this, the page stated the paid plan as a fact and
+    // said nothing at all about the declined card.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'past_due',
+        usage: { plantCount: 25, maxPlants: 10, memberCount: 4, maxMembers: 1 },
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText(/We couldn’t take your last payment/)).toBeInTheDocument();
+    // The two facts a household needs and could not get anywhere in the app.
+    expect(screen.getByText(/nothing is deleted/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Update the card under “Manage subscription” below\./)
+    ).toBeInTheDocument();
+    // The plan line no longer asserts the paid plan is in force.
+    expect(screen.getByText(/but its last payment has not gone through/)).toBeInTheDocument();
+    expect(screen.queryByText('Your household is on the Garden plan.')).not.toBeInTheDocument();
+    // One cause, one warning: the generic over-limit banner would blame "your
+    // current plan" for a cap that plan does not have.
+    expect(screen.queryByText('Over your plan limit')).not.toBeInTheDocument();
+  });
+
+  it('points a non-admin at an admin rather than at a button they cannot press', async () => {
+    isAdmin.mockReturnValue(false);
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'unpaid',
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText(/We couldn’t take your last payment/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Update the card under “Manage subscription” below\./)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText('Only a household admin can manage billing.').length
+    ).toBeGreaterThan(0);
+  });
+
+  it('does not call an unknown status a failed payment', async () => {
+    // checkout.session.completed records the subscription id before any status
+    // is known. "Your payment failed" there would be a worse claim than the
+    // silence it replaces.
+    await renderBilling(
+      { planId: 'garden', stripeCustomerId: 'cus_1', stripeSubscriptionId: 'sub_1' },
+      { paid: true }
+    );
+
+    expect(screen.queryByText(/We couldn’t take your last payment/)).not.toBeInTheDocument();
+    expect(screen.getByText('Your household is on the Garden plan.')).toBeInTheDocument();
+  });
+
   it('does not promise a trial end date to a household that already cancelled', async () => {
     // Two dates would contradict each other; the cancellation notice is the
     // more useful message.

@@ -431,9 +431,26 @@ Operational notes:
 - **Payment failure links Stripe's hosted invoice page** (`hosted_invoice_url`
   off the event, validated to an https `stripe.com` host) so a customer can
   settle the invoice in one click. It deliberately does not say what tier the
-  household drops to: that depends on Stripe's "subscription status after all
-  retries fail" setting and on whether entitlement consults
-  `subscriptionStatus` (it does not on `main`; PR #364 changes that).
+  household drops to, because that depends on Stripe's "subscription status
+  after all retries fail" setting (cancel / mark unpaid / leave `past_due`),
+  which is a dashboard control this repository does not read. What entitlement
+  does with whichever status arrives is no longer open: since #364/#540,
+  `getEntitledPlan` entitles `active` and `trialing` only, so a `past_due`,
+  `unpaid`, `incomplete` or `incomplete_expired` household has Seedling's caps
+  from the moment Stripe reports the status — with **no grace period**, and
+  with the lifetime floor still underneath it. Nothing is deleted: existing
+  plants, tasks, photos and history stay readable and editable, and only new
+  creations are refused (see "Plan caps and downgrades"). The email's "nothing
+  is deleted either way" is therefore a claim the handlers keep.
+- **The app says so too.** `Settings → Billing` renders a payment-failed notice
+  for those four statuses (`UNPAID_SUBSCRIPTION_STATUSES` in
+  `frontend/src/features/settings/BillingSettings.tsx`) and suppresses the
+  generic over-limit banner while it shows, because that banner blames "your
+  current plan" for a cap the plan does not have. Without it the page stated
+  the paid plan as a fact over meters showing Seedling's numbers, and the
+  declined card appeared nowhere in the product — the email was the only
+  notice, and it depends on the endpoint subscribing `invoice.payment_failed`
+  and on SES.
 - **`STRIPE_CUSTOMER#{id}` pointer.** `customer.source.expiring` carries only a
   customer id, so any notice that knows both ids writes this pointer (400-day
   TTL) and that one reads it. No pointer yet ⇒ no warning, never a guess.
