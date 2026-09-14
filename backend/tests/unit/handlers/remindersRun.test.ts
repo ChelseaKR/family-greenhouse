@@ -6,6 +6,9 @@ vi.mock('../../../src/services/reminders.js', () => ({
 vi.mock('../../../src/services/householdEmails.js', () => ({
   runHouseholdEmails: vi.fn(),
 }));
+vi.mock('../../../src/services/confirmReminders.js', () => ({
+  runConfirmReminders: vi.fn(),
+}));
 
 const REMINDER_SUMMARY = { households: 3, attempted: 3, sent: 2, failed: 0, truncated: false };
 const EMAIL_SUMMARY = {
@@ -20,25 +23,77 @@ const EMAIL_SUMMARY = {
   failed: 0,
 };
 
+const CONFIRM_SUMMARY = {
+  due: 1,
+  sent: 1,
+  confirmedAfterReminder: 0,
+  skippedNotUnconfirmed: 0,
+  skippedDeleted: 0,
+  skippedFixture: 0,
+  skippedSuppressed: 0,
+  alreadyClaimed: 0,
+  deferred: 0,
+  throttled: 0,
+  failed: 0,
+  errors: 0,
+  truncated: false,
+};
+
 beforeEach(async () => {
   vi.clearAllMocks();
   const reminders = await import('../../../src/services/reminders.js');
   vi.mocked(reminders.remindAllHouseholds).mockResolvedValue(REMINDER_SUMMARY);
   const householdEmails = await import('../../../src/services/householdEmails.js');
   vi.mocked(householdEmails.runHouseholdEmails).mockResolvedValue(EMAIL_SUMMARY);
+  const confirmReminders = await import('../../../src/services/confirmReminders.js');
+  vi.mocked(confirmReminders.runConfirmReminders).mockResolvedValue(CONFIRM_SUMMARY);
 });
 
 describe('hourly reminders Lambda', () => {
-  it('runs the household-email pass alongside the reminder fan-out', async () => {
+  it('runs the household-email and confirm-reminder passes alongside the reminder fan-out', async () => {
     const { handler } = await import('../../../src/handlers/reminders/handler.js');
     const reminders = await import('../../../src/services/reminders.js');
     const householdEmails = await import('../../../src/services/householdEmails.js');
+    const confirmReminders = await import('../../../src/services/confirmReminders.js');
 
     const result = await handler();
 
     expect(reminders.remindAllHouseholds).toHaveBeenCalledTimes(1);
     expect(householdEmails.runHouseholdEmails).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ ...REMINDER_SUMMARY, householdEmails: EMAIL_SUMMARY });
+    expect(confirmReminders.runConfirmReminders).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ...REMINDER_SUMMARY,
+      householdEmails: EMAIL_SUMMARY,
+      confirmReminders: CONFIRM_SUMMARY,
+    });
+  });
+
+  it('runs the confirm-reminder pass last, on whatever time the first two left', async () => {
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    const confirmReminders = await import('../../../src/services/confirmReminders.js');
+    const { handler } = await import('../../../src/handlers/reminders/handler.js');
+
+    await handler(undefined, { getRemainingTimeInMillis: () => 28_000 });
+
+    const emailCall = vi.mocked(householdEmails.runHouseholdEmails).mock;
+    const confirmCall = vi.mocked(confirmReminders.runConfirmReminders).mock;
+    expect(confirmCall.invocationCallOrder[0]).toBeGreaterThan(emailCall.invocationCallOrder[0]);
+    const emailDeadline = emailCall.calls[0][1]?.deadlineAt as number;
+    const confirmDeadline = confirmCall.calls[0][1]?.deadlineAt as number;
+    expect(confirmDeadline).toBeGreaterThanOrEqual(emailDeadline);
+  });
+
+  it('reports the confirm-reminder pass as unknown, not zero, without failing the invocation', async () => {
+    const confirmReminders = await import('../../../src/services/confirmReminders.js');
+    vi.mocked(confirmReminders.runConfirmReminders).mockRejectedValue(new Error('cognito down'));
+    const { handler } = await import('../../../src/handlers/reminders/handler.js');
+
+    const result = await handler();
+
+    expect(result.confirmReminders).toBeNull();
+    // The other two passes still report their own real numbers.
+    expect(result.householdEmails).toEqual(EMAIL_SUMMARY);
+    expect(result.sent).toBe(2);
   });
 
   // #458. Both passes ride this one 30-second invocation, sequentially. With

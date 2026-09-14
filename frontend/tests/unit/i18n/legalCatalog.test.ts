@@ -54,14 +54,16 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 121 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 124 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
     // 101 when the fragment was split out, +15 for the commercial terms
     // (trial, renewal, cancellation, price changes, one-time purchases),
-    // +5 for the refund section (#426).
-    expect(en).toHaveLength(121);
+    // +5 for the refund section (#426), +3 for the account-free surfaces the
+    // policy used to leave out: the caretaker-seat collection bullet and the
+    // wall-display/caretaker-seat section.
+    expect(en).toHaveLength(124);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

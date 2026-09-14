@@ -75,6 +75,48 @@ describe('ConfirmEmailPage', () => {
     );
   });
 
+  // The confirm-reminder email carries a fresh code and links here. Opened in
+  // a new browser there is no router state and no pending confirmation, and
+  // before this the only thing the page offered was "send another code".
+  it('lets someone arriving from the reminder email, with no session, use the code they hold', async () => {
+    let resendCalls = 0;
+    let body: unknown;
+    server.use(
+      http.post(`${API}/auth/resend-code`, () => {
+        resendCalls += 1;
+        return HttpResponse.json({ message: 'sent' });
+      }),
+      http.post(`${API}/auth/confirm`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ message: 'Email confirmed' });
+      })
+    );
+    renderPage();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/email address/i), 'reminded@example.invalid');
+    await user.click(screen.getByRole('button', { name: /i already have a code/i }));
+    expect(screen.getByText(/reminded@example.invalid/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/confirmation code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /confirm email/i }));
+
+    expect(await screen.findByText('Login Page')).toBeInTheDocument();
+    expect(body).toEqual({ email: 'reminded@example.invalid', code: '123456' });
+    // No extra code was requested on the way.
+    expect(resendCalls).toBe(0);
+  });
+
+  it('does not open code entry without a valid email address', async () => {
+    renderPage();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: /i already have a code/i }));
+    await user.type(screen.getByLabelText(/email address/i), 'not-an-address');
+    await user.click(screen.getByRole('button', { name: /i already have a code/i }));
+
+    expect(screen.queryByLabelText(/confirmation code/i)).not.toBeInTheDocument();
+  });
+
   it('restores pending confirmation context after a refresh', async () => {
     sessionStorage.setItem(
       'fg.pendingConfirmation',

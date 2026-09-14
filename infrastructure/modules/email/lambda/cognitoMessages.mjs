@@ -71,8 +71,57 @@ export function adminInviteMessage(usernameParameter, codeParameter) {
   ].join('\n');
 }
 
+/**
+ * The switch value the confirm-reminder pass sends as ClientMetadata
+ * (backend/src/services/confirmReminders.ts, `REMINDER_CLIENT_METADATA`).
+ *
+ * ResendConfirmationCode is a public API, so clientMetadata is caller-supplied.
+ * It is therefore used ONLY as a switch and nothing from it reaches the body.
+ * Anyone who sets it gets this copy instead of the welcome copy, for an address
+ * they could already trigger a resend for, which changes nothing they can do.
+ */
+export const REMINDER_PURPOSE = 'confirm-reminder';
+
+/**
+ * The ONE automatic reminder for an account that signed up and never
+ * confirmed. Sent 24 hours to 7 days after sign-up, when the first code has
+ * expired, so it carries a fresh one. Same voice, sign-off and language as the
+ * sign-up template (English only, as that template is).
+ *
+ * No tracking of any kind: the one link is the plain confirmation page, with no
+ * query string, no redirect and no image.
+ */
+export function confirmReminderMessage(codeParameter) {
+  return [
+    'Hi there,',
+    '',
+    'You started signing up for Family Greenhouse but have not confirmed your',
+    'email address yet. The code in our first email has expired, so here is a',
+    'new one:',
+    '',
+    `Your verification code is: ${codeParameter}`,
+    '',
+    `To finish, open ${SITE_URL}/confirm-email and enter the email address`,
+    'you signed up with, then this code. It expires in 24 hours.',
+    '',
+    "This is the only reminder we'll send. Didn't sign up? You can safely",
+    'ignore this email — the account is never activated without the code.',
+    '',
+    SIGN_OFF,
+  ].join('\n');
+}
+
 export const handler = async (event) => {
   const { triggerSource, request, response } = event;
+
+  if (
+    triggerSource === 'CustomMessage_ResendCode' &&
+    request.clientMetadata?.purpose === REMINDER_PURPOSE
+  ) {
+    response.emailSubject = 'Finish setting up Family Greenhouse — here is a new code';
+    response.emailMessage = confirmReminderMessage(request.codeParameter);
+    return event;
+  }
 
   if (triggerSource === 'CustomMessage_ForgotPassword') {
     response.emailSubject = 'Reset your Family Greenhouse password';

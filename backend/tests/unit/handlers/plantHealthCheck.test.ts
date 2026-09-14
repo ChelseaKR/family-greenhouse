@@ -226,6 +226,36 @@ describe('plants health-check handler', () => {
     expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', 400);
   });
 
+  it.each([
+    [
+      "a household on the no-card Garden trial spends Seedling's allowance (ADR 0027)",
+      { planId: 'seedling', noCardTrialEndsAt: '2999-01-01T00:00:00.000Z' },
+      20,
+    ],
+    [
+      "a household on a card-based Stripe Garden trial keeps Garden's allowance (ADR 0027)",
+      {
+        planId: 'garden',
+        status: 'trialing',
+        stripeSubscriptionId: 'sub_synthetic_card_trial',
+        noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
+      },
+      200,
+    ],
+  ])('%s', async (_label, sub, expectedCap) => {
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue(
+      sub as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>
+    );
+    vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(
+      async (lookupPlanId) => ({ seedling: 20, garden: 200, greenhouse: 200 })[await lookupPlanId()]
+    );
+    const checkPlantHealth = await subject();
+    const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(leafHealthBudget.reserveUsage).toHaveBeenCalledWith('hh-1', expectedCap);
+  });
+
   it('503s before Bedrock when the cap cannot be resolved (a cap we cannot determine is not one to spend against)', async () => {
     vi.mocked(leafHealthBudget.resolveMonthlyCap).mockRejectedValue(new Error('ddb down'));
     const checkPlantHealth = await subject();
@@ -303,16 +333,22 @@ describe('plants health-check handler', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
-  it('surfaces transport failures as an exposed 502 message and records no activity', async () => {
+  it('surfaces a transport failure as an exposed 502 that does not quote the SDK error', async () => {
+    // The shape a Bedrock SDK failure actually has: a model identifier and an
+    // account-scoped ARN. The user can do nothing with either, and publishing
+    // them describes the deployment to anyone with an account.
     vi.mocked(leafHealth.assessLeafHealth).mockRejectedValue(
-      new Error('Bedrock timed out after 5000ms')
+      new Error(
+        'ValidationException: model arn:aws:bedrock:us-west-2:123456789012:foundation-model/claude-x is not available'
+      )
     );
     const checkPlantHealth = await subject();
 
     const res = (await checkPlantHealth(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 
     expect(res.statusCode).toBe(502);
-    expect(res.body).toMatch(/Leaf health check failed: Bedrock timed out/);
+    expect(res.body).toMatch(/Could not check this photo just now/);
+    expect(res.body).not.toMatch(/arn:aws:bedrock|123456789012|ValidationException/);
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 

@@ -18,7 +18,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { getErrorMessage } from '@/services/api';
 import { formatDate } from '@/i18n/format';
 import { sitterLinkState } from './sitterLinkState';
@@ -87,7 +87,7 @@ export function CaretakerSeatsCard({ householdId }: { householdId: string }) {
   const checkingPlan = plansQuery.isLoading || subscriptionQuery.isLoading;
   const plan =
     plansQuery.data && subscriptionQuery.data
-      ? plansQuery.data.plans.find((p) => p.id === subscriptionQuery.data.planId)
+      ? plansQuery.data.plans.find((p) => p.id === effectivePlanId(subscriptionQuery.data))
       : undefined;
   const entitled: boolean | undefined = plan?.features?.caretakerSeats;
 

@@ -19,7 +19,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
-import { atCap, type Limit } from '../models/plans.js';
+import { atCap, NO_CARD_TRIAL_DAYS, type Limit } from '../models/plans.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
 import { HOUSEHOLD_TIMEZONE_UNSET, normalizeHouseholdTimeZone } from './householdTimeZone.js';
 import {
@@ -32,6 +32,11 @@ import {
 import { CreateHouseholdInput } from '../models/schemas.js';
 import * as emailSuppression from './emailSuppression.js';
 import { normalizeEscalateAfterDays } from './escalationRule.js';
+
+/** Sort key of the per-account no-card trial claim row (ADR 0027). */
+export const NO_CARD_TRIAL_CLAIM_SK = 'NO_CARD_TRIAL';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Raised when a write would exceed the household's plan cap. Handlers map
@@ -122,10 +127,11 @@ export async function createHousehold(
   input: CreateHouseholdInput,
   userId: string,
   userName: string,
-  userEmail: string
+  userEmail: string,
+  at: Date = new Date()
 ): Promise<Household> {
   const id = uuid();
-  const now = new Date().toISOString();
+  const now = at.toISOString();
 
   const household: Household = {
     id,
@@ -159,6 +165,56 @@ export async function createHousehold(
     role: 'admin',
     joinedAt: now,
   };
+
+  // The no-card Garden trial (ADR 0027). A NEW household starts one, and an
+  // account gets at most one: the claim row below is conditional on not
+  // existing and rides the same transaction as the household, so two
+  // concurrent creates cannot both win it, and a household can never carry a
+  // trial whose claim did not commit. An account that already claimed one
+  // (it left a household and made another, or it is opening a second home)
+  // gets its household with no trial at all.
+  //
+  // The claim lives in the account's own `USER#` partition, so deleting the
+  // account's data (`accountCleanup.deleteUserScopedData`) removes it with the
+  // rest. That is the bound this rule accepts: a new account is a new claim,
+  // and a new account needs a new confirmed email address.
+  //
+  // Nothing here reaches Stripe, and no Stripe path reads or writes these
+  // attributes.
+  const noCardTrialEndsAt = new Date(at.getTime() + NO_CARD_TRIAL_DAYS * DAY_MS).toISOString();
+  try {
+    await dynamodb.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: { ...householdItem, noCardTrialStartedAt: now, noCardTrialEndsAt },
+            },
+          },
+          { Put: { TableName: TABLE_NAME, Item: memberItem } },
+          {
+            Put: {
+              TableName: TABLE_NAME,
+              Item: {
+                PK: `USER#${userId}`,
+                SK: NO_CARD_TRIAL_CLAIM_SK,
+                entityType: 'NoCardTrialClaim',
+                householdId: id,
+                claimedAt: now,
+              },
+              ConditionExpression: 'attribute_not_exists(PK)',
+            },
+          },
+        ],
+      })
+    );
+    return household;
+  } catch (err) {
+    // Only the CLAIM's own condition routes to the trial-less write below. Any
+    // other failure is a failed household creation, and it propagates.
+    if (transactCancellationReasons(err)[2]?.Code !== 'ConditionalCheckFailed') throw err;
+  }
 
   await dynamodb.send(
     new TransactWriteCommand({

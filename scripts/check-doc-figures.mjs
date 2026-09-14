@@ -248,6 +248,160 @@ for (const tier of ['seedling', 'garden', 'greenhouse']) {
   });
 }
 
+// --- docs/security.md: the shipped Content-Security-Policy ------------------
+// The audit published a directive list that had gone stale in the direction
+// that matters: it said `script-src 'self'` "(no `unsafe-eval` or
+// `unsafe-inline`)" while the shipped policy also admits
+// `https://www.googletagmanager.com`, and `connect-src` admits Tag Manager and
+// two Google Analytics hosts. A security document that under-states what its
+// own policy permits is worse than one that says nothing, because a reviewer
+// stops at the document.
+//
+// The repair is the same one this file applies everywhere else: the document
+// quotes the policy and the gate re-derives it, so the two cannot drift. A
+// re-worded summary is fine — the fenced block is what is compared.
+const SECURITY = 'docs/security.md';
+const cspMeta = read('frontend/index.html').match(
+  /http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]+)"/
+);
+if (cspMeta === null) {
+  problems.push(
+    `frontend/index.html: no <meta http-equiv="Content-Security-Policy"> — ${SECURITY} says one ` +
+      `ships. Either restore it or rewrite that section deliberately, in the same change.`
+  );
+} else {
+  const shipped = cspMeta[1].replace(/\s+/g, ' ').trim();
+  const quoted = [...read(SECURITY).matchAll(/```\n([^`]*default-src[^`]*?)\n```/g)].map((m) =>
+    m[1].replace(/\s+/g, ' ').trim()
+  );
+  if (quoted.length !== 1) {
+    problems.push(
+      `${SECURITY}: expected exactly 1 fenced block quoting the shipped CSP, found ${quoted.length}. ` +
+        `The block that carries the policy was removed or duplicated; restore it (or update this ` +
+        `gate deliberately, in the same change).`
+    );
+  } else if (quoted[0] !== shipped) {
+    problems.push(
+      `${SECURITY}: quotes a CSP that frontend/index.html no longer ships.\n` +
+        `      document: ${quoted[0]}\n` +
+        `      shipped:  ${shipped}`
+    );
+  }
+}
+
+// --- docs/analytics.md: the event vocabulary --------------------------------
+// The privacy policy tells a reader "The full event list is in our repo at
+// `docs/analytics.md`" (legal.privacy.collect.telemetryEvents). That sentence
+// is a promise about a DOCUMENT, so it is only true while the document is
+// complete — and it was not: `upgrade_requested` shipped in both the browser
+// union and the server's accept-list and was documented nowhere, so the
+// published list was one event short of what the product captures. A reader
+// checking what we collect would have come away with a wrong answer from the
+// page we sent them to.
+//
+// Three sets, re-derived rather than restated, and every pair compared in both
+// directions:
+//
+//   - `EventName` in frontend/src/services/analytics.ts — what the browser may
+//     emit.
+//   - `productEventNames` in backend/src/models/telemetry.ts — what the API
+//     will accept. An event only in the first is dropped on arrival with
+//     nothing to show for it; one only in the second is dead vocabulary.
+//   - the `| \`event\` |` rows of docs/analytics.md — what we published.
+//
+// `ServerEventName` (backend/src/utils/serverAnalytics.ts) is derived too, so
+// the three Stripe-confirmed events documented in the second table are not a
+// hard-coded exemption that would hide a fourth.
+const ANALYTICS = 'docs/analytics.md';
+
+/**
+ * Quoted string literals inside one TypeScript declaration.
+ *
+ * Comments are stripped first. Every one of these declarations is heavily
+ * commented, and the comments quote OTHER literals — `'lifetime'`,
+ * `'trialing'` — which a naive scan reads as event names and then reports as
+ * undocumented. That is a gate failing for a reason that has nothing to do
+ * with its subject, which is how a gate gets switched off.
+ */
+function namesIn(file, startNeedle, endNeedle) {
+  const text = read(file);
+  const start = text.indexOf(startNeedle);
+  if (start === -1) {
+    problems.push(
+      `${file}: no \`${startNeedle}\` declaration — this gate reads its names from it.`
+    );
+    return [];
+  }
+  const end = text.indexOf(endNeedle, start);
+  const block = text
+    .slice(start, end === -1 ? undefined : end)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  return [...block.matchAll(/'([a-z][a-z0-9_]*)'/g)].map((m) => m[1]);
+}
+
+const browserEvents = namesIn(
+  'frontend/src/services/analytics.ts',
+  'export type EventName =',
+  'export interface EventProps'
+);
+const acceptedEvents = namesIn(
+  'backend/src/models/telemetry.ts',
+  'export const productEventNames = [',
+  '] as const;'
+);
+const serverEvents = namesIn(
+  'backend/src/utils/serverAnalytics.ts',
+  'export type ServerEventName =',
+  'export interface ServerEventProps'
+);
+
+for (const [from, to, fromLabel, toLabel, why] of [
+  [
+    browserEvents,
+    acceptedEvents,
+    'the browser EventName union',
+    "the API's productEventNames",
+    'the API rejects it, so the event is captured nowhere',
+  ],
+  [
+    acceptedEvents,
+    browserEvents,
+    "the API's productEventNames",
+    'the browser EventName union',
+    'nothing can send it, so it is dead vocabulary',
+  ],
+]) {
+  for (const name of from) {
+    if (!to.includes(name)) {
+      problems.push(`${ANALYTICS}: \`${name}\` is in ${fromLabel} but not ${toLabel} — ${why}.`);
+    }
+  }
+}
+
+const documentedEvents = [...read(ANALYTICS).matchAll(/^\|\s*`([a-z][a-z0-9_]*)`\s*\|/gm)].map(
+  (m) => m[1]
+);
+const capturable = [...new Set([...browserEvents, ...acceptedEvents, ...serverEvents])];
+
+for (const name of capturable) {
+  if (!documentedEvents.includes(name)) {
+    problems.push(
+      `${ANALYTICS}: does not document \`${name}\`, which the code can capture. The privacy ` +
+        `policy sends readers here for the FULL event list, so an undocumented event makes that ` +
+        `sentence false. Add a table row for it.`
+    );
+  }
+}
+for (const name of documentedEvents) {
+  if (!capturable.includes(name)) {
+    problems.push(
+      `${ANALYTICS}: documents \`${name}\`, which no longer exists in the browser union, the ` +
+        `API accept-list, or the server events. Remove the row (or restore the event).`
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error('\n❌ Stated figures no longer match the repository:\n');
   for (const p of problems) console.error(`   ${p}`);
@@ -258,5 +412,6 @@ if (problems.length > 0) {
 console.log(
   `Doc figures OK — quality-audit.md states no hand-maintained route count ` +
     `(${routeCount} handler routes on disk, via --print), README's aligned version ` +
-    `(${distinct[0]}) and billing.md's six plan caps re-derived from the repository.`
+    `(${distinct[0]}), billing.md's six plan caps and analytics.md's ${capturable.length} ` +
+    `capturable events all re-derived from the repository.`
 );

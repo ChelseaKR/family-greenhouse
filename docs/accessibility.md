@@ -149,9 +149,20 @@ than the route gap does.
 
 ## Known gaps
 
-| Criterion        | Gap | Status                                 |
-| ---------------- | --- | -------------------------------------- |
-| (none currently) | —   | All previously documented gaps closed. |
+| Criterion               | Gap                                                                                                                                                                           | Status |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1.4.6 Contrast (AAA)    | Token discipline, not an automated gate: the axe suite enforces AA only, so a regression to a lower-contrast AAA token would not fail CI.                                     | Open   |
+| 2.5.5 Target Size (AAA) | The 44×44 floor is maintained by convention and review; axe does not mechanically check target size.                                                                          | Open   |
+| 4.1.2 Name, Role, Value | Five modals (`CommandPalette`, `CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, the mobile sidebar drawer) are opened by no test, so axe never sees them in the DOM. | Open   |
+| Coverage (all criteria) | Token routes are scanned only in their invalid-token state; the populated `/tag/:token`, `/kiosk/:token` and `/sit/:token/brief` pages are not.                               | Open   |
+| Coverage (all criteria) | Per-item content routes (`/blog/:slug`, `/care/:slug`, `/help/:topicId`), `/confirm-email` and `/reset-password` are not scanned.                                             | Open   |
+
+Each row above is stated in "What the axe sweep does not reach" and in the
+target-size and contrast notes earlier in this document. The table said "(none
+currently) — all previously documented gaps closed" while those paragraphs were
+on the same page, which is the one reading a conformance table has to be safe
+against: a reviewer who reads only the table came away with the opposite of what
+the document says.
 
 Closed:
 
