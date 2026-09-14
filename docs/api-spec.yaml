@@ -1747,7 +1747,7 @@ paths:
 
   /tag/{token}:
     get:
-      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, photo, house rule (`careNote`, from the same resolver as the sitter brief; never the plant's private notes), this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
+      summary: Public plant-tag scan view. No auth; the 256-bit token is the only credential and is scoped to ONE plant. Returns the plant's name, species, house rule (`careNote`, from the same resolver as the sitter brief; never the plant's private notes), this plant's due tasks, and a settled-read `history` (last care / last watering by first name, or `unavailable` when the read failed — never "never watered"). When the household set a PIN it must be sent in `X-Tag-Pin`.
       tags: [Plants]
       security: []
       parameters:
@@ -1768,7 +1768,6 @@ paths:
                 properties:
                   plantName: { type: string }
                   species: { type: string, nullable: true }
-                  imageUrl: { type: string, nullable: true }
                   careNote: { type: string, nullable: true }
                   careNoteSource: { type: string, nullable: true, enum: [rule] }
                   history:
@@ -2840,6 +2839,19 @@ components:
             household that has had one before and resubscribes. Derived from an internal timestamp
             that is never published. Absent from older backends, where it means UNKNOWN — a client
             must not read a missing field as false.
+        noCardTrial:
+          description: >-
+            The household's no-card Garden trial (ADR 0027), as the server's clock sees it. `null` when
+            there is none to describe: the household never had one, or Stripe owns its entitlement.
+            Absent from older backends.
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [state, endsAt]
+              properties:
+                state: { type: string, enum: [active, ended] }
+                endsAt: { type: string, format: date-time }
         identifyCredits:
           description: >-
             Identification top-up credits (ADR 0019). `null` means the balance could not be read and is

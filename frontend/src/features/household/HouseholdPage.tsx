@@ -246,19 +246,27 @@ export function HouseholdPage() {
                   readOnly
                   value={inviteLink}
                   className="input flex-1 bg-gray-50"
-                  aria-label="Invite link"
+                  aria-label={t('household.share.inviteLinkLabel')}
                 />
                 <Button
                   variant="secondary"
                   onClick={handleCopyInvite}
                   leftIcon={<ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />}
                 >
-                  {copied ? 'Copied!' : 'Copy'}
+                  {copied ? t('household.share.copied') : t('household.share.copy')}
                 </Button>
               </div>
+              {/* The success said nothing to a screen reader: it was carried
+                  only by the button's own label flipping to "Copied!", which
+                  is not a live region and is not announced. The failure below
+                  was already an alert. Rendered unconditionally so the region
+                  exists before it has anything to say. */}
+              <p className="text-sm text-primary-800" role="status">
+                {copied ? t('household.share.copiedAnnouncement') : ''}
+              </p>
               {copyError && (
                 <p className="text-sm text-red-700" role="alert">
-                  Could not copy automatically. Select the link and copy it manually.
+                  {t('household.share.copyFailed')}
                 </p>
               )}
               <p className="text-xs text-gray-600">This link will expire in 7 days.</p>

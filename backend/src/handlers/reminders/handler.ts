@@ -9,13 +9,15 @@
  * Wiring: `infrastructure/modules/api/main.tf` defines the Lambda (via the
  * `lambda_handlers` map) and the `aws_cloudwatch_event_rule` that triggers it.
  *
- * Two passes run here, sequentially and independently:
+ * Three passes run here, sequentially and independently:
  *
  *   1. `remindAllHouseholds` — the per-member due-task roll-up.
  *   2. `runHouseholdEmails`  — the household emails (`services/householdEmails.ts`):
  *      offers up long-overdue unassigned tasks, and delivers anything queued by
  *      the event-driven household emails whose recipient was inside their quiet
  *      hours when it fired.
+ *   3. `runConfirmReminders` — the ONE automatic reminder for an account that
+ *      signed up and never confirmed its email (`services/confirmReminders.ts`).
  *
  * The second pass rides this schedule rather than getting an EventBridge rule
  * of its own so it needs no Terraform change to start working, and because the
@@ -23,12 +25,21 @@
  * in either pass is reported in its own summary and never aborts the other:
  * `households: 0` from a broken run must not be readable as "nobody had
  * anything due".
+ *
+ * The third pass rides it for the same reasons and one more: the deploy
+ * workflows publish Lambda code from a fixed list of handler names, so a new
+ * function would keep running its placeholder bundle. Riding this one also
+ * gives the pass this function's existing per-function error alarm and DLQ.
  */
 import { remindAllHouseholds } from '../../services/reminders.js';
 import {
   runHouseholdEmails,
   type HouseholdEmailRunSummary,
 } from '../../services/householdEmails.js';
+import {
+  runConfirmReminders,
+  type ConfirmReminderRunSummary,
+} from '../../services/confirmReminders.js';
 import { deadlineFrom } from '../../services/scheduledFanOut.js';
 import { logger } from '../../utils/logger.js';
 
@@ -60,6 +71,8 @@ export interface ReminderRunSummary {
   /** null when the household-email pass threw outright — an explicit "we do
    *  not know", never a zeroed summary that reads like a calm hour. */
   householdEmails: HouseholdEmailRunSummary | null;
+  /** null when the confirm-reminder pass threw outright, for the same reason. */
+  confirmReminders: ConfirmReminderRunSummary | null;
 }
 
 export const handler = async (
@@ -81,5 +94,19 @@ export const handler = async (
       'household_email.run_failed'
     );
   }
-  return { ...reminders, householdEmails };
+  let confirmReminders: ConfirmReminderRunSummary | null = null;
+  try {
+    // Last, on whatever time is left. A sign-up can be reminded at any point
+    // in a six-day window, so an hour in which this pass is squeezed out loses
+    // nothing the next hour cannot do. It never throws past here, so it can
+    // never make EventBridge retry the two passes above. The log line carries
+    // the error's name only: nothing that could hold an address.
+    confirmReminders = await runConfirmReminders(new Date(), { deadlineAt: deadlineFrom(context) });
+  } catch (err) {
+    logger.error(
+      { errorName: (err as Error).name, msg: 'confirm_reminders.run_failed' },
+      'confirm_reminders.run_failed'
+    );
+  }
+  return { ...reminders, householdEmails, confirmReminders };
 };

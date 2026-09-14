@@ -53,6 +53,7 @@ import {
 import { S3Client, DeleteObjectsCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import {
   buildHouseholdFixtureStamp,
+  buildSignupAddressFixtureMarker,
   buildSmokeEmail,
   buildTestFixtureClaim,
   householdIdFromCreateResponse,
@@ -591,6 +592,19 @@ test.describe('public registration smoke', () => {
     page,
   }) => {
     email = smokeEmail('public');
+    // Before the account exists. See buildSignupAddressFixtureMarker: this row
+    // is what keeps the hourly confirm-reminder pass from ever emailing this
+    // fixture, even when the run dies before teardown.
+    await ddb.send(
+      new PutItemCommand({
+        TableName: TABLE_NAME,
+        Item: buildSignupAddressFixtureMarker({
+          email,
+          runId: randomUUID(),
+          createdAt: new Date().toISOString(),
+        }),
+      })
+    );
 
     await page.goto('/register');
     await page.getByLabel(/full name/i).fill('Public Signup Smoke');

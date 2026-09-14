@@ -17,7 +17,11 @@ const MODULE_URL = new URL(
 
 interface CustomMessageEvent {
   triggerSource: string;
-  request: { codeParameter?: string; usernameParameter?: string };
+  request: {
+    codeParameter?: string;
+    usernameParameter?: string;
+    clientMetadata?: Record<string, string>;
+  };
   response: { emailSubject?: string; emailMessage?: string };
 }
 
@@ -26,6 +30,8 @@ async function load() {
     handler: (event: CustomMessageEvent) => Promise<CustomMessageEvent>;
     forgotPasswordMessage: (code: string) => string;
     adminInviteMessage: (username: string, code: string) => string;
+    confirmReminderMessage: (code: string) => string;
+    REMINDER_PURPOSE: string;
   };
 }
 
@@ -38,6 +44,72 @@ function event(triggerSource: string): CustomMessageEvent {
 }
 
 describe('Cognito CustomMessage trigger', () => {
+  it('renders the ONE confirm reminder for a resend carrying the reminder switch', async () => {
+    const { handler, REMINDER_PURPOSE } = await load();
+    const { REMINDER_CLIENT_METADATA } = await import('../../../src/services/confirmReminders.js');
+    // The value the backend sends must be the value this trigger reads, or
+    // every reminder silently goes out as a second copy of the welcome email.
+    expect(REMINDER_PURPOSE).toBe(REMINDER_CLIENT_METADATA.purpose);
+
+    const result = await handler({
+      triggerSource: 'CustomMessage_ResendCode',
+      request: { codeParameter: '{####}', clientMetadata: { purpose: REMINDER_PURPOSE } },
+      response: {},
+    });
+
+    expect(result.response.emailSubject).toBe(
+      'Finish setting up Family Greenhouse — here is a new code'
+    );
+    // Losing the placeholder sends a reminder with no code in it.
+    expect(result.response.emailMessage).toContain('{####}');
+    expect(result.response.emailMessage).toMatch(/^Hi there,/);
+    expect(result.response.emailMessage).toContain(
+      'open https://familygreenhouse.net/confirm-email and enter the email address'
+    );
+    expect(result.response.emailMessage).toContain("This is the only reminder we'll send.");
+    expect(result.response.emailMessage).toMatch(/safely\s+ignore this email/);
+  });
+
+  it('carries no tracking: plain links to our own site, no query string, no image', async () => {
+    const { confirmReminderMessage } = await load();
+    const body = confirmReminderMessage('{####}');
+    const urls = body.match(/https?:\/\/\S+/g) ?? [];
+
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      expect(new URL(url).hostname).toBe('familygreenhouse.net');
+      expect(url).not.toMatch(/[?#&=]/);
+    }
+    expect(body).not.toMatch(/<img|utm_|pixel|redirect/i);
+  });
+
+  it('keeps the pool template for a person pressing Resend, whatever the metadata says', async () => {
+    const { handler } = await load();
+    const metadataVariants: Array<Record<string, string> | undefined> = [
+      undefined,
+      {},
+      { purpose: 'something-else' },
+      { purpose: 'CONFIRM-REMINDER' },
+    ];
+    for (const clientMetadata of metadataVariants) {
+      const result = await handler({
+        triggerSource: 'CustomMessage_ResendCode',
+        request: { codeParameter: '{####}', clientMetadata },
+        response: {},
+      });
+      expect(result.response.emailMessage).toBeUndefined();
+      expect(result.response.emailSubject).toBeUndefined();
+    }
+    // The switch belongs to ResendCode only: the sign-up email itself never
+    // becomes a reminder.
+    const signUp = await handler({
+      triggerSource: 'CustomMessage_SignUp',
+      request: { codeParameter: '{####}', clientMetadata: { purpose: 'confirm-reminder' } },
+      response: {},
+    });
+    expect(signUp.response.emailMessage).toBeUndefined();
+  });
+
   it("renders a branded forgot-password body carrying Cognito's code placeholder", async () => {
     const { handler } = await load();
     const result = await handler(event('CustomMessage_ForgotPassword'));

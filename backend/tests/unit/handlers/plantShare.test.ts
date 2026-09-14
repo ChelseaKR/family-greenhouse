@@ -111,7 +111,7 @@ const sampleShare = {
   plantSnapshot: {
     name: 'Mother Monstera',
     species: 'Monstera deliciosa',
-    notes: 'thrives in the east window',
+    careRule: 'bottom-water only',
     imageUrl: null,
     tags: ['tropical'],
   },
@@ -386,7 +386,11 @@ describe('plants handler — propagation + shares', () => {
         {
           name: 'Mother Monstera',
           species: 'Monstera deliciosa',
-          notes: 'Cutting from Source House\n\nthrives in the east window',
+          // Provenance only. The source household's free-text notes are not on
+          // the card, so nothing of theirs can ride into the new household's
+          // notes field; the house rule travels in its own field.
+          notes: 'Cutting from Source House',
+          careRule: 'bottom-water only',
           tags: ['tropical'],
         },
         'hh-1', // the ACCEPTOR's household, not the share's
