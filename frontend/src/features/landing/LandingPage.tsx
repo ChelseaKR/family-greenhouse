@@ -89,6 +89,19 @@ const heroCopy: Record<
   },
 };
 
+// Sets expectations right next to the primary CTA instead of a scroll away
+// in the product-facts band (paid-acquisition readiness review, §4 note 4:
+// "'No credit card' is one scroll below the fold... not literally next to
+// the primary CTA button"). Also names the actual signup steps up front —
+// full name, email, a password, then an emailed confirmation code — so a
+// cold paid-traffic visitor isn't surprised mid-flow, which the same review
+// flagged as "the most likely place a paid-traffic visitor abandons" (§4
+// note 1). Reuses the "five minutes" figure already stated in the Setup
+// section below rather than inventing a new one. Not part of the hero A/B
+// test (heroCopy above): this renders identically under both variants.
+const ctaSignupNote =
+  'No credit card needed — a name, email, and a password, then a one-time code we email you. About five minutes, start to finish.';
+
 const features = [
   {
     name: 'Reminders per plant',
@@ -125,6 +138,20 @@ const features = [
     description:
       "Your household's data is encrypted in transit and at rest, and you can export your profile, plants and tasks as JSON or CSV whenever you like.",
     icon: RootLockIcon,
+  },
+  {
+    // The Away Kit was shipped but never named in this grid — the
+    // paid-acquisition readiness review (§4 note 2) found that a visitor
+    // clicking the sitter/vacation ad or keyword landed on a page that
+    // never mentioned sitters, handoff, or vacation coverage by name
+    // outside one persona-card sentence. Grounded in the real feature at
+    // frontend/src/features/sitter/SitPage.tsx (base link, every plan) and
+    // backend/src/models/plans.ts (sitterLinkMaxDays/sitterLinksActive;
+    // Away Kit gating via planIncludesAwayKit).
+    name: 'Someone else can cover',
+    description:
+      "Send a link before you travel — no account, no app, nothing to install. They see what's due and tap it done. The Away Kit (Garden and up) stretches coverage to 90 days and adds a printable handoff brief.",
+    icon: BriefcaseIcon,
   },
 ];
 
@@ -208,8 +235,15 @@ const personas = [
   },
   {
     icon: BriefcaseIcon,
+    // Body rewritten to name the actual mechanism (a link, no account, no
+    // app) rather than the vaguer "hand off to whoever's covering" — the
+    // paid-acquisition review (§4 note 2) found a visitor clicking the
+    // vacation/sitter ad or keyword landed on a page that didn't reinforce
+    // what the ad promised. This now mirrors Creative 2's own hook line
+    // ("no app, no account, no confusion") in the section that persona
+    // actually reads first.
     label: 'Away a lot',
-    body: "Gone for work or just the weekend. Set your dates and your tasks hand off to whoever's covering, marked so nothing quietly lapses.",
+    body: "Gone for work or just the weekend. Send whoever's covering a link — no account, no app to install — and they check off what's due while you're away.",
     href: '#features',
   },
   {
@@ -708,6 +742,9 @@ export function LandingPage() {
                       See how it works <span aria-hidden="true">→</span>
                     </a>
                   </div>
+                  {PUBLIC_REGISTRATION_AVAILABLE && (
+                    <p className="mt-4 text-sm text-gray-600">{ctaSignupNote}</p>
+                  )}
                 </div>
 
                 {/* App Preview — a faithful mock of the real product chrome
