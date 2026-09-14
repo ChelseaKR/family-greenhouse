@@ -42,6 +42,7 @@ import { successResponse, createdResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
 import type { LoggedEvent } from '../../middleware/logging.js';
+import { hashEmail, reportAdConversion } from '../../utils/adConversions.js';
 
 // POST /auth/signup
 export const signup = createHandler(
@@ -153,6 +154,13 @@ export const confirmEmail = createHandler(
         },
         'product_event'
       );
+
+      // Ad-conversion report (docs/paid-acquisition-readiness.md). Inert
+      // until a real GOOGLE_ADS_* / META_CAPI_* credential is configured —
+      // see adConversions.ts. Same trusted, exactly-once seam as the log
+      // above; fire-and-forget and never throws, so an ad-platform outage
+      // can never fail a real signup confirmation.
+      void reportAdConversion('signup_completed', { hashedEmail: hashEmail(validatedBody.email) });
 
       return successResponse({
         message: 'Email confirmed successfully. Please login.',

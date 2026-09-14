@@ -176,6 +176,17 @@ jobs:
           VITE_POSTHOG_HOST: ${{ vars.PRODUCTION_POSTHOG_HOST || 'https://us.i.posthog.com' }}
           VITE_GTM_ID: ${{ vars.PRODUCTION_GTM_ID }}
           VITE_GIT_SHA: ${{ needs.validate.outputs.commit_sha }}
+          # Production never set this, so `frontend/src/lib/betaMode.ts`'s
+          # unset-default ('true') applied and the live site showed a "Beta"
+          # badge next to the logo — including to cold paid-ad traffic
+          # landing on a product with public registration and real card
+          # payments live since 2026-09-01 (commercial-status.json). The
+          # mobile production build already pins this to 'false'
+          # (frontend/.env.mobile.production); the web build had no
+          # equivalent. Presentation-only per betaMode.ts's own comment: it
+          # cannot enable pricing, Checkout, or billing controls, so flipping
+          # it touches no commercial gate.
+          VITE_BETA_MODE: 'false'
           # Streaming chat feature flag: set the PRODUCTION_CHAT_STREAM_URL
           # repo variable to the `chat_stream_url` terraform output to turn
           # SSE streaming on; leave it unset (empty → falsy) to keep the
