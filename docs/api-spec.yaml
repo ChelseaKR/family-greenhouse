@@ -2254,9 +2254,22 @@ paths:
   /billing/checkout:
     post:
       summary: 'Start an idempotent Stripe checkout session (body: planId, optional interval month|year|lifetime, optional checkoutAttemptId UUID)'
+      description: >-
+        One plan checkout at a time per household. The Session handed out is recorded on the household
+        row and another plan checkout is refused while it is unreported by Stripe (a 45-minute window;
+        the Session itself expires after 30). Three 409s: already subscribed (use the portal), the tier is
+        already owned outright, and a checkout is already in progress — the last carries
+        `details.code` = CHECKOUT_PENDING so a buyer who just paid is told to wait, not to buy again.
       tags: [Billing]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+        '400': { description: Cadence withdrawn from sale }
+        '403': { description: Admin-only }
+        '409':
+          description: >-
+            Already subscribed (use the portal), the tier is already owned outright, or a checkout is
+            already in progress (`details.code` = CHECKOUT_PENDING).
+        '503': { description: Payments paused }
   /billing/top-up/checkout:
     post:
       summary: Start a one-time Stripe checkout for an identification top-up pack (admin only)
@@ -2265,7 +2278,9 @@ paths:
         months, never auto-renewed; ADR 0019). Credits are granted by the Stripe webhook, idempotently on
         the Checkout Session id, and drawn on only after the plan's monthly allowance is spent. Fails
         CLOSED: when no Stripe price is configured for this environment the answer is a 400 whose
-        `details.code` is `TOP_UP_NOT_CONFIGURED` — never a fallback price, never a free credit.
+        `details.code` is `TOP_UP_NOT_CONFIGURED`, and when the process holds no identification vendor
+        key it is a 400 whose `details.code` is `IDENTIFICATION_NOT_CONFIGURED` — never a fallback
+        price, never a free credit, never a credit that cannot be spent.
       tags: [Billing]
       requestBody:
         required: false
@@ -2282,7 +2297,7 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '400':
           {
-            description: Top-up pack not for sale in this environment (`details.code` = TOP_UP_NOT_CONFIGURED),
+            description: Top-up pack not for sale in this environment (`details.code` = TOP_UP_NOT_CONFIGURED or IDENTIFICATION_NOT_CONFIGURED),
           }
         '403': { description: Admin-only }
         '503': { description: Payments paused }

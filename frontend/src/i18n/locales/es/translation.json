@@ -1083,6 +1083,7 @@
       "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos.",
       "ownedForLife": "Ya tienes este plan de forma permanente.",
       "errorLifetimeOwned": "Tu hogar ya posee este plan de forma permanente. No hay nada más que comprar en este nivel.",
+      "errorCheckoutPending": "Este hogar ya tiene un pago en curso. Si acabas de pagar, tu plan se actualizará aquí en cuanto lo confirme nuestro proveedor de pagos; no vuelvas a pasar por la caja, una segunda compra iniciaría una segunda suscripción. Si dejaste un pago sin terminar, se libera solo en menos de una hora.",
       "cancelPending": "Cancelado: tu plan {{plan}} termina el {{date}} y luego tu hogar vuelve a Plántula.",
       "cancelPendingNoDate": "Cancelado: tu plan {{plan}} termina al final del periodo actual y luego tu hogar vuelve a Plántula.",
       "trialEnds": "Tu prueba gratuita termina el {{date}}. No se te cobrará antes de esa fecha, y cancelar en cualquier momento antes no cuesta nada.",
@@ -1589,6 +1590,7 @@
     "purchaseReturned": "Gracias: tus créditos de identificación aparecerán aquí en cuanto se confirme el pago. Puede tardar un momento.",
     "errorTitle": "No se pudo iniciar la compra",
     "errorNotConfigured": "Los paquetes de identificaciones no están disponibles en este momento. No se ha realizado ningún cargo.",
+    "errorIdentificationNotConfigured": "La identificación de plantas aún no está configurada en este servidor, así que los paquetes de identificaciones no están a la venta. No se ha realizado ningún cargo.",
     "errorPaymentsPaused": "Los pagos están en pausa. No se ha realizado ningún cargo.",
     "errorNotAdmin": "Solo una persona administradora del hogar puede comprar paquetes de identificaciones.",
     "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."

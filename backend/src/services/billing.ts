@@ -115,6 +115,28 @@ interface HouseholdBillingState extends HouseholdSubscription {
   /** Internal retry marker; never exposed by GET /billing/me. */
   pendingStripeCancellationId?: string;
   /**
+   * The plan Checkout Session this household has been handed and Stripe has
+   * not yet reported on, with the moment it was handed over. Internal; never
+   * exposed by GET /billing/me.
+   *
+   * Written by `createCheckoutSession` the instant a Session exists, because
+   * every other field here is written by the WEBHOOK — and between Stripe
+   * redirecting a buyer back to `/settings/billing?status=success` and
+   * `checkout.session.completed` landing, the row said nothing about the
+   * purchase at all. The live-subscription guard keys off
+   * `stripeSubscriptionId`, exactly the field the webhook had not written yet,
+   * so a second click in that window passed it and minted a second Session:
+   * two subscriptions, both renewing, until someone noticed the extra charge.
+   * The marker is what lets the guard refuse during that window.
+   *
+   * Cleared by the completion webhook in the same write that records the
+   * subscription, by `checkout.session.expired` when the endpoint is
+   * subscribed to it, and otherwise ignored once it is older than
+   * `PENDING_CHECKOUT_WINDOW_MS` (see `pendingCheckoutState`).
+   */
+  pendingCheckoutSessionId?: string;
+  pendingCheckoutAt?: string;
+  /**
    * ISO timestamp of the first Stripe-confirmed free trial this household
    * consumed. Internal; never exposed by GET /billing/me. Write-once (see
    * `markTrialConsumed`) and deliberately NOT cleared by cancellation, which
@@ -141,6 +163,8 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
+    pendingCheckoutSessionId: item.pendingCheckoutSessionId as string | undefined,
+    pendingCheckoutAt: item.pendingCheckoutAt as string | undefined,
     trialConsumedAt: item.trialConsumedAt as string | undefined,
     noCardTrialEndsAt: item.noCardTrialEndsAt as string | undefined,
   };
@@ -182,7 +206,12 @@ export async function getHouseholdSubscription(
  */
 type SubscriptionWriteField =
   | Exclude<keyof HouseholdSubscription, 'trialAvailable' | 'noCardTrialEndsAt'>
-  | 'pendingStripeCancellationId';
+  | 'pendingStripeCancellationId'
+  // The pending-checkout marker is CLEARED through here (null → REMOVE) so
+  // the clear rides the same write as the entitlement it settles. It is only
+  // ever SET by `claimPendingCheckout`, whose conditional write is the guard.
+  | 'pendingCheckoutSessionId'
+  | 'pendingCheckoutAt';
 
 /**
  * Write subscription fields onto the household metadata row.
@@ -221,6 +250,8 @@ export async function updateHouseholdSubscription(
     lifetimePlanId: 'lifetimePlanId',
     cancelAtPeriodEnd: 'subscriptionCancelAtPeriodEnd',
     pendingStripeCancellationId: 'pendingStripeCancellationId',
+    pendingCheckoutSessionId: 'pendingCheckoutSessionId',
+    pendingCheckoutAt: 'pendingCheckoutAt',
   };
 
   for (const [key, value] of Object.entries(fields)) {
@@ -294,6 +325,170 @@ const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'u
 
 /** Length of the free trial offered on a household's FIRST paid subscription. */
 export const TRIAL_PERIOD_DAYS = 14;
+
+/**
+ * How long a plan Checkout Session this code creates stays completable.
+ *
+ * Stripe's default is 24 hours; 30 minutes is the shortest it allows
+ * (`expires_at` must fall 30 minutes to 24 hours after creation). It is set
+ * to the minimum because a Session that is still open is a Session the
+ * household can still pay, so the refusal below has to hold for at least as
+ * long as any Session lives — and the only signal that a household simply
+ * closed the Stripe tab is that no signal ever comes. At the 24-hour default
+ * the same reasoning would lock a household that abandoned a checkout out of
+ * buying for a day.
+ */
+export const CHECKOUT_SESSION_LIFETIME_SECONDS = 30 * 60;
+
+/**
+ * How long `createCheckoutSession` refuses a second plan checkout after
+ * handing out a Session that Stripe has not reported on.
+ *
+ * The Session's own lifetime, plus fifteen minutes for the webhook that
+ * follows a completion in the last moments of that lifetime: Stripe normally
+ * delivers within seconds, and the allowance covers its first retries when it
+ * does not. Any finite window leaves the case where the webhook is later than
+ * this; the settings page (BillingSettings `awaitingEntitlement`) tells a
+ * returning buyer not to check out again in exactly that case, and this guard
+ * is what makes the instruction unnecessary for the ordinary one.
+ *
+ * Not longer, because an ABANDONED checkout holds the marker for the whole
+ * window: Stripe never tells this endpoint that a buyer closed the tab, and
+ * `checkout.session.expired` — which would release it at the 30-minute mark —
+ * is optional on the endpoint (docs/external-services-setup.md). Forty-five
+ * minutes is the longest a household can be refused for a purchase it walked
+ * away from. The web copy for the refusal promises release "within the hour";
+ * a test pins this constant under that promise.
+ */
+export const PENDING_CHECKOUT_WINDOW_MS = (CHECKOUT_SESSION_LIFETIME_SECONDS + 15 * 60) * 1000;
+
+export type PendingCheckoutState = 'none' | 'fresh' | 'stale' | 'undated';
+
+/**
+ * What the row says about an in-flight plan checkout, as of `now`.
+ *
+ * Pure and exported so the boundary is testable without DynamoDB.
+ *
+ *   none    — no marker: nothing has been handed out, or Stripe has since
+ *             reported on it and the webhook cleared it.
+ *   fresh   — a Session was handed out less than the window ago. Refuse.
+ *   stale   — older than the window: it has expired at Stripe by construction
+ *             (`expires_at` is shorter than the window), so the only way it
+ *             could still turn into a subscription is a webhook later than
+ *             the allowance. Proceed; the marker is overwritten by the claim.
+ *   undated — an id with no usable timestamp. The claim writes both fields in
+ *             one update, so this cannot come from this code; it is a row
+ *             someone edited. A marker that cannot be dated is a checkout
+ *             that cannot be ruled out, so the caller REFUSES and logs — the
+ *             lockout is visible and an operator can remove the attribute,
+ *             whereas reading it as `none` would be silent and could bill a
+ *             household twice.
+ */
+export function pendingCheckoutState(
+  state: Pick<HouseholdBillingState, 'pendingCheckoutSessionId' | 'pendingCheckoutAt'>,
+  now: number = Date.now()
+): PendingCheckoutState {
+  if (!state.pendingCheckoutSessionId) return 'none';
+  const at = state.pendingCheckoutAt ? Date.parse(state.pendingCheckoutAt) : Number.NaN;
+  if (Number.isNaN(at)) return 'undated';
+  return now - at < PENDING_CHECKOUT_WINDOW_MS ? 'fresh' : 'stale';
+}
+
+/**
+ * Record the Session just handed to this household — atomically, so two
+ * requests that both read "no checkout pending" cannot both hand one out.
+ *
+ * The read in `createCheckoutSession` is the cheap early refusal; this
+ * conditional write is the guard. It succeeds when the row carries no marker,
+ * when the marker is stale (its Session has expired at Stripe), or when it
+ * already names THIS Session — a safe HTTP retry with the same idempotency key
+ * gets the same Session back from Stripe and must not be refused for it.
+ * Missing `pendingCheckoutAt` fails the comparison, which is the fail-closed
+ * `undated` case above expressed in DynamoDB.
+ *
+ * Failure direction, both branches: the caller never returns a URL it could
+ * not record. The Session that was created is not lost to anyone — its URL
+ * was never handed out, so nobody can complete it, and it expires on its own
+ * within `CHECKOUT_SESSION_LIFETIME_SECONDS`. A checkout this row cannot see
+ * is exactly the checkout the guard exists to see.
+ */
+async function claimPendingCheckout(
+  householdId: string,
+  sessionId: string,
+  now: Date
+): Promise<void> {
+  const staleBefore = new Date(now.getTime() - PENDING_CHECKOUT_WINDOW_MS).toISOString();
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'SET #pendingCheckoutSessionId = :id, #pendingCheckoutAt = :at',
+        // ISO-8601 UTC timestamps from toISOString() compare as strings in
+        // chronological order, which is what makes `< :staleBefore` a date
+        // comparison rather than a lexical accident.
+        ConditionExpression:
+          'attribute_not_exists(#pendingCheckoutSessionId) OR #pendingCheckoutSessionId = :id OR #pendingCheckoutAt < :staleBefore',
+        ExpressionAttributeNames: {
+          '#pendingCheckoutSessionId': 'pendingCheckoutSessionId',
+          '#pendingCheckoutAt': 'pendingCheckoutAt',
+        },
+        ExpressionAttributeValues: {
+          ':id': sessionId,
+          ':at': now.toISOString(),
+          ':staleBefore': staleBefore,
+        },
+      })
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') {
+      // Another request claimed first. Its Session is the one in the buyer's
+      // hands; this one is unreachable and expires.
+      logger.info(
+        { householdId, stripeSessionId: sessionId },
+        'checkout_refused_concurrent_claim_lost'
+      );
+      throw new Error(
+        'CHECKOUT_PENDING: A checkout for this household is already in progress. Do not check out again.',
+        { cause: err }
+      );
+    }
+    logger.error(
+      { err, householdId, stripeSessionId: sessionId },
+      'pending_checkout_marker_write_failed'
+    );
+    throw err;
+  }
+}
+
+/**
+ * Release the marker for ONE named Session — never "whatever is pending".
+ * Returns whether it was released. Used by `checkout.session.expired`, an
+ * event that can be redelivered, arrive late, or arrive for a Session the
+ * household has since replaced; the id condition makes every one of those a
+ * no-op instead of a release of someone else's hold.
+ */
+async function clearPendingCheckout(householdId: string, sessionId: string): Promise<boolean> {
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
+        UpdateExpression: 'REMOVE #pendingCheckoutSessionId, #pendingCheckoutAt',
+        ConditionExpression: '#pendingCheckoutSessionId = :id',
+        ExpressionAttributeNames: {
+          '#pendingCheckoutSessionId': 'pendingCheckoutSessionId',
+          '#pendingCheckoutAt': 'pendingCheckoutAt',
+        },
+        ExpressionAttributeValues: { ':id': sessionId },
+      })
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
 
 /**
  * Record that this household has consumed its free trial. Write-once: the
@@ -456,6 +651,28 @@ export async function createCheckoutSession(args: {
       'ALREADY_SUBSCRIBED: This household already has an active subscription. Use the billing portal to change plans.'
     );
   }
+  // A plan checkout this household was handed and Stripe has not reported on
+  // yet. This is the guard the two above cannot be: they read fields the
+  // WEBHOOK writes, and between a buyer paying at Stripe and that webhook
+  // landing the row says nothing — so a second click in that window used to
+  // pass both and start a second subscription. It sits after them so a
+  // household that is refused for a permanent reason hears that reason, and
+  // it covers every cadence: a lifetime purchase racing a pending
+  // subscription would leave the household paying for both. The read here is
+  // the early refusal; `claimPendingCheckout` below is the atomic one.
+  const now = new Date();
+  const pending = pendingCheckoutState(sub, now.getTime());
+  if (pending === 'undated') {
+    logger.error(
+      { householdId: args.householdId, stripeSessionId: sub.pendingCheckoutSessionId },
+      'pending_checkout_marker_undated_refusing'
+    );
+  }
+  if (pending === 'fresh' || pending === 'undated') {
+    throw new Error(
+      'CHECKOUT_PENDING: A checkout for this household is already in progress. Do not check out again.'
+    );
+  }
   const stripe = await getStripe();
   // Never charge an amount the UI did not publish. The configured price id is
   // resolved from env above, but an id is not evidence of a price: a
@@ -491,6 +708,9 @@ export async function createCheckoutSession(args: {
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
     metadata,
+    // Bound how long this Session can be paid, so the refusal above has a
+    // bound too. See CHECKOUT_SESSION_LIFETIME_SECONDS for why the minimum.
+    expires_at: Math.floor(now.getTime() / 1000) + CHECKOUT_SESSION_LIFETIME_SECONDS,
     // Stripe Tax is opt-in because the Stripe account must first have its
     // registrations and product tax code configured. Once enabled, Checkout
     // collects the minimum address fields needed for the calculation.
@@ -525,6 +745,10 @@ export async function createCheckoutSession(args: {
           },
         });
   if (!session.url) throw new Error('Stripe did not return a checkout URL');
+  // A Session this row cannot name is a Session the guard cannot see; it is
+  // not handed out. Nobody has its URL, and it expires on its own.
+  if (!session.id) throw new Error('Stripe did not return a checkout session id');
+  await claimPendingCheckout(args.householdId, session.id, now);
   return { url: session.url };
 }
 
@@ -1175,6 +1399,27 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     if (trialHouseholdId) await markTrialConsumed(trialHouseholdId);
   }
 
+  // A plan Checkout Session nobody paid reached its `expires_at`. Nothing to
+  // grant; the household's hold on further checkouts is released early —
+  // otherwise it lifts on its own once the marker is older than
+  // PENDING_CHECKOUT_WINDOW_MS. Only when the endpoint is subscribed to this
+  // event (it is optional: docs/external-services-setup.md), and only for the
+  // Session named, never for whatever happens to be pending now. A top-up
+  // Session holds no marker; its id would not match, and it is skipped
+  // outright so the log line below cannot misdescribe it.
+  if (event.type === 'checkout.session.expired') {
+    const session = event.data.object as unknown as { id?: string };
+    const householdId = householdIdFromEvent(event);
+    if (session.id && householdId && !isIdentifyTopUpSession(event.data.object)) {
+      const released = await clearPendingCheckout(householdId, session.id);
+      logger.info(
+        { stripeEventId: event.id, householdId, stripeSessionId: session.id, released },
+        released ? 'pending_checkout_released_on_expiry' : 'pending_checkout_expiry_not_pending'
+      );
+    }
+    return;
+  }
+
   // A paid identification top-up is its own apply path: credits, not
   // entitlement. Branch before the subscription delta so the subscription
   // machinery (ordering guard, lifetime claim, lifecycle analytics) never
@@ -1299,12 +1544,25 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     // cancellation fails after this write, the marker (and Checkout metadata)
     // preserve the exact target for redelivery even though the active id is now
     // cleared from the public subscription state.
-    const fields = isLifetimeGrant
-      ? {
-          ...delta.fields,
-          pendingStripeCancellationId: priorSubscriptionId ?? null,
-        }
-      : delta.fields;
+    // A settled checkout also releases the household's hold on further
+    // checkouts, in the SAME write that records what was bought: after it the
+    // row carries a subscription id or a lifetime tier, and the permanent
+    // guards take over from the marker. Unconditional on the Session id
+    // because the guard allows one pending plan checkout at a time, so a
+    // settled plan checkout for this household is the pending one. An
+    // UNSETTLED completion (`payment_status` neither paid nor
+    // no_payment_required) never reaches here — `deltaForStripeEvent` returned
+    // null — and leaves the marker to lapse on its own.
+    const settlesPendingCheckout =
+      event.type === 'checkout.session.completed' ||
+      event.type === 'checkout.session.async_payment_succeeded';
+    const fields = {
+      ...delta.fields,
+      ...(isLifetimeGrant ? { pendingStripeCancellationId: priorSubscriptionId ?? null } : {}),
+      ...(settlesPendingCheckout
+        ? { pendingCheckoutSessionId: null, pendingCheckoutAt: null }
+        : {}),
+    };
     const applied = await updateHouseholdSubscription(delta.householdId, fields, event.created);
     if (!applied) {
       if (lifetimeClaimOwner) {

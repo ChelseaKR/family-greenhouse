@@ -22,6 +22,12 @@ function purchaseErrorKey(error: unknown): string {
   if (response?.status === 400 && code === 'TOP_UP_NOT_CONFIGURED') {
     return 'identifyTopUp.errorNotConfigured';
   }
+  // Priced and payable, but the identifications the pack buys cannot be made
+  // on this server. Says which promise cannot be kept, and that nothing was
+  // charged.
+  if (response?.status === 400 && code === 'IDENTIFICATION_NOT_CONFIGURED') {
+    return 'identifyTopUp.errorIdentificationNotConfigured';
+  }
   if (response?.status === 503) return 'identifyTopUp.errorPaymentsPaused';
   if (response?.status === 403) return 'identifyTopUp.errorNotAdmin';
   return 'identifyTopUp.errorProviderUnreachable';

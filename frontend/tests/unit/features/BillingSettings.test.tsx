@@ -486,6 +486,31 @@ describe('purchase controls once payment activity is available', () => {
     ).toBeInTheDocument();
   });
 
+  it('tells a household whose checkout Stripe has not reported on yet to wait — not that it is already subscribed', async () => {
+    // The server refuses a second plan checkout while one it handed out is
+    // unreported (409, `details.code: CHECKOUT_PENDING`). The row does not
+    // yet say "subscribed", so the already-subscribed copy would contradict
+    // the plan card beside it; and the portal cannot help — the fix is time.
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          message: 'A checkout for this household is already in progress.',
+          details: { code: 'CHECKOUT_PENDING' },
+        },
+      },
+    });
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
+
+    expect(
+      await screen.findByText(/A checkout for this household is already in progress/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already has an active subscription/)).not.toBeInTheDocument();
+  });
+
   it('re-reads entitlement after returning from checkout, since only the webhook knows', async () => {
     // The app-wide query defaults (5-minute staleTime, refetchOnWindowFocus
     // off) are right for data this client mutates. Entitlement is not: Stripe

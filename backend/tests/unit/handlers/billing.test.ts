@@ -37,6 +37,7 @@ import { getCreditBalance } from '../../../src/services/identifyCredits.js';
 vi.mock('../../../src/services/identifyTopUp.js', () => ({
   createIdentifyTopUpCheckoutSession: vi.fn(),
   TOP_UP_NOT_CONFIGURED: 'TOP_UP_NOT_CONFIGURED',
+  IDENTIFICATION_NOT_CONFIGURED: 'IDENTIFICATION_NOT_CONFIGURED',
 }));
 import { createIdentifyTopUpCheckoutSession } from '../../../src/services/identifyTopUp.js';
 
@@ -88,11 +89,15 @@ describe('billing handler', () => {
     // No packs bought is a real zero; individual tests override.
     vi.mocked(getCreditBalance).mockResolvedValue({ remaining: 0, expiresAt: null });
     delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
+    // The identification vendor key: the top-up pack is for sale only where
+    // the identifications it buys can be made. Individual tests remove it.
+    process.env.PLANT_ID_API_KEY = 'plant-key';
   });
 
   afterEach(() => {
     delete process.env.PAYMENTS_ENABLED;
     delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
+    delete process.env.PLANT_ID_API_KEY;
   });
 
   describe('listPlans', () => {
@@ -166,6 +171,27 @@ describe('billing handler', () => {
       )) as APIGatewayProxyResult;
       expect(JSON.parse(res.body).identifyTopUp).toEqual({
         available: true,
+        credits: 20,
+        validityDays: 365,
+        priceUsd: 1.99,
+      });
+    });
+
+    it('publishes the top-up pack as NOT available when this process holds no identification key — priced, payable, unsellable', async () => {
+      // Measured 2026-09-13: PLANT_ID_API_KEY had length 0 in production and
+      // the pack was still offered. The card reads `available`, so this is
+      // the field that decides whether a buyer is shown a purchase for
+      // credits no identification would ever draw on.
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      delete process.env.PLANT_ID_API_KEY;
+      const { listPlans } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await listPlans(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body).identifyTopUp).toEqual({
+        available: false,
         credits: 20,
         validityDays: 365,
         priceUsd: 1.99,
@@ -673,6 +699,38 @@ describe('billing handler', () => {
       const body = JSON.parse(res.body);
       expect(body.message).toMatch(/manage subscription/i);
     });
+
+    it('maps a checkout Stripe has not reported on yet to a 409 with a code the client can branch on', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(
+        new Error('CHECKOUT_PENDING: A checkout for this household is already in progress.')
+      );
+
+      const res = (await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'garden' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      // The code, not the prose, is the contract: a buyer who just paid must
+      // hear "in progress", never "already subscribed" (the row does not say
+      // so yet) and never "provider failed" (nothing failed).
+      expect(body.details).toEqual({ code: 'CHECKOUT_PENDING' });
+      expect(body.message).toMatch(/already in progress/i);
+      expect(body.message).toMatch(/do not check out again/i);
+      expect(body.message).not.toMatch(/manage subscription/i);
+      // The minutes quoted are the service's window, not a second copy of it.
+      expect(body.message).toContain(
+        `within ${Math.ceil(billing.PENDING_CHECKOUT_WINDOW_MS / 60_000)} minutes`
+      );
+    });
   });
 
   describe('topUpCheckout (ADR 0019)', () => {
@@ -690,6 +748,30 @@ describe('billing handler', () => {
       expect(body.message).toMatch(/not available in this environment/i);
       expect(body.details).toEqual({ code: 'TOP_UP_NOT_CONFIGURED' });
       expect(createIdentifyTopUpCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED with a 400 IDENTIFICATION_NOT_CONFIGURED when the identification key is absent — a priced pack nobody could spend is not sold', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      delete process.env.PLANT_ID_API_KEY;
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.body);
+      expect(body.message).toMatch(/identification is not set up/i);
+      expect(body.message).toMatch(/not for sale/i);
+      expect(body.details).toEqual({ code: 'IDENTIFICATION_NOT_CONFIGURED' });
+      expect(createIdentifyTopUpCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('maps the service-level IDENTIFICATION_NOT_CONFIGURED guard to the same 400, for any path around the handler check', async () => {
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { topUpCheckout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(createIdentifyTopUpCheckoutSession).mockRejectedValueOnce(
+        new Error('IDENTIFICATION_NOT_CONFIGURED: PLANT_ID_API_KEY is not set in this process')
+      );
+      const res = (await topUpCheckout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).details).toEqual({ code: 'IDENTIFICATION_NOT_CONFIGURED' });
     });
 
     it('opens the one-time checkout and returns the URL, scoping the attempt id to the household', async () => {

@@ -144,6 +144,11 @@ describe('IdentifyTopUpCard', () => {
       { details: { code: 'TOP_UP_NOT_CONFIGURED' } },
       /aren't available right now\. No charge was made/,
     ],
+    [
+      400,
+      { details: { code: 'IDENTIFICATION_NOT_CONFIGURED' } },
+      /Plant identification isn't set up on this server yet.*No charge was made/,
+    ],
     [503, {}, /Payments are currently paused/],
     [403, {}, /Only a household admin/],
     [502, {}, /could not reach our payment provider/],

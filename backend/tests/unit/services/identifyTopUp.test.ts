@@ -76,6 +76,9 @@ describe('createIdentifyTopUpCheckoutSession', () => {
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+    // The pack buys identifications; the process selling it must hold the
+    // vendor key those identifications are made with.
+    process.env.PLANT_ID_API_KEY = 'plant-key';
     pricesRetrieve.mockResolvedValue(CATALOG_TOP_UP_PRICE);
     sessionsCreate.mockResolvedValue({ url: 'https://checkout.stripe.test/topup' });
   });
@@ -83,6 +86,23 @@ describe('createIdentifyTopUpCheckoutSession', () => {
     delete process.env.PAYMENTS_ENABLED;
     delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
     delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+    delete process.env.PLANT_ID_API_KEY;
+  });
+
+  it('refuses with IDENTIFICATION_NOT_CONFIGURED when the vendor key is absent — priced and payable is not sellable', async () => {
+    // A pack sold here would be a real $1.99 charge for twenty
+    // identifications POST /plants/identify would never make: it answers
+    // "not configured" and consumes nothing. Refused before the household
+    // read, the price reconciliation, and Stripe.
+    delete process.env.PLANT_ID_API_KEY;
+    const { createIdentifyTopUpCheckoutSession, IDENTIFICATION_NOT_CONFIGURED } =
+      await import('../../../src/services/identifyTopUp.js');
+    await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toThrow(
+      new RegExp(`^${IDENTIFICATION_NOT_CONFIGURED}`)
+    );
+    expect(dynamodb.send).not.toHaveBeenCalled();
+    expect(pricesRetrieve).not.toHaveBeenCalled();
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
   it('fails closed on the payments gate before configuration, DynamoDB, or Stripe', async () => {
