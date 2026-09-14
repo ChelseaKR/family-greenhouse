@@ -323,6 +323,7 @@
     "confirmRecoveryTitle": "Continue email confirmation",
     "confirmRecoverySubtitle": "Enter your signup email and we’ll send a fresh confirmation code.",
     "resendConfirmation": "Send confirmation code",
+    "haveConfirmationCode": "I already have a code",
     "confirmDocumentTitle": "Confirm email",
     "confirmTitle": "Confirm your email",
     "confirmSentTo": "We sent a confirmation code to",
