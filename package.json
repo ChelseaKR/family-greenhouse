@@ -72,6 +72,7 @@
     "brand:check": "npm run brand:check --workspace frontend",
     "smoke:parse": "npm run smoke:parse --workspace frontend",
     "figures:check": "node scripts/check-doc-figures.mjs",
+    "plan-copy:check": "node scripts/check-plan-copy.mjs",
     "well-known:check": "node scripts/check-well-known.mjs",
     "commercial:check": "node scripts/check-commercial-status.mjs",
     "citation:check": "node scripts/check-citation-version.mjs",

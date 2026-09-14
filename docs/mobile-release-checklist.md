@@ -4,7 +4,28 @@
 
 - [x] Production bundle variables are reproducible and beta mode is off.
 - [x] Native HTTP handles API and presigned image uploads without weakening web CORS.
-- [x] Account deletion, AI response reporting, native purchase guards, camera disclosures, and privacy copy are implemented.
+- [x] Account deletion (`/account`, reachable before household setup), AI
+      response reporting (`ReportResponseControl` on every assistant answer),
+      and the camera/photo purpose strings in `Info.plist` are implemented.
+- [ ] Native purchase guards. `BillingSettings` and `/pricing` are gated;
+      `LockedFeature` is not, so `/chat` shows a Seedling household a
+      subscription price and an upgrade call to action inside the app. See
+      `docs/mobile.md`, "Store payment rules".
+- [ ] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send. It
+      lists 7 data types, all App Functionality, with `NSPrivacyTracking`
+      false. The shells run the same web bundle with none of it
+      `isNativeApp()`-gated, so they also post `/telemetry/product` (keyed to
+      the Cognito sub and the household id) and `/telemetry/frontend` (error
+      summaries and web vitals, keyed to a session id): Product Interaction,
+      Performance Data and Crash Data, none of them declared. A product
+      analytics rail is being turned on, which adds the Analytics purpose to
+      those types and to `UserID`. If any of it is linked to a person for
+      advertising, ad measurement or a data broker, `NSPrivacyTracking` is
+      true, the domains go in `NSPrivacyTrackingDomains`, and App Tracking
+      Transparency applies (a native prompt the WebView cannot show).
+      `validate-store-release.mjs` asserts only the 7 present types, so the
+      manifest is checked by hand against what that rail ships, before any
+      TestFlight build.
 - [x] Store icons, Play feature graphic, metadata, and review-safe screenshots validate.
 - [x] Screenshots are re-captured from a seeded store-demo household
       (`backend/src/local-server-store-demo.ts`, `SEED_STORE_DEMO=1`): the
@@ -16,7 +37,10 @@
       implemented and production SMS is off, so this stays true until
       `docs/mobile.md`'s push work ships.
 - [x] Android API 36 release bundle compiles with JDK 21.
-- [ ] Apple Developer and Google Play accounts have accepted current agreements.
+- [ ] Apple Developer and Google Play accounts have accepted current
+      agreements. Apple: enrolled and approved (Team ID `6X5YH93QNM`); the
+      Paid Apps agreement is not needed while the app sells nothing. Play: not
+      started, and Android is deferred.
 - [ ] Reviewer account is seeded and its credentials are stored only in the store consoles.
 - [ ] Android upload keystore is created, backed up, and exposed through the four `ANDROID_UPLOAD_*` environment variables.
 - [ ] Deep links, in this order — the serving half is wired and gated
@@ -31,7 +55,10 @@
         the file is generated from `src/App.tsx` (`npm run aasa --workspace
 frontend`) and carries the real Team ID; `npm run aasa:check` and
         `npm run well-known:check` both gate it, in `npm run verify` and in
-        CI's Lint job.
+        CI's Lint job. Both now also refuse the **Enrollment ID**
+        (`ACKGM9XK9V`) by value — it is ten uppercase alphanumerics, so the
+        shape check passed it, and a file carrying it deploys green while
+        every universal link keeps opening Safari.
   - [ ] Deploy, then confirm both URLs return `200 application/json` on the
         live domain before touching the native projects. A missing file now
         answers 404 rather than the app shell, so this is checkable.
@@ -39,7 +66,19 @@ frontend`) and carries the real Team ID; `npm run aasa:check` and
         `autoVerify="true"` intent-filter, and the Associated Domains
         entitlement. Doing these first makes Android 12+ record a failed
         verification and keep sending links to the browser.
-- [ ] Xcode 26+, Apple team signing, and the explicit `net.familygreenhouse.app` App ID are configured.
+- [ ] Xcode 26+, Apple team signing, and the explicit
+      `net.familygreenhouse.app` App ID are configured. Xcode 26.6 is
+      installed; the bundle identifier is explicit in both build
+      configurations; `DEVELOPMENT_TEAM = 6X5YH93QNM` is now committed, so a
+      fresh clone no longer stops at "Signing for 'App' requires a development
+      team". What is left is Apple-side: the App ID needs the **Push
+      Notifications** capability, because `App.entitlements` ships
+      `aps-environment` and a profile cannot carry an entitlement its App ID
+      lacks. Automatic signing normally adds the capability to the App ID on
+      the first signed build; if Archive stops on "Provisioning profile
+      doesn't include the aps-environment entitlement", enable it by hand
+      under Certificates, Identifiers & Profiles → Identifiers →
+      `net.familygreenhouse.app`.
 - [ ] Physical iPhone, iPad, and Android smoke tests pass against production.
 
 ## Build and test

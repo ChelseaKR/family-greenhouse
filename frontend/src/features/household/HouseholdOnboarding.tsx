@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { track } from '@/services/analytics';
@@ -18,18 +18,28 @@ import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getPendingShareCode, clearPendingShareCode } from '@/features/plants/pendingShareCode';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 type OnboardingStep = 'choice' | 'create' | 'join';
 
-const createHouseholdSchema = z.object({
-  name: z.string().min(1, 'Household name is required').max(100),
-});
+/**
+ * `.trim()` before `.min(1)`, not after — and this is not a tidy-up.
+ * Without it a name of three spaces passed validation, POST /households
+ * accepted it (the backend schema is `min(1)` too), and the household was
+ * created with a blank name: the switcher above the sidebar then rendered an
+ * empty line on every screen, with nothing on this page to explain it.
+ * Measured against the local server on 2026-09-13.
+ */
+const makeCreateHouseholdSchema = (t: TFunction) =>
+  z.object({
+    name: z.string().trim().min(1, t('household.onboarding.nameRequired')).max(100),
+  });
 
-type CreateHouseholdFormData = z.infer<typeof createHouseholdSchema>;
+type CreateHouseholdFormData = z.infer<ReturnType<typeof makeCreateHouseholdSchema>>;
 
 export function HouseholdOnboarding() {
   const { t } = useTranslation();
-  useDocumentTitle('Welcome');
+  useDocumentTitle(t('household.onboarding.chooseTitle'));
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
@@ -43,7 +53,24 @@ export function HouseholdOnboarding() {
     params.get('mode') === 'add' ? 'create' : 'choice'
   );
   const [error, setError] = useState<string | null>(null);
+  const [pastedInvite, setPastedInvite] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
 
+  // Choosing "Create" or "Join" unmounts the button that was pressed, so
+  // keyboard focus fell to <body> and a screen reader was told nothing at all
+  // about the screen having changed. Move focus to the new step's heading —
+  // the same thing WelcomeFlow does between ITS steps.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const isFirstStep = useRef(true);
+  useEffect(() => {
+    if (isFirstStep.current) {
+      isFirstStep.current = false;
+      return;
+    }
+    headingRef.current?.focus();
+  }, [step]);
+
+  const createHouseholdSchema = useMemo(() => makeCreateHouseholdSchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -119,24 +146,59 @@ export function HouseholdOnboarding() {
 
   const onSubmit = (data: CreateHouseholdFormData) => {
     setError(null);
-    createMutation.mutate(data);
+    createMutation.mutate({ ...data, name: data.name.trim() });
   };
+
+  /**
+   * Pull the invite code out of whatever the user pasted: a full link, a
+   * path, or the bare code. The route (`/join/:inviteCode`) and
+   * JoinHouseholdPage do the validating — this only has to decide which
+   * characters are the code.
+   */
+  function inviteCodeFrom(pasted: string): string | null {
+    const trimmed = pasted.trim();
+    if (!trimmed) return null;
+    const last = trimmed.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() ?? '';
+    return /^[A-Za-z0-9_-]{6,64}$/.test(last) ? last : null;
+  }
+
+  function openInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = inviteCodeFrom(pastedInvite);
+    if (!code) {
+      setJoinError(t('household.onboarding.joinInvalid'));
+      return;
+    }
+    setJoinError(null);
+    navigate(`/join/${code}`);
+  }
 
   return (
     <div className="greenhouse-grid min-h-screen flex flex-col justify-center bg-paper py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
         <BrandMark variant="wordmark" />
-        <h2 className="mt-8 text-center font-serif text-3xl tracking-tight text-ink">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="mt-8 text-center font-serif text-3xl tracking-tight text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        >
           {step === 'choice' &&
-            (isAddingAnother ? 'Add another household' : 'Set up your household')}
+            t(
+              isAddingAnother
+                ? 'household.onboarding.chooseTitleAnother'
+                : 'household.onboarding.chooseTitle'
+            )}
           {step === 'create' &&
-            (isAddingAnother ? 'Name your new household' : 'Create your household')}
-          {step === 'join' && 'Join a household'}
+            t(
+              isAddingAnother
+                ? 'household.onboarding.createTitleAnother'
+                : 'household.onboarding.createTitle'
+            )}
+          {step === 'join' && t('household.onboarding.joinTitle')}
         </h2>
         {step === 'choice' && !isAddingAnother && (
           <p className="mt-2 max-w-sm text-center text-sm text-gray-600">
-            A household keeps your plant care in one place — just you, or shared with others. Create
-            one to start fresh, or if someone already invited you, paste their link instead.
+            {t('household.onboarding.chooseLede')}
           </p>
         )}
       </div>
@@ -151,9 +213,11 @@ export function HouseholdOnboarding() {
                     <HomeIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-ink">Create a new household</h3>
+                    <h3 className="text-base font-semibold text-ink">
+                      {t('household.onboarding.createCardTitle')}
+                    </h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      Start fresh on your own — invite family any time you like
+                      {t('household.onboarding.createCardBody')}
                     </p>
                   </div>
                 </div>
@@ -167,9 +231,11 @@ export function HouseholdOnboarding() {
                     <UserGroupIcon className="h-6 w-6 text-accent-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-ink">Join an existing household</h3>
+                    <h3 className="text-base font-semibold text-ink">
+                      {t('household.onboarding.joinCardTitle')}
+                    </h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      Use an invite link from a family member
+                      {t('household.onboarding.joinCardBody')}
                     </p>
                   </div>
                 </div>
@@ -187,16 +253,13 @@ export function HouseholdOnboarding() {
             )}
 
             {!isAddingAnother && (
-              <p className="mb-6 text-sm text-gray-600">
-                Flying solo? Name it after yourself or your home — it's just for you, and you can
-                invite people whenever you're ready.
-              </p>
+              <p className="mb-6 text-sm text-gray-600">{t('household.onboarding.createLede')}</p>
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
               <Input
-                label="Household name"
-                placeholder="e.g., The Smith Family"
+                label={t('household.onboarding.nameLabel')}
+                placeholder={t('household.onboarding.namePlaceholder')}
                 required
                 error={errors.name?.message}
                 {...register('name')}
@@ -209,29 +272,51 @@ export function HouseholdOnboarding() {
                   className="flex-1"
                   onClick={() => setStep('choice')}
                 >
-                  Back
+                  {t('household.onboarding.back')}
                 </Button>
                 <Button type="submit" className="flex-1" isLoading={createMutation.isPending}>
-                  Create household
+                  {t('household.onboarding.createSubmit')}
                 </Button>
               </div>
             </form>
           </Card>
         )}
 
+        {/* This step used to be a dead end: the screen before it says "paste
+            their link", and this one said "you'll need an invite link" with
+            nothing to paste it into and only a Back button. Somebody who
+            registered first and opened the app rather than the email had no
+            way forward from here at all. */}
         {step === 'join' && (
           <Card>
-            <div className="text-center space-y-4">
-              <p className="text-gray-600">
-                To join an existing household, you'll need an invite link from a household admin.
-              </p>
-              <p className="text-sm text-gray-500">
-                Ask a family member who has already set up a household to send you an invite link.
-              </p>
-              <Button variant="secondary" onClick={() => setStep('choice')}>
-                Back
-              </Button>
-            </div>
+            <form onSubmit={openInvite} className="space-y-4" noValidate>
+              <p className="text-sm text-gray-600">{t('household.onboarding.joinLede')}</p>
+              <Input
+                label={t('household.onboarding.joinLinkLabel')}
+                placeholder={t('household.onboarding.joinLinkPlaceholder')}
+                autoComplete="off"
+                value={pastedInvite}
+                onChange={(event) => {
+                  setPastedInvite(event.target.value);
+                  if (joinError) setJoinError(null);
+                }}
+                error={joinError ?? undefined}
+              />
+              <p className="text-sm text-gray-500">{t('household.onboarding.joinNoLink')}</p>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setStep('choice')}
+                >
+                  {t('household.onboarding.back')}
+                </Button>
+                <Button type="submit" className="flex-1">
+                  {t('household.onboarding.joinSubmit')}
+                </Button>
+              </div>
+            </form>
           </Card>
         )}
         {!isAddingAnother && (

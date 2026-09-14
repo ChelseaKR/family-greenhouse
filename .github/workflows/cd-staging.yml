@@ -171,6 +171,15 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
+          # `.well-known/` is a hidden directory, and upload-artifact drops
+          # hidden files unless told otherwise. Without this the association
+          # files are built into dist/, silently dropped from the artifact,
+          # and the deploy job's guarded `aws s3 cp` finds nothing to copy —
+          # a fully green deploy that published no association file, which is
+          # how v0.33.0 shipped with a 404 on
+          # /.well-known/apple-app-site-association. Asserted by
+          # scripts/check-well-known.mjs.
+          include-hidden-files: true
 
   deploy-frontend:
     name: Deploy Frontend

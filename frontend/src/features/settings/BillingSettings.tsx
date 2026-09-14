@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -29,7 +29,17 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
+// Lazy: the checkout/redemption flow is real weight (~430 lines) that most
+// visits to this page never touch -- it only renders once plansQuery has
+// resolved and giftSubscriptions is on the offer, so it costs nothing on
+// first paint even for the households that do have it.
+const GiftSubscriptionCard = lazy(() =>
+  import('@/features/billing/GiftSubscriptionCard').then((m) => ({
+    default: m.GiftSubscriptionCard,
+  }))
+);
 import { isNativeApp } from '@/lib/platform';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
 
@@ -94,6 +104,32 @@ export function BillingSettings() {
   // lag the redirect by a moment — say so rather than show an unchanged 0.
   const returnedFromTopUp =
     searchParams.get('status') === 'success' && searchParams.get('purchase') === 'identify-top-up';
+  // A gift checkout returns with `purchase=gift`; the code is created by the
+  // webhook, so the purchase list polls for a moment (ADR 0028).
+  const returnedFromGift =
+    searchParams.get('status') === 'success' && searchParams.get('purchase') === 'gift';
+  // A SUBSCRIPTION checkout returns here with the same `status=success` and no
+  // `purchase` marker. Stripe only redirects to `success_url` once the Session
+  // has completed, so reaching this page with it set means a card was taken.
+  // Excludes both other `status=success` returns (top-up, gift): neither buys
+  // a plan, and each has its own pending/settled notice below.
+  const returnedFromPlanCheckout =
+    searchParams.get('status') === 'success' && !returnedFromTopUp && !returnedFromGift;
+  // Has the poll window below closed? Kept in state rather than read from
+  // `Date.now()` at render time because nothing else re-renders when the
+  // window lapses: without this the page would sit on the "finishing up"
+  // message for as long as the tab stays open, which is its own false claim.
+  const [checkoutWaitElapsed, setCheckoutWaitElapsed] = useState(false);
+  useEffect(() => {
+    if (!pollUntil) return;
+    const remaining = pollUntil - Date.now();
+    if (remaining <= 0) {
+      setCheckoutWaitElapsed(true);
+      return;
+    }
+    const timer = setTimeout(() => setCheckoutWaitElapsed(true), remaining);
+    return () => clearTimeout(timer);
+  }, [pollUntil]);
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
   const subQuery = useQuery({
     // Plan state is per-household; the backend resolves the ACTIVE household
@@ -192,6 +228,30 @@ export function BillingSettings() {
   const hasLiveSubscription =
     !!subQuery.data?.stripeSubscriptionId &&
     (!subQuery.data.status || LIVE_SUBSCRIPTION_STATUSES.has(subQuery.data.status));
+  // Payment taken, entitlement not yet written.
+  //
+  // Nothing is recorded on the household when a Checkout Session is CREATED —
+  // `createCheckoutSession` writes no row — so between Stripe redirecting back
+  // here and the webhook landing, `GET /billing/me` still answers with the
+  // pre-purchase tier. Until this block existed the page rendered that answer
+  // as a flat statement of fact ("Your household is on the Seedling plan."),
+  // with no acknowledgement of the payment anywhere on the screen, directly
+  // above a "Switch to Garden" button.
+  //
+  // That button is not merely confusing. The server guard that refuses a
+  // second concurrent subscription keys off `stripeSubscriptionId`, which is
+  // exactly the field the webhook has not written yet — so a second checkout
+  // started in this window is accepted, and the household is billed twice for
+  // two subscriptions that both keep renewing. The top-up path two cards below
+  // has said "this can take a moment" since it shipped; the subscription path,
+  // which is the one that costs $4.99–$9.99 a month, said nothing.
+  //
+  // A LIFETIME purchase settles with no subscription id at all (it clears
+  // one), so `lifetimePlanId` counts as settled too — otherwise a household
+  // that bought outright would be told forever that its purchase is pending.
+  const purchaseSettled = hasLiveSubscription || !!subQuery.data?.lifetimePlanId;
+  const awaitingEntitlement =
+    returnedFromPlanCheckout && subQuery.isSuccess && !purchaseSettled && !native;
   // The free trial is once per HOUSEHOLD, not once per checkout, so the
   // sentence above the purchase buttons cannot be unconditional (#602): a
   // household that cancelled — or was dunned to the end of its subscription —
@@ -245,6 +305,39 @@ export function BillingSettings() {
       {purchaseErrorKeyState && (
         <Alert variant="error" title={t('settings.billing.purchaseErrorTitle')}>
           <p>{t(purchaseErrorKeyState)}</p>
+        </Alert>
+      )}
+      {/* Payment taken, entitlement not written yet — see `awaitingEntitlement`.
+          Two messages, because the two situations need different actions from
+          the household: while the webhook is plausibly still in flight, wait;
+          once the poll window has lapsed without it, the purchase needs a
+          person. Both say the one thing that matters either way, which is
+          "do not pay again" — the page cannot show the plan they bought, and
+          the server cannot refuse a second checkout while the row is empty. */}
+      {awaitingEntitlement && (
+        <Alert
+          variant={checkoutWaitElapsed ? 'warning' : 'info'}
+          title={t(
+            checkoutWaitElapsed
+              ? 'settings.billing.checkoutStalledTitle'
+              : 'settings.billing.checkoutPendingTitle'
+          )}
+        >
+          <p data-testid="checkout-pending-body">
+            {t(
+              checkoutWaitElapsed
+                ? 'settings.billing.checkoutStalledBody'
+                : 'settings.billing.checkoutPendingBody'
+            )}
+          </p>
+          {checkoutWaitElapsed && (
+            <p className="mt-2 text-sm">
+              {t('settings.billing.checkoutStalledContact')}{' '}
+              <a className="underline" href={SUPPORT_MAILTO}>
+                {SUPPORT_EMAIL}
+              </a>
+            </p>
+          )}
         </Alert>
       )}
       <NoCardTrialNoticeView
@@ -365,6 +458,20 @@ export function BillingSettings() {
         </div>
       )}
 
+      {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
+          then nothing renders. Not on native: no purchase surface is. */}
+      {!native && plansQuery.data?.giftSubscriptions && (
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <GiftSubscriptionCard
+            offer={plansQuery.data.giftSubscriptions}
+            plans={plansQuery.data.plans}
+            paymentsAvailable={paymentsAvailable}
+            gift={subQuery.data?.gift}
+            returnedFromPurchase={returnedFromGift}
+          />
+        </Suspense>
+      )}
+
       {paymentsAvailable && !native && (
         <Card>
           <CardHeader
@@ -406,6 +513,7 @@ export function BillingSettings() {
                     lifetimePlanId: subQuery.data?.lifetimePlanId,
                     isAdmin,
                     hasLiveSubscription,
+                    awaitingEntitlement,
                     t,
                     isPending: checkoutMutation.isPending,
                     pendingPlanId: checkoutMutation.variables?.planId,
@@ -442,6 +550,7 @@ function renderPlanCta({
   lifetimePlanId,
   isAdmin,
   hasLiveSubscription,
+  awaitingEntitlement,
   isPending,
   pendingPlanId,
   onSelect,
@@ -456,6 +565,11 @@ function renderPlanCta({
   lifetimePlanId?: PlanId;
   isAdmin: boolean;
   hasLiveSubscription: boolean;
+  /** A checkout has completed at Stripe and its webhook has not landed yet.
+   *  Every tier's purchase button is withheld while this is true — see
+   *  `awaitingEntitlement` in BillingSettings for why a second checkout
+   *  started in this window is accepted by the server and bills twice. */
+  awaitingEntitlement: boolean;
   isPending: boolean;
   pendingPlanId?: string;
   onSelect: () => void;
@@ -487,6 +601,14 @@ function renderPlanCta({
   }
   // Not sold at this cadence — a blank price id is a deliberate partial launch.
   if (price === null) return null;
+  // A checkout has already been paid for and its entitlement has not arrived.
+  // Withheld for EVERY tier, not just the one that was bought: the page cannot
+  // tell which tier the pending purchase was for (nothing about it is recorded
+  // until the webhook lands), and buying any tier here starts a second
+  // subscription the server cannot yet refuse.
+  if (awaitingEntitlement) {
+    return <p className="text-sm text-gray-600">{t('settings.billing.purchaseInFlight')}</p>;
+  }
   if (!isAdmin) {
     // A member cannot buy, but can ask (brief §7d): one tap sends the admins
     // a note naming this plan. Billing itself stays admin-only.

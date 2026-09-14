@@ -28,6 +28,7 @@
  */
 import type Stripe from 'stripe';
 import { isPlanId, type PlanId } from './plans.js';
+import { isGiftSession } from './giftSubscriptions.js';
 
 export type BillingNoticeKind =
   | 'payment_receipt'
@@ -324,6 +325,12 @@ function invoiceItem(invoice: InvoiceView): PurchasedItem | null {
 function oneTimeReceipt(event: Stripe.Event): BillingNotice | null {
   const session = event.data.object as unknown as SessionView;
   if (session.mode !== 'payment') return null;
+  // A gift (ADR 0028) is bought by a person for a household that is not
+  // theirs. It names no household, and the household receipt below would
+  // resolve none — but saying so here, rather than letting it fall out as an
+  // "unresolved" warning, records that the silence is the decision: the
+  // buyer's housemates are not told what the buyer bought for someone else.
+  if (isGiftSession({ metadata: session.metadata })) return null;
   // Deferred payment methods report `unpaid` here and settle later on
   // `checkout.session.async_payment_succeeded`. No money has moved yet.
   if (session.payment_status !== 'paid') return null;
