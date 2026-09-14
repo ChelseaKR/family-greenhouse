@@ -10,8 +10,8 @@ not stored here.
 
 `npm run store:screenshots --workspace frontend` regenerates all twelve
 frames. It captures the **store-demo household** — three named members, eight
-plants across five rooms, one overdue job nobody has claimed, four due today
-across three people, and a month of care history — not the mock backend's
+plants across five rooms, one overdue job nobody has claimed, four due today — three held by
+three different people and one still up for grabs, and a month of care history — not the mock backend's
 default one-plant `test@example.com` fixture. That household lives in
 `backend/src/local-server-store-demo.ts` and is seeded only when the API
 starts with `SEED_STORE_DEMO=1`, which `tests/e2e/playwright.store.config.ts`

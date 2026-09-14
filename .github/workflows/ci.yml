@@ -183,6 +183,20 @@ jobs:
         # the next link built without checking rather than only on that one.
         run: npm run links:check
 
+      - name: Verify public copy states the free plan's real caps
+        # Shared with `npm run verify` (scripts/check-plan-copy.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-docs-testing.mjs below.
+        #
+        # The free tier's caps are stated in fifteen places a prospective
+        # customer reads before they ever sign up — the page metadata, the PWA
+        # manifest, the SEO catalog, the landing page, the care index, the blog
+        # CTA and two posts — and derived from backend/src/models/plans.ts in
+        # none of them. They have moved twice (#422, ADR 0014). This step
+        # re-derives every one of those statements from the catalog and fails
+        # in both directions.
+        run: npm run plan-copy:check
+
       - name: Verify docs/testing.md matches the suite it documents
         # Shared with `npm run verify` (scripts/check-docs-testing.mjs) so local
         # pre-push and CI run the identical check — see CICD-27. Guards the

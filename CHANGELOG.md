@@ -148,6 +148,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Public copy that overstated what the free plan and the app do.** Each
+  sentence now matches the code that decides it:
+  - Two blog posts said "free for households with up to 20 plants", naming the
+    cap least relevant to a post about _shared_ care and omitting the 1-home
+    and 3-member caps.
+  - Two sitter posts promised a link that shows "only the tasks actually due
+    while you're away", with no mention that the free window is a week (not 90
+    days) and that anything already overdue is on the list too.
+  - A post said the app "assigns each task to one person instead of reminding
+    everybody"; unassigned tasks remind every member.
+  - The landing page offered "export all of it"; the export is profile,
+    notification preferences, memberships, plants and tasks — no completion
+    history, activity feed or photo files. And "A year, looked back on" is a
+    30-day window on the free plan.
+  - The store listings advertised the care assistant with no plan qualifier
+    (it is Garden and up, bought on the web), a sitter link that "expires on a
+    date you choose" (a week on free), and identification with no allowance.
+  - `store-assets/README.md` described the demo household's four due-today
+    tasks as spread "across three people"; one is deliberately unclaimed.
+  - `docs/accessibility.md` published a conformance table reading "(none
+    currently) — all previously documented gaps closed" while the same
+    document lists five open gaps.
+- `scripts/check-plan-copy.mjs` (new, in `npm run verify` and in CI) re-derives
+  the free plan's caps from `backend/src/models/plans.ts` and checks all
+  fifteen public statements of them, failing in both directions.
+
 - **The privacy policy described one account-free surface and the product has
   three.** It had a section for sitter links and nothing for the wall display
   or caretaker seats — even though a caretaker seat collects a third party's
