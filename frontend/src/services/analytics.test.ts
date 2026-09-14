@@ -47,6 +47,19 @@ async function loadShim() {
   return { mod, fetchMock };
 }
 
+/** `Object.keys(localStorage)` does not see this environment's storage mock
+ *  (its keys live behind `key()`/`length`, not as own enumerable
+ *  properties) — read them the way the Storage interface actually exposes
+ *  them. */
+function storageKeys(storage: Storage): Set<string> {
+  const keys = new Set<string>();
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key !== null) keys.add(key);
+  }
+  return keys;
+}
+
 beforeEach(() => {
   vi.stubEnv('VITE_POSTHOG_KEY', 'phc_test_key');
   // Force both opt-out signals off so isEnabled() is true.
@@ -408,6 +421,20 @@ describe('Global Privacy Control', () => {
  */
 describe('cookieless by construction', () => {
   it('writes no cookie and nothing to web storage across a full signed-in session', async () => {
+    // The shared test harness (tests/setup.ts) resets the auth store in its
+    // own global beforeEach, and zustand's persist middleware writes an
+    // `auth-storage` key as a side effect of that reset — present before this
+    // test does anything and no business of the analytics module's. The
+    // guarantee under test is that THIS module adds nothing on top of
+    // whatever the harness already left behind, so the check is a diff
+    // against that starting snapshot, not a literal zero.
+    // Same reasoning as the localStorage baseline above: the harness's own
+    // auth-store reset also writes the session half of its split storage
+    // adapter (`auth-storage-session`, holding a null refresh token) as a
+    // side effect of persist middleware, not of anything under test here.
+    const localKeysBefore = storageKeys(localStorage);
+    const sessionKeysBefore = storageKeys(sessionStorage);
+
     const { mod } = await loadShim();
     mod.registerSuperProperties({ landing_hero_framing: 'B' });
     mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
@@ -421,8 +448,8 @@ describe('cookieless by construction', () => {
     await Promise.resolve();
 
     expect(document.cookie).toBe('');
-    expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+    expect(storageKeys(localStorage)).toEqual(localKeysBefore);
+    expect(storageKeys(sessionStorage)).toEqual(sessionKeysBefore);
   });
 
   it('asks PostHog not to geolocate any payload it receives', async () => {
@@ -542,12 +569,19 @@ describe('in-app opt-out', () => {
   });
 
   it('writes exactly one key, and removes it rather than writing "0"', async () => {
+    // Same harness caveat as the cookieless test above: `auth-storage` is
+    // already present from the shared beforeEach and is not this module's
+    // concern. What is under test is that toggling the opt-out adds exactly
+    // one key on top of that baseline, and removes exactly that one key.
+    const keysBefore = storageKeys(localStorage);
     const { mod } = await loadShim();
     mod.setAnalyticsOptOut(true);
-    expect(localStorage.length).toBe(1);
+    expect(storageKeys(localStorage)).toEqual(
+      new Set([...keysBefore, mod.ANALYTICS_OPT_OUT_STORAGE_KEY])
+    );
     expect(localStorage.getItem(mod.ANALYTICS_OPT_OUT_STORAGE_KEY)).toBe('1');
     mod.setAnalyticsOptOut(false);
-    expect(localStorage.length).toBe(0);
+    expect(storageKeys(localStorage)).toEqual(keysBefore);
     expect(mod.analyticsOptOutStored()).toBe(false);
   });
 

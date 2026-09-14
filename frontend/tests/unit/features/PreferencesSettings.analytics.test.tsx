@@ -36,6 +36,17 @@ describe('PreferencesSettings: product analytics opt-out', () => {
   });
 
   it('is on by default, and turning it off silences the shim on this device', async () => {
+    // Rendering the settings tree also mounts whatever reads auth state, and
+    // the shared test harness's own store reset (tests/setup.ts) already
+    // left an `auth-storage` key behind before this test runs. That key is
+    // not the shim's concern; what is under test is that opting out adds
+    // exactly one key beyond whatever was already there.
+    const keysBeforeClick = new Set<string>();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key !== null) keysBeforeClick.add(key);
+    }
+
     const user = userEvent.setup();
     renderPanel();
     const box = screen.getByRole('checkbox', { name: /share usage events/i });
@@ -49,7 +60,12 @@ describe('PreferencesSettings: product analytics opt-out', () => {
     expect(analyticsOptOutStored()).toBe(true);
     expect(analyticsOptedOut()).toBe(true);
     // The one key the shim ever writes, and nothing else.
-    expect(localStorage.length).toBe(1);
+    const keysAfterClick = new Set<string>();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key !== null) keysAfterClick.add(key);
+    }
+    expect(keysAfterClick).toEqual(new Set([...keysBeforeClick, ANALYTICS_OPT_OUT_STORAGE_KEY]));
     expect(localStorage.getItem(ANALYTICS_OPT_OUT_STORAGE_KEY)).toBe('1');
   });
 
