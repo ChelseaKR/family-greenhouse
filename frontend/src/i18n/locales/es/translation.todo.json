@@ -11,6 +11,7 @@
   "intentionallyEqual": [
     "awayRecap.noteLine",
     "household.onboarding.joinLinkPlaceholder",
+    "nav.chat",
     "awayRecap.taskLine",
     "caretaker.page.instructionOther",
     "caretaker.report.byCaretakerRange",

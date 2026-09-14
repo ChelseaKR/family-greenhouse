@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PublicShell } from '@/components/PublicShell';
@@ -75,6 +75,12 @@ export function SitPage() {
   // taskIds currently being completed (optimistic in-flight), and ones done.
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [done, setDone] = useState<Set<string>>(new Set());
+  // What the live region says when a row disappears, and where focus goes.
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [justCompleted, setJustCompleted] = useState<{ taskId: string; seq: number } | null>(null);
+  const completionSeq = useRef(0);
+  const doneButtons = useRef(new Map<string, HTMLButtonElement>());
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,6 +110,15 @@ export function SitPage() {
         if (!task) return;
         await sitterService.completeTask(token, taskId, task.dueDate);
         setDone((d) => new Set(d).add(taskId));
+        // The row this sitter just used is about to be removed. Two things
+        // vanish with it, and both have to be replaced explicitly: the words
+        // (a live region announces insertions, never removals, so a deleted
+        // row says nothing at all) and the focus (the removed <li> held it, so
+        // it falls to <body> and the next Done button is a full page of Tab
+        // presses away). This page IS that one interaction, for a guest with
+        // no account to fall back on.
+        setStatusMessage(t('sitter.markedDone', { plant: task.plantName || instructionFor(task) }));
+        setJustCompleted({ taskId, seq: completionSeq.current++ });
       } catch (err) {
         if (err instanceof SitterLinkInactiveError) {
           // The window closed while the page was open — fall back to the
@@ -120,8 +135,25 @@ export function SitPage() {
         });
       }
     },
-    [tasks, token]
+    [t, tasks, token]
   );
+
+  // Move focus to the next task's Done button once the completed row is gone
+  // — or to the closing summary when that was the last one. Runs after the
+  // render that removed the row, which is why it is keyed on a counter rather
+  // than on the task id: completing, retrying and completing again must both
+  // move focus.
+  useEffect(() => {
+    if (!justCompleted) return;
+    const order = tasks.map((task) => task.taskId);
+    const from = order.indexOf(justCompleted.taskId);
+    const nextId =
+      order.slice(from + 1).find((id) => !done.has(id)) ??
+      order.find((id) => !done.has(id)) ??
+      null;
+    const target = nextId ? doneButtons.current.get(nextId) : summaryRef.current;
+    target?.focus();
+  }, [done, justCompleted, tasks]);
 
   const now = Date.now();
   const remaining = tasks.filter((t) => !done.has(t.taskId));
@@ -188,16 +220,23 @@ export function SitPage() {
               region inside this one; the wrapper is what should speak, because
               finishing the last task is a single change to this region. */}
           <div className="mt-10 space-y-3" aria-live="polite">
+            {/* Inserted, not toggled: this region reports additions, so the
+                sentence about the row that just left has to arrive as new
+                content. Plain <p>, no role — a second live region nested in
+                this one is the defect #531 fixed. */}
+            {statusMessage && <p className="sr-only">{statusMessage}</p>}
             {allDone ? (
-              finishedSomething ? (
-                <Alert variant="success" title={t('sitter.allDoneTitle')} live="off">
-                  {t('sitter.allDoneBody')}
-                </Alert>
-              ) : (
-                <Alert variant="info" title={t('sitter.nothingDueTitle')} live="off">
-                  {t('sitter.nothingDueBody')}
-                </Alert>
-              )
+              <div ref={summaryRef} tabIndex={-1} className="focus:outline-hidden">
+                {finishedSomething ? (
+                  <Alert variant="success" title={t('sitter.allDoneTitle')} live="off">
+                    {t('sitter.allDoneBody')}
+                  </Alert>
+                ) : (
+                  <Alert variant="info" title={t('sitter.nothingDueTitle')} live="off">
+                    {t('sitter.nothingDueBody')}
+                  </Alert>
+                )}
+              </div>
             ) : (
               <ul className="space-y-3">
                 {remaining.map((task) => {
@@ -225,6 +264,10 @@ export function SitPage() {
                         </p>
                       </div>
                       <Button
+                        ref={(node) => {
+                          if (node) doneButtons.current.set(task.taskId, node);
+                          else doneButtons.current.delete(task.taskId);
+                        }}
                         variant="primary"
                         size="sm"
                         isLoading={isPending}

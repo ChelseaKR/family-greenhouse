@@ -24,7 +24,7 @@ import { getBudget } from '../../services/chat/persistence.js';
 import { resolveBudgetConfig } from '../../services/chat/budget.js';
 import type { BudgetConfig } from '../../services/chat/types.js';
 import * as billing from '../../services/billing.js';
-import { getEntitledPlan } from '../../models/plans.js';
+import { getMeteredPlanId } from '../../models/plans.js';
 import { logger } from '../../utils/logger.js';
 import { saveChatReport } from '../../services/chatReports.js';
 import { audit } from '../../utils/auditLog.js';
@@ -159,7 +159,9 @@ export const getChatBudget = createHandler(
     let config: BudgetConfig;
     try {
       config = await resolveBudgetConfig(
-        async () => getEntitledPlan(await billing.getHouseholdSubscription(householdId)).id
+        // METERED (ADR 0027): a no-card trial household's turns are held to
+        // Seedling's cap, so that is the cap this meter reports.
+        async () => getMeteredPlanId(await billing.getHouseholdSubscription(householdId))
       );
     } catch (err) {
       logger.error(

@@ -143,6 +143,43 @@ export interface SubscriptionState {
   /** Identification top-up credits. `null` means the balance could not be
    *  read — unknown, never zero. Absent from older backends. */
   identifyCredits?: IdentifyCreditBalance | null;
+  /** The household's no-card Garden trial (ADR 0027). `null` means there is
+   *  none to describe: the household never had one, or Stripe owns its
+   *  entitlement. Absent from older backends. */
+  noCardTrial?: NoCardTrial | null;
+}
+
+/**
+ * The no-card Garden trial as GET /billing/me publishes it (ADR 0027). `state`
+ * is decided by the SERVER's clock; `endsAt` is for display and countdowns.
+ */
+export interface NoCardTrial {
+  state: 'active' | 'ended';
+  endsAt: string;
+}
+
+const PLAN_RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 2 };
+
+/**
+ * The tier whose FEATURES this household may use now, for the client-side
+ * gates that show or hide a feature. It is `planId` for every household except
+ * one on a running no-card trial, which gets Garden's (ADR 0027); the server
+ * answers the same question in `getEntitledPlan`, and this only keeps the UI
+ * from hiding what the API allows.
+ *
+ * `planId` stays the plan the household is ON, and Settings → Billing keeps
+ * reading it: a trial household is on Seedling, trying Garden.
+ */
+export function effectivePlanId(subscription?: SubscriptionState | null): PlanId | null {
+  if (!subscription) return null;
+  const { planId } = subscription;
+  if (
+    subscription.noCardTrial?.state === 'active' &&
+    (PLAN_RANK[planId] ?? PLAN_RANK.seedling) < PLAN_RANK.garden
+  ) {
+    return 'garden';
+  }
+  return planId ?? null;
 }
 
 /**

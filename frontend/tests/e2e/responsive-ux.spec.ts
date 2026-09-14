@@ -209,6 +209,9 @@ let account: ProvisionedAccount;
 test.beforeAll(async () => {
   account = await provisionAccount({
     emailPrefix: 'responsive-ux',
+    // Seedling, not the no-card Garden trial a new household starts with: this
+    // spec checks the unavailable-chat state (ADR 0027).
+    plan: 'seedling',
     plant: { name: 'Audit Monstera', species: 'Monstera deliciosa', location: 'Living Room' },
     waterTask: { frequency: 7 },
   });

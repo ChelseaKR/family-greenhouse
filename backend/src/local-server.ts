@@ -58,7 +58,10 @@ import {
   featureOf,
   getEntitledPlan,
   getEntitledPlanForIssuedGrant,
+  getMeteredPlanId,
   hasHouseholdToolkit,
+  noCardTrialState,
+  NO_CARD_TRIAL_DAYS,
   planIncludesAwayKit,
   planIncludesCrossHomeToday,
   planHasMoveDay,
@@ -197,6 +200,11 @@ interface User {
    *  HouseholdMember rows: this — never the claim/default pointer — is the
    *  source of truth for membership AND role (middleware/auth.ts). */
   memberships: Membership[];
+  /**
+   * When this account claimed its one no-card Garden trial. Mirrors the
+   * production `USER#{id} / NO_CARD_TRIAL` claim row (ADR 0027).
+   */
+  noCardTrialClaimedAt?: string;
 }
 
 interface Household {
@@ -223,6 +231,8 @@ interface Household {
    * seeds `planId` and `subscriptionStatus`.
    */
   lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
+  /** Mirrors `noCardTrialEndsAt` on the production METADATA row (ADR 0027). */
+  noCardTrialEndsAt?: string;
 }
 
 interface Invite {
@@ -282,7 +292,9 @@ interface PlantShare {
   plantSnapshot: {
     name: string;
     species: string | null;
-    notes: string | null;
+    /** The house rule, never the plant's free-text notes — see
+     *  plantService.PlantShareSnapshot. */
+    careRule: string | null;
     imageUrl: string | null;
     tags: string[];
   };
@@ -969,6 +981,8 @@ function subscriptionOf(householdId: string | null | undefined): EntitlementSubs
     planId: h?.planId,
     status: h?.subscriptionStatus,
     lifetimePlanId: h?.lifetimePlanId,
+    stripeSubscriptionId: h?.stripeSubscriptionId,
+    noCardTrialEndsAt: h?.noCardTrialEndsAt,
   };
 }
 
@@ -1097,6 +1111,10 @@ app.post('/__test__/households/:id/plan', validateBody(testPlanSchema), (req, re
   const household = db.households.get(req.params.id);
   if (!household) return res.status(404).json({ message: 'Household not found' });
   household.planId = (req as any).validatedBody.planId;
+  // A seeded plan is the plan the spec asked for, not a trial on top of it:
+  // a browser test that needs Seedling behaviour asks for `seedling` and must
+  // not get the no-card Garden trial its household was created with.
+  delete household.noCardTrialEndsAt;
   return res.json({ id: household.id, planId: household.planId });
 });
 
@@ -1707,6 +1725,14 @@ app.post('/households', authMiddleware, validateBody(createHouseholdSchema), (re
     createdAt: now,
     createdBy: user.userId,
   };
+  // The no-card Garden trial — mirrors householdService.createHousehold
+  // (ADR 0027): a new household starts one, once per account.
+  if (!dbUser.noCardTrialClaimedAt) {
+    dbUser.noCardTrialClaimedAt = now;
+    household.noCardTrialEndsAt = new Date(
+      Date.parse(now) + NO_CARD_TRIAL_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+  }
   db.households.set(householdId, household);
 
   // Always append to memberships (multi-household). Only mark as default
@@ -3627,10 +3653,15 @@ function identifyMeterFor(user: { userId: string; householdId: string | null }) 
   // larger monthly allowance. The route has no requireHousehold, so a
   // householdless caller gets the free tier's, exactly as production does.
   const plan = user.householdId ? entitledPlan(user.householdId) : PLANS.seedling;
+  // METERED (ADR 0027) — mirrors handlers/plants/identify.ts: a no-card trial
+  // household has Garden's features and Seedling's identification allowance.
+  const meteredPlanId = user.householdId
+    ? getMeteredPlanId(subscriptionOf(user.householdId))
+    : plan.id;
   return {
     key,
     planName: plan.name,
-    allowance: IDENTIFY_ALLOWANCES[plan.id] ?? IDENTIFY_ALLOWANCES.seedling,
+    allowance: IDENTIFY_ALLOWANCES[meteredPlanId] ?? IDENTIFY_ALLOWANCES.seedling,
     used: identifyUsage.get(key) ?? 0,
     meteringEnabled: process.env.IDENTIFY_METERING_ENABLED === '1',
   };
@@ -3945,7 +3976,9 @@ app.post('/plants/:id/share', authMiddleware, requireHousehold, (req, res) => {
     plantSnapshot: {
       name: plant.name,
       species: plant.species,
-      notes: plant.notes,
+      // resolveCareNote, like the real service: the house rule if there is
+      // one, otherwise no care note at all. Never `plant.notes`.
+      careRule: resolveCareNote(plant).careNote,
       imageUrl: plant.imageUrl,
       tags: [...plant.tags],
     },
@@ -4587,10 +4620,10 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
   }
 
   const fromName = db.households.get(share.householdId)?.name ?? 'another household';
-  const prefix = `Cutting from ${fromName}`;
-  const notes = (
-    share.plantSnapshot.notes ? `${prefix}\n\n${share.plantSnapshot.notes}` : prefix
-  ).slice(0, 1000);
+  // Provenance only. The source household's free-text notes are not on the
+  // card (see plantService.PlantShareSnapshot), so they cannot be copied; the
+  // house rule travels in its own field below.
+  const notes = `Cutting from ${fromName}`.slice(0, 1000);
 
   const plantId = uuidv4();
   const now = new Date().toISOString();
@@ -4606,6 +4639,7 @@ app.post('/plants/shared/:code/accept', authMiddleware, requireHousehold, (req, 
     winterSpaceId: null,
     imageUrl: null,
     notes,
+    careRule: share.plantSnapshot.careRule,
     status: 'active',
     statusChangedAt: null,
     tags: [...share.plantSnapshot.tags],
@@ -5665,6 +5699,13 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     usageDetail: usage,
     // The mock sells no top-up packs, so the balance is a real zero.
     identifyCredits: { remaining: 0, expiresAt: null },
+    // Mirrors handlers/billing/handler.ts (ADR 0027).
+    noCardTrial: (() => {
+      const trialState = noCardTrialState(subscriptionOf(user.householdId));
+      return trialState === 'none' || !h?.noCardTrialEndsAt
+        ? null
+        : { state: trialState, endsAt: h.noCardTrialEndsAt };
+    })(),
   });
 });
 

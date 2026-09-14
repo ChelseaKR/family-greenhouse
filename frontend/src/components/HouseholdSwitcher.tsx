@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { ChevronUpDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { listMyHouseholds } from '@/services/householdService';
 import { useAuthStore } from '@/store/authStore';
@@ -16,6 +17,7 @@ import clsx from 'clsx';
  * into settings.
  */
 export function HouseholdSwitcher() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -45,7 +47,7 @@ export function HouseholdSwitcher() {
         )}
       >
         <span className="truncate">
-          <span className="block text-xs text-primary-200">Active household</span>
+          <span className="block text-xs text-primary-200">{t('nav.activeHousehold')}</span>
           <span className="block font-medium">{active.name}</span>
         </span>
         <ChevronUpDownIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -92,7 +94,7 @@ export function HouseholdSwitcher() {
             }}
           >
             <PlusIcon className="h-4 w-4" aria-hidden="true" />
-            Add a household
+            {t('nav.addHousehold')}
           </button>
         </li>
       </ul>

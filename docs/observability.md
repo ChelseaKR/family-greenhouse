@@ -9,8 +9,16 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
 - `FamilyGreenhouse/API/{environment} ApplicationRequests` and `Application5xx` are derived from structured API
   Gateway access logs and exclude `GET /health`. They measure application traffic rather than the
   external uptime probe (see "External availability checks" below).
-- `ApplicationLatency` records the same health-excluded request population and pages when p95 is
-  above 500 ms in two of three five-minute periods.
+- `ApplicationLatency` records the same health-excluded request population. It is alarmed as a
+  **burn rate against the latency SLO's error budget**, not as a percentile over a five-minute
+  period: `p95 <= 500ms` over 28 days permits 5% of requests above 500 ms, and
+  `latency-fast-burn` / `latency-slow-burn` page when that budget is being spent 14.4x and 6x too
+  fast. The fraction of requests over the objective is exact at any sample size; a p95 is not.
+  Measured over 28 days to 2026-09-13, the median five-minute period holds two requests, so the
+  five-minute p95 this replaced was reporting the slower of two requests — 94 `OK -> ALARM`
+  transitions in 30 days, 94 of the 100 recorded across all 33 alarms. See the comment on
+  `aws_cloudwatch_metric_alarm.latency_fast_burn` for the full measurement, and #730 for the
+  standing 4.4x burn that is a cold-start problem rather than an alerting one.
 - Native `AWS/ApiGateway Count`, `4xx`, and `5xx` use the real HTTP API `ApiId` and catch gateway-level
   failures. Lambda errors, Lambda throttles, DynamoDB read/write throttles, DLQs, and auth failures
   have separate alarms. External availability is checked from outside the stack entirely — a Route 53

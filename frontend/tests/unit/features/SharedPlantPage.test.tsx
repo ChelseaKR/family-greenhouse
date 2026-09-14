@@ -20,7 +20,10 @@ const PREVIEW = {
   plant: {
     name: 'Mother Monstera',
     species: 'Monstera deliciosa',
-    notes: 'East window, water weekly',
+    // The house rule — the one line of the household's own care words a
+    // public cutting card carries. Its free-text notes are not in the payload
+    // at all (backend: PlantShareSnapshot).
+    careRule: 'Bottom-water only',
     imageUrl: null,
     tags: ['tropical'],
   },
@@ -68,7 +71,7 @@ describe('SharedPlantPage', () => {
     expect(screen.getByText('Monstera deliciosa')).toBeInTheDocument();
     // PII-safe provenance: the household DISPLAY name, never an email.
     expect(screen.getByText('Grown by The Kelly House, passed on to you.')).toBeInTheDocument();
-    expect(screen.getByText('East window, water weekly')).toBeInTheDocument();
+    expect(screen.getByText('Bottom-water only')).toBeInTheDocument();
     expect(screen.getByText('tropical')).toBeInTheDocument();
     // Never leaks anything email-shaped.
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();

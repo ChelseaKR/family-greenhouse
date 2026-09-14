@@ -30,6 +30,22 @@ slos:
       field: responseLatency
       exclude_routes:
         - GET /health
+    # The objective is a percentile over the 28-day window above, so the alert
+    # on it is a burn rate against its 5% error budget. It is deliberately not
+    # a percentile over a five-minute period: at this traffic volume the
+    # median five-minute period holds two requests, and a p95 over two samples
+    # is the slower of the two. See the comment on
+    # aws_cloudwatch_metric_alarm.latency_fast_burn for the measurements.
+    # Multipliers and windows match the availability burn alerts above.
+    burn_rate_alerts:
+      - name: fast
+        multiplier: 14.4
+        slow_rate_percent: 72
+        window_minutes: 60
+      - name: slow
+        multiplier: 6
+        slow_rate_percent: 30
+        window_minutes: 360
 
   saturation:
     objective: zero throttled requests

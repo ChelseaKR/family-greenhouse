@@ -21,7 +21,13 @@ import {
   createIdentifyTopUpCheckoutSession,
   TOP_UP_NOT_CONFIGURED,
 } from '../../services/identifyTopUp.js';
-import { getEntitledPlan, getPlan, isIntervalOffered, limitOf } from '../../models/plans.js';
+import {
+  getEntitledPlan,
+  getPlan,
+  isIntervalOffered,
+  limitOf,
+  noCardTrialState,
+} from '../../models/plans.js';
 import { identifyTopUpSummary, isIdentifyTopUpConfigured } from '../../models/identifyTopUp.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
@@ -122,7 +128,8 @@ export const getCurrentSubscription = createHandler(
     // household whose next POST /plants is refused at Seedling's. `planId`
     // itself stays truthful: it is the plan they are on, which is not the
     // same as the caps they may currently use.
-    const plan = getEntitledPlan(sub);
+    const now = new Date();
+    const plan = getEntitledPlan(sub, now);
     const usageDetail = {
       plantCount: counters.plantCount,
       maxPlants: limitOf(plan, 'plants'),
@@ -138,11 +145,23 @@ export const getCurrentSubscription = createHandler(
             maxMembers: limitOf(plan, 'members'),
           }
         : undefined;
+    // The no-card trial goes out as what the SERVER's clock says about it
+    // (ADR 0027): its state and its end date, never the raw row attribute. A
+    // client with a wrong clock can change how many days it counts down, never
+    // whether the household is on the trial. `null` means there is no no-card
+    // trial to describe: the household never had one, or Stripe owns its
+    // entitlement.
+    const { noCardTrialEndsAt, ...published } = sub;
+    const trialState = noCardTrialState(sub, now);
     return successResponse({
-      ...sub,
+      ...published,
       ...(usage ? { usage } : {}),
       usageDetail,
       identifyCredits,
+      noCardTrial:
+        trialState === 'none' || !noCardTrialEndsAt
+          ? null
+          : { state: trialState, endsAt: noCardTrialEndsAt },
     });
   }
 )

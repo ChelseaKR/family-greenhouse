@@ -172,12 +172,18 @@ export interface PlantShareLink {
   expiresAt: string;
 }
 
-/** Public share preview (GET /plants/shared/{code} — no auth). */
+/**
+ * Public share preview (GET /plants/shared/{code} — no auth).
+ *
+ * The card carries the plant's short house rule, never its free-text notes:
+ * the link is unauthenticated and gets pasted into group chats, so the
+ * backend snapshot does not contain them at all.
+ */
 export interface SharedPlantPreview {
   plant: {
     name: string;
     species: string | null;
-    notes: string | null;
+    careRule: string | null;
     imageUrl: string | null;
     tags: string[];
   };
