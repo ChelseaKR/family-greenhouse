@@ -303,6 +303,7 @@
     "email": "Email address",
     "password": "Password",
     "forgotPassword": "Forgot your password?",
+    "keepSignedIn": "Keep me signed in on this device",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required",
     "signUpFree": "Sign up free",

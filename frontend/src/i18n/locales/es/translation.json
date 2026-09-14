@@ -314,6 +314,7 @@
     "email": "Correo electrónico",
     "password": "Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
+    "keepSignedIn": "Mantener la sesión iniciada en este dispositivo",
     "invalidEmail": "Introduce un correo válido",
     "passwordRequired": "La contraseña es obligatoria",
     "signUpFree": "Crear una cuenta gratis",
