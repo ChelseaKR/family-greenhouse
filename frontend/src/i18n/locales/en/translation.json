@@ -265,6 +265,14 @@
     }
   },
   "nav": {
+    "chat": "Chat",
+    "analytics": "Analytics",
+    "help": "Help",
+    "mainNavigation": "Main navigation",
+    "openSidebar": "Open sidebar",
+    "closeSidebar": "Close sidebar",
+    "activeHousehold": "Active household",
+    "addHousehold": "Add a household",
     "dashboard": "Dashboard",
     "plants": "Plants",
     "tasks": "Tasks",
@@ -323,6 +331,7 @@
     "confirmRecoveryTitle": "Continue email confirmation",
     "confirmRecoverySubtitle": "Enter your signup email and we’ll send a fresh confirmation code.",
     "resendConfirmation": "Send confirmation code",
+    "haveConfirmationCode": "I already have a code",
     "confirmDocumentTitle": "Confirm email",
     "confirmTitle": "Confirm your email",
     "confirmSentTo": "We sent a confirmation code to",
