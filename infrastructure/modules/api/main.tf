@@ -239,6 +239,18 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = "arn:aws:ses:*:${data.aws_caller_identity.current.account_id}:configuration-set/*"
       },
       {
+        # The confirm-reminder pass in the hourly `reminders` Lambda
+        # (backend/src/services/confirmReminders.ts) reads the SES ACCOUNT-level
+        # suppression list before asking Cognito to resend a confirmation code.
+        # Cognito sends through SES with no configuration set, so a bounce or a
+        # complaint on the ORIGINAL confirmation email is recorded only on that
+        # list, never on the application's own. Read-only. SES defines no
+        # resource type for this action, so it cannot be scoped below "*".
+        Effect   = "Allow"
+        Action   = ["ses:GetSuppressedDestination"]
+        Resource = "*"
+      },
+      {
         # Reminder SMS via SNS. Resource "*" is REQUIRED by AWS here:
         # publishing directly to a phone number has no ARN to scope to (only
         # topic publishes do), so this cannot be tightened further. Web push

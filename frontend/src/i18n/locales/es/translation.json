@@ -276,6 +276,14 @@
     }
   },
   "nav": {
+    "chat": "Chat",
+    "analytics": "Estadísticas",
+    "help": "Ayuda",
+    "mainNavigation": "Navegación principal",
+    "openSidebar": "Abrir la barra lateral",
+    "closeSidebar": "Cerrar la barra lateral",
+    "activeHousehold": "Hogar activo",
+    "addHousehold": "Añadir un hogar",
     "dashboard": "Panel",
     "plants": "Plantas",
     "tasks": "Tareas",
@@ -334,6 +342,7 @@
     "confirmRecoveryTitle": "Continúa la confirmación del correo",
     "confirmRecoverySubtitle": "Introduce el correo con el que te registraste y enviaremos un código nuevo.",
     "resendConfirmation": "Enviar código de confirmación",
+    "haveConfirmationCode": "Ya tengo un código",
     "confirmDocumentTitle": "Confirmar correo",
     "confirmTitle": "Confirma tu correo",
     "confirmSentTo": "Enviamos un código de confirmación a",
@@ -723,6 +732,14 @@
     "completedToast": "Hecho: {{plant}} en {{name}}"
   },
   "household": {
+    "share": {
+      "copy": "Copiar",
+      "copied": "¡Copiado!",
+      "copiedAnnouncement": "Enlace copiado al portapapeles.",
+      "copyFailed": "No hemos podido copiarlo automáticamente. Selecciona el enlace y cópialo a mano.",
+      "inviteLinkLabel": "Enlace de invitación",
+      "sitterLinkLabel": "Enlace para quien cuide las plantas"
+    },
     "climateChecking": "Comprobando la disponibilidad del clima…",
     "inviteByEmailLabel": "Enviar una invitación por correo",
     "inviteByEmailPlaceholder": "su@correo.com",
