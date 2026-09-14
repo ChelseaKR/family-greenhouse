@@ -120,11 +120,12 @@ export default function PlantSitterHandoff() {
       <h2>If you want this to be automatic</h2>
       <p>
         This is one of the things <a href="/">Family Greenhouse</a> was built for. You can hand a
-        sitter a time-boxed link: they open it, see only the tasks actually due while you&rsquo;re
-        away &mdash; &ldquo;Water the Monstera&rdquo;, with where it lives &mdash; and tap them off
-        as they go. No account, no sign-up, no joining your household, and the link stops working
-        when you&rsquo;re back. You come home to a log of what was done and when, instead of trying
-        to reconstruct it from a half-remembered conversation.
+        sitter a time-boxed link &mdash; up to a week on the free plan, up to 90 days on a paid one:
+        they open it and see the tasks due while you&rsquo;re away, plus anything already overdue
+        &mdash; &ldquo;Water the Monstera&rdquo;, with where it lives &mdash; and tap them off as
+        they go. No account, no sign-up, no joining your household, and the link stops working when
+        you&rsquo;re back. You come home to a log of what was done and when, instead of trying to
+        reconstruct it from a half-remembered conversation.
       </p>
       <p>
         A note on the counter genuinely works too, and for three plants it&rsquo;s the right amount

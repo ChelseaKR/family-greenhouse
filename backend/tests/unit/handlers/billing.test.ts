@@ -40,6 +40,27 @@ vi.mock('../../../src/services/identifyTopUp.js', () => ({
 }));
 import { createIdentifyTopUpCheckoutSession } from '../../../src/services/identifyTopUp.js';
 
+// Gift subscriptions (ADR 0028): the two service functions the routes call
+// are mocked; the error class and its guard stay real so the status mapping
+// is exercised against the real type.
+vi.mock('../../../src/services/giftSubscriptions.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/services/giftSubscriptions.js')>(
+    '../../../src/services/giftSubscriptions.js'
+  );
+  return { ...actual, createGiftCheckoutSession: vi.fn(), redeemGiftCode: vi.fn() };
+});
+import {
+  GiftRedeemError,
+  createGiftCheckoutSession,
+  redeemGiftCode,
+} from '../../../src/services/giftSubscriptions.js';
+vi.mock('../../../src/services/giftCodes.js', () => ({
+  listGiftPurchases: vi.fn(),
+  findGiftByCode: vi.fn(),
+  redeemGift: vi.fn(),
+}));
+import { listGiftPurchases } from '../../../src/services/giftCodes.js';
+
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
     body: null,
@@ -801,6 +822,334 @@ describe('billing handler', () => {
       expect(res.statusCode).toBe(502);
       expect(JSON.parse(res.body).message).toMatch(/Stripe checkout failed/);
       expect(res.body).not.toMatch(/secret internals/);
+    });
+  });
+
+  describe('gift subscriptions (ADR 0028)', () => {
+    const asMember = (body: unknown) =>
+      buildEvent({
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+        requestContext: {
+          authorizer: {
+            claims: {
+              sub: 'user-1',
+              email: 'test@example.com',
+              'custom:household_id': 'hh-1',
+              'custom:household_role': 'member',
+            },
+          },
+          identity: { sourceIp: '127.0.0.1' },
+        } as APIGatewayProxyEvent['requestContext'],
+      });
+    const post = (body: unknown) =>
+      buildEvent({
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    beforeEach(async () => {
+      const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+      __resetRateLimitForTests();
+      delete process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH;
+      delete process.env.STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH;
+    });
+
+    afterEach(() => {
+      delete process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH;
+      delete process.env.STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH;
+    });
+
+    describe('listPlans / getCurrentSubscription', () => {
+      it('publishes the gift offer per tier, fail-closed on configuration', async () => {
+        process.env.STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH = 'price_gift_gh';
+        const { listPlans } = await import('../../../src/handlers/billing/handler.js');
+        const res = (await listPlans(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(JSON.parse(res.body).giftSubscriptions).toEqual({
+          minMonths: 1,
+          maxMonths: 12,
+          redeemWindowDays: 365,
+          plans: [
+            { planId: 'garden', available: false },
+            { planId: 'greenhouse', available: true },
+          ],
+        });
+      });
+
+      it('publishes a running gift as the server sees it, and never the raw row attributes', async () => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+          planId: 'seedling',
+          giftPlanId: 'greenhouse',
+          giftEndsAt: endsAt,
+        });
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        const body = JSON.parse(res.body);
+        expect(body.gift).toEqual({ planId: 'greenhouse', endsAt, state: 'active' });
+        expect(body).not.toHaveProperty('giftPlanId');
+        expect(body).not.toHaveProperty('giftEndsAt');
+        // The caps published are the gifted tier's — what is actually enforced.
+        expect(body.usageDetail.maxPlants).toBe(5000);
+      });
+
+      it('publishes gift: null when there is none to describe', async () => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'garden' });
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(JSON.parse(res.body).gift).toBeNull();
+      });
+    });
+
+    describe('POST /billing/gift/checkout', () => {
+      it('fails CLOSED with 400 GIFT_NOT_CONFIGURED for a tier with no price — nothing reaches Stripe', async () => {
+        const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
+        const res = (await giftCheckout(
+          post({ planId: 'garden', months: 3 }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).details).toEqual({ code: 'GIFT_NOT_CONFIGURED' });
+        expect(createGiftCheckoutSession).not.toHaveBeenCalled();
+      });
+
+      it('opens the checkout for the BUYER — any member — scoping the attempt id to the user, not the household', async () => {
+        process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH = 'price_gift_garden';
+        const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+        setCachedMembership('user-1', 'hh-1', 'member');
+        const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(createGiftCheckoutSession).mockResolvedValueOnce({
+          url: 'https://checkout.stripe.test/gift',
+        });
+        const res = (await giftCheckout(
+          asMember({
+            planId: 'garden',
+            months: 3,
+            checkoutAttemptId: '0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
+          }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({ url: 'https://checkout.stripe.test/gift' });
+        expect(createGiftCheckoutSession).toHaveBeenCalledWith({
+          buyerUserId: 'user-1',
+          buyerEmail: 'test@example.com',
+          planId: 'garden',
+          months: 3,
+          successUrl: expect.stringContaining('/settings/billing?status=success&purchase=gift'),
+          cancelUrl: expect.stringContaining('/settings/billing?status=cancel'),
+          idempotencyKey: 'gift:user-1:0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
+        });
+      });
+
+      it('rejects months outside 1..12, a free tier, and a malformed attempt id at the validation layer', async () => {
+        process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH = 'price_gift_garden';
+        const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
+        for (const body of [
+          { planId: 'garden', months: 0 },
+          { planId: 'garden', months: 13 },
+          { planId: 'garden', months: 1.5 },
+          { planId: 'garden', months: '3' },
+          { planId: 'seedling', months: 3 },
+          { planId: 'garden', months: 3, checkoutAttemptId: 'nope' },
+          { planId: 'garden' },
+        ]) {
+          const res = (await giftCheckout(post(body), ctx, () => {})) as APIGatewayProxyResult;
+          expect(res.statusCode, JSON.stringify(body)).toBe(400);
+        }
+        expect(createGiftCheckoutSession).not.toHaveBeenCalled();
+      });
+
+      it('maps the gates and upstream failures like every other purchase route', async () => {
+        process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH = 'price_gift_garden';
+        const { giftCheckout } = await import('../../../src/handlers/billing/handler.js');
+        const paused = new Error('Payment activity is disabled') as Error & { code?: string };
+        paused.code = 'PAYMENTS_DISABLED';
+        vi.mocked(createGiftCheckoutSession).mockRejectedValueOnce(paused);
+        let res = (await giftCheckout(
+          post({ planId: 'garden', months: 3 }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(503);
+
+        vi.mocked(createGiftCheckoutSession).mockRejectedValueOnce(
+          new Error('GIFT_NOT_CONFIGURED: STRIPE_PRICE_ID_GIFT_GARDEN_MONTH is not set')
+        );
+        res = (await giftCheckout(
+          post({ planId: 'garden', months: 3 }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).details).toEqual({ code: 'GIFT_NOT_CONFIGURED' });
+
+        vi.mocked(createGiftCheckoutSession).mockRejectedValueOnce(
+          new Error('StripeConnectionError: secret internals')
+        );
+        res = (await giftCheckout(
+          post({ planId: 'garden', months: 3 }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(502);
+        expect(res.body).not.toMatch(/secret internals/);
+      });
+    });
+
+    describe('POST /billing/gift/redeem', () => {
+      it('redeems onto the caller’s household and returns what now runs', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(redeemGiftCode).mockResolvedValueOnce({
+          planId: 'garden',
+          endsAt: '2027-01-01T00:00:00.000Z',
+        });
+        const res = (await giftRedeem(
+          post({ code: 'FG-0123-4567-89AB-CDEF' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body)).toEqual({
+          planId: 'garden',
+          endsAt: '2027-01-01T00:00:00.000Z',
+        });
+        expect(redeemGiftCode).toHaveBeenCalledWith({
+          code: 'FG-0123-4567-89AB-CDEF',
+          householdId: 'hh-1',
+        });
+      });
+
+      it('maps each refusal to its status with the code in details, and echoes no code', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        const cases: Array<[string, number, Record<string, string>]> = [
+          ['GIFT_CODE_INVALID', 400, {}],
+          ['GIFT_CODE_EXPIRED', 400, { redeemBy: '2027-09-13T12:00:00.000Z' }],
+          ['GIFT_CODE_REDEEMED', 409, {}],
+          ['GIFT_HOUSEHOLD_SUBSCRIBED', 409, {}],
+          ['GIFT_ALREADY_ACTIVE', 409, { endsAt: '2026-12-01T00:00:00.000Z' }],
+          ['GIFT_ADDS_NOTHING', 409, {}],
+          ['GIFT_REDEEM_CONFLICT', 409, {}],
+        ];
+        const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+        for (const [code, status, details] of cases) {
+          // Seven refusals in one test would trip the 5/min limiter this route
+          // carries; that limit has its own test below.
+          __resetRateLimitForTests();
+          vi.mocked(redeemGiftCode).mockRejectedValueOnce(
+            new GiftRedeemError(code as never, details)
+          );
+          const res = (await giftRedeem(
+            post({ code: 'FG-0123-4567-89AB-CDEF' }),
+            ctx,
+            () => {}
+          )) as APIGatewayProxyResult;
+          expect(res.statusCode, code).toBe(status);
+          expect(JSON.parse(res.body).details, code).toEqual({ code, ...details });
+          expect(res.body).not.toContain('0123-4567');
+        }
+      });
+
+      it('is admin-only: a member gets 403 and the service is never called', async () => {
+        const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+        setCachedMembership('user-1', 'hh-1', 'member');
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        const res = (await giftRedeem(
+          asMember({ code: 'FG-0123-4567-89AB-CDEF' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(403);
+        expect(redeemGiftCode).not.toHaveBeenCalled();
+      });
+
+      it('rate-limits redemption attempts per IP: the sixth in a minute is refused before the service', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(redeemGiftCode).mockRejectedValue(new GiftRedeemError('GIFT_CODE_INVALID'));
+        const statuses: number[] = [];
+        for (let i = 0; i < 6; i += 1) {
+          const res = (await giftRedeem(
+            post({ code: `FG-0000-0000-0000-000${i}` }),
+            ctx,
+            () => {}
+          )) as APIGatewayProxyResult;
+          statuses.push(res.statusCode);
+        }
+        expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
+        expect(redeemGiftCode).toHaveBeenCalledTimes(5);
+      });
+
+      it('rejects an empty or missing code at the validation layer, and hides an infrastructure failure behind a 502', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        let res = (await giftRedeem(post({ code: '' }), ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        res = (await giftRedeem(post({}), ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(redeemGiftCode).not.toHaveBeenCalled();
+        vi.mocked(redeemGiftCode).mockRejectedValueOnce(new Error('DDB internals'));
+        res = (await giftRedeem(
+          post({ code: 'FG-0123-4567-89AB-CDEF' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(502);
+        expect(res.body).not.toMatch(/DDB internals/);
+      });
+    });
+
+    describe('GET /billing/gift/purchases', () => {
+      it('lists the caller’s own gifts', async () => {
+        const { giftPurchases } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(listGiftPurchases).mockResolvedValueOnce([
+          {
+            stripeSessionId: 'cs_1',
+            code: 'FG-0123-4567-89AB-CDEF',
+            planId: 'garden',
+            months: 3,
+            purchasedAt: '2026-09-13T12:00:00.000Z',
+            redeemBy: '2027-09-13T12:00:00.000Z',
+            status: 'unredeemed',
+            redeemedAt: null,
+            giftEndsAt: null,
+          },
+        ]);
+        const res = (await giftPurchases(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        expect(JSON.parse(res.body).purchases).toHaveLength(1);
+        expect(listGiftPurchases).toHaveBeenCalledWith('user-1');
+      });
+
+      it('answers a failed read with a 502, never an empty list', async () => {
+        const { giftPurchases } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(listGiftPurchases).mockRejectedValueOnce(new Error('throttled'));
+        const res = (await giftPurchases(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(502);
+        expect(res.body).not.toContain('"purchases"');
+      });
     });
   });
 

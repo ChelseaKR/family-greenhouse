@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { ENROLLMENT_ID, TEAM_ID } from '../../../scripts/app-site-association.mjs';
+
 /**
  * The iOS App target's entitlements.
  *
@@ -67,6 +69,33 @@ describe('iOS entitlements', () => {
     expect(project).toContain('APS_ENVIRONMENT = development;');
     expect(project).toContain('APS_ENVIRONMENT = production;');
     expect(project.match(/APS_ENVIRONMENT = /g) ?? []).toHaveLength(2);
+  });
+
+  /**
+   * Signing, and the second copy of the Team ID.
+   *
+   * `CODE_SIGN_STYLE = Automatic` with no `DEVELOPMENT_TEAM` does not archive:
+   * Xcode stops with "Signing for 'App' requires a development team", so the
+   * first Archive on a fresh clone fails and the fix is a dropdown in someone
+   * else's Xcode rather than anything in the repository. Committing the team
+   * makes the archive reproducible — the Team ID is not a secret, and this
+   * repository already publishes it, by design, in the association file Apple
+   * fetches.
+   *
+   * Pinned against `TEAM_ID` rather than against a literal because this is the
+   * SECOND place the Team ID lives, and every second copy in this repository
+   * has drifted. It also inherits the Enrollment ID refusal: `ACKGM9XK9V` is
+   * ten uppercase alphanumerics too, and a project signed with it is rejected
+   * at the point where the feedback is slowest.
+   */
+  it('commits the Apple team so a fresh clone can archive without an Xcode dropdown', () => {
+    const project = read(PROJECT);
+
+    const teams = project.match(/DEVELOPMENT_TEAM = ([^;]+);/g) ?? [];
+    // Both configurations: a Release that misses it fails only at Archive.
+    expect(teams).toHaveLength(2);
+    expect(teams.every((line) => line.includes(TEAM_ID))).toBe(true);
+    expect(project).not.toContain(ENROLLMENT_ID);
   });
 
   it('is valid property-list XML', () => {

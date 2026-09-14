@@ -123,7 +123,7 @@ const features = [
   {
     name: 'Yours to keep',
     description:
-      "Your household's data is encrypted in transit and at rest, and you can export all of it whenever you like.",
+      "Your household's data is encrypted in transit and at rest, and you can export your profile, plants and tasks as JSON or CSV whenever you like.",
     icon: RootLockIcon,
   },
 ];
@@ -181,7 +181,7 @@ const productFacts = [
     : { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
   { value: '3 people', label: 'Share one home free — unlimited on Garden' },
   { value: '5 minutes', label: 'From signup to first task' },
-  { value: 'Portable', label: 'Export your data any time' },
+  { value: 'Portable', label: 'Export plants and tasks any time' },
 ];
 
 // Testimonials were removed outright (not just gated): the quotes were
@@ -259,7 +259,7 @@ const differentiators = [
   {
     icon: ChartBarIcon,
     label: 'A year, looked back on',
-    body: 'Come December, see what the household actually did: plants added, tasks finished, the whole season.',
+    body: 'Come December, see what the household actually did: plants added, tasks finished, the whole season on Garden and Greenhouse, the last 30 days on the free plan.',
   },
 ];
 

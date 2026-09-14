@@ -145,6 +145,24 @@ function handler(event) {
   var request = event.request;
   var uri = request.uri;
 
+  // (0) One canonical host: `www.` 301s to the apex, before any rewrite below
+  // so it covers every path. Why, and what it repairs: see the note in
+  // frontend/scripts/build-spa-router.mjs.
+  var hh = request.headers && request.headers.host;
+  var h = hh && hh.value;
+  if (h && h.indexOf('www.') === 0) {
+    var qs = '';
+    for (var k in request.querystring) {
+      qs += (qs ? '&' : '?') + k;
+      if (request.querystring[k].value) qs += '=' + request.querystring[k].value;
+    }
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: { location: { value: 'https://' + h.slice(4) + uri + qs } },
+    };
+  }
+
   // (1) Content-addressed build output. Never a route, never rewritten: a
   // request for a chunk that is not there has to be a miss, not the shell.
   if (uri === '/assets' || uri.indexOf('/assets/') === 0) {

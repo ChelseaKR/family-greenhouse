@@ -412,6 +412,16 @@ Operational notes:
   claim/send/finalize lease `welcomeEmail` uses. It is a _different sort key_
   from the ledger's `METADATA` row on purpose: that row is written after the
   apply so a failed apply stays retryable, and an email must not claim it.
+  The finalize is allowed to FAIL, and that is the case the marker has to
+  survive: a slot left in `sending` still carries a five-minute lease, and the
+  claim treats an expired lease as reclaimable, so a Lambda timeout between
+  SES accepting and the finalize landing would collect a Stripe retry and send
+  a second receipt for one charge. `forceCloseSlot` therefore closes the slot
+  unconditionally on that path (`finalizeRecovered: true` on the row marks
+  it), because suppressing a receipt is recoverable — replay the event from
+  the Stripe dashboard — and un-sending one is not. If BOTH writes fail the
+  slot really is reclaimable, and `billing_email_marker_left_reclaimable` says
+  so rather than leaving it to be discovered by a customer.
 - **Dispatch never throws.** A 5xx would make Stripe redeliver an already
   applied event. A failed send releases its marker, so replaying the event from
   the Stripe dashboard delivers it.
@@ -522,7 +532,28 @@ mode) when the hold was lifted; it is the procedure for any new environment.
    https://ux8jg1lns0.execute-api.us-east-1.amazonaws.com/production/billing/webhook
    ```
 6. Add the endpoint's signing secret (`whsec_…`) as the `STRIPE_WEBHOOK_SECRET` GitHub Actions repo secret.
-7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices.
+7. Stripe → Settings → Customer Portal: allow cancel, update payment method, view invoices, **and update subscriptions** — listing the Garden and Greenhouse **monthly** prices as the products a customer may switch between, with prorations on so an upgrade takes effect immediately.
+
+   The last capability is not optional, and it is the one that is off by
+   default. Changing tier is portal-only by design: `POST /billing/checkout`
+   refuses a second purchase on a live subscription with a 409
+   (`ALREADY_SUBSCRIBED`, so a household is never billed for two concurrent
+   subscriptions), and `BillingSettings` answers a subscribed household with
+   "Use 'Manage subscription' above to switch to X" rather than a buy button.
+   With subscription updates left off, that sentence opens a portal with no
+   such control and an existing subscriber has **no route to a higher tier at
+   all** — the checklist's own verification step ("a plan change made there
+   re-resolves entitlement from the price id",
+   [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md)) cannot be performed, and
+   the webhook's `planIdFromPriceId` — which exists only to resolve a
+   portal-initiated switch — is unreachable.
+
+   Leave the **withdrawn** cadences out of the switchable list (Garden annual
+   and lifetime, Greenhouse annual): they are not sold to anyone new, and
+   offering them in the portal would start one from the surface that checkout
+   refuses. Their prices stay live so existing subscriptions keep renewing —
+   see § _Withdrawn cadences_ above.
+
 8. Open the two gates — `commercialHoldActive: false` and
    `payments_enabled = "1"` — with the reviews and approvals in
    [`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md).
@@ -685,6 +716,81 @@ is also fetched by the app shell on every page, so it does not mean the billing 
 was opened, and frontend route telemetry carries no household. Distinct sessions
 rendering `/settings/billing` are available only as an unattributed total.
 
+## Gift subscriptions
+
+Proposed 2026-09-13 ([ADR 0028](adr/0028-gift-subscriptions.md)). A signed-in
+member pays once for **1–12 months of Garden or Greenhouse for another
+household**, gets a code, and a household admin redeems it. Priced at the tier's
+**monthly price times the months, with no discount** — a discounted twelve-month
+gift would be the annual plan ADR 0012 withdrew, and a gift month must earn what
+a subscription month earns because it is metered the same way.
+
+- **Offer:** `GET /billing/plans` publishes `giftSubscriptions`
+  (`{ minMonths, maxMonths, redeemWindowDays, plans: [{ planId, available }] }`).
+  `available` per tier is true only when payments are on AND that tier's gift
+  price env (`STRIPE_PRICE_ID_GIFT_GARDEN_MONTH` / `_GREENHOUSE_MONTH`) is set.
+  The per-month amount is the tier's `monthlyPrice`, already on the catalog.
+- **Purchase:** `POST /billing/gift/checkout` `{ planId, months }` — any member,
+  not admin-only, because it charges the **buyer's own card** and changes nothing
+  about the buyer's household. A `mode: 'payment'` Session against the one-month
+  price with `quantity: months`, reconciled against the catalog first
+  (`assertGiftPriceMatchesCatalog`). The Session carries **no `householdId` and
+  no `client_reference_id`**, and attaches no Stripe customer: the buyer's
+  household is neither granted nor receipted (`billingNotices.oneTimeReceipt`
+  returns null for a gift), and no household admin's saved card can be offered.
+  With the env var blank: 400 `details.code: GIFT_NOT_CONFIGURED` before Stripe.
+- **Grant:** on a PAID checkout event the webhook (`applyStripeEvent` →
+  `giftCodes.grantGiftPurchase`) writes three rows in **one transaction**:
+  `GIFT#{sessionId}` (conditional put — the Session id is the idempotency key,
+  so a redelivery creates nothing and mints no second code), `GIFTCODE#{hash}`
+  (hash → session; the row never carries the code) and
+  `USER#{buyerId} / GIFT#{sessionId}` (the buyer's copy, code in plain text, in
+  the buyer's own partition, deleted with the account). Then the
+  `STRIPE_EVENT#` ledger, after the grant like every other event. A paid gift
+  whose metadata is broken reaches `stripe_event_paid_no_grant` (alarmed).
+- **The code** is `FG` + 16 Crockford base32 symbols (80 bits from the OS
+  CSPRNG), shown as `FG-XXXX-XXXX-XXXX-XXXX`. It is a bearer credential: never
+  stamped on a Stripe object, never logged, shown only to the buying account via
+  `GET /billing/gift/purchases`. Redemption normalises case, separators and the
+  Crockford confusables (`O`→`0`, `I`/`L`→`1`). No email carries it yet.
+- **Redeem:** `POST /billing/gift/redeem` `{ code }` — admin-only, rate-limited
+  5/min per IP and 20/hour per user. It places `giftPlanId` / `giftEndsAt` on the
+  household METADATA row and consumes the code **in the same transaction**, each
+  half conditioned (`giftCodes.redeemGift`): a spent code never grants, a refused
+  household never spends one. The gift runs from redemption for whole calendar
+  months (day clamped: 31 Jan + 1 month = 28/29 Feb). A code may be redeemed
+  within 365 days of purchase.
+- **Refusals, none of which consume the code** (`details.code`):
+  `GIFT_CODE_INVALID` (unknown or malformed — one answer for both),
+  `GIFT_CODE_EXPIRED`, `GIFT_CODE_REDEEMED`, `GIFT_HOUSEHOLD_SUBSCRIBED` (a live
+  Stripe subscription — `hasLiveStripeSubscription`, the `ALREADY_SUBSCRIBED`
+  rule, fail-closed on an id with no status yet), `GIFT_ALREADY_ACTIVE` (one is
+  running; `details.endsAt`), `GIFT_ADDS_NOTHING` (lifetime tier at or above the
+  gift), `GIFT_REDEEM_CONFLICT` (a concurrent change; retry).
+- **Entitlement:** `giftState` in `models/plans.ts`, derived on every read like
+  the trial. A running gift is a **raise-only floor**: it lifts the household to
+  the gifted tier, never lowers it, sits on top of the lifetime floor, and is
+  **not** switched off by Stripe state (it was paid for — a subscription that
+  lapses into dunning mid-gift keeps the gifted months). `getMeteredPlanId`
+  meters AI at the gifted tier. The no-card trial defers to a running gift
+  (`noCardTrialState` is `none` while one runs), so a gift month is never
+  metered at the free tier.
+- **The card trial** (`trialConsumedAt`) is neither consumed nor granted by a
+  gift. **Cancellation at period end** is a live subscription and is refused
+  under `GIFT_HOUSEHOLD_SUBSCRIBED`. **`commercialHoldActive` / `PAYMENTS_ENABLED`**
+  gate the purchase (like every payment surface) and not the redemption, which
+  originates no payment — the same reasoning as webhook handling.
+- **Ending:** on the clock at `giftEndsAt`. The downgrade contract below applies
+  unchanged; nothing is deleted. `GET /billing/me` publishes
+  `gift: { planId, endsAt, state } | null` and never the raw attributes.
+- **Not written by any Stripe path:** `SubscriptionWriteField` excludes
+  `giftPlanId` / `giftEndsAt`, exactly like the trial attributes.
+- **Known gap, deliberately left:** a gifted household can still subscribe
+  during the gift (checkout is unchanged), and is then charged after its card
+  trial while the gift still runs. The billing page shows the gift's end date
+  beside the plan grid; refusing that checkout, or starting the subscription
+  when the gift ends, is a follow-up decision.
+
 ## Plan caps and downgrades
 
 If a household downgrades from Greenhouse → Seedling and they have 200 plants,
@@ -746,6 +852,7 @@ change to any row below is a change to the Terms as well, in **both** locales.
 | Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                  | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                                        |
 | Price changes       | A new price applies to new subscriptions only; a live subscription is never moved onto a different price, and a change that would move one is emailed to the household's admins 14 days ahead                                             | `line_items: [{ price: priceId }]` set once at checkout and never updated; § _Price changes_ below; § _Setup checklist_ above ("do not archive those Stripe prices") |
 | One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                               | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                                   |
+| Gifts               | **Not yet in the Terms.** A gift is a third one-time purchase with rules the `oneTime` sentence does not cover: redeemable within 365 days, runs from redemption, not refundable, cannot be applied to a subscribed household (ADR 0028)  | `models/giftSubscriptions.ts`, `services/giftSubscriptions.ts`; the Terms sentence is the owner's to write, in both locales                                          |
 | Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                                      |
 | Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                                       |
 

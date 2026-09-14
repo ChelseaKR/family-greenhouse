@@ -84,6 +84,42 @@ export interface IdentifyCreditBalance {
   expiresAt: string | null;
 }
 
+/**
+ * The gift subscription offer (ADR 0028), published by GET /billing/plans on
+ * the same fail-closed terms as the plan prices. The per-month amount is the
+ * tier's `monthlyPrice` in `plans`; a gift costs that times the months, with
+ * no discount. `available` per tier is true only when payments are on AND
+ * the server has a Stripe price for that tier's gift month.
+ */
+export interface GiftSubscriptionOffer {
+  minMonths: number;
+  maxMonths: number;
+  redeemWindowDays: number;
+  plans: Array<{ planId: Exclude<PlanId, 'seedling'>; available: boolean }>;
+}
+
+/** A redeemed gift as GET /billing/me publishes it: state decided by the server's clock. */
+export interface GiftState {
+  planId: Exclude<PlanId, 'seedling'>;
+  endsAt: string;
+  state: 'active' | 'ended';
+}
+
+/** One gift this account bought, as GET /billing/gift/purchases lists it. */
+export interface GiftPurchase {
+  stripeSessionId: string;
+  /** Display form, `FG-XXXX-XXXX-XXXX-XXXX`. */
+  code: string;
+  planId: Exclude<PlanId, 'seedling'>;
+  months: number;
+  purchasedAt: string;
+  redeemBy: string;
+  /** `unknown` means the server could not read whether it was redeemed. */
+  status: 'unredeemed' | 'redeemed' | 'expired' | 'unknown';
+  redeemedAt: string | null;
+  giftEndsAt: string | null;
+}
+
 export interface PlanCatalog {
   paymentsAvailable: boolean;
   commercialHold: {
@@ -93,6 +129,8 @@ export interface PlanCatalog {
   plans: Plan[];
   /** Absent from older backends. */
   identifyTopUp?: IdentifyTopUpOffer;
+  /** Absent from older backends. */
+  giftSubscriptions?: GiftSubscriptionOffer;
 }
 
 /** Legacy usage shape from GET /billing/me: counters are always numeric here;
@@ -147,6 +185,9 @@ export interface SubscriptionState {
    *  none to describe: the household never had one, or Stripe owns its
    *  entitlement. Absent from older backends. */
   noCardTrial?: NoCardTrial | null;
+  /** A redeemed gift subscription (ADR 0028). `null` means none to describe.
+   *  Absent from older backends. */
+  gift?: GiftState | null;
 }
 
 /**
@@ -173,13 +214,22 @@ const PLAN_RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 
 export function effectivePlanId(subscription?: SubscriptionState | null): PlanId | null {
   if (!subscription) return null;
   const { planId } = subscription;
+  let effective: PlanId = planId ?? 'seedling';
+  // A running gift raises the household to the gifted tier (ADR 0028), the
+  // way the server's `giftState` does; it never lowers it.
+  if (
+    subscription.gift?.state === 'active' &&
+    (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < (PLAN_RANK[subscription.gift.planId] ?? 0)
+  ) {
+    effective = subscription.gift.planId;
+  }
   if (
     subscription.noCardTrial?.state === 'active' &&
-    (PLAN_RANK[planId] ?? PLAN_RANK.seedling) < PLAN_RANK.garden
+    (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < PLAN_RANK.garden
   ) {
-    return 'garden';
+    effective = 'garden';
   }
-  return planId ?? null;
+  return planId === undefined && effective === 'seedling' ? null : effective;
 }
 
 /**
@@ -413,6 +463,44 @@ export const billingService = {
   async createTopUpCheckout(input: { checkoutAttemptId: string }): Promise<{ url: string }> {
     const response = await api.post<{ url: string }>('/billing/top-up/checkout', input);
     return response.data;
+  },
+
+  /**
+   * Start a one-time Stripe Checkout for a gift subscription (ADR 0028):
+   * `months` of `planId` for somebody else, charged to the caller's own card.
+   * Same idempotency contract as `createCheckout`. The server answers 400
+   * with `details.code: GIFT_NOT_CONFIGURED` when that tier cannot be given
+   * in its environment, and 503 while payments are paused.
+   */
+  async createGiftCheckout(input: {
+    planId: Exclude<PlanId, 'seedling'>;
+    months: number;
+    checkoutAttemptId: string;
+  }): Promise<{ url: string }> {
+    const response = await api.post<{ url: string }>('/billing/gift/checkout', input);
+    return response.data;
+  },
+
+  /**
+   * Redeem a gift code onto the active household (admin only). Refusals carry
+   * `details.code` (GIFT_CODE_INVALID, GIFT_CODE_EXPIRED, GIFT_CODE_REDEEMED,
+   * GIFT_HOUSEHOLD_SUBSCRIBED, GIFT_ALREADY_ACTIVE, GIFT_ADDS_NOTHING,
+   * GIFT_REDEEM_CONFLICT) and never consume the code.
+   */
+  async redeemGiftCode(input: {
+    code: string;
+  }): Promise<{ planId: Exclude<PlanId, 'seedling'>; endsAt: string }> {
+    const response = await api.post<{ planId: Exclude<PlanId, 'seedling'>; endsAt: string }>(
+      '/billing/gift/redeem',
+      input
+    );
+    return response.data;
+  },
+
+  /** The gifts this account has bought, with their codes. */
+  async listGiftPurchases(): Promise<GiftPurchase[]> {
+    const response = await api.get<{ purchases: GiftPurchase[] }>('/billing/gift/purchases');
+    return response.data.purchases;
   },
 
   /**

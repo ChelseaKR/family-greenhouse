@@ -22,14 +22,17 @@ import { test } from 'node:test';
 import { declaredRoutePaths, sampleUrlFor } from './app-routes.mjs';
 import {
   BUNDLE_ID,
+  ENROLLMENT_ID,
   TEAM_ID,
   TEAM_ID_PATTERN,
   TEAM_ID_PLACEHOLDER,
+  associationDocument,
   committedAssociation,
   componentPatterns,
   matchesComponent,
   partitionRoutes,
   renderAssociation,
+  teamIdProblem,
 } from './app-site-association.mjs';
 
 const committed = JSON.parse(committedAssociation());
@@ -64,6 +67,34 @@ test('the appID is <Team ID>.<bundle id>, with a real Team ID', () => {
   assert.deepEqual(detail.appIDs, [`${TEAM_ID}.${BUNDLE_ID}`]);
   assert.notEqual(TEAM_ID, TEAM_ID_PLACEHOLDER);
   assert.match(TEAM_ID, TEAM_ID_PATTERN);
+  assert.notEqual(TEAM_ID, ENROLLMENT_ID);
+});
+
+/**
+ * The Enrollment ID is the one wrong value that shape cannot reject, so it is
+ * the one that has to be rejected by name.
+ *
+ * Measured before this existed: substituting `ACKGM9XK9V` for TEAM_ID and
+ * regenerating left `npm run aasa`, `npm run aasa:check` AND
+ * `npm run well-known:check` all green, publishing a file that Apple fetches
+ * with a 200 while every universal link keeps opening Safari. The first
+ * assertion here is the one that was false.
+ */
+test('the Enrollment ID is refused by value, because it passes every shape check', () => {
+  // The hole: shape alone cannot tell the two IDs apart.
+  assert.match(ENROLLMENT_ID, TEAM_ID_PATTERN);
+
+  assert.ok(teamIdProblem(ENROLLMENT_ID)?.includes('ENROLLMENT ID'));
+  assert.equal(teamIdProblem(TEAM_ID), null);
+  assert.ok(teamIdProblem(TEAM_ID_PLACEHOLDER) !== null);
+  assert.ok(teamIdProblem('6x5yh93qnm') !== null, 'a lower-cased Team ID is not a Team ID');
+  assert.ok(teamIdProblem('6X5YH93QN') !== null, 'a truncated paste is not a Team ID');
+
+  // And the generator refuses to WRITE one, not merely to check one after the
+  // fact — the committed file is byte-compared against its output, so a bad
+  // TEAM_ID that regenerated cleanly would leave every gate green.
+  assert.throws(() => associationDocument(ENROLLMENT_ID), /ENROLLMENT ID/);
+  assert.throws(() => associationDocument(TEAM_ID_PLACEHOLDER), /placeholder/);
 });
 
 test('the committed file is exactly what the generator produces', () => {

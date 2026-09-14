@@ -271,6 +271,82 @@ describe('dispatchBillingEmails — exactly once', () => {
     expect(sent().some((c) => c.kind === 'Delete')).toBe(false);
   });
 
+  it('closes the marker anyway when the conditional finalize fails after SES accepted', async () => {
+    // The duplicate-receipt hole: a marker left in `sending` still carries a
+    // five-minute lease, and `claimSlot` hands an EXPIRED lease to the next
+    // delivery. A Lambda timeout between SES accepting and this update landing
+    // returns a non-2xx, Stripe retries after the lease has passed, and the
+    // household is receipted twice for one charge.
+    vi.mocked(dynamodb.send).mockImplementation((command: unknown) => {
+      const cmd = command as FakeCommand;
+      const key = keyOf(cmd);
+      if (cmd.kind === 'Get') return Promise.resolve({ Item: rows.get(key) }) as never;
+      if (cmd.kind === 'Update') return Promise.reject(new Error('throughput exceeded')) as never;
+      if (cmd.kind === 'Put') {
+        if (claimedKeys.has(key)) return Promise.reject(conditionalFailure()) as never;
+        rows.set(key, cmd.input.Item ?? {});
+        return Promise.resolve({}) as never;
+      }
+      return Promise.resolve({}) as never;
+    });
+
+    await dispatchBillingEmails(paidInvoice, 'charge');
+
+    // The slot is terminal and carries no lease, so nothing can reclaim it.
+    const closed = rows.get('STRIPE_EVENT#evt_test|EMAIL#payment_receipt#user-admin');
+    expect(closed).toMatchObject({ status: 'sent', finalizeRecovered: true });
+    expect(closed).not.toHaveProperty('leaseExpiresAt');
+    // And it is closed, never deleted — a delete is the other way to duplicate.
+    expect(sent().some((c) => c.kind === 'Delete')).toBe(false);
+  });
+
+  it('a redelivery after a recovered finalize still sends nothing', async () => {
+    // The property the recovery exists for, asserted end to end rather than on
+    // the shape of one row. The fake below distinguishes the two writes the way
+    // DynamoDB does: `claimSlot`'s Put carries a reservationId and is
+    // conditional (free, or a lease that has expired); `forceCloseSlot`'s
+    // carries none and is unconditional.
+    let failUpdates = true;
+    const nowEpoch = () => Math.floor(Date.now() / 1000);
+    vi.mocked(dynamodb.send).mockImplementation((command: unknown) => {
+      const cmd = command as FakeCommand;
+      const key = keyOf(cmd);
+      if (cmd.kind === 'Get') return Promise.resolve({ Item: rows.get(key) }) as never;
+      if (cmd.kind === 'Update' && failUpdates) {
+        return Promise.reject(new Error('throughput exceeded')) as never;
+      }
+      if (cmd.kind === 'Put') {
+        const item = cmd.input.Item ?? {};
+        const existing = rows.get(key);
+        const isClaim = item.reservationId !== undefined;
+        if (
+          isClaim &&
+          existing &&
+          !(existing.status === 'sending' && (existing.leaseExpiresAt as number) <= nowEpoch())
+        ) {
+          return Promise.reject(conditionalFailure()) as never;
+        }
+        rows.set(key, item);
+        return Promise.resolve({}) as never;
+      }
+      return Promise.resolve({}) as never;
+    });
+
+    await dispatchBillingEmails(paidInvoice, 'charge');
+    expect(emailNotifier.sendEmail).toHaveBeenCalledTimes(1);
+
+    // Stripe retries the same event long after the five-minute lease would
+    // have expired. Expiring the stored lease models that without a clock.
+    failUpdates = false;
+    const slot = 'STRIPE_EVENT#evt_test|EMAIL#payment_receipt#user-admin';
+    const stored = rows.get(slot)!;
+    if (stored.leaseExpiresAt !== undefined) stored.leaseExpiresAt = nowEpoch() - 1;
+
+    await dispatchBillingEmails(paidInvoice, 'charge');
+
+    expect(emailNotifier.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
   it('releases the marker on a dry run, so a resend can still deliver', async () => {
     vi.mocked(emailNotifier.sendEmail).mockResolvedValue(false);
     await dispatchBillingEmails(paidInvoice, 'charge');

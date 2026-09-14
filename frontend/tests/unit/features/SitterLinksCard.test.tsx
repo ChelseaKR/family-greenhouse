@@ -159,7 +159,15 @@ describe('SitterLinksCard existing-links read', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/couldn.t load your existing sitter links/i);
-    expect(alert).toHaveTextContent(/still active/i);
+    // The failed read changed nothing — that is the honest statement, and it is
+    // what the household needs in order not to read "we could not look" as
+    // "there is nothing out there". The sentence used to end "any links you
+    // created earlier are still active", which asserts something this code
+    // path cannot know: `sitterService.getActiveLink` re-checks status and
+    // expiresAt on every read, so an earlier link may have expired or been
+    // revoked in the meantime.
+    expect(alert).toHaveTextContent(/Nothing changed/i);
+    expect(alert).toHaveTextContent(/expires or someone revokes it/i);
     expect(screen.queryByText('Links you’ve shared')).not.toBeInTheDocument();
   });
 

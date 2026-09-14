@@ -67,8 +67,15 @@
  *   - the `TEAMID_PENDING` sentinel;
  *   - a missing, empty, or non-string `appIDs` entry;
  *   - anything that is not exactly ten uppercase alphanumerics before the
- *     bundle identifier — a truncated paste, a lower-cased value, or the
- *     Enrollment ID, which is a different number that looks like a Team ID.
+ *     bundle identifier — a truncated paste or a lower-cased value;
+ *   - this account's Enrollment ID, BY VALUE.
+ *
+ * That last one used to be listed as something the shape check caught. It is
+ * not, and it cannot be: an Enrollment ID is also ten uppercase alphanumerics,
+ * so the regex accepts it, and swapping one in left this gate and `aasa:check`
+ * both green while the published file claimed the wrong team. The refusal now
+ * names the value (`ENROLLMENT_ID`), which is the only way to refuse a wrong
+ * answer that has the right shape.
  *
  * The sentinel is still named even though the real Team ID has landed. The
  * failure it guards is a FUTURE placeholder — pasted in while standing up a
@@ -99,10 +106,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
+import { artifactHiddenFileProblems } from './artifact-hidden-files.mjs';
 import {
   BUNDLE_ID,
-  TEAM_ID_PATTERN,
   TEAM_ID_PLACEHOLDER,
+  teamIdProblem,
 } from '../frontend/scripts/app-site-association.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -142,10 +150,26 @@ const TEAM_ID_SOURCE =
  * a one-year immutable cache (#644).
  */
 const DEPLOY_PATHS = [
-  { file: '.github/workflows/cd-production.yml', dist: 'dist' },
-  { file: '.github/workflows/cd-staging.yml', dist: 'dist' },
-  { file: 'scripts/deploy.sh', dist: 'frontend/dist' },
+  { file: '.github/workflows/cd-production.yml', dist: 'dist', viaArtifact: true },
+  { file: '.github/workflows/cd-staging.yml', dist: 'dist', viaArtifact: true },
+  { file: 'scripts/deploy.sh', dist: 'frontend/dist', viaArtifact: false },
 ];
+
+/**
+ * `.well-known/` is a HIDDEN directory, and `actions/upload-artifact` drops
+ * hidden files unless this is set. A workflow that builds the association file
+ * into `dist/` and then hands `dist/` to another job through an artifact loses
+ * it in transit: the build is green, the upload step's `if [ -f ... ]` guard
+ * finds nothing, and the deploy is green too. Nothing anywhere says the file
+ * was dropped. That is exactly how v0.33.0 deployed successfully while
+ * https://familygreenhouse.net/.well-known/apple-app-site-association
+ * answered 404 (331 objects uploaded, none of them under .well-known/).
+ *
+ * `scripts/deploy.sh` reads `frontend/dist` in place and never crosses an
+ * artifact, so it is exempt.
+ */
+// The assertion itself lives in ./artifact-hidden-files.mjs so it can be
+// unit-tested; this gate runs at import time and cannot be imported.
 
 /** The filter that keeps the immutable sync off `.well-known/`. */
 const WELL_KNOWN_EXCLUDE = '--exclude ".well-known/*"';
@@ -207,13 +231,15 @@ function escapeRegExp(value) {
  * Every appID has to be `<10-character Team ID>.<bundle id>`. The placeholder
  * is called out by name because it is the expected state of this repository
  * until enrollment completes, and the failure text has to be a handover note
- * rather than a riddle. Anything else that fails the shape gets the same
- * refusal — a truncated paste, a lower-cased value, or the Enrollment ID,
- * which is the mistake this specific gate exists to catch.
+ * rather than a riddle. A truncated paste or a lower-cased value gets the same
+ * refusal from the shape check, and this account's Enrollment ID gets it BY
+ * VALUE — shape cannot separate the two, which is why `teamIdProblem()` names
+ * the one wrong value this repository actually knows.
  *
- * Deliberately NOT a check that the Team ID is the RIGHT one: nothing in this
- * repository can know that. The claim being made is narrower and provable —
- * that no value of a shape Apple never issues reaches the bucket.
+ * Still deliberately NOT a check that the Team ID is the RIGHT one: nothing
+ * here can know that. The claim is narrower and provable — that no value of a
+ * shape Apple never issues, and no value this repository knows to be the wrong
+ * one, reaches the bucket.
  */
 function appleAppIdProblems(parsed) {
   const where = `${PUBLIC_WELL_KNOWN}/${APPLE_ASSOCIATION}`;
@@ -236,20 +262,15 @@ function appleAppIdProblems(parsed) {
       continue;
     }
     const teamId = appId.slice(0, appId.length - BUNDLE_ID.length - 1);
-    if (teamId === TEAM_ID_PLACEHOLDER) {
+    // One predicate, shared with the generator, so the thing that WRITES the
+    // file and the thing that CHECKS it cannot disagree about what may ship.
+    const problem = teamIdProblem(teamId);
+    if (problem !== null) {
       found.push(
-        `${where}: the appID carries the placeholder Team ID \`${TEAM_ID_PLACEHOLDER}\`, so ` +
-          'this file CANNOT SHIP. Published as-is it parses, uploads, caches, and is fetched ' +
-          'successfully by Apple — and every universal link silently keeps opening Safari, ' +
-          `which is a failure with no server-side trace and a weeks-long feedback loop. ` +
-          TEAM_ID_SOURCE
-      );
-      continue;
-    }
-    if (!TEAM_ID_PATTERN.test(teamId)) {
-      found.push(
-        `${where}: appID ${JSON.stringify(appId)} does not start with an Apple Team ID — ` +
-          `\`${teamId}\` is not ${TEAM_ID_PATTERN.source}. ${TEAM_ID_SOURCE}`
+        `${where}: this file CANNOT SHIP — ${problem}. Published as-is it parses, uploads, ` +
+          'caches, and is fetched successfully by Apple, and every universal link silently ' +
+          'keeps opening Safari: a failure with no server-side trace and a weeks-long ' +
+          `feedback loop. ${TEAM_ID_SOURCE}`
       );
     }
   }
@@ -258,9 +279,13 @@ function appleAppIdProblems(parsed) {
 
 // --- The deploy paths -------------------------------------------------------
 
-for (const { file, dist } of DEPLOY_PATHS) {
+for (const { file, dist, viaArtifact } of DEPLOY_PATHS) {
   const text = read(file);
   const commands = commandLines(text);
+
+  // A `dist/` that travels through an artifact must carry hidden files, or
+  // `.well-known/` never reaches the job that uploads it to S3.
+  if (viaArtifact) problems.push(...artifactHiddenFileProblems(file, text, dist));
 
   // The immutable sync must not claim `.well-known/`. Without this the
   // extensionless Apple file rides it up with a 1-year immutable cache and a
