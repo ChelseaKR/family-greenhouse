@@ -22,7 +22,7 @@ export default function RoomLight() {
       <ul>
         <li>
           <strong>Sharp-edged shadow you could trace.</strong> Direct sun. Good for succulents,
-          cacti, most herbs. Will scorch a fern or a calathea.
+          cacti, most herbs. Will scorch a fern or a <a href="/care/calathea">calathea</a>.
         </li>
         <li>
           <strong>Soft shadow with fuzzy edges, clearly visible.</strong> This is bright indirect
@@ -31,7 +31,7 @@ export default function RoomLight() {
         </li>
         <li>
           <strong>Faint shadow you have to look for.</strong> Medium to low light. Plenty of plants
-          cope: pothos, snake plants, cast iron plants, parlour palms.
+          cope: <a href="/care/pothos">pothos</a>, snake plants, cast iron plants, parlour palms.
         </li>
         <li>
           <strong>No shadow at all.</strong> Too dark for a plant to grow, whatever the label
@@ -95,7 +95,7 @@ export default function RoomLight() {
         The cheapest fix, and the one people resist. If your flat has one good window, put the
         light-hungry plants there and fill the dim corners with things that genuinely tolerate low
         light rather than things you wish did. A thriving pothos in a dark hallway looks better than
-        a suffering fiddle leaf fig anywhere.
+        a suffering <a href="/care/fiddle-leaf-fig">fiddle leaf fig</a> anywhere.
       </p>
       <h3>2. Rotate plants through the good spot</h3>
       <p>

@@ -32,8 +32,9 @@ export default function WateringWhileOnVacation() {
         </li>
       </ul>
       <p>
-        Skip the gadgets entirely at this length. Succulents, snake plants, ZZ plants and most
-        things with thick leaves would be fine for three times as long.
+        Skip the gadgets entirely at this length. Succulents, snake plants,{' '}
+        <a href="/care/zz-plant">ZZ</a> plants and most things with thick leaves would be fine for
+        three times as long.
       </p>
 
       <h2>One to two weeks: buy time mechanically</h2>

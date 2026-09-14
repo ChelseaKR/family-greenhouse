@@ -14,9 +14,10 @@ export default function RememberingToWater() {
 
       <h2>Why &ldquo;just remember&rdquo; doesn&rsquo;t work</h2>
       <p>
-        Plants don&rsquo;t fit cleanly into your week. A peace lily wants water every five-ish days.
-        A jade plant wants water every fifteen. A fiddle leaf fig wants water when the top inch of
-        soil is dry, which is between four and ten days depending on the season.
+        Plants don&rsquo;t fit cleanly into your week. A <a href="/care/peace-lily">peace lily</a>{' '}
+        wants water every five-ish days. A <a href="/care/jade-plant">jade plant</a> wants water
+        every fifteen. A <a href="/care/fiddle-leaf-fig">fiddle leaf fig</a> wants water when the
+        top inch of soil is dry, which is between four and ten days depending on the season.
       </p>
       <p>
         That&rsquo;s a different schedule per plant, all running on different clocks, none of which
@@ -33,10 +34,10 @@ export default function RememberingToWater() {
 
       <h3>1. The sticky-note method</h3>
       <p>
-        A sticky note on the fridge that says &ldquo;water Monstera Mondays.&rdquo; Works for one or
-        two plants. Falls apart at three. The notes accumulate, you stop reading them, and
-        you&rsquo;re back where you started. Worse: when you skip a Monday, the note doesn&rsquo;t
-        adjust. It just keeps lying to you.
+        A sticky note on the fridge that says &ldquo;water <a href="/care/monstera">Monstera</a>{' '}
+        Mondays.&rdquo; Works for one or two plants. Falls apart at three. The notes accumulate, you
+        stop reading them, and you&rsquo;re back where you started. Worse: when you skip a Monday,
+        the note doesn&rsquo;t adjust. It just keeps lying to you.
       </p>
 
       <h3>2. The calendar reminder</h3>
