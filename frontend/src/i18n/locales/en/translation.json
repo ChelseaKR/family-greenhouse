@@ -1098,7 +1098,13 @@
       "plantsUsageUnlimited": "{{n}} plants · no limit",
       "plantsCountUnavailable": "Plants — usage unavailable",
       "membersUsageUnlimited": "{{n}} members · no limit",
-      "membersCountUnavailable": "Members — usage unavailable"
+      "membersCountUnavailable": "Members — usage unavailable",
+      "checkoutPendingTitle": "Payment received — finishing up",
+      "checkoutPendingBody": "Your payment went through. Your plan updates here as soon as our payment provider confirms it, which usually takes a few seconds. Please do not check out again — a second purchase would start a second subscription and charge you twice.",
+      "checkoutStalledTitle": "Your payment went through, but your plan has not updated",
+      "checkoutStalledBody": "We have not had confirmation from our payment provider yet. Nothing is lost — the payment is recorded with them — but this household is still showing its old plan. Please do not check out again: a second purchase would start a second subscription and charge you twice. Reload this page in a minute or two.",
+      "checkoutStalledContact": "If it still has not updated, email us and we will apply it by hand:",
+      "purchaseInFlight": "Waiting for your last purchase to be confirmed. Buying again would charge you twice."
     }
   },
   "notifications": {

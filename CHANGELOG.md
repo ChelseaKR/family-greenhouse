@@ -18,6 +18,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **A household that had just paid was told it was still on the free plan, with
+  a button to buy again.** `createCheckoutSession` writes nothing to the
+  household row — entitlement arrives only when the Stripe webhook does — so
+  between the redirect back to `/settings/billing?status=success` and that
+  webhook landing, `GET /billing/me` still answers with the pre-purchase tier.
+  Settings → Billing rendered that answer as a flat statement of fact ("Your
+  household is on the Seedling plan."), with **no acknowledgement of the
+  payment anywhere on the page**, directly above a live "Switch to Garden"
+  button. The identification top-up path two cards below has said "this can
+  take a moment" since it shipped; the subscription path, the one that costs
+  $4.99–$9.99 a month, said nothing — and `docs/billing.md` has described step
+  4 of this flow as "the settings page reads the query string and shows a
+  friendly notice" the whole time.
+
+  The button was not only confusing. The server guard that refuses a second
+  concurrent subscription keys off `stripeSubscriptionId` — exactly the field
+  the webhook has not written yet — so a second checkout started in that window
+  is accepted, and the household ends up paying for two subscriptions that both
+  keep renewing.
+
+  The page now says "Payment received — finishing up" while the webhook is
+  plausibly still in flight, withholds every tier's purchase button while a
+  paid checkout is unconfirmed, and — once the 20-second poll window lapses
+  without entitlement — escalates to "Your payment went through, but your plan
+  has not updated", naming the support address so the grant can be made by
+  hand. A lifetime purchase counts as settled through `lifetimePlanId` (it
+  clears the subscription id by design), and the top-up return keeps its own
+  notice.
+
 - **The iOS app-site-association file was never published, and every deploy
   said it was.** `frontend/public/.well-known/apple-app-site-association` has
   carried the real Team ID since #731 and is built into `dist/` correctly, but
