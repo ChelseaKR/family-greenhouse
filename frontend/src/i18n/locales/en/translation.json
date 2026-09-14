@@ -1396,6 +1396,7 @@
     "featureImportExport": "Import, export and calendar feed (CSV, JSON, .ics)",
     "trialNote": "A new household starts with 14 days of Garden, no card needed, then moves to the free plan on its own. Separately, a household’s first paid subscription begins with a 14-day trial: checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing. The subscription trial is once per household: a household that has had one before is charged when it subscribes again.",
     "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
+    "giftNote": "Buying this for someone else?",
     "whyHeading": "Why a paid plan",
     "whyHouseholdTitle": "One bill for the house",
     "whyHouseholdBody": "A plan covers the whole household on a single subscription. The people you share your plants with are members of your plan, not extra seats to buy.",
@@ -1692,6 +1693,24 @@
       "rateLimited": "Too many attempts. Wait a minute and try again.",
       "generic": "We couldn't redeem the code right now. Nothing was used — please try again shortly."
     }
+  },
+  "giftLanding": {
+    "eyebrow": "Gifts",
+    "title": "Give a Family Greenhouse gift",
+    "lede": "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code to enter in Settings → Billing — you don't need a household of your own to send one.",
+    "howItWorksHeading": "How it works",
+    "step1Title": "Choose a plan and length",
+    "step1Body": "Garden or Greenhouse, from 1 to 12 months.",
+    "step2Title": "Pay once, on your own card",
+    "step2Body": "One payment, nothing renews. We send a receipt and a redemption code to pass on.",
+    "step3Title": "They redeem it",
+    "step3Body": "Whoever you're gifting it to enters the code in Settings → Billing, and the gift starts that day.",
+    "signInHeading": "Sign in to send a gift",
+    "signInBody": "Buying a gift charges your own card, so we need an account to send the receipt and code to. It does not need a household of your own — this is the only place gifting works without one.",
+    "signInCta": "Sign in",
+    "registerCta": "Create a free account",
+    "nativeNotice": "Gifting isn't available in the app. Open familygreenhouse.net on the web to send a gift.",
+    "navLink": "Gift a subscription"
   },
   "caretaker": {
     "seats": {

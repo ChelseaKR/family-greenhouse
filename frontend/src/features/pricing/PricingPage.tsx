@@ -121,6 +121,13 @@ export function PricingPage() {
             <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
               {t('pricing.howToBuyNote')}
             </p>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
+              {t('pricing.giftNote')}{' '}
+              <Link to="/gift" className="font-medium text-primary-700 hover:underline">
+                {t('giftLanding.navLink')}
+              </Link>
+              .
+            </p>
           </>
         }
       />

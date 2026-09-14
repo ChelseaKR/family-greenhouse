@@ -374,15 +374,27 @@ export const topUpCheckout = createHandler(
 // POST /billing/gift/checkout
 //
 // One-time Stripe Checkout for a gift subscription (models/giftSubscriptions.ts,
-// ADR 0028): N months of a paid tier for somebody else. Any signed-in member
-// may buy one — it charges the buyer's own card and changes nothing about the
-// buyer's household — which is why this is the one purchase route without
-// `requireAdmin`. Fails CLOSED on configuration exactly like the top-up.
+// ADR 0028): N months of a paid tier for somebody else. Any signed-in user
+// may buy one — it charges the buyer's own card, names no household on the
+// Session (see createGiftCheckoutSession), and changes nothing about the
+// buyer's own household, if they even have one. That is also why this route
+// carries no `requireHousehold`, unlike every other purchase route: a buyer
+// giving a gift to a friend has no reason to have created a household of
+// their own first, and the service call below never reads one. Also without
+// `requireAdmin`, for the same reason. Fails CLOSED on configuration exactly
+// like the top-up.
 export const giftCheckout = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<GiftCheckoutInput>;
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // A household member returns to the billing settings they already know;
+    // a buyer with no household (the public /gift page is the only way to
+    // reach one) returns to /gift, which reads its own purchase list — the
+    // /settings/billing route lives behind ProtectedRoute's household gate
+    // and would otherwise bounce a gift-only buyer into onboarding right
+    // after they paid.
+    const returnPath = user.householdId ? '/settings/billing' : '/gift';
     const notConfigured = () =>
       createHttpError(400, 'Gift subscriptions are not available in this environment.', {
         expose: true,
@@ -395,8 +407,8 @@ export const giftCheckout = createHandler(
         buyerEmail: user.email,
         planId: validatedBody.planId,
         months: validatedBody.months,
-        successUrl: `${baseUrl}/settings/billing?status=success&purchase=gift`,
-        cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
+        successUrl: `${baseUrl}${returnPath}?status=success&purchase=gift`,
+        cancelUrl: `${baseUrl}${returnPath}?status=cancel`,
         idempotencyKey: validatedBody.checkoutAttemptId
           ? `gift:${user.userId}:${validatedBody.checkoutAttemptId}`
           : undefined,
@@ -421,7 +433,6 @@ export const giftCheckout = createHandler(
   }
 )
   .use(authMiddleware())
-  .use(requireHousehold())
   .use(userRateLimit({ perWindowMs: 60_000, max: 10 }))
   .use(validateBody(giftCheckoutSchema));
 
@@ -485,8 +496,11 @@ export const giftRedeem = createHandler(
 // GET /billing/gift/purchases
 //
 // The gifts this account has bought, with their codes and whether each has
-// been redeemed. The buyer's own rows only; a failed read is a 502, never an
-// empty list.
+// been redeemed. The buyer's own rows only, keyed by userId — no household
+// gate here either, the same reasoning as POST /billing/gift/checkout: a
+// gift-only buyer with no household still needs to read the codes they paid
+// for, and the read never touches a household record. A failed read is a
+// 502, never an empty list.
 export const giftPurchases = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -500,9 +514,7 @@ export const giftPurchases = createHandler(
       });
     }
   }
-)
-  .use(authMiddleware())
-  .use(requireHousehold());
+).use(authMiddleware());
 
 // POST /billing/portal
 export const portal = createHandler(

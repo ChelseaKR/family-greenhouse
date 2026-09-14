@@ -225,6 +225,13 @@ export const ROUTE_POLICY = {
   // by search, read by people who do not have the app: never claimed.
   '/pet-safe/:slug': 'web',
   '/pricing': 'web',
+  // Public gift-subscription landing page (ADR 0028). Same reasoning as
+  // /pricing: it must render for a giver who has never installed the app —
+  // very likely, since buying a gift for someone else is no reason to have
+  // signed up first — and GiftLandingPage itself declines to offer the
+  // purchase at all inside the native shell (App Store in-app-purchase
+  // rules, same as /pricing).
+  '/gift': 'web',
   '/status': 'web',
   '/support': 'web',
 
