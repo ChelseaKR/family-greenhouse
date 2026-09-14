@@ -70,8 +70,18 @@ echo "Deploying frontend to S3..."
 # blog/<slug>/index.html and app-shell.html all went up with a 1-year
 # immutable cache at URLs that never change. The CD workflows already do the
 # two-phase split below; this script had drifted from them.
+#
+# NO --delete here, for the reason cd-production.yml gives at the same place:
+# a tab open across a release holds the PREVIOUS index chunk, which names the
+# previous `<Route>-<hash>.js`. Deleting that file in the same breath as
+# uploading the new one turns the next lazy navigation into "The page's code
+# couldn't be fetched" — observed on /confirm-email, the worst page for it,
+# because a confirmation link is followed once and often in a tab that has been
+# sitting open. The old objects are content-hashed and immutable, so keeping
+# them costs storage and nothing else; the tagged release path prunes them
+# after a grace period. This script had kept the `--delete` that incident
+# removed from CD, which is the same drift the comment above records.
 aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
-    --delete \
     --cache-control "max-age=31536000,public" \
     --exclude "*.html" \
     --exclude "sw.js" \
@@ -157,18 +167,43 @@ echo "Deploying Lambda functions..."
 # SNS-invoked SES bounce/complaint consumer. Keep this list in sync
 # with infrastructure/modules/api locals + the CD workflow's deploy loop.
 HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests emailEvents chat-stream)
+# Every function that did not end up running this build's code. The loop keeps
+# going so one broken function does not leave the rest on the old release, but
+# the script must not end by saying the deploy is complete when this is not
+# empty — see the exit at the bottom.
+FAILED_HANDLERS=()
 for handler in "${HANDLERS[@]}"; do
     FUNCTION_NAME="family-greenhouse-${handler}-${ENVIRONMENT}"
     SRC="backend/dist/${handler}.js"
 
+    # A missing bundle is a broken build, not a function to skip. Both CD
+    # workflows exit 1 here; this used to print "Skipping" and carry on, so a
+    # `dist/` that was half-built deployed a partial release and still finished
+    # by announcing a complete one.
     if [[ ! -f "$SRC" ]]; then
-        echo "  Skipping ${handler}: ${SRC} not found"
+        echo "  ✗ ${FUNCTION_NAME}: ${SRC} not found — the backend build did not produce it" >&2
+        FAILED_HANDLERS+=("$handler")
         continue
     fi
 
     WORK=$(mktemp -d)
     cp "$SRC" "${WORK}/handler.mjs"
-    [[ -f "${SRC}.map" ]] && cp "${SRC}.map" "${WORK}/handler.mjs.map"
+    # An `if`, not `[[ ... ]] && cp ... || true`. Errexit applies to the last
+    # command of an `&&` list, so the bare `[[ ... ]] && cp` this replaces
+    # returned 1 on a bundle built without a source map and killed the whole
+    # script mid-deploy, after some functions had already been published. The
+    # `|| true` both CD workflows use fixes that, but SC2015 fires on it under
+    # the analyser version the CI runner ships and not under the newer one a
+    # laptop may have, so the gate's verdict would depend on which machine ran
+    # it. An `if` suspends errexit in its condition and reads the same to every
+    # version.
+    #
+    # (And this comment does not begin a line with the analyser's own name:
+    # that is read as a directive, and a malformed one silently stops the file
+    # being checked at all — see the header of scripts/check-shell.mjs.)
+    if [[ -f "${SRC}.map" ]]; then
+        cp "${SRC}.map" "${WORK}/handler.mjs.map"
+    fi
     ZIP="$(pwd)/.deploy-${handler}.zip"
     (cd "$WORK" && zip -q -r "$ZIP" .)
 
@@ -177,25 +212,73 @@ for handler in "${HANDLERS[@]}"; do
     # would print "not found or update failed" for a Lambda that had just been
     # published and `continue` past the artifact archive below — leaving CD's
     # auto-rollback with no zip for a version that exists.
+    #
+    # stderr is NOT discarded. It used to be `2>/dev/null`, so the one line
+    # saying WHY (a wrong profile, an expired session, a function this
+    # environment does not have) was thrown away and the operator was left with
+    # "not found or update failed" for all sixteen.
     if PUBLISHED_VER=$(aws lambda update-function-code \
         --function-name "$FUNCTION_NAME" \
         --region us-east-1 \
         --zip-file "fileb://${ZIP}" \
-        --publish --query 'Version' --output text 2>/dev/null); then
+        --publish --query 'Version' --output text); then
+        # Both CD workflows wait here. Without it the script returns while the
+        # new code is still being applied, so a caller that immediately smokes
+        # the API can be answered by the previous version, and a second update
+        # to the same function races an in-progress one.
+        aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME" --region us-east-1
         echo "  ✓ ${FUNCTION_NAME} (v${PUBLISHED_VER})"
     else
-        echo "  ✗ ${FUNCTION_NAME} (not found or update failed)"
+        echo "  ✗ ${FUNCTION_NAME} (update failed — see the error above)" >&2
+        FAILED_HANDLERS+=("$handler")
         rm -rf "$WORK" "$ZIP"
         continue
     fi
 
     # Archive this version's zip so CD auto-rollback can restore it later.
-    aws s3 cp "$ZIP" \
+    #
+    # Not `|| true`. This archive IS the rollback: cd-production.yml restores a
+    # previous version by fetching exactly this key, and a version that exists
+    # in Lambda with no zip in S3 is a version the auto-rollback cannot go back
+    # to. Swallowing the failure left that gap silently, on the manual path
+    # that is used when something is already wrong.
+    if ! aws s3 cp "$ZIP" \
         "s3://${ARTIFACT_BUCKET}/lambda-versions/${handler}-v${PUBLISHED_VER}.zip" \
-        --region us-east-1 --only-show-errors || true
+        --region us-east-1 --only-show-errors; then
+        echo "  ✗ ${FUNCTION_NAME}: v${PUBLISHED_VER} is live but its rollback package could not be archived" >&2
+        FAILED_HANDLERS+=("$handler")
+    fi
 
     rm -rf "$WORK" "$ZIP"
 done
+
+if [[ ${#FAILED_HANDLERS[@]} -gt 0 ]]; then
+    echo "" >&2
+    echo "Deployment to $ENVIRONMENT INCOMPLETE: ${#FAILED_HANDLERS[@]} of ${#HANDLERS[@]} functions did not deploy cleanly:" >&2
+    printf '  %s\n' "${FAILED_HANDLERS[@]}" >&2
+    echo "" >&2
+    echo "The frontend above has already been published, so the site is now newer than these" >&2
+    echo "functions. Fix the cause and re-run, or roll the frontend back by hand." >&2
+    exit 1
+fi
+
+# Prove the API is actually serving, the same way both CD workflows do
+# immediately after their own Lambda loop. A deploy that published every
+# function and left the API answering 500 used to end with "complete!".
+echo ""
+echo "Smoke test: GET ${API_URL}/health"
+HEALTH_CODE=$(curl -sS -o /tmp/fg-deploy-health.json -w "%{http_code}" "${API_URL}/health")
+echo "  HTTP ${HEALTH_CODE}"
+cat /tmp/fg-deploy-health.json
+echo ""
+if [[ "$HEALTH_CODE" != "200" ]]; then
+    echo "Smoke test failed: the API did not answer 200 after this deploy." >&2
+    exit 1
+fi
+node -e "const h=require('/tmp/fg-deploy-health.json'); if(h.status!=='ok'||h.components?.database?.status!=='ok') process.exit(1)" || {
+    echo "Smoke test failed: /health answered 200 but did not report itself healthy." >&2
+    exit 1
+}
 
 echo ""
 echo "Deployment to $ENVIRONMENT complete!"

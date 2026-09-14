@@ -71,7 +71,14 @@ The switcher exposes a "+ Add a household" affordance that links to `/onboarding
 - If they're the only member, the household, plants, tasks, and completion records are wiped before the user row is removed.
 - If they're the only member and the household has a Stripe subscription, it is cancelled immediately — before anything is deleted. Subscriptions are per household, so leaving a household that keeps other members never touches billing; but an abandoned household is erased together with the only login that could reach the billing portal, so its subscription has to go first. If Stripe can't confirm the subscription is dead, the deletion is refused with a 502 and nothing has been touched; retrying is safe (an already-cancelled or missing subscription counts as done).
 
-Past activity events and task completion records intentionally retain the user's name as a snapshot, same as documented in `docs/profile.md`.
+A rename never rewrites past activity events or task completion records: the
+name on them is a snapshot, as documented in `docs/profile.md`. Account
+deletion is the exception, and it does rewrite them —
+`accountCleanup.anonymizeUserInHousehold` replaces the departing user's
+`actorId` / `completedBy` with `deleted-user` and their `actorName` /
+`completedByName` with "Former member" on every event and completion they
+authored. That is what the privacy policy and `docs/support.md` describe, and
+it is why a household keeps the history without keeping the person.
 
 ## Local development
 

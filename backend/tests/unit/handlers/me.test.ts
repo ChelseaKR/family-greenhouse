@@ -747,6 +747,37 @@ describe('me handler', () => {
       const body = JSON.parse(res.body);
       expect(body.households).toEqual([]);
     });
+
+    it('is rate-limited per user (6/hour), because one call reads every plant and task', async () => {
+      const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+      __resetRateLimitForTests();
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const notificationPrefs = await import('../../../src/services/notificationPrefs.js');
+      const { exportMe } = await import('../../../src/handlers/me/handler.js');
+
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValue('Test User');
+      vi.mocked(notificationPrefs.getPreferences).mockResolvedValue({
+        userId: 'user-1',
+        browser: false,
+        email: true,
+        sms: false,
+        phone: '',
+        dndStart: '',
+        dndEnd: '',
+        timezone: 'UTC',
+        pestAlerts: false,
+        updatedAt: '',
+      });
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
+
+      let last: APIGatewayProxyResult | undefined;
+      for (let i = 0; i < 7; i += 1) {
+        last = (await exportMe(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      }
+      expect(last?.statusCode).toBe(429);
+      __resetRateLimitForTests();
+    });
   });
 
   describe('listMyHouseholds', () => {
@@ -851,6 +882,21 @@ describe('me handler', () => {
         () => {}
       )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(401);
+    });
+
+    it('is rate-limited per user (60/min), like the public feed serving the same read', async () => {
+      const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+      __resetRateLimitForTests();
+      const taskService = await import('../../../src/services/taskService.js');
+      const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(taskService.getTasks).mockResolvedValue([]);
+
+      let last: APIGatewayProxyResult | undefined;
+      for (let i = 0; i < 61; i += 1) {
+        last = (await calendarIcs(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      }
+      expect(last?.statusCode).toBe(429);
+      __resetRateLimitForTests();
     });
   });
 

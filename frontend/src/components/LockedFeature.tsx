@@ -10,7 +10,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
 import { useAuthStore } from '@/store/authStore';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { householdService } from '@/services/householdService';
 import {
   classifyUpgradeRequestError,
@@ -75,7 +75,8 @@ function useUpgradeAsk(feature: UpgradeFeature) {
   // be shown "Included with Garden — $4.99 a month" — a downgrade, presented
   // as the fix, with a price on it. Null until the read settles; no line
   // rather than a wrong one.
-  const currentPlanId = subQuery.data?.planId ?? null;
+  // The tier whose features apply now: a no-card Garden trial counts (ADR 0027).
+  const currentPlanId = effectivePlanId(subQuery.data);
   const targetPlanId = currentPlanId ? resolveTargetPlan(feature, currentPlanId, plans) : null;
   const targetPlan = targetPlanId ? plans?.find((p) => p.id === targetPlanId) : undefined;
   // Fail closed on an unknown catalog: the ask is only offered once the API

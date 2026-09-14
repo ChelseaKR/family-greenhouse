@@ -22,8 +22,8 @@
  *     - The task-complete path checks that the task belongs to the tag's
  *       PLANT, not merely its household — a forged taskId for the household's
  *       other plants is refused.
- *     - The response exposes the plant's name, species, photo, house rule,
- *       due tasks and the FIRST NAME of whoever last did each — that last
+ *     - The response exposes the plant's name, species, house rule, due
+ *       tasks and the FIRST NAME of whoever last did each — that last
  *       line is the feature ("last watered Tuesday by Dad"), and the PIN
  *       exists for households that don't want it readable off a photographed
  *       label. Never the plant's free-text `notes` (see getTagView), never
@@ -385,6 +385,10 @@ async function enforcePin(tag: plantTagService.PlantTag, event: APIGatewayProxyE
 //
 // The scan page: plant name, "last watered <when> by <first name>", the
 // plant's house rule, and this plant's due/overdue tasks.
+//
+// No photo. The scan page has never rendered one, and the brief's photo is a
+// signed address that expires with the sitter link (#453), so a stored address
+// here would have outlived the revocation that is a tag's only remedy.
 export const getTagView = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { tag, plant } = await resolveScan(event.pathParameters?.token ?? '');
@@ -404,7 +408,6 @@ export const getTagView = createHandler(
     return successResponse({
       plantName: plant.name,
       species: plant.species,
-      imageUrl: plant.imageUrl,
       // The house rule, through the SAME resolver the sitter brief uses, and
       // never the plant's free-text `notes`. Anyone who can see the label can
       // read this (the PIN is off by default), so it may not carry what the

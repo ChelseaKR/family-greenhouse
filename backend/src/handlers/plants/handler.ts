@@ -953,8 +953,10 @@ export const sharePlant = createHandler(
 // PUBLIC (auth: none) by design — recipients of a share link usually don't
 // have an account yet, exactly like invite previews. The response exposes
 // no PII beyond the sharing household's display name and the plant card
-// snapshot. IP rate-limited to slow code enumeration (the 128-bit code
-// space is already unbruteforceable; this just caps probe volume).
+// snapshot — which carries the plant's house rule and NOT its free-text
+// notes (see PlantShareSnapshot). IP rate-limited to slow code enumeration
+// (the 128-bit code space is already unbruteforceable; this just caps probe
+// volume).
 export const getSharedPlant = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const code = event.pathParameters?.code;
@@ -1009,12 +1011,12 @@ export const acceptSharedPlant = createHandler(
     const sourceHousehold = await householdService.getHousehold(share.householdId);
     const fromName = sourceHousehold?.name ?? 'another household';
 
-    // Provenance note rides the plant's notes field, prefixed before the
-    // shared notes; clamp to the createPlant contract's 1000-char cap.
+    // Provenance note rides the plant's notes field; clamp to the createPlant
+    // contract's 1000-char cap. The SOURCE household's free-text notes are not
+    // part of the card (see PlantShareSnapshot) and so cannot be copied here —
+    // the house rule travels instead, in the field it belongs to.
     const prefix = `Cutting from ${fromName}`;
-    const notes = (
-      share.plantSnapshot.notes ? `${prefix}\n\n${share.plantSnapshot.notes}` : prefix
-    ).slice(0, 1000);
+    const notes = prefix.slice(0, 1000);
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
     // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
@@ -1029,6 +1031,7 @@ export const acceptSharedPlant = createHandler(
           name: share.plantSnapshot.name,
           species: share.plantSnapshot.species ?? undefined,
           notes,
+          careRule: share.plantSnapshot.careRule ?? undefined,
           tags: share.plantSnapshot.tags,
         },
         user.householdId!,

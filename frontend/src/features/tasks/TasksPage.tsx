@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +45,14 @@ import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel } from '@/utils/spaces';
 
 type FilterType = 'all' | 'mine' | 'overdue' | 'today' | 'week';
+
+/**
+ * How long after a completion the page may still put focus back on that
+ * task's Done button. Long enough for the invalidated list to come back and
+ * re-bucket the row; short enough that a background refetch minutes later
+ * can never yank the caret out of somewhere else.
+ */
+const FOCUS_RESTORE_WINDOW_MS = 5_000;
 
 function filterFromSearchParam(value: string | null): FilterType {
   // Notification links historically used `filter=due`; keep those links
@@ -176,13 +184,46 @@ export function TasksPage() {
     tasksLoading || (Boolean(requestedSpaceFilter) && (plantsLoading || spacesLoading));
   const error = tasksError || (requestedSpaceFilter ? (plantsError ?? spacesError) : null);
 
+  // Completing a task re-buckets it — a task due today lands in Upcoming —
+  // which unmounts the row the keyboard was standing on and drops focus to
+  // <body>, a whole page of Tab presses from the next task. Remember which
+  // task was completed and put focus back on its Done button once the list
+  // has settled in its new shape.
+  const doneButtons = useRef(new Map<string, HTMLButtonElement>());
+  const [focusAfterComplete, setFocusAfterComplete] = useState<{
+    taskId: string;
+    at: number;
+  } | null>(null);
+
   const completeTaskMutation = useCompleteTaskMutation(householdId);
   // House rule gate: a plant with a care rule shows it before the completion
   // goes through; with no rule the click completes exactly as before.
   const careRuleGate = useCareRuleGate<TaskWithCoverage>(
     (task) => careRuleFor(plantsById.get(task.plantId)),
-    (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
+    (task) => {
+      setFocusAfterComplete({ taskId: task.id, at: Date.now() });
+      completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue });
+    }
   );
+
+  useEffect(() => {
+    if (!focusAfterComplete) return;
+    // A completion that cost nobody their place must not move anything, and
+    // the intent must not outlive the interaction that created it: the row
+    // can take a moment to re-bucket, but after that this is just a stale
+    // claim on the user's focus.
+    if (Date.now() - focusAfterComplete.at > FOCUS_RESTORE_WINDOW_MS) {
+      setFocusAfterComplete(null);
+      return;
+    }
+    // Only ever take focus back from nobody — i.e. when the row that held it
+    // has been unmounted and the browser dropped focus to <body>.
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const button = doneButtons.current.get(focusAfterComplete.taskId);
+    if (!button) return;
+    button.focus();
+    setFocusAfterComplete(null);
+  }, [focusAfterComplete, tasks]);
 
   const claimMutation = useClaimTaskMutation(householdId);
   const unclaimMutation = useUnclaimTaskMutation(householdId);
@@ -206,6 +247,10 @@ export function TasksPage() {
     onUnclaim: (id) => unclaimMutation.mutate(id),
     onAsk: (task) => setAskTarget(task),
     onSkip: (task, reason) => skipMutation.mutate({ task, reason }),
+    registerDone: (taskId, node) => {
+      if (node) doneButtons.current.set(taskId, node);
+      else doneButtons.current.delete(taskId);
+    },
     claimPending: claimMutation.isPending || unclaimMutation.isPending,
     askPending: askMutation.isPending,
     skipPending: skipMutation.isPending,
@@ -503,6 +548,8 @@ interface TaskRowExtras {
   onUnclaim: (taskId: string) => void;
   onAsk: (task: TaskWithCoverage) => void;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
+  /** Where each row's Done button is, so focus can be put back on it. */
+  registerDone: (taskId: string, node: HTMLButtonElement | null) => void;
   claimPending: boolean;
   askPending: boolean;
   skipPending: boolean;
@@ -617,11 +664,24 @@ function TaskSection({
                   isPending={extras.claimPending}
                 />
                 <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
+                {/* `aria-disabled` while the completion is in flight, never
+                    `disabled`. A browser blurs a focused element the moment it
+                    becomes disabled, so the keyboard user who had just pressed
+                    Done was thrown out of the row to the top of the document
+                    (measured in Chromium: document.activeElement === body) and
+                    had to Tab back through the whole page to reach the next
+                    task. The button stays focusable and still announces itself
+                    as unavailable; the handler is what refuses a second press. */}
                 <Button
+                  ref={(node) => extras.registerDone(task.id, node)}
                   variant="secondary"
                   size="sm"
-                  onClick={() => onComplete(task)}
-                  disabled={completingTaskId === task.id}
+                  onClick={() => {
+                    if (completingTaskId === task.id) return;
+                    onComplete(task);
+                  }}
+                  aria-disabled={completingTaskId === task.id}
+                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                   leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
                 >
                   Done

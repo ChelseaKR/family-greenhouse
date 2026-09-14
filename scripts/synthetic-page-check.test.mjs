@@ -21,6 +21,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -31,6 +32,9 @@ import {
 } from './synthetic-page-check.mjs';
 
 const ORIGIN = 'https://familygreenhouse.net';
+
+/** How many of `pageFailures`' reasons have a case that breaks only that one. */
+const ISOLATED_PAGE_FAILURE_CASES = 7;
 
 /** The shape of a healthy page, minimal but complete. */
 const goodPage = {
@@ -47,6 +51,128 @@ const goodPage = {
 
 test('a healthy page produces no failures', () => {
   assert.deepEqual(pageFailures(goodPage), []);
+});
+
+// --- pageFailures: the seven ways a page is not this app --------------------
+//
+// Until these existed, `pageFailures` had exactly one test: the healthy page
+// above, which asserts it returns NOTHING. Replacing its whole body with
+// `return []` therefore left `npm run test:checks` fully green — 171 tests,
+// 171 passing. Every one of the seven reasons it can give was unexamined, on
+// the predicate behind the fifteen-minute uptime probe, which exists because a
+// forty-minute total frontend outage went unnoticed (#464).
+//
+// The live `--expect-failure` control in uptime.yml does not close that gap and
+// says so in this file's header: it points at /robots.txt, so ONE failing
+// assertion satisfies it, and six could rot behind the one that fires.
+//
+// So each case below breaks exactly ONE property of the good page and asserts
+// the list is exactly one reason long. That is what makes them individual:
+// a fixture that tripped two assertions would still pass a "there was a
+// failure" test while proving nothing about either.
+
+/** One reason, and it is the expected one. */
+function onlyFailure(page, expected) {
+  const failures = pageFailures(page);
+  assert.equal(
+    failures.length,
+    1,
+    `expected exactly one reason, got ${failures.length}: ${JSON.stringify(failures)}`
+  );
+  assert.match(failures[0], expected);
+  return failures[0];
+}
+
+test('a page that did not answer 200 is a failure', () => {
+  onlyFailure({ ...goodPage, status: 503 }, /HTTP 503 \(expected 200\)/u);
+});
+
+test('a page served as something other than HTML is a failure', () => {
+  onlyFailure(
+    { ...goodPage, contentType: 'application/json' },
+    /Content-Type application\/json \(expected text\/html\)/u
+  );
+  // A response with no Content-Type at all says so rather than reading as one.
+  onlyFailure({ ...goodPage, contentType: undefined }, /<missing>/u);
+});
+
+test('a page that redirected off-origin is a failure', () => {
+  // A parked domain, an expired certificate redirect, a hijacked CNAME: the
+  // bytes can be a perfectly good page of somebody else's site.
+  onlyFailure(
+    { ...goodPage, finalUrl: 'https://example.invalid/login' },
+    /redirected off-origin to https:\/\/example\.invalid/u
+  );
+});
+
+test('a page with nowhere for the app to mount is a failure', () => {
+  onlyFailure(
+    { ...goodPage, body: goodPage.body.replace('<div id="root">', '<div id="app">') },
+    /nowhere to mount/u
+  );
+});
+
+test('a page that loads no module bundle is a failure', () => {
+  onlyFailure(
+    {
+      ...goodPage,
+      body: goodPage.body.replace(
+        '<script type="module" crossorigin src="/assets/index-C4WjWgvt.js"></script>',
+        ''
+      ),
+    },
+    /the app bundle is not loaded/u
+  );
+});
+
+test("a page carrying someone else's og:site_name is a failure", () => {
+  // The string this asserts is the same one `aws_route53_health_check.site`
+  // matches on, so a page that loses it is also a page the health check stops
+  // recognising — which is the outage this predicate exists to see.
+  onlyFailure(
+    {
+      ...goodPage,
+      body: goodPage.body.replace('content="Family Greenhouse"', 'content="Example Hosting"'),
+    },
+    /og:site_name is "Example Hosting"/u
+  );
+  onlyFailure(
+    {
+      ...goodPage,
+      body: goodPage.body.replace(
+        '<meta property="og:site_name" content="Family Greenhouse" />',
+        ''
+      ),
+    },
+    /og:site_name is missing/u
+  );
+});
+
+test('a page with no title is a failure', () => {
+  onlyFailure(
+    { ...goodPage, body: goodPage.body.replace('<title>Sign in</title>', '<title></title>') },
+    /empty or missing <title>/u
+  );
+});
+
+test('every reason pageFailures can give has a case above', async () => {
+  // The guard against this file going quietly out of date: a reason added to
+  // the predicate without a case here would be as untested as all seven were.
+  // Both numbers are derived — the left from the source, the right from the
+  // list of cases — so neither can be updated to match the other by hand
+  // without the change being visible.
+  const source = await readFile(new URL('./synthetic-page-check.mjs', import.meta.url), 'utf8');
+  const body = source.slice(
+    source.indexOf('export function pageFailures('),
+    source.indexOf('export function moduleScriptSrc(')
+  );
+  const reasons = [...body.matchAll(/failures\.push\(/gu)].length;
+  assert.equal(
+    reasons,
+    ISOLATED_PAGE_FAILURE_CASES,
+    `pageFailures can give ${reasons} reasons and this file isolates ${ISOLATED_PAGE_FAILURE_CASES}. ` +
+      'Add a case that breaks only the new one, then update the count.'
+  );
 });
 
 test('the module script src is read out of the page', () => {

@@ -53,7 +53,10 @@ const plantRow = {
   species: 'Monstera deliciosa',
   location: 'Kitchen',
   imageUrl: 'https://assets.example/plants/hh-1/plant-1/a.jpg',
-  notes: 'east window',
+  // The long-form private note, and the short house rule written to be handed
+  // out. Only the second may travel on a public card.
+  notes: 'PRIVATENOTE-4T6 spare key is under the flowerpot',
+  careRule: 'bottom-water only',
   status: 'active',
   tags: ['tropical', 'gift'],
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -82,13 +85,15 @@ describe('plantService — shares + lineage', () => {
       expect(share).not.toBeNull();
       // 32 lowercase hex chars, like invite codes.
       expect(share!.code).toMatch(/^[0-9a-f]{32}$/);
-      // Snapshot is the card as it stood at share time — name, species,
-      // notes, imageUrl, tags. No location (room names are household-
-      // internal) and no PII.
+      // Snapshot is the card as it stood at share time — name, species, the
+      // HOUSE RULE, imageUrl, tags. No location (room names are household-
+      // internal), no PII, and none of the plant's free-text notes: the
+      // preview route is unauthenticated, so the note never enters the row in
+      // the first place.
       expect(share!.plantSnapshot).toEqual({
         name: 'Mother Monstera',
         species: 'Monstera deliciosa',
-        notes: 'east window',
+        careRule: 'bottom-water only',
         imageUrl: 'https://assets.example/plants/hh-1/plant-1/a.jpg',
         tags: ['tropical', 'gift'],
       });
@@ -98,6 +103,10 @@ describe('plantService — shares + lineage', () => {
         input: { Item: Record<string, unknown> };
       };
       expect(put.kind).toBe('Put');
+      // The note must not reach the stored row either: a row is readable for
+      // its whole 14-day life, so keeping it out of the write is what makes
+      // the read safe rather than merely projected-safe.
+      expect(JSON.stringify(put.input.Item)).not.toContain('PRIVATENOTE-4T6');
       expect(put.input.Item.PK).toBe(`SHARE#${share!.code}`);
       expect(put.input.Item.SK).toBe('METADATA');
       expect(put.input.Item.entityType).toBe('PlantShare');
@@ -120,6 +129,62 @@ describe('plantService — shares + lineage', () => {
     });
   });
 
+  describe('revokePlantSharesCreatedBy', () => {
+    /** Two rows in the household's share index, minted by different people. */
+    const shareRows = [
+      {
+        PK: 'SHARE#aaa',
+        SK: 'METADATA',
+        createdBy: 'departing-user',
+        householdId: 'hh-1',
+      },
+      {
+        PK: 'SHARE#bbb',
+        SK: 'METADATA',
+        createdBy: 'staying-user',
+        householdId: 'hh-1',
+      },
+    ];
+
+    it('deletes only the departing member’s links and counts them', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { revokePlantSharesCreatedBy } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Items: shareRows });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+
+      const revoked = await revokePlantSharesCreatedBy('hh-1', 'departing-user');
+
+      expect(revoked).toBe(1);
+      const calls = vi
+        .mocked(dynamodb.send)
+        .mock.calls.map(([c]) => c as unknown as { kind: string; input: Record<string, unknown> });
+      // Read the household's share index...
+      expect(calls[0].kind).toBe('Query');
+      expect(calls[0].input.IndexName).toBe('GSI1');
+      expect((calls[0].input.ExpressionAttributeValues as Record<string, string>)[':pk']).toBe(
+        'HOUSEHOLD#hh-1#SHARE'
+      );
+      // ...and delete exactly the one row they created. A sweep that took the
+      // household's other live link would be a different bug.
+      expect(calls).toHaveLength(2);
+      expect(calls[1].kind).toBe('Delete');
+      expect(calls[1].input.Key).toEqual({ PK: 'SHARE#aaa', SK: 'METADATA' });
+    });
+
+    it('propagates a read failure instead of reporting zero revoked', async () => {
+      // A swallowed error here publishes a 0 into the removal audit, which
+      // reads as "they left nothing behind" — the one answer that cannot be
+      // checked afterwards.
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { revokePlantSharesCreatedBy } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('ddb throttled'));
+
+      await expect(revokePlantSharesCreatedBy('hh-1', 'departing-user')).rejects.toThrow(
+        'ddb throttled'
+      );
+    });
+  });
+
   describe('getPlantShare', () => {
     const storedShare = {
       code: 'c0ffee'.padEnd(32, '0'),
@@ -128,7 +193,7 @@ describe('plantService — shares + lineage', () => {
       plantSnapshot: {
         name: 'Mother Monstera',
         species: null,
-        notes: null,
+        careRule: null,
         imageUrl: null,
         tags: [],
       },
@@ -150,6 +215,38 @@ describe('plantService — shares + lineage', () => {
       const { getPlantShare } = await import('../../../src/services/plantService');
       vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined });
       expect(await getPlantShare('f'.repeat(32))).toBeNull();
+    });
+
+    it('drops the free-text notes carried by a row minted before the house-rule change', async () => {
+      // Rows live for 14 days, so links minted by the previous code are still
+      // being opened after the deploy. Their stored snapshot holds `notes` and
+      // no `careRule`; the projection must not hand either the note or a
+      // guessed rule to the anonymous reader.
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlantShare } = await import('../../../src/services/plantService');
+      const legacyRow = {
+        ...storedShare,
+        plantSnapshot: {
+          name: 'Mother Monstera',
+          species: 'Monstera deliciosa',
+          notes: 'PRIVATENOTE-4T6 spare key is under the flowerpot',
+          imageUrl: null,
+          tags: [],
+        },
+      };
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: legacyRow });
+
+      const share = await getPlantShare(storedShare.code);
+
+      expect(share).not.toBeNull();
+      expect(share!.plantSnapshot).toEqual({
+        name: 'Mother Monstera',
+        species: 'Monstera deliciosa',
+        careRule: null,
+        imageUrl: null,
+        tags: [],
+      });
+      expect(JSON.stringify(share)).not.toContain('PRIVATENOTE-4T6');
     });
 
     it('returns null for an expired row that DDB TTL has not swept yet', async () => {

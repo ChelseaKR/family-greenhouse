@@ -76,6 +76,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   requests exceed 500 ms, a sustained 4.4x burn caused by cold starts. That is
   tracked as a product problem in #730 rather than as a repeating page.
 
+### Fixed
+
+- **The privacy policy described one account-free surface and the product has
+  three.** It had a section for sitter links and nothing for the wall display
+  or caretaker seats — even though a caretaker seat collects a third party's
+  name, typed by the household and kept on every visit record, and a wall
+  display link never expires. The policy now says what each link shows, what
+  neither shows, and how long a seat can run; the Stripe paragraph now lists
+  the billing fields actually stored (a scheduled cancellation, a tier bought
+  outright, the date a free trial was first used), not a subset of them.
+  `backend/tests/unit/config/privacyTokenSurfaces.test.ts` holds the new
+  sentences to `caretakerService` and `kioskService`.
+- **`docs/analytics.md` was one event short of what the product captures.**
+  `upgrade_requested` shipped in the browser union and the API accept-list and
+  was documented nowhere, while the privacy policy sends readers to that file
+  for the full list. `scripts/check-doc-figures.mjs` now re-derives the three
+  event vocabularies and fails in both directions.
+- **`docs/security.md` published a CSP the app stopped shipping.** It stated
+  `script-src 'self'` with no third-party origins; the shipped policy admits
+  Google Tag Manager and two Analytics hosts. The document now quotes the
+  policy from `frontend/index.html` and the same gate keeps them equal.
+- **`docs/multi-household.md` said account deletion keeps the departing user's
+  name** on activity events and completions. It does not:
+  `accountCleanup.anonymizeUserInHousehold` rewrites both to "Former member",
+  which is what the privacy policy and `docs/support.md` already said.
+- **`README.md` credited household authorization to Cognito custom claims**,
+  the one input `middleware/auth.ts` documents as untrusted. The membership row
+  is the authority.
+
 ## [0.33.0] - 2026-09-13
 
 ### Security

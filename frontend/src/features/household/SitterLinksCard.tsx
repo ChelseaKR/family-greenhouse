@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
-import { billingService } from '@/services/billingService';
+import { billingService, effectivePlanId } from '@/services/billingService';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -76,7 +76,7 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
     staleTime: 60_000,
   });
   const limits = subscriptionQuery.isSuccess
-    ? sitterLinkLimitsFor(subscriptionQuery.data.planId)
+    ? sitterLinkLimitsFor(effectivePlanId(subscriptionQuery.data))
     : null;
   const maxDays = limits?.maxDays ?? SITTER_LINK_MAX_DAYS_CEILING;
   const shownDays =
