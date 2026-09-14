@@ -78,7 +78,8 @@ export async function getEscalationRule(householdId: string): Promise<Escalation
       // (#476). They live on this same METADATA row — the attribute names are
       // services/billing.ts's own (see its field map) — so consulting payment
       // status here costs nothing: still one GetItem, no extra read.
-      ProjectionExpression: 'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId',
+      ProjectionExpression:
+        'escalateAfterDays, planId, subscriptionStatus, lifetimePlanId, stripeSubscriptionId, noCardTrialEndsAt',
     })
   );
   const item = result.Item ?? {};
@@ -93,6 +94,10 @@ export async function getEscalationRule(householdId: string): Promise<Escalation
       planId: item.planId as string | undefined,
       status: item.subscriptionStatus as string | undefined,
       lifetimePlanId: item.lifetimePlanId as string | undefined,
+      // The no-card trial (ADR 0027) resolves off these two, so an auto-handoff
+      // rule a trial household turned on is acted on while the trial runs.
+      stripeSubscriptionId: item.stripeSubscriptionId as string | undefined,
+      noCardTrialEndsAt: item.noCardTrialEndsAt as string | undefined,
     }).id,
   };
 }

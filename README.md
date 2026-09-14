@@ -72,7 +72,7 @@ For everything else (running tests, deploying, configuring channels) follow the 
 
 Headline features that are wired end-to-end:
 
-- **Households**: invite-link based, role-aware (admin/member), enforced via Cognito custom claims
+- **Households**: invite-link based, role-aware (admin/member), enforced server-side from the `MEMBER#{userId}` membership row — the Cognito `custom:household_*` claims are defence-in-depth only and are never trusted for authorization (`backend/src/middleware/auth.ts`)
 - **Plants**: CRUD, photo upload (with S3 presigned URL race-fixed), species autocomplete from a curated catalog, plant-name shuffle, optional Plant.id-powered identification from a photo
 - **Tasks**: types (water/fertilize/prune/repot/custom), recurring frequency, complete/snooze/edit, assigned-to lookups
 - **Care history**: per-plant + household activity feed

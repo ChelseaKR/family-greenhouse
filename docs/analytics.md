@@ -52,6 +52,7 @@ The full set is the `EventName` union in `analytics.ts`. Each is a deliberate fu
 | `shared_care_pulse_action` | Shared-care setup action or dismissal         | `context` is a fixed milestone key or `dismiss`.                                                                                                                                                                                            |
 | `climate_location_set`     | Household location saved                      | Validates the OpenWeatherMap integration's reach.                                                                                                                                                                                           |
 | `experiment_viewed`        | Landing experiment variant rendered           | Carries only the fixed experiment id and A/B variant. Fired by an anonymous visitor, so it is **held and replayed at sign-in** — see "Events fired before sign-in".                                                                         |
+| `upgrade_requested`        | Member asked the admins to upgrade            | Fired by `upgradeRequestService` once the request POST returns; `upgradeTo` is the target plan id the server resolved, never free text.                                                                                                     |
 
 ## Server-confirmed events
 
