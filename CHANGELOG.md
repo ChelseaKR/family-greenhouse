@@ -16,8 +16,104 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The site was indexed twice, once per hostname.** `www.familygreenhouse.net`
+  is a second CloudFront alias over the same bucket, so both hostnames answered
+  `200` with identical content and no redirect. Google treated them as two
+  sites. Measured in Search Console on 2026-09-11 over the preceding three
+  months: 7 paths were indexed **only** under `www.` (`/care`, `/care/zz-plant`,
+  `/care/monstera`, `/care/snake-plant`, `/care/spider-plant`,
+  `/care/peace-lily`, `/care/heartleaf-philodendron`), 15 **only** under the
+  apex, and none on both — one site's ranking signal split across two
+  hostnames, with the `www.` half sitting at average position 55-75 while the
+  apex homepage sat at 6.2.
+
+  Every page already emitted a self-canonical naming the apex. That was not
+  enough, and this is the point: a canonical is a hint a crawler may ignore,
+  and here it was ignored. The CloudFront function now answers `301` to the
+  apex for any `www.` host, preserving path and querystring, as rule 0 — before
+  the rewrites, so it covers even `/assets/*`, which rule 1 passes through
+  untouched.
+
+  The function is 10,149 bytes of CloudFront's 10,240 limit, so the long
+  explanation lives in `frontend/scripts/build-spa-router.mjs`, which has no
+  size limit, exactly as the size test's failure message prescribes. **91 bytes
+  of headroom remain**, and the generated route map grows by one line per care
+  guide and blog post: the next few pages will need the leaner map encoding
+  that test also names.
+
+- **A household that had just paid was told it was still on the free plan, with
+  a button to buy again.** `createCheckoutSession` writes nothing to the
+  household row — entitlement arrives only when the Stripe webhook does — so
+  between the redirect back to `/settings/billing?status=success` and that
+  webhook landing, `GET /billing/me` still answers with the pre-purchase tier.
+  Settings → Billing rendered that answer as a flat statement of fact ("Your
+  household is on the Seedling plan."), with **no acknowledgement of the
+  payment anywhere on the page**, directly above a live "Switch to Garden"
+  button. The identification top-up path two cards below has said "this can
+  take a moment" since it shipped; the subscription path, the one that costs
+  $4.99–$9.99 a month, said nothing — and `docs/billing.md` has described step
+  4 of this flow as "the settings page reads the query string and shows a
+  friendly notice" the whole time.
+
+  The button was not only confusing. The server guard that refuses a second
+  concurrent subscription keys off `stripeSubscriptionId` — exactly the field
+  the webhook has not written yet — so a second checkout started in that window
+  is accepted, and the household ends up paying for two subscriptions that both
+  keep renewing.
+
+  The page now says "Payment received — finishing up" while the webhook is
+  plausibly still in flight, withholds every tier's purchase button while a
+  paid checkout is unconfirmed, and — once the 20-second poll window lapses
+  without entitlement — escalates to "Your payment went through, but your plan
+  has not updated", naming the support address so the grant can be made by
+  hand. A lifetime purchase counts as settled through `lifetimePlanId` (it
+  clears the subscription id by design), and the top-up return keeps its own
+  notice.
+
+- **The iOS app-site-association file was never published, and every deploy
+  said it was.** `frontend/public/.well-known/apple-app-site-association` has
+  carried the real Team ID since #731 and is built into `dist/` correctly, but
+  `.well-known/` is a hidden directory and `actions/upload-artifact` drops
+  hidden files unless told not to. The build job recorded
+  `include-hidden-files: false`, the artifact reached the deploy job without
+  `.well-known/`, and the deploy's deliberately-guarded
+  `if [ -f dist/.well-known/apple-app-site-association ]` found nothing to
+  copy. Nothing failed: `Deploy to Production` for `v0.33.0` uploaded 331
+  objects, none of them under `.well-known/`, and reported success while
+  `https://familygreenhouse.net/.well-known/apple-app-site-association`
+  answered `404 NoSuchKey`. Universal links cannot be verified against a 404,
+  so this blocked the iOS Associated Domains work behind a green deploy.
+
+  Both workflows that hand `frontend/dist` to a deploy job now set
+  `include-hidden-files: true`. `scripts/deploy.sh` reads `frontend/dist` in
+  place and never crosses an artifact, so it was never affected.
+
+  `scripts/check-well-known.mjs` could not have caught this: it verified that
+  the file is committed and that each deploy path names it with the right
+  content type, but nothing asserted the file survives the trip. The assertion
+  now lives in `scripts/artifact-hidden-files.mjs`, in its own module because
+  the gate runs at import time and cannot be imported by a test, and
+  `scripts/artifact-hidden-files.test.mjs` covers it — including that both
+  real workflows carry the flag, so removing it fails a test rather than a
+  deploy six weeks later.
+
 ### Added
 
+- **Gift subscriptions (ADR 0028).** Any signed-in member can pay once, on
+  their own card, for 1–12 months of Garden or Greenhouse for another
+  household — priced at the monthly rate times the months, no discount — and
+  gets a code in Settings → Billing to pass on. A household admin redeems the
+  code there; the gift runs from that day, ends on the clock with nothing
+  deleted, and is metered exactly as the paid tier. A code stays valid for a
+  year, is consumed only when a household actually receives the gift, and is
+  refused (unspent) on a household with a running subscription, a running
+  gift, or a lifetime tier at or above it. `POST /billing/gift/checkout`,
+  `POST /billing/gift/redeem`, `GET /billing/gift/purchases`; `gift` on
+  `GET /billing/me`; `giftSubscriptions` on `GET /billing/plans`. Nothing is
+  for sale until the owner creates the two one-time Stripe prices and sets
+  `stripe_price_id_gift_garden_month` / `stripe_price_id_gift_greenhouse_month`.
 - **A sign-up that never confirmed its email now gets one reminder, and only
   one.** A self-service account starts `UNCONFIRMED` and receives one code that
   is valid for 24 hours. Cognito never expires or deletes such an account: it
@@ -131,6 +227,90 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
   file already on disk is refused before it ships). One predicate, two callers,
   because the thing that writes this file and the thing that blesses it drifting
   apart is the same class of bug one layer up.
+
+- **In-app copy that promised what the code refuses.** Eleven strings in both
+  locales, each checked against the handler that decides it:
+  - API keys: "Keys issued earlier keep working" while the household is off
+    Greenhouse — `middleware/apiKey.ts` re-checks entitlement AND the issuer's
+    membership on every use and 403s with "This household has downgraded". The
+    read-failure notice named revocation as the only way a key stops working.
+  - Plant import: "Paid plan changes are paused" rendered unconditionally on a
+    plan-limit hit, with no commercial-hold guard, months after the hold was
+    lifted (`commercial-status.json`).
+  - Archiving: "You can restore it whenever you're ready" — restoring is
+    cap-checked exactly like creating and 402s at the plant cap.
+  - Wall display: "they can't see your notes" — the kiosk payload carries each
+    plant's space and placement note. The placement-note field hint said the
+    note is shared with sitter links only; caretaker seats and the wall
+    display receive it too.
+  - Identifications: "a higher plan includes more each month" was shown to
+    Greenhouse households, which have no higher plan.
+  - Sitter brief: "Everything below was written by the household" — the same
+    page prints our pet-safety line.
+  - Invites: "already invited today" is a rolling 24 hours.
+  - `Settings → Billing` is labelled **Plan status** in the UI.
+- **Spanish copy that differed from English on facts**: the analytics note and
+  three caretaker-seat strings named a "plan Jardín" and a "Configuración"
+  menu that do not exist (plan names ship untranslated; the menu is "Ajustes"),
+  and the caretaker Revoke control read "Cancelar", the same word as Cancel.
+
+- **Help answers that were wrong about the product.** `helpContent.tsx` imports
+  nothing from the backend, so every figure and rule in it is hand-typed; eight
+  had drifted from the code, and each is now checked against the handler that
+  decides it:
+  - Leaf health was published as "capped at 200 checks per household per
+    calendar month". Production caps the free tier at 20
+    (`leaf_health_monthly_cap_seedling`), so the page overstated the free
+    allowance tenfold.
+  - Sitter links were listed under "admins alone can" three times.
+    `createSitterLink` carries no `requireAdmin` — any member can create one,
+    and the creator or an admin can revoke.
+  - "A sitter link they created stays active" after removing a member: removal
+    revokes their sitter links, plant tags and kiosk links (#449).
+  - "Plants → Import" is not a menu that exists; the only entry point is in
+    Settings → Account.
+  - "If the species is freehand text … you get nothing automatically":
+    `suggestTaskTemplate` matches the typed text, so freehand "monstera" gets
+    the full bundle.
+  - "One email always goes out regardless of preferences": three do — welcome,
+    account-deletion confirmation, and billing emails.
+  - "Two features do switch off with the tier" listed two of about ten.
+  - The `data` section's search-result description offered "photos and care
+    history"; neither export contains either.
+  - Menu paths: the billing tab reads **Plan status**, the account tab
+    **Account**.
+  - `delete-account` said "immediate and permanent" without the backup caveat
+    the deletion email itself discloses.
+- `backend/tests/unit/config/helpFigures.test.ts` re-derives the free-tier caps,
+  the three plant caps, the sitter windows, the identification allowances and
+  both leaf-health caps from `plans.ts`, `identifyBudget.ts` and the production
+  tfvars, and fails in both directions.
+
+- **Public copy that overstated what the free plan and the app do.** Each
+  sentence now matches the code that decides it:
+  - Two blog posts said "free for households with up to 20 plants", naming the
+    cap least relevant to a post about _shared_ care and omitting the 1-home
+    and 3-member caps.
+  - Two sitter posts promised a link that shows "only the tasks actually due
+    while you're away", with no mention that the free window is a week (not 90
+    days) and that anything already overdue is on the list too.
+  - A post said the app "assigns each task to one person instead of reminding
+    everybody"; unassigned tasks remind every member.
+  - The landing page offered "export all of it"; the export is profile,
+    notification preferences, memberships, plants and tasks — no completion
+    history, activity feed or photo files. And "A year, looked back on" is a
+    30-day window on the free plan.
+  - The store listings advertised the care assistant with no plan qualifier
+    (it is Garden and up, bought on the web), a sitter link that "expires on a
+    date you choose" (a week on free), and identification with no allowance.
+  - `store-assets/README.md` described the demo household's four due-today
+    tasks as spread "across three people"; one is deliberately unclaimed.
+  - `docs/accessibility.md` published a conformance table reading "(none
+    currently) — all previously documented gaps closed" while the same
+    document lists five open gaps.
+- `scripts/check-plan-copy.mjs` (new, in `npm run verify` and in CI) re-derives
+  the free plan's caps from `backend/src/models/plans.ts` and checks all
+  fifteen public statements of them, failing in both directions.
 
 - **The privacy policy described one account-free surface and the product has
   three.** It had a section for sitter links and nothing for the wall display

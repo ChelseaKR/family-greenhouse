@@ -70,6 +70,25 @@ describe('billingNoticeForEvent — one-time purchase receipts', () => {
     });
   });
 
+  it('sends no household receipt for a gift purchase: the buyer’s housemates are not the buyer (ADR 0028)', () => {
+    const notice = billingNoticeForEvent(
+      event('checkout.session.completed', {
+        id: 'cs_gift',
+        mode: 'payment',
+        payment_status: 'paid',
+        amount_total: 1497,
+        currency: 'usd',
+        metadata: {
+          purchase: 'gift_subscription',
+          giftPlanId: 'garden',
+          months: '3',
+          buyerUserId: 'user-buyer',
+        },
+      })
+    );
+    expect(notice).toBeNull();
+  });
+
   it('does not invent a pack size when the credits metadata is unreadable', () => {
     const notice = billingNoticeForEvent(
       event('checkout.session.completed', {

@@ -460,6 +460,14 @@ export interface EntitlementSubscription {
    * on every household that never had one. Read through `noCardTrialState`.
    */
   noCardTrialEndsAt?: string | null;
+  /**
+   * The tier a redeemed gift grants (ADR 0028) and when it ends, ISO 8601.
+   * Written together by `giftCodes.redeemGiftCode`, never by any Stripe path,
+   * and absent on every household that never redeemed one. Read only through
+   * `giftState`.
+   */
+  giftPlanId?: string | null;
+  giftEndsAt?: string | null;
 }
 
 /**
@@ -558,6 +566,12 @@ export function noCardTrialState(
 ): NoCardTrialState {
   if (!sub.noCardTrialEndsAt) return 'none';
   if (hasStripeEntitlementState(sub)) return 'none';
+  // A running gift owns the household's entitlement the way Stripe state
+  // does: it is paid for, it grants at least the trial's tier, and it is
+  // metered at that tier. Reporting the trial as active beside it would let
+  // `getMeteredPlanId` spend a paid gift month at the free tier's allowances
+  // and the trial notice claim allowances the household does not have.
+  if (giftState(sub, now) === 'active') return 'none';
   const endsAt = Date.parse(sub.noCardTrialEndsAt);
   if (!Number.isFinite(endsAt)) return 'none';
   return now.getTime() < endsAt ? 'active' : 'ended';
@@ -567,6 +581,49 @@ export function noCardTrialState(
 function withNoCardTrial(resolved: Plan, sub: EntitlementSubscription, now: Date): Plan {
   if (noCardTrialState(sub, now) !== 'active') return resolved;
   return planRank(resolved.id) >= planRank(NO_CARD_TRIAL_PLAN.id) ? resolved : NO_CARD_TRIAL_PLAN;
+}
+
+// ---------------------------------------------------------------------------
+// Gift subscriptions (ADR 0028)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a household stands on a redeemed gift.
+ *
+ *   - `none`   nothing redeemed, or the row's gift attributes do not name a
+ *              real paid tier and a readable end date.
+ *   - `active` now is before `giftEndsAt`.
+ *   - `ended`  now is at or after it: the gift no longer raises anything.
+ *
+ * Derived on every read and never stored, for the same reasons as the trial:
+ * there is no job to miss and no write at the boundary that could delete
+ * anything. A gift that names an unknown tier or an unreadable date grants
+ * nothing — this codebase writes both, so an unreadable one is a defect, and
+ * that defect must cost a household a gift month, not hand it an unmetered
+ * tier.
+ */
+export type GiftState = 'active' | 'ended' | 'none';
+
+export function giftState(sub: EntitlementSubscription, now: Date = new Date()): GiftState {
+  if (!sub.giftEndsAt || !isPlanId(sub.giftPlanId)) return 'none';
+  if (planRank(sub.giftPlanId) <= planRank(PLANS.seedling.id)) return 'none';
+  const endsAt = Date.parse(sub.giftEndsAt);
+  if (!Number.isFinite(endsAt)) return 'none';
+  return now.getTime() < endsAt ? 'active' : 'ended';
+}
+
+/**
+ * Raise `resolved` to the gifted tier while a gift runs. Never lowers it: a
+ * household on Greenhouse that redeems a Garden gift keeps Greenhouse (the
+ * redemption path refuses that gift before it gets here, but the resolver
+ * does not rely on that). Unlike the trial, a gift is NOT suppressed by
+ * Stripe state — it was paid for, and a household whose subscription lapses
+ * into dunning mid-gift keeps the months somebody bought it.
+ */
+function withGift(resolved: Plan, sub: EntitlementSubscription, now: Date): Plan {
+  if (giftState(sub, now) !== 'active') return resolved;
+  const gifted = getPlan(sub.giftPlanId);
+  return planRank(resolved.id) >= planRank(gifted.id) ? resolved : gifted;
 }
 
 /**
@@ -600,7 +657,11 @@ export function getMeteredPlanId(sub: EntitlementSubscription, now: Date = new D
  */
 export function getEntitledPlan(sub: EntitlementSubscription, now: Date = new Date()): Plan {
   const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
-  return withNoCardTrial(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now);
+  return withNoCardTrial(
+    withGift(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now),
+    sub,
+    now
+  );
 }
 
 /**
@@ -646,7 +707,7 @@ export function getEntitledPlanForIssuedGrant(
   // at day 14 an issued grant falls back exactly as it does when a cancelled
   // subscription reaches its period end and `planId` is reset to Seedling.
   const floored = withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
-  return withNoCardTrial(floored, sub, now);
+  return withNoCardTrial(withGift(floored, sub, now), sub, now);
 }
 
 /** True iff `id` names a real plan in the catalog. */

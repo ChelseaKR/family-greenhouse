@@ -42,6 +42,13 @@
  * and a confirmed SES send never reopens it — reopening would guarantee a
  * duplicate receipt on the next redelivery, and a duplicate receipt is the
  * one outcome that makes a customer doubt the charge itself.
+ *
+ * "Never reopens it" has to hold through the finalize FAILING, which is why
+ * `forceCloseSlot` exists. A marker left in `sending` still carries a
+ * five-minute lease, and `claimSlot` hands an expired lease to the next
+ * delivery — so a Lambda timeout between SES accepting and the conditional
+ * update landing used to return a non-2xx, collect a Stripe retry after the
+ * lease had passed, and send the second receipt this module says it prevents.
  */
 import { randomUUID } from 'node:crypto';
 import { DeleteCommand, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -264,6 +271,51 @@ async function finalizeSlot(
   );
 }
 
+/**
+ * Close the slot after `finalizeSlot` failed, although SES has already
+ * accepted the message.
+ *
+ * The hole this fills: a marker left in `sending` still carries
+ * `leaseExpiresAt`, and `claimSlot` treats an EXPIRED lease as reclaimable —
+ * which is right when a Lambda died BEFORE sending and wrong when it died
+ * just after. Those two are indistinguishable from the row, and the second is
+ * reachable by the ordinary means: a Lambda timeout or an API Gateway 5xx
+ * between SES accepting and the conditional update landing returns a non-2xx
+ * to Stripe, Stripe retries after the five-minute lease has passed, the slot
+ * is reclaimed, and the household gets a second receipt for one charge. That
+ * is the exact outcome this module's header calls "the one outcome that makes
+ * a customer doubt the charge itself", so it cannot be left to a conditional
+ * write that is allowed to fail.
+ *
+ * Unconditional on purpose. The condition on `finalizeSlot` exists to avoid
+ * overwriting a SUCCESSOR's claim, and that trade reverses once the message is
+ * out: a successor whose send is in flight has already sent too, so stopping
+ * it records the truth rather than losing it, and suppressing a receipt is
+ * recoverable (replay the event from the Stripe dashboard) in a way that
+ * un-sending one is not.
+ *
+ * `finalizeRecovered` distinguishes this row from a clean finalize, so the
+ * difference between "recorded first time" and "recovered after a failed
+ * conditional write" stays legible to an operator reading the table.
+ */
+async function forceCloseSlot(eventId: string, sortKey: string): Promise<void> {
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  await dynamodb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: eventPartition(eventId),
+        SK: sortKey,
+        entityType: 'BillingEmailMarker',
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        finalizeRecovered: true,
+        ttl: nowEpoch + EMAIL_MARKER_TTL_SECONDS,
+      },
+    })
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -342,13 +394,25 @@ async function sendToRecipient(
     return;
   }
 
-  await finalizeSlot(event.id, sortKey, reservationId).catch((err) => {
+  await finalizeSlot(event.id, sortKey, reservationId).catch(async (err) => {
     // SES already accepted it. Never delete the marker here: that would
-    // guarantee a second receipt on the next redelivery.
+    // guarantee a second receipt on the next redelivery. Leaving it in
+    // `sending` is not safe either — the lease expires in five minutes and
+    // `claimSlot` would then hand the slot to Stripe's retry — so close it
+    // unconditionally instead of merely logging that we could not.
     logger.warn(
       { err: (err as Error).message, stripeEventId: event.id, kind: notice.kind },
       'billing_email_finalize_failed'
     );
+    await forceCloseSlot(event.id, sortKey).catch((closeErr) => {
+      // Both writes failed, so the slot really is reclaimable and a
+      // redelivery may duplicate this receipt. Nothing else can be done from
+      // here — the send has happened — but it must not be silent.
+      logger.error(
+        { err: (closeErr as Error).message, stripeEventId: event.id, kind: notice.kind },
+        'billing_email_marker_left_reclaimable'
+      );
+    });
   });
 
   logger.info(
