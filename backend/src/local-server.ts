@@ -61,6 +61,7 @@ import {
   getMeteredPlanId,
   hasHouseholdToolkit,
   noCardTrialState,
+  giftState,
   NO_CARD_TRIAL_DAYS,
   planIncludesAwayKit,
   planIncludesCrossHomeToday,
@@ -105,6 +106,7 @@ import {
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
 import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import { giftSubscriptionSummary } from './models/giftSubscriptions.js';
 import { IDENTIFICATION_CONFIDENCE_FLOOR } from './services/plantIdentification.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
 // Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
@@ -233,6 +235,11 @@ interface Household {
   lifetimePlanId?: 'seedling' | 'garden' | 'greenhouse';
   /** Mirrors `noCardTrialEndsAt` on the production METADATA row (ADR 0027). */
   noCardTrialEndsAt?: string;
+  /** Mirror the redeemed-gift attributes on the production METADATA row
+   *  (ADR 0028). Nothing in the mock writes them — no gift can be bought or
+   *  redeemed here — so a test seeds them directly, like `lifetimePlanId`. */
+  giftPlanId?: 'garden' | 'greenhouse';
+  giftEndsAt?: string;
 }
 
 interface Invite {
@@ -983,6 +990,8 @@ function subscriptionOf(householdId: string | null | undefined): EntitlementSubs
     lifetimePlanId: h?.lifetimePlanId,
     stripeSubscriptionId: h?.stripeSubscriptionId,
     noCardTrialEndsAt: h?.noCardTrialEndsAt,
+    giftPlanId: h?.giftPlanId,
+    giftEndsAt: h?.giftEndsAt,
   };
 }
 
@@ -1115,6 +1124,9 @@ app.post('/__test__/households/:id/plan', validateBody(testPlanSchema), (req, re
   // a browser test that needs Seedling behaviour asks for `seedling` and must
   // not get the no-card Garden trial its household was created with.
   delete household.noCardTrialEndsAt;
+  // Likewise a seeded plan is not a gift on top of it (ADR 0028).
+  delete household.giftPlanId;
+  delete household.giftEndsAt;
   return res.json({ id: household.id, planId: household.planId });
 });
 
@@ -5664,6 +5676,7 @@ app.get('/billing/plans', (_req, res) => {
     },
     plans: Object.values(PLANS).map((plan) => planSummary(plan, paymentsAvailable)),
     identifyTopUp: identifyTopUpSummary(paymentsAvailable),
+    giftSubscriptions: giftSubscriptionSummary(paymentsAvailable),
   });
 });
 
@@ -5706,6 +5719,14 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
         ? null
         : { state: trialState, endsAt: h.noCardTrialEndsAt };
     })(),
+    // Mirrors the redeemed-gift projection in handlers/billing/handler.ts
+    // (ADR 0028): the server's clock decides the state.
+    gift: (() => {
+      const state = giftState(subscriptionOf(user.householdId));
+      return state === 'none' || !h?.giftPlanId || !h?.giftEndsAt
+        ? null
+        : { planId: h.giftPlanId, endsAt: h.giftEndsAt, state };
+    })(),
   });
 });
 
@@ -5741,6 +5762,30 @@ app.post(
     });
   }
 );
+
+// Mirrors giftCheckout / giftRedeem / giftPurchases in
+// handlers/billing/handler.ts (ADR 0028). The mock has no gift price
+// configured and holds no gift codes, so it answers the same fail-closed
+// refusals production does in that state; a test that needs a gifted
+// household seeds `giftPlanId` / `giftEndsAt` on the in-memory row.
+app.post('/billing/gift/checkout', authMiddleware, requireHousehold, (_req, res) => {
+  res.status(400).json({
+    message: 'Gift subscriptions are not available in this environment.',
+    details: { code: 'GIFT_NOT_CONFIGURED' },
+  });
+});
+
+app.post('/billing/gift/redeem', authMiddleware, requireHousehold, requireAdmin, (_req, res) => {
+  res.status(400).json({
+    message: 'This gift code could not be redeemed.',
+    details: { code: 'GIFT_CODE_INVALID' },
+  });
+});
+
+app.get('/billing/gift/purchases', authMiddleware, requireHousehold, (_req, res) => {
+  // No gift can be bought here, so an empty list is a real zero.
+  res.json({ purchases: [] });
+});
 
 app.post('/billing/portal', authMiddleware, requireHousehold, requireAdmin, (_req, res) => {
   res.status(503).json({ message: 'Billing access is currently paused.' });

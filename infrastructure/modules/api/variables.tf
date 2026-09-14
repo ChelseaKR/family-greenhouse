@@ -143,6 +143,19 @@ variable "stripe_price_id_identify_top_up" {
   default     = ""
 }
 
+# Gift subscriptions (ADR 0028). No default at this layer on purpose: the root
+# module must pass a value (it defaults to blank there), so a module caller
+# cannot forget the wiring and silently ship a Lambda that never sees it.
+variable "stripe_price_id_gift_garden_month" {
+  description = "Stripe ONE-TIME price ID for ONE gift month of Garden ($4.99, the monthly price; ADR 0028). Charged with quantity = months. Blank means Garden cannot be given as a gift and POST /billing/gift/checkout answers 400 GIFT_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+}
+
+variable "stripe_price_id_gift_greenhouse_month" {
+  description = "Stripe ONE-TIME price ID for ONE gift month of Greenhouse ($9.99, the monthly price; ADR 0028). Charged with quantity = months. Blank means Greenhouse cannot be given as a gift and POST /billing/gift/checkout answers 400 GIFT_NOT_CONFIGURED. Never a fallback price."
+  type        = string
+}
+
 variable "stripe_automatic_tax_enabled" {
   description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured. Enables automatic tax in Checkout."
   type        = string

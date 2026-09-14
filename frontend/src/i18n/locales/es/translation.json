@@ -1601,6 +1601,62 @@
     "errorNotAdmin": "Solo una persona administradora del hogar puede comprar paquetes de identificaciones.",
     "errorProviderUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."
   },
+  "giftSubscription": {
+    "title": "Regala Family Greenhouse",
+    "body": "Paga una sola vez varios meses de Garden o Greenhouse para otro hogar. Recibirás un código para entregar; ese hogar lo canjea en Ajustes → Facturación y el regalo empieza el día en que lo hace. Nada se renueva y a ese hogar no se le cobra nada.",
+    "activeTitle": "Tu hogar tiene {{plan}} como regalo hasta el {{date}}",
+    "activeBody": "Alguien lo ha pagado. A tu hogar no se le cobra nada y nada se renueva. El {{date}} el hogar vuelve a su propio plan, y nada de lo que hayas añadido se borra.",
+    "giveTitle": "Hacer un regalo",
+    "planLabel": "Plan",
+    "monthsLabel": "Meses",
+    "oneMonth": "1 mes",
+    "nMonths": "{{n}} meses",
+    "total": "{{months}} × {{monthly}} al mes = {{total}}",
+    "terms": "Un único pago de {{total}}, cargado a tu propia tarjeta. El código puede canjearse durante los {{days}} días siguientes a la compra, y el regalo dura {{months}} meses desde el día en que se canjea. Un hogar con una suscripción activa no puede recibir un regalo hasta que esta termine.",
+    "buy": "Comprar regalo por {{total}}",
+    "buyNoTotal": "Comprar regalo",
+    "notForSale": "Los regalos no están disponibles en este momento.",
+    "purchaseErrorTitle": "No se pudo iniciar la compra",
+    "purchaseErrors": {
+      "notConfigured": "Los regalos no están disponibles en este momento. No se ha realizado ningún cargo.",
+      "paymentsPaused": "Los pagos están en pausa. No se ha realizado ningún cargo.",
+      "providerUnreachable": "No hemos podido contactar con nuestro proveedor de pagos. No se ha realizado ningún cargo; inténtalo de nuevo en unos minutos."
+    },
+    "purchaseReturned": "Gracias: tu código de regalo aparecerá aquí en cuanto se confirme el pago. Puede tardar un momento.",
+    "purchasesTitle": "Regalos que has comprado",
+    "purchasesEmpty": "Todavía no has comprado ningún regalo.",
+    "purchasesUnavailable": "No hemos podido leer tus regalos en este momento. Nada ha cambiado; vuelve a cargar la página para intentarlo de nuevo.",
+    "purchaseLine": "{{months}} meses de {{plan}}, comprado el {{date}}",
+    "codeLabel": "Código",
+    "copyCode": "Copiar código",
+    "codeCopied": "Copiado",
+    "status": {
+      "unredeemed": "Sin canjear todavía; se puede canjear hasta el {{date}}.",
+      "redeemed": "Canjeado el {{date}}.",
+      "redeemedNoDate": "Canjeado.",
+      "expired": "No se canjeó antes del {{date}}, así que ya no puede usarse.",
+      "unknown": "No hemos podido comprobar si se ha canjeado."
+    },
+    "redeemTitle": "Canjear un código de regalo",
+    "redeemBody": "Introduce el código que te han dado. El regalo empieza hoy y dura sus meses; no se cobra nada y nada se renueva.",
+    "codeInputLabel": "Código de regalo",
+    "codePlaceholder": "FG-XXXX-XXXX-XXXX-XXXX",
+    "redeem": "Canjear",
+    "redeemAdminOnly": "Solo una persona administradora del hogar puede canjear un regalo.",
+    "redeemed": "Listo: tu hogar tiene {{plan}} hasta el {{date}}.",
+    "errorTitle": "No se pudo canjear este código",
+    "errors": {
+      "GIFT_CODE_INVALID": "Ese código no es válido. Compruébalo e inténtalo de nuevo.",
+      "GIFT_CODE_EXPIRED": "Ese código ya no puede canjearse: era válido hasta el {{date}}.",
+      "GIFT_CODE_REDEEMED": "Ese código ya se ha canjeado.",
+      "GIFT_HOUSEHOLD_SUBSCRIBED": "Este hogar tiene una suscripción, así que no se le puede añadir un regalo. El código sigue siendo válido: cánjealo cuando la suscripción termine, o en un hogar que no tenga una.",
+      "GIFT_ALREADY_ACTIVE": "Este hogar ya tiene un regalo activo hasta el {{date}}. Canjea este código después de esa fecha; sigue siendo válido.",
+      "GIFT_ADDS_NOTHING": "Este hogar ya tiene este plan de forma permanente, así que el regalo no añadiría nada. El código sigue siendo válido para otro hogar.",
+      "GIFT_REDEEM_CONFLICT": "Algo cambió mientras canjeábamos el código. No se ha usado nada; inténtalo de nuevo.",
+      "rateLimited": "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+      "generic": "No hemos podido canjear el código en este momento. No se ha usado nada; inténtalo de nuevo en unos minutos."
+    }
+  },
   "caretaker": {
     "seats": {
       "title": "Plazas de cuidador",

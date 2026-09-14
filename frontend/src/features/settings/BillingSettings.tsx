@@ -29,6 +29,7 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
+import { GiftSubscriptionCard } from '@/features/billing/GiftSubscriptionCard';
 import { isNativeApp } from '@/lib/platform';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
 import clsx from 'clsx';
@@ -94,6 +95,10 @@ export function BillingSettings() {
   // lag the redirect by a moment — say so rather than show an unchanged 0.
   const returnedFromTopUp =
     searchParams.get('status') === 'success' && searchParams.get('purchase') === 'identify-top-up';
+  // A gift checkout returns with `purchase=gift`; the code is created by the
+  // webhook, so the purchase list polls for a moment (ADR 0028).
+  const returnedFromGift =
+    searchParams.get('status') === 'success' && searchParams.get('purchase') === 'gift';
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
   const subQuery = useQuery({
     // Plan state is per-household; the backend resolves the ACTIVE household
@@ -363,6 +368,18 @@ export function BillingSettings() {
             balance={identifyCredits === undefined ? null : identifyCredits}
           />
         </div>
+      )}
+
+      {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
+          then nothing renders. Not on native: no purchase surface is. */}
+      {!native && plansQuery.data?.giftSubscriptions && (
+        <GiftSubscriptionCard
+          offer={plansQuery.data.giftSubscriptions}
+          plans={plansQuery.data.plans}
+          paymentsAvailable={paymentsAvailable}
+          gift={subQuery.data?.gift}
+          returnedFromPurchase={returnedFromGift}
+        />
       )}
 
       {paymentsAvailable && !native && (

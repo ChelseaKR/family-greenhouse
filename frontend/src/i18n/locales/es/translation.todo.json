@@ -9,6 +9,8 @@
     "plants.lineage.childrenCount_many"
   ],
   "intentionallyEqual": [
+    "giftSubscription.planLabel",
+    "giftSubscription.codePlaceholder",
     "awayRecap.noteLine",
     "nav.chat",
     "awayRecap.taskLine",

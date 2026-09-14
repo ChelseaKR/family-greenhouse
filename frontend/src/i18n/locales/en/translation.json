@@ -1558,6 +1558,62 @@
     "errorNotAdmin": "Only a household admin can buy identification packs.",
     "errorProviderUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly."
   },
+  "giftSubscription": {
+    "title": "Give Family Greenhouse as a gift",
+    "body": "Pay once for months of Garden or Greenhouse for another household. You get a code to pass on; they redeem it in Settings → Billing, and the gift runs from the day they do. Nothing renews, and nothing is charged to them.",
+    "activeTitle": "Your household has {{plan}} as a gift until {{date}}",
+    "activeBody": "Somebody paid for it. Nothing is charged to your household and nothing renews. On {{date}} the household returns to its own plan, and nothing you added is deleted.",
+    "giveTitle": "Give a gift",
+    "planLabel": "Plan",
+    "monthsLabel": "Months",
+    "oneMonth": "1 month",
+    "nMonths": "{{n}} months",
+    "total": "{{months}} × {{monthly}} a month = {{total}}",
+    "terms": "One payment of {{total}}, charged to your own card. The code can be redeemed within {{days}} days of purchase, and the gift then runs for {{months}} months from the day it is redeemed. A household with a running subscription can't take a gift until it ends.",
+    "buy": "Buy gift for {{total}}",
+    "buyNoTotal": "Buy gift",
+    "notForSale": "Gifts aren't available right now.",
+    "purchaseErrorTitle": "Purchase could not be started",
+    "purchaseErrors": {
+      "notConfigured": "Gifts aren't available right now. No charge was made.",
+      "paymentsPaused": "Payments are currently paused. No charge was made.",
+      "providerUnreachable": "We could not reach our payment provider. No charge was made — please try again shortly."
+    },
+    "purchaseReturned": "Thanks — your gift code will appear here as soon as the payment is confirmed. This can take a moment.",
+    "purchasesTitle": "Gifts you've bought",
+    "purchasesEmpty": "You haven't bought any gifts yet.",
+    "purchasesUnavailable": "We couldn't read your gifts right now. Nothing has changed — reload to try again.",
+    "purchaseLine": "{{months}} months of {{plan}}, bought {{date}}",
+    "codeLabel": "Code",
+    "copyCode": "Copy code",
+    "codeCopied": "Copied",
+    "status": {
+      "unredeemed": "Not redeemed yet — can be redeemed until {{date}}.",
+      "redeemed": "Redeemed on {{date}}.",
+      "redeemedNoDate": "Redeemed.",
+      "expired": "Not redeemed by {{date}}, so it can no longer be used.",
+      "unknown": "We couldn't check whether this has been redeemed."
+    },
+    "redeemTitle": "Redeem a gift code",
+    "redeemBody": "Enter the code you were given. The gift starts today and runs for its months; nothing is charged and nothing renews.",
+    "codeInputLabel": "Gift code",
+    "codePlaceholder": "FG-XXXX-XXXX-XXXX-XXXX",
+    "redeem": "Redeem",
+    "redeemAdminOnly": "Only a household admin can redeem a gift.",
+    "redeemed": "Done — your household has {{plan}} until {{date}}.",
+    "errorTitle": "This code couldn't be redeemed",
+    "errors": {
+      "GIFT_CODE_INVALID": "That code isn't valid. Check it and try again.",
+      "GIFT_CODE_EXPIRED": "That code can no longer be redeemed — it was valid until {{date}}.",
+      "GIFT_CODE_REDEEMED": "That code has already been redeemed.",
+      "GIFT_HOUSEHOLD_SUBSCRIBED": "This household has a subscription, so a gift can't be added to it. The code stays valid: redeem it after the subscription ends, or on a household without one.",
+      "GIFT_ALREADY_ACTIVE": "This household already has a gift running until {{date}}. Redeem this code after that; it stays valid.",
+      "GIFT_ADDS_NOTHING": "This household already owns this plan permanently, so the gift would add nothing. The code stays valid for another household.",
+      "GIFT_REDEEM_CONFLICT": "Something changed while we were redeeming. Nothing was used — try again.",
+      "rateLimited": "Too many attempts. Wait a minute and try again.",
+      "generic": "We couldn't redeem the code right now. Nothing was used — please try again shortly."
+    }
+  },
   "caretaker": {
     "seats": {
       "title": "Caretaker seats",
