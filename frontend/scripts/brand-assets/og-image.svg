@@ -35,6 +35,11 @@
     <tspan x="552" dy="0">Reminders, schedules, and a care log</tspan>
     <tspan x="552" dy="42">for the whole household.</tspan>
   </text>
-  <rect x="548" y="478" width="334" height="54" rx="27" fill="#DC6C1F"/>
+  <!-- accent-700 (#A23F1A), not accent-500 (#DC6C1F): white text at this size
+       only clears 3.38:1 on accent-500, short of WCAG AA's 4.5:1 for normal
+       text. accent-700 is already used for the threshold stroke above, so the
+       badge stays in the documented terracotta family; white-on-accent-700
+       measures 6.44:1. -->
+  <rect x="548" y="478" width="334" height="54" rx="27" fill="#A23F1A"/>
   <text x="715" y="513" text-anchor="middle" font-family="Instrument Sans, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="#FFFFFF">FREE FOR UP TO 20 PLANTS</text>
 </svg>

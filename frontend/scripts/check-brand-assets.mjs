@@ -180,8 +180,8 @@ if (!seedlingPlants) {
 // a deliberate social-card edit must regenerate the raster and update both
 // values in the same change.
 const reviewedSocialCardHashes = {
-  source: '1c4138253d503dd5cd8a6bf0aca35033f90bf381ebdc4df4e79250ad1a5bad9b',
-  raster: 'c6aaca0c98da9cc6e8c27b3bea465c24eaf7a1fed195361a8ff01c53ab84b940',
+  source: '761e0b41aed3faca93ea818ec4a88c13deb340abc41dc471d56ce77666e0f5e1',
+  raster: '19efd007a98c6dfcbf60c7cd59febc5062e5366ec16cb4af1a6857c6fec26f2a',
 };
 const actualSocialCardHashes = {
   source: sha256(readFileSync(socialSourcePath)),
