@@ -398,6 +398,40 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
     expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
   });
 
+  describe('inside the native (Capacitor) shells', () => {
+    beforeEach(() => {
+      // Simulate the global the Capacitor bridge injects (lib/platform.ts
+      // reads it instead of importing @capacitor/core) — same pattern as
+      // BillingSettings.test.tsx's native-shell suite.
+      (window as unknown as { Capacitor?: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+      };
+    });
+
+    afterEach(() => {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    });
+
+    it('never offers the top-up purchase, even when the 402 says it can be bought (store payment rules)', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({
+          topUpAvailable: true,
+          credits: { remaining: 0, expiresAt: null },
+          topUp: { credits: 20, priceUsd: 1.99 },
+        })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+
+      expect(
+        await screen.findByText(/This month's plant identifications are used up/)
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('still surfaces an ordinary failure as before', async () => {
     vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
       Object.assign(new Error('boom'), {
