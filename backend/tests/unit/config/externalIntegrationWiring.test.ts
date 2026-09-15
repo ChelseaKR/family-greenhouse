@@ -72,12 +72,11 @@ describe('external integration deployment wiring', () => {
     expect(configured).not.toContain('BEDROCK');
   });
 
-  it('builds and permits the optional Sentry, PostHog, and GTM browser rails', () => {
+  it('builds and permits the optional Sentry and PostHog browser rails', () => {
     for (const wiring of [
       'VITE_SENTRY_DSN: ${{ secrets.PRODUCTION_FRONTEND_SENTRY_DSN }}',
       'VITE_POSTHOG_KEY: ${{ secrets.PRODUCTION_POSTHOG_KEY }}',
       'VITE_POSTHOG_HOST:',
-      'VITE_GTM_ID: ${{ vars.PRODUCTION_GTM_ID }}',
     ]) {
       expect(productionWorkflow).toContain(wiring);
     }
@@ -89,5 +88,33 @@ describe('external integration deployment wiring', () => {
     expect(frontendModule).toContain('https://us.i.posthog.com');
     expect(frontendModule).toContain('https://eu.i.posthog.com');
     expect(frontendModule).toContain('https://*.sentry.io');
+  });
+
+  it('carries the browser PostHog key from a REPOSITORY secret into a job with no environment', () => {
+    // The `build` job is the only place VITE_* values become bytes in the
+    // bundle, and it runs outside the `production` environment. An
+    // environment-scoped PRODUCTION_POSTHOG_KEY would therefore reach it
+    // empty: the deploy stays green and analytics ships dark. This pins the
+    // shape the owner step in docs/analytics.md relies on.
+    const buildJob = productionWorkflow.slice(
+      productionWorkflow.indexOf('\n  build:'),
+      productionWorkflow.indexOf('\n  terraform:')
+    );
+    expect(buildJob).not.toMatch(/^\s+environment:/m);
+    expect(buildJob).toContain('VITE_POSTHOG_KEY: ${{ secrets.PRODUCTION_POSTHOG_KEY }}');
+  });
+
+  it('loads no Google Tag Manager: the loader, its build variable and its CSP allowances are gone', () => {
+    // Removed with the 2026-09-13 analytics decision (docs/analytics.md):
+    // PostHog only, cookieless. GTM/GA4 set cookies and would void that
+    // posture, so the dormant loader went rather than staying one repository
+    // variable away from re-enabling itself.
+    for (const file of [productionWorkflow, stagingWorkflow, frontendModule]) {
+      expect(file).not.toContain('GTM_ID');
+      expect(file).not.toContain('googletagmanager');
+      expect(file).not.toContain('google-analytics');
+    }
+    expect(read('frontend/src/services/analytics.ts')).not.toContain('dataLayer');
+    expect(read('frontend/index.html')).not.toContain('googletagmanager');
   });
 });

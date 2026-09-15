@@ -47,11 +47,28 @@ async function loadShim() {
   return { mod, fetchMock };
 }
 
+/** `Object.keys(localStorage)` does not see this environment's storage mock
+ *  (its keys live behind `key()`/`length`, not as own enumerable
+ *  properties) — read them the way the Storage interface actually exposes
+ *  them. */
+function storageKeys(storage: Storage): Set<string> {
+  const keys = new Set<string>();
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key !== null) keys.add(key);
+  }
+  return keys;
+}
+
 beforeEach(() => {
   vi.stubEnv('VITE_POSTHOG_KEY', 'phc_test_key');
-  // Force Do-Not-Track off so isEnabled() is true.
+  // Force both opt-out signals off so isEnabled() is true.
   Object.defineProperty(globalThis.navigator, 'doNotTrack', {
     value: null,
+    configurable: true,
+  });
+  Object.defineProperty(globalThis.navigator, 'globalPrivacyControl', {
+    value: undefined,
     configurable: true,
   });
 });
@@ -335,5 +352,248 @@ describe('upgrade-intent event', () => {
       properties: { upgradeTo: 'greenhouse', interval: 'year' },
       superProperties: {},
     });
+  });
+});
+
+/**
+ * Global Privacy Control. The CCPA/CPRA regulations name it as a valid
+ * opt-out-of-sale/sharing request, the privacy page promises to honour it,
+ * and the post-deploy smoke browser declares it — which is how test fixtures
+ * stay out of the funnel. It must silence every rail, not just PostHog.
+ */
+describe('Global Privacy Control', () => {
+  function declareGpc(value: unknown) {
+    Object.defineProperty(globalThis.navigator, 'globalPrivacyControl', {
+      value,
+      configurable: true,
+    });
+  }
+
+  it('silences both rails, the $identify and the $groupidentify for a signed-in user', async () => {
+    declareGpc(true);
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.identify(USER_A);
+    mod.track('billing_opened');
+    mod.track('plan_limit_hit', { context: 'plants' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mod.analyticsOptedOut()).toBe(true);
+  });
+
+  it('queues nothing while opted out, so a later sign-in replays nothing', async () => {
+    declareGpc(true);
+    const { mod, fetchMock } = await loadShim();
+    mod.track('signup_started');
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    // The signal is withdrawn later in the session; what was refused while it
+    // was on must not surface now.
+    declareGpc(false);
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toHaveLength(0);
+    expect(captures(fetchMock).map((c) => c.event)).toEqual(['$identify']);
+  });
+
+  it('accepts the boolean and the string form, and nothing else', async () => {
+    const { mod } = await loadShim();
+    declareGpc(true);
+    expect(mod.analyticsOptedOut()).toBe(true);
+    declareGpc('1');
+    expect(mod.analyticsOptedOut()).toBe(true);
+    declareGpc(false);
+    expect(mod.analyticsOptedOut()).toBe(false);
+    declareGpc(undefined);
+    expect(mod.analyticsOptedOut()).toBe(false);
+  });
+});
+
+/**
+ * Cookieless by construction — the property that makes this rail exempt from
+ * a consent banner. Not a setting that could be flipped: the shim has no
+ * storage code at all, and this is the characterization test that keeps it so.
+ */
+describe('cookieless by construction', () => {
+  it('writes no cookie and nothing to web storage across a full signed-in session', async () => {
+    // The shared test harness (tests/setup.ts) resets the auth store in its
+    // own global beforeEach, and zustand's persist middleware writes an
+    // `auth-storage` key as a side effect of that reset — present before this
+    // test does anything and no business of the analytics module's. The
+    // guarantee under test is that THIS module adds nothing on top of
+    // whatever the harness already left behind, so the check is a diff
+    // against that starting snapshot, not a literal zero.
+    // Same reasoning as the localStorage baseline above: the harness's own
+    // auth-store reset also writes the session half of its split storage
+    // adapter (`auth-storage-session`, holding a null refresh token) as a
+    // side effect of persist middleware, not of anything under test here.
+    const localKeysBefore = storageKeys(localStorage);
+    const sessionKeysBefore = storageKeys(sessionStorage);
+
+    const { mod } = await loadShim();
+    mod.registerSuperProperties({ landing_hero_framing: 'B' });
+    mod.track('experiment_viewed', { experiment: 'landing_hero_framing', variant: 'B' });
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.identify(USER_A);
+    mod.track('household_created', { ordinal: 'first' });
+    mod.track('billing_opened');
+    mod.reset();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(document.cookie).toBe('');
+    expect(storageKeys(localStorage)).toEqual(localKeysBefore);
+    expect(storageKeys(sessionStorage)).toEqual(sessionKeysBefore);
+  });
+
+  it('asks PostHog not to geolocate any payload it receives', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.identify(USER_A);
+    mod.track('billing_opened');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const payloads = captures(fetchMock);
+    expect(payloads.map((p) => p.event).sort()).toEqual([
+      '$groupidentify',
+      '$identify',
+      'billing_opened',
+    ]);
+    for (const payload of payloads) {
+      expect(payload.properties?.$geoip_disable).toBe(true);
+    }
+  });
+});
+
+/**
+ * `plan_limit_hit` is recorded by the axios interceptor for every 402, so the
+ * `context` it carries must be a bounded route FAMILY the server's closed
+ * alphabet accepts — never a route with an id or a token in it — and retries
+ * of one refusal must count once.
+ */
+describe('plan-limit context', () => {
+  it.each([
+    ['/plants', 'plants'],
+    ['/plants/identify', 'plants_identify'],
+    ['/households/a0000000-0000-4000-8000-000000000001/members', 'households_members'],
+    [
+      '/households/a0000000-0000-4000-8000-000000000001/invites/abcdefghijklmnopqrstuvwxyz1234',
+      'households_invites',
+    ],
+    ['/me/today?until=2026-09-13T00:00:00Z', 'me_today'],
+    ['/api-keys', 'api-keys'],
+    ['http://localhost:4000/tasks/12345/photos', 'tasks_photos'],
+    ['/Plants/NEW', 'plants_new'],
+    ['/', 'other'],
+    [undefined, 'other'],
+  ])('%s → %s', async (url, expected) => {
+    const { mod } = await loadShim();
+    const context = mod.planLimitContext(url);
+    expect(context).toBe(expected);
+    expect(context).toMatch(/^[a-z][a-z0-9_-]{0,31}$/u);
+  });
+
+  it('counts retries of one refusal once, and a fresh refusal after the window', async () => {
+    const { mod } = await loadShim();
+    expect(mod.planLimitHitContext('/plants', 1_000)).toBe('plants');
+    expect(mod.planLimitHitContext('/plants', 4_000)).toBeNull();
+    expect(mod.planLimitHitContext('/households', 4_000)).toBe('households');
+    expect(mod.planLimitHitContext('/plants', 12_000)).toBe('plants');
+  });
+
+  it('forgets the dedupe ledger on reset(), so the next user is counted afresh', async () => {
+    const { mod } = await loadShim();
+    expect(mod.planLimitHitContext('/plants', 1_000)).toBe('plants');
+    mod.reset();
+    expect(mod.planLimitHitContext('/plants', 1_500)).toBe('plants');
+  });
+
+  it('reaches the first-party rail with only the closed-enum context', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.track('plan_limit_hit', { context: mod.planLimitContext('/households/x/members') });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(firstPartyEvents(fetchMock)).toEqual([
+      {
+        event: 'plan_limit_hit',
+        properties: { context: 'households_x_members'.slice(0, 0) || 'households_x' },
+        superProperties: {},
+      },
+    ]);
+  });
+});
+
+/**
+ * The in-app opt-out. Settings → Preferences writes one localStorage key
+ * through `setAnalyticsOptOut`; the shim reads it on every event. It is the
+ * only opt-out that can work inside the iOS shell, where neither browser
+ * signal ever fires, so it has to silence everything the signals do.
+ */
+describe('in-app opt-out', () => {
+  afterEach(() => {
+    localStorage.removeItem('fg-analytics-opt-out');
+  });
+
+  it('silences both rails for a signed-in user, and drops what was queued', async () => {
+    const { mod, fetchMock } = await loadShim();
+    mod.track('signup_started'); // anonymous, queued
+    mod.setAnalyticsOptOut(true);
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.setActiveHousehold(HOUSEHOLD_A);
+    mod.identify(USER_A);
+    mod.track('billing_opened');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mod.analyticsOptedOut()).toBe(true);
+    expect(mod.analyticsOptOutStored()).toBe(true);
+
+    // Turning it back on later does not resurrect the dropped queue.
+    mod.setAnalyticsOptOut(false);
+    mod.track('household_created', { ordinal: 'first' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(firstPartyEvents(fetchMock).map((e) => e.event)).toEqual(['household_created']);
+  });
+
+  it('writes exactly one key, and removes it rather than writing "0"', async () => {
+    // Same harness caveat as the cookieless test above: `auth-storage` is
+    // already present from the shared beforeEach and is not this module's
+    // concern. What is under test is that toggling the opt-out adds exactly
+    // one key on top of that baseline, and removes exactly that one key.
+    const keysBefore = storageKeys(localStorage);
+    const { mod } = await loadShim();
+    mod.setAnalyticsOptOut(true);
+    expect(storageKeys(localStorage)).toEqual(
+      new Set([...keysBefore, mod.ANALYTICS_OPT_OUT_STORAGE_KEY])
+    );
+    expect(localStorage.getItem(mod.ANALYTICS_OPT_OUT_STORAGE_KEY)).toBe('1');
+    mod.setAnalyticsOptOut(false);
+    expect(storageKeys(localStorage)).toEqual(keysBefore);
+    expect(mod.analyticsOptOutStored()).toBe(false);
+  });
+
+  it('is read from storage on a fresh load, so it survives the session', async () => {
+    localStorage.setItem('fg-analytics-opt-out', '1');
+    const { mod, fetchMock } = await loadShim();
+    mod.setTelemetryAuthToken('jwt-token');
+    mod.identify(USER_A);
+    mod.track('plant_added', { ordinal: 'first' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

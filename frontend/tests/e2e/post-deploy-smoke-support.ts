@@ -48,6 +48,50 @@ export const TEST_FIXTURE = {
 } as const;
 
 /**
+ * Declare Global Privacy Control on the page BEFORE any app script runs.
+ *
+ * This is how a smoke fixture stays out of the product analytics. The 2026-09-13
+ * funnel measurement found 11 of the 13 households created since 2026-09-01
+ * were post-deploy smoke accounts; a PostHog funnel that counted them would be
+ * 85% test debris, in the same way the household count was before the
+ * `isTestFixture` stamp above. The browser cannot know it is a fixture — the
+ * claim row lives in DynamoDB — so the harness tells it, in the one vocabulary
+ * the app already honours: `frontend/src/services/analytics.ts` treats
+ * `navigator.globalPrivacyControl` as an opt-out and then sends nothing on any
+ * rail, PostHog or first-party, and queues nothing for later.
+ *
+ * Passed to `page.addInitScript`, which serialises the function and runs it in
+ * every frame before the page's own scripts. It must therefore stay
+ * self-contained: no closures, no imports. The unit test runs the same function
+ * against jsdom and then asks the shim's own predicate, so the two sides cannot
+ * drift apart. Only GPC is declared, not Do Not Track: DNT would also silence
+ * the first-party error and Web Vitals rail, which identifies no one and whose
+ * CloudWatch alarms are worth exercising from a real browser on every deploy.
+ */
+export function declareGlobalPrivacyControl(): void {
+  Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', {
+    get: () => true,
+    configurable: true,
+  });
+}
+
+/**
+ * A request from the smoke browser to one of these is a product-analytics
+ * payload leaving a browser that declared its opt-out — the negative control
+ * for the paragraph on the privacy page. PostHog's capture host is the only
+ * vendor analytics origin the CSP admits.
+ */
+export function isVendorAnalyticsHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === 'posthog.com' || normalized.endsWith('.posthog.com');
+}
+
+/** The first-party product-event endpoint, which GPC must silence as well. */
+export function isProductTelemetryRequest(url: string, apiUrl: string): boolean {
+  return url.startsWith(`${apiUrl}/`) && new URL(url).pathname.endsWith('/telemetry/product');
+}
+
+/**
  * Seconds a sign-up address marker lives. It must stay far above the 7-day
  * ceiling of the confirm-reminder pass (`REMIND_BEFORE_MS` in
  * backend/src/services/confirmReminders.ts): the marker is written before the

@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+import { analyticsOptedOut } from '@/services/analytics';
 import {
   buildSignupAddressFixtureMarker,
   buildSmokeEmail,
+  declareGlobalPrivacyControl,
   householdIdFromCreateResponse,
   householdIdFromMembershipItem,
   isAmazonS3Hostname,
+  isProductTelemetryRequest,
+  isVendorAnalyticsHostname,
   purgeExactSmokeS3Object,
   purgeSmokeOwnedPartitions,
   runAllCleanupSteps,
@@ -15,6 +19,60 @@ import {
 } from '../../e2e/post-deploy-smoke-support';
 
 describe('post-deploy smoke support', () => {
+  describe('declareGlobalPrivacyControl', () => {
+    const PROPERTY = 'globalPrivacyControl';
+    const original = Object.getOwnPropertyDescriptor(Navigator.prototype, PROPERTY);
+    const restore = () => {
+      if (original) Object.defineProperty(Navigator.prototype, PROPERTY, original);
+      else delete (Navigator.prototype as { globalPrivacyControl?: unknown })[PROPERTY];
+    };
+
+    it('is the opt-out the analytics shim honours, pinned from both sides', () => {
+      // The smoke browser runs exactly this function before the app boots. If
+      // the shim ever stops reading `navigator.globalPrivacyControl`, or the
+      // harness stops declaring it, fixtures start landing in the PostHog
+      // funnel again — this is the test that turns red first.
+      try {
+        expect(analyticsOptedOut()).toBe(false);
+        declareGlobalPrivacyControl();
+        expect((navigator as Navigator & { globalPrivacyControl?: unknown })[PROPERTY]).toBe(true);
+        expect(analyticsOptedOut()).toBe(true);
+      } finally {
+        restore();
+      }
+    });
+
+    it('is self-contained, because addInitScript serialises it into the page', () => {
+      // A closure over a module import would serialise to a ReferenceError in
+      // the page and silently not opt out. Re-evaluating the source in a bare
+      // scope proves nothing outside the function body is needed.
+      const source = declareGlobalPrivacyControl.toString();
+      expect(source).not.toMatch(/\b(import|require|expect|vi)\b/);
+      expect(source).toContain('globalPrivacyControl');
+    });
+  });
+
+  describe('analytics leak detection', () => {
+    it('names PostHog capture hosts and nothing else', () => {
+      expect(isVendorAnalyticsHostname('us.i.posthog.com')).toBe(true);
+      expect(isVendorAnalyticsHostname('EU.I.POSTHOG.COM')).toBe(true);
+      expect(isVendorAnalyticsHostname('posthog.com')).toBe(true);
+      expect(isVendorAnalyticsHostname('notposthog.com')).toBe(false);
+      expect(isVendorAnalyticsHostname('familygreenhouse.net')).toBe(false);
+      expect(isVendorAnalyticsHostname('s3.us-east-1.amazonaws.com')).toBe(false);
+    });
+
+    it('names the first-party product endpoint on our API only', () => {
+      const api = 'https://api.example.invalid/production';
+      expect(isProductTelemetryRequest(`${api}/telemetry/product`, api)).toBe(true);
+      expect(isProductTelemetryRequest(`${api}/telemetry/frontend`, api)).toBe(false);
+      expect(isProductTelemetryRequest(`${api}/plants`, api)).toBe(false);
+      expect(isProductTelemetryRequest('https://elsewhere.invalid/telemetry/product', api)).toBe(
+        false
+      );
+    });
+  });
+
   describe('buildSignupAddressFixtureMarker', () => {
     const RUN_ID = '550e8400-e29b-41d4-a716-446655440000';
     const CREATED_AT = '2026-10-06T17:23:41.000Z';

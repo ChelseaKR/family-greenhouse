@@ -166,6 +166,49 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `GET /billing/me`; `giftSubscriptions` on `GET /billing/plans`. Nothing is
   for sale until the owner creates the two one-time Stripe prices and sets
   `stripe_price_id_gift_garden_month` / `stripe_price_id_gift_greenhouse_month`.
+- **Product analytics, switched on — cookieless, opt-out-honouring, and
+  fixture-proof.** Until now the funnel could only be read from CloudFront
+  logs with smoke fixtures excluded by hand: 12 real sessions, 3 sign-ups, 1
+  confirmed, 1 activated, 0 payments over 13 days, measured once. The
+  `PostHog`-shaped shim that has shipped inert since the start is now wired end
+  to end, so the moment `PRODUCTION_POSTHOG_KEY` exists as a repository secret
+  the next deploy ships it and every stage of sign-up → confirm → activate →
+  hit a limit → open billing → checkout started → checkout completed is
+  countable per real household. `docs/analytics.md` is the design; the rest is
+  what changed.
+
+  - **Three events fill the gaps in the funnel.** `signup_started` (the
+    register form accepted by the API; held and replayed at first sign-in like
+    the other pre-identity events), `plan_limit_hit` (recorded by the axios
+    interceptor for every 402 — plant cap, member cap, homes cap, API keys,
+    chat, cross-home Today, the identify allowance — with a bounded route
+    family as its only property, deduped against react-query retries) and
+    `billing_opened` (Settings → Billing rendered, the one page-level event).
+    A gate in `scripts/check-doc-figures.mjs` now holds each of the seven
+    stages in the doc's funnel table to a live call site, comments excluded,
+    so a refactor that drops one fails `verify` instead of showing up as a
+    permanent zero on a dashboard step.
+  - **Global Privacy Control is an opt-out, alongside Do Not Track.** Either
+    signal silences every rail in the shim — PostHog and the first-party
+    endpoint — and nothing is queued or stored while it is on. GPC is the
+    signal the CCPA/CPRA regulations name as a valid opt-out for California
+    residents.
+  - **Test fixtures are excluded structurally.** The post-deploy smoke browser
+    declares GPC before the app boots, and the spec asserts that no request
+    reached PostHog or `POST /telemetry/product` during the run — a negative
+    control that rolls the release back if the deployed bundle ever ignores
+    the signal. The Route 53 health check executes no JavaScript and cannot
+    emit an event.
+  - **Cookieless by construction, and now tested.** The shim never touches
+    cookies or web storage; the identity is the Cognito sub in module memory,
+    set only after sign-in. Every PostHog payload carries `$geoip_disable`.
+  - **Disclosure rewritten.** The privacy policy (en/es) states what is sent,
+    keyed how, to whom (PostHog Cloud US), for how long, how to opt out, and
+    that account deletion does not delete the PostHog person; the DPIA, the
+    iOS privacy manifest (`UserID` gains the Analytics purpose;
+    `ProductInteraction` is declared; tracking stays `false`), `docs/security.md`
+    and `docs/external-services-setup.md` follow.
+
 - **A sign-up that never confirmed its email now gets one reminder, and only
   one.** A self-service account starts `UNCONFIRMED` and receives one code that
   is valid for 24 hours. Cognito never expires or deletes such an account: it
@@ -258,6 +301,18 @@ Automatic` with no `DEVELOPMENT_TEAM`, so the first Archive on a fresh clone
   The SLO is currently missed — the 28-day p95 is 1,673 ms and 21.8% of
   requests exceed 500 ms, a sustained 4.4x burn caused by cold starts. That is
   tracked as a product problem in #730 rather than as a repeating page.
+
+### Removed
+
+- **The dormant Google Tag Manager loader.** `analytics.ts` would have injected
+  `googletagmanager.com/gtm.js` on sign-in had `VITE_GTM_ID` ever been set;
+  no environment set it. The 2026-09-13 analytics decision is PostHog only and
+  cookieless, and GTM/GA4 set cookies that would have voided that posture, so
+  the loader, its `PRODUCTION_GTM_ID` / `STAGING_GTM_ID` build variables, the
+  Google allowances in both Content-Security-Policies, and the privacy
+  policy's Tag Manager paragraph are gone rather than left one repository
+  variable away from re-enabling themselves. `script-src` is now `'self'`
+  alone in both policies.
 
 ### Fixed
 

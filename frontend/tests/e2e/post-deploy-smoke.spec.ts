@@ -56,6 +56,9 @@ import {
   buildSignupAddressFixtureMarker,
   buildSmokeEmail,
   buildTestFixtureClaim,
+  declareGlobalPrivacyControl,
+  isProductTelemetryRequest,
+  isVendorAnalyticsHostname,
   householdIdFromCreateResponse,
   householdIdFromMembershipItem,
   isAmazonS3Hostname,
@@ -580,6 +583,42 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
   });
 }
 
+/**
+ * Analytics negative control.
+ *
+ * Every page this file opens declares Global Privacy Control before the app
+ * boots (see declareGlobalPrivacyControl in the support module). That is what
+ * keeps smoke fixtures out of the product funnel: `services/analytics.ts`
+ * treats the signal as an opt-out and sends nothing to PostHog and nothing to
+ * POST /telemetry/product. The collector below records any such request, and
+ * each test asserts the list is empty at its end — so a release whose bundle
+ * ignores the opt-out is rolled back by the smoke rather than shipped with a
+ * privacy-page promise it does not keep. With no PostHog key configured the
+ * vendor half is trivially empty; the first-party half is live either way.
+ */
+const analyticsLeaks: string[] = [];
+
+test.beforeEach(async ({ page }) => {
+  analyticsLeaks.length = 0;
+  await page.addInitScript(declareGlobalPrivacyControl);
+  page.on('request', (request) => {
+    const url = request.url();
+    const { hostname } = new URL(url);
+    if (isVendorAnalyticsHostname(hostname)) {
+      analyticsLeaks.push(`vendor analytics request to ${hostname}`);
+    } else if (isProductTelemetryRequest(url, API_URL)) {
+      analyticsLeaks.push('first-party POST /telemetry/product');
+    }
+  });
+});
+
+function expectNoAnalyticsLeaks(): void {
+  expect(
+    analyticsLeaks,
+    'the smoke browser declared Global Privacy Control; no product-analytics request may leave it'
+  ).toEqual([]);
+}
+
 test.describe('public registration smoke', () => {
   let email: string | undefined;
   let username: string | undefined;
@@ -630,6 +669,8 @@ test.describe('public registration smoke', () => {
     expect(createdUser?.Enabled).toBe(true);
     expect(createdUser?.Username).toBeTruthy();
     username = createdUser?.Username;
+
+    expectNoAnalyticsLeaks();
   });
 });
 
@@ -892,5 +933,7 @@ test.describe('post-deploy smoke', () => {
     // only hostname + status, never presigned paths or query credentials.
     const fatalApiErrors = apiErrors.filter((e) => e.status === 403 || e.status >= 500);
     expect(fatalApiErrors).toEqual([]);
+
+    expectNoAnalyticsLeaks();
   });
 });

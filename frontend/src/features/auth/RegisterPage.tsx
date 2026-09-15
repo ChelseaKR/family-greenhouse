@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
+import { track } from '@/services/analytics';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
@@ -92,6 +93,10 @@ function RegistrationForm({ redirect, loginHref }: { redirect: string | null; lo
         email: data.email,
         password: data.password,
       });
+      // The funnel's first step, fired only once the API has accepted the
+      // account. The visitor has no identity yet, so this is held in memory
+      // and replayed at first sign-in (services/analytics.ts).
+      track('signup_started');
       setPendingConfirmation({ email: data.email, redirect });
       navigate('/confirm-email', { state: { email: data.email, redirect } });
     } catch (err) {

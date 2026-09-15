@@ -244,10 +244,23 @@ for (const dataType of [
   'OtherUserContent',
   'UserID',
   'CoarseLocation',
+  // Product analytics (docs/analytics.md): funnel events keyed to the account
+  // id, and the first-party Web Vitals rail. Linked to the user for the
+  // former, not for the latter; neither is "tracking" in Apple's sense — no
+  // third-party data linking, no ad measurement, no data broker — so the
+  // manifest keeps NSPrivacyTracking false and needs no ATT prompt.
+  'ProductInteraction',
+  'PerformanceData',
 ]) {
   if (!privacyManifest.includes(`NSPrivacyCollectedDataType${dataType}`)) {
     fail(`iOS privacy manifest is missing collected data type ${dataType}`);
   }
+}
+if (!/<key>NSPrivacyTracking<\/key>\s*<false\/>/.test(privacyManifest)) {
+  fail(
+    'iOS privacy manifest must declare NSPrivacyTracking false: nothing here links user data ' +
+      'with third-party data for advertising, and declaring tracking would require an ATT prompt'
+  );
 }
 if (/NSPrivacyAccessedAPITypes<\/key>\s*<array\s*\/>/.test(privacyManifest)) {
   fail(

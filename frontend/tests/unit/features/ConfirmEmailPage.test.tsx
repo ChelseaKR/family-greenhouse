@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,7 +9,13 @@ import { ConfirmEmailPage } from '@/features/auth/ConfirmEmailPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import es from '@/i18n/locales/es/translation.json';
+import { track } from '@/services/analytics';
 import { server } from '../../msw/server';
+
+vi.mock('@/services/analytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/analytics')>();
+  return { ...actual, track: vi.fn() };
+});
 
 const API = 'http://localhost:4000';
 
@@ -165,6 +171,25 @@ describe('ConfirmEmailPage', () => {
     expect(screen.getByText('redirect:/join/code-1')).toBeInTheDocument();
     expect(screen.getByText('confirmed:a@b.com')).toBeInTheDocument();
     expect(body).toEqual({ email: 'a@b.com', code: '123456' });
+    // The funnel's "confirmed" stage (docs/analytics.md): fired after Cognito
+    // accepted the code, held until the same tab signs in.
+    expect(track).toHaveBeenCalledWith('signup_completed');
+  });
+
+  it('does not report a confirmation the API refused', async () => {
+    vi.mocked(track).mockClear();
+    server.use(
+      http.post(`${API}/auth/confirm`, () =>
+        HttpResponse.json({ message: 'Invalid confirmation code' }, { status: 400 })
+      )
+    );
+    renderPage({ email: 'a@b.com' });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/confirmation code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /confirm email/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/invalid confirmation code/i);
+    expect(track).not.toHaveBeenCalledWith('signup_completed');
   });
 
   it('drops a backslash redirect before routing from confirmation to login', async () => {
