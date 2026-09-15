@@ -16,7 +16,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-09-14
+
 ### Added
+
+- **An admin can now see that their last checkout never finished.**
+  `GET /billing/me` derives `staleCheckout` from the same
+  `pendingCheckoutSessionId`/`pendingCheckoutAt` marker the second-checkout
+  guard already reads: unset unless that marker has gone stale, so an
+  in-flight checkout (still refusing a second one) says nothing new. Settings
+  → Billing shows it as an info notice, gated to admins and to
+  `!awaitingEntitlement` so it can never contradict "hang on, you just paid."
+  The copy is deliberately hedged — a Checkout Session using a delayed
+  payment method can still settle after the notice starts showing — so it
+  says "unless you paid using a bank transfer or another method that
+  confirms after checkout" rather than promising nothing was charged. EN/ES.
 
 - **One public page per plant with a cited verdict in the pet-toxicity table,
   at `/pet-safe/<slug>`.** Funnel measurement on 2026-09-13 found the site's
@@ -54,6 +68,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   routes are in the iOS association file's not-claimed set.
 
 ### Fixed
+
+- **The og-image badge failed WCAG AA contrast.** "FREE FOR UP TO 20 PLANTS"
+  rendered white text on `accent-500` (3.38:1, short of the 4.5:1 normal-text
+  floor). Swapped to `accent-700` (already used for the threshold stroke
+  elsewhere in the asset), measuring 6.44:1. The reviewed-hash pair in
+  `check-brand-assets.mjs` moves with the regenerated raster.
+
+- **The landing page never mentioned sitters, handoff, or a no-card, five-
+  minute signup — two gaps the paid-acquisition readiness review (#786)
+  found but didn't fix.** A visitor who clicked the vacation/sitter ad or
+  keyword landed on a page that named the mechanism nowhere but one persona
+  sentence; the features grid now has a "Someone else can cover" card and
+  the "Away a lot" persona body names the actual mechanism (a link, no
+  account, no app), grounded in the real Away Kit feature and its plan
+  gating. Separately, "no credit card" lived one scroll below the primary
+  CTA and the actual signup steps were never stated up front — flagged as
+  the most likely place paid-traffic abandons; a note now sits directly
+  under the CTA, reusing the "five minutes" figure the Setup section already
+  states.
 
 - **The blog named the care guides' plants fifty times and linked to a care
   guide zero times.** Twelve of the fourteen posts name at least one plant
