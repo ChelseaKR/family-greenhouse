@@ -114,7 +114,16 @@ export function PreferencesSettings() {
           </div>
         )}
 
-        {/* Product analytics — the in-app opt-out the privacy page names. */}
+        {/* Product analytics — the in-app opt-out the privacy page names.
+            Sized to a 28px box (not the 20px `h-5 w-5` this file's other
+            checkboxes use, which get away with it by living inside a
+            wrapping <label>): a bare `<input>` referenced by a separate
+            `<label htmlFor>`, as here, isn't exempt from
+            responsive-ux.spec.ts's 24px minimum control-target check, and
+            wrapping this one would fold the description paragraph and the
+            privacy link's own text into the checkbox's accessible name.
+            `h-7 w-7` keeps the name exactly "Share usage events" and clears
+            the 24px floor without relying on exact-boundary rounding. */}
         <fieldset>
           <legend className="label">{t('settings.preferences.analytics')}</legend>
           <div className="flex items-start justify-between gap-4">
@@ -132,7 +141,7 @@ export function PreferencesSettings() {
             <input
               id="analytics-shared"
               type="checkbox"
-              className="mt-1 h-5 w-5 shrink-0 accent-primary-700"
+              className="mt-1 h-7 w-7 shrink-0 accent-primary-700"
               checked={analyticsShared}
               onChange={(e) => onAnalyticsChange(e.target.checked)}
             />
