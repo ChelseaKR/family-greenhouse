@@ -299,6 +299,44 @@ describe('billing handler', () => {
       expect(body).not.toHaveProperty('trialConsumedAt');
     });
 
+    it('publishes staleCheckout on the wire exactly as the service derived it — the abandoned-checkout notice', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'seedling',
+        staleCheckout: { startedAt: '2026-09-13T12:00:00.000Z' },
+      });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const body = JSON.parse(res.body);
+      expect(body.staleCheckout).toEqual({ startedAt: '2026-09-13T12:00:00.000Z' });
+    });
+
+    it('carries no staleCheckout key when the service did not derive one — a fresh or absent marker', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+
+      // The service never sends `staleCheckout: undefined` explicitly — it is
+      // simply absent from the object, the same as every other unset optional
+      // field on HouseholdSubscription.
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const body = JSON.parse(res.body);
+      expect(body).not.toHaveProperty('staleCheckout');
+    });
+
     it('publishes the top-up credit balance, and an UNREADABLE balance as null rather than 0', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');

@@ -291,6 +291,22 @@ export function BillingSettings() {
   const purchaseSettled = hasLiveSubscription || !!subQuery.data?.lifetimePlanId;
   const awaitingEntitlement =
     returnedFromPlanCheckout && subQuery.isSuccess && !purchaseSettled && !native;
+  // A plan Checkout Session this household was handed and never finished,
+  // old enough that the backend calls it abandoned rather than merely
+  // in-flight (`staleCheckout`; see PENDING_CHECKOUT_WINDOW_MS in
+  // backend/src/services/billing.ts). Distinct from `awaitingEntitlement`
+  // above on purpose: that one means "you just paid, the webhook is
+  // catching up" and only appears on the redirect back from Stripe
+  // (`status=success`); this one means "you never finished paying" and can
+  // surface on ANY later visit to this page. Gated to admins because only an
+  // admin can have started the checkout it describes — a member sees no
+  // purchase button and would have no way to act on it. `!awaitingEntitlement`
+  // is belt-and-braces: `claimPendingCheckout` overwrites the marker the
+  // instant a new checkout starts, so the two cannot describe the same
+  // Session, but showing "you didn't finish" beside "hang on, you just paid"
+  // would contradict itself, so it is guarded directly rather than trusting
+  // that invariant silently.
+  const staleCheckout = isAdmin && !awaitingEntitlement ? subQuery.data?.staleCheckout : undefined;
   // Reads a status Stripe actually sent. An ABSENT status is never dunning:
   // `checkout.session.completed` records the subscription id before any status
   // is known, and calling that window "your payment failed" would be a worse
@@ -386,6 +402,24 @@ export function BillingSettings() {
               </a>
             </p>
           )}
+        </Alert>
+      )}
+      {/* An abandoned plan checkout, surfaced from `staleCheckout` (data
+          already on the household row — see billing.ts). Wording is
+          deliberately unmistakable next to `awaitingEntitlement` above:
+          that one means a card WAS charged and the page is catching up; this
+          one means the household never finished paying. The date names when
+          the checkout was STARTED (the row records nothing about which tier
+          it was for), and the caveat about delayed payment methods is not
+          boilerplate — a Checkout Session that used one can still settle,
+          and charge the household, after this notice starts showing. */}
+      {staleCheckout && (
+        <Alert variant="info" title={t('settings.billing.abandonedCheckoutTitle')}>
+          <p data-testid="abandoned-checkout-body">
+            {t('settings.billing.abandonedCheckoutBody', {
+              date: formatDate(staleCheckout.startedAt),
+            })}
+          </p>
         </Alert>
       )}
       <NoCardTrialNoticeView
