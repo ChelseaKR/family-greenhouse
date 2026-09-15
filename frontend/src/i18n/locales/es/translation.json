@@ -1205,7 +1205,9 @@
       "checkoutStalledTitle": "Tu pago se ha realizado, pero tu plan no se ha actualizado",
       "checkoutStalledBody": "Todavía no hemos recibido la confirmación de nuestro proveedor de pagos. No se ha perdido nada: el pago está registrado con ellos, pero este hogar sigue mostrando su plan anterior. No vuelvas a pasar por la caja: una segunda compra iniciaría una segunda suscripción y te cobraría dos veces. Vuelve a cargar esta página dentro de uno o dos minutos.",
       "checkoutStalledContact": "Si sigue sin actualizarse, escríbenos y lo aplicaremos manualmente:",
-      "purchaseInFlight": "Esperando la confirmación de tu última compra. Comprar de nuevo te cobraría dos veces."
+      "purchaseInFlight": "Esperando la confirmación de tu última compra. Comprar de nuevo te cobraría dos veces.",
+      "abandonedCheckoutTitle": "Pago sin finalizar",
+      "abandonedCheckoutBody": "Parece que iniciaste el pago de un plan el {{date}} y no lo terminaste — ese intento ya venció. No se te cobró nada por él, salvo que hayas pagado con una transferencia bancaria u otro método que se confirma después del pago; si es así, revisa tu correo por si llegó un recibo. Puedes intentarlo de nuevo cuando quieras."
     }
   },
   "notifications": {

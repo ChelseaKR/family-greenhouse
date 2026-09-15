@@ -123,6 +123,46 @@ export interface HouseholdSubscription {
    */
   giftPlanId?: PlanId;
   giftEndsAt?: string;
+  /**
+   * A plan Checkout Session this household was handed and never completed,
+   * old enough that `pendingCheckoutState` reads it as `stale` (see
+   * `PENDING_CHECKOUT_WINDOW_MS` below) — i.e. Settings → Billing may finally
+   * say something about it. `undefined` covers every OTHER case: no marker,
+   * a `fresh` one (still refusing a second checkout — nothing has changed
+   * for the household to hear about yet), and an `undated` one (a row
+   * someone edited by hand, not a shape this code produces, and not one to
+   * describe as an ordinary abandoned checkout).
+   *
+   * `startedAt` is the marker's OWN timestamp — when the household was
+   * handed the Session, not when it went stale — for client copy that wants
+   * to say roughly when. There is no `planId` here: `claimPendingCheckout`
+   * records only the Session id and the moment, never what was being
+   * bought, so which tier an abandoned checkout was for is not recoverable
+   * from this row without a new field this change does not add.
+   *
+   * Absence of a live subscription is NOT implied by this field being set,
+   * and must not be inferred from it: a LIFETIME purchase attempt can go
+   * stale while the household keeps an unrelated subscription running (the
+   * ALREADY_SUBSCRIBED guard that would otherwise block a second checkout is
+   * deliberately skipped for `interval: 'lifetime'`, see
+   * `createCheckoutSession`).
+   *
+   * Does not, by itself, prove no money will ever move for this Session. A
+   * Checkout Session that completed with a payment method that settles
+   * later (`checkout.session.completed` with `payment_status: 'unpaid'`,
+   * e.g. a bank debit) leaves this SAME marker in place —
+   * `applyStripeEvent` only clears it once a delta is actually applied, and
+   * an unsettled completion produces none (see `deltaForStripeEvent`, and
+   * `docs/billing.md`'s note that "the async event completes delayed
+   * one-time payment methods"). Such a Session can still turn into
+   * `checkout.session.async_payment_succeeded` well after this field starts
+   * reporting the marker `stale`. The ordinary case this field exists to
+   * describe — a closed tab, a Session that simply expired unused — is the
+   * overwhelming majority, but a caller that renders this as an
+   * unconditional "you were not charged" is asserting more than this field
+   * can back up on its own.
+   */
+  staleCheckout?: { startedAt: string };
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -206,6 +246,11 @@ export async function getHouseholdSubscription(
     noCardTrialEndsAt: state.noCardTrialEndsAt,
     giftPlanId: state.giftPlanId,
     giftEndsAt: state.giftEndsAt,
+    // Same boundary, same reason: derived from the internal marker fields
+    // below (never exposed themselves) so there is one place that decides
+    // what a client learns about an abandoned checkout — see
+    // `HouseholdSubscription.staleCheckout`.
+    staleCheckout: staleCheckoutMarker(state),
   };
 }
 
@@ -225,11 +270,16 @@ export async function getHouseholdSubscription(
  * `giftPlanId` / `giftEndsAt` are excluded for the same reason (ADR 0028):
  * they are written by the redemption transaction, and a Stripe event that
  * could touch them could end a gift somebody paid for.
+ *
+ * `staleCheckout` is excluded because it too is DERIVED — from
+ * `pendingCheckoutSessionId`/`pendingCheckoutAt`, which remain the row's only
+ * authority on an in-flight checkout. Allowing it through would let a caller
+ * write a `startedAt` that disagrees with the marker it was computed from.
  */
 type SubscriptionWriteField =
   | Exclude<
       keyof HouseholdSubscription,
-      'trialAvailable' | 'noCardTrialEndsAt' | 'giftPlanId' | 'giftEndsAt'
+      'trialAvailable' | 'noCardTrialEndsAt' | 'giftPlanId' | 'giftEndsAt' | 'staleCheckout'
     >
   | 'pendingStripeCancellationId'
   // The pending-checkout marker is CLEARED through here (null → REMOVE) so
@@ -438,6 +488,28 @@ export function pendingCheckoutState(
   const at = state.pendingCheckoutAt ? Date.parse(state.pendingCheckoutAt) : Number.NaN;
   if (Number.isNaN(at)) return 'undated';
   return now - at < PENDING_CHECKOUT_WINDOW_MS ? 'fresh' : 'stale';
+}
+
+/**
+ * The `HouseholdSubscription.staleCheckout` fact, derived from the same
+ * marker `pendingCheckoutState` reads — `undefined` unless that marker is
+ * `stale`. `none` and `undated` publish nothing (see the field's own doc for
+ * why `undated` is not treated as an ordinary abandoned checkout), and
+ * `fresh` publishes nothing because nothing has changed for the household to
+ * hear about yet: the second-checkout guard is still the only consequence.
+ *
+ * Pure and exported so the boundary is testable without DynamoDB — the same
+ * reason `pendingCheckoutState` is.
+ */
+export function staleCheckoutMarker(
+  state: Pick<HouseholdBillingState, 'pendingCheckoutSessionId' | 'pendingCheckoutAt'>,
+  now: number = Date.now()
+): { startedAt: string } | undefined {
+  if (pendingCheckoutState(state, now) !== 'stale') return undefined;
+  // `pendingCheckoutState` only returns 'stale' once `pendingCheckoutAt` has
+  // parsed as a real instant, so this cast names a fact already established,
+  // not an assumption.
+  return { startedAt: state.pendingCheckoutAt as string };
 }
 
 /**

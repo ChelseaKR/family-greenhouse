@@ -2665,6 +2665,53 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
     });
   });
 
+  describe('staleCheckoutMarker — the fact GET /billing/me may finally report', () => {
+    it('is undefined with no marker, and undefined for one still fresh', async () => {
+      const { staleCheckoutMarker, PENDING_CHECKOUT_WINDOW_MS } =
+        await import('../../../src/services/billing.js');
+      const marker = (agoMs: number) => ({
+        pendingCheckoutSessionId: 'cs_1',
+        pendingCheckoutAt: new Date(NOW - agoMs).toISOString(),
+      });
+      expect(staleCheckoutMarker({}, NOW)).toBeUndefined();
+      expect(staleCheckoutMarker(marker(0), NOW)).toBeUndefined();
+      expect(staleCheckoutMarker(marker(PENDING_CHECKOUT_WINDOW_MS - 1), NOW)).toBeUndefined();
+    });
+
+    it('reports startedAt from the exact instant the marker turns stale, and not one millisecond sooner', async () => {
+      // The negative control: this pins staleCheckoutMarker to the SAME
+      // threshold `pendingCheckoutState` uses (PENDING_CHECKOUT_WINDOW_MS),
+      // rather than a copy that could quietly drift from it. A mutant that
+      // moved the boundary by even 1ms — or hardcoded a different window —
+      // fails one of these two assertions.
+      const { staleCheckoutMarker, PENDING_CHECKOUT_WINDOW_MS } =
+        await import('../../../src/services/billing.js');
+      const startedAt = new Date(NOW - PENDING_CHECKOUT_WINDOW_MS).toISOString();
+      expect(
+        staleCheckoutMarker({ pendingCheckoutSessionId: 'cs_1', pendingCheckoutAt: startedAt }, NOW)
+      ).toEqual({ startedAt });
+
+      const oneMsYounger = new Date(NOW - PENDING_CHECKOUT_WINDOW_MS + 1).toISOString();
+      expect(
+        staleCheckoutMarker(
+          { pendingCheckoutSessionId: 'cs_1', pendingCheckoutAt: oneMsYounger },
+          NOW
+        )
+      ).toBeUndefined();
+    });
+
+    it('is undefined for an undated marker — never invents a startedAt for a row it cannot date', async () => {
+      const { staleCheckoutMarker } = await import('../../../src/services/billing.js');
+      expect(staleCheckoutMarker({ pendingCheckoutSessionId: 'cs_1' }, NOW)).toBeUndefined();
+      expect(
+        staleCheckoutMarker(
+          { pendingCheckoutSessionId: 'cs_1', pendingCheckoutAt: 'not a date' },
+          NOW
+        )
+      ).toBeUndefined();
+    });
+  });
+
   it('refuses a second plan checkout while the marker is fresh — before the price is read or Stripe is touched', async () => {
     await expect(
       runCheckout({
@@ -2862,13 +2909,17 @@ describe('getHouseholdSubscription', () => {
     });
   });
 
-  it('never exposes the pending-checkout marker — a Session id has no business on GET /billing/me', async () => {
+  it('never exposes the raw pending-checkout marker — a Session id has no business on GET /billing/me — while it is still fresh', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockResolvedValueOnce({
       Item: {
         planId: 'seedling',
         pendingCheckoutSessionId: 'cs_private_pending',
-        pendingCheckoutAt: '2026-09-13T12:00:00.000Z',
+        // Relative to the real clock, not a fixed calendar date: a hardcoded
+        // "recent" ISO instant eventually crosses PENDING_CHECKOUT_WINDOW_MS
+        // and silently starts exercising the STALE branch instead of the
+        // FRESH one this test is named for.
+        pendingCheckoutAt: new Date(Date.now() - 5 * 60_000).toISOString(),
       },
     });
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
@@ -2882,6 +2933,31 @@ describe('getHouseholdSubscription', () => {
       trialAvailable: true,
     });
     expect(JSON.stringify(published)).not.toContain('cs_private_pending');
+  });
+
+  it('publishes staleCheckout once the marker is older than the window — but still never the raw Session id', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { PENDING_CHECKOUT_WINDOW_MS } = await import('../../../src/services/billing.js');
+    const startedAt = new Date(Date.now() - PENDING_CHECKOUT_WINDOW_MS - 60_000).toISOString();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Item: {
+        planId: 'seedling',
+        pendingCheckoutSessionId: 'cs_private_abandoned',
+        pendingCheckoutAt: startedAt,
+      },
+    });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    const published = await getHouseholdSubscription('hh-1');
+    expect(published).toEqual({
+      planId: 'seedling',
+      stripeCustomerId: undefined,
+      stripeSubscriptionId: undefined,
+      status: undefined,
+      currentPeriodEnd: undefined,
+      trialAvailable: true,
+      staleCheckout: { startedAt },
+    });
+    expect(JSON.stringify(published)).not.toContain('cs_private_abandoned');
   });
 
   it('reads stored plan + Stripe ids', async () => {

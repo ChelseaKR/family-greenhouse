@@ -1339,3 +1339,68 @@ describe('returning from a subscription checkout before the webhook lands', () =
     expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
   });
 });
+
+describe('an abandoned plan checkout (staleCheckout)', () => {
+  // The survey this feature came out of: a household starts checkout,
+  // abandons it (closed tab, silent card failure, whatever), and gets zero
+  // acknowledgement on a LATER visit to this page — as opposed to
+  // `awaitingEntitlement` above, which only ever fires on the redirect back
+  // from Stripe. `staleCheckout` is what `GET /billing/me` reports once the
+  // backend's PENDING_CHECKOUT_WINDOW_MS has actually elapsed.
+  const STARTED_AT = '2026-09-01T12:00:00.000Z';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  it('shows the notice on an ordinary visit — not just right after a Stripe redirect', async () => {
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true, staleCheckout: { startedAt: STARTED_AT } },
+      { paid: true } // no ?status=success — this is a ROUTINE visit
+    );
+
+    expect(screen.getByText('Checkout left unfinished')).toBeInTheDocument();
+    const body = screen.getByTestId('abandoned-checkout-body').textContent ?? '';
+    expect(body).toMatch(/started checking out for a plan/i);
+    // The one claim this feature must never overstate — and the one honest
+    // caveat that keeps it from doing so (a payment method that settles
+    // later can still turn into a real charge after this notice appears).
+    expect(body).toMatch(/were not charged/i);
+    expect(body).toMatch(/bank transfer/i);
+    // The row never records which tier the abandoned checkout was for —
+    // the copy must not invent one.
+    expect(body).not.toMatch(/Garden plan|Greenhouse plan/i);
+  });
+
+  it('says nothing when there is no stale marker to report', async () => {
+    await renderBilling({ planId: 'seedling', trialAvailable: true }, { paid: true });
+
+    expect(screen.queryByText('Checkout left unfinished')).not.toBeInTheDocument();
+  });
+
+  it('says nothing for a member — only an admin could have started the checkout it describes', async () => {
+    isAdmin.mockReturnValue(false);
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true, staleCheckout: { startedAt: STARTED_AT } },
+      { paid: true }
+    );
+
+    expect(screen.queryByText('Checkout left unfinished')).not.toBeInTheDocument();
+  });
+
+  it('never shows beside "your payment went through" — the two notices describe opposite outcomes', async () => {
+    // Constructed to make BOTH conditions structurally true at once
+    // (returned from Stripe with status=success, unsettled entitlement, AND
+    // a staleCheckout on the row) to prove the belt-and-braces guard in
+    // BillingSettings actually suppresses the abandoned-checkout notice
+    // rather than relying on the data never overlapping in practice.
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true, staleCheckout: { startedAt: STARTED_AT } },
+      { paid: true, route: '/settings/billing?status=success' }
+    );
+
+    expect(screen.getByText('Payment received — finishing up')).toBeInTheDocument();
+    expect(screen.queryByText('Checkout left unfinished')).not.toBeInTheDocument();
+  });
+});

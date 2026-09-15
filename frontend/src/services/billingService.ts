@@ -188,6 +188,33 @@ export interface SubscriptionState {
   /** A redeemed gift subscription (ADR 0028). `null` means none to describe.
    *  Absent from older backends. */
   gift?: GiftState | null;
+  /** A plan Checkout Session this household was handed and never finished,
+   *  old enough that the backend calls it abandoned rather than merely
+   *  in-flight (`backend/src/services/billing.ts`'s `PENDING_CHECKOUT_WINDOW_MS`).
+   *  Absent — not present, never `null` — whenever there is nothing to say:
+   *  no marker, one still fresh (the purchase button stays withheld by
+   *  `awaitingEntitlement`/`hasLiveSubscription` elsewhere, not by this),
+   *  or an undated one an operator edited by hand. Absent from older
+   *  backends too. See `StaleCheckout` for what it does and does not prove. */
+  staleCheckout?: StaleCheckout;
+}
+
+/**
+ * `SubscriptionState.staleCheckout` as GET /billing/me publishes it.
+ *
+ * `startedAt` is when the abandoned Session was handed out, not when it went
+ * stale; there is no plan id here (the row never recorded which tier the
+ * checkout was for), so copy built on this must describe "a plan", not name
+ * one.
+ *
+ * Does NOT prove with certainty that nothing was, or will be, charged: a
+ * Checkout Session that used a payment method settling later (e.g. a bank
+ * debit) can still turn into a real charge well after this fact starts being
+ * true — see the field's backend doc comment. Treat it as "abandoned" in the
+ * overwhelming ordinary case, not as a payment guarantee.
+ */
+export interface StaleCheckout {
+  startedAt: string;
 }
 
 /**

@@ -1176,7 +1176,9 @@
       "checkoutStalledTitle": "Your payment went through, but your plan has not updated",
       "checkoutStalledBody": "We have not had confirmation from our payment provider yet. Nothing is lost — the payment is recorded with them — but this household is still showing its old plan. Please do not check out again: a second purchase would start a second subscription and charge you twice. Reload this page in a minute or two.",
       "checkoutStalledContact": "If it still has not updated, email us and we will apply it by hand:",
-      "purchaseInFlight": "Waiting for your last purchase to be confirmed. Buying again would charge you twice."
+      "purchaseInFlight": "Waiting for your last purchase to be confirmed. Buying again would charge you twice.",
+      "abandonedCheckoutTitle": "Checkout left unfinished",
+      "abandonedCheckoutBody": "It looks like you started checking out for a plan on {{date}} and never finished — that checkout has since expired. You were not charged for it, unless you paid using a bank transfer or another method that confirms after checkout; if so, check your email for a receipt. Feel free to try again whenever you're ready."
     }
   },
   "notifications": {
