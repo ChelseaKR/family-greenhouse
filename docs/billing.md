@@ -999,14 +999,51 @@ a running subscription, so that is where the notice is required.
 
 **What it cannot see, and what stays manual.** `emailedOn` is an attestation;
 no test can see an inbox. No repository gate can see the Stripe Dashboard,
-where a person can migrate subscriptions without a line of code changing. And
-there is still no send path: `services/billingEmails.ts` dispatches from a
-Stripe event, and reaching every admin of every household on a given price
-would be a new send — a seventh notice kind plus a fan-out in the shape
-`services/scheduledFanOut.ts` provides. It is deliberately not built ahead of
-need: no price change is planned. What the gate guarantees is that the email
-is sent — by that path once it exists, or by hand — and recorded before any
-code that moves a running subscription can merge.
+where a person can migrate subscriptions without a line of code changing.
+What the gate guarantees is that the email is sent — by the path below, or by
+hand — and recorded before any code that moves a running subscription can
+merge.
+
+**The send path now exists.** `services/priceChangeNotices.ts` +
+`backend/src/scripts/sendPriceChangeNotice.ts` (`npm run notify:price-change
+--workspace backend --`) is the fan-out this section used to say was not built
+ahead of need. It is operator-triggered only — nothing calls it from a
+webhook, a schedule, or a request handler, because no price change is planned
+and none should be announced by a change no person chose:
+
+- **Who it mails:** every household whose stored `planId` matches the
+  announced plan and holds a live Stripe subscription (`stripeSubscriptionId`
+  set, status `active` or `trialing`) — every admin on each of them, resolved
+  from our own roster the same way `billingEmails.ts` resolves recipients for
+  every other billing email. The household row carries no per-cadence field,
+  so this cannot tell a Garden monthly subscriber from a Garden annual one;
+  both are notified of a Garden price move. That is deliberate: an
+  unaffected admin told a price "is changing" costs one unnecessary email,
+  under-notifying a truly affected one is the defect #710 was filed about.
+- **Idempotent, not lease-based.** Unlike the Stripe-webhook emails, there is
+  no at-least-once redelivery stream here — one operator runs one script,
+  once. Each admin gets a single conditional DynamoDB marker
+  (`PRICE_CHANGE_NOTICE#{id}` / `EMAIL#{userId}`); a failed send releases its
+  own marker so a re-run of the same `--id` retries exactly the recipients
+  that did not get mailed, without re-mailing the ones that did.
+  `backend/tests/unit/services/priceChangeNotices.test.ts` proves the failure
+  case specifically — a send that fails leaves no marker, so it is not
+  silently treated as done.
+- **Dry run by default.** The CLI validates the 14-day rule itself
+  (`models/priceChangeAnnouncement.ts`) and prints how many households would
+  be notified before sending anything; `--confirm` is required to actually
+  mail.
+- **It writes the ledger entry for you.** A successful `--confirm` run
+  appends (or updates, by `--id`) an entry in
+  `docs/price-change-notices.json` with `emailedOn` set to the day it actually
+  ran and `sites: []` — exactly the shape the gate above already treats as
+  passing ("an email that is out while the code is not written yet"). When
+  the PR that actually moves a running subscription's price ships, add that
+  PR's `sites` entries to the SAME notice (by its `id`) rather than opening a
+  new one.
+- **Still manual:** deciding to change a price at all, and running the
+  command. Nothing here can see the Stripe Dashboard either, so a price moved
+  by hand there without this script first is exactly as unseen as before.
 
 **What was already not kept.** The sentence
 `legal.terms.fromUs.notice` used to promise that "material features and usage
@@ -1075,14 +1112,27 @@ Gated, so it cannot drift silently:
 
 Done by hand, and deliberately so:
 
-- **Issuing a refund.** Nothing in this repository can issue one. If a refund
-  is agreed it is made in the Stripe dashboard by the operator, with the
-  operator's own credentials. The deployed Stripe key is not restricted to
-  read-only, so this is a posture rather than an enforced boundary — worth
-  noting as a difference from the sibling `gtfs-scorecard`, where the key in
-  the Lambdas genuinely cannot refund.
+- **Issuing a refund.** Nothing in the deployed SERVICE (`backend/src`) can
+  issue one — `refundPosture.test.ts` still fails if any path there acquires
+  the Stripe refund API. The operator issues one by hand, either in the
+  Stripe dashboard with their own credentials, or with
+  `scripts/issue-refund.mjs` — a repo-root, plain-Node CLI, deliberately
+  outside `backend/src` and therefore outside that guard's scope, that wraps
+  `stripe.refunds.create` for a target the operator has already decided to
+  refund. Dry run by default; `--apply` is required to actually call Stripe.
+  Every refund it issues is appended to `docs/refund-log.json` (id, target,
+  amount, reason, who decided it, when) — a durable record this repository
+  keeps that a dashboard click alone would not leave. The deployed Stripe key
+  is still not restricted to read-only, so this remains a posture rather than
+  an enforced boundary, same as before — worth noting as a difference from the
+  sibling `gtfs-scorecard`, where the key in the Lambdas genuinely cannot
+  refund. See the doc comment at the top of the script for the full reasoning
+  on why this does not contradict `legal.terms.refunds.policy`.
 - **Receiving the request.** The intake is the support mailbox. There is no
   ticket, no request record, and no report of requests approaching a deadline.
+  `docs/refund-log.json` records a refund once issued; it is not an intake
+  queue and states nothing about requests that were declined or never acted
+  on.
 - **Reconciling.** Nothing links a refund made in Stripe back to the credits a
   pack purchase granted, so a refunded pack leaves its credits spendable.
 

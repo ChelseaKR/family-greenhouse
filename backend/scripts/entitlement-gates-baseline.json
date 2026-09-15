@@ -65,6 +65,10 @@
       "reason": "Not a gate — the opposite. Resolves which tier to UPSELL a household to given the tier it is on, and returns null when that tier already includes the feature. Reading the plan row is correct here: a household that already holds the tier must not be sold it again, whatever its payment status, which is the same rule services/billing.ts's double-pay guard enforces.",
       "arg": "currentPlanId"
     },
+    "models/priceChangeAnnouncement.ts::validatePriceChangeAnnouncement::PlanId===": {
+      "reason": "Not entitlement. `announcement` is an OPERATOR-SUPPLIED price-change notice (#710, backend/src/scripts/sendPriceChangeNotice.ts), never a household's own subscription row, and this refuses the announcement itself when it names the free tier — Seedling has no price to change, so there is nothing to notify anyone about. Nothing is granted, refused, or displayed to a household from this comparison; it validates the input to a sender, before any household is even looked up.",
+      "arg": "announcement.planId === 'seedling'"
+    },
     "services/billing.ts::applyStripeEvent::PlanId===": {
       "reason": "Not entitlement — analytics. Emits the activation product event only when the tier activated is a PAID one, so the free tier's own row is not counted as a conversion. Nothing is granted or refused here; access was decided upstream by getEntitledPlan. Any tier added later is paid unless it is the free floor, which is exactly what this names.",
       "arg": "activatedPlan !== 'seedling'"
@@ -92,6 +96,10 @@
     "services/billingEmailCopy.ts::cancellationScheduled::getPlan": {
       "reason": "Not entitlement. A literal: the free tier's NAME, so the cancellation email can say which tier the household will land on.",
       "arg": "'seedling'"
+    },
+    "services/billingEmailCopy.ts::composePriceChangeNoticeEmail::getPlan": {
+      "reason": "Not entitlement. `announcement.planId` is the tier NAMED in an operator-authored price-change notice (#710) — read only for its catalog `name`, to say in the email which plan's price is moving. No household or subscription is in scope at this call; nothing is granted, refused, or displayed to a specific household from it.",
+      "arg": "announcement.planId"
     },
     "services/billingEmailCopy.ts::itemLabel::getPlan": {
       "reason": "Not entitlement. A tier NAME for one line item on an invoice email. The item is a record of what was billed, not a decision about what may be used.",

@@ -1,0 +1,4 @@
+{
+  "$comment": "Every refund issued through scripts/issue-refund.mjs (#426). No card numbers or customer PII beyond a Stripe object id — those are not secrets, the same ids the Stripe Dashboard shows. Append-only; never edit or remove a past entry. See docs/billing.md § Refunds for what this does and does not cover.",
+  "refunds": []
+}

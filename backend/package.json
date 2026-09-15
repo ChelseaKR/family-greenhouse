@@ -16,7 +16,8 @@
     "test:coverage": "vitest run --coverage",
     "reads:check": "node scripts/check-settled-read-states.mjs",
     "entitlements:check": "node scripts/check-entitlement-gates.mjs",
-    "eval": "vitest run tests/eval"
+    "eval": "vitest run tests/eval",
+    "notify:price-change": "tsx src/scripts/sendPriceChangeNotice.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1116.0",

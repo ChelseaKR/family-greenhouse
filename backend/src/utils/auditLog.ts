@@ -27,6 +27,11 @@ export type AuditEvent =
   | 'billing.subscription_changed'
   | 'billing.upgrade_requested'
   | 'billing.identify_top_up_granted'
+  // The 14-day price-change notice (#710, services/priceChangeNotices.ts).
+  // One line per admin actually emailed; never fired for a skip (already
+  // notified) or a failed send, so the audit trail cannot claim a notice was
+  // given when it was not.
+  | 'billing.price_change_notice_sent'
   // Gift subscriptions (ADR 0028): a paid gift created with its code, and a
   // code placed on a household. Neither line carries the code.
   | 'billing.gift_subscription_granted'
