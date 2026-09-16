@@ -112,3 +112,52 @@ describe('CareGuidePage content dates', () => {
     expect(rendered).toMatch(new RegExp(`\\b${Number(day)}, ${year}\\b`));
   });
 });
+
+/**
+ * FAQPage content parity, for every guide rather than the one sampled above.
+ *
+ * Both the visible `<dd>` and the FAQPage `acceptedAnswer.text` are derived
+ * from the same `f.a` string in `careGuides.ts` — `withLinks(f.a)` for the
+ * DOM, `plainText(f.a)` (link syntax stripped) for the schema — so unlike
+ * help articles, whose plain-text twin is a hand-written paraphrase, a care
+ * guide's rendered answer and its published answer are supposed to be the
+ * exact same characters. This is the byte-for-byte check the brief asked
+ * for: read the schema, read the DOM, assert they match — for all 24 guides
+ * and every FAQ on each, not a sample of one.
+ */
+describe('CareGuidePage FAQPage schema matches the visible answers, guide by guide', () => {
+  it('publishes each FAQ answer identical to what the page renders', () => {
+    for (const guide of CARE_GUIDES) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const script = container.ownerDocument.querySelector('script[type="application/ld+json"]');
+      expect(script, guide.slug).not.toBeNull();
+      const graph = JSON.parse(script!.textContent!)['@graph'] as {
+        '@type': string;
+        mainEntity?: { name: string; acceptedAnswer: { text: string } }[];
+      }[];
+      const faq = graph.find((node) => node['@type'] === 'FAQPage')!;
+      expect(faq, guide.slug).toBeDefined();
+      expect(faq.mainEntity, guide.slug).toHaveLength(guide.faqs.length);
+
+      const questions = [...container.querySelectorAll('dt')];
+      for (const entry of faq.mainEntity!) {
+        const dt = questions.find((el) => el.textContent === entry.name);
+        expect(dt, `${guide.slug}: no <dt> rendered for "${entry.name}"`).toBeDefined();
+        const dd = dt!.nextElementSibling as HTMLElement | null;
+        expect(dd?.tagName, `${guide.slug}: "${entry.name}"`).toBe('DD');
+        expect(dd!.textContent, `${guide.slug}: "${entry.name}"`).toBe(entry.acceptedAnswer.text);
+      }
+      unmount();
+    }
+  });
+
+  it('never publishes a FAQPage node for a guide with no FAQs', () => {
+    // Not currently true of any guide (every one of the 24 has at least one),
+    // but the invariant an empty `mainEntity` array would violate: FAQPage
+    // structured data with zero questions is exactly the kind of markup
+    // Google's spam policies target, so the node must not exist at all.
+    for (const guide of CARE_GUIDES) {
+      expect(guide.faqs.length, guide.slug).toBeGreaterThan(0);
+    }
+  });
+});

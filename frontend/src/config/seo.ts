@@ -123,6 +123,73 @@ export interface ResolvedHead {
 }
 
 /**
+ * The site's Organization node: real name, real production URL, the real
+ * icon asset already shipped at `public/brand/icon-512.png` (the same file
+ * LandingPage's and pricingJsonLd's hand-written Organization nodes already
+ * point at). No `sameAs`: the footer links out to Perenual, not to any social
+ * profile of Family Greenhouse's own, so there is no real one to name.
+ *
+ * `@id` matches every hand-written Organization/`publisher` reference already
+ * in the codebase (LandingPage, pricingJsonLd, CareGuidePage, BlogPost) —
+ * same real-world entity, one canonical description.
+ */
+export function organizationNode(): Record<string, unknown> {
+  return {
+    '@type': 'Organization',
+    '@id': `${SITE_URL}/#organization`,
+    name: SITE_NAME,
+    url: SITE_URL,
+    logo: siteUrl('/brand/icon-512.png'),
+  };
+}
+
+/**
+ * Add the site's Organization node to a route's JSON-LD.
+ *
+ * Before this, Organization existed on exactly four hand-written routes
+ * (the homepage, /pricing, and the Article `publisher` on every care guide
+ * and blog post) and nowhere else — not on /blog, /care, /help and its
+ * topics, /gift, /changelog, /pet-safe, or either legal page, all of which
+ * publish no JSON-LD at all today. Doing it here, in the one function both
+ * `useMetaTags`'s prerender capture and the build-time HTML share, makes it
+ * genuinely site-wide instead of a per-page opt-in someone has to remember.
+ *
+ * Two guards keep this honest rather than noisy:
+ *  - `indexable` (the route's resolved `robots`) skips it on a page Google
+ *    won't index — including the SPA shell, which answers for arbitrary
+ *    URLs (someone else's sitter/kiosk/tag token among them) and must not
+ *    describe itself as any particular page or entity.
+ *  - a route that already names this `@id` at the top level of its own
+ *    `@graph` is left alone rather than given a second, potentially
+ *    diverging copy — this is exactly what `pricingJsonLd.ts` already does
+ *    by hand, for the same reason its own comment gives: so a crawler that
+ *    lands on that page without having read the homepage still gets a
+ *    resolvable Organization.
+ */
+export function withOrganization(
+  jsonLd: Record<string, unknown> | undefined,
+  indexable: boolean
+): Record<string, unknown> | undefined {
+  if (!indexable) return jsonLd;
+  const org = organizationNode();
+  if (!jsonLd) {
+    return { '@context': 'https://schema.org', '@graph': [org] };
+  }
+  const graph = jsonLd['@graph'];
+  if (Array.isArray(graph)) {
+    const hasOrganization = graph.some(
+      (node) => (node as Record<string, unknown> | null)?.['@id'] === org['@id']
+    );
+    return hasOrganization ? jsonLd : { ...jsonLd, '@graph': [...graph, org] };
+  }
+  // No current route publishes a single flat node instead of a `@graph`, but
+  // stay correct if one starts: don't double up if that lone node already is
+  // the Organization, otherwise promote it into a `@graph` alongside one.
+  if (jsonLd['@id'] === org['@id']) return jsonLd;
+  return { '@context': jsonLd['@context'] ?? 'https://schema.org', '@graph': [jsonLd, org] };
+}
+
+/**
  * Resolve a route's `useMetaTags` payload into a complete head.
  *
  * `meta` is null for the SPA shell (no route rendered). `path` is the
@@ -140,6 +207,7 @@ export function resolveHead(meta: MetaTags | null, path: string | null): Resolve
   const ogTitle = meta?.title ?? DEFAULT_META.ogTitle;
   const ogDescription = meta?.description ?? DEFAULT_META.ogDescription;
   const twitterDescription = meta?.description ?? DEFAULT_META.twitterDescription;
+  const robots = meta?.robots ?? (path === null ? 'noindex, follow' : 'index, follow');
 
   return {
     title,
@@ -165,9 +233,9 @@ export function resolveHead(meta: MetaTags | null, path: string | null): Resolve
     //
     // A route that renders its own page is unaffected: prerendered files pass
     // a real `path` and keep `index, follow`.
-    robots: meta?.robots ?? (path === null ? 'noindex, follow' : 'index, follow'),
+    robots,
     article: meta?.article,
-    jsonLd: meta?.jsonLd,
+    jsonLd: withOrganization(meta?.jsonLd, robots === 'index, follow'),
   };
 }
 

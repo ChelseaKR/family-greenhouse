@@ -295,3 +295,76 @@ describe('HelpTopicPage', () => {
     );
   });
 });
+
+/**
+ * FAQPage content parity, across every topic rather than the one substring
+ * check above.
+ *
+ * `helpContent.tsx` states its own rule 2: `text` is a plain-text RENDERING
+ * of `a` that must "SAY THE SAME THING" — a hand-maintained paraphrase, not
+ * a literal transcript (`a`'s "optionally add a photo and a space
+ * (“kitchen window”)" is `text`'s "optionally add a photo and a space such
+ * as kitchen window"). A byte-for-byte DOM-vs-schema assertion would be
+ * false to that design and would fail on every legitimate rewording, so
+ * this checks the two things that are supposed to hold exactly:
+ *
+ *  - the schema publishes precisely the `text` field the article declares —
+ *    guards the plumbing in HelpTopicPage.tsx between the source and the
+ *    published `acceptedAnswer`, for every article in every visible topic,
+ *    not just the one question HelpTopicPage.test.tsx samples;
+ *  - `a` and `text` never disagree on a NUMBER — a dollar price, a day
+ *    window, a member/plant cap. Wording may legitimately differ; the facts
+ *    a reader (or a search engine) takes away must not. This is exactly the
+ *    #643/#609 bug class this file's other tests were written to hold shut,
+ *    generalised to every article instead of the two it names.
+ */
+describe('help FAQPage schema, across every topic', () => {
+  it('publishes exactly the declared `text` for every article in every visible topic', () => {
+    for (const section of visibleSections(false)) {
+      const { unmount } = renderAt(`/help/${section.id}`);
+      // `useMetaTags` appends its script to `document.head` and only removes
+      // it on unmount — a render left mounted from a prior iteration would
+      // leave its script in the DOM too, and `querySelector` returns
+      // whichever one comes first, not this iteration's.
+      const script = document.head.querySelector('script[type="application/ld+json"]');
+      expect(script, section.id).not.toBeNull();
+      const graph = JSON.parse(script!.textContent!)['@graph'] as {
+        '@type': string;
+        mainEntity?: { name: string; acceptedAnswer: { text: string } }[];
+      }[];
+      const faq = graph.find((node) => node['@type'] === 'FAQPage')!;
+      expect(faq.mainEntity, section.id).toHaveLength(section.articles.length);
+      for (const article of section.articles) {
+        const question = faq.mainEntity!.find((q) => q.name === article.q);
+        expect(question, `${section.id}/${article.id}`).toBeDefined();
+        expect(question!.acceptedAnswer.text, `${section.id}/${article.id}`).toBe(article.text);
+      }
+      unmount();
+    }
+  });
+
+  it('never lets a number drift between the rendered answer and its FAQ twin', () => {
+    // Trailing punctuation trimmed: prose commas ("10, and the fourth
+    // costs...") are not part of the number, unlike an internal one
+    // ("1,000"), and `text`'s plainer prose doesn't always repeat them.
+    const numbers = (s: string) => [...s.matchAll(/\d[\d,.]*\d|\d/g)].map((m) => m[0]).sort();
+
+    for (const section of visibleSections(false)) {
+      const { container, unmount } = renderAt(`/help/${section.id}`);
+      for (const article of section.articles) {
+        const heading = container.querySelector(`#${CSS.escape(article.id)}`);
+        expect(heading, `${section.id}/${article.id}`).not.toBeNull();
+        // The answer is the heading's next sibling (see HelpTopicPage.tsx),
+        // not the whole <article> — the <article> also contains the
+        // heading's own text, which is redundant here and, for a question
+        // that itself contains a number ("14-day trial?"), would double it.
+        const answerNode = heading!.nextElementSibling as HTMLElement | null;
+        expect(answerNode, `${section.id}/${article.id}`).not.toBeNull();
+        expect(numbers(answerNode!.textContent ?? ''), `${section.id}/${article.id}`).toEqual(
+          numbers(article.text)
+        );
+      }
+      unmount();
+    }
+  });
+});

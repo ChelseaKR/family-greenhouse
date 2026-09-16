@@ -4,7 +4,9 @@ import {
   DEFAULT_OG_IMAGE,
   headToTags,
   jsonLdScript,
+  organizationNode,
   resolveHead,
+  withOrganization,
 } from '@/config/seo';
 
 /**
@@ -73,6 +75,95 @@ describe('resolveHead', () => {
     expect(head.twitterTitle).toBe('Pothos Care');
     expect(head.ogDescription).toBe('Watering a pothos.');
     expect(head.twitterDescription).toBe('Watering a pothos.');
+  });
+});
+
+/**
+ * Organization JSON-LD, site-wide.
+ *
+ * Before this, Organization existed only on the four routes that hand-wrote
+ * it (LandingPage, pricingJsonLd, and the Article `publisher` on care guides
+ * and blog posts) and was absent from every other public page — /blog,
+ * /care, /help and its topics, /gift, /changelog, /pet-safe, both legal
+ * pages. Putting the merge in `resolveHead` is what makes it "in the page
+ * shell" rather than a per-page opt-in.
+ */
+describe('withOrganization', () => {
+  it('publishes real, checkable values — not invented ones', () => {
+    const org = organizationNode();
+    expect(org.name).toBe('Family Greenhouse');
+    expect(org.url).toBe('https://familygreenhouse.net');
+    // The real asset already shipped at frontend/public/brand/icon-512.png —
+    // the same file LandingPage's and pricingJsonLd's own Organization nodes
+    // point at.
+    expect(org.logo).toBe('https://familygreenhouse.net/brand/icon-512.png');
+    expect(org['@id']).toBe('https://familygreenhouse.net/#organization');
+    // No sameAs: the footer's only outbound link is to Perenual, not a real
+    // social profile of Family Greenhouse's own.
+    expect(org.sameAs).toBeUndefined();
+  });
+
+  it('adds the node to a route that publishes no JSON-LD at all', () => {
+    const merged = withOrganization(undefined, true);
+    expect(merged?.['@graph']).toEqual([organizationNode()]);
+  });
+
+  it('adds the node onto a route that already has other JSON-LD', () => {
+    const faq = { '@type': 'FAQPage', mainEntity: [] };
+    const merged = withOrganization({ '@context': 'https://schema.org', '@graph': [faq] }, true);
+    expect(merged?.['@graph']).toEqual([faq, organizationNode()]);
+  });
+
+  it('does not add a second copy when the route already names this @id', () => {
+    const own = { ...organizationNode(), description: 'a route-specific description' };
+    const original = { '@context': 'https://schema.org', '@graph': [own] };
+    expect(withOrganization(original, true)).toBe(original);
+  });
+
+  it('skips a non-indexable page entirely, JSON-LD absent or present', () => {
+    expect(withOrganization(undefined, false)).toBeUndefined();
+    const faq = { '@context': 'https://schema.org', '@graph': [{ '@type': 'FAQPage' }] };
+    expect(withOrganization(faq, false)).toBe(faq);
+  });
+
+  it('is what resolveHead publishes for an indexable route with no JSON-LD', () => {
+    // /changelog, /legal/privacy, /legal/terms, /support and /status all call
+    // useMetaTags with only a title and description — this is what makes
+    // Organization reach them without anyone touching those five files.
+    const head = resolveHead({ title: 'Changelog — Family Greenhouse' }, '/changelog');
+    expect(head.jsonLd).toEqual({
+      '@context': 'https://schema.org',
+      '@graph': [organizationNode()],
+    });
+    const tags = headToTags(head);
+    expect(tags).toContain('"@type":"Organization"');
+  });
+
+  it('is absent from the noindex SPA shell', () => {
+    expect(resolveHead(null, null).jsonLd).toBeUndefined();
+  });
+
+  it('still adds a standalone node when the only existing reference is nested', () => {
+    // CareGuidePage and BlogPost name this @id, but only inside the
+    // Article's `publisher` field, never as a standalone top-level graph
+    // node — so a crawler reading either page in isolation has no
+    // independently resolvable Organization to find. The merge only skips
+    // routes that already name the @id at the TOP LEVEL of `@graph` (the
+    // dedupe case above); a nested reference like this one still gets the
+    // standalone node added alongside it, same as pricingJsonLd.ts already
+    // does by hand for its own SoftwareApplication.publisher reference.
+    const article = {
+      '@type': 'Article',
+      headline: 'Pothos care',
+      publisher: { '@type': 'Organization', '@id': `${organizationNode()['@id']}`, name: 'x' },
+    };
+    const merged = withOrganization(
+      { '@context': 'https://schema.org', '@graph': [article] },
+      true
+    );
+    const graph = merged?.['@graph'] as Record<string, unknown>[];
+    expect(graph).toHaveLength(2);
+    expect(graph[1]).toEqual(organizationNode());
   });
 });
 
