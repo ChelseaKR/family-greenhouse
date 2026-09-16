@@ -354,6 +354,10 @@ locals {
     # ({"job": "weekly"} / {"job": "yearRecap"}) selects the routine inside
     # backend/src/handlers/digests/handler.ts.
     "digests" = "digests"
+    # Also EventBridge-only: the abandoned-checkout recovery scan (proactive
+    # counterpart to the #790 in-app notice) — see the schedule below and
+    # backend/src/handlers/checkoutRecovery/handler.ts.
+    "checkoutRecovery" = "checkoutRecovery"
     # Also not an HTTP group — SNS-invoked. The SES configuration set publishes
     # bounce/complaint/delivery events to the topic this function subscribes to
     # (see the subscription below), and the handler maintains the outbound
@@ -581,6 +585,10 @@ locals {
     digests     = local.email_environment
     emailEvents = {}
     chat        = local.chat_environment
+    # SES only — reads billing.getHouseholdSubscription (DynamoDB) and mails
+    # through emailNotifier.ts like reminders/digests, no Stripe key needed:
+    # it never creates or touches a Stripe object.
+    checkoutRecovery = local.email_environment
   }
 
   handler_environments = {
@@ -1252,6 +1260,40 @@ resource "aws_lambda_permission" "reminders_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.reminders.arn
 }
 
+# Abandoned-checkout recovery scan: proactive counterpart to PR #790's in-app
+# "Checkout left unfinished" notice. Runs on its OWN schedule rather than
+# riding the hourly `reminders` invocation — a household that abandoned a
+# checkout should hear about it within roughly the window
+# PENDING_CHECKOUT_WINDOW_MS (45 minutes) already makes it wait before the
+# marker goes stale, not up to an hour later on top of that. See
+# backend/src/handlers/checkoutRecovery/handler.ts.
+resource "aws_cloudwatch_event_rule" "checkout_recovery" {
+  name                = "${var.project_name}-checkout-recovery-${var.environment}"
+  description         = "Abandoned-checkout recovery email scan"
+  schedule_expression = "rate(20 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "checkout_recovery" {
+  rule = aws_cloudwatch_event_rule.checkout_recovery.name
+  arn  = aws_lambda_function.handlers["checkoutRecovery"].arn
+
+  retry_policy {
+    maximum_retry_attempts       = 4
+    maximum_event_age_in_seconds = 3600
+  }
+  dead_letter_config {
+    arn = aws_sqs_queue.lambda_dlq.arn
+  }
+}
+
+resource "aws_lambda_permission" "checkout_recovery_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handlers["checkoutRecovery"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.checkout_recovery.arn
+}
+
 # Weekly plants-at-risk digest: four Monday passes, six hours apart. Each pass
 # respects the recipient's local quiet hours and per-user weekly markers make
 # the first eligible delivery win without duplicates.
@@ -1390,6 +1432,7 @@ resource "aws_sqs_queue_policy" "lambda_dlq" {
             aws_cloudwatch_event_rule.reminders.arn,
             aws_cloudwatch_event_rule.digests_weekly.arn,
             aws_cloudwatch_event_rule.year_recap.arn,
+            aws_cloudwatch_event_rule.checkout_recovery.arn,
           ]
         }
       }

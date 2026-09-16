@@ -708,7 +708,7 @@ jobs:
           versions=""
           # Keep this list in sync with the deploy loop below (and with
           # esbuild's dist/*.js bundles + the terraform function names).
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents chat-stream; do
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents checkoutRecovery chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             # get-function without a qualifier reports Version "$LATEST",
             # which broke rollback (it looked for "<handler>-v\$LATEST.zip"
@@ -821,7 +821,7 @@ jobs:
           # standalone esbuild entry, not a handler.ts group).
           # `emailEvents` is SNS-invoked (SES bounce/complaint feedback); like
           # `reminders` it has no API route but is deployed the same way.
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents chat-stream; do
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents checkoutRecovery chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             SRC="dist/${handler}.js"
             test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }

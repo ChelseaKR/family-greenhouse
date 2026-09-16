@@ -83,7 +83,16 @@ const FALLBACK_BUDGET_MS = 25_000;
 
 /** Named so the checkpoint rows are greppable and can never collide with a
  *  household partition. */
-export type ScheduledJob = 'reminders' | 'householdEmails' | 'weeklyDigest' | 'yearRecap';
+export type ScheduledJob =
+  | 'reminders'
+  | 'householdEmails'
+  | 'weeklyDigest'
+  | 'yearRecap'
+  // Abandoned-checkout recovery email (services/checkoutRecoveryEmails.ts):
+  // scans every household for a genuinely stale pending-checkout marker
+  // (billing.staleCheckoutMarker, the same read GET /billing/me uses) and
+  // mails its admins once per checkout attempt.
+  | 'checkoutRecovery';
 
 export interface FanOutSummary {
   /** Households enumerated. Unchanged by truncation — it is the denominator
