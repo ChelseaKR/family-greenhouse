@@ -24,6 +24,7 @@ removed, or left un-synced without this table moving with it.
 
 | Plugin                          | What it backs                                                                                                                                      |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@capacitor/app`                | `appUrlOpen` delivery for iOS Universal Links / Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" below.            |
 | `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below. |
 
 <!-- capacitor-plugins:end -->
@@ -49,23 +50,38 @@ review notes before and neither is true:
   (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
   The PWA offline story is a web-only feature.
 
-Deep links are half present. `frontend/public/.well-known/apple-app-site-association`
-is now in the tree and carries the real Apple Team ID, so the SERVING side of
-iOS universal links is done. Nothing else is: the only Android `intent-filter`
-is `MAIN`/`LAUNCHER`; `ios/App/App/App.entitlements` declares only
-`aps-environment` and no Associated Domains; there is no `assetlinks.json`;
-and `@capacitor/app` is not installed, so nothing delivers `appUrlOpen` to the
-WebView. Until those land, every link the backend mails — invites, sitter
-links, the `/tasks?filter=due` reminder link, unsubscribe, the calendar feed —
-still opens the browser for a user who has the app installed, and asks them to
-sign in again.
+Deep links are done on iOS, still half present on Android.
+`frontend/public/.well-known/apple-app-site-association` has carried the real
+Apple Team ID since before this and is the SERVING side of iOS universal
+links; the APP side landed alongside it: `ios/App/App/App.entitlements` now
+declares `com.apple.developer.associated-domains` (`applinks:
+familygreenhouse.net`), `@capacitor/app` is installed and linked into both
+native projects, and `frontend/src/services/nativeDeepLinks.ts` turns the
+`appUrlOpen` event into an in-app navigation via `history.pushState` +
+a manual `popstate` dispatch (`<BrowserRouter>` only re-syncs on `popstate`,
+which `pushState` does not fire on its own). `AppDelegate.swift` already
+forwarded `continue userActivity` to `ApplicationDelegateProxy` before any of
+this — nothing to add there.
 
-Half of it is worse than none, which is why the remaining pieces are staged in
-a fixed order: an `intent-filter` with `autoVerify="true"` and no matching
-`assetlinks.json` fails verification on Android 12+, so links keep opening the
-browser while the manifest claims otherwise. The association file has to be
-LIVE and verifiable at the domain before the entitlement or the intent-filter
-is enabled, never the other way round. Tracked in
+**Still outstanding, and on whom.** Adding a new entitlement re-requests a
+capability from the Apple Developer portal the same way Push Notifications
+did (#469 §3) — expect to redo the Signing & Capabilities dance (or at minimum
+regenerate/reselect the Release provisioning profile) on the next archive
+after this lands, not before. Android is untouched: the only `intent-filter`
+is `MAIN`/`LAUNCHER`, and there is no `assetlinks.json` — that file needs the
+SHA-256 fingerprint of the release/upload signing certificate (`keytool
+-list -v` against the upload keystore, or Play Console → Setup → App
+integrity), which is a maintainer-held value nothing in this repo can derive.
+Until Android's half lands, every link the backend mails — invites, sitter
+links, the `/tasks?filter=due` reminder link, unsubscribe, the calendar feed —
+opens the browser for an Android user who has the app installed, and asks them
+to sign in again; iOS users now go straight into the app.
+
+Half of it is worse than none, which is why the remaining Android piece stays
+staged in the same fixed order this section already established: an
+`intent-filter` with `autoVerify="true"` and no matching `assetlinks.json`
+fails verification on Android 12+, so links keep opening the browser while the
+manifest claims otherwise. Tracked in
 [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
 
 ### The iOS association file
@@ -123,13 +139,14 @@ publish this object. A wrong Team ID is the most expensive defect the file can
 carry: it parses, uploads, caches, and is fetched successfully by Apple while
 every universal link silently keeps opening Safari.
 
-### The serving half is ready; the app half is not
+### The serving half is ready; the Android app half is not
 
 The deploy and CDN path for both association files is wired and gated, so
 `assetlinks.json` remains a one-file change the day the Android fingerprint
-exists. Nothing app-side was enabled — no entitlement, no `autoVerify`
-intent-filter, no invented fingerprint — precisely because half a setup is
-worse than none.
+exists. The iOS app half is now enabled (Associated Domains entitlement,
+`@capacitor/app`, see "Deep links" above); Android's is not — no
+`autoVerify` intent-filter, no invented fingerprint — for the same reason iOS
+waited: half a setup is worse than none.
 
 **What is ready.** Drop a file at `frontend/public/.well-known/assetlinks.json`
 or `frontend/public/.well-known/apple-app-site-association`, and:
@@ -156,20 +173,18 @@ or `frontend/public/.well-known/apple-app-site-association`, and:
   `frontend/public/.well-known/` that the deploy path does not name or that is
   not valid JSON.
 
-**What is still blocked, and on whom.** These are maintainer-held values; none
-can be derived from this repository. The Apple Team ID has since landed and is
-kept in the table so the row that unblocked the iOS file is not lost:
+**What is still blocked, and on whom.** One maintainer-held value remains,
+and it cannot be derived from this repository:
 
-| Needed                                                        | Where it comes from                                                                                    | What it unblocks                                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity      | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter             |
-| Apple Team ID — **done**, `6X5YH93QNM`                        | Apple Developer → Membership → Team ID                                                                 | `apple-app-site-association` (shipped); next is the Associated Domains entitlement |
-| `@capacitor/app`                                              | `npm i @capacitor/app` in `frontend`, plus a row in the plugin table above and an `appUrlOpen` handler | the WebView actually navigating to the incoming URL instead of opening cold        |
+| Needed                                                        | Where it comes from                                                                               | What it unblocks                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter |
 
-The order matters and is the whole reason the app half is not staged here: the
-association file has to be **live and verifiable at the domain first**, then
-the intent-filter and entitlement. Reversed, Android 12+ records a failed
-verification and keeps sending links to the browser.
+Apple Team ID, the Associated Domains entitlement, and `@capacitor/app` are
+all done — see "Deep links" above. The order matters for Android the same way
+it mattered for iOS: the association file has to be **live and verifiable at
+the domain first**, then the intent-filter. Reversed, Android 12+ records a
+failed verification and keeps sending links to the browser.
 
 ## Build flow
 
@@ -367,22 +382,26 @@ Remaining work for delivery:
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
-      scrutiny, and **there is currently no native capability to point a
-      reviewer at.** Do not write review notes that claim otherwise. This item
-      used to name "camera photo capture + the offline app shell"; neither
-      survives a reviewer opening the app. Photo capture is the WebView file
+      scrutiny. As of 0.34.0 (the first submitted build) **there was no native
+      capability to point a reviewer at** — photo capture is the WebView file
       picker, identical to the website in mobile Safari; the app opens offline
       because the bundle is inside the binary, which is what wrapping a web app
-      means rather than a differentiator; and the one linked plugin, push
-      notifications, is deliberately unreachable from the UI. All three are
-      documented under "Native capabilities" above. Closing the gap is a
-      product decision tracked in
-      [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) — the
-      candidates are native camera capture, Universal Links / App Links, or
-      finishing push delivery. A 4.2 rejection is a multi-week loop, so decide
-      before submitting rather than after. If rejected under 4.2, the usual
-      fixes are haptics, widgets, or native share — talk to review, don't
-      resubmit blind.
+      means rather than a differentiator; and push notifications were
+      deliberately unreachable from the UI. **Since then, iOS Universal Links
+      are real** (this file's "Deep links" section): tapping a
+      familygreenhouse.net link the app mails — an invite, a sitter link, a
+      task reminder — opens straight into the native app instead of Safari.
+      That is a genuine behavioral difference from the mobile website and the
+      thing to name in review notes for any submission after 0.34.0, once a
+      build carrying it has been archived. It does not retroactively help
+      0.34.0's review. Android still has nothing to point at (App Links await
+      the signing-certificate fingerprint, above) and push delivery is still
+      off end to end. Tracked in
+      [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469). A 4.2
+      rejection is a multi-week loop; if 0.34.0 is rejected under it, the
+      fastest fix is very likely re-submitting once a build with Universal
+      Links lands, rather than reaching for haptics/widgets/native share —
+      talk to review, don't resubmit blind.
 - [ ] Demo credentials for a seeded household in the review notes (both
       stores log into the app during review).
 

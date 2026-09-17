@@ -25,5 +25,25 @@
 	-->
 	<key>aps-environment</key>
 	<string>$(APS_ENVIRONMENT)</string>
+	<!--
+	  Associated Domains for iOS Universal Links (#469 §2). The serving side —
+	  frontend/public/.well-known/apple-app-site-association, generated from
+	  ROUTE_POLICY by npm run aasa — has been live since the Team ID landed.
+	  This is the other half: without this entitlement, iOS never even asks
+	  whether a familygreenhouse.net link belongs to this app, so every link
+	  the backend mails (invites, sitter links, task reminders) opens Safari
+	  for a user who already has the app installed. See docs/mobile.md
+	  "Deep links are half present."
+
+	  `applinks:` (not `webcredentials:` or `activitycontinuation:`) is the
+	  only service needed here — this app does not use AutoFill credential
+	  association or Handoff. One domain: apple-app-site-association is only
+	  ever served from familygreenhouse.net, never a www or app subdomain, so
+	  there is nothing else to list.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:familygreenhouse.net</string>
+	</array>
 </dict>
 </plist>
