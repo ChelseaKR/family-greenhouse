@@ -8,7 +8,7 @@
     },
     "support": {
       "metaTitle": "Support — Family Greenhouse",
-      "metaDescription": "Get help with your Family Greenhouse account and plant-care workspace.",
+      "metaDescription": "Get help with your Family Greenhouse account, find plant-care answers, or check service status — no account needed to browse the help pages.",
       "title": "Support",
       "lead": "Need help with Family Greenhouse? Email <supportLink>{{supportEmail}}</supportLink>. Include the device type and a short description of what happened, but never send a password or sign-in code.",
       "account": {
@@ -26,7 +26,7 @@
     },
     "accountDeletion": {
       "metaTitle": "Delete your account — Family Greenhouse",
-      "metaDescription": "How to permanently delete a Family Greenhouse account and associated data.",
+      "metaDescription": "How to permanently delete your Family Greenhouse account yourself, or request deletion by email, and exactly what data is removed.",
       "title": "Delete your account",
       "lead": "You can permanently delete your Family Greenhouse account in the app, even if you have not created or joined a household.",
       "self": {
@@ -50,7 +50,7 @@
     },
     "terms": {
       "metaTitle": "Terms — Family Greenhouse",
-      "metaDescription": "The terms of using Family Greenhouse. Plain language.",
+      "metaDescription": "Family Greenhouse's terms of service: the 14-day free trial, billing, cancellation, and refunds, and what's expected of you and from us.",
       "title": "Terms of Service",
       "lead": "These terms govern your use of Family Greenhouse. We’ve kept them readable. If anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll explain.",
       "agreement": {
@@ -132,7 +132,7 @@
     },
     "privacy": {
       "metaTitle": "Privacy — Family Greenhouse",
-      "metaDescription": "How Family Greenhouse handles your data. Plain language.",
+      "metaDescription": "What Family Greenhouse collects, why, and which named third parties (AWS, Stripe, and others) see it — plus how to export or delete your data.",
       "title": "Privacy",
       "lead": "This page explains what data Family Greenhouse collects, why, and what you can do about it. We’ve deliberately written it as plain text rather than a template — if anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll fix the wording.",
       "collect": {

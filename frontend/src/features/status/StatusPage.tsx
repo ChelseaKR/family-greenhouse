@@ -80,7 +80,8 @@ export function StatusPage() {
 
   useMetaTags({
     title: 'Status — Family Greenhouse',
-    description: 'Current operational status of Family Greenhouse and recent incidents.',
+    description:
+      "Live status for Family Greenhouse's database, sign-in, and email/SMS delivery, checked every 60 seconds, plus a log of past incidents.",
   });
 
   const { data, isLoading, isError, error } = useQuery({

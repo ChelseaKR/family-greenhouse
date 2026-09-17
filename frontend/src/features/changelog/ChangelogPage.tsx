@@ -291,7 +291,8 @@ const ENTRIES: Entry[] = [
 export function ChangelogPage() {
   useMetaTags({
     title: 'Changelog — Family Greenhouse',
-    description: "What's new in Family Greenhouse, in plain language.",
+    description:
+      "What's new in Family Greenhouse: feature releases, fixes, and reliability improvements, grouped by month, in plain language.",
   });
 
   const grouped = groupByMonth(ENTRIES);

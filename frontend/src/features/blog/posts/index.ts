@@ -52,6 +52,8 @@ export const POSTS: BlogPost[] = [
     title: 'How to actually remember to water your plants',
     description:
       'Why most people forget to water their plants — and the three systems that actually work, ranked from worst to best.',
+    metaDescription:
+      'Why sticky notes and calendar reminders fail to keep plants watered, and what a real plant-care app does differently, ranked worst to best.',
     date: '2026-05-05',
     readingMinutes: 5,
     Component: RememberingToWater,
