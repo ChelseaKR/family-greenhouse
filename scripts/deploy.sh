@@ -164,9 +164,10 @@ aws cloudfront create-invalidation \
 echo "Deploying Lambda functions..."
 # chat-stream is the Function-URL streaming handler (bundle chat-stream.js);
 # digests is the EventBridge weekly/yearly email job; emailEvents is the
-# SNS-invoked SES bounce/complaint consumer. Keep this list in sync
+# SNS-invoked SES bounce/complaint consumer; checkoutRecovery is the
+# EventBridge abandoned-checkout recovery scan. Keep this list in sync
 # with infrastructure/modules/api locals + the CD workflow's deploy loop.
-HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests emailEvents chat-stream)
+HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests emailEvents checkoutRecovery chat-stream)
 # Every function that did not end up running this build's code. The loop keeps
 # going so one broken function does not leave the rest on the old release, but
 # the script must not end by saying the deploy is complete when this is not

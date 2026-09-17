@@ -620,10 +620,12 @@ locals {
   # Async, no-user-watching functions. `reminders` was already here; `digests`
   # and `emailEvents` were not, for no stated reason — they are cron/SNS
   # invoked and have no user to notice, which is verbatim the argument the
-  # strategy note above makes for keeping `reminders`.
+  # strategy note above makes for keeping `reminders`. `checkoutRecovery`
+  # joined the same way: it is EventBridge-invoked with no user watching it
+  # either.
   scheduled_lambda_names = [
     for name in var.lambda_function_names : name
-    if length(regexall("-(reminders|digests|emailEvents)-", name)) > 0
+    if length(regexall("-(reminders|digests|emailEvents|checkoutRecovery)-", name)) > 0
   ]
 
   # Functions whose LATENCY is worth its own alarm: the two the strategy note
