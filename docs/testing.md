@@ -169,13 +169,26 @@ webServer: [
 ],
 ```
 
-**Sharding.** CI splits the suite across four runners with Playwright's
-`--shard=N/4`, each at one worker. One worker per shard is deliberate: the local
-backend boots a single in-memory DB, so specs touching the shared seed account
-(`test@example.com`) race each other if they run concurrently against the _same_
-server — the collision documented at the top of `tests/e2e/helpers.ts`. Separate
-shards are separate runners with separate backends and separate seeds, so
-partitioning across them is safe where raising in-job workers would not be.
+**Sharding.** CI splits the suite across four runners, each at one worker. One
+worker per shard is deliberate: the local backend boots a single in-memory DB,
+so specs touching the shared seed account (`test@example.com`) race each other
+if they run concurrently against the _same_ server — the collision documented
+at the top of `tests/e2e/helpers.ts`. Separate shards are separate runners with
+separate backends and separate seeds, so partitioning across them is safe where
+raising in-job workers would not be.
+
+Which spec file lands in which shard is decided by `scripts/e2e-shard-plan.mjs`,
+not Playwright's own `--shard=N/4`. Playwright's flag divides the
+alphabetically-sorted file list into four equal-**count** groups, which is not
+the same as four equal-**duration** groups: measured 2026-09-16, two of the
+three heaviest files (`a11y-authenticated.spec.ts`, `a11y.spec.ts`) both sort
+first alphabetically, so the equal-count split put a disproportionate share of
+the suite's real runtime in shard 1 (averaged 101.8s across 15 runs, against
+69.7s for shard 4) even though every shard got roughly the same number of
+files. `e2e-shard-plan.mjs` bin-packs from a checked-in table of each file's
+last-measured duration instead, and asserts every spec file on disk is
+assigned to exactly one shard — a file it doesn't have a measurement for still
+runs, at a default weight, rather than being silently dropped.
 
 Shards publish `--reporter=blob` output that the `E2E report (merged)` job merges
 back into one `playwright-report/`, printing the executed and skipped totals as

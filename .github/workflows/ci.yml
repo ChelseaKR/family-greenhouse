@@ -861,10 +861,22 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run e2e + a11y suite (shard ${{ matrix.shard }} of 4)
+        # Balanced by real measured runtime (scripts/e2e-shard-plan.mjs)
+        # instead of Playwright's own `--shard=N/4`, which divides the
+        # alphabetically-sorted file list into equal-COUNT (not
+        # equal-duration) chunks. Measured 2026-09-16 over 15 consecutive
+        # `main` runs: shard 1 (a11y-authenticated.spec.ts + a11y.spec.ts
+        # sort first and are two of the three heaviest files) averaged
+        # 101.8s while shard 4 averaged 69.7s — every run's E2E wall clock
+        # waited on shard 1 regardless of whether E2E was the pipeline's
+        # actual bottleneck that run. The planner's LPT bin-packing puts all
+        # four shards within ~1.3s of each other on that same measurement.
         working-directory: frontend
         env:
           SHARD: ${{ matrix.shard }}
-        run: npm run test:e2e -- --project=chromium --shard="$SHARD/4" --reporter=blob
+        run: |
+          FILES=$(node scripts/e2e-shard-plan.mjs "$SHARD" 4)
+          npx playwright test --project=chromium --reporter=blob $FILES
 
       - name: Upload shard blob report
         if: always()
