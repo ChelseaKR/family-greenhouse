@@ -66,6 +66,68 @@ and wait for CloudFront invalidation before restoring the previous Lambda code.
 
 ---
 
+## Issue a refund
+
+**Symptom:** a customer's charge needs to be refunded — a duplicate, a
+mistaken renewal, a case decided by hand from the support mailbox. See
+`docs/billing.md` § Refunds for the full policy (#426): there is no self-serve
+path and no stated refund window; every refund is a case-by-case decision the
+operator makes.
+
+**Fix**, from the repo root, with `STRIPE_SECRET_KEY` in the environment:
+
+```bash
+# dry run first — always safe, issues nothing
+node scripts/issue-refund.mjs \
+  --payment-intent pi_... --reason "customer says renewed after cancelling" \
+  --issued-by "Chelsea"
+
+# then, once you're satisfied, add --apply
+node scripts/issue-refund.mjs \
+  --payment-intent pi_... --reason "customer says renewed after cancelling" \
+  --issued-by "Chelsea" --apply
+```
+
+Use `--charge ch_...` instead of `--payment-intent` if that's what you have,
+and add `--amount 4.99` for a partial refund (omit it for the full amount). A
+successful `--apply` appends to `docs/refund-log.json` — commit that file so
+the refund has a durable record. If a pack of identification credits was
+attached to the refunded charge, nothing un-grants them automatically; check
+`docs/billing.md` § Refunds → Reconciling.
+
+---
+
+## Send a price-change notice
+
+**Symptom:** a plan's price is about to change and existing subscribers need
+the 14 days' notice `legal.terms.priceChanges.body` promises (#710). See
+`docs/billing.md` § _Price changes_ for the full contract.
+
+**Fix**, from `backend/`, with AWS credentials for the target environment
+(`TABLE_NAME` + `SES_FROM_EMAIL`):
+
+```bash
+# dry run first — prints how many households would be notified, sends nothing
+npm run notify:price-change --workspace backend -- \
+  --id garden-monthly-2026-11-01 --plan garden --interval month \
+  --old 4.99 --new 5.99 --effective 2026-11-01 \
+  --summary "Garden monthly is moving from $4.99 to $5.99; see ADR NNNN."
+
+# then, once you're satisfied, add --confirm
+npm run notify:price-change --workspace backend -- \
+  --id garden-monthly-2026-11-01 --plan garden --interval month \
+  --old 4.99 --new 5.99 --effective 2026-11-01 \
+  --summary "Garden monthly is moving from $4.99 to $5.99; see ADR NNNN." \
+  --confirm
+```
+
+`--effective` must be at least 14 days out or the script refuses to send. A
+successful `--confirm` run also appends to `docs/price-change-notices.json` —
+commit that alongside the run. Re-running the same `--id` is safe: recipients
+already mailed are skipped, not mailed twice.
+
+---
+
 ## Reminders not sending
 
 **Symptom:** users report missing watering reminders.

@@ -40,6 +40,7 @@
  */
 import type { BillingNotice, Money, PurchasedItem } from '../models/billingNotices.js';
 import { getPlan, isUnlimited, type Limit, type Plan } from '../models/plans.js';
+import type { PriceChangeAnnouncement } from '../models/priceChangeAnnouncement.js';
 
 export type BillingEmailLocale = 'en' | 'es';
 
@@ -588,6 +589,110 @@ function cancellationComplete(
         ? 'Tu plan de Family Greenhouse ha terminado'
         : 'Your Family Greenhouse plan has ended',
     text: envelope(locale, ctx.appUrl, body),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The price-change notice (#710) — not a BillingNotice: it is not derived
+// from a Stripe webhook event at all, but from an operator-supplied
+// `PriceChangeAnnouncement` (models/priceChangeAnnouncement.ts). Sent by
+// `services/priceChangeNotices.ts`, invoked from
+// `backend/scripts/sendPriceChangeNotice.ts`.
+// ---------------------------------------------------------------------------
+
+/** A plain USD amount (not a Stripe `Money`, which is minor units off a real
+ *  charge) — these are catalog prices, e.g. `PLANS.garden.monthlyPrice`. */
+function formatUsd(amountUsd: number, locale: BillingEmailLocale): string {
+  return new Intl.NumberFormat(INTL_LOCALES[locale], {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amountUsd);
+}
+
+/** A YYYY-MM-DD calendar date, not an instant — there is no recipient
+ *  timezone to render it in, so this anchors at noon UTC (matching
+ *  `formatMonthYear` above) so no zone can shift the printed day. */
+function formatCalendarDate(isoDate: string, locale: BillingEmailLocale): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!m) return isoDate;
+  const instant = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+  return new Intl.DateTimeFormat(INTL_LOCALES[locale], {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  }).format(instant);
+}
+
+/**
+ * The email `legal.terms.priceChanges.body` promises: sent to a household's
+ * admins at least 14 days before an affected plan's price moves, stating the
+ * old and new price and the date, and that nothing changes before then.
+ *
+ * Every sentence here has to stay true of a household that never opens the
+ * email at all — nobody has to act for the promise to hold, because the
+ * price simply does not move before `effectiveOn`. Cancelling is offered as
+ * an option, not a requirement.
+ */
+export function composePriceChangeNoticeEmail(
+  announcement: PriceChangeAnnouncement,
+  ctx: { locale: BillingEmailLocale; appUrl: string }
+): ComposedEmail {
+  const { locale, appUrl } = ctx;
+  const plan = getPlan(announcement.planId);
+  const cadence =
+    announcement.interval === 'year'
+      ? locale === 'es'
+        ? 'anual'
+        : 'annual'
+      : locale === 'es'
+        ? 'mensual'
+        : 'monthly';
+  const oldPrice = formatUsd(announcement.oldPriceUsd, locale);
+  const newPrice = formatUsd(announcement.newPriceUsd, locale);
+  const effective = formatCalendarDate(announcement.effectiveOn, locale);
+  const body: string[] = [];
+
+  if (locale === 'es') {
+    body.push(
+      `El precio ${cadence} del plan ${plan.name} va a cambiar, de ${oldPrice} a ${newPrice}.`
+    );
+    body.push('');
+    body.push(
+      `Tu suscripción se mantiene en ${oldPrice} hasta el ${effective}. No se te cobrará el ` +
+        'nuevo precio antes de esa fecha, y no tienes que hacer nada para que sea así.'
+    );
+    body.push('');
+    body.push(
+      `Si prefieres no continuar al nuevo precio, cancela antes del ${effective} en ` +
+        '"Gestionar suscripción": conservas el plan hasta el final del periodo que ya has ' +
+        'pagado y no se te vuelve a cobrar.'
+    );
+    body.push('');
+    body.push(announcement.summary);
+  } else {
+    body.push(
+      `The ${cadence} price of the ${plan.name} plan is changing, from ${oldPrice} to ${newPrice}.`
+    );
+    body.push('');
+    body.push(
+      `Your subscription stays at ${oldPrice} until ${effective}. You will not be charged the ` +
+        'new price before then, and there is nothing you need to do to keep it that way.'
+    );
+    body.push('');
+    body.push(
+      `If you would rather not continue at the new price, cancel before ${effective} under ` +
+        '"Manage subscription": you keep the plan until the end of the period you have already ' +
+        'paid for, and you will not be charged again.'
+    );
+    body.push('');
+    body.push(announcement.summary);
+  }
+
+  return {
+    subject:
+      locale === 'es'
+        ? `El precio de ${plan.name} va a cambiar el ${effective}`
+        : `The price of ${plan.name} is changing on ${effective}`,
+    text: envelope(locale, appUrl, body),
   };
 }
 
