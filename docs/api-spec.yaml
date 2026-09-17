@@ -1023,6 +1023,40 @@ paths:
           description: No household of the caller's is on a plan that includes cross-home Today
         '503':
           description: Plan entitlement could not be verified; retry later
+  /me/referral:
+    get:
+      summary: Refer-a-friend (ADR 0029) — the caller's own shareable code plus their referral history
+      description: |
+        Get-or-create: mints the caller's code on first call, then always
+        returns the same one. Distinct from a household invite — this code
+        is for someone starting their OWN new household, not for joining the
+        caller's. `referrals` never carries a referred signup's name or
+        email, only whether their bonus landed.
+      tags: [Me]
+      responses:
+        '200':
+          description: The caller's referral code and history
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [code, bonusPlanId, bonusMonths, totalReferrals, grantedReferrals, referrals]
+                properties:
+                  code: { type: string, example: 'RF-00000-00001' }
+                  bonusPlanId: { type: string, enum: [garden, greenhouse] }
+                  bonusMonths: { type: integer }
+                  totalReferrals: { type: integer }
+                  grantedReferrals: { type: integer }
+                  referrals:
+                    type: array
+                    items:
+                      type: object
+                      required: [signedUpAt, rewarded]
+                      properties:
+                        signedUpAt: { type: string, format: date-time }
+                        rewarded: { type: boolean }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /me/calendar.ics:
     get:
       summary: Authenticated one-shot iCalendar download of the active household's tasks. JWT-guarded, so it is NOT a subscription URL — calendar apps carry no session. Subscribe via /calendar/{token}/family-greenhouse.ics instead.
