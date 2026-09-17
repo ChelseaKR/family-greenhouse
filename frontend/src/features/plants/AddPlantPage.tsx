@@ -34,6 +34,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 import { taskTypeLabels } from '@/utils/taskTypeConfig';
+import { isNativeApp } from '@/lib/platform';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -87,6 +88,13 @@ export function AddPlantPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
+  // App Store review guideline 3.1.1: the iOS shell must never offer a way to
+  // buy anything Apple doesn't get its cut of. Every other purchase surface in
+  // the app (BillingSettings, PricingPage, GiftLandingPage) already withholds
+  // its CTA behind this same check — this is the one place that didn't, because
+  // the identify top-up offer is reached from a 402 mid-form rather than from a
+  // billing page a native check was written with in mind.
+  const native = isNativeApp();
   const addPlantSchema = useMemo(() => makeAddPlantSchema(t), [t]);
   // Propagation mode: arriving via "Propagate cutting" links the new plant
   // to its parent and prefills the species. (Router state survives normal
@@ -217,10 +225,13 @@ export function AddPlantPage() {
       const exhausted = identifyBudgetExhaustedFromError(err);
       if (exhausted) {
         setIdentifyExhausted(exhausted);
-        // No pack can be bought here (no household, payments paused, or no
-        // price configured): say what happened and where the allowance
-        // comes from, in the reader's language.
-        if (!exhausted.topUpAvailable) setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
+        // No pack can be bought here (no household, payments paused, no price
+        // configured, OR this is the iOS/Android app, which must never offer
+        // an in-app purchase outside Apple's/Google's own billing — see
+        // `native` above): say what happened and where the allowance comes
+        // from, in the reader's language.
+        if (!exhausted.topUpAvailable || native)
+          setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
         return;
       }
       setError(getErrorMessage(err));
@@ -433,7 +444,7 @@ export function AddPlantPage() {
             {identifyNotice}
           </Alert>
         )}
-        {identifyExhausted?.topUpAvailable && identifyExhausted.topUp && (
+        {!native && identifyExhausted?.topUpAvailable && identifyExhausted.topUp && (
           <div className="mb-6">
             <IdentifyTopUpCard
               variant="exhausted"
