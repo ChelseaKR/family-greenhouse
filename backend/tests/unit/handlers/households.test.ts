@@ -19,6 +19,11 @@ vi.mock('../../../src/services/billing.js', () => ({
   getHouseholdSubscription: vi.fn(async () => ({ planId: 'garden' })),
 }));
 vi.mock('../../../src/services/escalation.js');
+// Refer-a-friend (ADR 0029). Auto-mocked like the other services here — the
+// tests below assert the WIRING (when it is/isn't consulted, and what it is
+// handed), not the eligibility policy itself, which
+// tests/unit/services/referrals.test.ts already covers directly.
+vi.mock('../../../src/services/referrals.js');
 
 function buildEvent(
   claims: Record<string, unknown> | null,
@@ -505,9 +510,146 @@ describe('households handler', () => {
       { name: 'Home' },
       'user-1',
       'Alice',
-      'a@b.com'
+      'a@b.com',
+      expect.any(Date),
+      // No referralCode in the request body: refer-a-friend (ADR 0029) never
+      // resolves a grant, so this stays null rather than undefined.
+      null
     );
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-1', 'hh-new', 'admin');
+  });
+
+  describe('refer-a-friend (ADR 0029)', () => {
+    it('resolves a referral grant on a FIRST household and credits the referrer after creating it', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const referrals = await import('../../../src/services/referrals.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('New Person');
+      const grant = {
+        planId: 'garden' as const,
+        endsAt: '2026-10-16T12:00:00.000Z',
+        referrerUserId: 'user-referrer',
+        referrerHouseholdId: 'hh-referrer',
+        referralCode: 'RF0000000001',
+      };
+      vi.mocked(referrals.resolveReferralGrant).mockResolvedValueOnce({ ok: true, grant });
+      vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+        id: 'hh-new',
+        name: 'New Home',
+        createdAt: '',
+        createdBy: 'user-new',
+      });
+      vi.mocked(referrals.creditReferralAfterSignup).mockResolvedValueOnce(undefined);
+
+      const event = buildEvent(
+        { sub: 'user-new', email: 'new@example.test' },
+        {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'New Home', referralCode: 'RF-00000-00001' }),
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(201);
+
+      expect(referrals.resolveReferralGrant).toHaveBeenCalledWith({
+        code: 'RF-00000-00001',
+        newUserId: 'user-new',
+        newUserEmail: 'new@example.test',
+      });
+      // The resolved grant is handed straight to createHousehold — it rides
+      // the SAME transaction as the household (see householdService.ts).
+      expect(householdService.createHousehold).toHaveBeenCalledWith(
+        { name: 'New Home', referralCode: 'RF-00000-00001' },
+        'user-new',
+        'New Person',
+        'new@example.test',
+        expect.any(Date),
+        grant
+      );
+      expect(referrals.creditReferralAfterSignup).toHaveBeenCalledWith({
+        grant,
+        newHouseholdId: 'hh-new',
+      });
+    });
+
+    it('still creates the household when the referral code is refused (self-referral, or unknown) — no bonus, no error', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const referrals = await import('../../../src/services/referrals.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('New Person');
+      vi.mocked(referrals.resolveReferralGrant).mockResolvedValueOnce({
+        ok: false,
+        reason: 'self_referral',
+      });
+      vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+        id: 'hh-new',
+        name: 'New Home',
+        createdAt: '',
+        createdBy: 'user-new',
+      });
+
+      const event = buildEvent(
+        { sub: 'user-new', email: 'new@example.test' },
+        {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'New Home', referralCode: 'RF-00000-00001' }),
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(201);
+      expect(householdService.createHousehold).toHaveBeenCalledWith(
+        { name: 'New Home', referralCode: 'RF-00000-00001' },
+        'user-new',
+        'New Person',
+        'new@example.test',
+        expect.any(Date),
+        null
+      );
+      // Nothing to credit — the grant was refused before the household ever existed.
+      expect(referrals.creditReferralAfterSignup).not.toHaveBeenCalled();
+    });
+
+    it('never resolves a referral grant when adding a SECOND household to an existing account', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+      const referrals = await import('../../../src/services/referrals.js');
+      const billing = await import('../../../src/services/billing.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Existing User');
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-1', role: 'admin', joinedAt: '2026-01-01T00:00:00.000Z' },
+      ]);
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'greenhouse' });
+      vi.mocked(householdService.createHousehold).mockResolvedValueOnce({
+        id: 'hh-second',
+        name: 'Second Home',
+        createdAt: '',
+        createdBy: 'user-1',
+      });
+
+      const event = buildEvent(adminClaims, {
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Second Home', referralCode: 'RF-00000-00001' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(201);
+      // A referral code on a SECOND household is not even looked up — this
+      // account is not new to the app, whatever the code says.
+      expect(referrals.resolveReferralGrant).not.toHaveBeenCalled();
+      expect(householdService.createHousehold).toHaveBeenCalledWith(
+        { name: 'Second Home', referralCode: 'RF-00000-00001' },
+        'user-1',
+        'Existing User',
+        'a@b.com',
+        expect.any(Date),
+        null
+      );
+    });
   });
 
   it('createHousehold sends exactly one welcome email on the genuine first household', async () => {

@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { track } from '@/services/analytics';
 import { server } from '../../msw/server';
+import { getPendingReferralCode } from '@/features/referrals/pendingReferralCode';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
@@ -137,5 +138,23 @@ describe('RegisterPage', () => {
 
     await waitFor(() => expect(track).toHaveBeenCalledWith('signup_started'));
     expect(track).toHaveBeenCalledTimes(1);
+  });
+
+  describe('refer-a-friend (ADR 0029)', () => {
+    it('does not show the referred notice, and stashes nothing, on an ordinary visit', () => {
+      sessionStorage.clear();
+      renderPage('/register');
+      expect(screen.queryByText(/invited to family greenhouse/i)).not.toBeInTheDocument();
+      expect(getPendingReferralCode()).toBeNull();
+    });
+
+    it('shows the referred notice and stashes the code from ?ref= for HouseholdOnboarding to pick up', () => {
+      sessionStorage.clear();
+      renderPage('/register?ref=RF-00000-00001');
+      expect(screen.getByText(/invited to family greenhouse/i)).toBeInTheDocument();
+      // Stashed exactly as given — normalization/validation is the server's
+      // job (services/referrals.ts), never re-implemented on the client.
+      expect(getPendingReferralCode()).toBe('RF-00000-00001');
+    });
   });
 });

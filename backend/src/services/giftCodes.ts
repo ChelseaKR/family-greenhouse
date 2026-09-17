@@ -267,7 +267,8 @@ export async function redeemGift(args: {
               TableName: TABLE_NAME,
               Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
               UpdateExpression:
-                'SET giftPlanId = :plan, giftEndsAt = :endsAt, giftStripeSessionId = :sid, giftRedeemedAt = :now',
+                'SET giftPlanId = :plan, giftEndsAt = :endsAt, giftStripeSessionId = :sid, ' +
+                'giftRedeemedAt = :now, giftSource = :src',
               // `giftEndsAt` is compared as a string: every value written is
               // `Date#toISOString()`, a fixed-width UTC form whose lexical
               // order is its chronological order. The subscription clause is
@@ -284,6 +285,12 @@ export async function redeemGift(args: {
                 ':endsAt': endsAtIso,
                 ':sid': gift.stripeSessionId,
                 ':now': nowIso,
+                // Explicit, not just the default absent-means-purchase
+                // reading (services/billing.ts): a household's SECOND gift
+                // (this purchase, redeemed after an earlier referral bonus
+                // ended) must not keep showing 'referral' in GET /billing/me
+                // once a real purchase is what is actually running.
+                ':src': 'purchase',
                 ...statusValues,
               },
             },

@@ -874,6 +874,76 @@ a subscription month earns because it is metered the same way.
   beside the plan grid; refusing that checkout, or starting the subscription
   when the gift ends, is a follow-up decision.
 
+## Refer-a-friend
+
+Proposed 2026-09-16 ([ADR 0029](adr/0029-refer-a-friend.md)). An existing user invites someone
+NEW to the app — not a household member joining an existing household (that is the household
+invite, `POST /households/:id/invites`), but a genuinely new signup starting their OWN new
+household. Both sides get **one free month of Garden**, granted through the exact same
+`giftPlanId` / `giftEndsAt` mechanism as gift subscriptions above — a referral bonus is not a new
+entitlement path, it is a gift whose source happens to be "someone invited me" instead of "someone
+paid for me".
+
+- **The code:** `GET /me/referral` — any authenticated member with an active household, not
+  admin-only. Get-or-create, one code per account for life
+  (`referralCodes.getOrCreateReferralCode`), `RF` + 10 Crockford base32 symbols, shown as
+  `RF-XXXXX-XXXXX`. Not hashed at rest, unlike a gift code: a gift code is a bearer credential
+  redeemable for money by whoever holds it, and secrecy is the whole guard; a referral code is
+  meant to be shared publicly, and the guard against abuse is the self-referral check below, not
+  concealment. Same response also lists the account's referral history (`totalReferrals`,
+  `grantedReferrals`, and each signup's date + whether the referrer's side was granted) — never a
+  referred signup's name or email.
+- **The link:** `/register?ref=CODE` — distinct from a household invite's `/join/CODE` by both
+  path and purpose. Stashed in `sessionStorage`
+  (`frontend/src/features/referrals/pendingReferralCode.ts`, the same fix
+  `pendingShareCode.ts` already applies for a shared cutting link) across register →
+  confirm-email → household-onboarding, then sent as an optional `referralCode` field on
+  `POST /households`.
+- **Eligibility:** only a user's FIRST household (`households/handler.ts`'s `isFirstHousehold`)
+  can be a referred signup — an existing user opening a second home is not a new person arriving,
+  and is never even looked up against a code they might have pasted. A bad, unknown, expired, or
+  self-referred code is never a signup error: `services/referrals.ts#resolveReferralGrant`
+  resolves it to "no bonus" and the household is created normally either way.
+- **Anti-self-referral (`models/referrals.ts#detectSelfReferral`):** refuses a grant when the
+  referrer's and the new signup's emails normalize to the same address (`+tag` stripped — the
+  common alias trick) OR share a domain that is NOT a common free/shared provider (gmail.com,
+  icloud.com, and the like are exempt — two different people routinely share one of those, and
+  refusing on domain match alone would refuse most legitimate referrals). Deliberately does not
+  attempt device fingerprinting, IP correlation, or payment-method matching: there is no card to
+  compare at signup (both the no-card trial and this bonus are card-free), and this product has no
+  paying customers as of this decision.
+- **Grant, new household's side:** rides the SAME transaction as `POST /households`
+  (`householdService.createHousehold`) — the household METADATA Put gains `giftPlanId: 'garden'`,
+  `giftEndsAt` (+1 calendar month), `giftSource: 'referral'`, and a `USER#{id} / REFERRAL_REDEEMED`
+  claim (conditional, one per account ever) is added as a 4th transact item alongside the no-card
+  trial's own claim. Either claim conflicting falls back to the plain 2-item create with **neither**
+  the trial nor the referral bonus — the same simplification the trial alone already made for a
+  second-time account.
+- **Grant, referrer's side:** `services/referrals.ts#creditReferralAfterSignup`, called by the
+  handler right after the new household is created, best-effort and never able to fail the
+  signup response. Re-reads the NEW household's own row first (authoritative, not assumed — the
+  claim-conflict fallback above can mean no bonus actually landed) then applies the referrer's
+  grant with the exact same conditional guard `giftCodes.redeemGift`'s household-side update uses
+  (no live Stripe subscription, no gift already running, no lifetime floor at or above Garden). A
+  refusal (`stripe_subscribed` / `gift_active` / `owns_tier` / `conflict`) is recorded on the
+  referrer's own history rather than silently dropped.
+- **Entitlement:** unchanged from gift subscriptions — `giftState` / `withGift` in
+  `models/plans.ts` do not know or care whether a gift came from a purchase or a referral. `GET
+/billing/me` publishes the same `gift: { planId, endsAt, state } | null` shape plus one
+  additive field, `source: 'purchase' | 'referral'` (absent reads as `'purchase'`, the only
+  source before this existed).
+- **Not written by any Stripe path:** `giftSource` joins `giftPlanId` / `giftEndsAt` in
+  `SubscriptionWriteField`'s exclusion list, for the same reason.
+- **Native (iOS/Android) shell:** the "Refer a friend" settings panel is **not** gated by
+  `isNativeApp()`, unlike every purchase surface in this doc. Nothing on it is a payment — no
+  checkout, no price shown as payable, no button that starts one — so App Store guideline 3.1.1
+  does not apply to it. `ReferralSettings.test.tsx` asserts both halves: the panel still renders
+  on native, and its only control is "Copy link".
+- **Known gap, deliberately left:** no email carries the referral link (in-app only, same
+  posture gift codes shipped with); and a referrer who redeems a purchased gift AND makes a
+  successful referral in the same active window has the second one refused as `gift_active` —
+  bonuses do not stack, they queue, exactly like two gift codes.
+
 ## Plan caps and downgrades
 
 If a household downgrades from Greenhouse → Seedling and they have 200 plants,

@@ -344,7 +344,8 @@
     "resendPrompt": "Didn’t receive the code?",
     "resendCode": "Resend code",
     "confirmationResent": "A new confirmation code was sent. Check your email.",
-    "sending": "Sending…"
+    "sending": "Sending…",
+    "referredNotice": "You've been invited to Family Greenhouse — create your account and you'll both get a free month of Garden."
   },
   "joinInvite": {
     "signInOrCreate": "Please sign in or create an account to accept this invitation.",
@@ -1047,7 +1048,8 @@
       "kiosk": "Wall display",
       "account": "Account",
       "help": "Help",
-      "plantTags": "Plant tags"
+      "plantTags": "Plant tags",
+      "refer": "Refer a friend"
     },
     "preferences": {
       "title": "Preferences",
@@ -1183,6 +1185,21 @@
       "purchaseInFlight": "Waiting for your last purchase to be confirmed. Buying again would charge you twice.",
       "abandonedCheckoutTitle": "Checkout left unfinished",
       "abandonedCheckoutBody": "It looks like you started checking out for a plan on {{date}} and never finished — that checkout has since expired. You were not charged for it, unless you paid using a bank transfer or another method that confirms after checkout; if so, check your email for a receipt. Feel free to try again whenever you're ready."
+    },
+    "refer": {
+      "title": "Refer a friend",
+      "description": "Invite someone new to Family Greenhouse. When they start their own household with your link, you both get a free month of Garden.",
+      "loading": "Loading your referral link…",
+      "loadError": "Couldn't load your referral info. Try again in a moment.",
+      "linkLabel": "Your referral link",
+      "copyButton": "Copy link",
+      "copiedConfirmation": "Copied!",
+      "howItWorks": "This is different from a household invite: a household invite adds someone to YOUR household. This link is for someone starting their OWN new household — that's when the bonus applies.",
+      "statsHeading": "Your referrals",
+      "statsSummary": "{{granted}} of {{total}} earned a bonus",
+      "statsEmpty": "No signups yet. Once someone joins using your link, they'll show up here.",
+      "rowGranted": "Bonus granted",
+      "rowSkipped": "No bonus — your household already had an active plan or gift when this one landed"
     }
   },
   "notifications": {

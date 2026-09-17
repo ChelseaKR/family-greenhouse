@@ -57,6 +57,9 @@ export interface HouseholdWithMembers extends Household {
 
 export interface CreateHouseholdData {
   name: string;
+  /** Refer-a-friend (ADR 0029). Optional; only meaningful on a user's FIRST
+   *  household — the server ignores it (no error) on any other. */
+  referralCode?: string;
 }
 
 export interface InviteLink {

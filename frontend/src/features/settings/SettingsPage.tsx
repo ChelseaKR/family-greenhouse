@@ -8,19 +8,28 @@ import { BillingSettings } from './BillingSettings';
 import { PreferencesSettings } from './PreferencesSettings';
 import { ApiKeysSettings } from './ApiKeysSettings';
 import { KioskSettings } from './KioskSettings';
+import { ReferralSettings } from './ReferralSettings';
 import { TagPinSettings } from '@/features/tags/TagPinSettings';
 import { AccountSettings } from './AccountSettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
 type Tab =
-  'preferences' | 'notifications' | 'plant-tags' | 'billing' | 'kiosk' | 'api-keys' | 'account';
+  | 'preferences'
+  | 'notifications'
+  | 'plant-tags'
+  | 'billing'
+  | 'refer'
+  | 'kiosk'
+  | 'api-keys'
+  | 'account';
 
 const TABS: Tab[] = [
   'preferences',
   'notifications',
   'plant-tags',
   'billing',
+  'refer',
   'kiosk',
   'api-keys',
   'account',
@@ -31,6 +40,7 @@ const TAB_LABEL: Record<Tab, string> = {
   notifications: 'settings.tabs.notifications',
   'plant-tags': 'settings.tabs.plantTags',
   billing: 'settings.tabs.billing',
+  refer: 'settings.tabs.refer',
   kiosk: 'settings.tabs.kiosk',
   'api-keys': 'settings.tabs.apiKeys',
   account: 'settings.tabs.account',
@@ -137,6 +147,7 @@ export function SettingsPage() {
         {tab === 'notifications' && <NotificationSettings />}
         {tab === 'plant-tags' && <TagPinSettings />}
         {tab === 'billing' && <BillingSettings />}
+        {tab === 'refer' && <ReferralSettings />}
         {tab === 'kiosk' && <KioskSettings />}
         {tab === 'api-keys' && <ApiKeysSettings />}
         {tab === 'account' && <AccountSettings />}

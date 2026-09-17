@@ -210,6 +210,16 @@ interface User {
    * production `USER#{id} / NO_CARD_TRIAL` claim row (ADR 0027).
    */
   noCardTrialClaimedAt?: string;
+  /**
+   * Refer-a-friend (ADR 0029). Mirrors the production `USER#{id} /
+   * REFERRAL_CODE` row, lazily minted on first `GET /me/referral` exactly
+   * like production's get-or-create. Redemption (crediting a referral from
+   * an actual signup) is NOT implemented here — like gift subscriptions
+   * above, nothing in the mock can apply the real anti-self-referral policy
+   * or the household-side grant, so a test seeds `referrals` directly.
+   */
+  referralCode?: string;
+  referrals?: Array<{ signedUpAt: string; rewarded: boolean }>;
 }
 
 interface Household {
@@ -1415,6 +1425,27 @@ app.get('/me/households', authMiddleware, (req, res) => {
     };
   });
   res.json(list);
+});
+
+// GET /me/referral — refer-a-friend (ADR 0029). Mints a code on first read;
+// see the `referralCode`/`referrals` fields on `User` above for what this
+// mock does and does not simulate.
+app.get('/me/referral', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  const dbUser = db.users.get(user.userId);
+  if (!dbUser) return res.status(404).json({ message: 'User not found' });
+  if (!dbUser.referralCode) {
+    dbUser.referralCode = `RF-${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+  }
+  const referrals = dbUser.referrals ?? [];
+  res.json({
+    code: dbUser.referralCode,
+    bonusPlanId: 'garden',
+    bonusMonths: 1,
+    totalReferrals: referrals.length,
+    grantedReferrals: referrals.filter((r) => r.rewarded).length,
+    referrals,
+  });
 });
 
 // GET /me/today

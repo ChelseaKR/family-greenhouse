@@ -20,6 +20,7 @@ import {
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { atCap, NO_CARD_TRIAL_DAYS, type Limit } from '../models/plans.js';
+import type { GiftablePlanId } from '../models/giftSubscriptions.js';
 import { invalidateMembership } from '../utils/membershipCache.js';
 import { HOUSEHOLD_TIMEZONE_UNSET, normalizeHouseholdTimeZone } from './householdTimeZone.js';
 import {
@@ -35,6 +36,21 @@ import { normalizeEscalateAfterDays } from './escalationRule.js';
 
 /** Sort key of the per-account no-card trial claim row (ADR 0027). */
 export const NO_CARD_TRIAL_CLAIM_SK = 'NO_CARD_TRIAL';
+
+/** Sort key of the per-account refer-a-friend redemption claim row (ADR
+ *  0029) — at most one referral bonus per account, ever, mirroring
+ *  `NO_CARD_TRIAL_CLAIM_SK`. */
+export const REFERRAL_REDEEMED_CLAIM_SK = 'REFERRAL_REDEEMED';
+
+/** A referral bonus already resolved by `services/referrals.ts`, ready to
+ *  apply to the new household's METADATA row. See `createHousehold`. */
+export interface HouseholdReferralGrant {
+  planId: GiftablePlanId;
+  /** ISO 8601. */
+  endsAt: string;
+  referrerUserId: string;
+  referralCode: string;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -128,7 +144,14 @@ export async function createHousehold(
   userId: string,
   userName: string,
   userEmail: string,
-  at: Date = new Date()
+  at: Date = new Date(),
+  // Refer-a-friend (ADR 0029), resolved by `services/referrals.ts` BEFORE
+  // this call — this function only applies a decision already made, exactly
+  // as it applies the no-card trial. `undefined`/`null` (every existing
+  // caller) is byte-identical to the pre-referral behavior below: the extra
+  // transact item is appended, never inserted, so the no-card-trial claim
+  // stays item [2] and its own conflict handling is untouched.
+  referralGrant?: HouseholdReferralGrant | null
 ): Promise<Household> {
   const id = uuid();
   const now = at.toISOString();
@@ -182,6 +205,18 @@ export async function createHousehold(
   // Nothing here reaches Stripe, and no Stripe path reads or writes these
   // attributes.
   const noCardTrialEndsAt = new Date(at.getTime() + NO_CARD_TRIAL_DAYS * DAY_MS).toISOString();
+  // The referral bonus (ADR 0029) rides the household's own Put, exactly
+  // like the trial fields above: `giftPlanId`/`giftEndsAt` are read by
+  // `giftState` in models/plans.ts with no other code path involved, so a
+  // household with a referral grant is, from entitlement's point of view,
+  // simply a household with a gift already on it the instant it exists.
+  const referralItem = referralGrant
+    ? {
+        giftPlanId: referralGrant.planId,
+        giftEndsAt: referralGrant.endsAt,
+        giftSource: 'referral' as const,
+      }
+    : {};
   try {
     await dynamodb.send(
       new TransactWriteCommand({
@@ -189,7 +224,12 @@ export async function createHousehold(
           {
             Put: {
               TableName: TABLE_NAME,
-              Item: { ...householdItem, noCardTrialStartedAt: now, noCardTrialEndsAt },
+              Item: {
+                ...householdItem,
+                noCardTrialStartedAt: now,
+                noCardTrialEndsAt,
+                ...referralItem,
+              },
             },
           },
           { Put: { TableName: TABLE_NAME, Item: memberItem } },
@@ -206,14 +246,47 @@ export async function createHousehold(
               ConditionExpression: 'attribute_not_exists(PK)',
             },
           },
+          // Item [3], present ONLY when a referral grant was resolved. At
+          // most one of these per account, ever — the same one-claim-per-
+          // account guard the trial uses, riding the SAME transaction so a
+          // household can never exist with a referral bonus applied but no
+          // claim committed (or vice versa).
+          ...(referralGrant
+            ? [
+                {
+                  Put: {
+                    TableName: TABLE_NAME,
+                    Item: {
+                      PK: `USER#${userId}`,
+                      SK: REFERRAL_REDEEMED_CLAIM_SK,
+                      entityType: 'ReferralRedeemedClaim',
+                      referralCode: referralGrant.referralCode,
+                      referrerUserId: referralGrant.referrerUserId,
+                      householdId: id,
+                      redeemedAt: now,
+                    },
+                    ConditionExpression: 'attribute_not_exists(PK)',
+                  },
+                },
+              ]
+            : []),
         ],
       })
     );
     return household;
   } catch (err) {
-    // Only the CLAIM's own condition routes to the trial-less write below. Any
-    // other failure is a failed household creation, and it propagates.
-    if (transactCancellationReasons(err)[2]?.Code !== 'ConditionalCheckFailed') throw err;
+    // Item [2] is the trial claim; item [3] (if present) is the referral
+    // claim. Either conflicting routes to the plain write below, which
+    // drops BOTH the trial and the referral bonus — the same simplification
+    // the trial alone already made: an account that has been through this
+    // path before (left a household and made another, or is on a retried
+    // request that already won one of these claims) gets its household with
+    // neither. Any OTHER failure is a failed household creation and
+    // propagates unchanged.
+    const reasons = transactCancellationReasons(err);
+    const trialConflict = reasons[2]?.Code === 'ConditionalCheckFailed';
+    const referralConflict = referralGrant ? reasons[3]?.Code === 'ConditionalCheckFailed' : false;
+    if (!trialConflict && !referralConflict) throw err;
   }
 
   await dynamodb.send(

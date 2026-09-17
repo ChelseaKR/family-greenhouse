@@ -17,6 +17,10 @@ import { Card } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getPendingShareCode, clearPendingShareCode } from '@/features/plants/pendingShareCode';
+import {
+  getPendingReferralCode,
+  clearPendingReferralCode,
+} from '@/features/referrals/pendingReferralCode';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -146,7 +150,18 @@ export function HouseholdOnboarding() {
 
   const onSubmit = (data: CreateHouseholdFormData) => {
     setError(null);
-    createMutation.mutate({ ...data, name: data.name.trim() });
+    // Refer-a-friend (ADR 0029): only a genuinely NEW account can be a
+    // referred signup — `isAddingAnother` means this account already has a
+    // household and is opening a second one, which is not what the code was
+    // shared for. Cleared either way so a stale code from an earlier visit
+    // never resurfaces on a LATER, unrelated household creation.
+    const referralCode = isAddingAnother ? null : getPendingReferralCode();
+    clearPendingReferralCode();
+    createMutation.mutate({
+      ...data,
+      name: data.name.trim(),
+      ...(referralCode ? { referralCode } : {}),
+    });
   };
 
   /**

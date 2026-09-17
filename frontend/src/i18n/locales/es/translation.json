@@ -355,7 +355,8 @@
     "resendPrompt": "¿No recibiste el código?",
     "resendCode": "Reenviar código",
     "confirmationResent": "Enviamos un código de confirmación nuevo. Revisa tu correo.",
-    "sending": "Enviando…"
+    "sending": "Enviando…",
+    "referredNotice": "Te han invitado a Family Greenhouse — crea tu cuenta y ambos recibirán un mes gratis de Garden."
   },
   "joinInvite": {
     "signInOrCreate": "Inicia sesión o crea una cuenta para aceptar esta invitación.",
@@ -1076,7 +1077,8 @@
       "kiosk": "Pantalla de pared",
       "account": "Cuenta",
       "help": "Ayuda",
-      "plantTags": "Etiquetas"
+      "plantTags": "Etiquetas",
+      "refer": "Recomendar a un amigo"
     },
     "preferences": {
       "title": "Preferencias",
@@ -1212,6 +1214,21 @@
       "purchaseInFlight": "Esperando la confirmación de tu última compra. Comprar de nuevo te cobraría dos veces.",
       "abandonedCheckoutTitle": "Pago sin finalizar",
       "abandonedCheckoutBody": "Parece que iniciaste el pago de un plan el {{date}} y no lo terminaste — ese intento ya venció. No se te cobró nada por él, salvo que hayas pagado con una transferencia bancaria u otro método que se confirma después del pago; si es así, revisa tu correo por si llegó un recibo. Puedes intentarlo de nuevo cuando quieras."
+    },
+    "refer": {
+      "title": "Recomendar a un amigo",
+      "description": "Invita a alguien nuevo a Family Greenhouse. Cuando empiece su propio hogar con tu enlace, ambos reciben un mes gratis de Garden.",
+      "loading": "Cargando tu enlace de recomendación…",
+      "loadError": "No pudimos cargar tu información de recomendaciones. Inténtalo de nuevo en un momento.",
+      "linkLabel": "Tu enlace de recomendación",
+      "copyButton": "Copiar enlace",
+      "copiedConfirmation": "¡Copiado!",
+      "howItWorks": "Esto es distinto de una invitación de hogar: una invitación de hogar añade a alguien a TU hogar. Este enlace es para alguien que va a crear su PROPIO hogar nuevo — ahí es cuando se aplica la bonificación.",
+      "statsHeading": "Tus recomendaciones",
+      "statsSummary": "{{granted}} de {{total}} obtuvieron una bonificación",
+      "statsEmpty": "Todavía no hay registros. Cuando alguien se una con tu enlace, aparecerá aquí.",
+      "rowGranted": "Bonificación otorgada",
+      "rowSkipped": "Sin bonificación — tu hogar ya tenía un plan o regalo activo cuando llegó esta recomendación"
     }
   },
   "notifications": {

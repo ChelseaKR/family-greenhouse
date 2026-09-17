@@ -19,6 +19,7 @@ vi.mock('../../../src/services/accountCleanup.js');
 vi.mock('../../../src/services/apiKeys.js');
 vi.mock('../../../src/services/calendarTokens.js');
 vi.mock('../../../src/services/billingEmails.js');
+vi.mock('../../../src/services/referralCodes.js');
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
@@ -921,6 +922,64 @@ describe('me handler', () => {
       requestContext: { identity: { sourceIp: ip } } as never,
     });
   }
+
+  describe('getMyReferral', () => {
+    it('returns the code (get-or-create) and a summary of the referral history', async () => {
+      const referralCodes = await import('../../../src/services/referralCodes.js');
+      const { getMyReferral } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(referralCodes.getOrCreateReferralCode).mockResolvedValueOnce({
+        code: 'RF0000000001',
+        referrerUserId: 'user-1',
+        referrerHouseholdId: 'hh-1',
+        referrerEmail: 'test@example.com',
+        createdAt: '2026-09-01T00:00:00.000Z',
+      });
+      vi.mocked(referralCodes.listReferralEvents).mockResolvedValueOnce([
+        {
+          referredHouseholdId: 'hh-a',
+          signedUpAt: '2026-09-10T00:00:00.000Z',
+          referredRewardStatus: 'granted',
+          referrerRewardStatus: 'granted',
+        },
+        {
+          referredHouseholdId: 'hh-b',
+          signedUpAt: '2026-09-12T00:00:00.000Z',
+          referredRewardStatus: 'granted',
+          referrerRewardStatus: 'skipped',
+          referrerSkipReason: 'gift_active',
+        },
+      ]);
+
+      const res = (await getMyReferral(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(referralCodes.getOrCreateReferralCode).toHaveBeenCalledWith({
+        userId: 'user-1',
+        householdId: 'hh-1',
+        email: 'test@example.com',
+      });
+      const body = JSON.parse(res.body);
+      expect(body.code).toBe('RF-00000-00001'); // formatted for display
+      expect(body.bonusPlanId).toBe('garden');
+      expect(body.bonusMonths).toBe(1);
+      expect(body.totalReferrals).toBe(2);
+      expect(body.grantedReferrals).toBe(1);
+      expect(body.referrals).toEqual([
+        { signedUpAt: '2026-09-10T00:00:00.000Z', rewarded: true },
+        { signedUpAt: '2026-09-12T00:00:00.000Z', rewarded: false },
+      ]);
+    });
+
+    it('401s without claims and 403s without a household', async () => {
+      const { getMyReferral } = await import('../../../src/handlers/me/handler.js');
+      const anon = (await getMyReferral(
+        buildEvent({ requestContext: { identity: { sourceIp: '127.0.0.1' } } as never }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(anon.statusCode).toBe(401);
+    });
+  });
 
   describe('getCalendarToken', () => {
     it('returns the non-secret status for the active household', async () => {

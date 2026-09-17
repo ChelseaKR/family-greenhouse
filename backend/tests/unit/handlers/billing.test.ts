@@ -1015,11 +1015,43 @@ describe('billing handler', () => {
           () => {}
         )) as APIGatewayProxyResult;
         const body = JSON.parse(res.body);
-        expect(body.gift).toEqual({ planId: 'greenhouse', endsAt, state: 'active' });
+        // No `giftSource` on the row (every gift redeemed before ADR 0029)
+        // publishes as 'purchase' — the only source that could have produced
+        // one before referrals existed. Never 'unknown'.
+        expect(body.gift).toEqual({
+          planId: 'greenhouse',
+          endsAt,
+          state: 'active',
+          source: 'purchase',
+        });
         expect(body).not.toHaveProperty('giftPlanId');
         expect(body).not.toHaveProperty('giftEndsAt');
         // The caps published are the gifted tier's — what is actually enforced.
         expect(body.usageDetail.maxPlants).toBe(5000);
+      });
+
+      it('publishes gift.source: "referral" for a refer-a-friend bonus (ADR 0029), not "purchase"', async () => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+          planId: 'seedling',
+          giftPlanId: 'garden',
+          giftEndsAt: endsAt,
+          giftSource: 'referral',
+        });
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        const body = JSON.parse(res.body);
+        expect(body.gift).toEqual({
+          planId: 'garden',
+          endsAt,
+          state: 'active',
+          source: 'referral',
+        });
       });
 
       it('publishes gift: null when there is none to describe', async () => {

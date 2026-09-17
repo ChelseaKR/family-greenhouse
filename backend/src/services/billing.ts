@@ -124,6 +124,18 @@ export interface HouseholdSubscription {
   giftPlanId?: PlanId;
   giftEndsAt?: string;
   /**
+   * Where a `giftPlanId`/`giftEndsAt` grant came from: a purchased gift code
+   * (`giftCodes.redeemGift`) or a refer-a-friend bonus
+   * (`services/referrals.ts`, ADR 0029). Display-only — `giftState` in
+   * models/plans.ts resolves entitlement from `giftPlanId`/`giftEndsAt`
+   * alone and never reads this field, so a household missing it (every gift
+   * redeemed before this field existed) still resolves correctly; it only
+   * changes whether GET /billing/me's `gift.source` says "purchase" or
+   * "referral" for a client that wants different copy for each. Absent means
+   * "purchase" (the only source before referrals existed), never "unknown".
+   */
+  giftSource?: 'purchase' | 'referral';
+  /**
    * A plan Checkout Session this household was handed and never completed,
    * old enough that `pendingCheckoutState` reads it as `stale` (see
    * `PENDING_CHECKOUT_WINDOW_MS` below) — i.e. Settings → Billing may finally
@@ -223,6 +235,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     noCardTrialEndsAt: item.noCardTrialEndsAt as string | undefined,
     giftPlanId: isPlanId(item.giftPlanId) ? item.giftPlanId : undefined,
     giftEndsAt: item.giftEndsAt as string | undefined,
+    giftSource: item.giftSource === 'referral' ? 'referral' : undefined,
   };
 }
 
@@ -246,6 +259,7 @@ export async function getHouseholdSubscription(
     noCardTrialEndsAt: state.noCardTrialEndsAt,
     giftPlanId: state.giftPlanId,
     giftEndsAt: state.giftEndsAt,
+    giftSource: state.giftSource,
     // Same boundary, same reason: derived from the internal marker fields
     // below (never exposed themselves) so there is one place that decides
     // what a client learns about an abandoned checkout — see
@@ -267,9 +281,10 @@ export async function getHouseholdSubscription(
  * could touch it could extend, restart or end an app-side trial that Stripe
  * knows nothing about.
  *
- * `giftPlanId` / `giftEndsAt` are excluded for the same reason (ADR 0028):
- * they are written by the redemption transaction, and a Stripe event that
- * could touch them could end a gift somebody paid for.
+ * `giftPlanId` / `giftEndsAt` / `giftSource` are excluded for the same reason
+ * (ADR 0028, and ADR 0029 for `giftSource`): they are written by the
+ * redemption transaction or the referral credit, and a Stripe event that
+ * could touch them could end a gift somebody paid for or earned.
  *
  * `staleCheckout` is excluded because it too is DERIVED — from
  * `pendingCheckoutSessionId`/`pendingCheckoutAt`, which remain the row's only
@@ -279,7 +294,12 @@ export async function getHouseholdSubscription(
 type SubscriptionWriteField =
   | Exclude<
       keyof HouseholdSubscription,
-      'trialAvailable' | 'noCardTrialEndsAt' | 'giftPlanId' | 'giftEndsAt' | 'staleCheckout'
+      | 'trialAvailable'
+      | 'noCardTrialEndsAt'
+      | 'giftPlanId'
+      | 'giftEndsAt'
+      | 'giftSource'
+      | 'staleCheckout'
     >
   | 'pendingStripeCancellationId'
   // The pending-checkout marker is CLEARED through here (null → REMOVE) so

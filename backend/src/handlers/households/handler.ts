@@ -42,6 +42,7 @@ import {
   sitterWindowDays,
 } from '../../services/sitterPlanGate.js';
 import * as doubleCare from '../../services/doubleCare.js';
+import * as referrals from '../../services/referrals.js';
 import {
   assertCanAddHome,
   homesLimitMessage,
@@ -139,12 +140,40 @@ export const createHousehold = createHandler(
       }
     }
 
+    // Refer-a-friend (ADR 0029): only a user's FIRST household can be a
+    // referred signup — `isAddingAnother`/a second home is this same
+    // account, not a new one, and gets no bonus either way. Resolving the
+    // grant never throws and never refuses the household: a bad, expired,
+    // or self-referred code just means no bonus (see resolveReferralGrant).
+    const referralDecision =
+      isFirstHousehold && validatedBody.referralCode
+        ? await referrals.resolveReferralGrant({
+            code: validatedBody.referralCode,
+            newUserId: user.userId,
+            newUserEmail: user.email,
+          })
+        : null;
+    const referralGrant = referralDecision?.ok ? referralDecision.grant : null;
+
     const household = await householdService.createHousehold(
       validatedBody,
       user.userId,
       userName,
-      user.email
+      user.email,
+      new Date(),
+      referralGrant
     );
+
+    // Best-effort, after the new household is already committed: credits the
+    // REFERRER's side and records the event for their "Refer a friend" list.
+    // Never awaited into a failure the caller sees — see
+    // `creditReferralAfterSignup`'s doc comment for why.
+    if (referralGrant) {
+      await referrals.creditReferralAfterSignup({
+        grant: referralGrant,
+        newHouseholdId: household.id,
+      });
+    }
 
     // Only set the JWT default if the user doesn't already have one. This
     // keeps the "first household stays default" property — switching to a
@@ -165,7 +194,7 @@ export const createHousehold = createHandler(
       actorId: user.userId,
       actorEmail: user.email,
       householdId: household.id,
-      metadata: { name: household.name },
+      metadata: { name: household.name, referred: !!referralGrant },
     });
 
     return createdResponse(household);
