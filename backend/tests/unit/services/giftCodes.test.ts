@@ -224,7 +224,8 @@ describe('redeemGift', () => {
 
     expect(household.Key).toEqual({ PK: 'HOUSEHOLD#hh-9', SK: 'METADATA' });
     expect(household.UpdateExpression).toBe(
-      'SET giftPlanId = :plan, giftEndsAt = :endsAt, giftStripeSessionId = :sid, giftRedeemedAt = :now'
+      'SET giftPlanId = :plan, giftEndsAt = :endsAt, giftStripeSessionId = :sid, ' +
+        'giftRedeemedAt = :now, giftSource = :src'
     );
     // No gift running, and no live subscription: absent id, or a recorded
     // status outside the live set. An id with NO status is live (fails closed).
@@ -237,6 +238,7 @@ describe('redeemGift', () => {
       ':endsAt': '2027-01-01T09:30:00.000Z',
       ':sid': 'cs_gift_1',
       ':now': '2026-10-01T09:30:00.000Z',
+      ':src': 'purchase',
       ':live0': 'active',
       ':live1': 'trialing',
       ':live2': 'past_due',

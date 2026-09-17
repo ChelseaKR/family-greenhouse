@@ -1113,6 +1113,8 @@ locals {
     "GET /me/calendar-token"    = { group = "me", auth = "jwt" }
     "POST /me/calendar-token"   = { group = "me", auth = "jwt" }
     "DELETE /me/calendar-token" = { group = "me", auth = "jwt" }
+    # Refer-a-friend (ADR 0029): the caller's own code + referral history.
+    "GET /me/referral" = { group = "me", auth = "jwt" }
     # Capability URL for calendar apps: the token in the path is the credential.
     "GET /calendar/{token}/family-greenhouse.ics" = { group = "me", auth = "none" }
 

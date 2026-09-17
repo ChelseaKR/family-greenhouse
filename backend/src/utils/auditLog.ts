@@ -36,6 +36,10 @@ export type AuditEvent =
   // code placed on a household. Neither line carries the code.
   | 'billing.gift_subscription_granted'
   | 'billing.gift_redeemed'
+  // Refer-a-friend (ADR 0029): a household's bonus is audited as part of
+  // household.created; this line covers the REFERRER's side, since that
+  // write happens later, against a different household, and can be skipped.
+  | 'referral.signup_credited'
   // Outbound-mail deliverability (services/emailSuppression.ts). Suppressing
   // an address stops every product email to it, and clearing one puts it back
   // on the send list — both are consequential enough to leave a trail.

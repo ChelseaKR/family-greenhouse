@@ -13,6 +13,12 @@ import * as apiKeys from '../../services/apiKeys.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as calendarTokens from '../../services/calendarTokens.js';
 import * as billingEmails from '../../services/billingEmails.js';
+import * as referralCodes from '../../services/referralCodes.js';
+import {
+  REFERRAL_BONUS_MONTHS,
+  REFERRAL_BONUS_PLAN_ID,
+  formatReferralCode,
+} from '../../models/referrals.js';
 import { buildIcs } from '../../services/icsExport.js';
 import { myToday } from './today.js';
 import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
@@ -454,12 +460,46 @@ export const calendarFeed = createHandler(
   }
 ).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 
+// GET /me/referral
+//
+// Refer-a-friend (ADR 0029): the caller's own shareable code, plus their
+// referral history, for the "Refer a friend" settings panel. Lazily mints a
+// code on first call (get-or-create) so there is nothing to "set up" before
+// a user sees their link. Per-user rate-limited like the other /me writes
+// that touch DynamoDB on every call.
+export const getMyReferral = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const owner = await referralCodes.getOrCreateReferralCode({
+      userId: user.userId,
+      householdId: user.householdId!,
+      email: user.email,
+    });
+    const events = await referralCodes.listReferralEvents(user.userId);
+    return successResponse({
+      code: formatReferralCode(owner.code),
+      bonusPlanId: REFERRAL_BONUS_PLAN_ID,
+      bonusMonths: REFERRAL_BONUS_MONTHS,
+      totalReferrals: events.length,
+      grantedReferrals: events.filter((e) => e.referrerRewardStatus === 'granted').length,
+      referrals: events.map((e) => ({
+        signedUpAt: e.signedUpAt,
+        rewarded: e.referrerRewardStatus === 'granted',
+      })),
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 30 }));
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'DELETE /me': deleteMe,
   'GET /me/export': exportMe,
   'GET /me/households': listMyHouseholds,
   'GET /me/today': myToday,
+  'GET /me/referral': getMyReferral,
   'GET /me/calendar.ics': calendarIcs,
   'GET /me/calendar-token': getCalendarToken,
   'POST /me/calendar-token': createCalendarToken,

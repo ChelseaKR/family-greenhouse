@@ -10,6 +10,10 @@ import es from '@/i18n/locales/es/translation.json';
 import { HouseholdOnboarding } from '@/features/household/HouseholdOnboarding';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
+import {
+  setPendingReferralCode,
+  getPendingReferralCode,
+} from '@/features/referrals/pendingReferralCode';
 
 const API = 'http://localhost:4000';
 
@@ -27,11 +31,11 @@ const API = 'http://localhost:4000';
  *     pressed is unmounted by the step change.
  * And the whole screen rendered in English under `es`.
  */
-function renderOnboarding(options: { i18n?: I18nInstance } = {}) {
+function renderOnboarding(options: { i18n?: I18nInstance; entry?: string } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const tree = (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/onboarding']}>
+      <MemoryRouter initialEntries={[options.entry ?? '/onboarding']}>
         <Routes>
           <Route path="/onboarding" element={<HouseholdOnboarding />} />
           <Route path="/join/:inviteCode" element={<div>invite screen</div>} />
@@ -90,6 +94,82 @@ describe('HouseholdOnboarding', () => {
 
     expect(await screen.findByText('Household name is required')).toBeInTheDocument();
     expect(posted, 'a blank name must never reach POST /households').toBe(0);
+  });
+
+  describe('refer-a-friend (ADR 0029)', () => {
+    it('sends a pending referral code on a genuinely first household, then clears it', async () => {
+      sessionStorage.clear();
+      setPendingReferralCode('RF-00000-00001');
+      let received: unknown;
+      server.use(
+        http.post(`${API}/households`, async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: 'hh-1', name: 'My Home' }, { status: 201 });
+        })
+      );
+      const user = userEvent.setup();
+      renderOnboarding();
+
+      await user.click(await screen.findByRole('button', { name: /create a new household/i }));
+      await user.type(await screen.findByLabelText(/household name/i), 'My Home');
+      await user.click(screen.getByRole('button', { name: /^create household$/i }));
+
+      await waitFor(() => {
+        expect(received).toEqual({ name: 'My Home', referralCode: 'RF-00000-00001' });
+      });
+      // Consumed — a later, unrelated household creation must not resend it.
+      expect(getPendingReferralCode()).toBeNull();
+    });
+
+    it('does NOT send a pending referral code when adding a SECOND household (?mode=add)', async () => {
+      sessionStorage.clear();
+      setPendingReferralCode('RF-00000-00001');
+      let received: unknown;
+      server.use(
+        http.post(`${API}/households`, async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: 'hh-2', name: 'Second Home' }, { status: 201 });
+        })
+      );
+      const user = userEvent.setup();
+      useAuthStore.setState({
+        user: {
+          id: 'u-1',
+          email: 'someone@example.invalid',
+          householdId: 'hh-1',
+          householdRole: 'admin',
+        },
+      } as never);
+      renderOnboarding({ entry: '/onboarding?mode=add' });
+
+      await user.type(await screen.findByLabelText(/household name/i), 'Second Home');
+      await user.click(screen.getByRole('button', { name: /^create household$/i }));
+
+      await waitFor(() => {
+        expect(received).toEqual({ name: 'Second Home' });
+      });
+    });
+
+    it('sends nothing extra, and the field is simply absent, when there is no pending code', async () => {
+      sessionStorage.clear();
+      let received: unknown;
+      server.use(
+        http.post(`${API}/households`, async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: 'hh-1', name: 'My Home' }, { status: 201 });
+        })
+      );
+      const user = userEvent.setup();
+      renderOnboarding();
+
+      await user.click(await screen.findByRole('button', { name: /create a new household/i }));
+      await user.type(await screen.findByLabelText(/household name/i), 'My Home');
+      await user.click(screen.getByRole('button', { name: /^create household$/i }));
+
+      await waitFor(() => {
+        expect(received).toEqual({ name: 'My Home' });
+      });
+    });
   });
 
   it('takes a pasted invite link to the invite screen', async () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
 import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
+import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
 
 const makeRegisterSchema = (t: TFunction) =>
   z
@@ -43,6 +44,18 @@ export function RegisterPage() {
   const [searchParams] = useSearchParams();
   const redirect = safeAppRedirect(searchParams.get('redirect'));
   const loginHref = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login';
+  // Refer-a-friend (ADR 0029): `?ref=CODE` names the referring user's link,
+  // distinct from a household invite (`?redirect=/join/CODE`, handled by
+  // `safeAppRedirect` above and applied after signup by a different flow
+  // entirely). Stashed in sessionStorage because register -> confirm-email
+  // -> household-onboarding drops query params along the way; read back and
+  // sent on `POST /households` by HouseholdOnboarding. A malformed or absent
+  // code is simply not stashed — the server treats a bad code as "no bonus",
+  // never as a signup error, so there is nothing to validate here.
+  const referralCode = searchParams.get('ref');
+  useEffect(() => {
+    if (referralCode) setPendingReferralCode(referralCode);
+  }, [referralCode]);
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (
@@ -63,10 +76,21 @@ export function RegisterPage() {
     );
   }
 
-  return <RegistrationForm redirect={redirect} loginHref={loginHref} />;
+  return <RegistrationForm redirect={redirect} loginHref={loginHref} referred={!!referralCode} />;
 }
 
-function RegistrationForm({ redirect, loginHref }: { redirect: string | null; loginHref: string }) {
+function RegistrationForm({
+  redirect,
+  loginHref,
+  referred,
+}: {
+  redirect: string | null;
+  loginHref: string;
+  /** A referral code was captured from `?ref=` — show why signing up here
+   *  earns a bonus. Purely informational: whether the bonus actually lands
+   *  is decided server-side when the household is created. */
+  referred: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   // Preserve a post-auth redirect (e.g. /join/CODE from a shared invite) across
@@ -119,6 +143,12 @@ function RegistrationForm({ redirect, loginHref }: { redirect: string | null; lo
         </>
       }
     >
+      {referred && (
+        <Alert variant="info" className="mb-6">
+          {t('auth.referredNotice')}
+        </Alert>
+      )}
+
       {error && (
         <Alert variant="error" className="mb-6">
           {error}

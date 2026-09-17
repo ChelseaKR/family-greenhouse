@@ -103,6 +103,12 @@ export interface GiftState {
   planId: Exclude<PlanId, 'seedling'>;
   endsAt: string;
   state: 'active' | 'ended';
+  /** Where the gift came from (ADR 0028 purchase vs ADR 0029 refer-a-friend).
+   *  Display-only — entitlement (the caps a household actually gets) is the
+   *  same either way. Absent on an older backend response reads as
+   *  'purchase', the only source that could have produced a gift before
+   *  referrals existed. */
+  source?: 'purchase' | 'referral';
 }
 
 /** One gift this account bought, as GET /billing/gift/purchases lists it. */

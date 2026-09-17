@@ -202,7 +202,7 @@ export const getCurrentSubscription = createHandler(
     // whether the household is on the trial. `null` means there is no no-card
     // trial to describe: the household never had one, or Stripe owns its
     // entitlement.
-    const { noCardTrialEndsAt, giftPlanId, giftEndsAt, ...published } = sub;
+    const { noCardTrialEndsAt, giftPlanId, giftEndsAt, giftSource, ...published } = sub;
     const trialState = noCardTrialState(sub, now);
     // A redeemed gift (ADR 0028) goes out the same way: the server's clock
     // decides its state. `null` means there is no gift to describe.
@@ -219,7 +219,15 @@ export const getCurrentSubscription = createHandler(
       gift:
         giftNow === 'none' || !giftPlanId || !giftEndsAt
           ? null
-          : { planId: giftPlanId, endsAt: giftEndsAt, state: giftNow },
+          : {
+              planId: giftPlanId,
+              endsAt: giftEndsAt,
+              state: giftNow,
+              // Absent on a gift redeemed before ADR 0029 (or on a fresh
+              // read where giftCodes.redeemGift's write predates this field)
+              // means 'purchase' — see the doc comment on HouseholdSubscription.
+              source: giftSource ?? 'purchase',
+            },
     });
   }
 )

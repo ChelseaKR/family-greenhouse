@@ -49,6 +49,12 @@ export const refreshTokenSchema = z.object({
 // Household schemas
 export const createHouseholdSchema = z.object({
   name: z.string().min(1).max(100),
+  // Refer-a-friend (ADR 0029). Optional, and only ever consulted for a
+  // user's FIRST household (households/handler.ts's `isFirstHousehold`) — an
+  // existing user adding a second home is not a referral. A bad, expired, or
+  // self-referred code is never an error here: `services/referrals.ts`
+  // resolves it to "no bonus" rather than refusing the household.
+  referralCode: z.string().trim().min(1).max(32).optional(),
 });
 
 export const joinHouseholdSchema = z.object({
