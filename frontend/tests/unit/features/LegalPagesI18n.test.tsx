@@ -171,6 +171,9 @@ describe('legal pages: link targets survive localization', () => {
       '_ga_L2JN3PQ75P',
       'never in the iOS or Android app',
       'keeps Google Analytics off',
+      // The public footer control (AnalyticsOptOutToggle), by its visible name.
+      'Opt out of analytics',
+      'Opt back in',
       'Google signals and ad personalization are disabled',
       '14 months',
     ]) {
@@ -184,6 +187,8 @@ describe('legal pages: link targets survive localization', () => {
       'Analítica del sitio web (Google Analytics 4)',
       '_ga_L2JN3PQ75P',
       'mantiene desactivado Google Analytics',
+      'Desactivar la analítica',
+      'Volver a activarla',
       'Google Signals y la personalización de anuncios están deshabilitadas',
       '14 meses',
     ]) {

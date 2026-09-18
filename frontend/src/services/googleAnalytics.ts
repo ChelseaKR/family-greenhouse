@@ -58,9 +58,15 @@
  * the `_ga`/`_ga_*` cookies already set; it also runs at boot whenever an
  * opt-out is in force, so a visitor who opts out later is not left carrying
  * the old identifier.
+ *
+ * One switch for both vendors: `setAnalyticsPreference()` is what the public
+ * footer control (components/AnalyticsOptOutToggle) and Settings → Preferences
+ * both call. It writes the single per-device flag analytics.ts owns, so the
+ * same choice silences PostHog and Google Analytics, and opting back in
+ * resumes both.
  */
 import { isNativeApp } from '@/lib/platform';
-import { analyticsOptedOut } from '@/services/analytics';
+import { analyticsOptedOut, setAnalyticsOptOut } from '@/services/analytics';
 import { normalizeTelemetryRoute } from '@/services/frontendTelemetry';
 
 const MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]{4,20}$/;
@@ -308,4 +314,27 @@ export function trackGooglePageView(
   gtag('set', params);
   gtag('event', 'page_view');
   lastPageLocation = pageLocation;
+}
+
+/**
+ * The one per-device analytics switch, for every control that offers it.
+ *
+ * Opting out writes the flag analytics.ts reads before every PostHog or
+ * first-party event and that gtag.js reads (through `ga-disable-<id>`) before
+ * every Google Analytics hit, then deletes the GA cookies already set. Opting
+ * back in clears the flag and, unless a browser signal (GPC, DNT) still
+ * applies, starts Google Analytics if it was never loaded this visit and
+ * records the page being viewed; PostHog needs nothing, it re-reads the flag
+ * on the next event.
+ */
+export function setAnalyticsPreference(optOut: boolean): void {
+  setAnalyticsOptOut(optOut);
+  if (optOut) {
+    clearGoogleAnalyticsCookies();
+    return;
+  }
+  if (analyticsOptedOut() || typeof window === 'undefined') return;
+  if (initGoogleAnalytics()) {
+    trackGooglePageView(window.location.pathname, window.location.search);
+  }
 }

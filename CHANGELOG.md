@@ -40,8 +40,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Privacy Control, Do Not Track or the in-app analytics switch — which is also
   how the post-deploy smoke stays out of it. The privacy page, in English and
   Spanish, describes what it collects, its `_ga` cookies and how to turn it
-  off. The Content-Security-Policy change (CloudFront, Terraform) applies with
-  the next tagged release.
+  off. A new "Opt out of analytics" link in the site footers — "Opt back in"
+  once used — turns off Google Analytics and PostHog together on that device,
+  with or without an account; it is the same switch as Settings → Preferences.
+  The Content-Security-Policy change (CloudFront, Terraform) applies with the
+  next tagged release.
 
 ### Changed
 

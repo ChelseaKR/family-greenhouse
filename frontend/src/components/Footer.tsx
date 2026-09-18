@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { MemorialFrame } from './brand/MemorialFrame';
+import { AnalyticsOptOutToggle } from './AnalyticsOptOutToggle';
 
 const FOOTER_LINKS = [
   { label: 'Help', to: '/help' },
@@ -35,6 +36,7 @@ export function Footer() {
             </Link>
           ))}
         </nav>
+        <AnalyticsOptOutToggle className="mt-4" />
         <div className="mt-8 flex items-center justify-center gap-4">
           <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50" />
           <p className="text-sm italic text-primary-200">

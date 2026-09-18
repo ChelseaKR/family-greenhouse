@@ -1061,6 +1061,10 @@
       "analytics": "Product analytics",
       "analyticsToggle": "Share usage events to help improve the app",
       "analyticsDescription": "A small set of product events — household created, plant added, a plan limit reached, billing opened and the like — keyed to a random account id and sent to us and to PostHog. Never plant names, photos or anything you type. On the website, turning it off also stops Google Analytics on this device. This switch is per device; the Privacy page has the details.",
+      "analyticsOptOutLink": "Opt out of analytics",
+      "analyticsOptBackIn": "Opt back in",
+      "analyticsOffHere": "Analytics is off on this device.",
+      "analyticsOffBySignal": "Analytics is off: your browser sends a privacy signal.",
       "analyticsPrivacyLink": "Privacy page"
     },
     "apiKeys": {
