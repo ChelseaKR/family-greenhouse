@@ -213,8 +213,9 @@ export function headToTags(head: ResolvedHead): string {
     meta('name', 'twitter:description', head.twitterDescription),
     meta('name', 'twitter:image', head.twitterImage),
     meta('name', 'twitter:image:alt', TWITTER_IMAGE_ALT),
-    // Facebook guesses the locale without this; the site ships English only
-    // (i18n/index.ts collapses SUPPORTED_LANGS to ['en']).
+    // Facebook guesses the locale without this. The markup crawlers read is
+    // English: the prerender pins i18next to 'en' (i18n/index.ts), and a
+    // Spanish-speaking visitor's switch happens client-side, after load.
     meta('property', 'og:locale', 'en_US'),
     ...(head.ogType === 'article' && head.article
       ? [

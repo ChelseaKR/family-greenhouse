@@ -3,14 +3,14 @@
  *
  * WHY THIS EXISTS
  * `src/i18n/index.ts` used to `import es from './locales/es/translation.json'`
- * unconditionally and register it in `resources`. Spanish is not selectable in
- * any deployed environment (`SUPPORTED_LANGS` in ./index.ts collapses to
- * `['en']` unless the opt-in is active), so every visitor downloaded and parsed
- * the whole Spanish catalog on the startup path to reach a language they could
- * not choose — 104,586 bytes of JSON (#467 says 86,560; the catalog has grown
- * since), pinned by vite.manualChunks.ts into the `i18n` chunk that
- * dist/index.html modulepreloads. This module and the narrowed chunk rule are
- * the fix.
+ * unconditionally and register it in `resources`, so every visitor downloaded
+ * and parsed the whole Spanish catalog on the startup path — at the time, for a
+ * language no deployed build even let them choose — 104,586 bytes of JSON
+ * (#467 says 86,560; the catalog has grown since), pinned by
+ * vite.manualChunks.ts into the `i18n` chunk that dist/index.html
+ * modulepreloads. This module and the narrowed chunk rule are the fix, and they
+ * matter more now that Spanish is reachable: the chunk is fetched only by a
+ * visitor whose language is Spanish, never by the English-first majority.
  *
  * WHY `import()` AND NOT `?url` + fetch
  * Fetching the catalog as an emitted `.json` asset is the standard i18next

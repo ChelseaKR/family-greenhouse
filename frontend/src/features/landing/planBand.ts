@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 /**
  * Copy for the plans band, keyed by the two gates that decide what may be
  * said there: the repository commercial hold and the registration kill
@@ -5,45 +7,29 @@
  * kept announcing "paid plans are paused" after the hold lifted — directly
  * contradicting the priced catalog rendered underneath it by `PricingGrid`.
  *
- * `footerNote` / `footerLink` live here rather than as JSX text so the band
- * can vary with the gates, matching how the rest of the landing page keeps
- * its copy in module-scope blocks.
+ * The words live in the catalogs under `landing.plans.<state>` (#467), so the
+ * band reads in the visitor's language; this module only decides which state
+ * applies. `footerNote` / `footerLink` stay separate strings because the link
+ * sits between them.
  *
  * No amount appears here, and none may: prices come from the API, and the
- * public-surface guard test forbids literal amounts on this surface.
+ * public-surface guard test forbids literal amounts on this surface — in both
+ * catalogs. The free-plan caps in `landing.plans.*` are re-derived from
+ * plans.ts by scripts/check-plan-copy.mjs.
  */
-const planBandCopy = {
-  open: {
-    title: 'One plan covers the whole household',
-    description:
-      'Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 3 people and 20 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.',
-    footerNote: 'Trial terms, cancellation, and how plan changes work are covered in full on the',
-    footerLink: 'plans page',
-  },
-  openRegistrationClosed: {
-    title: 'One plan covers the whole household',
-    description:
-      'Plans are priced per household, not per person, and cover every member who shares your plants. New account registration is paused; existing account holders can still sign in and change plans.',
-    footerNote: 'Trial terms, cancellation, and how plan changes work are covered in full on the',
-    footerLink: 'plans page',
-  },
-  held: {
-    title: 'Start free; paid plans are paused',
-    description:
-      'Free accounts include one home, up to 3 household members and 20 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.',
-    footerNote: 'Read the full',
-    footerLink: 'plan-status notice',
-  },
-  heldRegistrationClosed: {
-    title: 'New accounts and paid plans are paused',
-    description:
-      'Existing account holders can still sign in. New accounts, paid plans, purchases, and plan changes remain unavailable.',
-    footerNote: 'Read the full',
-    footerLink: 'plan-status notice',
-  },
-} as const;
+type PlanBandState = 'open' | 'openRegistrationClosed' | 'held' | 'heldRegistrationClosed';
 
-export function planBandFor(holdActive: boolean, registrationOpen: boolean) {
-  if (holdActive) return registrationOpen ? planBandCopy.held : planBandCopy.heldRegistrationClosed;
-  return registrationOpen ? planBandCopy.open : planBandCopy.openRegistrationClosed;
+function planBandState(holdActive: boolean, registrationOpen: boolean): PlanBandState {
+  if (holdActive) return registrationOpen ? 'held' : 'heldRegistrationClosed';
+  return registrationOpen ? 'open' : 'openRegistrationClosed';
+}
+
+export function planBandFor(holdActive: boolean, registrationOpen: boolean, t: TFunction) {
+  const state = planBandState(holdActive, registrationOpen);
+  return {
+    title: t(`landing.plans.${state}.title`),
+    description: t(`landing.plans.${state}.description`),
+    footerNote: t(`landing.plans.${state}.footerNote`),
+    footerLink: t(`landing.plans.${state}.footerLink`),
+  };
 }

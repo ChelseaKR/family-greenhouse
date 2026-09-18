@@ -16,11 +16,12 @@ import esTranslation from '@/i18n/locales/es/translation.json';
 import { manualChunks } from '../../../vite.manualChunks.ts';
 
 /**
- * The Spanish catalog is 104,586 bytes of JSON that no deployed build lets a
- * user select. It used to be a static import in src/i18n/index.ts, registered in
- * `resources`, and pinned by vite.manualChunks.ts into the modulepreloaded
- * `i18n` chunk — so every visitor downloaded and parsed all of it, on the
- * startup path, for a language the UI would not offer them (#467 §2).
+ * The Spanish catalog is 104,586 bytes of JSON. It used to be a static import
+ * in src/i18n/index.ts, registered in `resources`, and pinned by
+ * vite.manualChunks.ts into the modulepreloaded `i18n` chunk — so every
+ * visitor downloaded and parsed all of it, on the startup path, whatever
+ * language they read (#467 §2). Now that Spanish is reachable, the split is
+ * what keeps that cost on the Spanish-speaking visitors who use it.
  *
  * Measured on this branch: the startup `i18n` catalog chunk went 169,505 ->
  * 78,827 bytes raw, 42,317 -> 21,838 brotli, and the critical path (entry +
@@ -63,8 +64,9 @@ const asInstance = (fake: Fake) => fake as unknown as I18nInstance;
 describe('deferred non-English catalogs', () => {
   describe('the startup path', () => {
     it('does not register Spanish on the shared instance at boot', () => {
-      // The real module, initialised the way every visitor gets it: the
-      // non-English opt-in is off under vitest, as in every deployed build.
+      // The real module, initialised the way an English-first visitor gets
+      // it: jsdom's navigator reports en-US and nothing is stored, so the
+      // detector lands on English and nothing asks for the Spanish chunk.
       expect(i18n.hasResourceBundle('en', 'translation')).toBe(true);
       expect(i18n.hasResourceBundle('es', 'translation')).toBe(false);
     });
@@ -104,8 +106,8 @@ describe('deferred non-English catalogs', () => {
           `a manualChunks rule captures locales/${lng}/translation.json into ` +
             `'${String(chunkFor(lng))}', the startup catalog's chunk. That catalog is loaded on ` +
             'demand by src/i18n/nonEnglishCatalog.ts; naming it in a chunk rule folds it back ' +
-            'onto the startup path, where every visitor downloads it to reach a language the UI ' +
-            'does not offer them. Match locales/en/translation.json by name.'
+            'onto the startup path, where every visitor downloads it whatever language they ' +
+            'read. Match locales/en/translation.json by name.'
         ).toBeUndefined();
       }
 

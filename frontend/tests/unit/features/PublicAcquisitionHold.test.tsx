@@ -1,10 +1,39 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { PublicShell } from '@/components/PublicShell';
 import { planBandFor } from '@/features/landing/planBand';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
+
+/**
+ * Every string value under `path` in one locale's catalog, joined with blank
+ * lines. The landing page and the pricing hero keep their copy in the
+ * catalogs (#467), so a claim about that copy is checked there — in both
+ * locales, because a Spanish sentence can overpromise just as well as an
+ * English one. Throws on a missing subtree rather than returning '', which
+ * every "must not say X" check below would read as a pass.
+ */
+function catalogCopy(locale: 'en' | 'es', path: string): string {
+  const root = JSON.parse(
+    readFileSync(
+      resolve(process.cwd(), '..', `frontend/src/i18n/locales/${locale}/translation.json`),
+      'utf8'
+    )
+  ) as Record<string, unknown>;
+  const node = path
+    .split('.')
+    .reduce<unknown>((at, part) => (at as Record<string, unknown> | undefined)?.[part], root);
+  if (node === undefined) throw new Error(`${locale}/translation.json has no \`${path}\``);
+  const strings: string[] = [];
+  const walk = (value: unknown) => {
+    if (typeof value === 'string') strings.push(value);
+    else if (value && typeof value === 'object') Object.values(value).forEach(walk);
+  };
+  walk(node);
+  return strings.join('\n\n');
+}
 
 /**
  * `text` with every `<!-- ... -->` removed; an unterminated comment runs to the
@@ -60,6 +89,20 @@ describe('free registration with paid activity on hold', () => {
         expect(source, `${relativePath} contains ${pattern}`).not.toMatch(pattern);
       }
     }
+
+    // The landing page and pricing hero copy moved into the catalogs (#467);
+    // reading only the .tsx files above would now check nothing.
+    const forbiddenInSpanish = [/prueba gratis/i, /suscr[íi]bete (?:ya|ahora)/i, /\$\s*\d/];
+    for (const path of ['landing', 'pricingPage']) {
+      const english = catalogCopy('en', path);
+      const spanish = catalogCopy('es', path);
+      for (const pattern of forbidden) {
+        expect(english, `en ${path}.* contains ${pattern}`).not.toMatch(pattern);
+      }
+      for (const pattern of forbiddenInSpanish) {
+        expect(spanish, `es ${path}.* contains ${pattern}`).not.toMatch(pattern);
+      }
+    }
   });
 
   it('keeps every public registration CTA behind the shared kill switch', () => {
@@ -101,17 +144,23 @@ describe('free registration with paid activity on hold', () => {
     );
     const smsDelivers = /^\s*sms_notifications_enabled\s*=\s*"1"/m.test(productionVars);
 
-    // Comment lines are stripped: the source explains why SMS is absent, and
-    // that explanation must not read as the claim it is there to prevent.
-    const landingCopy = readFileSync(
-      resolve(repositoryRoot, 'frontend/src/features/landing/LandingPage.tsx'),
-      'utf8'
-    ).replace(/^\s*\/\/.*$/gm, '');
+    // The landing copy lives in the catalogs (#467), so it is read there, in
+    // both locales. The component source keeps only comments explaining why
+    // SMS is absent, and those must not read as the claim they prevent.
+    const namesSms = {
+      en: /\bSMS\b|\bor text\b|\btext message/i,
+      es: /\bSMS\b|mensajes? de texto|\bpor texto\b/i,
+    } as const;
+    // The predicates have to catch the sentences they exist for.
+    expect(namesSms.en.test('Browser, email, or text.')).toBe(true);
+    expect(namesSms.es.test('En el navegador, por correo o por mensaje de texto.')).toBe(true);
 
-    expect(
-      smsDelivers || !/\bSMS\b|\bor text\b|\btext message/i.test(landingCopy),
-      'LandingPage.tsx offers a text/SMS reminder channel that production does not deliver'
-    ).toBe(true);
+    for (const locale of ['en', 'es'] as const) {
+      expect(
+        smsDelivers || !namesSms[locale].test(catalogCopy(locale, 'landing')),
+        `${locale} landing.* offers a text/SMS reminder channel that production does not deliver`
+      ).toBe(true);
+    }
   });
 
   it('keeps the readme and the headline it lends out to the channels production delivers', () => {
@@ -228,31 +277,32 @@ describe('free registration with paid activity on hold', () => {
 
     const pushWaitsForQuietHours = deferredDuringQuietHours('browser');
 
-    // Comments stripped for the same reason as the SMS check above: the source
-    // explains the split, and the explanation must not satisfy the claim.
-    const landingSource = readFileSync(
-      resolve(repositoryRoot, 'frontend/src/features/landing/LandingPage.tsx'),
-      'utf8'
-    ).replace(/^\s*\/\/.*$/gm, '');
+    // The band copy lives in the catalogs (#467) — read there, per sentence
+    // block, in both locales. Spanish says "horas de silencio" for quiet hours
+    // (the term the in-app settings use) and "No molestar" for the OS mode.
+    const rules = {
+      en: { quietHours: /quiet hours/i, doNotDisturb: /do not disturb/i },
+      es: { quietHours: /horas de silencio/i, doNotDisturb: /no molestar/i },
+    } as const;
+    for (const locale of ['en', 'es'] as const) {
+      const quietHoursCopy = catalogCopy(locale, 'landing')
+        .split('\n\n')
+        .filter((copy) => rules[locale].quietHours.test(copy));
+      // Deleting the sentence must not be a way to pass: a check satisfied by
+      // removing its own subject is a check that quietly stopped checking
+      // (scripts/check-doc-figures.mjs makes the same argument).
+      expect(
+        quietHoursCopy.length,
+        `no ${locale} landing.* copy mentions quiet hours — either the claim was deleted or this reader stopped matching; both need a person`
+      ).toBeGreaterThan(0);
 
-    const bodies = [...landingSource.matchAll(/\bbody:\s*(['"`])((?:\\.|(?!\1).)*)\1/g)].map(
-      (m) => m[2]
-    );
-    const quietHoursCopy = bodies.filter((body) => /quiet hours/i.test(body));
-    // Deleting the sentence must not be a way to pass: a check satisfied by
-    // removing its own subject is a check that quietly stopped checking
-    // (scripts/check-doc-figures.mjs makes the same argument).
-    expect(
-      quietHoursCopy.length,
-      'no LandingPage band copy mentions quiet hours — either the claim was deleted or this extractor stopped matching; both need a person'
-    ).toBeGreaterThan(0);
-
-    if (!pushWaitsForQuietHours) {
-      for (const copy of quietHoursCopy) {
-        expect(
-          copy,
-          `LandingPage band copy promises quiet hours without naming the channel they do not cover: "${copy}"`
-        ).toMatch(/do not disturb/i);
+      if (!pushWaitsForQuietHours) {
+        for (const copy of quietHoursCopy) {
+          expect(
+            copy,
+            `${locale} landing copy promises quiet hours without naming the channel they do not cover: "${copy}"`
+          ).toMatch(rules[locale].doNotDisturb);
+        }
       }
     }
   });
@@ -270,12 +320,28 @@ describe('free registration with paid activity on hold', () => {
 
   it('states the authoritative free tier limits on acquisition and help surfaces', () => {
     const repositoryRoot = resolve(process.cwd(), '..');
+    // The landing page and the pricing hero keep their copy in the catalogs
+    // (#467), in both locales; the component files hold none of it.
+    for (const path of ['landing', 'pricingPage']) {
+      const english = catalogCopy('en', path);
+      expect(english, `en ${path}.* must state the 20-plant cap`).toMatch(/20 plants/i);
+      expect(english, `en ${path}.* must state the 3-member cap`).toMatch(
+        /3 (?:household )?members|3 people/i
+      );
+      expect(english, `en ${path}.* must state the one-home cap`).toMatch(/one home/i);
+
+      const spanish = catalogCopy('es', path);
+      expect(spanish, `es ${path}.* must state the 20-plant cap`).toMatch(/20 plantas/i);
+      expect(spanish, `es ${path}.* must state the 3-member cap`).toMatch(
+        /3 (?:miembros|personas)/i
+      );
+      expect(spanish, `es ${path}.* must state the one-home cap`).toMatch(/un hogar/i);
+    }
+
     for (const relativePath of [
       // The help answers live in helpContent.tsx; HelpPage.tsx is now only the
       // browse/filter shell around them.
       'frontend/src/features/help/helpContent.tsx',
-      'frontend/src/features/landing/LandingPage.tsx',
-      'frontend/src/features/pricing/PricingPage.tsx',
       'frontend/src/i18n/locales/en/translation.json',
     ]) {
       const source = readFileSync(resolve(repositoryRoot, relativePath), 'utf8');
@@ -365,32 +431,60 @@ describe('landing plans band tracks BOTH commercial gates', () => {
   // say in the hold-lifted / registration-closed state.
   const PAID_PAUSE_LANGUAGE =
     /(?:paid plans?|purchases?|plan changes)[^.]{0,60}(?:paused|unavailable)/i;
+  // The same claim in the Spanish catalog's words: "los planes de pago … en
+  // pausa / sin estar disponibles". The band renders in the visitor's language
+  // (#467), so a pause over a selling catalog would be just as wrong in either.
+  const PAID_PAUSE_LANGUAGE_ES =
+    /(?:planes? de pago|compras?|cambios? de plan)[^.]{0,60}(?:en pausa|disponibles?)/i;
+
+  const locales = [
+    ['en', PAID_PAUSE_LANGUAGE],
+    ['es', PAID_PAUSE_LANGUAGE_ES],
+  ] as const;
+
+  beforeAll(async () => {
+    await ensureLanguageCatalog('es');
+  });
+
+  it('reads the Spanish catalog, not the English fallback', () => {
+    // Without the es bundle every Spanish assertion below would be run against
+    // English copy and pass for the wrong reason.
+    expect(i18n.getFixedT('es')('landing.plans.held.title')).not.toBe(
+      i18n.getFixedT('en')('landing.plans.held.title')
+    );
+  });
 
   it('announces the pause only while the hold is actually active', () => {
-    for (const registrationOpen of [true, false]) {
-      const held = planBandFor(true, registrationOpen);
-      expect(
-        `${held.title} ${held.description}`,
-        `hold active / registration ${registrationOpen} must state the pause`
-      ).toMatch(PAID_PAUSE_LANGUAGE);
+    for (const [locale, pause] of locales) {
+      for (const registrationOpen of [true, false]) {
+        const held = planBandFor(true, registrationOpen, i18n.getFixedT(locale));
+        expect(
+          `${held.title} ${held.description}`,
+          `${locale}: hold active / registration ${registrationOpen} must state the pause`
+        ).toMatch(pause);
+      }
     }
   });
 
   it('never claims paid plans are paused once the hold is lifted', () => {
-    for (const registrationOpen of [true, false]) {
-      const open = planBandFor(false, registrationOpen);
-      expect(
-        `${open.title} ${open.description} ${open.footerNote} ${open.footerLink}`,
-        `hold lifted / registration ${registrationOpen} must not announce a pause`
-      ).not.toMatch(PAID_PAUSE_LANGUAGE);
+    for (const [locale, pause] of locales) {
+      for (const registrationOpen of [true, false]) {
+        const open = planBandFor(false, registrationOpen, i18n.getFixedT(locale));
+        expect(
+          `${open.title} ${open.description} ${open.footerNote} ${open.footerLink}`,
+          `${locale}: hold lifted / registration ${registrationOpen} must not announce a pause`
+        ).not.toMatch(pause);
+      }
     }
   });
 
   it('publishes no amount in band copy — prices belong to the API-backed grid', () => {
-    for (const holdActive of [true, false]) {
-      for (const registrationOpen of [true, false]) {
-        const band = planBandFor(holdActive, registrationOpen);
-        expect(Object.values(band).join(' ')).not.toMatch(/\$\s*\d/);
+    for (const [locale] of locales) {
+      for (const holdActive of [true, false]) {
+        for (const registrationOpen of [true, false]) {
+          const band = planBandFor(holdActive, registrationOpen, i18n.getFixedT(locale));
+          expect(Object.values(band).join(' ')).not.toMatch(/\$\s*\d/);
+        }
       }
     }
   });

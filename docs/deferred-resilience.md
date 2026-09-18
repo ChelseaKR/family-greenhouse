@@ -81,5 +81,5 @@ For clarity, these audit-flagged items were addressed during the same session th
 - Per-user rate limiting → `userRateLimit` middleware applied to write endpoints.
 - Distributed traces → X-Ray active tracing already on; trace id now correlated into structured logs.
 - Production dashboard → `infrastructure/modules/monitoring/main.tf` extended with the four panels and the DDB-throttle alarm.
-- Locale gating → non-English locales feature-gated via `VITE_ENABLE_NON_ENGLISH_LOCALES`.
+- Locale gating → non-English locales on by default since #467; `VITE_ENABLE_NON_ENGLISH_LOCALES=false` switches them off at build time.
 - Refactor branchy paths in `deleteMe` → guard helpers extracted.

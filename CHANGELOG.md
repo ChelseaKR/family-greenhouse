@@ -63,6 +63,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   window to end, in reminders and in every other notification. The Settings
   quiet-hours text (EN/ES), the Help answers and the landing page say so.
 
+- **Spanish is reachable (#467).** The Spanish catalog was complete but sat
+  behind an opt-in set in no deployed environment. It is now on by default,
+  through two paths the app already had: a first visit from a browser whose
+  first language is Spanish boots into Spanish, and the language picker in
+  Settings → Preferences appears for everyone. Returning visitors keep the
+  English the detector cached for them. Detection now compares base languages,
+  so a browser sending `en-US, es` gets English rather than Spanish. The
+  catalog stays a separate chunk that English-first visitors never request,
+  and the picker now fetches it when pressed or focused instead of on mount.
+  `VITE_ENABLE_NON_ENGLISH_LOCALES=false` is the build-time kill switch; the
+  per-device `?locales=on|off` opt-in is gone.
+
+- **A Spanish-speaking visitor's first screens are in Spanish.** The landing
+  page (both hero variants, the dashboard mock-up, every band, the plans band
+  and its footer), the `/pricing` hero and page metadata, the public footer,
+  the header wordmark's tagline and the 404 page now read from the catalogs,
+  with new Latin-American Spanish copy. A render test fails on any visible
+  string left identical in English and Spanish on those pages, and the
+  free-plan caps they state are now re-derived in both catalogs. Help, care
+  guides, blog, changelog, `/pet-safe` and the strings the hardcoded-string
+  ratchet still baselines remain English; `docs/i18n.md` § Shipping status
+  lists them.
+
 ### Fixed
 
 - **The payment-failed notice no longer names the free plan when the household

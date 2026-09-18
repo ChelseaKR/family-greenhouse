@@ -302,7 +302,9 @@
     "blog": "Blog",
     "pricing": "Planes",
     "openMenu": "Abrir menú del sitio",
-    "tryApp": "Probar la aplicación"
+    "tryApp": "Probar la aplicación",
+    "siteNavLabel": "Sitio",
+    "homeLabel": "Inicio de Family Greenhouse"
   },
   "commercialHold": {
     "statusLabel": "Estado comercial",
@@ -322,7 +324,7 @@
     "keepSignedIn": "Mantener la sesión iniciada en este dispositivo",
     "invalidEmail": "Introduce un correo válido",
     "passwordRequired": "La contraseña es obligatoria",
-    "signUpFree": "Crear una cuenta gratis",
+    "signUpFree": "Regístrate gratis",
     "createAccount": "Crear una cuenta",
     "goToRegistration": "Ir al registro",
     "signUpTitle": "Crear una cuenta",
@@ -1922,5 +1924,273 @@
       "noteAt": "{{time}}: {{text}}",
       "truncated": "Esta visita tuvo más entradas de las que el registro podía guardar: {{tasks}} tareas, {{photos}} fotos y {{notes}} notas están contadas arriba pero no aparecen en la lista."
     }
+  },
+  "landing": {
+    "meta": {
+      "title": "Family Greenhouse — Cuidado de plantas compartido y recordatorios de riego",
+      "descriptionOpen": "Comparte con tu hogar los calendarios de riego, los recordatorios, los registros de cuidado y las tareas de tus plantas. Family Greenhouse es gratis para un hogar, hasta 3 personas y 20 plantas.",
+      "descriptionClosed": "Un diario de cuidados compartido para los calendarios de riego, los recordatorios, las tareas y los registros de cuidado de las plantas de tu hogar. Si ya tienes cuenta, puedes seguir iniciando sesión."
+    },
+    "nav": {
+      "features": "Funciones",
+      "logIn": "Entrar"
+    },
+    "hero": {
+      "a": {
+        "eyebrow": "Un diario de plantas para toda la casa",
+        "headlinePre": "“Pensé que la habías regado ",
+        "headlineEmphasis": "tú",
+        "headlinePost": ".”",
+        "subhead": "Family Greenhouse es un diario de cuidados compartido para las plantas de tu casa. Todo el hogar ve qué toca hacer y qué ya se hizo, para que el helecho no se riegue dos veces el martes y luego quede olvidado dos semanas."
+      },
+      "b": {
+        "eyebrow": "Un diario de cuidados para tus plantas",
+        "headlinePre": "Mantén viva ",
+        "headlineEmphasis": "cada",
+        "headlinePost": " planta.",
+        "subhead": "Family Greenhouse lleva un calendario de riego y cuidados para cada una de tus plantas, para que ninguna se quede sin agua ni se ahogue. Funciona igual de bien para una persona con unas cuantas macetas en la ventana que para todo un hogar que comparte la regadera."
+      },
+      "seeHowItWorks": "Mira cómo funciona",
+      "signupNote": "No necesitas tarjeta de crédito: solo un nombre, un correo y una contraseña, y después un código de un solo uso que te mandamos por correo. Unos cinco minutos de principio a fin."
+    },
+    "mockup": {
+      "label": "Vista previa del panel de Family Greenhouse con las próximas tareas de cuidado de plantas y la actividad del hogar.",
+      "householdName": "Depto. 3B",
+      "eyebrow": "Tu hogar",
+      "welcome": "Hola de nuevo, {{name}}",
+      "lede": "Esto es lo que pasa hoy con tus plantas.",
+      "dueToday": "Para hoy",
+      "overdue": "Atrasadas",
+      "upcoming": "Próximas tareas",
+      "activityTitle": "Actividad del hogar",
+      "hoursAgo": "hace {{hours}} h",
+      "activity": {
+        "watered": "<b>{{name}}</b> regó <b>{{plant}}</b>",
+        "added": "<b>{{name}}</b> agregó <b>{{plant}}</b>",
+        "repotted": "<b>{{name}}</b> trasplantó <b>{{plant}}</b>",
+        "completedTasks": "<b>{{name}}</b> completó 3 tareas",
+        "pruned": "<b>{{name}}</b> podó <b>{{plant}}</b>"
+      }
+    },
+    "plants": {
+      "snakePlant": "Lengua de suegra",
+      "spiderPlant": "Mala madre",
+      "bostonFern": "Helecho de Boston",
+      "fiddleLeafFig": "Ficus lira"
+    },
+    "facts": {
+      "free": {
+        "value": "Gratis",
+        "label": "Hasta 20 plantas, sin tarjeta de crédito"
+      },
+      "existing": {
+        "value": "Cuentas existentes",
+        "label": "Puedes seguir iniciando sesión y consultando tus datos de cuidado"
+      },
+      "people": {
+        "value": "3 personas",
+        "label": "Comparten un hogar gratis; sin límite con Garden"
+      },
+      "minutes": {
+        "value": "5 minutos",
+        "label": "Del registro a tu primera tarea"
+      },
+      "portable": {
+        "value": "Sin ataduras",
+        "label": "Exporta tus plantas y tareas cuando quieras"
+      }
+    },
+    "who": {
+      "eyebrow": "Para quién es",
+      "title": "Cada quien llega a las plantas a su manera",
+      "description": "Toda la casa discutiendo por la regadera es una historia. Aquí van algunas otras.",
+      "seeHow": "Ver cómo",
+      "sharing": {
+        "label": "Si compartes casa",
+        "body": "Tu pareja, compañeros de casa, una familia… y nadie sabe bien quién regó qué. Asigna tareas o déjalas libres para quien las tome, y el registro de actividad lleva la cuenta sin hacer ruido."
+      },
+      "growing": {
+        "label": "Una colección que crece",
+        "body": "Unas cuantas plantas se volvieron diez. Importa la hoja de cálculo que has ido llevando y deja que un solo panel guarde todas las fechas."
+      },
+      "away": {
+        "label": "Si viajas seguido",
+        "body": "Por trabajo o solo por el fin de semana. Mándale un enlace a quien te cubra —sin cuenta y sin app que instalar— y esa persona marca lo que toca mientras no estás."
+      },
+      "new": {
+        "label": "Si apenas empiezas",
+        "body": "Una suculenta triste y el orgullo un poco golpeado. Empieza con una planta que perdone tus errores, apóyate en las guías de cuidado y deja que los recordatorios se acuerden por ti."
+      }
+    },
+    "features": {
+      "eyebrow": "Qué hace",
+      "title": "Un solo calendario que toda la casa puede ver",
+      "description": "Agrega una planta una sola vez y con ella vienen su calendario, sus recordatorios, sus fotos y su historial. El resto del hogar ve lo mismo que tú.",
+      "reminders": {
+        "name": "Recordatorios para cada planta",
+        "description": "Cada planta tiene su propio calendario, y el aviso le llega a quien le toca la tarea. El cactus deja de regarse al ritmo del helecho."
+      },
+      "shared": {
+        "name": "Compartido, con nombre y apellido",
+        "description": "Todo el hogar ve qué toca y qué ya se hizo. El registro muestra quién hizo qué, y así las discusiones sobre el riego se acaban rápido."
+      },
+      "week": {
+        "name": "La semana de un vistazo",
+        "description": "Todas las tareas que vienen, en un solo calendario. Con una mirada el domingo en la noche sabes si la semana viene pesada o tranquila."
+      },
+      "sink": {
+        "name": "Para usar con las manos ocupadas",
+        "description": "Se instala en tu teléfono como cualquier app. Marca una tarea como hecha con el pulgar, agrega una nota y vuelve a la regadera."
+      },
+      "memory": {
+        "name": "La historia de cada planta",
+        "description": "Las notas, las fotos y todo el registro de cuidados se quedan con la planta. Cuando las hojas se ponen amarillas, revisas qué pasó en lugar de adivinar."
+      },
+      "yours": {
+        "name": "Tus datos son tuyos",
+        "description": "Los datos de tu hogar se cifran en tránsito y en reposo, y puedes exportar tu perfil, tus plantas y tus tareas en JSON o CSV cuando quieras."
+      },
+      "cover": {
+        "name": "Alguien más te puede cubrir",
+        "description": "Manda un enlace antes de viajar: sin cuenta, sin app, sin instalar nada. Esa persona ve qué hay que hacer y lo marca como hecho con un toque. El Kit de Viaje (desde Garden) extiende la cobertura a 90 días y agrega una guía de traspaso imprimible."
+      }
+    },
+    "beyond": {
+      "eyebrow": "Más allá de lo básico",
+      "title": "Más que una app de recordatorios",
+      "description": "Todo empieza con el calendario compartido. Esto es lo que vas aprovechando con el tiempo.",
+      "weather": {
+        "label": "Avisos según el clima",
+        "body": "Agrega tu ubicación y la app te ofrece saltarte un riego cuando se acerca lluvia o una ola de frío."
+      },
+      "leaf": {
+        "label": "Revisa una hoja con una foto",
+        "body": "Sube la foto de una hoja que no se ve bien y recibe una idea de qué podría estar fallando."
+      },
+      "cutting": {
+        "label": "Comparte un esqueje",
+        "body": "¿Estás propagando? Lleva el registro de qué planta salió de cuál y mándale a alguien un enlace al esqueje que le vas a regalar."
+      },
+      "reminders": {
+        "label": "Recordatorios donde sí los vas a ver",
+        "body": "En el navegador o por correo, el día en que vence la tarea. Configura tus horas de silencio y todos los recordatorios esperan a que terminen."
+      },
+      "year": {
+        "label": "Tu año en retrospectiva",
+        "body": "Cuando llegue diciembre, mira lo que de verdad hizo tu hogar: plantas agregadas, tareas terminadas, toda la temporada con Garden y Greenhouse, y los últimos 30 días con el plan gratuito."
+      }
+    },
+    "setup": {
+      "eyebrow": "Primeros pasos",
+      "title": "Tres pasos, unos cinco minutos",
+      "add": {
+        "title": "Agrega tus plantas",
+        "description": "Con un nombre y una foto basta. Elige tú el ritmo de riego o empieza con una sugerencia según la especie."
+      },
+      "invite": {
+        "title": "Invita a tu hogar",
+        "description": "Manda un solo enlace. Quien vive contigo se une y ve las mismas plantas y la misma lista de tareas."
+      },
+      "split": {
+        "title": "Repártanse el trabajo",
+        "description": "Asigna tareas o deja que las tome quien esté en casa. Los recordatorios salen solos y el historial se va llenando."
+      }
+    },
+    "care": {
+      "eyebrow": "Antes de llevarte una a casa",
+      "title": "Conoce a tu planta antes de adoptarla",
+      "body": "Las guías de cuidado te cuentan con honestidad lo que la etiqueta del vivero no dice: cada cuánto necesita agua de verdad, qué te quieren decir las puntas cafés y si es segura cerca de un gato o de un niño curioso. Vale la pena leerlas antes de que la planta llegue a casa.",
+      "startWithGuide": "Empieza con una guía",
+      "allGuides": "Todas las guías de cuidado (en inglés)",
+      "readBlog": "Lee el blog (en inglés)"
+    },
+    "plans": {
+      "eyebrow": "Planes",
+      "open": {
+        "title": "Un solo plan cubre todo el hogar",
+        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 personas y 20 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "footerNote": "Las condiciones de la prueba, la cancelación y los cambios de plan se explican en detalle en la",
+        "footerLink": "página de planes"
+      },
+      "openRegistrationClosed": {
+        "title": "Un solo plan cubre todo el hogar",
+        "description": "Los planes se cobran por hogar, no por persona, y cubren a todos los miembros que comparten tus plantas. El registro de cuentas nuevas está en pausa; si ya tienes cuenta, puedes seguir iniciando sesión y cambiar de plan.",
+        "footerNote": "Las condiciones de la prueba, la cancelación y los cambios de plan se explican en detalle en la",
+        "footerLink": "página de planes"
+      },
+      "held": {
+        "title": "Empieza gratis; los planes de pago están en pausa",
+        "description": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas, sin tarjeta de crédito. Los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
+        "footerNote": "Lee el",
+        "footerLink": "aviso completo sobre el estado de los planes"
+      },
+      "heldRegistrationClosed": {
+        "title": "Las cuentas nuevas y los planes de pago están en pausa",
+        "description": "Si ya tienes cuenta, puedes seguir iniciando sesión. Las cuentas nuevas, los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
+        "footerNote": "Lee el",
+        "footerLink": "aviso completo sobre el estado de los planes"
+      }
+    },
+    "footer": {
+      "tagline": "Un diario de cuidados compartido para las plantas de tu casa.",
+      "product": "Producto",
+      "learn": "Aprende",
+      "company": "Empresa",
+      "legal": "Aviso legal",
+      "contact": "Contacto",
+      "plantCareGuides": "Guías de cuidado de plantas",
+      "copyright": "© {{year}} Family Greenhouse. Todos los derechos reservados."
+    }
+  },
+  "footer": {
+    "navLabel": "Pie de página",
+    "changelog": "Novedades",
+    "status": "Estado del servicio",
+    "support": "Soporte",
+    "privacy": "Privacidad",
+    "deleteAccount": "Eliminar cuenta",
+    "terms": "Términos",
+    "memorial": "En cariñosa memoria de mi mamá, Joyce, quien nos enseñó a seguir creciendo.",
+    "copyrightPlantData": "© {{year}} Family Greenhouse. Datos de plantas proporcionados por"
+  },
+  "notFound": {
+    "metaTitle": "Página no encontrada — Family Greenhouse",
+    "metaDescription": "Esta página no existe en Family Greenhouse.",
+    "title": "Aquí no crece nada",
+    "body": "Esta dirección no coincide con nada del invernadero. Puede que el enlace ya no sirva o que la página se haya movido.",
+    "home": "Volver al inicio"
+  },
+  "pricingPage": {
+    "eyebrow": "Planes",
+    "title": {
+      "open": "Un precio por hogar, no por persona",
+      "heldOpen": "Empieza con una cuenta gratuita",
+      "heldClosed": "Los planes de pago están en pausa"
+    },
+    "lede": {
+      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
+      "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+      "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
+    },
+    "native": {
+      "eyebrow": "Información del plan",
+      "title": "Tu plan de Family Greenhouse",
+      "lede": "La app móvil no ofrece compras ni cambios de plan. Si ya tienes cuenta, puedes ver el estado de tu plan y tu uso en Ajustes → Facturación, y cambiar de plan en la web."
+    },
+    "meta": {
+      "title": {
+        "open": "Planes y precios — Family Greenhouse",
+        "heldOpen": "Cuentas gratuitas y estado de los planes — Family Greenhouse",
+        "heldClosed": "Estado de los planes — Family Greenhouse"
+      },
+      "description": {
+        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 3 personas y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+        "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
+      }
+    }
+  },
+  "brand": {
+    "tagline": "Crecer juntos"
   }
 }

@@ -40,17 +40,16 @@ const WHY_PAID_POINTS = [
 export function PricingPage() {
   const { t } = useTranslation();
   const native = isNativeApp();
+  // Which of the three commercial states the hero and metadata describe. The
+  // copy is `pricingPage.*` in the catalogs (#467).
+  const state = COMMERCIAL_HOLD_ACTIVE
+    ? PUBLIC_REGISTRATION_AVAILABLE
+      ? 'heldOpen'
+      : 'heldClosed'
+    : 'open';
   useMetaTags({
-    title: COMMERCIAL_HOLD_ACTIVE
-      ? PUBLIC_REGISTRATION_AVAILABLE
-        ? 'Free accounts and plan status — Family Greenhouse'
-        : 'Plan status — Family Greenhouse'
-      : 'Plans and pricing — Family Greenhouse',
-    description: COMMERCIAL_HOLD_ACTIVE
-      ? PUBLIC_REGISTRATION_AVAILABLE
-        ? 'Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.'
-        : 'Paid plans, purchases, plan changes, and new account registration are paused.'
-      : 'Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.',
+    title: t(`pricingPage.meta.title.${state}`),
+    description: t(`pricingPage.meta.description.${state}`),
     canonical: siteUrl('/pricing'),
     // SoftwareApplication + Offer, from the guarded price mirror rather than
     // from the runtime catalog: the prerendered HTML is written at build time,
@@ -64,9 +63,9 @@ export function PricingPage() {
     return (
       <PublicShell>
         <PageIntro
-          eyebrow="Plan information"
-          title="Your Family Greenhouse plan"
-          lede="The mobile app does not offer purchases or plan changes. Existing account holders can see current plan status and usage in Settings → Billing, and can change plans on the web."
+          eyebrow={t('pricingPage.native.eyebrow')}
+          title={t('pricingPage.native.title')}
+          lede={t('pricingPage.native.lede')}
         />
         <section className="mt-12 rounded-2xl border border-primary-100 bg-white p-6">
           <h2 className="font-serif text-2xl tracking-tight text-ink">
@@ -82,21 +81,9 @@ export function PricingPage() {
     <PublicShell width="wide">
       <PageIntro
         align="center"
-        eyebrow="Plans"
-        title={
-          COMMERCIAL_HOLD_ACTIVE
-            ? PUBLIC_REGISTRATION_AVAILABLE
-              ? 'Start with a free account'
-              : 'Paid plans are paused'
-            : 'Priced per household, not per person'
-        }
-        lede={
-          COMMERCIAL_HOLD_ACTIVE
-            ? PUBLIC_REGISTRATION_AVAILABLE
-              ? 'Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.'
-              : 'New account registration, paid plans, purchases, and plan changes are currently paused.'
-            : 'Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.'
-        }
+        eyebrow={t('pricingPage.eyebrow')}
+        title={t(`pricingPage.title.${state}`)}
+        lede={t(`pricingPage.lede.${state}`)}
       />
 
       {PUBLIC_REGISTRATION_AVAILABLE && (

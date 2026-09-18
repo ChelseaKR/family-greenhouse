@@ -290,7 +290,9 @@
     "blog": "Blog",
     "pricing": "Plans",
     "openMenu": "Open site menu",
-    "tryApp": "Try the app"
+    "tryApp": "Try the app",
+    "siteNavLabel": "Site",
+    "homeLabel": "Family Greenhouse home"
   },
   "commercialHold": {
     "statusLabel": "Commercial status",
@@ -1876,5 +1878,273 @@
       "noteAt": "{{time}}: {{text}}",
       "truncated": "This visit had more entries than the record could store: {{tasks}} tasks, {{photos}} photos and {{notes}} notes are counted above but not listed."
     }
+  },
+  "landing": {
+    "meta": {
+      "title": "Family Greenhouse — Shared Plant Care & Watering Reminders",
+      "descriptionOpen": "Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.",
+      "descriptionClosed": "A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in."
+    },
+    "nav": {
+      "features": "Features",
+      "logIn": "Log in"
+    },
+    "hero": {
+      "a": {
+        "eyebrow": "A garden journal for the whole house",
+        "headlinePre": "“I thought ",
+        "headlineEmphasis": "you",
+        "headlinePost": " watered it.”",
+        "subhead": "Family Greenhouse is a shared care journal for the plants in your house. Everyone sees what’s due and what’s already done, so the fern doesn’t get watered twice on Tuesday and then forgotten for two weeks."
+      },
+      "b": {
+        "eyebrow": "A care journal for your plants",
+        "headlinePre": "Keep ",
+        "headlineEmphasis": "every",
+        "headlinePost": " plant alive.",
+        "subhead": "Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing gets missed or drowned. It works just as well for one person and a windowsill as it does for a whole household sharing the watering can."
+      },
+      "seeHowItWorks": "See how it works",
+      "signupNote": "No credit card needed — a name, email, and a password, then a one-time code we email you. About five minutes, start to finish."
+    },
+    "mockup": {
+      "label": "Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity.",
+      "householdName": "Apartment 3B",
+      "eyebrow": "Your household",
+      "welcome": "Welcome back, {{name}}",
+      "lede": "Here’s what’s happening with your plants today.",
+      "dueToday": "Due today",
+      "overdue": "Overdue",
+      "upcoming": "Upcoming tasks",
+      "activityTitle": "Family activity",
+      "hoursAgo": "{{hours}}h ago",
+      "activity": {
+        "watered": "<b>{{name}}</b> watered <b>{{plant}}</b>",
+        "added": "<b>{{name}}</b> added <b>{{plant}}</b>",
+        "repotted": "<b>{{name}}</b> repotted <b>{{plant}}</b>",
+        "completedTasks": "<b>{{name}}</b> completed 3 tasks",
+        "pruned": "<b>{{name}}</b> pruned <b>{{plant}}</b>"
+      }
+    },
+    "plants": {
+      "snakePlant": "Snake plant",
+      "spiderPlant": "Spider plant",
+      "bostonFern": "Boston fern",
+      "fiddleLeafFig": "Fiddle leaf fig"
+    },
+    "facts": {
+      "free": {
+        "value": "Free",
+        "label": "Up to 20 plants — no credit card"
+      },
+      "existing": {
+        "value": "Existing accounts",
+        "label": "Sign-in and stored care data remain available"
+      },
+      "people": {
+        "value": "3 people",
+        "label": "Share one home free — unlimited on Garden"
+      },
+      "minutes": {
+        "value": "5 minutes",
+        "label": "From signup to first task"
+      },
+      "portable": {
+        "value": "Portable",
+        "label": "Export plants and tasks any time"
+      }
+    },
+    "who": {
+      "eyebrow": "Who it's for",
+      "title": "However you ended up with plants",
+      "description": "The whole house arguing over the watering can is one story. Here are a few of the others.",
+      "seeHow": "See how",
+      "sharing": {
+        "label": "Sharing a place",
+        "body": "A partner, roommates, a family — and no one's sure who watered what. Assign tasks or leave them up for grabs, and the activity log quietly keeps score."
+      },
+      "growing": {
+        "label": "A growing collection",
+        "body": "A few plants turned into ten. Import the spreadsheet you have been keeping, and let one dashboard hold every due date."
+      },
+      "away": {
+        "label": "Away a lot",
+        "body": "Gone for work or just the weekend. Send whoever's covering a link — no account, no app to install — and they check off what's due while you're away."
+      },
+      "new": {
+        "label": "New and a little nervous",
+        "body": "One sad succulent and a dented ego. Start with a plant that forgives you, lean on the care guides, and let the reminders do the remembering."
+      }
+    },
+    "features": {
+      "eyebrow": "What it does",
+      "title": "One schedule the whole house can see",
+      "description": "Add a plant once and its schedule, reminders, photos, and history come along. The rest of the household sees the same thing you do.",
+      "reminders": {
+        "name": "Reminders per plant",
+        "description": "Each plant gets its own schedule, and the nudge goes to whoever the task belongs to. The cactus stops getting watered on the fern's timetable."
+      },
+      "shared": {
+        "name": "Shared, with names attached",
+        "description": "Everyone in the household sees what's due and what's done. The log shows who did what, which settles the watering arguments quickly."
+      },
+      "week": {
+        "name": "A week you can scan",
+        "description": "Every upcoming task on one calendar. A look on Sunday night tells you whether the week ahead is heavy or quiet."
+      },
+      "sink": {
+        "name": "Works at the sink",
+        "description": "Installs to your phone like any app. Mark a task done with one thumb, add a note, get back to the watering can."
+      },
+      "memory": {
+        "name": "A memory for each plant",
+        "description": "Notes, photos, and the full care log live with the plant. When leaves yellow, you check what happened instead of guessing."
+      },
+      "yours": {
+        "name": "Yours to keep",
+        "description": "Your household's data is encrypted in transit and at rest, and you can export your profile, plants and tasks as JSON or CSV whenever you like."
+      },
+      "cover": {
+        "name": "Someone else can cover",
+        "description": "Send a link before you travel — no account, no app, nothing to install. They see what's due and tap it done. The Away Kit (Garden and up) stretches coverage to 90 days and adds a printable handoff brief."
+      }
+    },
+    "beyond": {
+      "eyebrow": "Beyond the basics",
+      "title": "More than a reminder app",
+      "description": "The shared schedule is where it starts. These are the parts you grow into.",
+      "weather": {
+        "label": "Weather-aware nudges",
+        "body": "Add your location and the app offers to skip a watering when rain or a cold snap is on the way."
+      },
+      "leaf": {
+        "label": "Check a leaf from a photo",
+        "body": "Upload a struggling leaf and get a read on what might be going wrong."
+      },
+      "cutting": {
+        "label": "Share a cutting",
+        "body": "Propagating? Track which plant came from which, and send a friend a link to the cutting you are passing on."
+      },
+      "reminders": {
+        "label": "Reminders where you'll see them",
+        "body": "Browser or email, on the day a task is due. Set quiet hours and every reminder waits for them."
+      },
+      "year": {
+        "label": "A year, looked back on",
+        "body": "Come December, see what the household actually did: plants added, tasks finished, the whole season on Garden and Greenhouse, the last 30 days on the free plan."
+      }
+    },
+    "setup": {
+      "eyebrow": "Setup",
+      "title": "Three steps, about five minutes",
+      "add": {
+        "title": "Add your plants",
+        "description": "A name and a photo will do. Pick a watering rhythm yourself or start from a species suggestion."
+      },
+      "invite": {
+        "title": "Invite your household",
+        "description": "Send one link. Whoever lives with you joins and sees the same plants and the same task list."
+      },
+      "split": {
+        "title": "Split the work",
+        "description": "Assign tasks, or let whoever's home claim them. Reminders go out, the history fills in."
+      }
+    },
+    "care": {
+      "eyebrow": "Before you bring one home",
+      "title": "Know what you’re getting into",
+      "body": "The care guides are honest about the parts the plant-shop label skips: how often it actually needs water, what the brown tips are telling you, and whether it’s safe around a cat or a curious toddler. Worth a read before the plant comes home.",
+      "startWithGuide": "Start with a guide",
+      "allGuides": "All care guides",
+      "readBlog": "Read the blog"
+    },
+    "plans": {
+      "eyebrow": "Plans",
+      "open": {
+        "title": "One plan covers the whole household",
+        "description": "Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 3 people and 20 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
+        "footerNote": "Trial terms, cancellation, and how plan changes work are covered in full on the",
+        "footerLink": "plans page"
+      },
+      "openRegistrationClosed": {
+        "title": "One plan covers the whole household",
+        "description": "Plans are priced per household, not per person, and cover every member who shares your plants. New account registration is paused; existing account holders can still sign in and change plans.",
+        "footerNote": "Trial terms, cancellation, and how plan changes work are covered in full on the",
+        "footerLink": "plans page"
+      },
+      "held": {
+        "title": "Start free; paid plans are paused",
+        "description": "Free accounts include one home, up to 3 household members and 20 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.",
+        "footerNote": "Read the full",
+        "footerLink": "plan-status notice"
+      },
+      "heldRegistrationClosed": {
+        "title": "New accounts and paid plans are paused",
+        "description": "Existing account holders can still sign in. New accounts, paid plans, purchases, and plan changes remain unavailable.",
+        "footerNote": "Read the full",
+        "footerLink": "plan-status notice"
+      }
+    },
+    "footer": {
+      "tagline": "A shared care journal for the plants in your house.",
+      "product": "Product",
+      "learn": "Learn",
+      "company": "Company",
+      "legal": "Legal",
+      "contact": "Contact",
+      "plantCareGuides": "Plant care guides",
+      "copyright": "© {{year}} Family Greenhouse. All rights reserved."
+    }
+  },
+  "footer": {
+    "navLabel": "Footer",
+    "changelog": "Changelog",
+    "status": "Status",
+    "support": "Support",
+    "privacy": "Privacy",
+    "deleteAccount": "Delete account",
+    "terms": "Terms",
+    "memorial": "In loving memory of my mom, Joyce — who taught us to keep growing.",
+    "copyrightPlantData": "© {{year}} Family Greenhouse. Plant data powered by"
+  },
+  "notFound": {
+    "metaTitle": "Page not found — Family Greenhouse",
+    "metaDescription": "This page does not exist in Family Greenhouse.",
+    "title": "Nothing growing here",
+    "body": "This address doesn’t match anything in the greenhouse. The link might be old, or the page may have moved.",
+    "home": "Go back home"
+  },
+  "pricingPage": {
+    "eyebrow": "Plans",
+    "title": {
+      "open": "Priced per household, not per person",
+      "heldOpen": "Start with a free account",
+      "heldClosed": "Paid plans are paused"
+    },
+    "lede": {
+      "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.",
+      "heldOpen": "Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+      "heldClosed": "New account registration, paid plans, purchases, and plan changes are currently paused."
+    },
+    "native": {
+      "eyebrow": "Plan information",
+      "title": "Your Family Greenhouse plan",
+      "lede": "The mobile app does not offer purchases or plan changes. Existing account holders can see current plan status and usage in Settings → Billing, and can change plans on the web."
+    },
+    "meta": {
+      "title": {
+        "open": "Plans and pricing — Family Greenhouse",
+        "heldOpen": "Free accounts and plan status — Family Greenhouse",
+        "heldClosed": "Plan status — Family Greenhouse"
+      },
+      "description": {
+        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
+        "heldOpen": "Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+        "heldClosed": "Paid plans, purchases, plan changes, and new account registration are paused."
+      }
+    }
+  },
+  "brand": {
+    "tagline": "Grow together"
   }
 }

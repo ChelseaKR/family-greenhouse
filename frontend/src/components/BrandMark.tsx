@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { useTranslation } from 'react-i18next';
 
 interface BrandMarkProps {
   /** Lockup variant.
@@ -54,6 +55,10 @@ export function BrandMark({
   className,
   name = 'Family Greenhouse',
 }: BrandMarkProps) {
+  // The tagline is part of the lockup in every header, so it follows the
+  // visitor's language like the rest of the chrome (#467). The name is a
+  // proper noun and does not.
+  const { t } = useTranslation();
   if (variant === 'mark') {
     return (
       <img
@@ -93,7 +98,7 @@ export function BrandMark({
           Family Greenhouse
         </span>
         <span className={clsx('uppercase tracking-[0.2em]', s.tagline, taglineColor)}>
-          Grow together
+          {t('brand.tagline')}
         </span>
       </span>
     </span>

@@ -37,19 +37,23 @@ export function PreferencesSettings() {
   // Mirror prefs to the DOM whenever they change in this tab.
   useEffect(() => applyDensity(density), [density]);
 
-  // Warm the catalogs the picker can select. Non-English copy is fetched as a
-  // static asset rather than bundled (src/i18n/nonEnglishCatalog.ts), so
-  // without this the first switch would render the English fallback for the
-  // length of one request. Rendering this picker at all means the build lets
-  // the user choose those languages, which makes fetching them the expected
-  // cost rather than speculative work. Memoized, so mounting twice is one
-  // request; a failure is not actionable here — setLanguage reports it and
-  // i18next stays on English — so it is deliberately not surfaced in the UI.
-  useEffect(() => {
+  // Warm the catalogs the picker can select, once the user reaches for it.
+  // Non-English copy is a separate chunk rather than bundled
+  // (src/i18n/nonEnglishCatalog.ts), so without this the first switch would
+  // render the English fallback for the length of one request. This used to
+  // run on mount, which was harmless while the picker only rendered for
+  // opted-in testers; now that it renders for everyone, a mount prefetch would
+  // hand every English speaker who opens Settings the Spanish catalog (#467).
+  // Pointer-down (mouse, touch) or focus (keyboard) comes before the change
+  // event, so the fetch still starts ahead of the switch. Memoized, so
+  // repeats are one request; a failure is not actionable here — setLanguage
+  // reports it and i18next stays on English — so it is deliberately not
+  // surfaced in the UI.
+  const warmLanguageCatalogs = () => {
     for (const { code } of LANGUAGES) {
       void ensureLanguageCatalog(code).catch(() => undefined);
     }
-  }, []);
+  };
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = isRTL(language) ? 'rtl' : 'ltr';
@@ -91,9 +95,9 @@ export function PreferencesSettings() {
           </div>
         </fieldset>
 
-        {/* Language — hidden when only English ships. The picker reappears
-            automatically when VITE_ENABLE_NON_ENGLISH_LOCALES turns on at
-            build time, so there's no separate UI gating to remember. */}
+        {/* Language — hidden only in a build with the kill switch on
+            (VITE_ENABLE_NON_ENGLISH_LOCALES=false), where English is the only
+            locale. There's no separate UI gating to remember. */}
         {LANGUAGES.length > 1 && (
           <div>
             <label htmlFor="lang-select" className="label">
@@ -102,6 +106,8 @@ export function PreferencesSettings() {
             <select
               id="lang-select"
               value={language}
+              onPointerDown={warmLanguageCatalogs}
+              onFocus={warmLanguageCatalogs}
               onChange={(e) => setLanguage(e.target.value as LangCode)}
               className="input max-w-xs"
             >

@@ -61,8 +61,9 @@ export const usePrefsStore = create<PrefsState>()(
         // bundled (src/i18n/nonEnglishCatalog.ts), so the copy may land a beat
         // later; `react.bindI18nStore: 'added'` re-renders when it does, and
         // until then i18next serves the English fallback rather than raw keys.
-        // PreferencesSettings prefetches on mount, so in practice the catalog
-        // is already registered before the picker is ever used.
+        // PreferencesSettings prefetches when the picker is pressed or
+        // focused, so in practice the fetch is under way before a choice is
+        // made.
         i18n.changeLanguage(language);
         set({ language });
         void ensureLanguageCatalog(language).catch((error: unknown) => {
