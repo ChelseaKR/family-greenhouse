@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { RemovePlantDialog } from '@/features/plants/RemovePlantDialog';
 
 function setup() {
@@ -52,5 +53,30 @@ describe('RemovePlantDialog', () => {
 
     await user.click(screen.getByRole('button', { name: /stays in the trash/i }));
     expect(onDelete).toHaveBeenCalledOnce();
+  });
+
+  it('offers the plant passport beside "I gave it away" when the page passes one (#676)', () => {
+    render(
+      <MemoryRouter>
+        <RemovePlantDialog
+          isOpen
+          plantName="Monstera"
+          passportTo="/plants/p1/passport"
+          onClose={vi.fn()}
+          onArchive={vi.fn()}
+          onDied={vi.fn()}
+          onGaveAway={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+    expect(
+      screen.getByRole('link', { name: 'Giving it away? Print its plant passport first' })
+    ).toHaveAttribute('href', '/plants/p1/passport');
+  });
+
+  it('shows no passport link when none is passed', () => {
+    setup();
+    expect(screen.queryByRole('link', { name: /passport/i })).not.toBeInTheDocument();
   });
 });

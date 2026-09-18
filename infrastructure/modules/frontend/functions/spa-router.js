@@ -111,7 +111,8 @@ var PREFIXED = '/pet-safe/';
 // --- generated from App.tsx: do not edit by hand -----------------------------
 var APP_EXACT =
   '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
-var APP_PATTERNS = '/caretaker/* /join/* /kiosk/* /plants/* /shared/* /sit/* /sit/*/brief /tag/*';
+var APP_PATTERNS =
+  '/caretaker/* /join/* /kiosk/* /plants/* /plants/*/passport /shared/* /sit/* /sit/*/brief /tag/*';
 // --- end generated App.tsx ---------------------------------------------------
 
 // Space-delimited strings, not object literals: half the bytes, under a hard

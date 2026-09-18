@@ -93,6 +93,38 @@ test.describe('A11y — authenticated routes', () => {
     await expectNoA11yViolations(page, 'plant-detail');
   });
 
+  // The plant passport (#676) is a print document: axe on screen, then the
+  // same page under print media, where every control must be gone and the
+  // sheet itself still there. jsdom has no print media, so this is the only
+  // place the `print:hidden` panel is observed actually hiding.
+  test('plant passport, on screen and in print', async ({ page }) => {
+    await page.goto('/plants');
+    await page.waitForLoadState('networkidle');
+    const monstera = page.getByRole('link', { name: /Monstera/i }).first();
+    await monstera.waitFor({ state: 'visible', timeout: 15000 });
+    await monstera.click();
+    await page.getByRole('link', { name: 'Passport' }).click();
+    await page.waitForURL(/\/plants\/[^/]+\/passport$/, { timeout: 15000 });
+    const print = page.getByRole('button', { name: 'Print passport' });
+    await expect(print).toBeEnabled({ timeout: 15000 });
+    await page.waitForLoadState('networkidle');
+    await expectNoA11yViolations(page, 'plant-passport');
+
+    // On screen first, so the hidden checks below cannot pass on elements
+    // that were never there: `toBeHidden` is also true for a missing node.
+    const controls = page.getByTestId('passport-controls');
+    const back = page.getByRole('link', { name: /^Back to / });
+    await expect(controls).toBeVisible();
+    await expect(back).toBeVisible();
+
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.getByTestId('plant-passport')).toBeVisible();
+    await expect(controls).toBeHidden();
+    await expect(print).toBeHidden();
+    await expect(back).toBeHidden();
+    await page.emulateMedia({ media: 'screen' });
+  });
+
   test('tasks', async ({ page }) => {
     await page.goto('/tasks');
     await page.waitForLoadState('networkidle');

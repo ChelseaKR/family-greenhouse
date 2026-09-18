@@ -13,6 +13,7 @@ import {
   ShareIcon,
   SparklesIcon,
   ArrowsRightLeftIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService, type ScheduleDrift } from '@/services/taskService';
@@ -20,6 +21,7 @@ import { ScheduleDriftHint } from './ScheduleDriftHint';
 import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
@@ -359,6 +361,19 @@ export function PlantDetailPage() {
                   </Button>
                 </>
               )}
+              {/* Every status, not only active: a plant given away is the
+                  moment a passport is for (#676). */}
+              <Link
+                to={`/plants/${plant.id}/passport`}
+                className={buttonStyles({
+                  variant: 'secondary',
+                  size: 'sm',
+                  className: 'w-full sm:w-auto',
+                })}
+              >
+                <IdentificationIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                {t('plants.passport.action')}
+              </Link>
               <Button
                 variant="secondary"
                 size="sm"
@@ -655,6 +670,7 @@ export function PlantDetailPage() {
       <RemovePlantDialog
         isOpen={showRemove}
         plantName={plant.name}
+        passportTo={`/plants/${plant.id}/passport`}
         isLoading={statusMutation.isPending || deleteMutation.isPending}
         onClose={() => setShowRemove(false)}
         onArchive={() => statusMutation.mutate('archived')}

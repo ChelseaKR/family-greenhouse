@@ -80,6 +80,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   three import plural forms that were still English in Spanish are
   translated.
 
+- **A printable plant passport for handing a plant on (#676).** Every plant
+  page, whatever its status, links to `/plants/{id}/passport`: one page per
+  plant, laid out for black-and-white printing, with its name, species and how
+  the species was recorded, the house rule, the care schedule (with any
+  seasonal intervals, named by season), the care logged in the last 90 days,
+  its parent plant and cuttings, and pet safety from the curated
+  ASPCA-grounded table only. Private by default: the plant's notes are never
+  on it unless a household admin ticks "Include my notes" at print time, and
+  whoever did the care is shown by initials unless full names are asked for;
+  completion notes, task notes and where the plant sits at home are never on
+  it, and neither choice is saved. Every absence is stated — no house rule,
+  no care yet since the plant was added, a history or pet-safety check that
+  could not load, a care list the server may have cut short — and nothing on
+  the page is generated. A QR code is optional and is the existing 14-day
+  cutting-share link, minted only when asked for. "I gave it away" in the
+  remove dialog now offers the passport first. EN/ES. Free on every plan.
+  No new API route: it reads `GET /plants/{id}` and `GET /plants/{id}/history`,
+  which already exist. The generated route lists in the CloudFront router and
+  the iOS association file gain the new path and ship with the next `v*` tag;
+  a direct load already reaches the app the same way `/plants/{id}` does,
+  through the `/plants/*` behavior's app-shell rescue.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

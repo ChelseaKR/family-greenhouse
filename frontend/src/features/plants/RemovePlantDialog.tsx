@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { Link } from 'react-router';
 import { TRASH_RETENTION_DAYS } from '@/services/trashService';
 import { Dialog, Transition } from '@headlessui/react';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
@@ -15,6 +16,9 @@ interface RemovePlantDialogProps {
   /** Record an outcome — keeps history, removes from active views, restorable. */
   onDied: () => void;
   onGaveAway: () => void;
+  /** Where this plant's printable passport lives (#676). When set, the
+   *  dialog offers it beside "I gave it away" — the moment of hand-off. */
+  passportTo?: string;
   /** Delete — for mistakes/duplicates. Moves the plant to the household trash
    *  (#670), restorable for 30 days; permanent only after that or via Delete now. */
   onDelete: () => void;
@@ -34,6 +38,7 @@ export function RemovePlantDialog({
   onArchive,
   onDied,
   onGaveAway,
+  passportTo,
   onDelete,
 }: RemovePlantDialogProps) {
   const { t } = useTranslation();
@@ -95,6 +100,14 @@ export function RemovePlantDialog({
                   >
                     {t('plants.archive.gaveAway')}
                   </Button>
+                  {passportTo && (
+                    <Link
+                      to={passportTo}
+                      className="inline-flex min-h-touch items-center justify-center text-center text-sm text-primary-700 underline underline-offset-2 hover:text-primary-800"
+                    >
+                      {t('plants.archive.passportLink')}
+                    </Link>
+                  )}
                   <Button
                     variant="secondary"
                     onClick={onDied}
