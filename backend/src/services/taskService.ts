@@ -657,6 +657,44 @@ export async function completeTask(
     duplicateOfCompletionId?: string;
   }
 ): Promise<Task | null> {
+  const outcome = await completeTaskWithOutcome(
+    householdId,
+    taskId,
+    userId,
+    userName,
+    notes,
+    expectedNextDue,
+    opts
+  );
+  return outcome?.task ?? null;
+}
+
+export interface CompleteTaskOutcome {
+  task: Task;
+  /**
+   * False when this call advanced nothing: the occurrence named by
+   * `expectedNextDue` was already completed/snoozed, or a concurrent request
+   * won the race. `task` is then the CURRENT row, which a caller must not
+   * report as its own completion (#667: a reply that arrives after someone
+   * else did the watering is told so, not thanked).
+   */
+  changed: boolean;
+}
+
+/** `completeTask` that also says whether THIS call did the completing — the
+ *  completion twin of `snoozeTaskWithOutcome`. */
+export async function completeTaskWithOutcome(
+  householdId: string,
+  taskId: string,
+  userId: string,
+  userName: string,
+  notes?: string,
+  expectedNextDue?: string,
+  opts?: {
+    /** Double-care: the other member's completion this one knowingly duplicates. */
+    duplicateOfCompletionId?: string;
+  }
+): Promise<CompleteTaskOutcome | null> {
   const task = await getTask(householdId, taskId);
   if (!task) {
     return null;
@@ -667,7 +705,7 @@ export async function completeTask(
   // originally saw: if the schedule has already advanced, return its current
   // state without advancing again or writing another completion row.
   if (expectedNextDue !== undefined && task.nextDue !== expectedNextDue) {
-    return task;
+    return { task, changed: false };
   }
 
   const now = new Date();
@@ -717,7 +755,8 @@ export async function completeTask(
     if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
       // Already completed by a concurrent request (nextDue moved) or deleted
       // under us. Return the current row (null if deleted) as a no-op.
-      return getTask(householdId, taskId);
+      const current = await getTask(householdId, taskId);
+      return current ? { task: current, changed: false } : null;
     }
     throw err;
   }
@@ -757,7 +796,10 @@ export async function completeTask(
     return null;
   }
 
-  return reassignInheritedOccurrence(itemToTask(result.Attributes));
+  return {
+    task: await reassignInheritedOccurrence(itemToTask(result.Attributes)),
+    changed: true,
+  };
 }
 
 /**

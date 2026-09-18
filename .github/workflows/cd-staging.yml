@@ -350,7 +350,7 @@ jobs:
           set -euo pipefail
           # See cd-production.yml for the explanation of why we repackage
           # each bundle as `handler.mjs`.
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents checkoutRecovery chat-stream; do
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-staging"
             SRC="dist/${handler}.js"
             test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }

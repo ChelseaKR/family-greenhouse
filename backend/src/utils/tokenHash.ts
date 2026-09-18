@@ -47,6 +47,8 @@ export const TOKEN_HASH_SALTS = {
   giftCode: 'family-greenhouse-giftcode-v1',
   plantTag: 'family-greenhouse-planttag-v1',
   plantShare: 'family-greenhouse-plantshare-v1',
+  /** The per-message reply address on a reminder email (#667). */
+  emailReply: 'family-greenhouse-emailreply-v1',
 } as const;
 
 export type TokenHashSurface = keyof typeof TOKEN_HASH_SALTS;

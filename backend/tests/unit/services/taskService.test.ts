@@ -756,6 +756,63 @@ describe('taskService', () => {
     expect(kinds).not.toContain('Put');
   });
 
+  // #667: the reply path must tell "I completed it" from "it was already
+  // done", because it reports the second as already done, not as a success.
+  describe('completeTaskWithOutcome', () => {
+    it('says changed: true only when THIS call advanced the task', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { completeTaskWithOutcome } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({ Item: baseTask })
+        .mockResolvedValueOnce({ Attributes: { ...baseTask, nextDue: 'later' } })
+        .mockResolvedValueOnce({});
+      const outcome = await completeTaskWithOutcome(
+        'hh-1',
+        't1',
+        'user-1',
+        'Test',
+        undefined,
+        baseTask.nextDue
+      );
+      expect(outcome).toMatchObject({ changed: true, task: { nextDue: 'later' } });
+    });
+
+    it('says changed: false for a stale occurrence, writing nothing', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { completeTaskWithOutcome } = await import('../../../src/services/taskService.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({
+        Item: { ...baseTask, nextDue: '2026-05-08T00:00:00.000Z' },
+      });
+      const outcome = await completeTaskWithOutcome(
+        'hh-1',
+        't1',
+        'user-1',
+        'Test',
+        undefined,
+        baseTask.nextDue
+      );
+      expect(outcome).toMatchObject({
+        changed: false,
+        task: { nextDue: '2026-05-08T00:00:00.000Z' },
+      });
+      expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+    });
+
+    it('says changed: false when a concurrent completion won the race', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { completeTaskWithOutcome } = await import('../../../src/services/taskService.js');
+      const err = Object.assign(new Error('conditional'), {
+        name: 'ConditionalCheckFailedException',
+      });
+      vi.mocked(dynamodb.send)
+        .mockResolvedValueOnce({ Item: baseTask })
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce({ Item: { ...baseTask, nextDue: '2026-05-08T00:00:00.000Z' } });
+      const outcome = await completeTaskWithOutcome('hh-1', 't1', 'user-1', 'Test');
+      expect(outcome?.changed).toBe(false);
+    });
+  });
+
   it('snoozeTask on a future task pushes nextDue forward from the current due date', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-20T00:00:00.000Z'));

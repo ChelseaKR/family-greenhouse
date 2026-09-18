@@ -78,6 +78,11 @@ export interface ReminderTaskRow {
   upForGrabs: boolean;
   /** Deep link to this row's own plant. */
   url: string;
+  /**
+   * The task this row is. Never rendered; carried so the caller can bind the
+   * reply address to exactly the rows the email numbered (#667).
+   */
+  taskId?: string;
 }
 
 export interface CoverageNote {
@@ -125,6 +130,12 @@ export interface ReminderEmailInput {
   /** The age at which a task starts resting, so the copy and the constant
    *  cannot drift apart. */
   restingAfterDays: number;
+  /**
+   * The email carries a reply address (#667, ADR 0031): number EVERY listed
+   * row — the up-for-grabs ones continue after the member's own — and say how
+   * to reply. Omitted or false renders the email exactly as before.
+   */
+  replyHint?: boolean;
 }
 
 export interface ReminderComposition {
@@ -133,6 +144,13 @@ export interface ReminderComposition {
   body: string;
   /** One line for space-constrained channels (SMS is one 140-byte segment). */
   shortBody: string;
+  /**
+   * The rows the body LISTS, in the order it numbers them when `replyHint`
+   * is set: position i is the row printed as `i + 1.`. The reply address is
+   * bound to exactly these, so a reply can never name a row the email left
+   * out (the capped remainder, the resting count).
+   */
+  listed: ReminderTaskRow[];
 }
 
 interface Counts {
@@ -188,6 +206,10 @@ interface Copy {
   climateRain: string;
   climateFrost: (lowC: string) => string;
   footerHint: string;
+  /** How to act by replying, when the email lists exactly one task. */
+  replyHintOne: string;
+  /** The same, for a numbered list. */
+  replyHintMany: string;
 }
 
 const COPY: Record<ReminderLocale, Copy> = {
@@ -228,6 +250,10 @@ const COPY: Record<ReminderLocale, Copy> = {
       "Rain is forecast for your area — outdoor plants likely don't need watering today.",
     climateFrost: (lowC) => `A low of ${lowC}°C is forecast tonight — bring tender plants indoors.`,
     footerHint: 'Open any plant above to log the care, or see everything here:',
+    replyHintOne:
+      'Done it already? Reply to this email with "done" and we will mark it done, or with "snooze 2 days" to push it back. We read only the first line of your reply.',
+    replyHintMany:
+      'Done some already? Reply to this email with "done 1" (or "done 1, 2") and we will mark them done, or with "snooze 2 for 3 days" to push one back. We read only the first line of your reply.',
   },
   es: {
     subjectPrefix: 'Recordatorio de cuidado de plantas',
@@ -268,6 +294,10 @@ const COPY: Record<ReminderLocale, Copy> = {
     climateFrost: (lowC) =>
       `Se prevé una mínima de ${lowC} °C esta noche: mete las plantas delicadas en casa.`,
     footerHint: 'Abre cualquier planta de arriba para registrar el cuidado, o velo todo aquí:',
+    replyHintOne:
+      '¿Ya lo hiciste? Responde a este correo con «hecho» y lo marcaremos como hecho, o con «posponer 2 días» para aplazarlo. Solo leemos la primera línea de tu respuesta.',
+    replyHintMany:
+      '¿Ya hiciste alguna? Responde a este correo con «hecho 1» (o «hecho 1, 2») y las marcaremos como hechas, o con «posponer 2 por 3 días» para aplazar una. Solo leemos la primera línea de tu respuesta.',
   },
 };
 
@@ -455,35 +485,43 @@ export function composeReminderEmail(input: ReminderEmailInput): ReminderComposi
 
   const assigned = input.rows.filter((r) => !r.upForGrabs);
   const unclaimed = input.rows.filter((r) => r.upForGrabs);
+  const listedAssigned = assigned.slice(0, MAX_LISTED_ASSIGNED);
+  const listedUnclaimed = unclaimed.slice(0, MAX_LISTED_UNCLAIMED);
+  const replyHint = input.replyHint === true;
 
   const blocks: string[] = [];
   if (summary) blocks.push(copy.summarySentence(summary));
 
-  if (assigned.length > 0) {
-    const listed = assigned.slice(0, MAX_LISTED_ASSIGNED);
+  if (listedAssigned.length > 0) {
     const section = [
       copy.assignedHeading,
       '',
-      ...listed.map((row, i) => renderRow(row, locale, `${i + 1}.`)),
+      ...listedAssigned.map((row, i) => renderRow(row, locale, `${i + 1}.`)),
     ];
-    if (listed.length < assigned.length) {
-      section.push('', copy.showingSubset(listed.length, assigned.length));
+    if (listedAssigned.length < assigned.length) {
+      section.push('', copy.showingSubset(listedAssigned.length, assigned.length));
     }
     blocks.push(section.join('\n'));
   }
 
-  if (unclaimed.length > 0) {
-    const listed = unclaimed.slice(0, MAX_LISTED_UNCLAIMED);
+  if (listedUnclaimed.length > 0) {
+    // Without a reply address the up-for-grabs rows keep their dashes; with
+    // one, each needs a number a reply can name, continuing after the
+    // member's own rows so no two rows share one.
     const section = [
       copy.unclaimedHeading,
       '',
-      ...listed.map((row) => renderRow(row, locale, '-')),
+      ...listedUnclaimed.map((row, i) =>
+        renderRow(row, locale, replyHint ? `${listedAssigned.length + i + 1}.` : '-')
+      ),
     ];
-    if (listed.length < unclaimed.length) {
-      section.push('', copy.showingSubset(listed.length, unclaimed.length));
+    if (listedUnclaimed.length < unclaimed.length) {
+      section.push('', copy.showingSubset(listedUnclaimed.length, unclaimed.length));
     }
     blocks.push(section.join('\n'));
   }
+
+  const listed = [...listedAssigned, ...listedUnclaimed];
 
   if (input.restingCount > 0) {
     blocks.push(
@@ -501,6 +539,10 @@ export function composeReminderEmail(input: ReminderEmailInput): ReminderComposi
   const climate = climateLines(input.climate, locale);
   if (climate.length > 0) blocks.push(climate.join('\n'));
 
+  if (replyHint && listed.length > 0) {
+    blocks.push(listed.length === 1 ? copy.replyHintOne : copy.replyHintMany);
+  }
+
   blocks.push(copy.footerHint);
 
   return {
@@ -509,6 +551,7 @@ export function composeReminderEmail(input: ReminderEmailInput): ReminderComposi
     // SMS is capped at one 140-byte segment and a browser-push body is a
     // couple of lines, so those channels get the counts sentence only.
     shortBody: summary || copy.subjectPrefix,
+    listed,
   };
 }
 

@@ -487,3 +487,65 @@ describe('reminderEmail — aged-out rows (#478)', () => {
     expect(body).not.toContain('Yours, most urgent first:');
   });
 });
+
+describe('reminderEmail — reply hint (#667)', () => {
+  const many = () =>
+    input({
+      rows: [
+        row({ plantName: 'Own A', taskId: 'a' }),
+        row({ plantName: 'Own B', taskId: 'b', due: { kind: 'today' } }),
+        row({ plantName: 'Free C', taskId: 'c', upForGrabs: true }),
+      ],
+    });
+
+  it('renders byte-for-byte the same email when the hint is off or omitted', () => {
+    const omitted = composeReminderEmail(many());
+    const off = composeReminderEmail({ ...many(), replyHint: false });
+    expect(off.body).toBe(omitted.body);
+    expect(off.subject).toBe(omitted.subject);
+    expect(omitted.body).toContain('- Free C — water');
+    expect(omitted.body).not.toContain('Reply to this email');
+  });
+
+  it('numbers up-for-grabs rows after the member own rows and explains the syntax', () => {
+    const { body, listed } = composeReminderEmail({ ...many(), replyHint: true });
+    expect(body).toContain('1. Own A — water, 2 days overdue');
+    expect(body).toContain('2. Own B — water, due today');
+    expect(body).toContain('3. Free C — water, 2 days overdue');
+    expect(body).not.toContain('- Free C');
+    expect(body).toContain('Reply to this email with "done 1"');
+    // `listed` is the numbering: position i is the row printed as i + 1.
+    expect(listed.map((r) => r.taskId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('lists only what it shows, so a reply can never name a capped row', () => {
+    const rows = Array.from({ length: MAX_LISTED_ASSIGNED + 2 }, (_, i) =>
+      row({ plantName: `P${i}`, taskId: `t${i}` })
+    );
+    const { listed } = composeReminderEmail(input({ rows, replyHint: true }));
+    expect(listed).toHaveLength(MAX_LISTED_ASSIGNED);
+  });
+
+  it('uses the one-task wording for a single listed task, in both locales', () => {
+    const en = composeReminderEmail(input({ rows: [row({ taskId: 'a' })], replyHint: true }));
+    expect(en.body).toContain('Reply to this email with "done"');
+    const es = composeReminderEmail(
+      input({ rows: [row({ taskId: 'a' })], replyHint: true, locale: 'es' })
+    );
+    expect(es.body).toContain('Responde a este correo con «hecho»');
+  });
+
+  it('shows hint examples the reply parser actually accepts', async () => {
+    const { parseReplyCommand } = await import('../../../src/services/email/replyCommand.js');
+    for (const locale of REMINDER_LOCALES) {
+      const copy = __testing.COPY[locale];
+      for (const hint of [copy.replyHintOne, copy.replyHintMany]) {
+        const examples = [...hint.matchAll(/["«]([^"»]+)["»]/gu)].map((m) => m[1]);
+        expect(examples.length, `${locale}: ${hint}`).toBeGreaterThan(0);
+        for (const example of examples) {
+          expect(parseReplyCommand(example).kind, `${locale}: ${example}`).not.toBe('unrecognized');
+        }
+      }
+    }
+  });
+});

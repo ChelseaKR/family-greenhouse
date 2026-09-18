@@ -36,6 +36,13 @@ export interface EmailMessage {
    * for CR/LF in the MIME builder.
    */
   headers?: Record<string, string>;
+  /**
+   * A per-message Reply-To, replacing the configured `SES_REPLY_TO` for this
+   * one send. Used by the daily reminder to carry its reply address (#667,
+   * `services/email/replyAddress.ts`); every other message omits it and keeps
+   * pointing replies at the forwarded `support@` mailbox.
+   */
+  replyTo?: string;
 }
 
 /**
@@ -155,7 +162,7 @@ export async function sendEmailAccepted(msg: EmailMessage): Promise<EmailAccepta
   }
 
   const configurationSet = process.env.SES_CONFIGURATION_SET?.trim();
-  const replyTo = process.env.SES_REPLY_TO?.trim();
+  const replyTo = msg.replyTo?.trim() || process.env.SES_REPLY_TO?.trim();
   const raw = buildRawMessage({
     from,
     to: msg.to,
