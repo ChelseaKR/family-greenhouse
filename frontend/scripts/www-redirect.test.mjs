@@ -89,7 +89,14 @@ test('the target is the substituted apex whatever Host the request carries', () 
 
 test('the committed function carries the placeholder Terraform substitutes', () => {
   assert.ok(source.includes(`'${PLACEHOLDER}'`), 'www-redirect.js lost its apex placeholder');
-  assert.ok(!source.includes(APEX), 'www-redirect.js hardcodes the apex instead of taking it');
+  // A regex rather than `.includes(APEX)`: this asserts the domain is ABSENT
+  // from the source, and CodeQL reads a substring test on a hostname as URL
+  // sanitization (js/incomplete-url-substring-sanitization).
+  assert.doesNotMatch(
+    source,
+    /familygreenhouse\.net/u,
+    'www-redirect.js hardcodes the apex instead of taking it'
+  );
   const fn = tfResource('aws_cloudfront_function', 'www_redirect');
   assert.match(
     fn,

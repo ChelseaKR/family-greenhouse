@@ -246,39 +246,39 @@ test('the shell answered for a missing asset fails on both counts', () => {
 
 test('a 404 that still carries the health check string is still a failure', () => {
   const failures = missingAssetFailures({ status: 404, body: goodPage.body });
-
-  // #719: since the distribution's `404 -> 404` rule, a missing asset's body is
-  // the app's own not-found page. That is a pass exactly because the page
-  // deliberately omits og:site_name — the status is still 404 and nothing in the
-  // body can read as the app to Route 53.
-  test('the not-found page answering for a missing asset passes', () => {
-    const notFoundPage =
-      '<!doctype html><html><head><title>Page not found — Family Greenhouse</title>' +
-      '<meta name="robots" content="noindex, nofollow" /></head>' +
-      '<body><div id="root"><h1>Nothing growing here</h1></div></body></html>';
-    assert.deepEqual(missingAssetFailures({ status: 404, body: notFoundPage }), []);
-  });
-
-  // --- missingRouteFailures ---------------------------------------------------
-
-  test('an unpublished care guide answering 404 passes, whatever the body', () => {
-    assert.deepEqual(missingRouteFailures({ status: 404, body: '<Error>NoSuchKey</Error>' }), []);
-    assert.deepEqual(missingRouteFailures({ status: 404, body: goodPage.body }), []);
-  });
-
-  // The #719 report exactly: the shell, 200, for a care guide that does not exist.
-  test('the shell answering 200 for an unpublished care guide fails', () => {
-    const failures = missingRouteFailures({ status: 200, body: goodPage.body });
-    assert.equal(failures.length, 1);
-    assert.match(failures[0], /expected 404/u);
-    assert.match(failures[0], /#719/u);
-  });
-
-  test('any other status for an unpublished care guide fails too', () => {
-    for (const status of [301, 403, 500]) {
-      assert.equal(missingRouteFailures({ status }).length, 1, `HTTP ${status}`);
-    }
-  });
   assert.equal(failures.length, 1);
   assert.match(failures[1] ?? failures[0], /health check's search string/u);
+});
+
+// #719: since the distribution's `404 -> 404` rule, a missing asset's body is
+// the app's own not-found page. That is a pass exactly because the page
+// deliberately omits og:site_name — the status is still 404 and nothing in the
+// body can read as the app to Route 53.
+test('the not-found page answering for a missing asset passes', () => {
+  const notFoundPage =
+    '<!doctype html><html><head><title>Page not found — Family Greenhouse</title>' +
+    '<meta name="robots" content="noindex, nofollow" /></head>' +
+    '<body><div id="root"><h1>Nothing growing here</h1></div></body></html>';
+  assert.deepEqual(missingAssetFailures({ status: 404, body: notFoundPage }), []);
+});
+
+// --- missingRouteFailures ---------------------------------------------------
+
+test('an unpublished care guide answering 404 passes, whatever the body', () => {
+  assert.deepEqual(missingRouteFailures({ status: 404, body: '<Error>NoSuchKey</Error>' }), []);
+  assert.deepEqual(missingRouteFailures({ status: 404, body: goodPage.body }), []);
+});
+
+// The #719 report exactly: the shell, 200, for a care guide that does not exist.
+test('the shell answering 200 for an unpublished care guide fails', () => {
+  const failures = missingRouteFailures({ status: 200, body: goodPage.body });
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /expected 404/u);
+  assert.match(failures[0], /#719/u);
+});
+
+test('any other status for an unpublished care guide fails too', () => {
+  for (const status of [301, 403, 500]) {
+    assert.equal(missingRouteFailures({ status }).length, 1, `HTTP ${status}`);
+  }
 });
