@@ -19,6 +19,13 @@ export type AuditEvent =
   | 'auth.password_changed'
   | 'auth.profile_updated'
   | 'auth.account_deleted'
+  // Two-step verification (#671). Setup-started is its own line because the
+  // secret is issued there, before any code proves the authenticator exists;
+  // enabled/disabled are the only lines that mean the factor changed. None
+  // carries the secret or a code.
+  | 'auth.mfa.totp_setup_started'
+  | 'auth.mfa.totp_enabled'
+  | 'auth.mfa.totp_disabled'
   | 'household.created'
   | 'household.member_added'
   | 'household.member_removed'

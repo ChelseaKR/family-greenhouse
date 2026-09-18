@@ -151,6 +151,7 @@ import {
   type LocalPlantTagPin,
 } from './local-server-plant-tags.js';
 import { STORE_DEMO_LOGIN, seedStoreDemoHousehold } from './local-server-store-demo.js';
+import { beginMfaSignIn, registerMfaRoutes, resetMfaState } from './local-server-mfa.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import {
@@ -789,6 +790,8 @@ export function resetDb(): void {
   // it never set up.
   moveDayRecords.clear();
   identifyUsage.clear();
+  // Authenticator secrets and sign-in challenges (#671) live in their module.
+  resetMfaState();
 
   const now = new Date().toISOString();
 
@@ -1308,14 +1311,22 @@ app.post('/auth/login', validateBody(loginSchema), (req, res) => {
     return res.status(401).json({ message: 'Please confirm your email first' });
   }
 
-  const idToken = generateToken(user.id);
-  const accessToken = generateToken(user.id);
-  const refreshToken = generateToken(user.id);
+  // An authenticator app on the account (#671): Cognito answers with a
+  // SOFTWARE_TOKEN_MFA challenge instead of tokens — see local-server-mfa.ts.
+  const challenge = beginMfaSignIn(user.id);
+  if (challenge) return res.json(challenge);
 
-  // Production returns BOTH tokens plus expiresIn: the ID token rides the
-  // Authorization header for API calls; the access token is for
-  // Cognito-direct calls. The mock accepts either, but the shape must match.
-  res.json({
+  res.json(signInBody(user));
+});
+
+/**
+ * Production returns BOTH tokens plus expiresIn: the ID token rides the
+ * Authorization header for API calls; the access token is for Cognito-direct
+ * calls. The mock accepts either, but the shape must match. Shared by the
+ * password sign-in above and the second-factor step (POST /auth/login/mfa).
+ */
+function signInBody(user: User) {
+  return {
     user: {
       id: user.id,
       email: user.email,
@@ -1323,12 +1334,12 @@ app.post('/auth/login', validateBody(loginSchema), (req, res) => {
       householdId: user.householdId,
       householdRole: user.householdRole,
     },
-    idToken,
-    accessToken,
-    refreshToken,
+    idToken: generateToken(user.id),
+    accessToken: generateToken(user.id),
+    refreshToken: generateToken(user.id),
     expiresIn: 3600,
-  });
-});
+  };
+}
 
 app.post('/auth/refresh', validateBody(refreshTokenSchema), (req, res) => {
   const { refreshToken } = (req as any).validatedBody;
@@ -7995,6 +8006,13 @@ registerPlantTagRoutes(app, {
   requireAdmin,
   validateBody,
   recordActivity,
+});
+
+registerMfaRoutes(app, {
+  authMiddleware,
+  validateBody,
+  getUser: (userId) => db.users.get(userId),
+  signInBody: (userId) => signInBody(db.users.get(userId)),
 });
 
 // ============ FALLBACKS ============

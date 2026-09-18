@@ -23,6 +23,23 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+/**
+ * What `POST /auth/login` returns instead of tokens when the account has an
+ * authenticator app on (#671). The session is Cognito's, opaque, single-use
+ * and short-lived; `username` is echoed back verbatim with the code.
+ */
+export interface MfaChallenge {
+  challenge: 'SOFTWARE_TOKEN_MFA';
+  session: string;
+  username: string;
+}
+
+export type LoginResult = AuthResponse | MfaChallenge;
+
+export function isMfaChallenge(result: LoginResult): result is MfaChallenge {
+  return (result as MfaChallenge).challenge === 'SOFTWARE_TOKEN_MFA';
+}
+
 export interface ConfirmEmailData {
   email: string;
   code: string;
@@ -39,8 +56,18 @@ export interface ResetPasswordData {
 }
 
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/login', credentials);
+  async login(credentials: LoginCredentials): Promise<LoginResult> {
+    const response = await api.post<LoginResult>('/auth/login', credentials);
+    return response.data;
+  },
+
+  /** The second sign-in step: answer the authenticator-code challenge. */
+  async completeMfaSignIn(input: {
+    username: string;
+    session: string;
+    code: string;
+  }): Promise<AuthResponse> {
+    const response = await api.post<AuthResponse>('/auth/login/mfa', input);
     return response.data;
   },
 

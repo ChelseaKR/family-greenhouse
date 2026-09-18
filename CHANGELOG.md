@@ -102,6 +102,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   a direct load already reaches the app the same way `/plants/{id}` does,
   through the `/plants/*` behavior's app-shell rescue.
 
+- **Two-step verification with an authenticator app (#671, the TOTP half).**
+  Settings → Security now turns on Cognito's software-token MFA, which the
+  pool has had switched on (`OPTIONAL`) with no way for anyone to enroll. Setup
+  asks for the current password, shows a QR code (drawn in the browser — the
+  secret never goes to a QR service) and the setup key with a copy button,
+  and switches the factor on only after one correct code; it then shows what
+  to do if the phone is lost. Signing in to an account with it on asks for
+  the code after the password (`POST /auth/login` answers with a
+  `SOFTWARE_TOKEN_MFA` challenge; `POST /auth/login/mfa` completes it), and a
+  wrong or timed-out code starts a fresh challenge rather than stranding the
+  person. Turning it off needs the password and a current code. Cognito
+  generates, stores and checks the secret; the app stores none and logs
+  neither secret nor code. EN/ES, labeled inputs, focus moved to each step.
+  An account that meets a Cognito challenge the app does not implement now
+  gets a coded 409 `UNSUPPORTED_CHALLENGE` instead of a bare 500. The local
+  mock checks codes with real RFC 6238 arithmetic, and the e2e enrolls with a
+  secret pinned only in the Playwright webServer. Not in this change:
+  recovery codes (support resets the factor — docs/runbooks.md), security
+  emails, and passkeys, all still open on #671. Deploy note: five routes on
+  the existing auth Lambda in `local.routes`, applied by the next release tag;
+  no user-pool change and no new Lambda.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

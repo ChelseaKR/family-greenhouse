@@ -76,6 +76,22 @@ export async function deleteUser(userId: string): Promise<void> {
 }
 
 /**
+ * Which sign-in factors Cognito has switched on for this user (#671). Read
+ * with the admin API so the Settings → Security page needs only the ID token.
+ * Deliberately NOT wrapped in a fallback: a failed read must surface as a
+ * failure, never as "two-step verification is off".
+ */
+export async function getMfaState(userId: string): Promise<{ totpEnabled: boolean }> {
+  const result = await cognito.send(
+    new AdminGetUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId,
+    })
+  );
+  return { totpEnabled: (result.UserMFASettingList ?? []).includes('SOFTWARE_TOKEN_MFA') };
+}
+
+/**
  * Look up a Cognito user's display name (the `name` attribute). Returns the
  * email-localpart fallback if the user has no name attribute set, which can
  * happen for accounts created before the name attribute was required.

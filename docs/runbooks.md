@@ -248,6 +248,31 @@ What to expect, none of which is a bug:
 A newer export version than the deployed build reads is refused by name
 (`400 unsupported_version`); that resolves itself once the newer build ships.
 
+## Reset a user's two-step verification
+
+Someone lost their authenticator app and the setup key (#671). There are no
+recovery codes yet, so this is the way back in, and it is an account-takeover
+path: verify first, act second.
+
+1. **Verify.** The request must come from the account's own email address, and
+   the requester must then complete a password reset (`Forgot your password?`)
+   — proving they control that inbox _now_, not only that they know the
+   address. A request that cannot do both is refused.
+2. **Reset.** Turn the software-token factor off for that user (the Cognito
+   username is the `sub`, not the email):
+
+```sh
+aws cognito-idp admin-set-user-mfa-preference \
+  --user-pool-id <pool id> \
+  --username <sub> \
+  --software-token-mfa-settings Enabled=false,PreferredMfa=false
+```
+
+3. **Confirm** with `aws cognito-idp admin-get-user --user-pool-id <pool id>
+--username <sub>`: `UserMFASettingList` no longer lists
+   `SOFTWARE_TOKEN_MFA`. Reply that they can sign in with their password and
+   set up a new authenticator under Settings → Security.
+
 ## Post-deploy test fixtures in production data
 
 **Symptom:** a count of households, members, or plants that does not match what

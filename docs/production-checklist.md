@@ -71,7 +71,10 @@ backend "production live" rather than "production-ready in code".
 - [ ] **Cognito security apply check** — the module sets a 12-character mixed
       case/digit policy, `ENFORCED` Threat Protection (including compromised
       credentials), and optional software-token TOTP. Verify the applied pool;
-      user-facing TOTP enrollment is separate product scope.
+      user-facing TOTP enrollment ships under Settings → Security (#671) and
+      needs only the five `/auth/login/mfa` + `/auth/mfa/*` routes applied —
+      no pool change. Before the App Store review build, confirm the review
+      demo account does NOT have two-step verification on.
 - [ ] **API Gateway throttling apply check** — the HTTP API stage is configured
       at 100 burst / 50 requests per second; `/auth/*` also has the tighter
       application per-IP limiter. Verify the stage values after apply.

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuthStore } from '@/store/authStore';
-import { authService } from '@/services/authService';
+import { authService, type AuthResponse, type LoginCredentials } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -15,6 +15,8 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { AuthShell } from './AuthShell';
 import { safeAppRedirect } from './safeRedirect';
+import { readMfaErrorCode, submitCode, submitCredentials, type SignInState } from './signInFlow';
+import { TotpChallengeForm } from './TotpChallengeForm';
 
 // Built per-render from the active locale so validation messages are
 // translated (zod resolves the message at schema-construction time, so the
@@ -30,7 +32,6 @@ type LoginFormData = z.infer<ReturnType<typeof makeLoginSchema>>;
 
 export function LoginPage() {
   const { t } = useTranslation();
-  useDocumentTitle(t('auth.signInButton'));
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -41,6 +42,13 @@ export function LoginPage() {
   // long-lived refresh token is persisted to localStorage, so it is asked for
   // rather than assumed. See the storage model in store/authStore.ts.
   const [keepSignedIn, setKeepSignedIn] = useState(false);
+  // Two-step verification (#671). The credentials are held only while the
+  // code step is on screen — the flow may need them to start a fresh
+  // challenge — and are dropped on success or on "back".
+  const [codeStep, setCodeStep] = useState<Extract<SignInState, { step: 'code' }> | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const credentialsRef = useRef<LoginCredentials | null>(null);
+  useDocumentTitle(codeStep ? t('auth.mfa.title') : t('auth.signInButton'));
 
   // An explicit ?redirect= (e.g. from a shared cutting card) wins, then the
   // ProtectedRoute's saved location, then the dashboard. Only same-origin
@@ -68,24 +76,74 @@ export function LoginPage() {
     defaultValues: { email: confirmState?.email ?? '' },
   });
 
+  const finishSignIn = (response: AuthResponse) => {
+    credentialsRef.current = null;
+    // BEFORE setTokens: the persist adapter reads this flag off the payload
+    // it is writing, so it decides where the refresh token lands.
+    setRememberMe(keepSignedIn);
+    setTokens(response.idToken, response.accessToken, response.refreshToken);
+    setUser(response.user);
+    navigate(from, { replace: true });
+  };
+
   const onSubmit = async (data: LoginFormData) => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const response = await authService.login(data);
-      // BEFORE setTokens: the persist adapter reads this flag off the payload
-      // it is writing, so it decides where the refresh token lands.
-      setRememberMe(keepSignedIn);
-      setTokens(response.idToken, response.accessToken, response.refreshToken);
-      setUser(response.user);
-      navigate(from, { replace: true });
+      const outcome = await submitCredentials(authService, data);
+      if (outcome.kind === 'signedIn') {
+        finishSignIn(outcome.auth);
+      } else {
+        credentialsRef.current = { email: data.email, password: data.password };
+        setCodeError(null);
+        setCodeStep(outcome.state);
+      }
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(signInErrorMessage(err, t));
     } finally {
       setIsLoading(false);
     }
   };
+
+  const onSubmitCode = async (code: string) => {
+    const credentials = credentialsRef.current;
+    if (!codeStep || !credentials) return;
+    setCodeError(null);
+    setIsLoading(true);
+    try {
+      const outcome = await submitCode(authService, credentials, codeStep, code);
+      if (outcome.kind === 'signedIn') {
+        finishSignIn(outcome.auth);
+      } else {
+        setCodeStep(outcome.state);
+        if (outcome.kind === 'wrongCode') setCodeError(t('auth.mfa.wrongCode'));
+      }
+    } catch (err) {
+      setCodeError(signInErrorMessage(err, t));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const backToCredentials = () => {
+    credentialsRef.current = null;
+    setCodeStep(null);
+    setCodeError(null);
+  };
+
+  if (codeStep) {
+    return (
+      <AuthShell title={t('auth.mfa.title')} subtitle={t('auth.mfa.subtitle')}>
+        <TotpChallengeForm
+          onSubmit={onSubmitCode}
+          onBack={backToCredentials}
+          error={codeError}
+          isLoading={isLoading}
+        />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell
@@ -158,4 +216,18 @@ export function LoginPage() {
       </form>
     </AuthShell>
   );
+}
+
+/** A refused sign-in step, worded in the reader's language where it is coded. */
+function signInErrorMessage(error: unknown, t: TFunction): string {
+  switch (readMfaErrorCode(error)) {
+    case 'INVALID_CODE':
+      return t('auth.mfa.wrongCode');
+    case 'MFA_SESSION_EXPIRED':
+      return t('auth.mfa.expired');
+    case 'UNSUPPORTED_CHALLENGE':
+      return t('auth.mfa.unsupported');
+    default:
+      return getErrorMessage(error);
+  }
 }
