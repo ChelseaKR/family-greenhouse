@@ -314,4 +314,53 @@ describe('LockedFeature', () => {
       await screen.findByRole('button', { name: 'Ask your household admin to upgrade' })
     ).toBeInTheDocument();
   });
+
+  describe('inside the native (Capacitor) shells', () => {
+    beforeEach(() => {
+      // Simulate the global the Capacitor bridge injects (lib/platform.ts
+      // reads it instead of importing @capacitor/core).
+      (window as unknown as { Capacitor?: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+      };
+    });
+
+    afterEach(() => {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    });
+
+    it('shows what the feature is, with no price and no ask, for a member (Guideline 3.1.1)', async () => {
+      signIn('member');
+      stubReads();
+      renderLocked(
+        <LockedFeature feature="chat">Ask about your plants in plain language.</LockedFeature>
+      );
+
+      expect(await screen.findByRole('heading', { name: 'Plant care chat' })).toBeInTheDocument();
+      expect(screen.getByText('Ask about your plants in plain language.')).toBeInTheDocument();
+      expect(
+        await screen.findByText("Plan changes aren't available in the app.")
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('locked-included')).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/\$\s*\d/);
+      expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+
+    it('shows the same neutral notice for an admin, with no Change plan link', async () => {
+      signIn('admin');
+      stubReads({
+        members: [
+          { userId: 'u-me', name: 'Sam', role: 'admin' },
+          { userId: 'u-2', name: 'Maria', role: 'member' },
+        ],
+      });
+      renderLocked(<LockedFeature feature="chat" />);
+
+      expect(
+        await screen.findByText("Plan changes aren't available in the app.")
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Change plan' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('locked-included')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -9,6 +9,7 @@ import { Card } from '@/components/Card';
 import { buttonStyles } from '@/components/buttonStyles';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
+import { isNativeApp } from '@/lib/platform';
 import { useAuthStore } from '@/store/authStore';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { householdService } from '@/services/householdService';
@@ -194,15 +195,21 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
   const { t } = useTranslation();
   const ask = useUpgradeAsk(feature);
   const heading = title ?? t(`locked.features.${feature}`);
+  // Guideline 3.1.1: no price, and no call to action toward a purchase
+  // mechanism other than In-App Purchase, inside the native shells. The web
+  // app keeps the full ask — this is the one surface LockedFeature renders
+  // differently by platform (see docs/mobile.md "Store payment rules").
+  const native = isNativeApp();
 
-  const includedWith = ask.targetPlan
-    ? typeof ask.targetPlan.monthlyPrice === 'number'
-      ? t('locked.includedWithPrice', {
-          plan: ask.targetPlan.name,
-          price: formatCurrency(ask.targetPlan.monthlyPrice),
-        })
-      : t('locked.includedWith', { plan: ask.targetPlan.name })
-    : null;
+  const includedWith =
+    !native && ask.targetPlan
+      ? typeof ask.targetPlan.monthlyPrice === 'number'
+        ? t('locked.includedWithPrice', {
+            plan: ask.targetPlan.name,
+            price: formatCurrency(ask.targetPlan.monthlyPrice),
+          })
+        : t('locked.includedWith', { plan: ask.targetPlan.name })
+      : null;
 
   return (
     <Card variant="paper" className={className}>
@@ -222,7 +229,9 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
           )}
           {children && <p className="mt-2 text-sm text-gray-700">{children}</p>}
           <div className="mt-4">
-            {ask.role === 'admin' ? (
+            {native ? (
+              <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+            ) : ask.role === 'admin' ? (
               <div className="space-y-2">
                 <Link to="/settings/billing" className={buttonStyles({})}>
                   {t('locked.adminChangePlan')}
