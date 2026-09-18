@@ -16,6 +16,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **A failed payment is now stated on every screen, not only in Settings.**
+  When Stripe reports a household's subscription as unpaid, the household's
+  caps drop at once (there is no grace period), and until now the only place
+  in the app that said so was Settings → Plan status — so most households
+  found out from a refused "add plant". A banner in the app frame now says the
+  payment failed, what changed, and links to Settings → Plan status to fix
+  it. It disappears as soon as Stripe reports the subscription paid again,
+  stays off the Plan status page that already carries the full notice, and
+  inside the native apps points only at that in-app page, never at a payment
+  step. (#593)
+
+### Fixed
+
+- **The payment-failed notice no longer names the free plan when the household
+  keeps a better one.** A tier bought outright or a running gift stays in
+  force under a declined card, so a household that owns Garden was wrongly
+  told it now had Seedling's limits. Both the banner and Settings → Plan
+  status now describe the plan the household actually keeps.
+
 ## [0.35.0] - 2026-09-17
 
 ### Added

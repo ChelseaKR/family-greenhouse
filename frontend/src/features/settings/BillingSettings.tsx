@@ -29,6 +29,7 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
+import { isPaymentFailing, paymentFailedBodyKey } from '@/features/billing/paymentFailing';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
 // resolved and giftSubscriptions is on the offer, so it costs nothing on
@@ -58,34 +59,6 @@ const planRank = (id: PlanId) => PLAN_ORDER.indexOf(id);
  *  in one of these must change plans through the portal: the API rejects a
  *  second purchase with 409 precisely to avoid double-billing. */
 const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
-
-/**
- * Statuses that mean the subscription EXISTS but is not being paid for — the
- * complement of `ENTITLED_SUBSCRIPTION_STATUSES` in
- * `backend/src/models/plans.ts`, which entitles `active` and `trialing` only.
- *
- * The distinction is invisible on this page without it, and that is the whole
- * reason it exists. `planId` keeps saying `garden` through dunning — Stripe
- * only rewrites it to `seedling` when it finally gives up and deletes the
- * subscription, weeks later — while the server has ALREADY dropped the
- * household to Seedling's caps (`getEntitledPlan`, #364/#540). So the page
- * said "Your household is on the Garden plan" over meters showing Seedling's
- * numbers, and, if the household was over them, an over-limit warning that
- * blamed "your current plan" for a cap that plan does not have. The one fact
- * that explains all of it — the card was declined — appeared nowhere in the
- * app at all; the only notice was an email, which depends on the Stripe
- * endpoint subscribing `invoice.payment_failed` and on SES.
- *
- * `paused` is deliberately absent: it is a live subscription Stripe is not
- * billing on purpose, not a failed payment, and it is not something this
- * product can put a household into today.
- */
-const UNPAID_SUBSCRIPTION_STATUSES = new Set([
-  'past_due',
-  'unpaid',
-  'incomplete',
-  'incomplete_expired',
-]);
 
 /** Map the API's failure modes onto something a household can act on. The
  *  server is the authority on all three; none of them are recoverable by
@@ -307,12 +280,12 @@ export function BillingSettings() {
   // would contradict itself, so it is guarded directly rather than trusting
   // that invariant silently.
   const staleCheckout = isAdmin && !awaitingEntitlement ? subQuery.data?.staleCheckout : undefined;
-  // Reads a status Stripe actually sent. An ABSENT status is never dunning:
-  // `checkout.session.completed` records the subscription id before any status
-  // is known, and calling that window "your payment failed" would be a worse
-  // lie than the silence it replaces.
-  const paymentFailing =
-    !!subQuery.data?.status && UNPAID_SUBSCRIPTION_STATUSES.has(subQuery.data.status);
+  // Reads a status Stripe actually sent; an ABSENT status is never dunning.
+  // Without this the page said "Your household is on the Garden plan" over
+  // meters showing Seedling's numbers, because `planId` keeps the paid tier
+  // through dunning while the server has already dropped the caps. Shared
+  // with the app-wide banner (`paymentFailing.ts`) so the two cannot disagree.
+  const paymentFailing = isPaymentFailing(subQuery.data);
   // Exactly the condition the portal button below renders on, so the notice
   // never tells someone to press a control that is not on their screen.
   const canOpenPortal = paymentsAvailable && !native && !!subQuery.data?.stripeCustomerId;
@@ -437,7 +410,10 @@ export function BillingSettings() {
             title={t('settings.billing.paymentFailedTitle')}
             className="mb-4"
           >
-            <p>{t('settings.billing.paymentFailedBody')}</p>
+            {/* Names the free plan only when that is what the household
+                keeps: a tier bought outright or a running gift is a floor a
+                declined card cannot take away. */}
+            <p>{t(paymentFailedBodyKey(subQuery.data))}</p>
             {canOpenPortal && (
               <p className="mt-2">
                 {isAdmin

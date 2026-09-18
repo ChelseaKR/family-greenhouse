@@ -609,6 +609,26 @@ describe('purchase controls once payment activity is available', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('does not name the free plan when a tier bought outright is the floor', async () => {
+    // getEntitledPlan keeps a lifetime tier under a lapsed subscription
+    // (withLifetimeFloor), so this household keeps Garden's caps, not
+    // Seedling's. "You now have the free Seedling plan's limits" would be false.
+    await renderBilling(
+      {
+        planId: 'greenhouse',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'past_due',
+        lifetimePlanId: 'garden',
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText(/We couldn’t take your last payment/)).toBeInTheDocument();
+    expect(screen.getByText(/the plan it already owns outright or was given/)).toBeInTheDocument();
+    expect(screen.queryByText(/free Seedling plan’s limits/)).not.toBeInTheDocument();
+  });
+
   it('does not call an unknown status a failed payment', async () => {
     // checkout.session.completed records the subscription id before any status
     // is known. "Your payment failed" there would be a worse claim than the

@@ -511,15 +511,33 @@ Operational notes:
   plants, tasks, photos and history stay readable and editable, and only new
   creations are refused (see "Plan caps and downgrades"). The email's "nothing
   is deleted either way" is therefore a claim the handlers keep.
-- **The app says so too.** `Settings → Billing` renders a payment-failed notice
-  for those four statuses (`UNPAID_SUBSCRIPTION_STATUSES` in
-  `frontend/src/features/settings/BillingSettings.tsx`) and suppresses the
+- **The app says so too.** `Settings → Plan status` renders a payment-failed
+  notice for those four statuses (`UNPAID_SUBSCRIPTION_STATUSES` in
+  `frontend/src/features/billing/paymentFailing.ts`) and suppresses the
   generic over-limit banner while it shows, because that banner blames "your
   current plan" for a cap the plan does not have. Without it the page stated
   the paid plan as a fact over meters showing Seedling's numbers, and the
   declined card appeared nowhere in the product — the email was the only
   notice, and it depends on the endpoint subscribing `invoice.payment_failed`
   and on SES.
+- **And on every screen, not only that one** (#593). A household that never
+  opens Settings found out from a 402 the next time it added a plant.
+  `PaymentFailedBanner` (`frontend/src/features/billing/`) renders in the app
+  frame (`Layout.tsx`) on every authenticated page except Settings → Plan
+  status, which already says it, and the chat composer, which has no page
+  padding. It reads the subscription the frame already holds, so it adds no
+  request, and it has no dismiss state: it disappears when Stripe's
+  `past_due → active` `customer.subscription.updated` lands and
+  `GET /billing/me` reports a paid status. The action is an in-app link to
+  Settings → Plan status, never a payment link, so the native shells stay
+  within Guideline 3.1.1.
+- **"What changed" follows the floor, not a fixed sentence.** Both notices
+  name the free Seedling plan only when that is what the household keeps.
+  `planWhilePaymentFails` mirrors `getEntitledPlan` for an unpaid status —
+  Seedling, raised by a lifetime tier (`withLifetimeFloor`) or a running gift
+  (`withGift`) — so a household that owns Garden outright is not told it now
+  has Seedling's limits. Neither notice changes entitlement; there is still no
+  grace period (see "There is no grace period" above).
 - **`STRIPE_CUSTOMER#{id}` pointer.** `customer.source.expiring` carries only a
   customer id, so any notice that knows both ids writes this pointer (400-day
   TTL) and that one reads it. No pointer yet ⇒ no warning, never a guess.
