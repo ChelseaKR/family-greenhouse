@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,7 @@ import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
 import { ConnectionNotice } from './ConnectionNotice';
 import { PullToRefresh } from './PullToRefresh';
 import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
+import { setNativeStatusBarOverDarkSurface } from '@/services/nativeShell';
 import clsx from 'clsx';
 
 /**
@@ -108,6 +109,12 @@ export function Layout() {
   // background (a no-op on the web).
   useNativeResumeRefresh();
 
+  // The drawer is forest green and runs under the status bar in the native
+  // shells, where the bar otherwise carries dark icons for the light app.
+  useEffect(() => {
+    setNativeStatusBarOverDarkSurface(sidebarOpen);
+  }, [sidebarOpen]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -151,7 +158,7 @@ export function Layout() {
                   leaveFrom="opacity-100"
                   leaveTo="opacity-0"
                 >
-                  <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
+                  <div className="absolute left-full top-0 flex w-16 justify-center pt-[calc(1.25rem+env(safe-area-inset-top))]">
                     <button
                       type="button"
                       className="-m-2.5 p-2.5"
@@ -255,7 +262,11 @@ interface SidebarContentProps {
 function SidebarContent({ user, chatAvailable, onLogout, onNavigate }: SidebarContentProps) {
   const { t } = useTranslation();
   return (
-    <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 px-6 pb-4">
+    // Safe-area padding keeps the wordmark out from under the status bar and
+    // Dynamic Island, and Sign out above the home indicator, in the native
+    // shells and installed PWAs. env() is 0 in a browser tab, where this is
+    // the same px-6 pb-4 it always was.
+    <div className="relative flex grow flex-col gap-y-5 overflow-y-auto bg-primary-900 pt-[env(safe-area-inset-top)] pr-6 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))]">
       {/* Pane lines + a climbing vine turn the rail into the edge of the
           greenhouse without competing with navigation labels. */}
       <SidebarPattern className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.11]" />

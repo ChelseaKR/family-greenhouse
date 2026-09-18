@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The two brand surfaces the shell shows before and around the web
+         content: the page's paper background and the forest green of the
+         launch screen, both from frontend/src/index.css. -->
+    <color name="fgPaper">#F7F8F2</color>
+    <color name="fgForest">#173404</color>
+</resources>

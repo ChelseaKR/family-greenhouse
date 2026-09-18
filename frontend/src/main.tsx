@@ -2,6 +2,9 @@
 // module body runs, so a top-level throw in the imports below is reportable.
 // See frontend/src/telemetryBoot.ts and issue #576.
 import './telemetryBoot';
+// SECOND: arms the native launch-screen fallback before any other module body
+// can throw. See frontend/src/nativeLaunchBoot.ts.
+import './nativeLaunchBoot';
 import '@/lib/zodConfig';
 import React from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
