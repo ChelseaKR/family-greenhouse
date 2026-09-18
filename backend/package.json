@@ -18,7 +18,8 @@
     "entitlements:check": "node scripts/check-entitlement-gates.mjs",
     "eval": "vitest run tests/eval",
     "notify:price-change": "tsx src/scripts/sendPriceChangeNotice.ts",
-    "backfill:token-hashes": "tsx src/scripts/backfillTokenHashes.ts"
+    "backfill:token-hashes": "tsx src/scripts/backfillTokenHashes.ts",
+    "backfill:photo-metadata": "tsx src/scripts/stripStoredPhotoMetadata.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1116.0",

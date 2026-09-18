@@ -321,3 +321,56 @@ aws dynamodb scan --table-name family-greenhouse-production \
   --expression-attribute-values '{":t":{"S":"Household"}}' \
   --select COUNT --query Count
 ```
+
+## Strip location metadata from stored photos
+
+**Symptom:** a stored plant photo may carry the phone's GPS position. That's
+usually the household's home. Before #849, a member upload fell back to the
+original file when the browser's canvas resize failed, and the caretaker page
+uploaded every photo as picked. Nothing on the server re-encodes a photo. The
+object in S3 is the bytes the client sent, and `/plants/*` on CloudFront serves
+them to anyone who has the URL, with no signature and no expiry.
+
+**Measure first.** Don't copy photos to a laptop to look at them. The backfill's
+dry run is the census. It reads each version in memory and prints counts and
+short refs only, never a key, a coordinate or a place name. Run it from AWS
+CloudShell in us-east-1 so the bytes stay inside AWS:
+
+```bash
+git clone https://github.com/ChelseaKR/family-greenhouse.git && cd family-greenhouse && npm ci
+IMAGES_BUCKET="$(aws s3api list-buckets --query "Buckets[?starts_with(Name,'family-greenhouse-images-production-')].Name | [0]" --output text)"
+export IMAGES_BUCKET
+npm run backfill:photo-metadata --workspace backend            # dry run: reads only
+```
+
+The 2026-09-18 census found no GPS, XMP, IPTC place fields or trailing images
+in any stored photo, and no old versions. The JPEGs it found carry only the
+ColorSpace-and-dimensions EXIF that Safari's canvas encoder writes.
+
+**Fix:** once the release carrying #849 is deployed, run it for real:
+
+```bash
+npm run backfill:photo-metadata --workspace backend -- --confirm
+# and, only if you want the originals gone before the 30-day lifecycle rule:
+npm run backfill:photo-metadata --workspace backend -- --confirm --delete-old-versions
+aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=infrastructure output -raw cloudfront_distribution_id)" --paths '/plants/*'
+```
+
+- **Old versions.** The bucket is versioned, so `--confirm` alone leaves each
+  original behind as a noncurrent version. CloudFront can't serve one: the
+  grant is `s3:GetObject` only, and the cache policy forwards no query string.
+  The `expire-noncurrent-versions` rule deletes it after 30 days.
+  `--delete-old-versions` deletes it now, and that can't be undone.
+- **The CDN.** A rewritten photo keeps its key, so the edge can serve the old
+  bytes until it's invalidated. Sitter photos are stored with a one-year
+  `Cache-Control`.
+- **Caches the backfill can't reach.** Browsers, the app's service-worker
+  `images` cache (100 entries, 30 days) and email clients that loaded a digest
+  thumbnail keep whatever they fetched. Only moving each photo to a new key and
+  deleting the old one would break those copies, and that means rewriting every
+  DynamoDB row that holds the URL.
+- **Exit status 2** means something raced a live request or couldn't be
+  parsed. Read the listed refs and run it again. A raced photo is never
+  overwritten or brought back.
+- **Re-run it** once the native app builds from before #849 are out of use.
+  An installed build uploads with the code it shipped with.
