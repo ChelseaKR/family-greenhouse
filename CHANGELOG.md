@@ -16,6 +16,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Spanish is reachable (#467).** The Spanish catalog was complete but sat
+  behind an opt-in set in no deployed environment. It is now on by default,
+  through two paths the app already had: a first visit from a browser whose
+  first language is Spanish boots into Spanish, and the language picker in
+  Settings → Preferences appears for everyone. Returning visitors keep the
+  English the detector cached for them. Detection now compares base languages,
+  so a browser sending `en-US, es` gets English rather than Spanish. The
+  catalog stays a separate chunk that English-first visitors never request,
+  and the picker now fetches it when pressed or focused instead of on mount.
+  `VITE_ENABLE_NON_ENGLISH_LOCALES=false` is the build-time kill switch; the
+  per-device `?locales=on|off` opt-in is gone. Copy that never went through
+  the catalog — most of the landing page, the public footer, help, care
+  guides, blog, and the strings the hardcoded-string ratchet still baselines —
+  is still English on a Spanish screen; `docs/i18n.md` § Shipping status lists
+  it.
+
 ## [0.35.0] - 2026-09-17
 
 ### Added

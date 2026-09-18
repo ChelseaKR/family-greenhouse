@@ -15,10 +15,11 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 //
 // `locales/<lng>/translation.json` for every NON-English locale is deliberately
 // not imported here either. English is the fallback catalog every visitor needs
-// on first paint; Spanish is not selectable at all unless the opt-in below is
-// active, so importing it put 104,586 bytes of JSON into the modulepreloaded
-// `i18n` chunk for a language nobody could choose (#467). ./nonEnglishCatalog.ts
-// fetches it as a static asset, on demand, for the visitors who opted in.
+// on first paint; importing Spanish put 104,586 bytes of JSON into the
+// modulepreloaded `i18n` chunk for every visitor, including the English-first
+// majority who never read a word of it (#467). ./nonEnglishCatalog.ts fetches
+// it as a separate chunk, on demand, only for a visitor whose language is
+// Spanish — detected, stored, or picked in Settings.
 import en from './locales/en/translation.json';
 
 /**
@@ -40,70 +41,35 @@ export const ALL_LANGS = ['en', 'es'] as const;
 export type LangCode = (typeof ALL_LANGS)[number];
 
 /**
- * The locales that are *actually shippable to users*.
+ * The locales users can reach.
  *
- * WHAT THE GATE IS AND IS NOT. This comment used to say the non-English
- * catalogs were "partial scaffolds, not real translations", with "half the
- * strings still falling through to English". That is not what the catalogs
- * measure: `tests/unit/i18n/localeCoverage.test.ts` reports es at 99.3%
- * (1344/1354 keys), zero missing keys, and the ten values that equal English
- * are enumerated as `intentionallyEqual` in locales/es/translation.todo.json.
- * The remaining blocker is a native-speaker review of the Spanish and the
- * product surface that would come with it (a discoverable switcher or locale
- * detection, `/es` routes, `hreflang`, and the backend copy — household emails
- * and chat safety messages are English regardless of this flag). It is a
- * shipping decision, not a coverage problem. See docs/i18n.md § Shipping
- * status and #467.
+ * Spanish is on (#467). It used to sit behind an opt-in that was set in no
+ * deployed environment, so a fully written catalog — every key defined, the
+ * identical-to-English values enumerated in locales/es/translation.todo.json,
+ * the 95% bar enforced by tests/unit/i18n/localeCoverage.test.ts on every run —
+ * was unreachable by any visitor. Two existing paths now reach it, and nothing
+ * new was built for either:
  *
- * Until that decision is made, Spanish is a STAGED ASSET rather than a shipped
- * feature that happens to be switched off: ./nonEnglishCatalog.ts keeps its
- * bytes out of the JS every visitor downloads, and the coverage bar keeps it
- * from rotting while it waits.
+ *   - the language detector below: a visitor whose browser asks for Spanish
+ *     (`navigator.languages`) boots into Spanish on their first visit;
+ *   - the language picker in Settings → Preferences, which renders whenever
+ *     more than one locale is supported.
  *
- * Three layered opt-ins, evaluated in order:
- *   1. URL query param `?locales=on` — flips the flag for this tab and
- *      persists into localStorage. Lets internal/QA testers exercise the
- *      Spanish path without a rebuild. `?locales=off` clears it again.
- *   2. localStorage key `feature:non_english_locales` (set by #1, or
- *      pushed via the browser console).
- *   3. Build-time `VITE_ENABLE_NON_ENGLISH_LOCALES=true` — the global
- *      switch for "ship Spanish to everyone." Stays off by default, and is
- *      set in no deployed environment today.
+ * A returning visitor keeps whatever `i18nextLng` the detector cached on an
+ * earlier visit, and while Spanish was off that was always 'en'. So nobody who
+ * has already been using the app in English is switched to Spanish by this
+ * change; they can pick it in Settings.
  *
- * Order matters: the build-time flag is the broadest signal, so any of the
- * narrower opt-ins also enables. Disabling is `?locales=off` (or clearing the
- * localStorage key) plus leaving the env var unset — the safe default wins on
- * a cold reload.
+ * WHAT IS STILL ENGLISH on a Spanish screen is listed in docs/i18n.md §
+ * Shipping status: JSX text the hardcoded-string ratchet still has baselined,
+ * the prerendered marketing HTML (and so every crawler's view), and copy the
+ * backend writes.
+ *
+ * `VITE_ENABLE_NON_ENGLISH_LOCALES=false` at build time is the kill switch: it
+ * collapses this to English only, and the pull-back below returns anyone with
+ * a stored Spanish preference to English on their next load. Unset means on.
  */
-const LS_KEY_NON_ENGLISH = 'feature:non_english_locales';
-
-function readNonEnglishOptIn(): boolean {
-  if (import.meta.env.VITE_ENABLE_NON_ENGLISH_LOCALES === 'true') return true;
-  if (typeof window === 'undefined') return false;
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const requested = params.get('locales');
-    if (requested === 'off') {
-      // The mirror of `?locales=on`. Without it the only way back out of the
-      // opt-in was editing localStorage by hand in devtools, so a tester who
-      // turned Spanish on stayed on a Spanish-capable build on that device
-      // forever. Cannot override the build-time flag, by design: that one is
-      // "ship Spanish to everyone" and is not a per-device choice.
-      window.localStorage.removeItem(LS_KEY_NON_ENGLISH);
-      return false;
-    }
-    if (requested === 'on') {
-      window.localStorage.setItem(LS_KEY_NON_ENGLISH, 'true');
-      return true;
-    }
-    return window.localStorage.getItem(LS_KEY_NON_ENGLISH) === 'true';
-  } catch {
-    // Private mode etc.; fall through to the safe default.
-    return false;
-  }
-}
-
-const nonEnglishEnabled = readNonEnglishOptIn();
+const nonEnglishEnabled = import.meta.env.VITE_ENABLE_NON_ENGLISH_LOCALES !== 'false';
 
 export const SUPPORTED_LANGS = nonEnglishEnabled
   ? ALL_LANGS
@@ -119,7 +85,9 @@ export function isRTL(lang: string): boolean {
 // which exists in the Node process that runs the build-time prerender
 // (scripts/prerender.mjs). Skip it there and pin the render to English — the
 // prerendered pages are the canonical English marketing routes, and the client
-// re-detects normally on boot, before hydration.
+// re-detects normally on boot. A Spanish-speaking visitor hydrates that English
+// markup and re-renders in Spanish when the catalog lands (`bindI18nStore`
+// below, and the `changeLanguage` re-run in ensureLanguageCatalog).
 const IS_BROWSER = typeof window !== 'undefined';
 
 if (IS_BROWSER) i18n.use(LanguageDetector);
@@ -139,6 +107,13 @@ i18n.use(initReactI18next).init({
     order: ['localStorage', 'navigator'],
     lookupLocalStorage: 'i18nextLng',
     caches: ['localStorage'],
+    // Compare base languages, so the visitor's FIRST choice wins. i18next
+    // prefers an exact supported code anywhere in the list over a
+    // language-only match earlier in it, so without this a browser sending
+    // ['en-US', 'es'] boots into Spanish: 'en-US' is not in `supportedLngs`
+    // verbatim and 'es' is. Stripping the region makes that ['en', 'es'], and
+    // 'es-MX' still resolves to the one Spanish catalog.
+    convertDetectedLanguage: (lng: string) => lng.split('-')[0].toLowerCase(),
   },
   react: {
     // Non-English catalogs arrive after init via `addResourceBundle` (see
@@ -154,7 +129,7 @@ i18n.use(initReactI18next).init({
 /**
  * Register the catalog for `lng` if it is a non-English locale this build lets
  * users reach. Resolves immediately for English and for a build where the
- * non-English opt-in is off, so callers never need to know which is which.
+ * kill switch is on, so callers never need to know which is which.
  *
  * The `import()` is what keeps ./nonEnglishCatalog.ts (and the `?url` asset
  * reference it holds) off this module's startup chunk, and it is also why
@@ -180,19 +155,32 @@ export function ensureLanguageCatalog(lng: string): Promise<void> {
   });
 }
 
-// If a stale localStorage entry pinned the user to a non-shippable locale
-// (e.g. they tested Spanish before the gate landed), pull them back to en.
-if (!SUPPORTED_LANGS.includes(i18n.language as LangCode)) {
-  i18n.changeLanguage('en');
-} else if (IS_BROWSER) {
+function settleBootLanguage(): Promise<void> {
+  // If a stored preference pins the user to a locale this build does not
+  // offer (a build with the kill switch on), pull them back to en.
+  if (!SUPPORTED_LANGS.includes(i18n.language as LangCode)) {
+    void i18n.changeLanguage('en');
+    return Promise.resolve();
+  }
+  if (!IS_BROWSER) return Promise.resolve();
   // The detector may have landed on a non-English locale from localStorage or
-  // `navigator.language`. Its catalog is no longer bundled, so fetch it now
-  // rather than at first interaction. A failure is not fatal — i18next stays
-  // on `fallbackLng: 'en'`, which renders English copy, not raw key paths —
-  // but it must be visible rather than swallowed.
-  void ensureLanguageCatalog(i18n.language).catch((error: unknown) => {
+  // `navigator.languages`. Its catalog is not bundled, so fetch it now rather
+  // than at first interaction. A failure is not fatal — i18next stays on
+  // `fallbackLng: 'en'`, which renders English copy, not raw key paths — but
+  // it must be visible rather than swallowed.
+  return ensureLanguageCatalog(i18n.language).catch((error: unknown) => {
     console.warn(`i18n: could not load the ${i18n.language} catalog`, error);
   });
 }
+
+/**
+ * Settles once the catalog for the language this page booted in is registered
+ * — at once for English. Never rejects: a failed load is logged above and the
+ * page renders the English fallback. Nothing has to wait on it (the UI
+ * re-renders when the catalog lands); it exists so a caller that needs the
+ * boot language settled, such as tests/unit/i18n/localeReachable.test.ts, can
+ * wait on the real load instead of polling for it.
+ */
+export const bootCatalogReady: Promise<void> = settleBootLanguage();
 
 export default i18n;

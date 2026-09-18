@@ -260,7 +260,7 @@ After the audit-driven sweep, the standing risks are:
 
 1. **Single-region availability.** PITR is enabled and the 2026-06-09 restore drill validated 35/35 items (RTO ≈3.5 minutes, RPO ≈5 minutes), so backup recovery is closed. A regional outage still takes the app down; the accepted trigger and Global Tables path are in `docs/deferred-resilience.md` §2.
 2. **E2E breadth and stability.** The 104-test Chromium suite now covers public/authenticated axe checks, auth, CRUD, multi-household joins, keyboard paths, reflow, reduced motion, responsive UX, visual regression, and core task flows. New write paths still need a matching spec; the visual gate pins the landing A/B bucket so random treatment assignment cannot flake snapshots.
-3. **Localization content gap.** Locale picker is flag-gated to English pending native-speaker review. The coverage guard is in place: `frontend/src/i18n/coverage.ts` + `tests/unit/i18n/localeCoverage.test.ts` assert every non-English locale defines all keys (no silent fallbacks) and refuse to enable a locale below 95% translated when `VITE_ENABLE_NON_ENGLISH_LOCALES=true`. Spanish has zero missing keys; the remaining blocker is human review, not catalog coverage.
+3. **Localization content gap.** Spanish is reachable since #467 (browser-language detection and the Settings picker), but copy that never went through the catalog — the landing page, the public footer, the long-form help/care/blog/changelog content, and the JSX the hardcoded-string ratchet still baselines — renders in English on a Spanish screen, and the catalog has had no native-speaker review. The catalog itself is guarded: `frontend/src/i18n/coverage.ts` + `tests/unit/i18n/localeCoverage.test.ts` assert every non-English locale defines all keys (no silent fallbacks) and clears 95% translated on every run. See `docs/i18n.md` § Shipping status.
 
 Closed since the original audit pass:
 
@@ -269,7 +269,7 @@ Closed since the original audit pass:
 - ✅ Distributed traces → X-Ray active tracing on, trace id correlated into structured logs.
 - ✅ CDN-aware caching → `cacheableResponse` helper applied to public/static endpoints.
 - ✅ Per-user rate limiting → `userRateLimit` on write endpoints.
-- ✅ Locale gating → English-only by default behind `VITE_ENABLE_NON_ENGLISH_LOCALES`.
+- ✅ Locale gating → Spanish on by default since #467; `VITE_ENABLE_NON_ENGLISH_LOCALES=false` is the build-time kill switch.
 - ✅ Branchy `deleteMe` → guard helpers extracted.
 
 Deferred items with documented re-open triggers live in `docs/deferred-resilience.md`.
