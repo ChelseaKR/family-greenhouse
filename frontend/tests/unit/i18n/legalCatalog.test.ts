@@ -54,7 +54,7 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 125 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 126 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
@@ -66,8 +66,9 @@ describe('deferred legal catalog', () => {
     // paragraph went with the loader it described (the 2026-09-13 analytics
     // decision: PostHog only, cookieless), +2 for Google Analytics 4 on the
     // website (the 2026-09-17 decision): what it collects, and Google as a
-    // named third party.
-    expect(en).toHaveLength(125);
+    // named third party, +1 for the household audit log's collection bullet
+    // (#675).
+    expect(en).toHaveLength(126);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

@@ -1368,6 +1368,49 @@ paths:
       parameters: [{ $ref: '#/components/parameters/HouseholdId' }]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+  /households/{id}/audit:
+    get:
+      summary: >-
+        The household audit log (#675), newest first, one page at a time. Admin-only. Membership,
+        invites, sitter / kiosk / caretaker / plant-tag / share links, API keys, plan changes and
+        payment failures and recoveries, and trash restores and deletions. Entries expire after
+        `retentionDays`.
+      description: >-
+        Actors and targets are resolved against the household's CURRENT roster: a member by display
+        name, anyone who has left or deleted their account as `former_member`, and Stripe as
+        `stripe`. An entry never carries a token, an invite or share code, an API key or its hash, an
+        email address, a card detail or a plant note — details are enums, counts, non-secret ids,
+        instants and an API key's last four characters. `gapBefore` marks an entry written after an
+        audit write for this household failed, so something may be missing before it. A failed roster
+        read fails the request rather than showing every actor as a former member.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          description: The `nextCursor` of the previous page. Opaque.
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of the log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  retentionDays: { type: integer, example: 30 }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HouseholdAuditEntry' }
+                  nextCursor:
+                    type: string
+                    nullable: true
+                    description: Null exactly when there is nothing further.
+        '400': { description: A limit that is not a positive integer, or an unreadable cursor }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /households/{id}/analytics/daily:
     get:
       summary: >-
@@ -3586,6 +3629,36 @@ components:
           enum: [admin, member]
           nullable: true
 
+    AuditParty:
+      type: object
+      description: Who an audit entry names.
+      properties:
+        type: { type: string, enum: [member, former_member, stripe] }
+        name: { type: string, description: 'Display name; `member` only' }
+    HouseholdAuditEntry:
+      type: object
+      description: One household audit log entry (#675).
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          description: >-
+            household.created, member.joined, member.left, member.removed, member.role_changed,
+            invite.created, sitter_link.created / .revoked, kiosk_link.created / .revoked,
+            caretaker_seat.created / .revoked, plant_tag.created / .revoked, share_link.created,
+            api_key.created / .revoked, billing.plan_changed, billing.payment_failed,
+            billing.payment_recovered, trash.restored, trash.purged. Clients must tolerate kinds
+            they do not know.
+        occurredAt: { type: string, format: date-time }
+        actor: { $ref: '#/components/schemas/AuditParty' }
+        target:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/AuditParty' }]
+        details:
+          type: object
+          description: Enums, counts, non-secret ids, instants and an API key's last four only.
+          additionalProperties: true
+        gapBefore: { type: boolean }
     TrashEntry:
       type: object
       description: One entry in the household trash (#670). A projection of the stored entry.

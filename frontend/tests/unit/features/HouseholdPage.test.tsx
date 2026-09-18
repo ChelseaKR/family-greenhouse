@@ -21,8 +21,12 @@ function renderPage() {
   );
 }
 
+/** Requests the admin-only audit log card made (#675). */
+let auditRequests = 0;
+
 describe('HouseholdPage', () => {
   beforeEach(() => {
+    auditRequests = 0;
     // A plain member (not admin) — the roster is visible to everyone in the
     // household, so this is the caller the privacy bug actually affected.
     useAuthStore.setState({
@@ -99,6 +103,11 @@ describe('HouseholdPage', () => {
       // The admin-only caretaker-seats card lists existing seats regardless of
       // plan — revoking a live credential is never paywalled.
       http.get(`${API}/households/hh-1/caretakers`, () => HttpResponse.json([])),
+      // The admin-only household audit log (#675).
+      http.get(`${API}/households/hh-1/audit`, () => {
+        auditRequests += 1;
+        return HttpResponse.json({ retentionDays: 30, items: [], nextCursor: null });
+      }),
       http.get(`${API}/me/households`, () =>
         HttpResponse.json([
           { householdId: 'hh-1', name: 'The Kelly-Reifs', role: 'member', joinedAt: '' },
@@ -352,5 +361,20 @@ describe('HouseholdPage', () => {
 
     expect(await screen.findByLabelText('City')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled();
+  });
+
+  it('shows the household audit log to an admin', async () => {
+    becomeAdmin();
+    renderPage();
+    expect(await screen.findByText('Household audit log')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing recorded yet')).toBeInTheDocument();
+    expect(auditRequests).toBe(1);
+  });
+
+  it('neither shows nor requests the audit log for a plain member', async () => {
+    renderPage();
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Household audit log')).not.toBeInTheDocument();
+    expect(auditRequests).toBe(0);
   });
 });

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
+// The household audit log (#675) is covered by its own suites; mocked here so
+// these tests never reach a real DynamoDB client.
+vi.mock('../../../src/services/householdAudit.js');
 vi.mock('../../../src/services/householdService.js');
 vi.mock('../../../src/services/welcomeEmail.js');
 vi.mock('../../../src/services/inviteEmail.js', () => ({
@@ -2750,5 +2753,133 @@ describe('households handler — POST /households/{id}/leave (#686)', () => {
     const res = await leave(claims, { userId: 'user-9' });
     expect(res.statusCode).toBe(400);
     expect(householdService.removeMember).not.toHaveBeenCalled();
+  });
+});
+
+describe('households handler — GET /households/{id}/audit (#675)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  const auditEvent = (query: Record<string, string> | null = null, claims = adminClaims) =>
+    buildEvent(claims, {
+      pathParameters: { id: 'hh-1' },
+      queryStringParameters: query,
+    });
+
+  it('serves a page resolved against the current roster, passing limit and cursor through', async () => {
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { auditMemberRef } = await import('../../../src/models/householdAudit.js');
+    vi.mocked(householdAudit.listHouseholdAudit).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'e2',
+          kind: 'member.removed',
+          occurredAt: '2026-09-18T12:00:00.000Z',
+          actorType: 'member',
+          actorRef: auditMemberRef('hh-1', 'user-1'),
+          targetRef: auditMemberRef('hh-1', 'user-gone'),
+          details: { role: 'member', sitterLinks: 2 },
+        },
+      ],
+      nextCursor: 'next-page',
+    });
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      { userId: 'user-1', name: 'Ada', email: 'ada@example.invalid', role: 'admin' },
+    ] as never);
+    const { getHouseholdAuditLog } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await getHouseholdAuditLog(
+      auditEvent({ limit: '10', cursor: 'this-page' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(householdAudit.listHouseholdAudit).toHaveBeenCalledWith('hh-1', {
+      limit: 10,
+      cursor: 'this-page',
+    });
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({
+      retentionDays: 30,
+      nextCursor: 'next-page',
+      items: [
+        {
+          id: 'e2',
+          kind: 'member.removed',
+          occurredAt: '2026-09-18T12:00:00.000Z',
+          actor: { type: 'member', name: 'Ada' },
+          target: { type: 'former_member' },
+          details: { role: 'member', sitterLinks: 2 },
+          gapBefore: false,
+        },
+      ],
+    });
+    // The roster read carries emails; none of them leaves the handler.
+    expect(res.body).not.toContain('ada@example.invalid');
+  });
+
+  it('fails when the roster cannot be read, rather than showing every actor as a former member', async () => {
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdAudit.listHouseholdAudit).mockResolvedValueOnce({
+      items: [{ id: 'e1', kind: 'member.joined', actorType: 'member', actorRef: 'x' }],
+      nextCursor: null,
+    });
+    vi.mocked(householdService.getHouseholdMembers).mockRejectedValueOnce(new Error('throttled'));
+    const { getHouseholdAuditLog } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await getHouseholdAuditLog(
+      auditEvent(),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain('former_member');
+  });
+
+  it('maps an unreadable cursor to 400 and refuses a non-positive limit before reading', async () => {
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const err = Object.assign(new Error('Invalid audit cursor'), { name: 'AuditCursorError' });
+    vi.mocked(householdAudit.listHouseholdAudit).mockRejectedValueOnce(err);
+    const { getHouseholdAuditLog } = await import('../../../src/handlers/households/handler.js');
+
+    const bad = (await getHouseholdAuditLog(
+      auditEvent({ cursor: 'garbage' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(bad.statusCode).toBe(400);
+
+    const zero = (await getHouseholdAuditLog(
+      auditEvent({ limit: '0' }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(zero.statusCode).toBe(400);
+    expect(householdAudit.listHouseholdAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it('is admin-only', async () => {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const { getHouseholdAuditLog } = await import('../../../src/handlers/households/handler.js');
+
+    const res = (await getHouseholdAuditLog(
+      auditEvent(null, memberClaims),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(403);
+    expect(householdAudit.listHouseholdAudit).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,7 @@ import {
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { successResponse, cacheableResponse } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import {
   COMMERCIAL_HOLD_ACTIVE,
   COMMERCIAL_HOLD_EFFECTIVE_DATE,
@@ -470,12 +471,12 @@ export const giftRedeem = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<GiftRedeemInput>;
+    let redemption: Awaited<ReturnType<typeof redeemGiftCode>>;
     try {
-      const redemption = await redeemGiftCode({
+      redemption = await redeemGiftCode({
         code: validatedBody.code,
         householdId: user.householdId!,
       });
-      return successResponse(redemption);
     } catch (err) {
       if (isGiftRedeemError(err)) {
         throw createHttpError(
@@ -492,6 +493,16 @@ export const giftRedeem = createHandler(
         expose: true,
       });
     }
+    // Outside the try: the household audit write resolves in every case, and
+    // must never be mistaken for a failed redemption. The code is a bearer
+    // credential and is not recorded.
+    await householdAudit.recordHouseholdAudit({
+      householdId: user.householdId!,
+      kind: 'billing.plan_changed',
+      actor: { type: 'member', userId: user.userId },
+      details: { plan: redemption.planId, via: 'gift', endsAt: redemption.endsAt },
+    });
+    return successResponse(redemption);
   }
 )
   .use(rateLimit({ perWindowMs: 60_000, max: 5 }))

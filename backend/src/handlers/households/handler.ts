@@ -36,6 +36,7 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
 import * as householdDeparture from '../../services/householdDeparture.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import {
   LEAVE_REFUSAL_CODES,
   LEAVE_REFUSAL_MESSAGES,
@@ -59,6 +60,7 @@ import {
   type HomesLimitError,
 } from '../../services/homesGate.js';
 import { analyticsWindow } from '../../services/analyticsWindow.js';
+import { AUDIT_RETENTION_DAYS, toAuditEntryView } from '../../models/householdAudit.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
@@ -208,6 +210,12 @@ export const createHousehold = createHandler(
       householdId: household.id,
       metadata: { name: household.name, referred: !!referralGrant },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId: household.id,
+      kind: 'household.created',
+      actor: { type: 'member', userId: user.userId },
+      details: {},
+    });
 
     return createdResponse(household);
   }
@@ -287,6 +295,13 @@ export const createInvite = createHandler(
       actorEmail: user.email,
       householdId,
       metadata: { stage: 'invite_created', expiresAt: invite.expiresAt },
+    });
+    // The code itself is the credential and is never recorded.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'invite.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { channel: 'link', expiresAt: invite.expiresAt },
     });
 
     return createdResponse({
@@ -376,6 +391,16 @@ export const emailInvite = createHandler(
       joinUrl: url,
       expiresAt: invite.expiresAt,
       locale: validatedBody.locale,
+    });
+
+    // Recorded whatever the send's outcome: the invite exists either way. The
+    // address belongs to someone who is not a member and is never recorded,
+    // and neither is the code.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'invite.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { channel: 'email', expiresAt: invite.expiresAt },
     });
 
     if (status === 'rate_limited') {
@@ -549,6 +574,12 @@ export const joinHousehold = createHandler(
       householdId: invite.householdId,
       metadata: { stage: 'joined', via: 'invite_code' },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId: invite.householdId,
+      kind: 'member.joined',
+      actor: { type: 'member', userId: user.userId },
+      details: { role: 'member' },
+    });
 
     activity
       .recordActivity({
@@ -606,6 +637,61 @@ export const getActivity = createHandler(
 )
   .use(authMiddleware())
   .use(requireHousehold());
+
+// GET /households/:id/audit
+//
+// The household audit log (#675): who did what to the household itself —
+// membership, the credentials that open a door into it, billing — newest
+// first, one page at a time (`?limit=1..100&cursor=`). Admin-only: it is the
+// record of the admin's own powers, and it names members' actions that the
+// activity feed deliberately does not.
+//
+// Actors are resolved against the CURRENT roster: a member reads by display
+// name, anyone who has left (or deleted their account) as a former member.
+// The roster read is settled, not defaulted — if it fails the request fails,
+// rather than presenting every entry as the work of a former member.
+export const getHouseholdAuditLog = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const householdId = event.pathParameters?.id;
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+    const limitRaw = event.queryStringParameters?.limit;
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+      throw createHttpError(400, 'limit must be a positive integer');
+    }
+    const cursor = event.queryStringParameters?.cursor || null;
+
+    let page: Awaited<ReturnType<typeof householdAudit.listHouseholdAudit>>;
+    try {
+      page = await householdAudit.listHouseholdAudit(householdId, { limit, cursor });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AuditCursorError') {
+        throw createHttpError(400, 'Invalid cursor');
+      }
+      throw err;
+    }
+    // Only id and display name leave this function; the rows' emails do not.
+    const roster = (await householdService.getHouseholdMembers(householdId)).map((m) => ({
+      userId: m.userId,
+      name: m.name,
+    }));
+
+    return successResponse({
+      retentionDays: AUDIT_RETENTION_DAYS,
+      items: page.items.map((item) => toAuditEntryView(item, householdId, roster)),
+      nextCursor: page.nextCursor,
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin());
 
 /**
  * Double-care this month (household toolkit): confirmed duplicates counted
@@ -819,6 +905,13 @@ export const updateMemberRole = createHandler(
       householdId,
       metadata: { newRole: validatedBody.role, oldRole: member.role },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'member.role_changed',
+      actor: { type: 'member', userId: user.userId },
+      targetUserId: userId,
+      details: { from: member.role, to: validatedBody.role },
+    });
 
     return successResponse(updated);
   }
@@ -888,6 +981,15 @@ export const removeMember = createHandler(
         // reconstructable after the fact rather than only inferable.
         revokedCredentials: revoked,
       },
+    });
+    // The revocation cascade (#449) rides the same entry as counts, so the
+    // admin can see what the removal cost without the entry naming a token.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'member.removed',
+      actor: { type: 'member', userId: user.userId },
+      targetUserId: userId,
+      details: { role: member.role, ...revoked },
     });
 
     return noContentResponse();
@@ -1033,6 +1135,14 @@ export const leaveHousehold = createHandler(
         billingAcknowledged: validatedBody?.acknowledgeBilling === true,
       },
     });
+    // The leaver is no longer on the roster, so the page names them "former
+    // member" — the same contract the activity feed keeps.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'member.left',
+      actor: { type: 'member', userId: user.userId },
+      details: { role: member.role, releasedTasks, ...departure.revokedCredentials },
+    });
 
     // Emails. Awaited (a dangling promise can be frozen with the Lambda) but
     // never allowed to fail a departure that has already happened.
@@ -1171,6 +1281,14 @@ export const createSitterLink = createHandler(
       householdId,
       metadata: { stage: 'sitter_link_created', linkId: link.id, expiresAt: link.expiresAt },
     });
+    // The link's id and window only: the token leaves in the response below
+    // and nowhere else, and the free-text label is not the log's to keep.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'sitter_link.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { linkId: link.id, startsAt: link.startsAt, expiresAt: link.expiresAt },
+    });
 
     // Name the creator in the household feed. Any member can mint a link now,
     // so the rest of the household must be able to see who did and until when.
@@ -1260,6 +1378,12 @@ export const revokeSitterLink = createHandler(
       actorEmail: user.email,
       householdId,
       metadata: { stage: 'sitter_link_revoked', linkId },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'sitter_link.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { linkId: target.id },
     });
     const actorName = await cognitoUsers.getUserName(user.userId, user.email);
     activity
@@ -1408,6 +1532,7 @@ export const handler = createRouter({
   'GET /households/invites/{inviteCode}': validateInvite,
   'POST /households/join/{inviteCode}': joinHousehold,
   'GET /households/{id}/activity': getActivity,
+  'GET /households/{id}/audit': getHouseholdAuditLog,
   'GET /households/{id}/analytics/daily': getDailyAnalytics,
   'GET /households/{id}/analytics/coverage': getCoverage,
   'GET /households/{id}/year-in-review': getYearInReview,

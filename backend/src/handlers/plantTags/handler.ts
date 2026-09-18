@@ -56,6 +56,7 @@ import { resolveCareNote } from '../../models/sitterBriefFields.js';
 import type { Plant, TaskCompletion } from '../../models/types.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import { logger } from '../../utils/logger.js';
 
 /** Header a scan page sends once the household PIN has been entered. */
@@ -174,6 +175,12 @@ export const issuePlantTag = createHandler(
       targetId: plantId,
       metadata: { tagId: tag.id },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'plant_tag.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { tagId: tag.id, plantId },
+    });
     return createdResponse(tagResponse(tag, plant, baseUrl));
   }
 )
@@ -201,6 +208,12 @@ export const revokePlantTag = createHandler(
       householdId,
       targetId: plantId,
       metadata: { revoked },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'plant_tag.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { plantId, count: revoked },
     });
     return noContentResponse();
   }

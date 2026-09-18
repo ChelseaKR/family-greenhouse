@@ -310,6 +310,16 @@ export async function deleteAbandonedHouseholdData(householdId: string): Promise
   });
   await deleteItems(activityItems);
 
+  // The household audit log (#675) is its own partition. Its rows expire on a
+  // TTL anyway, but erasure does not wait for a retention window.
+  const auditItems = await queryAllItems({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: { ':pk': `HOUSEHOLD#${householdId}#AUDIT` },
+    ProjectionExpression: 'PK, SK',
+  });
+  await deleteItems(auditItems);
+
   const householdItems = await queryAllItems({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk',

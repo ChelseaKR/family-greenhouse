@@ -31,6 +31,7 @@ import { grantCreditPack } from './identifyCredits.js';
 import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSubscriptions.js';
 import { grantGiftPurchase } from './giftCodes.js';
 import { assertPriceMatchesCatalog } from './stripePrices.js';
+import { recordBillingTransition } from './householdAudit.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -1811,6 +1812,14 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
       householdId: delta.householdId,
       metadata: { stripeEventType: event.type, fields: delta.fields },
     });
+    // The household's own audit log (#675): a plan change, a failed payment
+    // or a recovered one, read from the status this webhook just recorded.
+    // Gated on the dedupe ledger like the analytics below, so a redelivery
+    // does not write the entry twice. Resolves in every case — it can never
+    // turn an applied event into a retried one.
+    if (isNew) {
+      await recordBillingTransition(delta.householdId, event, delta.fields);
+    }
 
     // ---------------------------------------------------------------------
     // Subscription lifecycle analytics. Three server events, one per real

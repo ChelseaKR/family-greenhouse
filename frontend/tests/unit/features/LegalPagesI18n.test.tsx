@@ -36,8 +36,8 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    effectiveEn: 'Effective September 17, 2026.',
-    effectiveEs: 'Vigente desde el 17 de septiembre de 2026.',
+    effectiveEn: 'Effective September 18, 2026.',
+    effectiveEs: 'Vigente desde el 18 de septiembre de 2026.',
   },
   {
     name: 'terms',
@@ -191,6 +191,35 @@ describe('legal pages: link targets survive localization', () => {
       'Volver a activarla',
       'Google Signals y la personalización de anuncios están deshabilitadas',
       '14 meses',
+    ]) {
+      expect(spanish, phrase).toContain(phrase);
+    }
+  });
+
+  it('privacy discloses the household audit log, what it never holds, and its 30 days, in both locales', () => {
+    // #675: a new store of who-did-what. The page has to name it, say who can
+    // read it, say what it can never contain, and state the retention the
+    // backend enforces (AUDIT_RETENTION_DAYS).
+    const english = renderEnglish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Household audit log',
+      'visible only to the household’s admins',
+      'never the key',
+      'appear only as a former member',
+      'never hold a link, code or key, an email address, card details or plant notes',
+      'deleted after 30 days',
+    ]) {
+      expect(english, phrase).toContain(phrase);
+    }
+    cleanup();
+
+    const spanish = renderSpanish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Registro de auditoría del hogar',
+      'visible solo para las personas administradoras del hogar',
+      'nunca la clave',
+      'solo aparece como antiguo miembro',
+      'se eliminan a los 30 días',
     ]) {
       expect(spanish, phrase).toContain(phrase);
     }

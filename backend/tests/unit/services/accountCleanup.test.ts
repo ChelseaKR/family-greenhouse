@@ -337,7 +337,7 @@ describe('account cleanup', () => {
     ]);
   });
 
-  it('deletes sitter + kiosk + caretaker credentials, plant tags, cutting shares, and every abandoned-household partition row', async () => {
+  it('deletes sitter + kiosk + caretaker credentials, plant tags, cutting shares, the audit log, and every abandoned-household partition row', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
       const command = raw as unknown as {
@@ -373,6 +373,11 @@ describe('account cleanup', () => {
           Items: [{ PK: 'HOUSEHOLD#hh#CARETAKER_VISIT', SK: 'VISIT#1' }],
         } as never;
       }
+      if (pk === 'HOUSEHOLD#hh#AUDIT') {
+        return {
+          Items: [{ PK: 'HOUSEHOLD#hh#AUDIT', SK: 'AUDIT#2026-09-18T00:00:00.000Z#a1' }],
+        } as never;
+      }
       return {
         Items: [
           { PK: 'HOUSEHOLD#hh', SK: 'METADATA' },
@@ -398,13 +403,14 @@ describe('account cleanup', () => {
           };
         }
     );
-    // Eight partitions: sitter links, the kiosk link, caretaker seats,
-    // caretaker visits, plant tags, public cutting shares, activity, and the
-    // base household partition. Credentials that live outside the household's
-    // own partition are exactly the rows a partition-only sweep would leave
-    // usable — and the cutting share is the one of them that needs no
-    // credential to open.
-    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(8);
+    // Nine partitions: sitter links, the kiosk link, caretaker seats,
+    // caretaker visits, plant tags, public cutting shares, activity, the
+    // household audit log (#675), and the base household partition.
+    // Credentials that live outside the household's own partition are exactly
+    // the rows a partition-only sweep would leave usable — and the cutting
+    // share is the one of them that needs no credential to open. The audit
+    // log would expire on its own TTL; erasure does not wait for it.
+    expect(commands.filter((command) => command.kind === 'Query')).toHaveLength(9);
     expect(
       commands.filter((command) => command.kind === 'Delete').map((command) => command.input.Key)
     ).toEqual(
@@ -416,6 +422,7 @@ describe('account cleanup', () => {
         { PK: 'SHARE#secret', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh#CARETAKER_VISIT', SK: 'VISIT#1' },
         { PK: 'HOUSEHOLD#hh#ACTIVITY', SK: 'EVENT#1' },
+        { PK: 'HOUSEHOLD#hh#AUDIT', SK: 'AUDIT#2026-09-18T00:00:00.000Z#a1' },
         { PK: 'HOUSEHOLD#hh', SK: 'METADATA' },
         { PK: 'HOUSEHOLD#hh', SK: 'SPACE#s1' },
         { PK: 'HOUSEHOLD#hh', SK: 'TASK#t1' },

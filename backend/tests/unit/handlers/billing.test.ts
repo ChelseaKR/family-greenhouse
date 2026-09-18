@@ -6,6 +6,9 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 // real Stripe client. Note we keep the real `ALL_PLANS`/`planSummary` exports
 // from a partial import — listPlans iterates over them. Mocking everything to
 // `vi.fn()` would leave ALL_PLANS undefined and crash that handler.
+// The household audit log (#675) is covered by its own suites; mocked here so
+// these tests never reach a real DynamoDB client.
+vi.mock('../../../src/services/householdAudit.js');
 vi.mock('../../../src/services/billing.js', async () => {
   const actual = await vi.importActual<typeof import('../../../src/services/billing.js')>(
     '../../../src/services/billing.js'
@@ -1217,6 +1220,44 @@ describe('billing handler', () => {
           code: 'FG-0123-4567-89AB-CDEF',
           householdId: 'hh-1',
         });
+      });
+
+      it('records the plan change in the household audit log — and never the gift code (#675)', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        const householdAudit = await import('../../../src/services/householdAudit.js');
+        const code = 'FG-0123-4567-89AB-CDEF';
+        vi.mocked(redeemGiftCode).mockResolvedValueOnce({
+          planId: 'greenhouse',
+          endsAt: '2027-03-01T00:00:00.000Z',
+        });
+        const res = (await giftRedeem(post({ code }), ctx, () => {})) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(200);
+        // The code was in the request the handler saw...
+        expect(vi.mocked(redeemGiftCode).mock.calls[0][0]).toMatchObject({ code });
+        // ...and the audit entry carries the plan, not the code.
+        expect(householdAudit.recordHouseholdAudit).toHaveBeenCalledTimes(1);
+        expect(householdAudit.recordHouseholdAudit).toHaveBeenCalledWith({
+          householdId: 'hh-1',
+          kind: 'billing.plan_changed',
+          actor: { type: 'member', userId: 'user-1' },
+          details: { plan: 'greenhouse', via: 'gift', endsAt: '2027-03-01T00:00:00.000Z' },
+        });
+        expect(
+          JSON.stringify(vi.mocked(householdAudit.recordHouseholdAudit).mock.calls)
+        ).not.toMatch(/0123|4567|89AB|CDEF/);
+      });
+
+      it('records nothing when a redemption is refused', async () => {
+        const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
+        const householdAudit = await import('../../../src/services/householdAudit.js');
+        vi.mocked(redeemGiftCode).mockRejectedValueOnce(new GiftRedeemError('GIFT_CODE_INVALID'));
+        const res = (await giftRedeem(
+          post({ code: 'FG-0123-4567-89AB-CDEF' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(householdAudit.recordHouseholdAudit).not.toHaveBeenCalled();
       });
 
       it('maps each refusal to its status with the code in details, and echoes no code', async () => {

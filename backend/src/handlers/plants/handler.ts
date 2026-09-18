@@ -39,6 +39,7 @@ import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
 import * as trashService from '../../services/trashService.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -956,6 +957,16 @@ export const sharePlant = createHandler(
     if (!share) {
       throw createHttpError(404, 'Plant not found');
     }
+
+    // A public link with no other credential: the household's admins should
+    // be able to see that one was opened, by whom and until when. The code is
+    // the credential and stays out of the entry (#811 hashes it at rest).
+    await householdAudit.recordHouseholdAudit({
+      householdId: user.householdId!,
+      kind: 'share_link.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { plantId, expiresAt: share.expiresAt },
+    });
 
     return createdResponse({
       code: share.code,

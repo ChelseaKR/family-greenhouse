@@ -13,6 +13,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
+// The household audit log (#675) is covered by its own suites; mocked here so
+// these tests never reach a real DynamoDB client.
+vi.mock('../../../src/services/householdAudit.js');
 vi.mock('../../../src/services/caretakerService.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/services/caretakerService.js')>();
   return { ...actual, createCaretaker: vi.fn() };

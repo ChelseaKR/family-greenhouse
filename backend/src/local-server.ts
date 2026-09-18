@@ -128,6 +128,15 @@ import {
 // down before it could answer /health.
 import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
+// From models/, NOT services/householdAudit.js, for the same reason as the
+// kiosk import above: the service reaches utils/dynamodb.ts.
+import {
+  AUDIT_RETENTION_DAYS,
+  buildAuditItem,
+  isAuditItemExpired,
+  toAuditEntryView,
+  type RecordHouseholdAuditInput,
+} from './models/householdAudit.js';
 import type { ActivityEvent, RecordActivityInput } from './services/activity.js';
 import {
   registerPlantTagRoutes,
@@ -657,6 +666,9 @@ export const db = {
   photos: new Map<string, PlantPhoto>(),
   apiKeys: new Map<string, ApiKey>(),
   activity: new Map<string, ActivityEvent>(),
+  // Household audit log (#675), keyed by the row's sort key — mirrors the
+  // HOUSEHOLD#{id}#AUDIT partition in services/householdAudit.ts.
+  audit: new Map<string, Record<string, unknown>>(),
   // Vacation windows, keyed `${householdId}|${userId}` (one window per
   // member per household — mirrors the VACATION#{userId} SK in production).
   vacations: new Map<string, VacationWindow>(),
@@ -735,6 +747,7 @@ export function resetDb(): void {
   db.photos.clear();
   db.apiKeys.clear();
   db.activity.clear();
+  db.audit.clear();
   db.vacations.clear();
   db.pushSubscriptions.clear();
   db.deviceTokens.clear();
@@ -1052,6 +1065,18 @@ function membersOf(householdId: string) {
   return members;
 }
 
+/**
+ * Append a household audit entry. Mirrors `services/householdAudit.ts` through
+ * the same pure row builder, so the stored shape (and what it refuses to
+ * store) is the production one. The mock records the membership, invite,
+ * sitter-link, kiosk-link, API-key and trash producers; the rest exist only in
+ * the Lambdas.
+ */
+function recordLocalAudit(input: RecordHouseholdAuditInput): void {
+  const { item } = buildAuditItem(input, { id: uuidv4(), now: new Date(), gapBefore: false });
+  db.audit.set(`${String(item.PK)}|${String(item.SK)}`, item);
+}
+
 // Helper for emitting activity events. Mirrors `services/activity.ts`.
 function recordActivity(input: RecordActivityInput): void {
   const id = uuidv4();
@@ -1358,6 +1383,9 @@ app.delete('/me', authMiddleware, (req, res) => {
       }
       for (const [eid, event] of db.activity.entries()) {
         if (event.householdId === m.householdId) db.activity.delete(eid);
+      }
+      for (const [aid, row] of db.audit.entries()) {
+        if (row.householdId === m.householdId) db.audit.delete(aid);
       }
       for (const [vid, vacation] of db.vacations.entries()) {
         if (vacation.householdId === m.householdId) db.vacations.delete(vid);
@@ -1877,6 +1905,13 @@ app.post('/households', authMiddleware, validateBody(createHouseholdSchema), (re
     dbUser.householdRole = 'admin';
   }
 
+  recordLocalAudit({
+    householdId,
+    kind: 'household.created',
+    actor: { type: 'member', userId: user.userId },
+    details: {},
+  });
+
   // Production returns the household record itself (no `role` field).
   res.status(201).json(household);
 });
@@ -2190,6 +2225,12 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
   // Mirror the Lambda response shape: { code, expiresAt, url }. The frontend
   // householdService and HouseholdPage both consume `data.url` directly.
   const payload = { code, expiresAt, url: `${baseUrl}/join/${code}` };
+  recordLocalAudit({
+    householdId: req.params.id,
+    kind: 'invite.created',
+    actor: { type: 'member', userId: user.userId },
+    details: { channel: 'link', expiresAt },
+  });
 
   console.log('\n========================================');
   console.log('HOUSEHOLD INVITE CREATED');
@@ -2293,6 +2334,12 @@ app.post(
     console.log(text);
     console.log('========================================\n');
 
+    recordLocalAudit({
+      householdId: String(req.params.id),
+      kind: 'invite.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { channel: 'email', expiresAt },
+    });
     res.status(201).json({ code, expiresAt, url, status: 'accepted' });
   }
 );
@@ -2372,6 +2419,12 @@ app.post(
       process.env.ALLOWED_ORIGIN ||
       `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
 
+    recordLocalAudit({
+      householdId: link.householdId,
+      kind: 'sitter_link.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { linkId: link.id, startsAt: link.startsAt, expiresAt: link.expiresAt },
+    });
     res.status(201).json({ ...sitterSummary(link), token, url: `${baseUrl}/sit/${token}` });
   }
 );
@@ -2486,6 +2539,12 @@ app.post(
       db.tasks.set(entry.task.id, entry.task);
     }
     db.trash.delete(key);
+    recordLocalAudit({
+      householdId: entry.householdId,
+      kind: 'trash.restored',
+      actor: { type: 'member', userId: user.userId },
+      details: { itemKind: entry.kind, itemId: entry.id },
+    });
     res.json({ ...localTrashSummary(entry), restoring: false });
   }
 );
@@ -2504,6 +2563,12 @@ app.delete('/households/:id/trash/:kind/:itemId', authMiddleware, requireHouseho
   const entry = db.trash.get(key);
   if (!entry) return res.status(404).json({ message: 'That item is not in the trash' });
   db.trash.delete(key);
+  recordLocalAudit({
+    householdId: entry.householdId,
+    kind: 'trash.purged',
+    actor: { type: 'member', userId: user.userId },
+    details: { itemKind: kind, itemId },
+  });
   if (kind === 'plant') {
     // A task trashed on its own can never come back once its plant is gone.
     for (const [otherKey, other] of db.trash.entries()) {
@@ -2695,6 +2760,12 @@ app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHouseh
     });
   }
   target.status = 'revoked';
+  recordLocalAudit({
+    householdId: target.householdId,
+    kind: 'sitter_link.revoked',
+    actor: { type: 'member', userId: user.userId },
+    details: { linkId: target.id },
+  });
   recordActivity({
     type: 'sitter_link.revoked',
     householdId: req.params.id,
@@ -3006,6 +3077,12 @@ app.post(
       process.env.ALLOWED_ORIGIN ||
       `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
 
+    recordLocalAudit({
+      householdId: link.householdId,
+      kind: 'kiosk_link.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { linkId: link.id },
+    });
     res.status(201).json({ ...kioskSummary(link), token, url: `${baseUrl}/kiosk/${token}` });
   }
 );
@@ -3046,6 +3123,12 @@ app.delete(
       return res.status(404).json({ message: 'No active kiosk link to revoke' });
     }
     for (const link of active) link.status = 'revoked';
+    recordLocalAudit({
+      householdId: String(req.params.id),
+      kind: 'kiosk_link.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { count: active.length },
+    });
     res.status(204).end();
   }
 );
@@ -3265,6 +3348,12 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
     actorName: dbUser.name,
     payload: { role: 'member' },
   });
+  recordLocalAudit({
+    householdId: invite.householdId,
+    kind: 'member.joined',
+    actor: { type: 'member', userId: dbUser.id },
+    details: { role: 'member' },
+  });
 
   // Production returns the household record.
   res.json(household);
@@ -3291,7 +3380,15 @@ app.put(
     if (!target || !membership) {
       return res.status(404).json({ message: 'Member not found' });
     }
+    const previousRole = membership.role;
     membership.role = role;
+    recordLocalAudit({
+      householdId,
+      kind: 'member.role_changed',
+      actor: { type: 'member', userId: caller.userId },
+      targetUserId: userId,
+      details: { from: previousRole, to: role },
+    });
     // Claims hygiene (production: only rewrite the target's claims when THIS
     // household is their current default household).
     if (target.householdId === householdId) {
@@ -3470,7 +3567,14 @@ app.delete(
     if (!target || !membership) {
       return res.status(404).json({ message: 'Member not found' });
     }
-    departLocalHousehold(target, householdId);
+    const removal = departLocalHousehold(target, householdId);
+    recordLocalAudit({
+      householdId,
+      kind: 'member.removed',
+      actor: { type: 'member', userId: (req as any).user.userId },
+      targetUserId: userId,
+      details: { role: membership.role, ...removal.revokedCredentials },
+    });
     res.status(204).send();
   }
 );
@@ -3521,6 +3625,16 @@ app.post(
       });
     }
     const summary = departLocalHousehold(target, householdId);
+    recordLocalAudit({
+      householdId,
+      kind: 'member.left',
+      actor: { type: 'member', userId: target.id },
+      details: {
+        role: membership.role,
+        releasedTasks: summary.releasedTasks,
+        ...summary.revokedCredentials,
+      },
+    });
     recordActivity({
       type: 'member.left',
       householdId,
@@ -6149,6 +6263,44 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
   });
 });
 
+// GET /households/:id/audit — mirrors getHouseholdAuditLog in
+// handlers/households/handler.ts: admin-only, newest first, cursor-paged, and
+// resolved against the current roster through the same pure view builder.
+app.get('/households/:id/audit', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
+  const user = (req as any).user;
+  const householdId = String(req.params.id);
+  if (user.householdId !== householdId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 25;
+  if (!Number.isInteger(limitRaw) || limitRaw < 1) {
+    return res.status(400).json({ message: 'limit must be a positive integer' });
+  }
+  const limit = Math.min(100, limitRaw);
+  let after: string | null = null;
+  if (typeof req.query.cursor === 'string' && req.query.cursor) {
+    after = Buffer.from(req.query.cursor, 'base64url').toString('utf8');
+    if (!after.startsWith('AUDIT#')) return res.status(400).json({ message: 'Invalid cursor' });
+  }
+  const now = new Date();
+  const rows = [...db.audit.values()]
+    .filter((row) => row.householdId === householdId)
+    .sort((a, b) => (String(a.SK) < String(b.SK) ? 1 : -1))
+    .filter((row) => after === null || String(row.SK) < after);
+  const page = rows.slice(0, limit);
+  const roster = membersOf(householdId).map((m) => ({ userId: m.userId, name: m.name }));
+  res.json({
+    retentionDays: AUDIT_RETENTION_DAYS,
+    items: page
+      .filter((row) => !isAuditItemExpired(row, now))
+      .map((row) => toAuditEntryView(row, householdId, roster)),
+    nextCursor:
+      rows.length > limit
+        ? Buffer.from(String(page[page.length - 1].SK), 'utf8').toString('base64url')
+        : null,
+  });
+});
+
 app.get('/households/:id/activity', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
   if (user.householdId !== req.params.id) {
@@ -7255,6 +7407,12 @@ app.post(
     db.apiKeys.set(id, record);
     console.log(`\n[api-keys] issued ${plaintext} for household ${user.householdId}\n`);
     const { plaintext: _p, ...publicShape } = record;
+    recordLocalAudit({
+      householdId: user.householdId,
+      kind: 'api_key.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { keyId: id, last4: record.last4, scopes: scopes.join(',') },
+    });
     res.status(201).json({ record: publicShape, plaintext });
   }
 );
@@ -7266,6 +7424,12 @@ app.delete('/api-keys/:id', authMiddleware, requireHousehold, requireAdmin, (req
     return res.status(404).json({ message: 'API key not found' });
   }
   db.apiKeys.delete(req.params.id);
+  recordLocalAudit({
+    householdId: key.householdId,
+    kind: 'api_key.revoked',
+    actor: { type: 'member', userId: (req as any).user.userId },
+    details: { keyId: key.id },
+  });
   res.status(204).send();
 });
 

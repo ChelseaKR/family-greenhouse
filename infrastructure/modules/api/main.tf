@@ -1069,6 +1069,7 @@ locals {
     "GET /households/invites/{inviteCode}"                = { group = "households", auth = "none" }
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }
+    "GET /households/{id}/audit"                          = { group = "households", auth = "jwt" }
     "GET /households/{id}/analytics/daily"                = { group = "households", auth = "jwt" }
     "GET /households/{id}/analytics/coverage"             = { group = "households", auth = "jwt" }
     "GET /households/{id}/year-in-review"                 = { group = "households", auth = "jwt" }

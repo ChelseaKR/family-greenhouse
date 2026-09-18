@@ -20,6 +20,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **A household audit log for admins (#675).** The Household page now shows
+  admins who changed the household itself, newest first and a page at a time:
+  the household being created; members joining, leaving (including by deleting
+  their account), being removed — with the credentials the removal revoked, as
+  counts — or changing role; invitations by link or email; sitter, wall
+  display, caretaker, plant-tag and cutting links created and turned off; API
+  keys created (last four and scopes) and revoked; plan changes, trial starts,
+  gift redemptions, and payments failing or recovering, read from the status
+  the Stripe webhook records; and trash restores and delete-nows. Entries live
+  in their own append-only partition (`HOUSEHOLD#{id}#AUDIT`, Put under
+  `attribute_not_exists`) for **30 days** — the retention the DPIA already
+  states for the security audit log; `AUDIT_RETENTION_DAYS` is the one-line
+  config. Actors are stored as a per-household hash of the user id and shown
+  by current display name, so anyone who has left reads as a former member and
+  a deleted account needs no rewrite. An entry never carries a token, code,
+  key or its hash, an email, card details, a label or a plant note: producers
+  pass allowlisted fields and a value guard refuses anything credential-shaped
+  (tested with every producer's real secret injected). A failed audit write
+  never fails the change it describes; it logs
+  `household_audit.write_failed` and the next entry for that household is
+  marked as following a gap. `GET /households/{id}/audit` is admin-only;
+  `DELETE /me` erases the partition with an abandoned household. EN/ES, and
+  the privacy policy now describes it. Deploy note: one new route in
+  `local.routes`, applied by the next `v*` tag; the Stripe webhook gains one
+  never-throwing DynamoDB write after the subscription row is applied.
+
 - **A 30-day household trash with restore (#670).** Deleting a plant or a task
   now moves it to the household's trash instead of erasing it. While it is
   there it is gone from every surface — lists, the reminder scan, the calendar

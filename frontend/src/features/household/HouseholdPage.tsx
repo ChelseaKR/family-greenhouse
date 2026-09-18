@@ -32,6 +32,7 @@ import { CareLoadCard } from './CareLoadCard';
 import { AutoHandoffCard } from './AutoHandoffCard';
 import { HouseholdTimeZoneCard } from './HouseholdTimeZoneCard';
 import { LeaveHouseholdCard } from './LeaveHouseholdCard';
+import { HouseholdAuditCard } from './HouseholdAuditCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -522,6 +523,11 @@ export function HouseholdPage() {
           ))}
         </ul>
       </Card>
+
+      {/* Household audit log (#675) — admin-only: who changed membership, the
+          links and keys into the household, and the plan. The server refuses
+          a member too; hiding it here is presentation, not the control. */}
+      {isAdmin && householdId && <HouseholdAuditCard householdId={householdId} />}
 
       {/* Leaving (#686) — every member, admins included: the card itself
           explains when a leave would be refused (only member, only admin). */}
