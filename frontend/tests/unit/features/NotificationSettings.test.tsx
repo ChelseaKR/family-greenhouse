@@ -804,7 +804,7 @@ describe('NotificationSettings', () => {
   it('offers a separate switch for each household email', async () => {
     await renderSettings(prefs());
     for (const label of [
-      'Someone joins the household',
+      'Someone joins or leaves the household',
       'A task is up for grabs',
       "You're covering for someone",
       'Someone covered for you',

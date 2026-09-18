@@ -158,6 +158,122 @@ describe('account cleanup', () => {
     expect(deletes[0].input.Key).toEqual({ PK: 'HOUSEHOLD#hh', SK: 'VACATION#u2' });
   });
 
+  it('drops the departed member from care rotations, scrubs the asker of an open help request, and reports only what it changed (#686)', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const rotation = (memberIds: string[]) => ({
+      memberIds,
+      cadence: 'weekly',
+      anchor: '2026-01-05T00:00:00.000Z',
+    });
+    vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
+      const command = raw as unknown as {
+        kind: string;
+        input: { IndexName?: string; KeyConditionExpression?: string };
+      };
+      if (command.kind !== 'Query') return {} as never;
+      if (command.input.IndexName === 'GSI1') return { Items: [] } as never;
+      if (command.input.KeyConditionExpression?.includes('begins_with')) {
+        return { Items: [] } as never;
+      }
+      return {
+        Items: [
+          // A three-person rotation keeps turning without them, same anchor.
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'SPACE#three',
+            entityType: 'PlantSpace',
+            rotation: rotation(['a', 'u1', 'b']),
+          },
+          // A two-person rotation is not a rotation once they go.
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'SPACE#two',
+            entityType: 'PlantSpace',
+            rotation: rotation(['a', 'u1']),
+          },
+          // A rotation that never named them is left alone.
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'SPACE#other',
+            entityType: 'PlantSpace',
+            rotation: rotation(['a', 'b']),
+          },
+          // An open "ask family" request they raised: already up for grabs.
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'TASK#asked',
+            entityType: 'Task',
+            assignedTo: null,
+            helpAskedBy: 'u1',
+            helpAskedByName: 'Sam',
+          },
+          // A claim and an inherited turn: both released.
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'TASK#claimed',
+            entityType: 'Task',
+            assignedTo: 'u1',
+            assignmentSource: null,
+          },
+          {
+            PK: 'HOUSEHOLD#hh',
+            SK: 'TASK#turn',
+            entityType: 'Task',
+            assignedTo: 'u1',
+            assignmentSource: 'rotation',
+          },
+          // Someone else's task is not touched.
+          { PK: 'HOUSEHOLD#hh', SK: 'TASK#theirs', entityType: 'Task', assignedTo: 'a' },
+        ],
+      } as never;
+    });
+
+    const { anonymizeUserInHousehold } = await import('../../../src/services/accountCleanup.js');
+    const summary = await anonymizeUserInHousehold('hh', 'u1');
+
+    expect(summary).toEqual({ releasedTasks: 2, rotationsUpdated: 2, helpAsksAnonymized: 1 });
+    const updates = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((call) => call[0] as unknown as { kind: string; input: Record<string, any> })
+      .filter((command) => command.kind === 'Update');
+    const bySk = (sk: string) => updates.find((u) => u.input.Key?.SK === sk);
+    expect(bySk('SPACE#three')?.input.ExpressionAttributeValues[':rotation']).toEqual(
+      rotation(['a', 'b'])
+    );
+    expect(bySk('SPACE#two')?.input.ExpressionAttributeValues[':rotation']).toBeNull();
+    expect(bySk('SPACE#other')).toBeUndefined();
+    expect(bySk('TASK#theirs')).toBeUndefined();
+    const asked = bySk('TASK#asked');
+    expect(asked?.input.UpdateExpression).toContain('#helpAskedBy = :deletedId');
+    expect(asked?.input.ExpressionAttributeValues).toMatchObject({
+      ':deletedId': 'deleted-user',
+      ':deletedName': 'Former member',
+    });
+    // The ask stays open: nothing about its state is rewritten.
+    expect(asked?.input.UpdateExpression).not.toContain('helpAskedForDue');
+    expect(asked?.input.UpdateExpression).not.toContain('escalatedForDue');
+  });
+
+  it('propagates a failed release write instead of reporting the task as released', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
+      const command = raw as unknown as {
+        kind: string;
+        input: { IndexName?: string; KeyConditionExpression?: string };
+      };
+      if (command.kind === 'Update') throw new Error('throttled');
+      if (command.input.IndexName === 'GSI1') return { Items: [] } as never;
+      if (command.input.KeyConditionExpression?.includes('begins_with')) {
+        return { Items: [] } as never;
+      }
+      return {
+        Items: [{ PK: 'HOUSEHOLD#hh', SK: 'TASK#t', entityType: 'Task', assignedTo: 'u1' }],
+      } as never;
+    });
+    const { anonymizeUserInHousehold } = await import('../../../src/services/accountCleanup.js');
+    await expect(anonymizeUserInHousehold('hh', 'u1')).rejects.toThrow('throttled');
+  });
+
   it('deletes every page of the user partition, including notification markers', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     let queryPage = 0;

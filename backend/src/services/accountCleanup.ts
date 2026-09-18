@@ -8,8 +8,12 @@ import * as plantService from './plantService.js';
 import * as plantTagService from './plantTagService.js';
 import * as sitterService from './sitterService.js';
 
-const DELETED_USER_ID = 'deleted-user';
-const DELETED_USER_NAME = 'Former member';
+/** The stable id and display name a departed member's history is rewritten
+ *  to. Exported so a producer writing a row AFTER the sweep (the `member.left`
+ *  activity entry) can write it already anonymised instead of racing the
+ *  sweep's eventually-consistent GSI read. */
+export const DELETED_USER_ID = 'deleted-user';
+export const DELETED_USER_NAME = 'Former member';
 
 const CLEANUP_CONCURRENCY = 10;
 
@@ -382,8 +386,57 @@ export async function revokeCredentialsCreatedBy(
   return { plantTags, sitterLinks, kioskLinks, cuttingShares };
 }
 
-export async function anonymizeUserInHousehold(householdId: string, userId: string): Promise<void> {
+/**
+ * What a departure changed in the household's live state, counted from the
+ * rows the sweep actually rewrote — never estimated. The leave route reports
+ * `releasedTasks` to the leaver, the household feed and the admins' email, so
+ * it must be the number of tasks that really went back up for grabs.
+ */
+export interface DepartureCleanupSummary {
+  /** Tasks that carried the departed member's name (a claim, an explicit
+   *  assignment, or an inherited space-default / rotation turn) and are now
+   *  unassigned — up for grabs. */
+  releasedTasks: number;
+  /** Care rotations the departed member was dropped from. */
+  rotationsUpdated: number;
+  /** Open "ask family" requests whose asker now reads as Former member. The
+   *  ask itself stays open: the task is still up for grabs. */
+  helpAsksAnonymized: number;
+}
+
+/**
+ * The departed member's rotation, with them taken out of the turn order.
+ *
+ * The anchor is kept so the remaining members' cycle does not restart at
+ * whoever happens to be first (the same rule `spaceService.resolveRotation`
+ * applies to an edit). A rotation left with fewer than two people is not a
+ * rotation — `spaceService.itemToRotation` already reads one as "none" — so it
+ * is cleared explicitly rather than stored in a shape the reader discards.
+ *
+ * Returns `undefined` when the stored value is not a rotation that names the
+ * user, so the caller leaves the attribute alone.
+ */
+function rotationWithout(raw: unknown, userId: string): Record<string, unknown> | null | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const rotation = raw as Record<string, unknown>;
+  if (!Array.isArray(rotation.memberIds)) return undefined;
+  const memberIds = rotation.memberIds as unknown[];
+  if (!memberIds.includes(userId)) return undefined;
+  const remaining = memberIds.filter((id) => id !== userId);
+  if (remaining.length < 2) return null;
+  return { ...rotation, memberIds: remaining };
+}
+
+export async function anonymizeUserInHousehold(
+  householdId: string,
+  userId: string
+): Promise<DepartureCleanupSummary> {
   const plantIds: string[] = [];
+  const summary: DepartureCleanupSummary = {
+    releasedTasks: 0,
+    rotationsUpdated: 0,
+    helpAsksAnonymized: 0,
+  };
   await forEachQueryPage(
     {
       TableName: TABLE_NAME,
@@ -406,7 +459,25 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
         const defaultCaregiverUser =
           item.entityType === 'PlantSpace' && item.defaultCaregiverId === userId;
         const reportedByUser = item.entityType === 'ChatReport' && item.userId === userId;
-        if (!createdByUser && !assignedToUser && !defaultCaregiverUser && !reportedByUser) return;
+        // A care rotation naming the departed member would otherwise skip
+        // their turn forever, handing the next person two turns in a row —
+        // which reads as a bug in the rotation, not as stale configuration.
+        const prunedRotation =
+          item.entityType === 'PlantSpace' ? rotationWithout(item.rotation, userId) : undefined;
+        // An open "ask family" request keeps its state (the task is already up
+        // for grabs — ADR 0024); only the asker's identity is scrubbed, exactly
+        // as a completion's is.
+        const helpAskedByUser = item.entityType === 'Task' && item.helpAskedBy === userId;
+        if (
+          !createdByUser &&
+          !assignedToUser &&
+          !defaultCaregiverUser &&
+          !reportedByUser &&
+          prunedRotation === undefined &&
+          !helpAskedByUser
+        ) {
+          return;
+        }
 
         const set: string[] = [];
         const remove: string[] = [];
@@ -435,6 +506,18 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
           names['#userId'] = 'userId';
           values[':deletedId'] = DELETED_USER_ID;
         }
+        if (prunedRotation !== undefined) {
+          set.push('#rotation = :rotation');
+          names['#rotation'] = 'rotation';
+          values[':rotation'] = prunedRotation;
+        }
+        if (helpAskedByUser) {
+          set.push('#helpAskedBy = :deletedId', '#helpAskedByName = :deletedName');
+          names['#helpAskedBy'] = 'helpAskedBy';
+          names['#helpAskedByName'] = 'helpAskedByName';
+          values[':deletedId'] = DELETED_USER_ID;
+          values[':deletedName'] = DELETED_USER_NAME;
+        }
 
         await dynamodb.send(
           new UpdateCommand({
@@ -446,6 +529,11 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
             ConditionExpression: 'attribute_exists(PK)',
           })
         );
+        // Counted only once the write has landed: these numbers are reported
+        // to people as what happened, so a failed write must not inflate them.
+        if (assignedToUser) summary.releasedTasks += 1;
+        if (prunedRotation !== undefined) summary.rotationsUpdated += 1;
+        if (helpAskedByUser) summary.helpAsksAnonymized += 1;
       })
   );
 
@@ -621,4 +709,5 @@ export async function anonymizeUserInHousehold(householdId: string, userId: stri
         );
       })
   );
+  return summary;
 }

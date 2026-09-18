@@ -15,6 +15,8 @@ import {
   CreateHouseholdInput,
   updateMemberRoleSchema,
   UpdateMemberRoleInput,
+  leaveHouseholdSchema,
+  LeaveHouseholdInput,
   createSitterLinkSchema,
   CreateSitterLinkInput,
   setEscalationRuleSchema,
@@ -33,6 +35,14 @@ import * as cognitoUsers from '../../services/cognitoUsers.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as accountCleanup from '../../services/accountCleanup.js';
+import * as householdDeparture from '../../services/householdDeparture.js';
+import {
+  LEAVE_REFUSAL_CODES,
+  LEAVE_REFUSAL_MESSAGES,
+  isRenewingSubscription,
+  rosterRefusal,
+  type LeaveRefusalCode,
+} from '../../services/leaveHouseholdRules.js';
 import * as escalation from '../../services/escalation.js';
 import * as coverage from '../../services/coverage.js';
 import { getEntitledPlan, hasHouseholdToolkit, limitOf, type Plan } from '../../models/plans.js';
@@ -843,8 +853,15 @@ export const removeMember = createHandler(
       throw createHttpError(404, 'Member not found');
     }
 
+    // The shared departure sequence (services/householdDeparture.ts): the
+    // member row under the last-admin guard, then credential revocation
+    // STRICTLY BEFORE anonymisation (#449 — the sweep overwrites `createdBy`
+    // on exactly the rows revocation must find), then task/rotation/vacation
+    // cleanup, then claims hygiene that only moves the default when this was
+    // it. Self-leave (#686) runs the same function, so the two cannot drift.
+    let departure: householdDeparture.DepartureResult;
     try {
-      await householdService.removeMember(householdId, userId);
+      departure = await householdDeparture.departHousehold(householdId, userId);
     } catch (err) {
       // Service-layer last-admin guard (L1).
       if (err instanceof Error && err.name === 'LastAdminError') {
@@ -855,34 +872,7 @@ export const removeMember = createHandler(
       }
       throw err;
     }
-    // Revoke the capability tokens this member minted. STRICTLY BEFORE
-    // anonymizeUserInHousehold: that sweep overwrites `createdBy` with the
-    // deleted-user id on exactly these rows, after which nothing can tell
-    // which credentials were theirs. Removal used to end the session and
-    // nothing else, so a plant tag (no expiry), a kiosk link (no expiry) or a
-    // sitter link they had issued kept working (#449).
-    const revoked = await accountCleanup.revokeCredentialsCreatedBy(householdId, userId);
-
-    // Member rows are only one half of departure. Clear every active task
-    // assignment, vacation/cover relationship, and space default that still
-    // points at the departed user, while anonymizing retained history.
-    await accountCleanup.anonymizeUserInHousehold(householdId, userId);
-
-    // Claims hygiene. Removal from a SECONDARY household must not touch the
-    // user's Cognito claims at all (the old unconditional clear logged users
-    // out of their own default household when removed from any other one).
-    // When the removed household IS their claim household, re-point the
-    // claims at one of their remaining memberships, or clear if none remain.
-    const claims = await cognitoUsers.getHouseholdClaims(userId);
-    if (claims.householdId === householdId) {
-      const remaining = await householdService.getMembershipsByUser(userId);
-      const next = remaining.find((m) => m.householdId !== householdId);
-      if (next) {
-        await cognitoUsers.setHouseholdClaims(userId, next.householdId, next.role);
-      } else {
-        await cognitoUsers.clearHouseholdClaims(userId);
-      }
-    }
+    const revoked = departure.revokedCredentials;
 
     audit('household.member_removed', {
       actorId: user.userId,
@@ -904,6 +894,204 @@ export const removeMember = createHandler(
   .use(authMiddleware())
   .use(requireHousehold())
   .use(requireAdmin());
+
+// ---------------------------------------------------------------------------
+// Leaving a household (#686)
+// ---------------------------------------------------------------------------
+//
+// A member leaves one household and keeps their account and every other
+// household. It is removal seen from the other side — the same departure
+// sequence runs (services/householdDeparture.ts) — plus the three states
+// removal never had to answer because an admin cannot remove themselves:
+//
+//   - LAST_MEMBER. The only member leaving would leave a household with plants,
+//     history and possibly a paid plan and nobody in it. Refused: invite and
+//     promote someone first, or delete the account (which is the existing,
+//     documented path for abandoning a household — docs/multi-household.md).
+//     The household is never ended or deleted by a leave.
+//   - LAST_ADMIN. The lone admin of a household with other members would lock
+//     it out of admin. Refused here on a read-only pre-check, AND by the
+//     TOCTOU-safe guard inside householdService.removeMember (two admins
+//     leaving at once cannot both succeed).
+//   - BILLING_ACK_REQUIRED. Leaving never touches billing: subscriptions belong
+//     to households, and a household that keeps members keeps its plan. But an
+//     ADMIN leaving a household whose Stripe subscription will renew may be
+//     leaving their own card on it, and after leaving they cannot reach this
+//     household's Settings → Billing (billing routes are admin-only, so a plain
+//     member can never be in this position). That admin is refused until they
+//     send `acknowledgeBilling: true` — the refusal IS the warning, and the
+//     client shows it before offering "leave anyway".
+//
+// Instant, like removal and DELETE /me: the confirm dialog is the fat-finger
+// guard, and a grace window an admin can see would defeat the point of the
+// route, which is leaving without having to ask the admin.
+
+/** A 409 whose `details.code` the client words in the user's language. */
+function leaveRefusal(code: LeaveRefusalCode, extra: Record<string, unknown> = {}) {
+  return createHttpError(409, LEAVE_REFUSAL_MESSAGES[code], { details: { code, ...extra } });
+}
+
+// POST /households/{id}/leave
+export const leaveHousehold = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<LeaveHouseholdInput>;
+    const householdId = event.pathParameters?.id;
+
+    if (!householdId) {
+      throw createHttpError(400, 'Household ID is required');
+    }
+    // Self only. The leaver is the authenticated caller — never a body or path
+    // field — and the path must name the household the request resolved to
+    // (X-Household-Id, validated against the membership row by authMiddleware).
+    if (user.householdId !== householdId) {
+      throw createHttpError(403, 'Access denied');
+    }
+
+    const member = await householdService.getMemberByUserId(householdId, user.userId);
+    if (!member) {
+      throw createHttpError(404, 'You are not a member of this household');
+    }
+    const members = await householdService.getHouseholdMembers(householdId);
+
+    const refusal = rosterRefusal(user.userId, members);
+    if (refusal) {
+      throw leaveRefusal(refusal);
+    }
+
+    if (member.role === 'admin' && validatedBody?.acknowledgeBilling !== true) {
+      // A read that fails here throws, and the leave is refused as a 500 with
+      // nothing changed: an unread subscription is not "no subscription".
+      const subscription = await billing.getHouseholdSubscription(householdId);
+      if (isRenewingSubscription(subscription)) {
+        throw leaveRefusal(LEAVE_REFUSAL_CODES.billingAckRequired, {
+          planId: subscription.planId,
+          currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+        });
+      }
+    }
+
+    // Read before anything changes: after the departure the leaver can no
+    // longer read this household. The name only feeds the leaver's own
+    // confirmation email, whose copy renders `null` as "a household" — true
+    // whether the read failed or the row had no name — so a failed read is
+    // settled explicitly as that acknowledged unknown, never as a reason to
+    // refuse a leave the person has already confirmed.
+    let householdName: string | null;
+    try {
+      householdName = (await householdService.getHousehold(householdId))?.name?.trim() || null;
+    } catch (err) {
+      householdName = null;
+      logger.warn(
+        { err: (err as Error).message, householdId, msg: 'household_leave.name_read_failed' },
+        'household_leave.name_read_failed'
+      );
+    }
+
+    let departure: householdDeparture.DepartureResult;
+    try {
+      departure = await householdDeparture.departHousehold(householdId, user.userId);
+    } catch (err) {
+      // Lost the race to another admin leaving or being demoted at the same
+      // moment: the service guard refused inside the transaction.
+      if (err instanceof Error && err.name === 'LastAdminError') {
+        throw leaveRefusal(LEAVE_REFUSAL_CODES.lastAdmin);
+      }
+      throw err;
+    }
+    const { releasedTasks } = departure.cleanup;
+
+    // The household's own record of the departure. Written ALREADY anonymised:
+    // the sweep above rewrote every earlier event of theirs to "Former member",
+    // and a row written after it that named them would undo that contract.
+    // (Writing it before the sweep would race the sweep's GSI read instead.)
+    try {
+      await activity.recordActivity({
+        type: 'member.left',
+        householdId,
+        actorId: accountCleanup.DELETED_USER_ID,
+        actorName: accountCleanup.DELETED_USER_NAME,
+        payload: { role: member.role, releasedTasks },
+      });
+    } catch (err) {
+      logger.warn({ err }, 'activity_record_failed');
+    }
+
+    audit('household.member_left', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      targetId: user.userId,
+      householdId,
+      metadata: {
+        role: member.role,
+        releasedTasks,
+        rotationsUpdated: departure.cleanup.rotationsUpdated,
+        helpAsksAnonymized: departure.cleanup.helpAsksAnonymized,
+        revokedCredentials: departure.revokedCredentials,
+        billingAcknowledged: validatedBody?.acknowledgeBilling === true,
+      },
+    });
+
+    // Emails. Awaited (a dangling promise can be frozen with the Lambda) but
+    // never allowed to fail a departure that has already happened.
+    try {
+      await householdEmails.notifyMemberLeft({
+        householdId,
+        leftUserId: user.userId,
+        memberName: member.name?.trim() || null,
+        releasedTasks,
+      });
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, householdId },
+        'household_email.member_left_failed'
+      );
+    }
+
+    // `null` is "could not read", never "none": the success path always yields
+    // a number, and the confirmation below is skipped rather than sent with a
+    // guessed count.
+    let remainingHouseholds: number | null;
+    try {
+      remainingHouseholds = (await householdService.getMembershipsByUser(user.userId)).filter(
+        (m) => m.householdId !== householdId
+      ).length;
+    } catch (err) {
+      remainingHouseholds = null;
+      logger.warn(
+        {
+          err: (err as Error).message,
+          householdId,
+          msg: 'household_leave.memberships_read_failed',
+        },
+        'household_leave.memberships_read_failed'
+      );
+    }
+    // The confirmation says how many households remain; with that count
+    // unknown it would have to guess, so it is not sent rather than sent wrong.
+    if (remainingHouseholds !== null) {
+      await householdEmails.sendLeaveConfirmation({
+        userId: user.userId,
+        email: user.email,
+        householdName,
+        releasedTasks,
+        remainingHouseholds,
+      });
+    }
+
+    return successResponse({
+      householdId,
+      releasedTasks,
+      revokedCredentials: departure.revokedCredentials,
+      defaultHouseholdId: departure.defaultHouseholdId,
+      defaultHouseholdRole: departure.defaultHouseholdRole,
+      remainingHouseholds,
+    });
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(validateBody(leaveHouseholdSchema));
 
 // ---------------------------------------------------------------------------
 // Plant-sitter links (authed management side)
@@ -1223,6 +1411,7 @@ export const handler = createRouter({
   'GET /households/{id}/year-in-review': getYearInReview,
   'PUT /households/{householdId}/members/{userId}/role': updateMemberRole,
   'DELETE /households/{householdId}/members/{userId}': removeMember,
+  'POST /households/{id}/leave': leaveHousehold,
   'POST /households/{id}/sitter-links': createSitterLink,
   'GET /households/{id}/sitter-links': listSitterLinks,
   'DELETE /households/{id}/sitter-links/{linkId}': revokeSitterLink,

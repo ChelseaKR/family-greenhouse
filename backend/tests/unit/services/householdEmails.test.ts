@@ -208,6 +208,168 @@ describe('notifyMemberJoined', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. Someone left (#686)
+// ---------------------------------------------------------------------------
+
+function queuedPayloads(calls: unknown[][]) {
+  return calls
+    .map((call) => {
+      const input = (call[0] as { input: Record<string, never> }).input as unknown as {
+        Key?: { PK: string; SK: string };
+        ExpressionAttributeValues?: { ':one'?: string[]; ':kind'?: string };
+      };
+      return {
+        pk: input.Key?.PK,
+        sk: input.Key?.SK,
+        kind: input.ExpressionAttributeValues?.[':kind'],
+        item: JSON.parse(input.ExpressionAttributeValues?.[':one']?.[0] ?? 'null'),
+      };
+    })
+    .filter((p) => p.kind === 'member_left');
+}
+
+describe('notifyMemberLeft', () => {
+  const adminB = { ...memberB, role: 'admin' as const };
+
+  it("queues the household's remaining ADMINS only, with the leaver's name and released-task count", async () => {
+    // u3 (Priya) left; the roster read after departure still lists u1 (admin),
+    // u2 (admin) and u4 (plain member). Only the admins are told.
+    const memberD = { ...memberC, userId: 'u4', email: 'd@x.com' };
+    await mockRoster([memberA, adminB, memberD]);
+    const { notifyMemberLeft } = await import('../../../src/services/householdEmails.js');
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+
+    const queued = await notifyMemberLeft(
+      { householdId: 'hh', leftUserId: 'u3', memberName: 'Priya', releasedTasks: 3 },
+      NOW
+    );
+
+    expect(queued).toBe(2);
+    const payloads = queuedPayloads(vi.mocked(dynamodb.send).mock.calls);
+    expect(payloads.map((p) => p.pk).sort()).toEqual(['USER#u1', 'USER#u2']);
+    expect(payloads[0].item).toEqual({
+      memberName: 'Priya',
+      householdName: 'The Kim House',
+      releasedTasks: 3,
+      householdUrl: 'https://app.example.net/household',
+    });
+    // Keyed on the departure instant, so a later leave after a re-invite is
+    // a second departure rather than a duplicate.
+    expect(payloads[0].sk).toBe(`HHEMAIL#member_left#hh#u3#${NOW.toISOString()}`);
+  });
+
+  it('respects the membership-change switch and the email master switch', async () => {
+    await mockRoster([memberA, adminB]);
+    await mockPrefs({ u1: { memberJoined: false }, u2: { email: false } });
+    const { notifyMemberLeft } = await import('../../../src/services/householdEmails.js');
+    expect(
+      await notifyMemberLeft(
+        { householdId: 'hh', leftUserId: 'u3', memberName: 'Priya', releasedTasks: 0 },
+        NOW
+      )
+    ).toBe(0);
+  });
+
+  it('renders in each language, and says nothing about tasks when none were released', async () => {
+    const { renderQueued } = await import('../../../src/services/householdEmails.js');
+    const row = (releasedTasks: number) =>
+      ({
+        kind: 'member_left',
+        items: [
+          JSON.stringify({
+            memberName: 'Priya',
+            householdName: 'The Kim House',
+            releasedTasks,
+            householdUrl: 'https://app.example.net/household',
+          }),
+        ],
+      }) as never;
+    const en = renderQueued(row(2), 'en', NOW);
+    expect(en?.subject).toBe('Priya left The Kim House');
+    expect(en?.text).toContain('They had 2 tasks with their name on them');
+    expect(en?.text).toContain('https://app.example.net/tasks');
+    const es = renderQueued(row(1), 'es', NOW);
+    expect(es?.subject).toBe('Priya ha salido de The Kim House');
+    expect(es?.text).toContain('Tenía una tarea a su nombre');
+    const none = renderQueued(row(0), 'en', NOW);
+    expect(none?.text).not.toMatch(/up for grabs/);
+  });
+});
+
+describe('discardQueuedForHousehold', () => {
+  it("drops only the departed household's PENDING rows from the leaver's own queue", async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockImplementation(async (raw) => {
+      const command = raw as unknown as { kind: string };
+      if (command.kind !== 'Query') return {} as never;
+      return {
+        Items: [
+          { PK: 'USER#u3', SK: 'HHEMAIL#a', householdId: 'hh', status: 'pending' },
+          { PK: 'USER#u3', SK: 'HHEMAIL#b', householdId: 'hh', status: 'sent' },
+          { PK: 'USER#u3', SK: 'HHEMAIL#c', householdId: 'hh-other', status: 'pending' },
+        ],
+      } as never;
+    });
+    const { discardQueuedForHousehold } = await import('../../../src/services/householdEmails.js');
+
+    expect(await discardQueuedForHousehold('u3', 'hh')).toBe(1);
+    const deletes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((call) => call[0] as unknown as { kind: string; input: { Key: unknown } })
+      .filter((c) => c.kind === 'Delete');
+    expect(deletes.map((d) => d.input.Key)).toEqual([{ PK: 'USER#u3', SK: 'HHEMAIL#a' }]);
+  });
+});
+
+describe('sendLeaveConfirmation', () => {
+  const params = {
+    userId: 'u3',
+    email: 'priya@x.com',
+    householdName: 'The Kim House',
+    releasedTasks: 2,
+    remainingHouseholds: 0,
+  };
+
+  it('sends straight away — a leaver of their only household is flushed by no household pass', async () => {
+    const { sendLeaveConfirmation } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+    expect(await sendLeaveConfirmation(params)).toBe('sent');
+    const msg = vi.mocked(emailNotifier.sendEmail).mock.calls[0][0];
+    expect(msg.to).toBe('priya@x.com');
+    expect(msg.subject).toBe('You left The Kim House');
+    expect(msg.text).toContain('Your account is still active');
+    expect(msg.text).toContain('You no longer belong to any household');
+  });
+
+  it("writes in the leaver's chosen language", async () => {
+    await mockPrefs({ u3: { emailLocale: 'es' } });
+    const { sendLeaveConfirmation } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+    await sendLeaveConfirmation({ ...params, remainingHouseholds: 2 });
+    const msg = vi.mocked(emailNotifier.sendEmail).mock.calls[0][0];
+    expect(msg.subject).toBe('Has salido de The Kim House');
+    expect(msg.text).toContain('Sigues perteneciendo a otros 2 hogares');
+  });
+
+  it('respects the email master switch', async () => {
+    await mockPrefs({ u3: { email: false } });
+    const { sendLeaveConfirmation } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+    expect(await sendLeaveConfirmation(params)).toBe('suppressed');
+    expect(emailNotifier.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('reports a dry run as not sent, and swallows a send failure', async () => {
+    const { sendLeaveConfirmation } = await import('../../../src/services/householdEmails.js');
+    const emailNotifier = await import('../../../src/services/emailNotifier.js');
+    vi.mocked(emailNotifier.sendEmail).mockResolvedValueOnce(false);
+    expect(await sendLeaveConfirmation(params)).toBe('not_sent');
+    vi.mocked(emailNotifier.sendEmail).mockRejectedValueOnce(new Error('ses down'));
+    expect(await sendLeaveConfirmation(params)).toBe('failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. Up for grabs
 // ---------------------------------------------------------------------------
 

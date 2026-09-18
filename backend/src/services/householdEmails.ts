@@ -8,7 +8,10 @@
  * moat had no email surface at all. These close that:
  *
  *   1. `member_joined`  — the invite you sent was accepted (services/inviteEmail.ts
- *                         sends the invite; this closes the loop).
+ *                         sends the invite; this closes the loop). Its mirror,
+ *                         `member_left` (#686), tells a household's admins that
+ *                         someone left and what that released; it shares the
+ *                         same per-user switch.
  *   2. `up_for_grabs`   — upcoming tasks nobody has claimed, scoped to more
  *                         than 24 hours out, past anything the daily reminder
  *                         names that day (see REMINDER_DUE_WINDOW_MS).
@@ -78,7 +81,9 @@ import * as scheduledFanOut from './scheduledFanOut.js';
 import {
   composeCareCreditEmail,
   composeCoverageEmail,
+  composeLeaveConfirmationEmail,
   composeMemberJoinedEmail,
+  composeMemberLeftEmail,
   composeUpForGrabsEmail,
   daysUntilDue,
   taskLabel,
@@ -147,13 +152,20 @@ const CARE_CREDIT_LIST_LIMIT = 8;
 /** Tasks named in a coverage email. Beyond this the email points at the app. */
 const COVERAGE_LIST_LIMIT = 10;
 
-export type HouseholdEmailKind = 'member_joined' | 'up_for_grabs' | 'coverage' | 'care_credit';
+export type HouseholdEmailKind =
+  'member_joined' | 'member_left' | 'up_for_grabs' | 'coverage' | 'care_credit';
 
 /** Which per-user toggle governs each kind. Every household email is
  *  individually switchable; before these, `weeklyDigest` was the product's
- *  only per-email control. */
+ *  only per-email control.
+ *
+ *  `member_left` shares the `memberJoined` switch, which Settings labels as
+ *  "someone joins or leaves the household": both are the same rare
+ *  membership-change event seen from either side, and a second toggle for the
+ *  rarer half would be noise. */
 const PREF_KEY: Record<HouseholdEmailKind, notificationPrefs.HouseholdEmailPrefKey> = {
   member_joined: 'memberJoined',
+  member_left: 'memberJoined',
   up_for_grabs: 'taskUpForGrabs',
   coverage: 'coverageUpdates',
   care_credit: 'careCredit',
@@ -367,6 +379,13 @@ interface MemberJoinedItem {
   householdUrl: string;
 }
 
+interface MemberLeftItem {
+  memberName: string | null;
+  householdName: string | null;
+  releasedTasks: number;
+  householdUrl: string;
+}
+
 interface UpForGrabsItem {
   householdName: string | null;
   totalCount: number;
@@ -437,6 +456,21 @@ export function renderQueued(
           householdName: item.householdName,
           recipientSentTheInvite: item.invitedByRecipient,
           householdUrl: item.householdUrl,
+          settingsUrl: settings,
+        },
+        locale
+      );
+    }
+    case 'member_left': {
+      const [item] = parseItems<MemberLeftItem>(row.items);
+      if (!item) return null;
+      return composeMemberLeftEmail(
+        {
+          memberName: item.memberName,
+          householdName: item.householdName,
+          releasedTasks: item.releasedTasks,
+          householdUrl: item.householdUrl,
+          tasksUrl: appLink('/tasks'),
           settingsUrl: settings,
         },
         locale
@@ -710,6 +744,164 @@ export async function notifyMemberJoined(
     if (outcome === 'queued') queued += 1;
   }
   return queued;
+}
+
+// ---------------------------------------------------------------------------
+// 2b. Someone left your household (#686)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tell the household's ADMINS that a member left, and what it released.
+ *
+ * Admins only, not every member: an admin is who can re-invite, reassign the
+ * released tasks, and re-mint the sitter links / plant tags the departure
+ * revoked. Everyone else sees the `member.left` row in the activity feed.
+ *
+ * Queued exactly like `member_joined`, so DND, retry and the per-recipient
+ * `memberJoined` switch all apply. The dedupe key carries the departure
+ * instant: someone who leaves, is re-invited and leaves again inside the
+ * queue's TTL is two departures, not a duplicate.
+ *
+ * `memberName` is read by the caller BEFORE the member row is deleted and
+ * before the history is anonymised; the admins are being told about a person
+ * they knew, and the email is addressed to them alone.
+ *
+ * Best-effort throughout, like `notifyMemberJoined`: a departure must never
+ * fail because an email could not be queued.
+ */
+export async function notifyMemberLeft(
+  params: {
+    householdId: string;
+    leftUserId: string;
+    memberName: string | null;
+    releasedTasks: number;
+  },
+  now: Date = new Date()
+): Promise<number> {
+  const { householdId, leftUserId, memberName, releasedTasks } = params;
+  const householdName = valueOrNull(await readHouseholdName(householdId));
+  const members = await householdService.getHouseholdMembers(householdId);
+  const householdUrl = appLink('/household');
+
+  let queued = 0;
+  for (const member of members) {
+    if (member.userId === leftUserId) continue;
+    if (member.role !== 'admin') continue;
+    if (!member.email) continue;
+    const prefs = await eligible(member.userId, 'member_left');
+    if (!prefs) continue;
+    const outcome = await enqueue({
+      userId: member.userId,
+      email: member.email,
+      householdId,
+      kind: 'member_left',
+      dedupeKey: `member_left#${householdId}#${leftUserId}#${now.toISOString()}`,
+      item: { memberName, householdName, releasedTasks, householdUrl } satisfies MemberLeftItem,
+      maxItems: 1,
+      accumulate: false,
+      now,
+    });
+    if (outcome === 'queued') queued += 1;
+  }
+  return queued;
+}
+
+/**
+ * Drop the pending household emails a departed member still has queued ABOUT
+ * the household they left.
+ *
+ * The queue lives in the member's own `USER#` partition and is flushed by any
+ * household's hourly pass they still belong to — so without this, a person
+ * who leaves one household but stays in another would still be sent that
+ * household's "up for grabs" list or a coverage notice from inside it.
+ * Delivered (`sent`) rows are kept: they are dedupe markers, not mail.
+ *
+ * Returns how many rows were dropped. Failures propagate — this runs inside
+ * the departure sequence, which reports a half-finished departure as a 500
+ * rather than a quiet success.
+ */
+export async function discardQueuedForHousehold(
+  userId: string,
+  householdId: string
+): Promise<number> {
+  let dropped = 0;
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':sk': QUEUE_SK_PREFIX },
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+    const rows = (result.Items ?? []) as unknown as QueueRow[];
+    for (const row of rows) {
+      if (row.householdId !== householdId || row.status !== 'pending') continue;
+      await discard({ PK: row.PK, SK: row.SK });
+      dropped += 1;
+    }
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+  return dropped;
+}
+
+export type LeaveConfirmationOutcome =
+  /** SES accepted it. Not a delivery claim — see the module comment. */
+  | 'sent'
+  /** The leaver has email switched off. */
+  | 'suppressed'
+  /** SES is unconfigured (a dry run), so nothing went out. */
+  | 'not_sent'
+  /** The send threw. Logged; never fails the departure. */
+  | 'failed';
+
+/**
+ * The leaver's own confirmation, sent straight away.
+ *
+ * Not queued: `flushUser` only runs for current MEMBERS of a household, and a
+ * person who just left their only household is a member of none, so a queued
+ * row would never be delivered. It is also a receipt for an action the person
+ * took seconds ago, so there is no quiet window to wait out.
+ *
+ * Respects the `email` master switch (the one control that governs every
+ * non-security email this product sends) and the recipient's chosen language.
+ */
+export async function sendLeaveConfirmation(params: {
+  userId: string;
+  email: string;
+  householdName: string | null;
+  releasedTasks: number;
+  remainingHouseholds: number;
+}): Promise<LeaveConfirmationOutcome> {
+  const { userId, email, householdName, releasedTasks, remainingHouseholds } = params;
+  try {
+    const prefs = await notificationPrefs.getPreferences(userId);
+    if (!prefs.email) return 'suppressed';
+    const { locale } = resolveEmailLocale(prefs.emailLocale, null);
+    const composed = composeLeaveConfirmationEmail(
+      {
+        householdName,
+        releasedTasks,
+        remainingHouseholds,
+        appUrl: appLink('/dashboard'),
+        settingsUrl: settingsUrl(),
+      },
+      locale
+    );
+    const delivered = await emailNotifier.sendEmail({
+      to: email,
+      subject: composed.subject,
+      text: composed.text,
+    });
+    return delivered ? 'sent' : 'not_sent';
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, userId, msg: 'household_email.leave_confirmation_failed' },
+      'household_email.leave_confirmation_failed'
+    );
+    return 'failed';
+  }
 }
 
 // ---------------------------------------------------------------------------

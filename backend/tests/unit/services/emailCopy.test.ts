@@ -3,7 +3,9 @@ import {
   composeCareCreditEmail,
   composeCoverageEmail,
   composeInviteEmail,
+  composeLeaveConfirmationEmail,
   composeMemberJoinedEmail,
+  composeMemberLeftEmail,
   composeUpForGrabsEmail,
   daysUntilDue,
   formatDate,
@@ -150,6 +152,72 @@ describe('composeMemberJoinedEmail', () => {
   it('renders the unknown-name case in Spanish too', () => {
     const { text } = composeMemberJoinedEmail({ ...base, memberName: null }, 'es');
     expect(text).toContain('No hemos podido leer su nombre');
+  });
+});
+
+describe('composeMemberLeftEmail (#686)', () => {
+  const base = {
+    householdName: 'The Kim House',
+    householdUrl: 'https://app.example.net/household',
+    tasksUrl: 'https://app.example.net/tasks',
+    settingsUrl: SETTINGS,
+  };
+
+  it('never substitutes a name it could not read', () => {
+    for (const locale of ['en', 'es'] as const) {
+      const email = composeMemberLeftEmail({ ...base, memberName: null, releasedTasks: 0 }, locale);
+      expect(email.subject).toBe(
+        locale === 'en' ? 'Someone left your household' : 'Alguien ha salido de tu hogar'
+      );
+      expect(email.text).toMatch(locale === 'en' ? /couldn't load their name/ : /No hemos podido/);
+    }
+  });
+
+  it('words one released task and several differently, in both languages', () => {
+    const one = composeMemberLeftEmail({ ...base, memberName: 'Sam', releasedTasks: 1 }, 'en');
+    expect(one.text).toContain('They had one task with their name on it.');
+    const many = composeMemberLeftEmail({ ...base, memberName: 'Sam', releasedTasks: 4 }, 'es');
+    expect(many.text).toContain('Tenía 4 tareas a su nombre');
+    expect(many.text).toContain(base.tasksUrl);
+  });
+
+  it('falls back to "your household" without inventing a name for it', () => {
+    const email = composeMemberLeftEmail(
+      { ...base, householdName: null, memberName: 'Sam', releasedTasks: 0 },
+      'en'
+    );
+    expect(email.subject).toBe('Sam left your household');
+  });
+});
+
+describe('composeLeaveConfirmationEmail (#686)', () => {
+  const base = { appUrl: 'https://app.example.net/dashboard', settingsUrl: SETTINGS };
+
+  it('confirms the account survives and says how many households remain', () => {
+    const one = composeLeaveConfirmationEmail(
+      { ...base, householdName: 'H', releasedTasks: 1, remainingHouseholds: 1 },
+      'en'
+    );
+    expect(one.subject).toBe('You left H');
+    expect(one.text).toContain('Your account is still active');
+    expect(one.text).toContain('The task that had your name on it is now up for grabs');
+    expect(one.text).toContain('You still belong to one other household');
+    const es = composeLeaveConfirmationEmail(
+      { ...base, householdName: null, releasedTasks: 3, remainingHouseholds: 1 },
+      'es'
+    );
+    expect(es.subject).toBe('Has salido de un hogar');
+    expect(es.text).toContain('Las 3 tareas que tenías a tu nombre');
+    expect(es.text).toContain('Sigues perteneciendo a otro hogar');
+  });
+
+  it('says nothing about tasks when none were released', () => {
+    const email = composeLeaveConfirmationEmail(
+      { ...base, householdName: 'H', releasedTasks: 0, remainingHouseholds: 3 },
+      'en'
+    );
+    expect(email.text).not.toMatch(/up for grabs/);
+    expect(email.text).toContain('You still belong to 3 other households');
   });
 });
 
@@ -414,6 +482,27 @@ describe('every household email carries a way to turn it off', () => {
           settingsUrl: SETTINGS,
         },
         'es'
+      ),
+      composeMemberLeftEmail(
+        {
+          memberName: 'Sam',
+          householdName: 'H',
+          releasedTasks: 2,
+          householdUrl: 'u',
+          tasksUrl: 'u',
+          settingsUrl: SETTINGS,
+        },
+        'es'
+      ),
+      composeLeaveConfirmationEmail(
+        {
+          householdName: 'H',
+          releasedTasks: 0,
+          remainingHouseholds: 0,
+          appUrl: 'u',
+          settingsUrl: SETTINGS,
+        },
+        'en'
       ),
     ];
     for (const body of bodies) {

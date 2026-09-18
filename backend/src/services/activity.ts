@@ -119,7 +119,10 @@ export interface ActivityPayloadByType {
     sitterLinkId?: string;
   };
   'member.joined': { role: 'admin' | 'member' };
-  'member.left': { role?: 'admin' | 'member' };
+  /** A member left (#686) or was removed. Written already anonymised — the
+   *  actor is "Former member" — so `releasedTasks` is the useful part: how
+   *  many tasks the departure put back up for grabs. Absent on older rows. */
+  'member.left': { role?: 'admin' | 'member'; releasedTasks?: number };
   'sitter_link.created': SitterLinkActivityPayload;
   'sitter_link.revoked': SitterLinkActivityPayload;
   'task.schedule_matched': TaskScheduleMatchedActivityPayload;

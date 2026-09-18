@@ -18,6 +18,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **A member can leave a household without deleting their account (#686).**
+  `POST /households/{id}/leave`, with its own confirm flow on the Household
+  page (EN/ES). It runs the same departure sequence as admin removal, now
+  shared in `services/householdDeparture.ts`: their tasks go back up for grabs
+  (the count is shown before confirming, returned, and put in the feed), the
+  credentials they minted are revoked, their history reads as "Former
+  member", and their default household moves only if it was this one. Three
+  states are refused with a coded 409 and nothing changed: the only member,
+  the only admin of a household with other members, and an admin of a
+  household whose paid plan will renew until they acknowledge that leaving
+  does not cancel it. Billing is never touched. The household's admins are
+  emailed and the leaver gets a confirmation, both respecting preferences.
+  Deploy note: one new route in `local.routes`, applied by the next `v*` tag.
+
 - **A failed payment is now stated on every screen, not only in Settings.**
   When Stripe reports a household's subscription as unpaid, the household's
   caps drop at once (there is no grace period), and until now the only place
@@ -30,6 +44,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   step. (#593)
 
 ### Changed
+
+- **Every departure (removal, leaving, account deletion from a shared
+  household) now also** drops the member from care rotations (anchor kept; a
+  rotation left with one person is cleared), scrubs the asker's name from an
+  open "ask family" request, deletes their calendar-feed token for that
+  household, and drops household emails still queued to them about it.
 
 - **The daily reminder goes out when your quiet hours end, or at 08:00
   local if you have none (#343).** It used to go out on the first hourly run

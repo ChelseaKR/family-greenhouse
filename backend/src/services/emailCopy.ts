@@ -300,6 +300,188 @@ export function composeMemberJoinedEmail(
 }
 
 // ---------------------------------------------------------------------------
+// 2b. Someone left (to the household's admins), and the leaver's confirmation
+// ---------------------------------------------------------------------------
+
+export interface MemberLeftCopyInput {
+  /** null = the member row could not be read before it was removed. Never
+   *  substituted with a name. */
+  memberName: string | null;
+  householdName: string | null;
+  /** Tasks that carried their name and are now up for grabs. A real count of
+   *  rows the departure rewrote (accountCleanup.DepartureCleanupSummary). */
+  releasedTasks: number;
+  householdUrl: string;
+  tasksUrl: string;
+  settingsUrl: string;
+}
+
+export function composeMemberLeftEmail(
+  input: MemberLeftCopyInput,
+  locale: EmailLocale
+): ComposedEmail {
+  const home = input.householdName;
+  const n = input.releasedTasks;
+  if (locale === 'es') {
+    const subject = input.memberName
+      ? home
+        ? `${input.memberName} ha salido de ${home}`
+        : `${input.memberName} ha salido de tu hogar`
+      : 'Alguien ha salido de tu hogar';
+    const lines = [
+      input.memberName
+        ? `${input.memberName} ha decidido salir de ${home ?? 'tu hogar'}. Su cuenta sigue existiendo; solo ha dejado este hogar.`
+        : `Un miembro ha decidido salir de ${home ?? 'tu hogar'}. No hemos podido leer su nombre antes de que saliera.`,
+      '',
+      'El historial del hogar sigue intacto: sus tareas completadas y su actividad se conservan, ahora a nombre de «Former member» (antiguo miembro).',
+    ];
+    if (n > 0) {
+      lines.push(
+        '',
+        n === 1
+          ? 'Tenía una tarea a su nombre; ahora está libre para quien pueda cogerla.'
+          : `Tenía ${formatNumber(n, 'es')} tareas a su nombre; ahora están libres para quien pueda cogerlas.`,
+        `Ver las tareas: ${input.tasksUrl}`
+      );
+    }
+    lines.push(
+      '',
+      'Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creó han dejado de funcionar.',
+      '',
+      `Miembros del hogar: ${input.householdUrl}`,
+      ...footer(
+        input.settingsUrl,
+        'Recibes este correo porque administras un hogar del que ha salido alguien.',
+        locale
+      )
+    );
+    return { subject, text: lines.join('\n') };
+  }
+  const subject = input.memberName
+    ? home
+      ? `${input.memberName} left ${home}`
+      : `${input.memberName} left your household`
+    : 'Someone left your household';
+  const lines = [
+    input.memberName
+      ? `${input.memberName} chose to leave ${home ?? 'your household'}. Their account still exists; they have only left this household.`
+      : `A member chose to leave ${home ?? 'your household'}. We couldn't load their name before they left.`,
+    '',
+    'The household record is intact: their past completions and activity stay, now shown as "Former member".',
+  ];
+  if (n > 0) {
+    lines.push(
+      '',
+      n === 1
+        ? 'They had one task with their name on it. It is now up for grabs.'
+        : `They had ${formatNumber(n, 'en')} tasks with their name on them. Those are now up for grabs.`,
+      `See the tasks: ${input.tasksUrl}`
+    );
+  }
+  lines.push(
+    '',
+    'Sitter links, plant tags and wall-display links they created have stopped working.',
+    '',
+    `Household members: ${input.householdUrl}`,
+    ...footer(
+      input.settingsUrl,
+      'You get this because you are an admin of a household someone left.',
+      locale
+    )
+  );
+  return { subject, text: lines.join('\n') };
+}
+
+export interface LeaveConfirmationCopyInput {
+  householdName: string | null;
+  releasedTasks: number;
+  /** How many households the leaver still belongs to after leaving. */
+  remainingHouseholds: number;
+  appUrl: string;
+  settingsUrl: string;
+}
+
+/**
+ * The leaver's own receipt. Sent straight away rather than through the
+ * household queue: that queue is flushed per MEMBER of a household, and a
+ * person who just left their only household is no longer a member of any.
+ */
+export function composeLeaveConfirmationEmail(
+  input: LeaveConfirmationCopyInput,
+  locale: EmailLocale
+): ComposedEmail {
+  const home = input.householdName;
+  const n = input.releasedTasks;
+  const others = input.remainingHouseholds;
+  if (locale === 'es') {
+    const lines = [
+      home ? `Has salido de ${home}.` : 'Has salido de un hogar.',
+      '',
+      'Tu cuenta sigue activa. Ya no ves las plantas ni las tareas de ese hogar, y el hogar conserva su historial de cuidados, con tu nombre sustituido por «Former member» (antiguo miembro).',
+    ];
+    if (n > 0) {
+      lines.push(
+        '',
+        n === 1
+          ? 'La tarea que tenías a tu nombre ha quedado libre para el resto del hogar.'
+          : `Las ${formatNumber(n, 'es')} tareas que tenías a tu nombre han quedado libres para el resto del hogar.`
+      );
+    }
+    lines.push(
+      '',
+      others > 0
+        ? others === 1
+          ? 'Sigues perteneciendo a otro hogar; no ha cambiado nada allí.'
+          : `Sigues perteneciendo a otros ${formatNumber(others, 'es')} hogares; no ha cambiado nada en ellos.`
+        : 'Ya no perteneces a ningún hogar. Puedes crear uno nuevo o unirte con una invitación cuando quieras.',
+      '',
+      'Si ha sido un error, pide a una persona administradora de ese hogar que te vuelva a invitar.',
+      '',
+      `Abrir Family Greenhouse: ${input.appUrl}`,
+      ...footer(
+        input.settingsUrl,
+        'Recibes este correo porque acabas de salir de un hogar.',
+        locale
+      )
+    );
+    return {
+      subject: home ? `Has salido de ${home}` : 'Has salido de un hogar',
+      text: lines.join('\n'),
+    };
+  }
+  const lines = [
+    home ? `You have left ${home}.` : 'You have left a household.',
+    '',
+    'Your account is still active. You can no longer see that household’s plants or tasks, and the household keeps its care history, with your name replaced by "Former member".',
+  ];
+  if (n > 0) {
+    lines.push(
+      '',
+      n === 1
+        ? 'The task that had your name on it is now up for grabs for the rest of the household.'
+        : `The ${formatNumber(n, 'en')} tasks that had your name on them are now up for grabs for the rest of the household.`
+    );
+  }
+  lines.push(
+    '',
+    others > 0
+      ? others === 1
+        ? 'You still belong to one other household; nothing changed there.'
+        : `You still belong to ${formatNumber(others, 'en')} other households; nothing changed in them.`
+      : 'You no longer belong to any household. You can create one, or join with an invite, whenever you like.',
+    '',
+    'If this was a mistake, ask an admin of that household to invite you again.',
+    '',
+    `Open Family Greenhouse: ${input.appUrl}`,
+    ...footer(input.settingsUrl, 'You get this because you just left a household.', locale)
+  );
+  return {
+    subject: home ? `You left ${home}` : 'You left a household',
+    text: lines.join('\n'),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 3. A task is up for grabs
 // ---------------------------------------------------------------------------
 

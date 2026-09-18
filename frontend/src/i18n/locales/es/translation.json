@@ -47,7 +47,11 @@
     "scheduleMatched": "{{actor}} ajustó el horario de {{task}} de {{plant}} a la realidad ({{from}} → {{to}} días)",
     "upgradeRequested": "{{actor}} pidió a las personas administradoras del hogar que mejoren el plan para tener {{feature}}",
     "upgradeRequestedUnknown": "{{actor}} pidió a las personas administradoras del hogar que mejoren el plan",
-    "caretakerNote": "{{actor}} dejó una nota: {{note}}"
+    "caretakerNote": "{{actor}} dejó una nota: {{note}}",
+    "memberLeft": "Un miembro ha salido del hogar",
+    "memberLeftReleased_one": "Un miembro ha salido del hogar: {{count}} tarea ha quedado libre",
+    "memberLeftReleased_many": "Un miembro ha salido del hogar: {{count}} tareas han quedado libres",
+    "memberLeftReleased_other": "Un miembro ha salido del hogar: {{count}} tareas han quedado libres"
   },
   "spaces": {
     "all": "Todos los espacios",
@@ -942,7 +946,26 @@
     "timeZoneClear": "Borrar zona horaria",
     "timeZoneSaved": "Zona horaria guardada.",
     "timeZoneCleared": "Zona horaria borrada. Este hogar vuelve a no tener ninguna zona configurada, que no es lo mismo que elegir UTC.",
-    "timeZonePlaceholder": "America/New_York"
+    "timeZonePlaceholder": "America/New_York",
+    "leave": {
+      "title": "Salir de este hogar",
+      "description": "Deja de ser miembro de {{household}}. Tu cuenta y los demás hogares a los que perteneces se quedan exactamente como están.",
+      "button": "Salir del hogar",
+      "blockedLastMember": "Eres el único miembro, así que no hay nadie a quien dejarle este hogar. Invita a alguien y hazlo administrador primero. Si ya no quieres usar Family Greenhouse, puedes eliminar tu cuenta en Ajustes; eso te saca de todos tus hogares.",
+      "blockedLastAdmin": "Eres la única persona administradora. Haz administrador a otro miembro más arriba y después podrás salir.",
+      "confirmTitle": "¿Salir de {{household}}?",
+      "confirmMessage": "Dejarás de ver las plantas, las tareas y la actividad de este hogar de inmediato. El hogar conserva su historial de cuidados, con tu nombre mostrado como «Former member» (antiguo miembro). Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creaste dejarán de funcionar. Para volver, una persona administradora tendría que invitarte de nuevo.",
+      "confirmTasks_one": "Tienes {{count}} tarea a tu nombre; quedará libre para quien pueda hacerla.",
+      "confirmTasks_many": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
+      "confirmTasks_other": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
+      "confirmTasksUnknown": "Las tareas que tengas a tu nombre quedarán libres para quien pueda hacerlas.",
+      "confirmLabel": "Salir del hogar",
+      "cancel": "Quedarme",
+      "billingTitle": "El plan de pago de este hogar se sigue renovando",
+      "billingMessage": "Salir no cancela ni cambia el plan: el resto del hogar lo conserva. Si se cobra en tu tarjeta, cambia el método de pago o cancela el plan en Ajustes → Facturación antes de salir: una vez fuera, no podrás acceder a la facturación de este hogar.",
+      "billingConfirm": "Salir de todos modos",
+      "left": "Has salido de {{household}}."
+    }
   },
   "sitter": {
     "coveringUntil": "Estás cubriendo hasta el {{date}}. Después, esta página deja de funcionar por sí sola.",
@@ -1252,8 +1275,8 @@
     "householdEmailsTitle": "Correos del hogar",
     "householdEmailsDescription": "Mensajes sobre las personas con las que compartes el cuidado de las plantas, no solo sobre las plantas. Cada uno se activa por separado.",
     "householdEmailsRequiresEmail": "Activa las notificaciones por correo para recibir los correos del hogar.",
-    "memberJoinedTitle": "Alguien se une al hogar",
-    "memberJoinedDescription": "Cuando se acepta una invitación.",
+    "memberJoinedTitle": "Alguien se une al hogar o sale de él",
+    "memberJoinedDescription": "Cuando se acepta una invitación o cuando un miembro sale (se avisa a quienes administran).",
     "taskUpForGrabsTitle": "Una tarea está libre",
     "taskUpForGrabsDescription": "Una vez por semana, las tareas de los próximos siete días que no tiene asignadas nadie. Lo que ya toca o va con retraso aparece en tu recordatorio diario.",
     "coverageUpdatesTitle": "Estás cubriendo a alguien",

@@ -1640,6 +1640,65 @@ paths:
         '204': { description: Member removed }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /households/{id}/leave:
+    post:
+      summary: Leave this household without deleting the account (#686). Self only — the leaver is the authenticated caller, never a body field. Runs the same departure sequence as admin removal (credentials the leaver minted are revoked, their tasks go back up for grabs, their history reads as Former member, rotations drop them). Billing is never changed. Refused with 409 and a `details.code` for LAST_MEMBER (the only member), LAST_ADMIN (the only admin of a household with other members) and BILLING_ACK_REQUIRED (an admin of a household whose Stripe subscription will renew, until `acknowledgeBilling` is true).
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                acknowledgeBilling:
+                  type: boolean
+                  description: Required (true) only for an admin leaving a household with a renewing paid plan; ignored otherwise.
+      responses:
+        '200':
+          description: Left the household
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  householdId: { type: string }
+                  releasedTasks:
+                    type: integer
+                    description: Tasks that carried the leaver's name and are now up for grabs.
+                  revokedCredentials:
+                    type: object
+                    properties:
+                      plantTags: { type: integer }
+                      sitterLinks: { type: integer }
+                      kioskLinks: { type: integer }
+                      cuttingShares: { type: integer }
+                  defaultHouseholdId:
+                    type: string
+                    nullable: true
+                    description: The caller's default household after leaving (re-pointed when they left their default), or null when they belong to none.
+                  defaultHouseholdRole:
+                    type: string
+                    enum: [admin, member]
+                    nullable: true
+                    description: The caller's role in defaultHouseholdId; null exactly when defaultHouseholdId is.
+                  remainingHouseholds:
+                    type: integer
+                    nullable: true
+                    description: Households the caller still belongs to; null when that read did not settle.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Refused. `details.code` is LAST_MEMBER, LAST_ADMIN or BILLING_ACK_REQUIRED; nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /households/{id}/sitter-links:
     post:
       summary: Create a no-account, time-boxed plant-sitter link (any household member). Returns the token/URL exactly once. The window and the number of live links are capped by the household's plan (402 over the cap). Every create is named in the activity feed.

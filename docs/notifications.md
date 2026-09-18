@@ -685,9 +685,35 @@ These are about the household as a group of people, which is the thing
 | --------------------------- | ----------------------------------------------- | ----------------------- | ------------------------------------------------ | ----------------------------- | ------------------------------------ |
 | **Invite**                  | `POST /households/{id}/invites/email` (admin)   | one address, no account | the join link                                    | n/a — recipient is not a user | 10/household/day + 1/address/day     |
 | **Someone joined**          | a successful `POST /households/join/{code}`     | every existing member   | `/household`                                     | `memberJoined`                | once per join                        |
+| **Someone left**            | a successful `POST /households/{id}/leave`      | the remaining admins    | `/household`, `/tasks`                           | `memberJoined`                | once per departure                   |
+| **You left** (confirmation) | a successful `POST /households/{id}/leave`      | the leaver only         | `/dashboard`                                     | `email` (master switch)       | once per departure, sent immediately |
 | **Up for grabs**            | hourly scan: unclaimed, due in (24h, 7d]        | every member            | `/plants/{id}` per task, `/tasks?filter=overdue` | `taskUpForGrabs`              | 1/household/ISO week                 |
 | **You're covering**         | `PUT /tasks/vacation`                           | the named cover         | `/plants/{id}` per task, `/tasks`                | `coverageUpdates`             | once per window (keyed on its dates) |
 | **Someone covered for you** | a completion by someone other than the assignee | the assignee only       | `/plants/{id}` per task, `/dashboard`            | `careCredit`                  | 1/recipient-local day, rolled up     |
+
+### Leaving a household (#686)
+
+**Someone left** mirrors **Someone joined** and shares its switch (Settings
+labels it "someone joins or leaves the household"): the same rare
+membership-change event seen from the other side, where a second toggle for
+the rarer half would be noise. It goes to the remaining **admins** only — they
+are who can re-invite, pick up the released tasks and re-mint the sitter links
+and plant tags the departure revoked — and names the leaver, whose name is read
+before the membership row is deleted. Everyone else sees an anonymised
+`member.left` row in the activity feed.
+
+**You left** is the one household email that is not queued. The queue is
+flushed per _member_ of a household on the hourly pass, and a person who just
+left their only household is a member of none, so a queued confirmation would
+never be delivered. It is a receipt for an action taken seconds earlier, so
+there is no quiet window to wait out; it respects the `email` master switch and
+the leaver's language. It is not sent when the count of households they still
+belong to could not be read, rather than stating a guessed number.
+
+A departure also drops any household email still **pending** in the leaver's
+own queue about the household they left (`discardQueuedForHousehold`) —
+otherwise another household's hourly pass would deliver it after they had gone.
+Delivered rows stay: they are dedupe markers, not mail.
 
 ### Why the invite email is the important one
 

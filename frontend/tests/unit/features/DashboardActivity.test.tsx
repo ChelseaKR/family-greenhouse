@@ -272,6 +272,25 @@ describe('dashboard activity rows', () => {
     ).toBeInTheDocument();
   });
 
+  it('words a departure by what it released, never by the anonymised actor name (#686)', async () => {
+    const left = (releasedTasks: number | undefined, id: string) => ({
+      ...event(
+        'member.left',
+        releasedTasks === undefined ? { role: 'member' } : { role: 'member', releasedTasks },
+        id
+      ),
+      actorId: 'deleted-user',
+      actorName: 'Former member',
+    });
+    renderDashboardActivity([left(2, 'with-tasks'), left(undefined, 'legacy')]);
+
+    expect(
+      await screen.findByText('A member left the household — 2 tasks went back up for grabs')
+    ).toBeInTheDocument();
+    expect(screen.getByText('A member left the household')).toBeInTheDocument();
+    expect(screen.queryByText(/Former member/)).not.toBeInTheDocument();
+  });
+
   it('names the housemate who asked and quotes their note', async () => {
     renderDashboardActivity([
       event('task.help_requested', {

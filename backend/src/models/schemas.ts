@@ -67,6 +67,19 @@ export const updateMemberRoleSchema = z.object({
   role: z.enum(['admin', 'member']),
 });
 
+/**
+ * POST /households/{id}/leave (#686). The leaver's identity comes from the
+ * JWT, never the body. The only field is the explicit acknowledgement an ADMIN
+ * of a household with a renewing paid plan must give (see the handler); the
+ * body may be absent altogether for everyone else.
+ */
+export const leaveHouseholdSchema = z
+  .object({
+    acknowledgeBilling: z.boolean().optional(),
+  })
+  .strict()
+  .nullish();
+
 // Household plant-space schemas
 export const spaceEnvironmentEnum = z.enum(['inside', 'outside']);
 export const rainExposureEnum = z.enum(['exposed', 'sheltered']);
@@ -452,6 +465,7 @@ export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 export type CreateHouseholdInput = z.infer<typeof createHouseholdSchema>;
 export type JoinHouseholdInput = z.infer<typeof joinHouseholdSchema>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
+export type LeaveHouseholdInput = z.infer<typeof leaveHouseholdSchema>;
 
 export type CreatePlantInput = z.infer<typeof createPlantSchema>;
 export type UpdatePlantInput = z.infer<typeof updatePlantSchema>;

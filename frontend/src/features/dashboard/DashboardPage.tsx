@@ -648,13 +648,18 @@ function ActivityRow({ event }: ActivityRowProps) {
         </>
       );
       break;
-    case 'member.left':
-      body = (
-        <>
-          <span className="font-medium">{actorName}</span> left the household
-        </>
-      );
+    case 'member.left': {
+      // Written already anonymised (#686): the actor is "Former member" by
+      // design, so the row leads with what changed for the household — how
+      // many tasks went back up for grabs — rather than with a name. Rows
+      // from before the count existed say only that someone left.
+      const released = event.payload.releasedTasks;
+      body =
+        typeof released === 'number' && released > 0
+          ? t('activity.memberLeftReleased', { count: released })
+          : t('activity.memberLeft');
       break;
+    }
     case 'sitter_link.created':
     case 'sitter_link.revoked': {
       // Any member can open a sitter link now, so the feed names who did and
