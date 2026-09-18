@@ -37,6 +37,37 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   households group, one EventBridge rule, one IAM list prefix and one bucket
   lifecycle rule — no new Lambda.
 
+- **A household can be restored from its own export (#669).** The JSON that
+  Settings → Account → Download full data has always produced can now go back
+  in: Settings → Account → Restore a household from an archive, admin-only and
+  into an empty household only (a new one, or one with no plants, tasks or
+  spaces — version 1 never merges). A preview writes nothing and lists what
+  comes back — every plant in every lifecycle state with its private notes,
+  house rule, tags, catalog id and cutting lineage, and its active plants'
+  tasks with their schedules, seasonal cadences and last completions — and
+  what does not: photos (the export holds links, not pictures), spaces, care
+  history and the tasks of past plants (the export has neither), members
+  (tasks for people who are not in the household come back unassigned, listed
+  by name for re-inviting), billing (no plan, subscription or trial carries
+  over) and every sitter, kiosk, tag, share, calendar or API link. The file is
+  untrusted input: 5 MiB cap before parsing, the format and version checked
+  (a newer or unknown version is refused by name), `__proto__` /
+  `constructor` / `prototype` keys refused anywhere, every plant and task
+  parsed through an allowlist so a smuggled token or #811 token hash is
+  dropped, no id, URL or photo key from the file used as a storage key or
+  fetched, and the integration-facing `canonicalSpecies` re-read from the
+  server's own species cache. An archive with more active plants than the
+  plan allows is refused whole with the numbers, not partly imported. Rows get
+  deterministic ids and land in atomic chunks that carry the plan-cap counter,
+  so committing the same archive again adds nothing, and a restore that stops
+  part-way reports exactly what landed and finishes when run again. The client
+  uploads only the household being restored, never the profile or other
+  households in the file. EN/ES. The round trip (export → empty household →
+  import → export) is the test: every field the export carries is either equal
+  or on an explicit not-restored list. Deploy note: one new route in
+  `local.routes` (households group, no new Lambda), applied by the next `v*`
+  tag.
+
 - **A member can leave a household without deleting their account (#686).**
   `POST /households/{id}/leave`, with its own confirm flow on the Household
   page (EN/ES). It runs the same departure sequence as admin removal, now

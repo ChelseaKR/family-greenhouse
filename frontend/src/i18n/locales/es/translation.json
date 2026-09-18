@@ -2228,5 +2228,57 @@
     "moveToTrash": "Mover a la papelera",
     "plantConfirmTitle": "¿Mover esta planta a la papelera?",
     "plantConfirmMessage": "«{{name}}» y sus tareas, fotos e historial de cuidados se moverán a la papelera. Cualquier persona del hogar puede restaurarla desde Ajustes → Papelera durante {{days}} días; después se elimina definitivamente. Para conservar su registro, elige «Murió» o «La regalé»."
+  },
+  "archiveImport": {
+    "title": "Restaurar un hogar desde una exportación",
+    "description": "Vuelve a cargar una exportación JSON para recuperar un hogar o trasladarlo a otra cuenta. Solo se restaura en un hogar vacío.",
+    "adminOnly": "Solo una persona administradora del hogar puede restaurar una exportación.",
+    "chooseFile": "Elegir un archivo de exportación",
+    "chooseAnother": "Elegir otro archivo",
+    "chooseHousehold": "Hogar que quieres restaurar",
+    "householdOption": "{{name}} — plantas: {{plants}}, tareas: {{tasks}}",
+    "check": "Revisar esta exportación",
+    "restore": "Restaurar en este hogar",
+    "restoreAgain": "Restaurar de nuevo para terminar",
+    "createHousehold": "Crear un hogar nuevo",
+    "done": "Se restauró «{{name}}». Plantas: {{plants}}, tareas: {{tasks}}.",
+    "alreadyImported": "Ya estaba restaurada aquí; no se añadió nada.",
+    "resumable": "Esta restauración se detuvo a medias. Vuelve a restaurar para terminar; no se añade nada dos veces.",
+    "errors": {
+      "tooLarge": "Este archivo pesa más de 5 MB; es demasiado grande para ser una exportación.",
+      "notJson": "Este archivo no es JSON.",
+      "notArchive": "Esta no es una exportación de Family Greenhouse.",
+      "newerVersion": "Esta exportación es de una versión más nueva de la aplicación (formato {{version}}). Actualiza la aplicación primero.",
+      "version": "Esta aplicación no puede leer la versión de formato de esta exportación.",
+      "invalid": "Esta exportación está incompleta o se modificó, así que no se puede restaurar.",
+      "notEmpty": "Este hogar no está vacío. Restaura en un hogar nuevo.",
+      "otherArchive": "Este hogar se restauró desde otra exportación. Restaura en un hogar nuevo.",
+      "changed": "Algo cambió desde que la revisaste. Vuelve a revisarla.",
+      "overLimit": "Esta exportación tiene {{active}} plantas activas y el plan {{plan}} permite {{limit}}. No se restaurará nada hasta que mejores el plan.",
+      "stoppedAtLimit": "Se detuvo en el límite del plan. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Mejora el plan y vuelve a restaurar.",
+      "interrupted": "Se detuvo a medias. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Vuelve a restaurar para terminar; no se añade nada dos veces."
+    },
+    "preview": {
+      "title": "Qué se restaura",
+      "from": "De «{{name}}», exportado el {{date}}",
+      "plants": "Plantas: {{n}} (activas {{active}}, pasadas {{past}}, archivadas {{archived}}), con notas, reglas de la casa y etiquetas",
+      "tasks": "Tareas y sus calendarios: {{n}}",
+      "lineage": "Vínculos de esquejes: {{n}}"
+    },
+    "notRestored": {
+      "title": "Qué no se restaura",
+      "photos": "Fotos: {{n}} (la exportación solo las enlaza)",
+      "spaces": "Asignaciones a espacios: {{n}} (se conserva el texto de ubicación)",
+      "unassigned": "Tareas que quedan sin asignar: {{n}}. Vuelve a invitar a estas personas:",
+      "person": "{{name}} — tareas: {{n}}",
+      "unnamed": "Sin nombre",
+      "orphanTasks": "Tareas sin su planta: {{n}}",
+      "brokenLineage": "Vínculos de esquejes a plantas que faltan: {{n}}",
+      "species": "Nombres científicos por volver a comprobar: {{n}}",
+      "history": "El historial de cuidados, las cronologías de fotos y las tareas de plantas pasadas",
+      "members": "Los miembros (vuelve a invitarlos)",
+      "billing": "La facturación: no se traslada ningún plan, suscripción ni periodo de prueba",
+      "links": "Los enlaces de cuidador, pantalla de pared, etiquetas, compartir, calendario y API (crea enlaces nuevos)"
+    }
   }
 }

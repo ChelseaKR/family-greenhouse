@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { downloadCsv, toCsv } from '@/utils/csv';
 import { track } from '@/services/analytics';
+import { ArchiveImportCard } from './ArchiveImportCard';
 
 /**
  * Account-level settings: change password, view profile, delete account.
@@ -301,6 +302,9 @@ export function AccountSettings() {
           </p>
         )}
       </Card>
+
+      {/* The way back in for the JSON export above (#669). */}
+      {hasHousehold && <ArchiveImportCard />}
 
       {hasHousehold && (
         <Card>
