@@ -718,7 +718,7 @@ export const getYearInReview = createHandler(
       throw createHttpError(403, 'Access denied');
     }
     const yearParam = event.queryStringParameters?.year;
-    const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+    const year = yearParam ? parseInt(yearParam, 10) : new Date().getUTCFullYear();
     if (!Number.isFinite(year) || year < 2020 || year > 2100) {
       throw createHttpError(400, 'year must be between 2020 and 2100');
     }

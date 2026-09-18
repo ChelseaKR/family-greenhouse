@@ -252,9 +252,8 @@ export function scheduleDriftScheduleUnavailable(
  * Next due date after matching the schedule to reality: the last completion
  * plus the new interval, floored at `now` so the tap never produces an
  * instantly-overdue task (by the household's own rhythm it is due, not late).
- * UTC date arithmetic, the same as `completeTask` under the Lambdas' TZ=UTC —
- * which since #590 is a setting (`TZ = "UTC"` on `local.lambda_environment` in
- * `infrastructure/modules/api/main.tf`) rather than an inherited AWS default.
+ * UTC date arithmetic, the same as `completeTask`, which since #342 says so
+ * explicitly (`setUTCDate`) rather than relying on the Lambdas' `TZ=UTC`.
  */
 export function nextDueAfterMatch(
   lastCompleted: string | null,
