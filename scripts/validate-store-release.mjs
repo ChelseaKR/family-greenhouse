@@ -192,6 +192,43 @@ for (const name of installedPlugins) {
   }
 }
 
+// Photos (docs/mobile.md, "Photos"). iOS terminates the app the moment the
+// camera or a photo picker opens without its purpose string, and both the
+// @capacitor/camera screens and the WebView file inputs open them. Android is
+// the other way round: the Photo Picker and the camera intent need no
+// permission at all, and DECLARING one changes that — a declared CAMERA makes
+// the camera intent demand a runtime grant, and a storage or media permission
+// is the broad library access the Play policy asks apps to justify. So none
+// may appear in the app's manifest.
+const infoPlist = read('frontend/ios/App/App/Info.plist');
+for (const key of ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription']) {
+  const purpose = infoPlist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`));
+  if (!purpose || !purpose[1].trim()) {
+    fail(
+      `frontend/ios/App/App/Info.plist has no ${key}; iOS terminates the app when the camera ` +
+        'or the photo picker opens without it'
+    );
+  }
+}
+const androidManifestSource = read('frontend/android/app/src/main/AndroidManifest.xml');
+for (const permission of [
+  'CAMERA',
+  'READ_EXTERNAL_STORAGE',
+  'WRITE_EXTERNAL_STORAGE',
+  'MANAGE_EXTERNAL_STORAGE',
+  'READ_MEDIA_IMAGES',
+  'READ_MEDIA_VIDEO',
+  'READ_MEDIA_VISUAL_USER_SELECTED',
+]) {
+  if (androidManifestSource.includes(`"android.permission.${permission}"`)) {
+    fail(
+      `AndroidManifest.xml declares android.permission.${permission}. Plant photos use the ` +
+        'Android Photo Picker and the camera intent, which need no permission; declaring one ' +
+        'adds a prompt (CAMERA) or broad library access the app does not use'
+    );
+  }
+}
+
 const androidBuild = read('frontend/android/app/build.gradle');
 assertEqual(
   match(androidBuild, /applicationId\s+['"]([^'"]+)['"]/, 'Android applicationId'),

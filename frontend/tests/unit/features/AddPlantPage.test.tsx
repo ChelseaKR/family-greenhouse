@@ -59,10 +59,18 @@ vi.mock('@/services/taskService', () => ({
 }));
 
 // jsdom has no real image decoder, so the canvas pipeline never resolves —
-// mock the module to behave like the "pipeline unavailable" fallback path
-// (null), which is what downscaleImage itself returns in that case.
+// mock the module to hand the picked file through. The real pipeline
+// (downscale + metadata strip) is covered by tests/unit/utils/imageMetadata.test.ts.
 vi.mock('@/utils/image', () => ({
-  downscaleImage: vi.fn().mockResolvedValue(null),
+  prepareImageForUpload: vi.fn(async (file: Blob) => file),
+}));
+
+// Inside the shells the photo comes from the native camera or picker, not the
+// file input. The plugin itself is covered by tests/unit/services/nativeCamera.test.ts.
+const pickNativePhoto = vi.hoisted(() => vi.fn());
+vi.mock('@/services/nativeCamera', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/nativeCamera')>()),
+  pickNativePhoto,
 }));
 
 /** A promise this test can resolve on demand, to control resolution order. */
@@ -413,6 +421,32 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     });
 
+    async function pickNativePhotoAndTryIdentify(source: 'camera' | 'library' = 'library') {
+      pickNativePhoto.mockResolvedValueOnce(
+        new File(['plant-bytes'], 'plant-photo.jpg', { type: 'image/jpeg' })
+      );
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole('button', { name: source === 'camera' ? 'Take photo' : 'Choose photo' })
+      );
+      fireEvent.click(await screen.findByRole('button', { name: /identify from photo/i }));
+    }
+
+    it('offers the camera and the photo picker in place of the file input', async () => {
+      vi.mocked(plantService.identifyPlant).mockResolvedValueOnce({
+        configured: true,
+        suggestions: [],
+      } as never);
+      renderPage();
+      expect(await screen.findByRole('button', { name: 'Take photo' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Choose photo' })).toBeInTheDocument();
+      expect(document.querySelector('input[type="file"]')).toBeNull();
+
+      await pickNativePhotoAndTryIdentify('camera');
+      expect(pickNativePhoto).toHaveBeenCalledWith('camera');
+      await waitFor(() => expect(plantService.identifyPlant).toHaveBeenCalledTimes(1));
+    });
+
     it('never offers the top-up purchase, even when the 402 says it can be bought (store payment rules)', async () => {
       vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
         budgetExhausted({
@@ -422,7 +456,7 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
         })
       );
       renderPage();
-      await pickPhotoAndTryIdentify();
+      await pickNativePhotoAndTryIdentify();
 
       expect(
         await screen.findByText(/This month's plant identifications are used up/)

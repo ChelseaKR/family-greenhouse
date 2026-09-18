@@ -9,6 +9,7 @@
  * before it crosses a sitter's mobile connection — a courtesy, not a guard.
  */
 import { downscaleImage } from '@/utils/image';
+import { stripImageMetadata } from '@/utils/imageMetadata';
 
 /** Decoded-byte cap the server enforces; we aim to land under it. */
 export const MAX_UPLOAD_BYTES = 300 * 1024;
@@ -46,8 +47,13 @@ export async function prepareSitterPhoto(file: File): Promise<string | null> {
       if (decodedBytes(dataUrl) <= MAX_UPLOAD_BYTES) return dataUrl;
     }
   }
+  // The canvas output above carries no metadata. The original does, GPS
+  // included, so it is only sent once that is removed — and not at all if it
+  // cannot be.
   if (file.size <= MAX_UPLOAD_BYTES) {
-    const dataUrl = await blobToDataUrl(file);
+    const stripped = await stripImageMetadata(file).catch(() => null);
+    if (!stripped) return null;
+    const dataUrl = await blobToDataUrl(stripped);
     if (decodedBytes(dataUrl) <= MAX_UPLOAD_BYTES) return dataUrl;
   }
   return null;

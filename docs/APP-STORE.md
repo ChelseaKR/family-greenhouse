@@ -138,8 +138,13 @@ What each row actually is, for whoever fills out the questionnaire:
   (`legal.json`, "Account info"). Phone number is opt-in, only collected if
   SMS reminders are turned on, and stays on file even if SMS is later
   switched off (production SMS is currently off regardless — see §4).
-- **Photos or Videos** — plant photos a user uploads through the WebView
-  file picker, stored in S3.
+- **Photos or Videos** — plant photos a user uploads, stored in S3: through
+  the native camera or photo picker on a plant's page and Add plant, and
+  the WebView file picker elsewhere. Every photo is downscaled and its EXIF,
+  XMP and other metadata, GPS included, is removed on the device before
+  upload (`docs/mobile.md`, "Photos"), so photos add nothing to the
+  location rows. The camera and the photo library are opened only when the
+  user taps to add a photo.
 - **Other User Content** — plant names, notes, task text, and similar
   free-text fields a household enters.
 - **Coarse Location (optional)** — only if a household sets one. This is a
@@ -236,6 +241,15 @@ each item it raised, re-verified today:
    this app, the honest answer is: nothing yet, except a push-notification
    plugin that's deliberately unreachable (see #3 below). Do not say
    otherwise in review notes.
+
+   **Update, 2026-09-18:** the camera half is no longer true for builds made
+   after the native-camera change. On a plant's page and on Add plant, the
+   shells now show Take photo and Choose photo, backed by
+   `@capacitor/camera` (the system camera and the system photo picker). Name
+   it in review notes only for a build that carries it, after trying both
+   buttons on a device running that build. The leaf-health, sitter and
+   caretaker photo screens are still the WebView file input. See
+   `docs/mobile.md`, "Photos".
 
 2. **Deep links / universal links — not working yet, don't claim they are.**
    Tonight's work (PRs #731, #736, #762, #768) landed the iOS side of

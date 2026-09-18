@@ -5,9 +5,15 @@
  * than a card, and the backend confirm step rejects objects over 5 MiB. So
  * we downscale to a max long edge before upload: WebP at ~0.8 quality, with
  * a JPEG fallback where `canvas.toBlob('image/webp')` is unsupported
- * (Safari < 16). If anything in the canvas pipeline fails, callers degrade
- * gracefully by uploading the original.
+ * (Safari < 16).
+ *
+ * Callers upload through `prepareImageForUpload()`, not `downscaleImage()`
+ * directly: when the canvas pipeline fails it falls back to the original
+ * file, and it strips that file's metadata (EXIF GPS included) either way —
+ * see `imageMetadata.ts`.
  */
+
+import { stripImageMetadata } from './imageMetadata';
 
 export const MAX_LONG_EDGE = 1600;
 export const ENCODE_QUALITY = 0.8;
@@ -26,7 +32,7 @@ function canvasToBlob(
   });
 }
 
-async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
+async function decodeImage(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
   if (typeof createImageBitmap === 'function') {
     try {
       return await createImageBitmap(file);
@@ -57,7 +63,7 @@ async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> 
  * uploading the original file.
  */
 export async function downscaleImage(
-  file: File,
+  file: Blob,
   maxEdge: number = MAX_LONG_EDGE,
   quality: number = ENCODE_QUALITY
 ): Promise<Blob | null> {
@@ -91,4 +97,23 @@ export async function downscaleImage(
   } catch {
     return null;
   }
+}
+
+/**
+ * The bytes to upload for a photo: downscaled when the canvas pipeline works,
+ * the original otherwise, and in both cases rewritten without metadata. A
+ * canvas re-encode already carries none, so the strip is a no-op there; on
+ * the fallback it is what keeps a phone's GPS coordinates off the server.
+ *
+ * Throws `ImageMetadataError` when the result is not a JPEG, PNG or WebP it
+ * can rewrite. That is deliberate: a photo whose metadata cannot be removed
+ * is not uploaded at all.
+ */
+export async function prepareImageForUpload(
+  file: Blob,
+  maxEdge: number = MAX_LONG_EDGE,
+  quality: number = ENCODE_QUALITY
+): Promise<Blob> {
+  const downscaled = await downscaleImage(file, maxEdge, quality);
+  return stripImageMetadata(downscaled ?? file);
 }

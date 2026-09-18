@@ -25,6 +25,7 @@ removed, or left un-synced without this table moving with it.
 | Plugin                          | What it backs                                                                                                                                             |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@capacitor/app`                | `appUrlOpen` delivery for iOS Universal Links (`frontend/src/services/nativeDeepLinks.ts`). Android App Links are not wired yet — see "Deep links" below. |
+| `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
 | `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).      |
 | `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                        |
 | `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below.        |
@@ -34,20 +35,10 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:end -->
 
-Everything else the apps do is the same web code running in a WebView. Two
-things that look native and are not, because both have been written into
-review notes before and neither is true:
+Everything else the apps do is the same web code running in a WebView. One
+thing looks native and is not, because it has been written into review notes
+before:
 
-- **Photos.** Every photo path is a plain `<input type="file">`
-  (`PlantImageUpload.tsx`, `AddPlantPage.tsx`, `LeafHealthCard.tsx`,
-  `SitterPhotoBack.tsx`, `CaretakerPage.tsx`). There is no `@capacitor/camera`.
-  `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
-  camera directly from the picker — **this is why `NSCameraUsageDescription`
-  and `NSPhotoLibraryUsageDescription` are in `Info.plist` and they must stay**;
-  iOS terminates the app if a purpose string is missing when the picker opens.
-  They are load-bearing for the WebView picker, not leftovers from a camera
-  plugin. What they are not is a native capability a reviewer can distinguish
-  from the mobile website.
 - **Offline.** The shells work offline because `dist/` is copied into the
   binary, not because anything caches at runtime. The PWA service worker is
   a web-only feature, and `initPwaRegistration()`
@@ -61,6 +52,50 @@ review notes before and neither is true:
   previous build until the new worker took over and reloaded the page. The
   shells now remove a worker an earlier build left behind, along with its
   caches.
+
+### Photos
+
+**The two plant photo screens are native; the rest are not.** On a plant's
+page (`PlantImageUpload.tsx`) and on Add plant (`AddPlantPage.tsx`), the
+shells show **Take photo** and **Choose photo** in place of the file input
+(`NativePhotoButtons.tsx` over `services/nativeCamera.ts`):
+
+- **Take photo** opens the system camera (`Camera.takePhoto`). Nothing is
+  saved to the gallery.
+- **Choose photo** opens the system photo picker (`Camera.chooseFromGallery`,
+  one photo): PHPicker on iOS, and the Android Photo Picker on Android 11+,
+  which Google Play services backports to older Android 11 and 12 devices
+  through the `ModuleDependencies` entry in `AndroidManifest.xml`. Without that
+  it falls back to the system document picker. None of these needs a storage
+  permission, and the app receives only the photo the person picked.
+- **Permissions are asked by the OS the first time a button is tapped**, never
+  at launch. A denial shows how to turn access back on in Settings.
+  `scripts/validate-store-release.mjs` fails if the Android manifest ever
+  declares a storage, media or camera permission. A declared `CAMERA`
+  permission would make the camera intent require a runtime grant it
+  otherwise does not need.
+
+The leaf-health check, the sitter photo page and the caretaker page keep the
+WebView `<input type="file">`, and in a browser every photo path is still that
+input. `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
+camera directly from the WebView picker. **`NSCameraUsageDescription` and
+`NSPhotoLibraryUsageDescription` must stay in `Info.plist` for both reasons**:
+iOS terminates the app if a purpose string is missing when either the plugin
+or the WebView picker opens, and the validator requires both, non-empty.
+
+**Every photo leaves the device without its metadata, on every platform.**
+`prepareImageForUpload()` (`frontend/src/utils/image.ts`) downscales the photo
+through a canvas, which keeps pixels only. When the canvas pipeline is
+unavailable it uses the original file instead, and in both cases
+`stripImageMetadata()` (`frontend/src/utils/imageMetadata.ts`) rewrites the
+bytes without EXIF, XMP, IPTC, MPF secondary images, PNG text chunks or WebP
+EXIF/XMP chunks, deciding the format from the bytes. A file it cannot rewrite
+is not uploaded. Before this, the fallback uploaded the original with its GPS
+block, and the caretaker page uploaded every photo as picked. That covers
+plant photos, Add plant, identification (sent to Plant.id), the leaf-health
+check, sitter photos and caretaker photos.
+`tests/unit/utils/imageMetadata.test.ts` builds photos carrying a location in
+each of those containers and parses the result to prove the GPS block is gone.
 
 ### Deep links
 
@@ -434,7 +469,11 @@ Remaining work for delivery:
       deletion (`/account-deletion`) URLs filled in on both store listings.
 - [ ] Apple "App Privacy" + Play "Data safety" forms: declare account data
       (email, name), phone number (optional, SMS reminders), photos users
-      upload, and the analytics rails as they actually ship — product
+      upload (Photos or Videos, App Functionality, linked to the user, not
+      tracking; the app removes their location and camera metadata on the
+      device before upload, and camera and photo-library access happen only
+      when the user taps to add a photo, so there is no Precise or Coarse
+      Location collected from photos), and the analytics rails as they actually ship — product
       interaction keyed to the account id, crash and performance data — under
       the Analytics purpose, matching `ios/App/App/PrivacyInfo.xcprivacy`
       entry for entry. Sentry only if a DSN is configured for the store build.
@@ -465,8 +504,13 @@ Remaining work for delivery:
     table against the installed plugins and both native projects, so it is
     the list to write review notes from. Keep adding to it as native
     behavior lands. A row that isn't in the table isn't in the app.
-  - **What is not an argument.** The WebView file picker behaves exactly like
-    mobile Safari's. Opening offline is what a bundled web app does anyway,
+  - **Photos come from the native camera and photo picker.** On a plant's
+    page and on Add plant, the build shows Take photo and Choose photo, which
+    open the system camera and the system photo picker (see "Photos" above).
+    Mobile Safari only offers a file input.
+  - **What is not an argument.** The WebView file picker that the leaf-health,
+    sitter and caretaker screens still use behaves exactly like mobile
+    Safari's. Opening offline is what a bundled web app does anyway,
     so it doesn't count as a feature. Push delivery is still off end to end,
     tracked in
     [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469).
