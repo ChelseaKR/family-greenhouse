@@ -466,11 +466,13 @@ describe('DELETE /plants/{id} → trash → restore', () => {
       }
     );
     expect(again.statusCode).toBe(404);
-    // Only the activity log still names it — history, as a delete always left.
+    // Only the history still names it: the activity log, as a delete always
+    // left, and the household audit log (#675), whose entries expire on their
+    // own retention and are erased with the household.
     const mentions = store
       .all()
       .filter((r) => JSON.stringify(r).includes(world.plantId))
-      .filter((r) => !String(r.PK).endsWith('#ACTIVITY'));
+      .filter((r) => !String(r.PK).endsWith('#ACTIVITY') && !String(r.PK).endsWith('#AUDIT'));
     expect(mentions).toEqual([]);
   });
 });

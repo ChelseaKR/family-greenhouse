@@ -21,6 +21,7 @@ import * as trashService from '../../services/trashService.js';
 import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -118,6 +119,12 @@ export const restoreTrashEntry = createHandler(
       householdId,
       metadata: { kind },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'trash.restored',
+      actor: { type: 'member', userId: user.userId },
+      details: { itemKind: kind, itemId },
+    });
 
     if (kind === 'plant') {
       activity
@@ -176,6 +183,12 @@ export const purgeTrashEntry = createHandler(
       targetId: itemId,
       householdId,
       metadata: { kind, trigger: 'delete_now', ...counts },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'trash.purged',
+      actor: { type: 'member', userId: user.userId },
+      details: { itemKind: kind, itemId },
     });
 
     if (kind === 'plant') {

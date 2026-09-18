@@ -40,7 +40,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-17">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-18">
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"
@@ -72,6 +72,9 @@ export function PrivacyPage() {
         </li>
         <li>
           <Trans i18nKey="legal.privacy.collect.caretaker" components={strong} />
+        </li>
+        <li>
+          <Trans i18nKey="legal.privacy.collect.auditLog" components={strong} />
         </li>
       </ul>
 

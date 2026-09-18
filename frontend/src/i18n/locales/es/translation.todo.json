@@ -10,6 +10,8 @@
   ],
   "intentionallyEqual": [
     "trash.taskLabel",
+    "householdAudit.when",
+    "householdAudit.stripe",
     "giftSubscription.planLabel",
     "giftSubscription.codePlaceholder",
     "awayRecap.noteLine",

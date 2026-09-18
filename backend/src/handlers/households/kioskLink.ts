@@ -26,6 +26,7 @@ import * as billing from '../../services/billing.js';
 import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
+import * as householdAudit from '../../services/householdAudit.js';
 
 export const issueKioskLinkSchema = z
   .object({
@@ -108,6 +109,12 @@ export const issueKioskLink = createHandler(
         pollIntervalSeconds: link.pollIntervalSeconds,
       },
     });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'kiosk_link.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { linkId: link.id },
+    });
 
     // The token leaves the building exactly once, here.
     return createdResponse({
@@ -162,6 +169,12 @@ export const revokeKioskLink = createHandler(
       actorEmail: user.email,
       householdId,
       metadata: { stage: 'kiosk_link_revoked', revoked },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'kiosk_link.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { count: revoked },
     });
     return noContentResponse();
   }

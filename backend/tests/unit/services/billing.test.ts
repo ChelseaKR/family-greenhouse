@@ -107,6 +107,11 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
 // event without hitting PostHog, and simulate it rejecting to prove the webhook
 // apply path swallows analytics failures.
 const { captureMock } = vi.hoisted(() => ({ captureMock: vi.fn() }));
+// The webhook's household-audit write (#675) is asserted in its own block
+// below; mocked so the dynamodb call counts here stay about the subscription.
+vi.mock('../../../src/services/householdAudit.js', () => ({
+  recordBillingTransition: vi.fn(async () => undefined),
+}));
 vi.mock('../../../src/utils/serverAnalytics.js', () => ({
   capture: captureMock,
 }));
@@ -3398,5 +3403,81 @@ describe('deltaForStripeEvent — a completed Session is not proof of payment', 
       },
     } as unknown as Stripe.Event);
     expect(delta?.fields.status).toBe('incomplete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Household audit log (#675): the webhook's one new call. The classification
+// and the write are covered in tests/unit/{models,services}/householdAudit;
+// what is asserted here is only what billing.ts itself decides — WHEN it
+// calls, with WHAT, and that it calls after the subscription row is written.
+// ---------------------------------------------------------------------------
+describe('applyStripeEvent → household audit log', () => {
+  const pastDue = (id: string) =>
+    ({
+      id,
+      created: 1_700_000_000,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status: 'past_due',
+          customer: 'cus_secret',
+          metadata: { householdId: 'hh-1', planId: 'garden' },
+        },
+        previous_attributes: { status: 'active' },
+      },
+    }) as unknown as Stripe.Event;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('hands the applied delta to recordBillingTransition, after the subscription Update', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({});
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    const event = pastDue('evt_audit_1');
+
+    await applyStripeEvent(event);
+
+    expect(householdAudit.recordBillingTransition).toHaveBeenCalledTimes(1);
+    expect(householdAudit.recordBillingTransition).toHaveBeenCalledWith(
+      'hh-1',
+      event,
+      expect.objectContaining({ planId: 'garden', status: 'past_due' })
+    );
+    const updateOrder = vi.mocked(dynamodb.send).mock.invocationCallOrder[0];
+    const auditOrder = vi.mocked(householdAudit.recordBillingTransition).mock
+      .invocationCallOrder[0];
+    expect(auditOrder).toBeGreaterThan(updateOrder);
+  });
+
+  it('does not call it for a redelivery the dedupe ledger has already seen', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const duplicate = Object.assign(new Error('exists'), {
+      name: 'ConditionalCheckFailedException',
+    });
+    // The Update applies (idempotently); the ledger Put reports a duplicate.
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({}).mockRejectedValueOnce(duplicate);
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+
+    await applyStripeEvent(pastDue('evt_audit_dup'));
+
+    expect(householdAudit.recordBillingTransition).not.toHaveBeenCalled();
+  });
+
+  it('does not call it for an out-of-order event that changed nothing', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const stale = Object.assign(new Error('stale'), { name: 'ConditionalCheckFailedException' });
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(stale);
+    const householdAudit = await import('../../../src/services/householdAudit.js');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+
+    await applyStripeEvent(pastDue('evt_audit_stale'));
+
+    expect(householdAudit.recordBillingTransition).not.toHaveBeenCalled();
   });
 });

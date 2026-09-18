@@ -33,6 +33,7 @@ import * as billing from '../../services/billing.js';
 import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
+import * as householdAudit from '../../services/householdAudit.js';
 
 /** Default report window when the caller names neither end: the last 30 days. */
 const DEFAULT_REPORT_DAYS = 30;
@@ -109,6 +110,14 @@ export const createCaretaker = createHandler(
         expiresAt: caretaker.expiresAt,
       },
     });
+    // The seat's id and window. Not the name the household typed: that is a
+    // person who is not a member, and the log keeps nothing about them.
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'caretaker_seat.created',
+      actor: { type: 'member', userId: user.userId },
+      details: { seatId: caretaker.id, expiresAt: caretaker.expiresAt },
+    });
 
     return createdResponse({
       ...caretakerService.toSummary(caretaker),
@@ -160,6 +169,12 @@ export const revokeCaretaker = createHandler(
       actorEmail: user.email,
       householdId,
       metadata: { stage: 'caretaker_revoked', caretakerId },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId,
+      kind: 'caretaker_seat.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { seatId: caretakerId },
     });
     return noContentResponse();
   }

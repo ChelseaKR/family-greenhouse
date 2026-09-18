@@ -83,18 +83,19 @@ Per-handler middlewares (`authMiddleware`, `requireHousehold`, `requireAdmin`, `
 
 One table named `FamilyGreenhouse` with `PK` (string) + `SK` (string) keys, plus two GSIs.
 
-| Entity            | PK                                     | SK                         | GSI1PK                    | GSI1SK           | GSI2PK                                             | GSI2SK      |
-| ----------------- | -------------------------------------- | -------------------------- | ------------------------- | ---------------- | -------------------------------------------------- | ----------- |
-| Household         | `HOUSEHOLD#{id}`                       | `METADATA`                 | —                         | —                | —                                                  | —           |
-| HouseholdMember   | `HOUSEHOLD#{id}`                       | `MEMBER#{userId}`          | `USER#{userId}`           | `HOUSEHOLD#{id}` | —                                                  | —           |
-| HouseholdInvite   | `INVITE#{code}`                        | `METADATA`                 | —                         | —                | —                                                  | —           |
-| Plant             | `HOUSEHOLD#{id}`                       | `PLANT#{plantId}`          | —                         | —                | —                                                  | —           |
-| Task              | `HOUSEHOLD#{id}`                       | `TASK#{taskId}`            | `HOUSEHOLD#{id}`          | `{nextDue ISO}`  | `HOUSEHOLD#{id}#ASSIGNEE#{userId}` _(if assigned)_ | `{nextDue}` |
-| TaskCompletion    | `HOUSEHOLD#{id}#PLANT#{plantId}`       | `COMPLETION#{ts}#{id}`     | `HOUSEHOLD#{id}#ACTIVITY` | `{completedAt}`  | —                                                  | —           |
-| PushSubscription  | `USER#{userId}`                        | `PUSH#{endpointHash}`      | —                         | —                | —                                                  | —           |
-| NotificationPrefs | `USER#{userId}`                        | `PREFS`                    | —                         | —                | —                                                  | —           |
-| TrashEntry        | `HOUSEHOLD#{id}`                       | `TRASH#{PLANT\|TASK}#{id}` | —                         | —                | —                                                  | —           |
-| TrashedRow        | `HOUSEHOLD#{id}#TRASH#PLANT#{plantId}` | `ROW#{origPK}\|{origSK}`   | —                         | —                | —                                                  | —           |
+| Entity              | PK                                     | SK                         | GSI1PK                    | GSI1SK           | GSI2PK                                             | GSI2SK      |
+| ------------------- | -------------------------------------- | -------------------------- | ------------------------- | ---------------- | -------------------------------------------------- | ----------- |
+| Household           | `HOUSEHOLD#{id}`                       | `METADATA`                 | —                         | —                | —                                                  | —           |
+| HouseholdMember     | `HOUSEHOLD#{id}`                       | `MEMBER#{userId}`          | `USER#{userId}`           | `HOUSEHOLD#{id}` | —                                                  | —           |
+| HouseholdInvite     | `INVITE#{code}`                        | `METADATA`                 | —                         | —                | —                                                  | —           |
+| Plant               | `HOUSEHOLD#{id}`                       | `PLANT#{plantId}`          | —                         | —                | —                                                  | —           |
+| Task                | `HOUSEHOLD#{id}`                       | `TASK#{taskId}`            | `HOUSEHOLD#{id}`          | `{nextDue ISO}`  | `HOUSEHOLD#{id}#ASSIGNEE#{userId}` _(if assigned)_ | `{nextDue}` |
+| TaskCompletion      | `HOUSEHOLD#{id}#PLANT#{plantId}`       | `COMPLETION#{ts}#{id}`     | `HOUSEHOLD#{id}#ACTIVITY` | `{completedAt}`  | —                                                  | —           |
+| PushSubscription    | `USER#{userId}`                        | `PUSH#{endpointHash}`      | —                         | —                | —                                                  | —           |
+| NotificationPrefs   | `USER#{userId}`                        | `PREFS`                    | —                         | —                | —                                                  | —           |
+| TrashEntry          | `HOUSEHOLD#{id}`                       | `TRASH#{PLANT\|TASK}#{id}` | —                         | —                | —                                                  | —           |
+| TrashedRow          | `HOUSEHOLD#{id}#TRASH#PLANT#{plantId}` | `ROW#{origPK}\|{origSK}`   | —                         | —                | —                                                  | —           |
+| HouseholdAuditEntry | `HOUSEHOLD#{id}#AUDIT`                 | `AUDIT#{occurredAt}#{id}`  | —                         | —                | —                                                  | —           |
 
 A few access patterns this supports:
 
@@ -103,6 +104,7 @@ A few access patterns this supports:
 - "Tasks due in the next 7 days for a household" → query GSI1 with `PK = HOUSEHOLD#x AND SK <= cutoff`
 - "Tasks assigned to me" → query GSI2 with `PK = HOUSEHOLD#x#ASSIGNEE#me`
 - "Recent activity across the household" → query GSI1 with `PK = HOUSEHOLD#x#ACTIVITY` newest-first
+- "The household audit log" (#675, admin-only) → query `PK = HOUSEHOLD#x#AUDIT` newest-first, paged by `ExclusiveStartKey`; rows are Put under `attribute_not_exists` and expire on a 30-day `ttl`
 
 There's no `entityType`-only secondary access — everything fans out from a known partition. Cross-household reads aren't possible without a Scan, which the code never does.
 

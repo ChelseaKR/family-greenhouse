@@ -14,6 +14,7 @@ import * as accountCleanup from '../../services/accountCleanup.js';
 import * as calendarTokens from '../../services/calendarTokens.js';
 import * as billingEmails from '../../services/billingEmails.js';
 import * as referralCodes from '../../services/referralCodes.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import {
   REFERRAL_BONUS_MONTHS,
   REFERRAL_BONUS_PLAN_ID,
@@ -162,6 +163,15 @@ export const deleteMe = createHandler(
       sharedHouseholds += 1;
       await accountCleanup.anonymizeUserInHousehold(m.householdId, user.userId);
       await householdService.removeMember(m.householdId, user.userId);
+      // The household that keeps going gets a record that they left. The ref
+      // it stores is unlinkable once the account is gone, so the entry reads
+      // "former member" and needs no rewrite.
+      await householdAudit.recordHouseholdAudit({
+        householdId: m.householdId,
+        kind: 'member.left',
+        actor: { type: 'member', userId: user.userId },
+        details: { role: m.role, accountDeleted: true },
+      });
     }
 
     await accountCleanup.deleteUserScopedData(user.userId);

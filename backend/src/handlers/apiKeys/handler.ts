@@ -22,6 +22,7 @@ import * as apiKeysService from '../../services/apiKeys.js';
 import * as billing from '../../services/billing.js';
 import { featureOf, getEntitledPlan } from '../../models/plans.js';
 import { audit } from '../../utils/auditLog.js';
+import * as householdAudit from '../../services/householdAudit.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 
 const createSchema = z.object({
@@ -79,6 +80,17 @@ export const createKey = createHandler(
       householdId: user.householdId ?? undefined,
       metadata: { keyId: result.record.id, label: result.record.label },
     });
+    // Last four and scopes, never the key (returned once, below) nor its hash.
+    await householdAudit.recordHouseholdAudit({
+      householdId: user.householdId!,
+      kind: 'api_key.created',
+      actor: { type: 'member', userId: user.userId },
+      details: {
+        keyId: result.record.id,
+        last4: result.record.last4,
+        scopes: result.record.scopes.join(','),
+      },
+    });
     return createdResponse(result);
   }
 )
@@ -103,6 +115,12 @@ export const revokeKey = createHandler(
       actorId: user.userId,
       householdId: user.householdId ?? undefined,
       metadata: { keyId },
+    });
+    await householdAudit.recordHouseholdAudit({
+      householdId: user.householdId!,
+      kind: 'api_key.revoked',
+      actor: { type: 'member', userId: user.userId },
+      details: { keyId },
     });
     return noContentResponse();
   }
