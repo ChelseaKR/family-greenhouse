@@ -214,6 +214,40 @@ rows whose images no longer exist). The daily purge is the digests function's
 `{ "job": "trashPurge" }` run; its summary line is `trash.purge_run_complete`
 with per-kind counts, alarmed through `*-digests-run-failed`.
 
+## Restoring a household from its export
+
+**Symptom:** "we deleted our household" / "I moved to a new account" / "send
+you our export?" — the household has a JSON export (`GET /me/export`,
+Settings → Account → Download full data) and wants it back.
+
+Since #669 an admin restores it themselves: create a new household (or use an
+empty one), then **Settings → Account → Restore a household from an archive**.
+The preview lists what comes back and what does not before anything is written.
+What to expect, none of which is a bug:
+
+- **Only into an empty household** (no plants, tasks or spaces). A household
+  with data answers `409 not_empty`; the fix is a new household, never a merge.
+- **Restored:** every plant in every lifecycle state (notes, house rule, tags,
+  catalog id, cutting links) and the tasks of active plants with their
+  schedules. **Not restored:** photos (the export holds links, not pictures),
+  spaces, care history, members (tasks for people not in the household come
+  back unassigned, listed for re-inviting), billing (no plan, subscription or
+  trial carries over) and every sitter, kiosk, tag, share, calendar or API
+  link — issue new ones.
+- **Plan cap:** more active plants than the household's plan allows is
+  refused whole (`402 over_plan_limit`, nothing written). Upgrade first.
+- **Interrupted restore** (`503 interrupted`): the response says exactly how
+  many plants and tasks landed. Running the same restore again finishes it;
+  rows have deterministic ids, so nothing is added twice. The household's
+  METADATA row carries `archiveImportDigest` / `archiveImportStatus`
+  (`in_progress` until every row is in, then `complete`).
+- **Audit:** every commit that wrote logs one `archive.imported` line with
+  `metadata.outcome` (`complete`, `plan_limit`, `write_failed`), the counts
+  and the archive digest — never the file or a note.
+
+A newer export version than the deployed build reads is refused by name
+(`400 unsupported_version`); that resolves itself once the newer build ships.
+
 ## Post-deploy test fixtures in production data
 
 **Symptom:** a count of households, members, or plants that does not match what

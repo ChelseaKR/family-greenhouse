@@ -2182,5 +2182,57 @@
     "moveToTrash": "Move to trash",
     "plantConfirmTitle": "Move this plant to the trash?",
     "plantConfirmMessage": "“{{name}}” and its tasks, photos and care history will move to the trash. Anyone in the household can restore it from Settings → Trash for {{days}} days; after that it’s deleted permanently. To keep its record instead, choose “It died” or “I gave it away”."
+  },
+  "archiveImport": {
+    "title": "Restore a household from an export",
+    "description": "Load a JSON export back in to recover a household or move it to another account. It only goes into an empty household.",
+    "adminOnly": "Only a household admin can restore an export.",
+    "chooseFile": "Choose an export file",
+    "chooseAnother": "Choose another file",
+    "chooseHousehold": "Household to restore",
+    "householdOption": "{{name}} — plants: {{plants}}, tasks: {{tasks}}",
+    "check": "Check this export",
+    "restore": "Restore into this household",
+    "restoreAgain": "Restore again to finish",
+    "createHousehold": "Create a new household",
+    "done": "Restored “{{name}}”. Plants: {{plants}}, tasks: {{tasks}}.",
+    "alreadyImported": "Already restored here; nothing was added.",
+    "resumable": "This restore stopped part-way. Restore again to finish; nothing is added twice.",
+    "errors": {
+      "tooLarge": "This file is over 5 MB, too large to be an export.",
+      "notJson": "This file isn’t JSON.",
+      "notArchive": "This isn’t a Family Greenhouse export.",
+      "newerVersion": "This export is from a newer version of the app (format {{version}}). Update the app first.",
+      "version": "This app can’t read this export’s format version.",
+      "invalid": "This export is incomplete or was edited, so it can’t be restored.",
+      "notEmpty": "This household isn’t empty. Restore into a new household.",
+      "otherArchive": "This household was restored from another export. Restore into a new household.",
+      "changed": "Something changed since you checked. Check again.",
+      "overLimit": "This export has {{active}} active plants and the {{plan}} plan allows {{limit}}. Nothing will be restored until you upgrade.",
+      "stoppedAtLimit": "Stopped at the plan limit. Plants: {{plants}}/{{totalPlants}}, tasks: {{tasks}}/{{totalTasks}}. Upgrade, then restore again.",
+      "interrupted": "Stopped part-way. Plants: {{plants}}/{{totalPlants}}, tasks: {{tasks}}/{{totalTasks}}. Restore again to finish; nothing is added twice."
+    },
+    "preview": {
+      "title": "What this restores",
+      "from": "From “{{name}}”, exported {{date}}",
+      "plants": "Plants: {{n}} (active {{active}}, past {{past}}, archived {{archived}}), with notes, house rules and tags",
+      "tasks": "Tasks and their schedules: {{n}}",
+      "lineage": "Cutting links: {{n}}"
+    },
+    "notRestored": {
+      "title": "Not restored",
+      "photos": "Photos: {{n}} (the export only links to them)",
+      "spaces": "Space assignments: {{n}} (location text is kept)",
+      "unassigned": "Tasks left unassigned: {{n}}. Invite these people again:",
+      "person": "{{name}} — tasks: {{n}}",
+      "unnamed": "Unnamed",
+      "orphanTasks": "Tasks without their plant: {{n}}",
+      "brokenLineage": "Cutting links to missing plants: {{n}}",
+      "species": "Scientific names to recheck: {{n}}",
+      "history": "Care history, photo timelines and past plants’ tasks",
+      "members": "Members (invite them again)",
+      "billing": "Billing: no plan, subscription or trial carries over",
+      "links": "Sitter, wall display, tag, share, calendar and API links (issue new ones)"
+    }
   }
 }

@@ -62,6 +62,11 @@ export type AuditEvent =
   | 'task.trashed'
   | 'trash.restored'
   | 'trash.purged'
+  // A household restored from its own export (#669). One line per commit that
+  // wrote (or tried to write) rows: `metadata.outcome` is `complete`,
+  // `plan_limit` or `write_failed`, with counts and the archive digest — never
+  // the file, a note, or a name from it.
+  | 'archive.imported'
   | 'rate_limit.tripped'
   | 'chat.message_sent'
   | 'chat.tools_called'

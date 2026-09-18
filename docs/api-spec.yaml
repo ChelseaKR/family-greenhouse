@@ -2161,6 +2161,74 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: A restore of this plant is part-way through; restore it again first }
 
+  /households/{id}/import-archive:
+    post:
+      summary: >-
+        Restore a household from the app's own export (#669) — the JSON `GET /me/export` writes,
+        format `family-greenhouse-export`, version 1. Admin only, into an EMPTY household only (no
+        plants, tasks or spaces; version 1 never merges). `mode: preview` validates the archive and
+        answers with counts, what will not be restored and the plan-cap verdict, writing nothing;
+        `mode: commit` writes the same plan and requires the preview's `confirmDigest`. The body
+        is capped at 5 MiB and treated as untrusted: unknown or newer versions are refused, keys
+        such as `__proto__` are refused, every plant and task is parsed through an allowlist, and
+        no id, URL or token from the file is used as a key or dereferenced. Restored: plants in
+        every lifecycle state with notes, house rule, tags, lineage and catalog id, and tasks with
+        their schedules, seasonal profiles, last completion and notes. Never restored: members
+        (tasks assigned to non-members come back unassigned and are listed for re-inviting),
+        billing (no plan, subscription or entitlement carries over — the target's own caps apply),
+        photos, spaces, and every share, sitter, kiosk, tag, calendar or API token. Rows get new
+        deterministic ids, so committing the same archive again finishes an interrupted restore
+        and never adds anything twice.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, archive]
+              properties:
+                mode: { type: string, enum: [preview, commit] }
+                sourceHouseholdId:
+                  type: string
+                  description: Which household of the archive to restore; optional when it holds one.
+                confirmDigest:
+                  type: string
+                  pattern: '^[0-9a-f]{64}$'
+                  description: Required for commit — the `digest` the preview returned.
+                archive:
+                  type: object
+                  description: The export document, as downloaded.
+      responses:
+        '200':
+          description: >-
+            Preview (`digest`, `source`, `counts`, `notRestored`, `planLimit`, `target.state`,
+            `canImport`), or the commit result (`status: complete | already_imported`, `imported`,
+            `counts`, `notRestored`).
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          description: >-
+            Not an export, an unknown or newer version, an unsafe or edited file, or a household
+            the file does not hold. `details.code` names which.
+        '402':
+          description: >-
+            More active plants than the plan allows (`over_plan_limit`, nothing written), or the
+            cap was reached part-way (`stopped_at_plan_limit`, with exact `landed` counts).
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: >-
+            `not_empty`, `other_archive`, `archive_changed` (confirmDigest does not match) or
+            `target_changed` (the household changed between the check and the claim).
+        '413': { description: Body larger than 5 MiB }
+        '503':
+          description: >-
+            `interrupted` — the restore stopped part-way; `details.landed` says exactly what is in
+            place, and committing the same archive again finishes it.
+
   /households/{id}/upgrade-requests:
     post:
       summary: >-

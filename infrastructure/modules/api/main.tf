@@ -1093,6 +1093,9 @@ locals {
     "GET /households/{id}/trash"                          = { group = "households", auth = "jwt" }
     "POST /households/{id}/trash/{kind}/{itemId}/restore" = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/trash/{kind}/{itemId}"       = { group = "households", auth = "jwt" }
+    # Restore from the app's own export (#669, handlers/households/importArchive.ts):
+    # admin-only, into an empty household, preview then commit; 5 MiB body cap.
+    "POST /households/{id}/import-archive" = { group = "households", auth = "jwt" }
     # A member asks the household's admins to upgrade for a locked feature
     # (email + push + activity row; once per member per feature per week).
     "POST /households/{id}/upgrade-requests" = { group = "households", auth = "jwt" }

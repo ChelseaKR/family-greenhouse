@@ -155,6 +155,15 @@ import {
 } from './services/sitterPhotoPolicy.js';
 import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
 import {
+  ARCHIVE_MAX_BYTES,
+  ArchiveRejectedError,
+  IMPORT_TARGET_REFUSALS,
+  importTargetState,
+  planArchiveImport,
+  readArchive,
+  type ValidatedArchive,
+} from './models/householdArchive.js';
+import {
   isEmailCategory,
   signToken,
   verifyTokenWithSecret,
@@ -189,6 +198,10 @@ app.use(cors());
 // Production caps bodies per route (middleware/bodySize.ts); the largest is
 // the sitter photo-back upload (SITTER_PHOTO_BODY_MAX_BYTES). Express's
 // 100 KB default would reject that route's in-spec bodies before it ran.
+// The archive restore (#669) takes a whole household in one body and has its
+// own 5 MiB cap (models/householdArchive.ts); parsed here first, so the
+// general limit below — which skips an already-parsed body — never sees it.
+app.use('/households/:id/import-archive', express.json({ limit: ARCHIVE_MAX_BYTES }));
 app.use(express.json({ limit: SITTER_PHOTO_BODY_MAX_BYTES }));
 
 // In-memory storage for local development
@@ -636,6 +649,9 @@ export const db = {
   // out of every other map, so every mock read excludes them the way the
   // production key move does.
   trash: new Map<string, LocalTrashEntry>(),
+  // Archive-restore markers (#669), keyed by household id — mirrors the
+  // `archiveImport*` attributes on the production METADATA row.
+  archiveImports: new Map<string, { digest: string; status: 'in_progress' | 'complete' }>(),
   tasks: new Map<string, Task>(),
   completions: new Map<string, Completion>(),
   photos: new Map<string, PlantPhoto>(),
@@ -713,6 +729,7 @@ export function resetDb(): void {
   db.spaces.clear();
   db.shares.clear();
   db.trash.clear();
+  db.archiveImports.clear();
   db.tasks.clear();
   db.completions.clear();
   db.photos.clear();
@@ -2502,6 +2519,163 @@ app.delete('/households/:id/trash/:kind/:itemId', authMiddleware, requireHouseho
   }
   res.status(204).send();
 });
+
+// ---------------------------------------------------------------------------
+// Restore from the app's own export (#669) — mirrors
+// handlers/households/importArchive.ts through the SAME pure module
+// (models/householdArchive.ts): validation, the restore plan, the target
+// states and the refusals are shared; only the storage is the mock's. The
+// mock has no species cache, so no canonical name is re-derived here.
+// ---------------------------------------------------------------------------
+
+// POST /households/:id/import-archive
+app.post(
+  '/households/:id/import-archive',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    const householdId = req.params.id;
+    if (user.householdId !== householdId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const body = (req.body ?? {}) as {
+      mode?: unknown;
+      sourceHouseholdId?: unknown;
+      confirmDigest?: unknown;
+      archive?: unknown;
+    };
+    if (body.mode !== 'preview' && body.mode !== 'commit') {
+      return res.status(400).json({
+        message: 'Send the archive with a mode of "preview" or "commit".',
+        details: { code: 'invalid_request' },
+      });
+    }
+    let archive: ValidatedArchive;
+    try {
+      archive = readArchive(
+        body.archive,
+        typeof body.sourceHouseholdId === 'string' ? body.sourceHouseholdId : undefined
+      );
+    } catch (err) {
+      if (err instanceof ArchiveRejectedError) {
+        return res
+          .status(400)
+          .json({ message: err.message, details: { code: err.code, ...err.details } });
+      }
+      throw err;
+    }
+
+    const members = membersOf(householdId);
+    const importPlan = planArchiveImport(archive, {
+      targetHouseholdId: householdId,
+      importerUserId: user.userId,
+      members: new Map(members.map((m) => [m.userId, m.name])),
+      canonicalSpecies: new Map(),
+    });
+    const inHousehold = (row: { householdId: string }) => row.householdId === householdId;
+    const hasData =
+      [...db.plants.values()].some(inHousehold) ||
+      [...db.tasks.values()].some(inHousehold) ||
+      [...db.spaces.values()].some(inHousehold);
+    const state = importTargetState(
+      db.archiveImports.get(householdId) ?? null,
+      hasData,
+      importPlan.digest
+    );
+    const plan = entitledPlan(householdId);
+    const limit = limitOf(plan, 'plants');
+    const currentActivePlants = [...db.plants.values()].filter(
+      (p) => inHousehold(p) && (p.status ?? 'active') === 'active'
+    ).length;
+    const fits =
+      state === 'resumable' ||
+      limit === null ||
+      currentActivePlants + importPlan.counts.activePlants <= limit;
+
+    if (body.mode === 'preview') {
+      return res.json({
+        digest: importPlan.digest,
+        source: {
+          householdId: archive.household.id,
+          name: archive.household.name,
+          exportedAt: archive.exportedAt,
+          version: archive.version,
+        },
+        counts: importPlan.counts,
+        notRestored: importPlan.notRestored,
+        planLimit: { planName: plan.name, limit, currentActivePlants, fits },
+        target: { state },
+        canImport: (state === 'empty' || state === 'resumable') && fits,
+      });
+    }
+
+    if (body.confirmDigest !== importPlan.digest) {
+      return res.status(409).json({
+        message:
+          'The archive is not the one that was previewed. Preview it again before restoring.',
+        details: { code: 'archive_changed' },
+      });
+    }
+    if (state === 'already_imported') {
+      return res.json({
+        status: 'already_imported',
+        imported: { plants: 0, tasks: 0 },
+        counts: importPlan.counts,
+        notRestored: importPlan.notRestored,
+      });
+    }
+    if (state === 'not_empty' || state === 'other_archive') {
+      return res
+        .status(409)
+        .json({ message: IMPORT_TARGET_REFUSALS[state], details: { code: state } });
+    }
+    if (!fits) {
+      return res.status(402).json({
+        message: `This archive has ${importPlan.counts.activePlants} active plants, and your ${plan.name} plan is limited to ${limit} plants. Nothing was restored. Upgrade the plan, or restore into a household on a larger plan.`,
+        details: {
+          code: 'over_plan_limit',
+          plan: plan.name,
+          limit,
+          activePlants: importPlan.counts.activePlants,
+        },
+      });
+    }
+
+    for (const plant of importPlan.plants) {
+      db.plants.set(plant.id, {
+        ...plant,
+        spaceId: null,
+        placementNote: plant.placementNote ?? null,
+        summerSpaceId: null,
+        winterSpaceId: null,
+        statusChangedAt: plant.statusChangedAt ?? null,
+        perenualSpeciesId: plant.perenualSpeciesId ?? null,
+        parentPlantId: plant.parentPlantId ?? null,
+      });
+    }
+    for (const task of importPlan.tasks) db.tasks.set(task.id, { ...task });
+    db.archiveImports.set(householdId, { digest: importPlan.digest, status: 'complete' });
+    const household = db.households.get(householdId);
+    if (household) household.name = importPlan.householdName;
+    if (importPlan.plants.length > 0) {
+      recordActivity({
+        type: 'plants.imported',
+        householdId,
+        actorId: user.userId,
+        actorName: db.users.get(user.userId)?.name ?? 'Someone',
+        payload: { count: importPlan.plants.length },
+      });
+    }
+    res.json({
+      status: 'complete',
+      imported: { plants: importPlan.plants.length, tasks: importPlan.tasks.length },
+      counts: importPlan.counts,
+      notRestored: importPlan.notRestored,
+    });
+  }
+);
 
 // DELETE /households/:id/sitter-links/:linkId
 app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHousehold, (req, res) => {
