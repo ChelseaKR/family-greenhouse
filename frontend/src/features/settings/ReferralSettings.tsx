@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ClipboardDocumentIcon, GiftIcon } from '@heroicons/react/24/outline';
+import { ArrowUpOnSquareIcon, ClipboardDocumentIcon, GiftIcon } from '@heroicons/react/24/outline';
+import { isNativeApp } from '@/lib/platform';
+import { shareLinkNatively } from '@/services/nativeShare';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
@@ -29,6 +31,8 @@ export function ReferralSettings() {
   const { t } = useTranslation();
   const householdId = useActiveHouseholdId();
   const [copied, setCopied] = useState(false);
+  // In the native shells the link goes out through the share sheet.
+  const native = isNativeApp();
   const [copyError, setCopyError] = useState(false);
 
   const referralQuery = useQuery({
@@ -39,6 +43,7 @@ export function ReferralSettings() {
   });
 
   const handleCopy = async (link: string) => {
+    if (await shareLinkNatively({ url: link, dialogTitle: t('common.shareLink') })) return;
     setCopyError(false);
     try {
       await navigator.clipboard.writeText(link);
@@ -106,8 +111,16 @@ export function ReferralSettings() {
               onClick={() => handleCopy(link)}
               className="shrink-0"
             >
-              <ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />
-              {copied ? t('settings.refer.copiedConfirmation') : t('settings.refer.copyButton')}
+              {native ? (
+                <ArrowUpOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />
+              )}
+              {native
+                ? t('common.shareLink')
+                : copied
+                  ? t('settings.refer.copiedConfirmation')
+                  : t('settings.refer.copyButton')}
             </Button>
           </div>
           {copyError && (

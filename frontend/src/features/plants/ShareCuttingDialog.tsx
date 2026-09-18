@@ -2,7 +2,14 @@ import { Fragment, useEffect, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ShareIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowUpOnSquareIcon,
+  ShareIcon,
+  ClipboardDocumentIcon,
+  CheckIcon,
+} from '@heroicons/react/24/outline';
+import { isNativeApp } from '@/lib/platform';
+import { shareLinkNatively } from '@/services/nativeShare';
 import { plantService } from '@/services/plantService';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
@@ -24,6 +31,8 @@ interface ShareCuttingDialogProps {
 export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDialogProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  // In the native shells the link goes out through the share sheet.
+  const native = isNativeApp();
   const [copyError, setCopyError] = useState(false);
 
   const shareMutation = useMutation({
@@ -44,6 +53,7 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
 
   const handleCopy = async () => {
     if (!share) return;
+    if (await shareLinkNatively({ url: share.url, dialogTitle: t('common.shareLink') })) return;
     setCopyError(false);
     try {
       await navigator.clipboard.writeText(share.url);
@@ -122,14 +132,20 @@ export function ShareCuttingDialog({ plantId, isOpen, onClose }: ShareCuttingDia
                               variant="secondary"
                               onClick={handleCopy}
                               leftIcon={
-                                copied ? (
+                                native ? (
+                                  <ArrowUpOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+                                ) : copied ? (
                                   <CheckIcon className="h-4 w-4" aria-hidden="true" />
                                 ) : (
                                   <ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />
                                 )
                               }
                             >
-                              {copied ? t('plants.share.copied') : t('plants.share.copy')}
+                              {native
+                                ? t('common.shareLink')
+                                : copied
+                                  ? t('plants.share.copied')
+                                  : t('plants.share.copy')}
                             </Button>
                           </div>
                           {copyError && (

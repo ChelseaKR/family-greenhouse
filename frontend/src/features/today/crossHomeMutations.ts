@@ -18,6 +18,7 @@ import {
   type CrossHomeTodayRow,
 } from '@/services/crossHomeTodayService';
 import { getErrorMessage } from '@/services/api';
+import { playHaptic } from '@/services/nativeHaptics';
 import { toast } from '@/store/toastStore';
 
 export interface RowTarget {
@@ -88,6 +89,7 @@ export function useCrossHomeCompleteMutation() {
         old ? removeRow(old, householdId, task.id) : old
       );
       markHomeStale(queryClient, householdId);
+      playHaptic('completed');
       toast.success(t('today.completedToast', { plant: task.plantName, name: task.householdName }));
     },
     onError: (err) => toast.error(getErrorMessage(err)),

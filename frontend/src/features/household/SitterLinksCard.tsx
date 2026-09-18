@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ClipboardDocumentIcon, KeyIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowUpOnSquareIcon,
+  ClipboardDocumentIcon,
+  KeyIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
+import { isNativeApp } from '@/lib/platform';
+import { shareLinkNatively } from '@/services/nativeShare';
 import { householdService, type CreatedSitterLink } from '@/services/householdService';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { Card, CardHeader } from '@/components/Card';
@@ -52,6 +59,8 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
     members.find((m) => m.userId === userId)?.name ?? t('household.sitterLinks.anotherMember');
   const [created, setCreated] = useState<CreatedSitterLink | null>(null);
   const [copied, setCopied] = useState(false);
+  // In the native shells the link goes out through the share sheet.
+  const native = isNativeApp();
   const [copyError, setCopyError] = useState(false);
   // Default the window to two weeks out — a typical trip length. Until the
   // member edits it, the default bends to the plan's cap (see `shownDays`).
@@ -123,6 +132,7 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
 
   const handleCopy = async () => {
     if (created) {
+      if (await shareLinkNatively({ url: created.url, dialogTitle: t('common.shareLink') })) return;
       setCopyError(false);
       try {
         await navigator.clipboard.writeText(created.url);
@@ -168,9 +178,19 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
             <Button
               variant="secondary"
               onClick={handleCopy}
-              leftIcon={<ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />}
+              leftIcon={
+                native ? (
+                  <ArrowUpOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />
+                )
+              }
             >
-              {copied ? t('household.share.copied') : t('household.share.copy')}
+              {native
+                ? t('common.shareLink')
+                : copied
+                  ? t('household.share.copied')
+                  : t('household.share.copy')}
             </Button>
           </div>
           {/* Same as the invite link above: the copy SUCCEEDING was announced

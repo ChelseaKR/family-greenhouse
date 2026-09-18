@@ -3,12 +3,15 @@ import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
+  ArrowUpOnSquareIcon,
   ClipboardDocumentIcon,
   EnvelopeIcon,
   UserPlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '@/store/authStore';
+import { isNativeApp } from '@/lib/platform';
+import { shareLinkNatively } from '@/services/nativeShare';
 import { householdService, type InviteEmailStatus } from '@/services/householdService';
 import { climateService } from '@/services/climateService';
 import { Input } from '@/components/Input';
@@ -45,6 +48,8 @@ export function HouseholdPage() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  // In the native shells the invite goes out through the share sheet.
+  const native = isNativeApp();
   const [inviteEmailDraft, setInviteEmailDraft] = useState('');
   // What the server actually did with the last emailed invite. Held so the UI
   // can say "we could not send it, here is the link" rather than implying a
@@ -114,6 +119,7 @@ export function HouseholdPage() {
 
   const handleCopyInvite = async () => {
     if (inviteLink) {
+      if (await shareLinkNatively({ url: inviteLink, dialogTitle: t('common.shareLink') })) return;
       setCopyError(false);
       try {
         await navigator.clipboard.writeText(inviteLink);
@@ -253,9 +259,19 @@ export function HouseholdPage() {
                 <Button
                   variant="secondary"
                   onClick={handleCopyInvite}
-                  leftIcon={<ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />}
+                  leftIcon={
+                    native ? (
+                      <ArrowUpOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />
+                    )
+                  }
                 >
-                  {copied ? t('household.share.copied') : t('household.share.copy')}
+                  {native
+                    ? t('common.shareLink')
+                    : copied
+                      ? t('household.share.copied')
+                      : t('household.share.copy')}
                 </Button>
               </div>
               {/* The success said nothing to a screen reader: it was carried

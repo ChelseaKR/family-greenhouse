@@ -102,10 +102,11 @@ describe('ReferralSettings', () => {
       // Nothing that looks like a checkout entry point: no price, no "Buy",
       // "Upgrade", "Switch to a plan", or "Manage plan" control — the whole
       // vocabulary BillingSettings/PricingPage/GiftLandingPage use for their
-      // real Stripe-Checkout buttons. Only Copy is a button here.
+      // real Stripe-Checkout buttons. The only button is the link's own, which
+      // inside the shells opens the share sheet instead of copying.
       const buttons = screen.getAllByRole('button');
       expect(buttons).toHaveLength(1);
-      expect(buttons[0]).toHaveTextContent(/copy link/i);
+      expect(buttons[0]).toHaveTextContent(/share link/i);
       expect(screen.queryByText(/\$\d/)).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: /buy|upgrade|switch to|manage plan/i })

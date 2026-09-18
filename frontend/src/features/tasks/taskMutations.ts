@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
 import { useDoubleCareStore } from '@/store/doubleCareStore';
 import { readDuplicateCare } from './doubleCare';
+import { playHaptic } from '@/services/nativeHaptics';
 
 export interface CompleteTaskVariables {
   taskId: string;
@@ -179,6 +180,7 @@ export function useCompleteTaskMutation(householdId: string | null) {
       queryClient.setQueriesData({ queryKey: ['plants', householdId] }, (value: unknown) =>
         replaceCompletedTaskInCache(value, updatedTask)
       );
+      playHaptic('completed');
       toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');
     },
     onError: (err, variables, context) => {
@@ -338,6 +340,7 @@ export function useSkipCycleMutation(householdId: string | null) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      playHaptic('snoozed');
       toast.success(t('tasks.skippedToast'));
     },
     onError: (err) => toast.error(getErrorMessage(err)),
