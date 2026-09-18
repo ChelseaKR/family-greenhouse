@@ -24,6 +24,7 @@ import { MemorialFrame } from './brand/MemorialFrame';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
+import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
 import clsx from 'clsx';
 
 /**
@@ -96,6 +97,10 @@ export function Layout() {
   const chatPlanId = effectivePlanId(subscription);
   const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
   const isChatRoute = location.pathname === '/chat' && chatAvailable;
+  // Settings → Plan status renders the full payment-failed notice itself, at
+  // the top of the card it explains; the banner there would say it twice. The
+  // chat route is a full-height composer with no page padding to sit in.
+  const showPaymentFailedBanner = !isChatRoute && location.pathname !== '/settings/billing';
 
   const handleLogout = () => {
     logout();
@@ -201,6 +206,7 @@ export function Layout() {
 
         <main className={isChatRoute ? '' : 'py-6'}>
           <div className={isChatRoute ? '' : 'px-4 sm:px-6 lg:px-8'}>
+            {showPaymentFailedBanner && <PaymentFailedBanner subscription={subscription} />}
             <Outlet />
           </div>
         </main>

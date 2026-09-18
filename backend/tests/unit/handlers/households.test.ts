@@ -406,7 +406,7 @@ describe('households handler', () => {
         buildEvent(adminClaims, {
           httpMethod: 'GET',
           pathParameters: { id: 'hh-1' },
-          queryStringParameters: { year: String(new Date().getFullYear()) },
+          queryStringParameters: { year: String(new Date().getUTCFullYear()) },
         }),
         fakeContext,
         () => {}
@@ -429,7 +429,7 @@ describe('households handler', () => {
         byTaskType: [],
         topPlants: [],
       });
-      const year = new Date().getFullYear();
+      const year = new Date().getUTCFullYear();
       const res = (await getYearInReview(
         buildEvent(adminClaims, {
           httpMethod: 'GET',

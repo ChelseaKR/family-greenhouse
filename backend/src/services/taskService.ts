@@ -240,7 +240,7 @@ export async function getTasks(
     // dueWithin=99999999 and we churn through every task in the household.
     const days = Math.max(0, Math.min(filters.dueWithin, MAX_DUE_WITHIN_DAYS));
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() + days);
+    cutoff.setUTCDate(cutoff.getUTCDate() + days);
     tasks = tasks.filter((t) => new Date(t.nextDue) <= cutoff);
   }
 
@@ -322,7 +322,7 @@ export async function getCaretakerTasks(
   dueWithinDays = 7
 ): Promise<CaretakerTask[]> {
   const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + dueWithinDays);
+  cutoff.setUTCDate(cutoff.getUTCDate() + dueWithinDays);
   return dueTasksThrough(householdId, cutoff.toISOString(), now);
 }
 
@@ -373,7 +373,7 @@ async function dueTasksThrough(
 
 export async function getUpcomingTasks(householdId: string): Promise<TaskWithCoverage[]> {
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + 7);
+  cutoff.setUTCDate(cutoff.getUTCDate() + 7);
 
   const tasks = await getTasksDueBy(householdId, cutoff.toISOString());
 
@@ -673,7 +673,10 @@ export async function completeTask(
   const now = new Date();
   const cadence = await resolveTaskCadence(householdId, task, now);
   const nextDue = new Date(now);
-  nextDue.setDate(nextDue.getDate() + cadence.frequency);
+  // N UTC calendar days — what this always computed, since the Lambdas run
+  // TZ=UTC, now said explicitly so no answer depends on the process zone
+  // (#342; tests/unit/config/processTimeZoneIndependence.test.ts).
+  nextDue.setUTCDate(nextDue.getUTCDate() + cadence.frequency);
 
   // Advance the task FIRST, guarded two ways:
   //  - attribute_exists(PK): completing a concurrently-deleted task must not
@@ -861,7 +864,7 @@ export async function snoozeTaskWithOutcome(
     ? Date.now()
     : Math.max(Date.now(), current.getTime());
   const next = new Date(baseMs);
-  next.setDate(next.getDate() + days);
+  next.setUTCDate(next.getUTCDate() + days);
 
   let result;
   try {
@@ -1092,8 +1095,11 @@ export async function getDailyCompletionCounts(
 ): Promise<Array<{ date: string; count: number }>> {
   const now = new Date();
   const start = new Date(now);
-  start.setDate(start.getDate() - days + 1);
-  start.setHours(0, 0, 0, 0);
+  // UTC midnight, the same calendar the bucket keys below and the stored
+  // `completedAt` keys use. This used to be a LOCAL midnight, which agreed
+  // with those keys only because the Lambdas run TZ=UTC (#342, #590).
+  start.setUTCDate(start.getUTCDate() - days + 1);
+  start.setUTCHours(0, 0, 0, 0);
 
   // Paginated for the same reason as getYearInReview — a busy household can
   // exceed one page within the window.
@@ -1112,7 +1118,7 @@ export async function getDailyCompletionCounts(
   const buckets = new Map<string, number>();
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
-    d.setDate(d.getDate() + i);
+    d.setUTCDate(d.getUTCDate() + i);
     buckets.set(d.toISOString().slice(0, 10), 0);
   }
   for (const it of items) {

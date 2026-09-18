@@ -1133,6 +1133,11 @@
       "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Plántula en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
       "paymentFailedActionAdmin": "Actualiza la tarjeta en “Gestionar suscripción”, más abajo.",
       "paymentFailedActionNative": "Abre Family Greenhouse en un navegador web para actualizar la tarjeta.",
+      "paymentFailedBodyOwned": "Hasta que se resuelva, tu hogar tiene los límites del plan que ya compró de por vida o que recibió como regalo, en lugar de los de tu suscripción. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras de ese plan.",
+      "paymentFailedBanner": {
+        "actionAdmin": "Actualiza la tarjeta en Ajustes → Estado del plan",
+        "actionView": "Consulta los detalles en Ajustes → Estado del plan"
+      },
       "planUnknownTitle": "No pudimos comprobar en qué plan estás",
       "planUnknownBody": "Tu plan no se cargó, así que no podemos decir en qué plan está tu hogar ni cómo se compara con sus límites. Es un problema al leer tu plan, no un cambio en él: tu plan y tu suscripción siguen exactamente igual, y no se ha cobrado ni cancelado nada. Vuelve a cargar la página para intentarlo de nuevo.",
       "changePlanUnavailable": "Los cambios de plan están en pausa aquí hasta que podamos comprobar en qué plan está ya tu hogar; ofrecerte uno ahora podría significar comprar un plan que ya tienes. Vuelve a cargar la página para intentarlo de nuevo.",

@@ -228,7 +228,7 @@ describe('starting: what a household may begin (#476)', () => {
   describe('year in review — GET /households/:id/year-in-review', () => {
     it('windows the year while the card is failing', async () => {
       const token = await loginAsSeed();
-      const year = new Date().getFullYear();
+      const year = new Date().getUTCFullYear();
       const get = () =>
         request(app)
           .get(`/households/${seedHouseholdId}/year-in-review?year=${year}`)

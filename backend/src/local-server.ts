@@ -4228,7 +4228,7 @@ app.post(
 
     const now = new Date();
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
     advanceInheritedAssignment(task);
@@ -4331,7 +4331,7 @@ app.post(
 
     const now = new Date();
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
 
@@ -4393,7 +4393,7 @@ function caretakerLookaheadDays(expiresAt: string, now: Date): number {
 function caretakerTasksFor(householdId: string, days: number) {
   const now = new Date();
   const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + days);
+  cutoff.setUTCDate(cutoff.getUTCDate() + days);
   const cutoffIso = cutoff.toISOString();
   const nowIso = now.toISOString();
   return [...db.tasks.values()]
@@ -4471,7 +4471,7 @@ app.post(
 
     const now = new Date();
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
 
@@ -4773,7 +4773,7 @@ app.get('/tasks', authMiddleware, requireHousehold, (req, res) => {
   }
   if (dueWithin !== undefined) {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() + dueWithin);
+    cutoff.setUTCDate(cutoff.getUTCDate() + dueWithin);
     tasks = tasks.filter((t) => new Date(t.nextDue) <= cutoff);
   }
 
@@ -5278,7 +5278,7 @@ app.post(
       ? Date.now()
       : Math.max(Date.now(), current.getTime());
     const next = new Date(baseMs);
-    next.setDate(next.getDate() + days);
+    next.setUTCDate(next.getUTCDate() + days);
     task.nextDue = next.toISOString();
 
     // Mirror handlers/tasks snoozeTask: feed entry with the optional reason
@@ -5355,7 +5355,7 @@ app.post(
     // a concurrent double-complete a no-op; this single-threaded mock can't
     // race, so the sequential semantics below are identical).
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
     advanceInheritedAssignment(task);
@@ -5476,12 +5476,12 @@ app.get('/households/:id/analytics/daily', authMiddleware, requireHousehold, (re
     historyLimitDays === null ? requestedDays : Math.min(requestedDays, historyLimitDays);
   const now = new Date();
   const start = new Date(now);
-  start.setDate(start.getDate() - days + 1);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - days + 1);
+  start.setUTCHours(0, 0, 0, 0);
   const buckets = new Map<string, number>();
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
-    d.setDate(d.getDate() + i);
+    d.setUTCDate(d.getUTCDate() + i);
     buckets.set(d.toISOString().slice(0, 10), 0);
   }
   for (const c of db.completions.values()) {
@@ -5555,7 +5555,7 @@ app.get('/households/:id/year-in-review', authMiddleware, requireHousehold, (req
     return res.status(403).json({ message: 'Access denied' });
   }
   const yearRaw = req.query.year;
-  const year = yearRaw ? parseInt(String(yearRaw), 10) : new Date().getFullYear();
+  const year = yearRaw ? parseInt(String(yearRaw), 10) : new Date().getUTCFullYear();
   if (!Number.isFinite(year) || year < 2020 || year > 2100) {
     return res.status(400).json({ message: 'year must be between 2020 and 2100' });
   }
@@ -6835,7 +6835,7 @@ app.post(
     }
     const now = new Date();
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
     advanceInheritedAssignment(task);
@@ -6882,7 +6882,7 @@ app.post(
       ? Date.now()
       : Math.max(Date.now(), current.getTime());
     const next = new Date(baseMs);
-    next.setDate(next.getDate() + days);
+    next.setUTCDate(next.getUTCDate() + days);
     task.nextDue = next.toISOString();
     recordActivity({
       type: 'task.snoozed',

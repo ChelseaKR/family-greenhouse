@@ -7,9 +7,10 @@
  * of quietly relabelled. Pure, so the Lambda handler and the local dev server
  * share one definition and the tests can pin a clock.
  *
- * `start` is local midnight `days - 1` days ago, matching
+ * `start` is UTC midnight `days - 1` days ago, matching
  * `taskService.getDailyCompletionCounts`, so the two endpoints agree on which
- * day is the first one shown.
+ * day is the first one shown. Explicitly UTC rather than the process zone
+ * (#342): it was UTC in production only because the Lambdas run `TZ=UTC`.
  */
 export function analyticsWindow(
   year: number,
@@ -19,8 +20,8 @@ export function analyticsWindow(
   const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
   const yearEnd = new Date(`${year + 1}-01-01T00:00:00.000Z`);
   const trailingStart = new Date(now);
-  trailingStart.setDate(trailingStart.getDate() - days + 1);
-  trailingStart.setHours(0, 0, 0, 0);
+  trailingStart.setUTCDate(trailingStart.getUTCDate() - days + 1);
+  trailingStart.setUTCHours(0, 0, 0, 0);
 
   const start = new Date(Math.max(yearStart.getTime(), trailingStart.getTime()));
   const end = new Date(Math.min(yearEnd.getTime(), now.getTime()));
