@@ -180,6 +180,10 @@ export default defineConfig({
       '@/services': resolve(__dirname, './src/services'),
       '@/store': resolve(__dirname, './src/store'),
       '@/utils': resolve(__dirname, './src/utils'),
+      // vite-plugin-pwa generates this module at build time and is not a
+      // plugin here; a stub lets tests import services/pwaRegistration.ts and
+      // replace it with vi.mock.
+      'virtual:pwa-register': resolve(__dirname, './tests/stubs/pwaRegister.ts'),
     },
   },
 });
