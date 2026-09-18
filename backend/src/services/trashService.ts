@@ -92,6 +92,7 @@ import { atCap, type Limit } from '../models/plans.js';
 import * as plantService from './plantService.js';
 import * as householdService from './householdService.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
+import { LEGACY_SURFACES, classifyRow, rekeyedItem } from './tokenHashBackfill.js';
 
 /** How long an item stays restorable. Stated in the DPIA retention table. */
 export const TRASH_RETENTION_DAYS = 30;
@@ -377,15 +378,37 @@ function countContents(rows: Item[]): TrashContents {
 // Moving rows
 // ---------------------------------------------------------------------------
 
+/**
+ * The form a row is kept in while it is in the trash.
+ *
+ * A plant tag or share link minted before tokens were hashed at rest (#450,
+ * `tokenHashBackfill.ts`) is keyed by its PLAINTEXT token. The backfill finds
+ * those rows by scanning the `PLANTTAG#` / `SHARE#` key prefixes, so a legacy
+ * row wrapped in here would escape it and keep its plaintext at rest for the
+ * whole trash window — and come back as a plaintext row on restore. So such a
+ * row is re-keyed on the way in, with the backfill's own `classifyRow` /
+ * `rekeyedItem` (which also drops a pre-#741 share's free-text notes): the
+ * same token still resolves after a restore, through the hashed read.
+ */
+function atRestForm(row: Item): Item {
+  for (const surface of [LEGACY_SURFACES.plantTag, LEGACY_SURFACES.plantShare]) {
+    const classified = classifyRow(surface, row);
+    if (classified.kind === 'legacy') return rekeyedItem(surface, row, classified.token);
+  }
+  return row;
+}
+
 function wrapDependent(householdId: string, plantId: string, row: Item, ttl: number): Item {
+  const stored = atRestForm(row);
   return {
     PK: dependentsPk(householdId, plantId),
-    SK: `ROW#${String(row.PK)}|${String(row.SK)}`,
+    // Built from the STORED key: a legacy row's own key is its plaintext.
+    SK: `ROW#${String(stored.PK)}|${String(stored.SK)}`,
     entityType: 'TrashedRow',
     householdId,
     plantId,
     ttl,
-    item: row,
+    item: stored,
   };
 }
 

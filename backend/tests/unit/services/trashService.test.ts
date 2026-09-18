@@ -16,7 +16,7 @@
  *     the trash the same way they are scrubbed from live rows.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { createInMemoryDynamo } from '../../integration/support/inMemoryDynamo.js';
 import { seedHousehold } from '../../integration/support/seed.js';
 
@@ -311,6 +311,8 @@ describe('restoreEntry (plant)', () => {
     const trash = await import('../../../src/services/trashService.js');
     const plantService = await import('../../../src/services/plantService.js');
     const seeded = await seedFurnishedPlant();
+    // Positive control: the share is live before it goes into the trash.
+    expect(store.all().some((r) => r.entityType === 'PlantShare')).toBe(true);
     await trash.trashPlant(seeded.householdId, seeded.plantId, actor, T0);
     const share = store
       .all()
@@ -326,7 +328,10 @@ describe('restoreEntry (plant)', () => {
     );
 
     expect(await plantService.getPlant(seeded.householdId, seeded.plantId)).not.toBeNull();
-    expect(store.all().some((r) => r.PK === `SHARE#${seeded.shareCode}`)).toBe(false);
+    // Share rows are keyed by a digest since #450, so look for the entity,
+    // not a key built from the plaintext code (which would pass vacuously).
+    expect(await plantService.getPlantShare(seeded.shareCode)).toBeNull();
+    expect(store.all().some((r) => r.entityType === 'PlantShare')).toBe(false);
   });
 
   it('refuses a restore that would exceed the plant cap, and changes nothing', async () => {
@@ -610,6 +615,63 @@ describe('anonymizeUserInTrash', () => {
     const snapshot = store.all();
     await trash.anonymizeUserInTrash(seeded.householdId, 'someone-else');
     expect(store.all()).toEqual(snapshot);
+  });
+});
+
+describe('legacy plaintext credentials (#450)', () => {
+  it('re-keys a legacy tag and share on the way into the trash; the same token still works after restore', async () => {
+    const trash = await import('../../../src/services/trashService.js');
+    const plantTagService = await import('../../../src/services/plantTagService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    const seeded = await seedFurnishedPlant();
+    // Turn the hashed rows back into the pre-#450 shape: keyed by, and
+    // carrying, the plaintext — exactly what the backfill looks for.
+    const dropRow = (row: Record<string, unknown>) =>
+      store.client.send(
+        new DeleteCommand({ TableName: 'test-table', Key: { PK: row.PK, SK: row.SK } }) as never
+      );
+    for (const row of store.all()) {
+      if (row.entityType === 'PlantTag') {
+        await dropRow(row);
+        const legacy: Record<string, unknown> = {
+          ...row,
+          PK: `PLANTTAG#${seeded.tagToken}`,
+          token: seeded.tagToken,
+        };
+        delete legacy.tokenHash;
+        store.put(legacy);
+      }
+      if (row.entityType === 'PlantShare') {
+        await dropRow(row);
+        const legacy: Record<string, unknown> = {
+          ...row,
+          PK: `SHARE#${seeded.shareCode}`,
+          code: seeded.shareCode,
+        };
+        delete legacy.codeHash;
+        store.put(legacy);
+      }
+    }
+    const legacyKeys = [`PLANTTAG#${seeded.tagToken}`, `SHARE#${seeded.shareCode}`];
+    // Negative control: the sabotage landed — both legacy rows exist and resolve.
+    expect(store.all().filter((r) => legacyKeys.includes(String(r.PK)))).toHaveLength(2);
+    expect(await plantTagService.getActiveTag(seeded.tagToken)).not.toBeNull();
+    expect(await plantService.getPlantShare(seeded.shareCode)).not.toBeNull();
+
+    await trash.trashPlant(seeded.householdId, seeded.plantId, actor, T0);
+    const trashDump = JSON.stringify(
+      store
+        .all()
+        .filter((r) => String(r.PK) === trash.dependentsPk(seeded.householdId, seeded.plantId))
+    );
+    expect(trashDump).not.toContain(seeded.tagToken);
+    expect(trashDump).not.toContain(seeded.shareCode);
+
+    await trash.restoreEntry(seeded.householdId, 'plant', seeded.plantId, { maxPlants: null }, T0);
+    expect(store.all().some((r) => legacyKeys.includes(String(r.PK)))).toBe(false);
+    expect(JSON.stringify(store.all())).not.toContain(seeded.tagToken);
+    expect(await plantTagService.getActiveTag(seeded.tagToken)).not.toBeNull();
+    expect(await plantService.getPlantShare(seeded.shareCode)).not.toBeNull();
   });
 });
 
