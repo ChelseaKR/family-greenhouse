@@ -11,6 +11,7 @@ import App from './App';
 import { initSentry } from './sentry';
 import { initPwaRegistration } from './services/pwaRegistration';
 import { initNativeDeepLinks } from './services/nativeDeepLinks';
+import { initNativeBackButton } from './services/nativeBackButton';
 import { initGoogleAnalytics } from './services/googleAnalytics';
 import './i18n';
 import { isRTL } from './i18n';
@@ -31,6 +32,7 @@ import './index.css';
 void initSentry();
 initPwaRegistration();
 initNativeDeepLinks();
+initNativeBackButton();
 // Website visit counting. Loads nothing without a built-in measurement ID, in
 // the native shells, or under any analytics opt-out — see the module header.
 initGoogleAnalytics();
