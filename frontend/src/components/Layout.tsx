@@ -125,7 +125,14 @@ export function Layout() {
       <CommandPalette />
       {/* Mobile sidebar */}
       <Transition.Root show={sidebarOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50 lg:hidden" onClose={setSidebarOpen}>
+        {/* Named, so VoiceOver and TalkBack announce "Main navigation,
+            dialog" rather than an unnamed dialog. */}
+        <Dialog
+          as="div"
+          className="relative z-50 lg:hidden"
+          onClose={setSidebarOpen}
+          aria-label={t('nav.mainNavigation')}
+        >
           <Transition.Child
             as={Fragment}
             enter="transition-opacity ease-linear duration-300"

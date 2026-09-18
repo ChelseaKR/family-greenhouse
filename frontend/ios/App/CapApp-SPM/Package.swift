@@ -17,7 +17,8 @@ let package = Package(
         .package(name: "CapacitorKeyboard", path: "../../../../node_modules/@capacitor/keyboard"),
         .package(name: "CapacitorPushNotifications", path: "../../../../node_modules/@capacitor/push-notifications"),
         .package(name: "CapacitorShare", path: "../../../../node_modules/@capacitor/share"),
-        .package(name: "CapacitorSplashScreen", path: "../../../../node_modules/@capacitor/splash-screen")
+        .package(name: "CapacitorSplashScreen", path: "../../../../node_modules/@capacitor/splash-screen"),
+        .package(name: "CapacitorTextZoom", path: "../../../../node_modules/@capacitor/text-zoom")
     ],
     targets: [
         .target(
@@ -30,7 +31,8 @@ let package = Package(
                 .product(name: "CapacitorKeyboard", package: "CapacitorKeyboard"),
                 .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
                 .product(name: "CapacitorShare", package: "CapacitorShare"),
-                .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen")
+                .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
+                .product(name: "CapacitorTextZoom", package: "CapacitorTextZoom")
             ]
         )
     ]

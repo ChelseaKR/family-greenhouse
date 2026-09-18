@@ -30,6 +30,7 @@ removed, or left un-synced without this table moving with it.
 | `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below.        |
 | `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                    |
 | `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                       |
+| `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, up to 200% (`frontend/src/hooks/useNativeTextSize.ts`).                                              |
 
 <!-- capacitor-plugins:end -->
 
@@ -258,6 +259,8 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Keyboard           | `@capacitor/keyboard` resizes the iOS WebView above the keyboard (its default `native` mode, which also hides the form accessory bar); Capacitor's SystemBars pads the Android one by the IME inset. `nativeShell.ts` then scrolls the focused field to the middle of what is left.                                                                                                                                                              |
 | Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                            |
 | Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                              |
+| Text size          | iOS: WKWebView ignores Dynamic Type, so `useNativeTextSize` reads the preferred size through `@capacitor/text-zoom` on launch and on every return to the foreground, and applies it as the page's text-size adjustment, from smaller sizes up to 200% (WCAG 1.4.4; past that, fixed-height controls clip). Android's WebView already applies the system font scale.                                                                              |
+| Screen readers     | The navigation drawer is announced by name ("Main navigation"), not as an unnamed dialog.                                                                                                                                                                                                                                                                                                                                                        |
 
 ### Fresh data, offline and unreachable
 
