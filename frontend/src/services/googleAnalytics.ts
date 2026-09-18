@@ -47,9 +47,14 @@
  *    module removes. The container served for this property today carries no
  *    history listener, but that is Google's to change, so the stream setting
  *    must be off; docs/analytics.md lists it as an owner step.
- *  - No user id, no account id, no household id, no event other than
- *    `page_view`. GA is a visit counter here, not a second product-analytics
- *    rail — the funnel stays in analytics.ts.
+ *  - No user id, no account id, no household id. Besides `page_view`, GA gets
+ *    four conversion events and nothing else (`trackGoogleConversion`, and
+ *    docs/analytics.md, "Conversion events in GA4"): `sign_up`, `start_trial`,
+ *    `purchase` with its plan and price, and `landing_cta_click`. Their
+ *    parameters are rebuilt here from closed lists and checked shapes, never
+ *    passed through, so nothing a person typed and no Stripe id can reach
+ *    Google. They exist so paid and organic traffic can be judged on sales;
+ *    the product funnel itself stays in analytics.ts.
  *
  * Opting out mid-visit: `window['ga-disable-<id>']` — Google's documented kill
  * switch — is defined as a getter over `analyticsOptedOut()`, so the next hit
@@ -314,6 +319,129 @@ export function trackGooglePageView(
   gtag('set', params);
   gtag('event', 'page_view');
   lastPageLocation = pageLocation;
+}
+
+/**
+ * The landing-page controls whose clicks are counted: the sign-up buttons in
+ * the header and the hero, and the hero's "see how it works" link. A click on
+ * one is the first sign that an arriving visitor did anything at all, which
+ * is the step the funnel loses most people at (docs/analytics.md).
+ */
+export const LANDING_CTAS = ['nav_signup', 'hero_signup', 'hero_how_it_works'] as const;
+export type LandingCta = (typeof LANDING_CTAS)[number];
+
+/** The paid tiers and cadences a `purchase` can name. */
+const PURCHASABLE_PLANS = ['garden', 'greenhouse'] as const;
+const PURCHASE_INTERVALS = ['month', 'year', 'lifetime'] as const;
+type PurchasablePlan = (typeof PURCHASABLE_PLANS)[number];
+type PurchaseInterval = (typeof PURCHASE_INTERVALS)[number];
+
+/** How long the no-card Garden trial lasts (backend NO_CARD_TRIAL_DAYS). */
+const TRIAL_DAYS = 14;
+
+/**
+ * The conversion events GA receives besides page views. Each is a closed
+ * shape: `trackGoogleConversion` builds the event parameters from these
+ * fields alone, after checking each one, so a caller cannot add a field.
+ *
+ * - `sign_up`: the registration form was accepted by the API.
+ * - `start_trial`: a new household started the 14-day no-card Garden trial
+ *   (ADR 0027); fired only when the server says the trial began.
+ * - `purchase`: Stripe returned from a plan checkout and the subscription
+ *   (or lifetime purchase) it bought has settled. `transactionId` is a hash
+ *   (`gaTransactionId`), never a Stripe id. `value` is the plan's price for
+ *   that cadence; when the return cannot say which plan and cadence were
+ *   bought, both are left out and the purchase is still counted.
+ * - `landing_cta_click`: one of the `LANDING_CTAS` was clicked.
+ */
+export type GoogleConversion =
+  | { name: 'sign_up' }
+  | { name: 'start_trial' }
+  | {
+      name: 'purchase';
+      transactionId: string;
+      plan?: PurchasablePlan;
+      interval?: PurchaseInterval;
+      value?: number;
+    }
+  | { name: 'landing_cta_click'; cta: LandingCta };
+
+const TRANSACTION_ID_PATTERN = /^[0-9a-f]{32}$/u;
+
+/**
+ * A GA transaction id for a purchase: the first 32 hex characters of the
+ * SHA-256 of `source` (a Stripe subscription id, or a stable key for a
+ * lifetime purchase). The same purchase always hashes to the same id, which
+ * is what lets GA count a reloaded return page once; the id itself is never
+ * sent. Null where Web Crypto is unavailable.
+ */
+export async function gaTransactionId(source: string): Promise<string | null> {
+  const subtle = typeof crypto === 'undefined' ? undefined : crypto.subtle;
+  if (!subtle || !source) return null;
+  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(source));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
+}
+
+/**
+ * The parameters one conversion event carries, or null when a field fails
+ * its check (the event is then dropped whole). Exported for its tests.
+ */
+export function conversionParams(
+  conversion: GoogleConversion,
+  pageLocation: string
+): Record<string, unknown> | null {
+  switch (conversion.name) {
+    case 'sign_up':
+      return { method: 'email', page_location: pageLocation };
+    case 'start_trial':
+      return { trial_plan: 'garden', trial_days: TRIAL_DAYS, page_location: pageLocation };
+    case 'landing_cta_click':
+      return (LANDING_CTAS as readonly string[]).includes(conversion.cta)
+        ? { cta: conversion.cta, page_location: pageLocation }
+        : null;
+    case 'purchase': {
+      if (!TRANSACTION_ID_PATTERN.test(conversion.transactionId)) return null;
+      const params: Record<string, unknown> = {
+        transaction_id: conversion.transactionId,
+        page_location: pageLocation,
+      };
+      const { plan, interval, value } = conversion;
+      if (plan === undefined && interval === undefined && value === undefined) return params;
+      if (
+        !(PURCHASABLE_PLANS as readonly string[]).includes(plan ?? '') ||
+        !(PURCHASE_INTERVALS as readonly string[]).includes(interval ?? '') ||
+        typeof value !== 'number' ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        value > 10_000
+      ) {
+        return null;
+      }
+      return {
+        ...params,
+        currency: 'USD',
+        value,
+        items: [{ item_id: `${plan}_${interval}`, price: value, quantity: 1 }],
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Send one conversion event. A no-op unless GA loaded, and silent under an
+ * opt-out that appeared after it did. The page address is scrubbed exactly
+ * as a page view's is, so a return address's query (`?status=success…`)
+ * never reaches GA.
+ */
+export function trackGoogleConversion(conversion: GoogleConversion): void {
+  if (!gtag || analyticsOptedOut()) return;
+  const { origin, pathname, search } = window.location;
+  const params = conversionParams(conversion, gaPageLocation(origin, pathname, search));
+  if (params) gtag('event', conversion.name, params);
 }
 
 /**

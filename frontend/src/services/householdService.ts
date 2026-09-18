@@ -23,6 +23,12 @@ export interface Household {
   timezone?: string;
   createdAt: string;
   createdBy: string;
+  /**
+   * End of the no-card Garden trial (ADR 0027). Present only on the response
+   * to the create that started the account's trial; the onboarding screen
+   * counts a trial start from it. Entitlement never reads it from here.
+   */
+  noCardTrialEndsAt?: string;
 }
 
 // Note: the household detail endpoint (GET /households/:id) never includes

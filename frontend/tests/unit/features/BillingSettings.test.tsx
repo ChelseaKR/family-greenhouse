@@ -18,6 +18,12 @@ import {
   type SubscriptionState,
 } from '@/services/billingService';
 import { useAuthStore } from '@/store/authStore';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
 
 vi.mock('@/services/billingService', async () => {
   const actual = await vi.importActual<typeof import('@/services/billingService')>(
@@ -1422,5 +1428,87 @@ describe('an abandoned plan checkout (staleCheckout)', () => {
 
     expect(screen.getByText('Payment received — finishing up')).toBeInTheDocument();
     expect(screen.queryByText('Checkout left unfinished')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The GA4 `purchase` (reportPlanPurchase.ts): once, on the return from a plan
+ * checkout, and only after the purchase has settled. Every negative case
+ * renders the same page the positive one does, so an absence here is the
+ * page choosing not to report, not the page failing to render.
+ */
+describe('BillingSettings — the GA4 purchase on the return from Stripe', () => {
+  const SETTLED: SubscriptionState = {
+    planId: 'garden',
+    stripeCustomerId: 'cus_1',
+    stripeSubscriptionId: 'sub_1',
+    status: 'trialing',
+  };
+  // SHA-256('sub_1'), first 32 hex characters, from Python's hashlib.
+  const order = (source: string) => (source === 'sub_1' ? '13a076fce7d175418cc5f004c44c1061' : '');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('reports the settled plan once, priced from the catalog, named by a hash', async () => {
+    await renderBilling(SETTLED, {
+      paid: true,
+      route: '/settings/billing?status=success&plan=garden&interval=month',
+    });
+
+    await waitFor(() => expect(trackGoogleConversion).toHaveBeenCalledTimes(1));
+    expect(trackGoogleConversion).toHaveBeenCalledWith({
+      name: 'purchase',
+      transactionId: order('sub_1'),
+      plan: 'garden',
+      interval: 'month',
+      value: 4.99,
+    });
+    expect(JSON.stringify(vi.mocked(trackGoogleConversion).mock.calls)).not.toMatch(
+      /sub_1|cus_1|hh-1|a@b\.com/
+    );
+  });
+
+  it('prices nothing when the address names a plan the settled state does not show', async () => {
+    await renderBilling(SETTLED, {
+      paid: true,
+      route: '/settings/billing?status=success&plan=greenhouse&interval=month',
+    });
+
+    await waitFor(() => expect(trackGoogleConversion).toHaveBeenCalledTimes(1));
+    expect(trackGoogleConversion).toHaveBeenCalledWith({
+      name: 'purchase',
+      transactionId: order('sub_1'),
+    });
+  });
+
+  it('waits while the webhook has not settled the purchase', async () => {
+    await renderBilling(
+      { planId: 'seedling', trialAvailable: true },
+      { paid: true, route: '/settings/billing?status=success&plan=garden&interval=month' }
+    );
+
+    expect(screen.getByText('Payment received — finishing up')).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a routine visit', '/settings/billing'],
+    ['a top-up return', '/settings/billing?status=success&purchase=identify-top-up'],
+    ['a gift return', '/settings/billing?status=success&purchase=gift'],
+    ['a cancelled checkout', '/settings/billing?status=cancel&plan=garden&interval=month'],
+  ])('reports nothing on %s', async (_label, route) => {
+    await renderBilling(SETTLED, { paid: true, route });
+
+    expect(screen.getByTestId('current-plan').textContent).toMatch(/Garden/);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, beforeEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,6 +9,7 @@ import { I18nextProvider } from 'react-i18next';
 import es from '@/i18n/locales/es/translation.json';
 import { HouseholdOnboarding } from '@/features/household/HouseholdOnboarding';
 import { useAuthStore } from '@/store/authStore';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 import {
   setPendingReferralCode,
@@ -16,6 +17,11 @@ import {
 } from '@/features/referrals/pendingReferralCode';
 
 const API = 'http://localhost:4000';
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
 
 /**
  * The screen a new account lands on straight after confirming its email —
@@ -94,6 +100,45 @@ describe('HouseholdOnboarding', () => {
 
     expect(await screen.findByText('Household name is required')).toBeInTheDocument();
     expect(posted, 'a blank name must never reach POST /households').toBe(0);
+  });
+
+  describe('the GA4 trial start (ADR 0027)', () => {
+    async function createWith(response: Record<string, unknown>) {
+      vi.mocked(trackGoogleConversion).mockClear();
+      let created = false;
+      server.use(
+        http.post(`${API}/households`, () => {
+          created = true;
+          return HttpResponse.json(response, { status: 201 });
+        })
+      );
+      const user = userEvent.setup();
+      renderOnboarding();
+      await user.click(await screen.findByRole('button', { name: /create a new household/i }));
+      await user.type(await screen.findByLabelText(/household name/i), 'My Home');
+      await user.click(screen.getByRole('button', { name: /^create household$/i }));
+      await waitFor(() => expect(created).toBe(true));
+    }
+
+    it('counts a trial start when the server says this household began one', async () => {
+      await createWith({
+        id: 'hh-1',
+        name: 'My Home',
+        noCardTrialEndsAt: '2026-10-02T00:00:00.000Z',
+      });
+      await waitFor(() =>
+        expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'start_trial' })
+      );
+      expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts nothing when the account had already claimed its trial', async () => {
+      await createWith({ id: 'hh-1', name: 'My Home' });
+      // onSuccess has run once the new household lands on home; only then is
+      // the absence of the event a finding.
+      expect(await screen.findByText('Home')).toBeInTheDocument();
+      expect(trackGoogleConversion).not.toHaveBeenCalled();
+    });
   });
 
   describe('refer-a-friend (ADR 0029)', () => {

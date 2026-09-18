@@ -37,6 +37,7 @@ import { RootLockIcon } from '@/components/icons/RootLockIcon';
 import { AnalyticsOptOutToggle } from '@/components/AnalyticsOptOutToggle';
 import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
 import { track, registerSuperProperties } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL, siteUrl } from '@/config/site';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
@@ -602,7 +603,13 @@ export function LandingPage() {
               {t('landing.nav.logIn')}
             </Link>
             {PUBLIC_REGISTRATION_AVAILABLE && (
-              <Link to="/register" className={buttonStyles()}>
+              <Link
+                to="/register"
+                className={buttonStyles()}
+                onClick={() =>
+                  trackGoogleConversion({ name: 'landing_cta_click', cta: 'nav_signup' })
+                }
+              >
                 {t('auth.signUpFree')}
               </Link>
             )}
@@ -646,14 +653,30 @@ export function LandingPage() {
                   </div>
                   <p className="mt-6 text-lg leading-8 text-gray-700">{t(`${hero}.subhead`)}</p>
                   <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
+                    {/* The hero's two controls are counted in GA4 as
+                      `landing_cta_click`: the arrival step is where the funnel
+                      loses most visitors (docs/analytics.md), and a click here
+                      is the first sign a visitor did anything. */}
                     {PUBLIC_REGISTRATION_AVAILABLE && (
-                      <Link to="/register" className={buttonStyles({ size: 'lg' })}>
+                      <Link
+                        to="/register"
+                        className={buttonStyles({ size: 'lg' })}
+                        onClick={() =>
+                          trackGoogleConversion({ name: 'landing_cta_click', cta: 'hero_signup' })
+                        }
+                      >
                         {t('auth.signUpFree')}
                       </Link>
                     )}
                     <a
                       href="#features"
                       className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
+                      onClick={() =>
+                        trackGoogleConversion({
+                          name: 'landing_cta_click',
+                          cta: 'hero_how_it_works',
+                        })
+                      }
                     >
                       {t('landing.hero.seeHowItWorks')} <span aria-hidden="true">→</span>
                     </a>

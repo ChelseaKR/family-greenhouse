@@ -404,3 +404,154 @@ describe('clearGoogleAnalyticsCookies', () => {
     expect(document.cookie).not.toContain('_ga=');
   });
 });
+
+describe('conversion events', () => {
+  const ORDER = '0123456789abcdef0123456789abcdef';
+
+  function conversions(): unknown[][] {
+    return commands().filter((command) => command[0] === 'event' && command[1] !== 'page_view');
+  }
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('sends each conversion with only its own fields and a scrubbed address', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/settings/billing?status=success&plan=garden&interval=month&utm_source=ads'
+    );
+    const { ga } = await load();
+    expect(ga.initGoogleAnalytics()).toBe(true);
+    const page_location = `${window.location.origin}/settings/billing?utm_source=ads`;
+
+    ga.trackGoogleConversion({ name: 'sign_up' });
+    ga.trackGoogleConversion({ name: 'start_trial' });
+    ga.trackGoogleConversion({ name: 'landing_cta_click', cta: 'hero_signup' });
+    ga.trackGoogleConversion({
+      name: 'purchase',
+      transactionId: ORDER,
+      plan: 'greenhouse',
+      interval: 'year',
+      value: 79.99,
+    });
+    ga.trackGoogleConversion({ name: 'purchase', transactionId: ORDER });
+
+    expect(conversions()).toEqual([
+      ['event', 'sign_up', { method: 'email', page_location }],
+      ['event', 'start_trial', { trial_plan: 'garden', trial_days: 14, page_location }],
+      ['event', 'landing_cta_click', { cta: 'hero_signup', page_location }],
+      [
+        'event',
+        'purchase',
+        {
+          transaction_id: ORDER,
+          page_location,
+          currency: 'USD',
+          value: 79.99,
+          items: [{ item_id: 'greenhouse_year', price: 79.99, quantity: 1 }],
+        },
+      ],
+      ['event', 'purchase', { transaction_id: ORDER, page_location }],
+    ]);
+    // gtag.js ignores anything that is not an `arguments` object.
+    for (const entry of window.dataLayer ?? []) {
+      expect(Object.prototype.toString.call(entry)).toBe('[object Arguments]');
+    }
+  });
+
+  it('never passes a field through: extra fields a caller adds are not sent', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const loaded = {
+      email: 'reader@example.org',
+      fullName: 'Ada Lovelace',
+      householdName: 'The Lovelace Home',
+      notes: 'water the fern on Sundays',
+      stripeSubscriptionId: 'sub_1ABC',
+      checkoutSessionId: 'cs_live_abc',
+    };
+
+    ga.trackGoogleConversion({ name: 'sign_up', ...loaded } as never);
+    ga.trackGoogleConversion({
+      name: 'purchase',
+      transactionId: ORDER,
+      plan: 'garden',
+      interval: 'month',
+      value: 4.99,
+      ...loaded,
+    } as never);
+
+    expect(conversions()).toHaveLength(2);
+    const sent = JSON.stringify(commands());
+    for (const value of Object.values(loaded)) expect(sent, value).not.toContain(value);
+  });
+
+  it.each([
+    ['a Stripe id as the transaction id', { name: 'purchase', transactionId: 'cs_live_abc' }],
+    ['an upper-case transaction id', { name: 'purchase', transactionId: ORDER.toUpperCase() }],
+    ['a short transaction id', { name: 'purchase', transactionId: ORDER.slice(1) }],
+    [
+      'the free tier as a purchase',
+      { name: 'purchase', transactionId: ORDER, plan: 'seedling', interval: 'month', value: 0 },
+    ],
+    [
+      'an unknown cadence',
+      { name: 'purchase', transactionId: ORDER, plan: 'garden', interval: 'week', value: 1 },
+    ],
+    [
+      'a negative value',
+      { name: 'purchase', transactionId: ORDER, plan: 'garden', interval: 'month', value: -1 },
+    ],
+    [
+      'a value that is not a number',
+      { name: 'purchase', transactionId: ORDER, plan: 'garden', interval: 'month', value: NaN },
+    ],
+    ['a plan with no cadence or value', { name: 'purchase', transactionId: ORDER, plan: 'garden' }],
+    ['an unlisted control', { name: 'landing_cta_click', cta: 'reader@example.org' }],
+    ['an unlisted event', { name: 'login' }],
+  ])('drops %s whole', async (_label, conversion) => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion(conversion as never);
+    expect(conversions()).toEqual([]);
+  });
+
+  it('sends nothing when Google Analytics did not load', async () => {
+    vi.stubEnv('VITE_GA_MEASUREMENT_ID', '');
+    const { ga } = await load();
+    expect(ga.initGoogleAnalytics()).toBe(false);
+    ga.trackGoogleConversion({ name: 'sign_up' });
+    expect(window.dataLayer).toBeUndefined();
+  });
+
+  it('sends nothing under Global Privacy Control', async () => {
+    setGpc(true);
+    const { ga, analytics } = await load();
+    expect(analytics.analyticsOptedOut()).toBe(true);
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion({ name: 'sign_up' });
+    expect(window.dataLayer).toBeUndefined();
+  });
+
+  it('stops at once when the visitor opts out mid-visit', async () => {
+    const { ga, analytics } = await load();
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion({ name: 'sign_up' });
+    expect(conversions()).toHaveLength(1);
+
+    analytics.setAnalyticsOptOut(true);
+    ga.trackGoogleConversion({ name: 'purchase', transactionId: ORDER });
+    expect(conversions()).toHaveLength(1);
+  });
+
+  it('names a purchase by the first 32 hex characters of a SHA-256, never the id', async () => {
+    const { ga } = await load();
+    const id = await ga.gaTransactionId('sub_1ABC');
+    // SHA-256('sub_1ABC'), first 32 hex characters, from Python's hashlib.
+    expect(id).toBe('0ceb6e6bd4fce375ec15be41ba4b794b');
+    expect(id).toMatch(/^[0-9a-f]{32}$/u);
+    expect(await ga.gaTransactionId('')).toBeNull();
+  });
+});

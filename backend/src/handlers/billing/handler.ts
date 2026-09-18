@@ -247,7 +247,11 @@ export const checkout = createHandler(
         customerEmail: user.email,
         planId: validatedBody.planId,
         interval: validatedBody.interval,
-        successUrl: `${baseUrl}/settings/billing?status=success`,
+        // `plan` and `interval` are the two validated enums this checkout
+        // sells, so the return page can report which plan was bought (GA4
+        // `purchase`, docs/analytics.md) without storing anything on the
+        // device. Neither names the household, the buyer or a Stripe id.
+        successUrl: `${baseUrl}/settings/billing?status=success&plan=${validatedBody.planId}&interval=${validatedBody.interval}`,
         cancelUrl: `${baseUrl}/settings/billing?status=cancel`,
         idempotencyKey: validatedBody.checkoutAttemptId
           ? `checkout:${user.householdId}:${validatedBody.checkoutAttemptId}`

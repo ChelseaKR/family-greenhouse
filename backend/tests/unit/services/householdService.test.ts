@@ -40,6 +40,9 @@ describe('householdService', () => {
     vi.mocked(dynamodb.send).mockResolvedValue({});
     const result = await createHousehold({ name: 'Home' }, 'user-1', 'Alice', 'a@b.com');
     expect(result).toMatchObject({ name: 'Home', createdBy: 'user-1' });
+    // The response says the trial began, with the same end date the row got,
+    // so the client can count a trial start on the server's word.
+    expect(result.noCardTrialEndsAt).toEqual(expect.any(String));
     const calls = vi.mocked(dynamodb.send).mock.calls;
     expect(calls).toHaveLength(1);
     const cmd = calls[0][0] as unknown as {
@@ -62,6 +65,7 @@ describe('householdService', () => {
     const householdItem = items.find((i) => i.entityType === 'Household');
     expect(householdItem?.memberCount).toBe(1);
     expect(householdItem?.plantCount).toBe(0);
+    expect(result.noCardTrialEndsAt).toBe(householdItem?.noCardTrialEndsAt);
   });
 
   it('setMemberRole updates and returns the new role', async () => {

@@ -5,12 +5,18 @@ import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 import { getPendingReferralCode } from '@/features/referrals/pendingReferralCode';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
   return { ...actual, track: vi.fn() };
+});
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
 });
 
 const API = 'http://localhost:4000';
@@ -112,6 +118,7 @@ describe('RegisterPage', () => {
     // The first funnel stage (docs/analytics.md). A refused sign-up is not a
     // sign-up started, so the event must wait for the 201.
     vi.mocked(track).mockClear();
+    vi.mocked(trackGoogleConversion).mockClear();
     server.use(
       http.post(`${API}/auth/signup`, () =>
         HttpResponse.json({ message: 'An account with this email already exists' }, { status: 400 })
@@ -128,6 +135,7 @@ describe('RegisterPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/already exists/i);
     expect(track).not.toHaveBeenCalled();
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
 
     server.use(
       http.post(`${API}/auth/signup`, () =>
@@ -138,6 +146,9 @@ describe('RegisterPage', () => {
 
     await waitFor(() => expect(track).toHaveBeenCalledWith('signup_started'));
     expect(track).toHaveBeenCalledTimes(1);
+    // The same step as the GA4 `sign_up`, with nothing from the form in it.
+    expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
+    expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'sign_up' });
   });
 
   describe('refer-a-friend (ADR 0029)', () => {

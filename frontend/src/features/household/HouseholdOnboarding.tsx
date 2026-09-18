@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -89,6 +90,10 @@ export function HouseholdOnboarding() {
       track('household_created', {
         ordinal: isAddingAnother ? 'subsequent' : 'first',
       });
+      // GA4 `start_trial`, only on the server's word that this create began
+      // the account's no-card Garden trial (ADR 0027). An account that had
+      // already claimed its trial gets a household without one, and no event.
+      if (household.noCardTrialEndsAt) trackGoogleConversion({ name: 'start_trial' });
       if (isAddingAnother) {
         // Activate the newly-created household via the X-Household-Id
         // path; don't disturb the user's "default" Cognito-claim household.
