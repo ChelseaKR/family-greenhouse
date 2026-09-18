@@ -3865,7 +3865,11 @@ components:
         viaTag: { type: boolean }
     PlantTag:
       type: object
-      description: A household-side view of one active tag. Includes the token because the household needs it to print the QR label (see ADR 0016).
+      description: >-
+        A household-side view of one active tag. `token` and `url` are what the print sheet renders the
+        QR label from. Since #450 the token is hashed at rest, so they are present on the response to
+        issuing a tag and null on a listed tag, except a pre-#450 tag whose row has not been re-keyed
+        yet (see ADR 0016, amendment 2026-09-17).
       properties:
         id: { type: string }
         householdId: { type: string }
@@ -3877,8 +3881,14 @@ components:
         createdAt: { type: string, format: date-time }
         status: { type: string, enum: [active, revoked] }
         revokedAt: { type: string, format: date-time, nullable: true }
-        token: { type: string, description: 64 lowercase hex chars (256 bits) }
-        url: { type: string, description: The scan URL the QR code encodes }
+        token:
+          type: string
+          nullable: true
+          description: 64 lowercase hex chars (256 bits). Null when the server no longer holds it.
+        url:
+          type: string
+          nullable: true
+          description: The scan URL the QR code encodes. Null exactly when `token` is.
     MoveDayResult:
       type: object
       required: [status]

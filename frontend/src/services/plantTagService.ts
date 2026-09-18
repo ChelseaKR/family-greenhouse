@@ -25,10 +25,22 @@ export interface PlantTag {
   createdAt: string;
   status: 'active' | 'revoked';
   revokedAt: string | null;
-  /** The secret the QR code encodes. Present because the household prints it. */
-  token: string;
-  /** The scan URL the QR code encodes. */
-  url: string;
+  /**
+   * The secret the QR code encodes. Since #450 the server keeps only a digest
+   * of it, so this is present on the response to `issue` — the one moment a
+   * new label can be printed — and null on a listed tag, except for a label
+   * issued before #450 whose row has not been re-keyed yet.
+   */
+  token: string | null;
+  /** The scan URL the QR code encodes; null exactly when `token` is. */
+  url: string | null;
+}
+
+/** A tag this page can actually print: its code is in hand. */
+export type PrintableTag = PlantTag & { token: string; url: string };
+
+export function isPrintable(tag: PlantTag): tag is PrintableTag {
+  return tag.token !== null && tag.url !== null;
 }
 
 export interface PlantTagAllowance {
@@ -51,8 +63,10 @@ export const plantTagService = {
     return response.data;
   },
 
-  async issue(plantId: string): Promise<PlantTag> {
-    const response = await api.post<PlantTag>(`/plants/${plantId}/tag`);
+  /** Issue (or re-issue) a plant's tag. The response is the only place the
+   *  new label's code ever appears — print it from here. */
+  async issue(plantId: string): Promise<PrintableTag> {
+    const response = await api.post<PrintableTag>(`/plants/${plantId}/tag`);
     return response.data;
   },
 

@@ -36,7 +36,8 @@
  * one link window (90 days at the longest) with nothing to run.
  */
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -106,7 +107,7 @@ const TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
  * one surface can never resolve on another even if it is pasted there.
  */
 function hashToken(token: string): string {
-  return scryptSync(token, 'family-greenhouse-sitter-v1', 32).toString('hex');
+  return hashCapabilityToken('sitterLink', token);
 }
 
 function itemToLink(item: Record<string, unknown>): SitterLink {
@@ -226,9 +227,15 @@ export async function getActiveLink(
   // messages keeps working. BOTH are GetItem on the partition key, so the
   // fallback costs one extra point read and adds no enumeration surface; and
   // nothing here writes a plaintext row back, so the legacy generation only
-  // ever shrinks (every sitter row carries a TTL).
-  const item =
-    (await readLinkRow(`SITTER#${hashToken(token)}`)) ?? (await readLinkRow(`SITTER#${token}`));
+  // ever shrinks (every sitter row carries a TTL). The fallback only honours a
+  // row that still carries the presented token — without that, a digest from
+  // a table export resolved as a working link (see `readTokenRow`).
+  const item = await readTokenRow({
+    surface: 'sitterLink',
+    token,
+    pk: (suffix) => `SITTER#${suffix}`,
+    read: readLinkRow,
+  });
   if (!item) return null;
 
   const link = itemToLink(item);

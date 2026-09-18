@@ -3,6 +3,11 @@
  * row shape, generic-null validation, revoke / re-issue semantics, and the
  * household PIN with its per-tag lockout. DynamoDB is mocked at the command
  * level so each test can assert exactly what was written.
+ *
+ * `tagRow()` is a PRE-#450 row — keyed by, and carrying, its plaintext token —
+ * because that is the generation every printed label in a pot today belongs
+ * to, so the revoke / PIN tests below double as "a legacy label still works".
+ * The hashed generation has its own block at the bottom.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { scryptSync } from 'node:crypto';
@@ -37,6 +42,12 @@ async function load() {
 const HH = 'hh-1';
 const TOKEN = 'a'.repeat(64);
 
+/** The production digest, restated so a silent change to the salt or the KDF
+ *  fails here rather than quietly un-scanning every printed label. */
+function expectedHash(token: string): string {
+  return scryptSync(token, 'family-greenhouse-planttag-v1', 32).toString('hex');
+}
+
 function tagRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'tag-1',
@@ -51,6 +62,11 @@ function tagRow(overrides: Record<string, unknown> = {}) {
     pinLockedUntil: null,
     ...overrides,
   };
+}
+
+/** A row as the service hands it around: `keyToken` is the row's PK suffix. */
+function asTag(row: Record<string, unknown>) {
+  return { ...row, keyToken: (row.tokenHash as string | undefined) ?? row.token } as never;
 }
 
 function sentCommands(send: unknown): Cmd[] {
@@ -79,7 +95,10 @@ describe('plantTagService.issueTag', () => {
     expect(tag.token).toMatch(/^[0-9a-f]{64}$/);
     expect(tag.status).toBe('active');
     const put = sentCommands(dynamodb.send).find((c) => c.kind === 'Put')!;
-    expect(put.input.Item.PK).toBe(`PLANTTAG#${tag.token}`);
+    // #450: keyed by the token's digest, never the token.
+    expect(put.input.Item.PK).toBe(`PLANTTAG#${expectedHash(tag.token)}`);
+    expect(put.input.Item.tokenHash).toBe(expectedHash(tag.token));
+    expect(tag.keyToken).toBe(expectedHash(tag.token));
     expect(put.input.Item.SK).toBe('METADATA');
     expect(put.input.Item.GSI1PK).toBe(`HOUSEHOLD#${HH}#PLANTTAG`);
     expect(put.input.Item.entityType).toBe('PlantTag');
@@ -240,7 +259,7 @@ describe('plantTagService PIN', () => {
   it('verifyTagPin demands a PIN when one is set and none was sent, without counting a failure', async () => {
     const { dynamodb, svc } = await load();
     respond(dynamodb.send, { Get: pinRow });
-    const tag = tagRow() as never;
+    const tag = asTag(tagRow());
     expect(await svc.verifyTagPin(tag, undefined)).toEqual({ verdict: 'required' });
     expect(await svc.verifyTagPin(tag, '')).toEqual({ verdict: 'required' });
     expect(sentCommands(dynamodb.send).filter((c) => c.kind === 'Update')).toHaveLength(0);
@@ -249,7 +268,7 @@ describe('plantTagService PIN', () => {
   it('verifyTagPin accepts the right PIN and clears stale failures', async () => {
     const { dynamodb, svc } = await load();
     respond(dynamodb.send, { Get: pinRow });
-    expect(await svc.verifyTagPin(tagRow({ pinFailures: 3 }) as never, '1234')).toEqual({
+    expect(await svc.verifyTagPin(asTag(tagRow({ pinFailures: 3 })), '1234')).toEqual({
       verdict: 'ok',
     });
     const update = sentCommands(dynamodb.send).find((c) => c.kind === 'Update')!;
@@ -260,7 +279,7 @@ describe('plantTagService PIN', () => {
   it('verifyTagPin counts a wrong PIN on the TAG row (ADD, not read-modify-write)', async () => {
     const { dynamodb, svc } = await load();
     respond(dynamodb.send, { Get: pinRow, Update: { Attributes: { pinFailures: 1 } } });
-    expect(await svc.verifyTagPin(tagRow() as never, '0000')).toEqual({ verdict: 'wrong' });
+    expect(await svc.verifyTagPin(asTag(tagRow()), '0000')).toEqual({ verdict: 'wrong' });
     const update = sentCommands(dynamodb.send).find((c) => c.kind === 'Update')!;
     expect(update.input.UpdateExpression).toBe('ADD pinFailures :one');
     expect(update.input.Key.PK).toBe(`PLANTTAG#${TOKEN}`);
@@ -270,7 +289,7 @@ describe('plantTagService PIN', () => {
     const { dynamodb, svc } = await load();
     respond(dynamodb.send, { Get: pinRow, Update: { Attributes: { pinFailures: 5 } } });
     const now = new Date('2026-09-03T12:00:00.000Z');
-    const check = await svc.verifyTagPin(tagRow() as never, '0000', now);
+    const check = await svc.verifyTagPin(asTag(tagRow()), '0000', now);
     expect(check.verdict).toBe('locked');
     expect(check.lockedUntil).toBe('2026-09-03T12:15:00.000Z');
     const lock = sentCommands(dynamodb.send)
@@ -283,7 +302,7 @@ describe('plantTagService PIN', () => {
     const { dynamodb, svc } = await load();
     respond(dynamodb.send, { Get: pinRow });
     const now = new Date('2026-09-03T12:00:00.000Z');
-    const locked = tagRow({ pinLockedUntil: '2026-09-03T12:10:00.000Z' }) as never;
+    const locked = asTag(tagRow({ pinLockedUntil: '2026-09-03T12:10:00.000Z' }));
     // Even the RIGHT pin is refused while locked, and nothing is written.
     expect(await svc.verifyTagPin(locked, '1234', now)).toEqual({
       verdict: 'locked',
@@ -297,9 +316,9 @@ describe('plantTagService PIN', () => {
 });
 
 describe('plantTagService.toSummary', () => {
-  it('strips the secret token and the PIN bookkeeping', async () => {
+  it('strips the secret token, the row key and the PIN bookkeeping', async () => {
     const { svc } = await load();
-    const summary = svc.toSummary(tagRow({ pinFailures: 2 }) as never);
+    const summary = svc.toSummary(asTag(tagRow({ pinFailures: 2 })));
     expect(summary).toEqual({
       id: 'tag-1',
       householdId: HH,
@@ -405,5 +424,146 @@ describe('plantTagService — the tag list is the whole tag list', () => {
       .filter((c) => c.kind === 'Update');
     expect(writes).toHaveLength(1);
     expect(writes[0].input.Key?.PK).toBe(`PLANTTAG#${'o'.repeat(64)}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #450 — the token is not in the table
+// ---------------------------------------------------------------------------
+
+/** A tag row as written since #450: digest-keyed, no plaintext anywhere. */
+function hashedRow(token: string, overrides: Record<string, unknown> = {}) {
+  const row: Record<string, unknown> = {
+    ...tagRow(overrides),
+    PK: `PLANTTAG#${expectedHash(token)}`,
+    SK: 'METADATA',
+    tokenHash: expectedHash(token),
+  };
+  delete row.token;
+  return row;
+}
+
+describe('plantTagService — the token is not in the table (#450)', () => {
+  beforeEach(async () => {
+    const { dynamodb } = await load();
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('issueTag writes no plaintext token anywhere on the row', async () => {
+    const { dynamodb, svc } = await load();
+    respond(dynamodb.send, { Query: { Items: [] } });
+    const tag = await svc.issueTag({ householdId: HH, plantId: 'p1', createdBy: 'u1' });
+    const put = sentCommands(dynamodb.send).find((c) => c.kind === 'Put')!;
+    expect(put.input.Item.token).toBeUndefined();
+    expect(JSON.stringify(put.input.Item)).not.toContain(tag.token);
+  });
+
+  it('a tag written by issueTag scans with its own token (hash written, hash read)', async () => {
+    const { dynamodb, svc } = await load();
+    respond(dynamodb.send, { Query: { Items: [] } });
+    const minted = await svc.issueTag({ householdId: HH, plantId: 'p1', createdBy: 'u1' });
+    const written = sentCommands(dynamodb.send).find((c) => c.kind === 'Put')!.input.Item;
+
+    // Hand the stored row straight back to the read path. A round trip is the
+    // only assertion that catches a write/read hash mismatch, which would
+    // strand every label printed from now on.
+    vi.mocked(dynamodb.send).mockReset();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: written } as never);
+    const resolved = await svc.getActiveTag(minted.token);
+    expect(resolved?.id).toBe(minted.id);
+    expect(resolved?.token).toBeNull();
+    const get = sentCommands(dynamodb.send)[0];
+    expect(get.input.Key.PK).toBe(written.PK);
+    expect(dynamodb.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('a label printed BEFORE #450 still scans (one fallback point read on the plaintext key)', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hashed key: not re-keyed yet
+      .mockResolvedValueOnce({ Item: tagRow() } as never); // the legacy row
+    const tag = await svc.getActiveTag(TOKEN);
+    expect(tag?.id).toBe('tag-1');
+    const keys = sentCommands(dynamodb.send).map((c) => c.input.Key.PK);
+    expect(keys).toEqual([`PLANTTAG#${expectedHash(TOKEN)}`, `PLANTTAG#${TOKEN}`]);
+  });
+
+  it('the same printed label scans after the backfill re-keys its row', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: hashedRow(TOKEN) } as never);
+    expect((await svc.getActiveTag(TOKEN))?.id).toBe('tag-1');
+    expect(dynamodb.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('a digest from a table export does NOT scan as a label', async () => {
+    const { dynamodb, svc } = await load();
+    const digest = expectedHash(TOKEN);
+    // Presenting the digest: its own hash misses, and the fallback read of
+    // `PLANTTAG#{digest}` finds the real hashed row — which carries no
+    // plaintext, so it is refused.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: hashedRow(TOKEN) } as never);
+    expect(await svc.getActiveTag(digest)).toBeNull();
+    const keys = sentCommands(dynamodb.send).map((c) => c.input.Key.PK);
+    // Sabotage-landed check: the fallback really did reach the hashed row, so
+    // the null above is the guard's doing and not a missed read.
+    expect(keys[1]).toBe(`PLANTTAG#${digest}`);
+  });
+
+  it('lists hashed tags with no token, and legacy tags with theirs until re-keyed', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({
+      Items: [hashedRow('b'.repeat(64), { id: 'tag-new' }), tagRow({ id: 'tag-legacy' })],
+    } as never);
+    const [fresh, legacy] = await svc.listTags(HH);
+    expect(fresh.token).toBeNull();
+    expect(fresh.keyToken).toBe(expectedHash('b'.repeat(64)));
+    expect(legacy.token).toBe(TOKEN);
+    expect(legacy.keyToken).toBe(TOKEN);
+  });
+
+  it('revokes each generation by its own row key (mixed household)', async () => {
+    const { dynamodb, svc } = await load();
+    respond(dynamodb.send, {
+      Query: {
+        Items: [
+          hashedRow('b'.repeat(64), { id: 'tag-new' }),
+          tagRow({ id: 'tag-legacy', token: 'c'.repeat(64) }),
+        ],
+      },
+    });
+    expect(await svc.revokeTagsForPlant(HH, 'p1')).toBe(2);
+    const keys = sentCommands(dynamodb.send)
+      .filter((c) => c.kind === 'Update')
+      .map((c) => c.input.Key.PK);
+    expect(keys).toEqual([
+      `PLANTTAG#${expectedHash('b'.repeat(64))}`,
+      `PLANTTAG#${'c'.repeat(64)}`,
+    ]);
+    // Never a key built from a token the hashed row does not have.
+    expect(keys).not.toContain('PLANTTAG#null');
+    expect(keys).not.toContain('PLANTTAG#undefined');
+  });
+
+  it('counts a wrong PIN on the hashed row, by its digest', async () => {
+    const { dynamodb, svc } = await load();
+    const SALT = 'deadbeef'.repeat(4);
+    const pinHash = scryptSync('1234', SALT, 32, { N: 16384, r: 8, p: 1 }).toString('hex');
+    respond(dynamodb.send, {
+      Get: { Item: { pinHash, pinSalt: SALT } },
+      Update: { Attributes: { pinFailures: 1 } },
+    });
+    const tag = asTag(hashedRow('b'.repeat(64)));
+    expect(await svc.verifyTagPin(tag, '0000')).toEqual({ verdict: 'wrong' });
+    const update = sentCommands(dynamodb.send).find((c) => c.kind === 'Update')!;
+    expect(update.input.Key.PK).toBe(`PLANTTAG#${expectedHash('b'.repeat(64))}`);
+  });
+
+  it('toSummary never carries the row key (for a legacy row it IS the token)', async () => {
+    const { svc } = await load();
+    const summary = svc.toSummary(asTag(tagRow()));
+    expect(Object.keys(summary)).not.toContain('keyToken');
+    expect(Object.keys(summary)).not.toContain('token');
   });
 });

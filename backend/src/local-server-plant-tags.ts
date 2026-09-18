@@ -25,7 +25,13 @@ import { PIN_MAX_FAILURES, PIN_LOCKOUT_MS, PIN_RE, TAG_ACTOR_PREFIX } from './mo
 // free of DynamoDB, for the same reason as the import above.
 import { resolveCareNote } from './models/sitterBriefFields.js';
 
-/** Mirrors plantTagService.PlantTag (PLANTTAG#{token} row). */
+/** Mirrors plantTagService.PlantTag.
+ *
+ *  This dev mock keys tags by the plaintext token in an in-memory Map; the
+ *  production row is `PLANTTAG#{scrypt(token)}` with no plaintext on it
+ *  (#450). The mock has no table to export, so it mirrors the SHAPE of the API
+ *  — the token leaves in the issue response and nowhere else — rather than the
+ *  at-rest posture. */
 export interface LocalPlantTag {
   id: string;
   token: string;
@@ -202,7 +208,11 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
     return n;
   };
 
-  const tagResponse = (tag: LocalPlantTag) => {
+  /** `minted` is true only for the issue response. Production can hand a
+   *  token out only at that moment (the row stores a digest), so the list
+   *  answers `token: null, url: null` here too — otherwise a print sheet built
+   *  against the dev server would work in dev and show blank labels in prod. */
+  const tagResponse = (tag: LocalPlantTag, minted = false) => {
     const plant = db.plants.get(tag.plantId);
     return {
       id: tag.id,
@@ -215,8 +225,8 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       plantName: plant?.name ?? '',
       plantSpecies: plant?.species ?? null,
       plantStatus: plant?.status ?? 'active',
-      token: tag.token,
-      url: `${baseUrl()}/tag/${tag.token}`,
+      token: minted ? tag.token : null,
+      url: minted ? `${baseUrl()}/tag/${tag.token}` : null,
     };
   };
 
@@ -334,7 +344,7 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       pinLockedUntil: null,
     };
     db.plantTags.set(tag.token, tag);
-    res.status(201).json(tagResponse(tag));
+    res.status(201).json(tagResponse(tag, true));
   });
 
   // DELETE /plants/:plantId/tag
@@ -358,15 +368,15 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
     // ENTITLEMENT, not the plan row (#476): the read side has to report the
     // allowance the WRITE side will actually enforce, or the print sheet
     // offers a household mid-dunning a cap that the issue route above would
-    // then refuse. `tags` is unaffected and still lists every ACTIVE tag with
-    // its token, so labels already issued can still be reprinted; only the
-    // allowance to issue MORE narrows.
+    // then refuse. `tags` is unaffected and still lists every ACTIVE tag, so
+    // labels already issued can still be managed; only the allowance to issue
+    // MORE narrows.
     const plan = entitledPlanFor(user.householdId);
     const tags = activeTagsFor(user.householdId)
       .filter((t) => db.plants.has(t.plantId))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     res.json({
-      tags: tags.map(tagResponse),
+      tags: tags.map((tag) => tagResponse(tag)),
       pinEnabled: db.plantTagPins.has(user.householdId),
       allowance: { ...plantTagAllowance(plan), used: activeTagsFor(user.householdId).length },
       planId: plan.id,

@@ -59,15 +59,18 @@ public-access block (`infrastructure/modules/frontend/main.tf` lines 85–170).
 - No analytics cookies or device identifiers: the PostHog rail holds the Cognito `sub` in module memory only, so nothing survives a page load and no consent banner is needed for it. Global Privacy Control and Do Not Track each silence it.
 - No Google Tag Manager / GA4 (a dormant loader was removed 2026-09-13; nothing from Google is in either CSP).
 - No plaintext API keys, calendar-feed tokens, sitter-link tokens, kiosk-link
-  tokens or caretaker-seat tokens at rest (scrypt hash only). Two caveats,
-  stated rather than implied (#450, #568): credentials minted **before** each
-  change keep their plaintext row until it ages out — sitter rows and caretaker
-  rows carry a TTL and so clear themselves within one link/engagement window
-  (≤60 days and ≤180 days respectively), kiosk rows carry none by design and
-  clear on the household's next re-issue. And plant-tag tokens are still stored
-  in plaintext, because the print sheet re-renders a pot label's QR code from
-  the stored token and hashing one would make it unrecoverable after issue;
-  that trade is open for decision on #450, not settled here.
+  tokens, caretaker-seat tokens, plant-tag tokens or cutting-share codes at
+  rest for anything minted since the change (scrypt hash only, one shared
+  helper: `backend/src/utils/tokenHash.ts`). One caveat, stated rather than
+  implied (#450, #568): credentials minted **before** each change keep their
+  plaintext row until it is re-keyed or ages out. Sitter, caretaker and share
+  rows carry a TTL and clear themselves (≤60 days, ≤180 days and 14 days
+  respectively); kiosk and plant-tag rows carry none by design, so they stay
+  until `backend/src/scripts/backfillTokenHashes.ts` re-keys them — same
+  token, so no label is reprinted and no display re-paired — or the household
+  re-issues. That script has not been run yet. Since 2026-09-17 a hashed
+  row's digest is also not usable as a credential: the legacy-read fallback
+  accepts a row only if it carries the token presented.
 - No sitter identity — sitters never create an account; the link label is enforced non-PII.
 - No caretaker account either. A caretaker seat DOES store one piece of personal data a sitter link does not: a **name**, typed by the household, which is the point of the feature — an unattributed visit record proves nothing. It is a household-supplied display name (a first name is what the UI asks for), never an email, phone number or address, and the caretaker never registers, authenticates, or is contactable through the product.
 - No HTML email (plain text only — `backend/src/services/emailNotifier.ts`), so no tracking pixels.

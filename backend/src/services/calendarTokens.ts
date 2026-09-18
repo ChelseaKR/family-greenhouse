@@ -46,7 +46,8 @@
  * eventually-consistent index read can never honour a URL that was regenerated
  * or revoked a moment earlier.
  */
-import { scryptSync, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken } from '../utils/tokenHash.js';
 import {
   PutCommand,
   GetCommand,
@@ -90,7 +91,7 @@ export function calendarFeedPath(token: string): string {
  * one where the other is expected.
  */
 function hashToken(token: string): string {
-  return scryptSync(token, 'family-greenhouse-caltoken-v1', 32).toString('hex');
+  return hashCapabilityToken('calendarToken', token);
 }
 
 function generateToken(): string {

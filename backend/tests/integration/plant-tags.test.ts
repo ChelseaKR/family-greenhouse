@@ -70,7 +70,7 @@ describe('plan gate', () => {
     expect(tag.url).toContain(`/tag/${tag.token}`);
   });
 
-  it('the household list reports tags with tokens, the PIN state and the allowance', async () => {
+  it('the household list reports tags, the PIN state and the allowance — but not the token', async () => {
     const auth = await loginAsSeed();
     onGarden();
     const tag = await issueSeedTag(auth);
@@ -79,12 +79,17 @@ describe('plan gate', () => {
       .set('Authorization', `Bearer ${auth}`);
     expect(list.status).toBe(200);
     expect(list.body.tags).toHaveLength(1);
+    // #450: a tag's token is hashed at rest, so the issue response is the only
+    // place it exists; the list answers null and the print sheet treats the
+    // label as already printed.
     expect(list.body.tags[0]).toMatchObject({
       id: tag.id,
       plantId: seedPlantId,
       plantName: 'Monstera',
-      token: tag.token,
+      token: null,
+      url: null,
     });
+    expect(JSON.stringify(list.body)).not.toContain(tag.token);
     expect(list.body.pinEnabled).toBe(false);
     expect(list.body.allowance).toEqual({ enabled: true, max: 50, used: 1 });
   });

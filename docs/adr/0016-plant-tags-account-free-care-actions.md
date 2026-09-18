@@ -209,3 +209,41 @@ more in front of the less trusted reader than the trusted one.
   response with the real brief entry for the same plant, by shape, value and
   bytes, and fails on any scan field that is neither in the brief nor disclosed
   in the notice.
+
+## Amendment — 2026-09-17: the token is hashed at rest (#450)
+
+The **Token** paragraph above made the plaintext token the partition key. That
+left a table export, a point-in-time restore or `dynamodb:Scan` holding a
+working copy of every label in every pot — and plant-tag rows never expire, so
+that copy sat in every backup for as long as the label stayed in use. API keys,
+calendar feeds, sitter, kiosk and caretaker links were already hashed; tags were
+the one credential left (#450, whose comments set out the trade below).
+
+- **Row shape.** `PLANTTAG#{scrypt(token)}` / `METADATA`, a `tokenHash`
+  attribute, and no plaintext on the row. The digest is the shared credential
+  hash (`backend/src/utils/tokenHash.ts`) with the plant-tag salt — the same
+  construction as every other credential, not a second scheme. A scan is still
+  one `GetItem` with no enumeration surface.
+- **Every label already printed keeps working.** `getActiveTag` reads the
+  hashed key, then one point read on the old plaintext key. That fallback only
+  honours a row that still carries the presented token; without that check a
+  digest from a dump, presented at `/tag/{digest}`, would land on the hashed
+  row's own key and scan. `backend/src/scripts/backfillTokenHashes.ts` re-keys
+  the legacy rows under the digest of the token they already hold, so the same
+  printed QR code resolves afterwards. Nothing is reprinted.
+- **What it costs: a label's code can be shown only when it is made.** The
+  print sheet used to re-render every active tag's QR from the stored token.
+  It now prints the labels issued on the current visit, from the issue
+  response, and lists earlier ones as printed. Replacing a lost or faded label
+  is **New code**, which is the same physical work as reprinting (one label
+  printed, one label stuck on) and additionally turns the lost one off. What
+  is genuinely gone is a second copy of a label that is still in use. Until
+  the backfill runs, a pre-#450 row still carries its token and the sheet can
+  still print it.
+- **Not chosen:** envelope-encrypting the token with KMS so the sheet could
+  keep reprinting (a new key, grant and rotation duty in `infrastructure/`, and
+  a decryptable copy of every label still at rest behind one more
+  permission); and leaving tags in plaintext as a documented exception.
+- The bulk list stops being a bulk read of secrets as the backfill runs:
+  `planttag.listed` now records how many tokens actually left (#451), which
+  falls to zero.

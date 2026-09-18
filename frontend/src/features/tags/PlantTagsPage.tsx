@@ -12,7 +12,12 @@ import { PageHeader } from '@/components/PageHeader';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { plantService } from '@/services/plantService';
-import { plantTagService, type PlantTag } from '@/services/plantTagService';
+import {
+  isPrintable,
+  plantTagService,
+  type PlantTag,
+  type PrintableTag,
+} from '@/services/plantTagService';
 import { getErrorMessage } from '@/services/api';
 import { QrCode } from './QrCode';
 
@@ -29,6 +34,13 @@ import { QrCode } from './QrCode';
  *
  * The QR codes are generated in the browser from the tag URLs (see ./qr.ts),
  * so no token is ever sent to an image service.
+ *
+ * Since #450 the server stores a digest of each tag's token, not the token, so
+ * it can hand a label's code out exactly once: in the response to issuing it.
+ * This page keeps the codes it minted during THIS visit in component state —
+ * memory only, never storage — and prints from those. A label issued earlier
+ * is listed as already printed; its label in the pot keeps working, and a
+ * replacement is "New code", which turns the old one off.
  */
 export function PlantTagsPage() {
   const { t } = useTranslation();
@@ -37,6 +49,9 @@ export function PlantTagsPage() {
   const queryClient = useQueryClient();
   const [revoking, setRevoking] = useState<PlantTag | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Labels minted on this visit, by tag id — the only codes this page will
+  // ever hold for a tag issued since #450. Deliberately not persisted.
+  const [minted, setMinted] = useState<Record<string, PrintableTag>>({});
 
   const tagsQuery = useQuery({
     queryKey: ['plant-tags', householdId],
@@ -55,8 +70,9 @@ export function PlantTagsPage() {
 
   const issueMutation = useMutation({
     mutationFn: (plantId: string) => plantTagService.issue(plantId),
-    onSuccess: () => {
+    onSuccess: (tag) => {
       setActionError(null);
+      setMinted((current) => ({ ...current, [tag.id]: tag }));
       invalidate();
     },
     onError: (err) => setActionError(getErrorMessage(err)),
@@ -79,7 +95,15 @@ export function PlantTagsPage() {
   // turn one off. See ADR 0010.
   const tagsUnavailable = !tagsQuery.isLoading && tagsQuery.data === undefined;
   const data = tagsQuery.data;
-  const tags = data?.tags ?? [];
+  // The list, with this visit's freshly minted codes laid over the tags they
+  // belong to. A re-issued plant's OLD tag is no longer listed, so its code
+  // simply drops out of what can be printed.
+  const tags: PlantTag[] = (data?.tags ?? []).map((tag) =>
+    isPrintable(tag) ? tag : (minted[tag.id] ?? tag)
+  );
+  const printable = tags.filter(isPrintable);
+  const alreadyPrinted = tags.length - printable.length;
+  const printingFresh = printable.some((tag) => minted[tag.id] !== undefined);
   const taggedPlantIds = new Set(tags.map((tag) => tag.plantId));
   const untagged = (plantsQuery.data ?? []).filter((plant) => !taggedPlantIds.has(plant.id));
   const allowance = data?.allowance;
@@ -93,7 +117,7 @@ export function PlantTagsPage() {
           title={t('plantTags.title')}
           description={t('plantTags.description')}
           action={
-            tags.length > 0 ? (
+            printable.length > 0 ? (
               <Button
                 variant="primary"
                 onClick={() => window.print()}
@@ -165,7 +189,9 @@ export function PlantTagsPage() {
                   <li key={tag.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-gray-900">{tag.plantName}</p>
-                      <p className="text-xs text-gray-600">{t('plantTags.labelReady')}</p>
+                      <p className="text-xs text-gray-600">
+                        {isPrintable(tag) ? t('plantTags.labelReady') : t('plantTags.labelPrinted')}
+                      </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button
@@ -222,16 +248,27 @@ export function PlantTagsPage() {
             {atCap && <p className="mt-3 text-sm text-amber-700">{t('plantTags.atCap')}</p>}
           </Card>
 
-          {tags.length === 0 ? (
+          {tags.length === 0 && (
             <p className="text-sm text-gray-600 print:hidden">{t('plantTags.empty')}</p>
-          ) : (
+          )}
+          {alreadyPrinted > 0 && (
+            <p className="text-sm text-gray-600 print:hidden">
+              {t('plantTags.printedHidden', { count: alreadyPrinted })}
+            </p>
+          )}
+          {printable.length > 0 && (
             <section aria-label={t('plantTags.sheetLabel')}>
               <p className="mb-3 text-sm text-gray-600 print:hidden">{t('plantTags.sheetHint')}</p>
+              {printingFresh && (
+                <p className="mb-3 text-sm font-medium text-amber-800 print:hidden">
+                  {t('plantTags.sheetOnce')}
+                </p>
+              )}
               {/* The sheet itself. Two columns on paper (and on any screen wide
                   enough); each label is a fixed-aspect card with a generous
                   quiet zone so a phone camera locks on from ~20 cm. */}
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:grid-cols-2 print:gap-3">
-                {tags.map((tag) => (
+                {printable.map((tag) => (
                   <li
                     key={tag.id}
                     className="flex items-center gap-4 rounded-xl border border-gray-300 bg-white p-4 print:break-inside-avoid print:rounded-none print:border-dashed print:shadow-none"

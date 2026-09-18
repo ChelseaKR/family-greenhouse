@@ -80,7 +80,8 @@ import {
   UpdateCommand,
   type QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -243,7 +244,7 @@ const TTL_BUFFER_MS = 3 * 24 * 60 * 60 * 1000;
  * one surface can never resolve on another even if it is pasted there.
  */
 function hashToken(token: string): string {
-  return scryptSync(token, 'family-greenhouse-caretaker-v1', 32).toString('hex');
+  return hashCapabilityToken('caretakerSeat', token);
 }
 
 /** The base row's key, addressed by its partition-key SUFFIX — the token's
@@ -365,10 +366,15 @@ export async function getActiveCaretaker(
   // GetItem on the partition key, so the fallback costs one extra point read
   // on a miss and adds no enumeration surface; and nothing here writes a
   // plaintext row back, so the legacy generation only ever shrinks (every
-  // caretaker row carries a TTL).
-  const item =
-    (await readCaretakerRow(caretakerPk(hashToken(token)))) ??
-    (await readCaretakerRow(caretakerPk(token)));
+  // caretaker row carries a TTL). The fallback only honours a row that still
+  // carries the presented token — without that, a digest from a table export
+  // resolved as a working seat (see `readTokenRow`).
+  const item = await readTokenRow({
+    surface: 'caretakerSeat',
+    token,
+    pk: caretakerPk,
+    read: readCaretakerRow,
+  });
   if (!item) return null;
 
   const caretaker = itemToCaretaker(item);

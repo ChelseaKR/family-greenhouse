@@ -304,7 +304,10 @@ interface PlantSpace {
   updatedAt: string;
 }
 
-/** Mirrors plantService.PlantShare (SHARE#{code} row, 14-day TTL). */
+/** Mirrors plantService.PlantShare (14-day TTL). Production keys the row by
+ *  `SHARE#{scrypt(code)}` with no code on it (#450); this in-memory mock keys
+ *  by the plaintext code, mirroring the API's shape rather than its at-rest
+ *  posture. */
 interface PlantShare {
   code: string;
   plantId: string;

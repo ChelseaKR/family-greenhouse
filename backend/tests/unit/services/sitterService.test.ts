@@ -380,6 +380,26 @@ describe('sitterService — the token is not in the table (#450)', () => {
     expect(legacyGet.input.Key.PK).toBe(`SITTER#${token}`);
   });
 
+  it('a digest lifted from a table export does NOT resolve as a link', async () => {
+    // The digest is 64 lowercase hex — the shape of a token — and
+    // `SITTER#{digest}` is the hashed row's real key, so the legacy fallback
+    // read lands on a live row. Before the guard it was honoured, and every
+    // hashed link in a dump was a working link.
+    const { dynamodb, svc } = await load();
+    const digest = expectedHash('a'.repeat(64));
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hash(digest): no such row
+      .mockResolvedValueOnce(activeRow({ token: undefined, tokenHash: digest }) as never);
+
+    expect(await svc.getActiveLink(digest)).toBeNull();
+    // Sabotage-landed check: the fallback really reached the live hashed row,
+    // so the null is the guard's doing, not a missed read.
+    const fallback = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(fallback.input.Key.PK).toBe(`SITTER#${digest}`);
+  });
+
   it('revokes a hashed row by its hash, not by a token it no longer stores', async () => {
     const { dynamodb, svc } = await load();
     const hash = expectedHash('a'.repeat(64));

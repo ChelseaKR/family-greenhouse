@@ -361,6 +361,45 @@ describe('GET /households/{id}/plant-tags', () => {
     expect(plantService.getPlants).toHaveBeenCalledWith('hh-1', 'all');
   });
 
+  it('lists a hashed-generation tag with no token or url, and never its row key (#450)', async () => {
+    const s = await svc();
+    const plantService = await import('../../../src/services/plantService.js');
+    const digest = 'd'.repeat(64);
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([
+      // What listTags returns for a row written since #450.
+      { ...tag({ token: null }), keyToken: digest },
+    ] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await listPlantTags(
+      authedEvent({ pathParameters: { id: 'hh-1' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    const body = JSON.parse(res.body);
+    expect(body.tags).toHaveLength(1);
+    expect(body.tags[0].token).toBeNull();
+    // Never `/tag/null`: a label printed from that would be dead on arrival.
+    expect(body.tags[0].url).toBeNull();
+    expect(res.body).not.toContain(digest);
+  });
+
+  it('never puts a legacy row’s key in the response either — for it, the key IS the token', async () => {
+    const s = await svc();
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([{ ...tag(), keyToken: TOKEN }] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    const res = (await listPlantTags(
+      authedEvent({ pathParameters: { id: 'hh-1' } }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(JSON.parse(res.body).tags[0].keyToken).toBeUndefined();
+  });
+
   it('reports the ENTITLED allowance, not the plan row, once a card has failed (#476)', async () => {
     // The read side has to report the cap the WRITE side enforces: the print
     // sheet must not offer an allowance `issuePlantTag` would refuse — the
@@ -439,9 +478,30 @@ describe('GET /households/{id}/plant-tags', () => {
       event: 'planttag.listed',
       householdId: 'hh-1',
       actorId: 'user-1',
-      metadata: { tags: 1 },
+      metadata: { tags: 1, tokens: 1 },
     });
     expect(JSON.stringify(audited)).not.toContain(TOKEN);
+    info.mockRestore();
+  });
+
+  it('audits how many tokens actually left: none, once every row is hashed (#450/#451)', async () => {
+    const s = await svc();
+    const plantService = await import('../../../src/services/plantService.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.mocked(s.listActiveTags).mockResolvedValueOnce([
+      { ...tag({ token: null }), keyToken: 'd'.repeat(64) },
+      { ...tag({ id: 'tag-2', token: null }), keyToken: 'e'.repeat(64) },
+    ] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
+
+    const { listPlantTags } = await import('../../../src/handlers/plantTags/handler.js');
+    await listPlantTags(authedEvent({ pathParameters: { id: 'hh-1' } }), ctx, () => {});
+
+    const audited = info.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find((fields) => fields?.event === 'planttag.listed');
+    expect(audited).toMatchObject({ metadata: { tags: 2, tokens: 0 } });
     info.mockRestore();
   });
 

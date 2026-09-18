@@ -396,6 +396,20 @@ describe('kioskService — the token is not in the table (#450)', () => {
     expect(legacyGet.input.Key.PK).toBe(`KIOSK#${TOKEN}`);
   });
 
+  it('a digest lifted from a table export does NOT resolve as a kiosk link', async () => {
+    const { dynamodb, svc } = await load();
+    const digest = expectedHash(TOKEN);
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hash(digest): no such row
+      .mockResolvedValueOnce({ Item: activeRow({ token: undefined, tokenHash: digest }) } as never);
+
+    expect(await svc.getActiveKioskLink(digest)).toBeNull();
+    const fallback = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(fallback.input.Key.PK).toBe(`KIOSK#${digest}`);
+  });
+
   it('revoke-everything-live reaches a hashed row and a legacy row alike', async () => {
     const { dynamodb, svc } = await load();
     const hash = expectedHash(TOKEN);
