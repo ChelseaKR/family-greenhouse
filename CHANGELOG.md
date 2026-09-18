@@ -37,6 +37,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   told it now had Seedling's limits. Both the banner and Settings → Plan
   status now describe the plan the household actually keeps.
 
+- **A reminder now arrives on the day its task is due, not the evening
+  before (#343).** The hourly scan used to name every task due within the
+  next 24 hours, while its one-a-day slot is keyed on the recipient's local
+  date. A task due Tuesday was therefore announced on Monday, again at the
+  first run of Tuesday, and then not at all for the rest of the day it was
+  due. The scan now names a task on the calendar day it falls due in the
+  recipient's own zone (the one quiet hours use), and each day after while it
+  stays overdue. No task is classified differently and no stored value
+  changes. Recipients still on the default `UTC` zone get UTC days, so in the
+  Americas theirs can still land the evening before, once instead of twice.
+  The delivery hour is unchanged: the first hourly run of the due day, or
+  when quiet hours end for email and SMS. The Settings and Help copy that said
+  "due in the next 24 hours" now says what happens. EN/ES.
+
 ## [0.35.0] - 2026-09-17
 
 ### Added

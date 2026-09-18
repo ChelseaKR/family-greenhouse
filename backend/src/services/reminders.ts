@@ -16,8 +16,12 @@
  * morning forever about a list that only grows — see that constant for why
  * that is a bug and not a feature.
  *
- * Spam control: the scan is hourly and the due window is 24h, so the same due
- * task is eligible on every run. A per-user, per-household, per-day dedupe
+ * When: a task is named on the calendar day it falls due, in the recipient's
+ * zone, and on every day after that it stays overdue — never on the day
+ * before. See `isDueByEndOfLocalDay` for why that zone and not another (#343).
+ *
+ * Spam control: the scan is hourly, so the same due task is eligible on every
+ * run of its due day. A per-user, per-household, per-day dedupe
  * marker per delivery channel caps each channel at one reminder for each
  * household per recipient-local calendar day. Each channel is atomically
  * reserved BEFORE delivery, finalized only when that provider accepts the
@@ -71,16 +75,102 @@ import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
 import { resolveEmailLocale } from './email/locale.js';
+import { localDay } from './dueDay.js';
 
-const DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How far past `now` the one household-wide due query reads (#343).
+ *
+ * This is a READ horizon, not the rule. The rule is `isDueByEndOfLocalDay`,
+ * applied per member once their zone is known — and zones are only known after
+ * the member reads this query exists to skip in the common empty hour. So the
+ * query has to return a superset of every recipient's "due by the end of my
+ * today", and the one way to get that wrong is to read too little: a short
+ * read is indistinguishable from a complete one, and the task it drops is not
+ * named on its due day at all (the same failure `dueDay.dueWindowCutoff`
+ * documents).
+ *
+ * The end of a recipient's local day is at most one local day away, and a
+ * local day is not always 24 hours long. A fall-back day is 25, and
+ * `Antarctica/Troll`'s two-hour shift makes one 26 — the longest in the tz
+ * database across every zone and year this product will see (measured over
+ * 2024–2033). 26 hours is therefore the smallest horizon that is never short.
+ * It widens the old 24-hour query by two hours of rows, all of which the
+ * per-member predicate then discards unless they are due today for somebody.
+ */
+const DUE_QUERY_HORIZON_MS = 26 * 60 * 60 * 1000;
+
+/**
+ * Is this task one the recipient should hear about today? True when its due
+ * day is today or earlier, in `timeZone`.
+ *
+ * ## Why this replaced a rolling 24-hour window (#343)
+ *
+ * The scan used to name every task due within `now + 24h`, while the daily
+ * dedupe slot below is keyed on the recipient's LOCAL DATE. Those are two
+ * different definitions of "today", and together they produced the bug:
+ * a task due Tuesday was announced on Monday as soon as it came within 24
+ * hours, spending Monday's slot; announced again at the first tick of Tuesday,
+ * spending Tuesday's; and then nothing for the rest of the day it was actually
+ * due. PR #682 measured it: two sends before the due day was under way, then
+ * silence through the due instant itself.
+ *
+ * The fix is to make the window and the slot agree. The zone here is the same
+ * `timeZone` `localDateKey` keys the slot on, so the one reminder a recipient
+ * gets on day D is about tasks due on day D (or earlier), by the same clock
+ * that says it is day D.
+ *
+ * ## Why the recipient's zone, and not the household's
+ *
+ * ADR 0025 puts the due-date CLASSIFICATION on the household zone, gated on
+ * the household having chosen one (phase 4, not shipped). This is not that:
+ * no task is classified differently — `dueStateFor` is untouched, so every row
+ * still reads "due today", "overdue" or "due in the next 24 hours" exactly as
+ * before. What changes is which day's slot a send is spent on, and the slot
+ * has been per-recipient-local since before ADR 0025. The ADR says in terms
+ * that #343 is "a separate decision about when to send", and `dueDay.ts`
+ * that it "takes no position" on it. Using any zone other than the slot's
+ * would recreate the disagreement this function exists to remove.
+ *
+ * The honest limit: `prefs.timezone` reads `'UTC'` for a recipient who never
+ * had one saved (#342; `notificationPrefs.ts` has no "never chosen" state for
+ * it). For them "today" is the UTC day, so a task due Tuesday morning in New
+ * York is sent at 20:00 Monday local — once, instead of the twice it used to
+ * be, but still on the evening before. That half closes when their zone is
+ * known, not here.
+ *
+ * ## What it does not decide
+ *
+ * The HOUR. The reminder still goes out on the first hourly run of the day on
+ * which a channel is eligible — right after local midnight, or when quiet
+ * hours end for email and SMS. Picking a delivery hour is a product decision
+ * this function does not make.
+ *
+ * A `nextDue` that does not parse is kept (it is `DueState.unknown`, the case
+ * most in need of a human, and ADR 0010 forbids dropping it); so is every
+ * task when `now` is not a real instant, because narrowing on a broken clock
+ * is the direction that loses reminders.
+ */
+export function isDueByEndOfLocalDay(
+  nextDue: string | null | undefined,
+  now: Date,
+  timeZone: string
+): boolean {
+  const dueDay = nextDue ? localDay(nextDue, timeZone) : null;
+  if (dueDay === null) return true;
+  const today = localDay(now, timeZone);
+  if (today === null) return true;
+  // Both are `YYYY-MM-DD` labels, which compare as calendar dates.
+  return dueDay <= today;
+}
 
 /**
  * When a task stops being part of the DAILY reminder (#478).
  *
- * `DUE_WINDOW_MS` above splits "ask before it's late" from "nag after it is",
- * and it has no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
- * cutoff` with no lower bound, so every overdue task is in the window forever,
+ * The due query splits "ask before it's late" from "nag after it is", and it
+ * has no far edge: `taskService.getTasksDueBy` queries `GSI1SK <= cutoff`
+ * with no lower bound, so every overdue task is in the window forever,
  * at any age. The consequence is the opposite of what the rest of this
  * codebase's anti-nag reasoning intends — a household that has fallen behind
  * receives a reminder EVERY morning (a household that is on top of things gets
@@ -459,7 +549,7 @@ async function readReminderClimate(householdId: string): Promise<ReminderClimate
 }
 
 /**
- * Notify each member of one household about tasks due within the next 24h
+ * Notify each member of one household about tasks due today in their own zone
  * (or already overdue): the member's own assigned tasks plus the household's
  * unassigned ones (otherwise unassigned tasks would notify nobody). Returns
  * how many members were sent a reminder.
@@ -468,10 +558,11 @@ export async function remindHousehold(
   householdId: string,
   now: Date = new Date()
 ): Promise<number> {
-  const cutoff = new Date(now.getTime() + DUE_WINDOW_MS).toISOString();
+  const cutoff = new Date(now.getTime() + DUE_QUERY_HORIZON_MS).toISOString();
 
   // One due-window query for the whole household. When nothing is due we
   // skip the member + plant reads entirely — the common case most hours.
+  // The read is a superset; each member's own day is applied below.
   const dueWindowTasks = await taskService.getTasksDueBy(householdId, cutoff);
 
   let due: Task[] = [];
@@ -578,9 +669,21 @@ export async function remindHousehold(
       // vacation mode. Their tasks are in someone else's `mine` below.
       if (vacations.has(member.userId)) continue;
 
-      const mine = fresh.filter((t) => effectiveAssignee(t) === member.userId);
-      const tasksForMember = [...mine, ...unassigned];
-      if (tasksForMember.length === 0) continue;
+      // Nothing in the read is this member's at all: skip before paying for
+      // their prefs row, as before.
+      const mineInRead = fresh.filter((t) => effectiveAssignee(t) === member.userId);
+      if (mineInRead.length === 0 && unassigned.length === 0) continue;
+
+      const memberPrefs = await notificationPrefs.getPreferences(member.userId);
+      const timeZone = memberPrefs.timezone || 'UTC';
+
+      // #343: only what is due by the end of THIS member's today, in the same
+      // zone the daily slot below is keyed on. Anything later in the read is
+      // theirs tomorrow, on its own due day — not today's slot.
+      const dueForMember = (t: Task) => isDueByEndOfLocalDay(t.nextDue, now, timeZone);
+      const mine = mineInRead.filter(dueForMember);
+      const unassignedForMember = unassigned.filter(dueForMember);
+      if (mine.length === 0 && unassignedForMember.length === 0) continue;
 
       // Stated as one number in the body, never listed and never in the
       // subject. Same partition as `mine` / `unassigned`, so a task cannot be
@@ -591,8 +694,6 @@ export async function remindHousehold(
 
       // Keep aggregate markers written by earlier releases authoritative until
       // they age out, then reserve only the still-pending eligible channels.
-      const memberPrefs = await notificationPrefs.getPreferences(member.userId);
-      const timeZone = memberPrefs.timezone || 'UTC';
       if (await hasAggregateReminderMarker(member.userId, householdId, now, timeZone)) {
         continue;
       }
@@ -644,7 +745,7 @@ export async function remindHousehold(
 
       const rows = [
         ...mine.map((t) => rowFor(t, false, memberLocale)),
-        ...unassigned.map((t) => rowFor(t, true, memberLocale)),
+        ...unassignedForMember.map((t) => rowFor(t, true, memberLocale)),
       ].sort(compareRows);
 
       // Tell the cover whose tasks they're picking up, and why. A member row

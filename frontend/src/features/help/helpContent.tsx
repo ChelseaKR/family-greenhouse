@@ -401,8 +401,9 @@ export const HELP_SECTIONS: HelpSection[] = [
             <p>Working from the most common cause down:</p>
             <ul>
               <li>
-                <strong>Nothing was due.</strong> We only remind about tasks due in the next 24
-                hours or already overdue, and only for active plants.
+                <strong>Nothing was due.</strong> We remind you about a task on the day it is due
+                and on each day it stays overdue, never the day before, and only for active plants.
+                &ldquo;The day&rdquo; is in the time zone saved with your notification settings.
               </li>
               <li>
                 <strong>You already got one today.</strong> There is at most one reminder per
@@ -433,7 +434,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'Working from the most common cause down. Nothing was due: we only remind about tasks due in the next 24 hours or already overdue, and only for active plants. You already got one today: there is at most one reminder per person, per household, per channel, per day, and it bundles every due task together rather than pinging per plant. The channel is off: in Settings then Notifications, email is on by default and browser notifications are off until you turn them on and grant permission. Quiet hours pause email and SMS inside your window; nothing is lost, the next hourly pass delivers once the window lifts. An active vacation window suppresses all of your reminders. Browser notifications need more than a tick. The scan runs hourly, so a task that becomes due at 09:05 may be notified at 10:00 rather than immediately.',
+        text: 'Working from the most common cause down. Nothing was due: we remind you about a task on the day it is due and on each day it stays overdue, never the day before, and only for active plants. The day is in the time zone saved with your notification settings. You already got one today: there is at most one reminder per person, per household, per channel, per day, and it bundles every due task together rather than pinging per plant. The channel is off: in Settings then Notifications, email is on by default and browser notifications are off until you turn them on and grant permission. Quiet hours pause email and SMS inside your window; nothing is lost, the next hourly pass delivers once the window lifts. An active vacation window suppresses all of your reminders. Browser notifications need more than a tick. The scan runs hourly, so a task that becomes due at 09:05 may be notified at 10:00 rather than immediately.',
       },
       {
         id: 'browser-notifications',

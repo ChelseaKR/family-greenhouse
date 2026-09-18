@@ -8,8 +8,9 @@
  *
  * **It changes no answer.** Due dates are still ISO instants compared in the
  * Lambda's own zone on every surface — the overdue filter, the 7-day upcoming
- * window, the reminder scan's rolling 24-hour cutoff, the ICS all-day date, the
- * digest's days-overdue. ADR 0025's own phase table says phase 2 changes
+ * window, the ICS all-day date, the digest's days-overdue — and the reminder
+ * scan's send day follows each member's own notification zone (#343), not
+ * this one. ADR 0025's own phase table says phase 2 changes
  * nothing, and the copy below says so to the reader rather than implying a
  * behaviour that has not shipped. Promising "your due dates now follow this
  * zone" before phase 4 would be the more comfortable sentence and would be

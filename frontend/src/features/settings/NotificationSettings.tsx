@@ -586,9 +586,7 @@ export function NotificationSettings() {
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Email</p>
-            <p className="text-sm text-gray-600">
-              Daily roll-up to your account email when tasks are due in the next 24 hours.
-            </p>
+            <p className="text-sm text-gray-600">{t('notifications.emailDescription')}</p>
           </div>
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">Email notifications</span>

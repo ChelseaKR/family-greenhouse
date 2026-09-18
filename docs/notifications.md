@@ -19,7 +19,7 @@ Lambda runReminders
         ▼
 For each member of the household:
   1. Read prefs from DDB (USER#{id} / PREFS)
-  2. Roll up their assigned + unassigned tasks due in the next 24h
+  2. Roll up their assigned + unassigned tasks due today (their zone) or overdue
   3. Compose one payload {title, body, shortBody, url, tag}
      via services/reminderEmail.composeReminderEmail
   4. Reserve each eligible channel's daily delivery marker
@@ -96,9 +96,37 @@ catch-up care, 0 coming up soon`; empty buckets are simply omitted.
   `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
   read of that field when it lands.
 
+### Which day a reminder goes out on (#343)
+
+A task is named on the **calendar day it falls due, in the recipient's zone**,
+and on each day after that while it stays overdue — never on the day before.
+`reminders.isDueByEndOfLocalDay` is the rule.
+
+It replaced a rolling window, `nextDue <= now + 24h`, which disagreed with the
+daily dedupe slot about what "today" is: the slot is keyed on the recipient's
+local date. Together they announced a Tuesday task on Monday as soon as it came
+within 24 hours (spending Monday's slot), again at the first run of Tuesday
+(spending Tuesday's), and then said nothing for the rest of the day it was due.
+The rule now uses the same zone as the slot, so the one reminder a person gets
+on a day is about that day.
+
+- **The zone is `prefs.timezone`**, the one quiet hours and the slot already
+  use, not the household zone of ADR 0025. No task is classified differently;
+  every row still reads exactly as before. A recipient still on the default
+  `'UTC'` (#342) gets UTC days, so in the Americas their reminder can still
+  land on the evening before — once now, where it used to be twice.
+- **The hour is not chosen.** A reminder goes out on the first hourly run of
+  the due day on which a channel is eligible: just after local midnight, or
+  when quiet hours end for email and SMS. Browser push is not held by quiet
+  hours. Choosing a delivery hour is an open product decision on #343.
+- **The query reads 26 hours ahead**, not 24 (`DUE_QUERY_HORIZON_MS`). It has to
+  return everything due by the end of any recipient's today before anyone's
+  zone is known, and the longest local day in the tz database is 26 hours
+  (`Antarctica/Troll`; an ordinary fall-back day is 25).
+
 ### The far edge of the due window
 
-`DUE_WINDOW_MS` gives the reminder a near edge — ask before it's late, nag
+The due query gives the reminder a near edge — ask before it's late, nag
 after. It had no far edge: `taskService.getTasksDueBy` queries `GSI1SK <=
 cutoff` with no lower bound, so every overdue task stayed in the window at any
 age. The result inverted the product's own anti-nag reasoning. A household
@@ -677,17 +705,20 @@ message — which is not delivery, since there is no bounce destination wired ye
 
 ### Why "up for grabs" only looks forward
 
-The daily reminder queries `nextDue <= now + 24h`, which includes everything
-already overdue, and [#427](https://github.com/ChelseaKR/family-greenhouse/pull/427)
+The daily reminder names everything due today in its recipient's zone, and
+everything already overdue, and [#427](https://github.com/ChelseaKR/family-greenhouse/pull/427)
 gives that email its own "Up for grabs" section for the unclaimed rows in it. A
 dedicated email about unclaimed _overdue_ tasks would therefore name the same
 task twice on the same morning, to every member.
 
-So the two are **disjoint by construction**, which is the split #427 proposed:
-the reminder owns everything at or inside its 24-hour window, and this email
-owns `(24h, 7d]` — the unclaimed work nobody is being told about at all.
-`REMINDER_DUE_WINDOW_MS` in `services/householdEmails.ts` is the only place the
-line is encoded, and there is no shared state between the two paths.
+So the two are **disjoint**, which is the split #427 proposed: the reminder
+owns everything due today or overdue, and this email owns `(24h, 7d]` — the
+unclaimed work nobody is being told about at all. The end of a recipient's day
+is at most 24 hours away on every ordinary day, so nothing past 24 hours is in
+that day's reminder; the one exception is the first hour of a 25-hour fall-back
+day. `REMINDER_DUE_WINDOW_MS` in `services/householdEmails.ts` is where this
+email's edge is encoded. It is household-level, with no zone to find a
+recipient's day in, which is why it is a fixed 24 hours.
 
 It is also the better half to own. Asking for a hand _before_ anything is late
 is the anti-nag version of the ask; asking after is the nag.
@@ -698,7 +729,7 @@ forward list of unclaimed work barely changes overnight, so a daily cadence
 would be the same email again. The lookahead equals the cadence on purpose, so
 nothing falls between the two surfaces: a task further out is caught by a later
 weekly pass while still unclaimed, and one that crosses inside 24 hours first is
-caught by the daily reminder that morning.
+caught by the daily reminder on its due day.
 
 **If #427 does not land**, unclaimed overdue tasks stay an anonymous integer in
 the reminder and no email names them. The fix is one constant

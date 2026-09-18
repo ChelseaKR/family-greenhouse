@@ -1211,6 +1211,7 @@
     "title": "Notifications",
     "browser": "Browser",
     "email": "Email",
+    "emailDescription": "A daily roll-up to your account email on the day tasks are due, and each day they stay overdue.",
     "sms": "Text message",
     "deviceTitle": "This device",
     "deviceActive": "Push notifications are enabled on this device.",

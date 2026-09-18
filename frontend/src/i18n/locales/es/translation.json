@@ -1240,6 +1240,7 @@
     "title": "Notificaciones",
     "browser": "Navegador",
     "email": "Correo",
+    "emailDescription": "Un resumen diario en el correo de tu cuenta el día en que vencen tus tareas y cada día que sigan atrasadas.",
     "sms": "Mensaje de texto",
     "deviceTitle": "Este dispositivo",
     "deviceActive": "Las notificaciones push están activadas en este dispositivo.",
