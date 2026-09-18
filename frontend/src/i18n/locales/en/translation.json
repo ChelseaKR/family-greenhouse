@@ -1561,6 +1561,17 @@
     "planAvailableTitle": "What stays available",
     "planAvailableBody": "Signing in gives you access to the plants, tasks, household sharing, and care features included with your existing account. No payment is collected in this app."
   },
+  "connection": {
+    "offlineTitle": "You're offline",
+    "unreachableTitle": "Can't reach Family Greenhouse",
+    "lastSyncedAt": "What you see was last updated at {{time}}.",
+    "lastSyncedOn": "What you see was last updated on {{date}}.",
+    "neverSynced": "Nothing has loaded yet.",
+    "offlineChanges": "Changes you make now are sent once you're back online, as long as the app stays open.",
+    "unreachableChanges": "Changes you make now won't save until Family Greenhouse can be reached again.",
+    "refreshing": "Refreshing",
+    "refreshed": "Updated"
+  },
   "validation": {
     "nameRequired": "Name is required",
     "nameTooLong": "Name is too long",

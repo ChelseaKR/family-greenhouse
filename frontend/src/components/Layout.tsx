@@ -25,6 +25,9 @@ import { billingService, effectivePlanId } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
 import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
+import { ConnectionNotice } from './ConnectionNotice';
+import { PullToRefresh } from './PullToRefresh';
+import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
 import clsx from 'clsx';
 
 /**
@@ -101,6 +104,9 @@ export function Layout() {
   // the top of the card it explains; the banner there would say it twice. The
   // chat route is a full-height composer with no page padding to sit in.
   const showPaymentFailedBanner = !isChatRoute && location.pathname !== '/settings/billing';
+  // Native shells: refetch what's on screen when the app comes back from the
+  // background (a no-op on the web).
+  useNativeResumeRefresh();
 
   const handleLogout = () => {
     logout();
@@ -204,8 +210,12 @@ export function Layout() {
           </div>
         </div>
 
+        {/* Native only, and not on the full-height chat composer, which
+            scrolls inside itself. */}
+        {!isChatRoute && <PullToRefresh />}
         <main className={isChatRoute ? '' : 'py-6'}>
           <div className={isChatRoute ? '' : 'px-4 sm:px-6 lg:px-8'}>
+            {!isChatRoute && <ConnectionNotice />}
             {showPaymentFailedBanner && <PaymentFailedBanner subscription={subscription} />}
             <Outlet />
           </div>

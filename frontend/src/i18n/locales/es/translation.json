@@ -1597,6 +1597,17 @@
     "planAvailableTitle": "Qué sigue disponible",
     "planAvailableBody": "Al iniciar sesión tienes acceso a las plantas, tareas, funciones compartidas del hogar y cuidados incluidos en tu cuenta actual. Esta aplicación no cobra pagos."
   },
+  "connection": {
+    "offlineTitle": "Estás sin conexión",
+    "unreachableTitle": "No se puede conectar con Family Greenhouse",
+    "lastSyncedAt": "Lo que ves se actualizó por última vez a las {{time}}.",
+    "lastSyncedOn": "Lo que ves se actualizó por última vez el {{date}}.",
+    "neverSynced": "Todavía no se ha cargado nada.",
+    "offlineChanges": "Los cambios que hagas ahora se enviarán cuando vuelvas a tener conexión, siempre que la app siga abierta.",
+    "unreachableChanges": "Los cambios que hagas ahora no se guardarán hasta que se pueda conectar de nuevo.",
+    "refreshing": "Actualizando",
+    "refreshed": "Actualizado"
+  },
   "validation": {
     "nameRequired": "El nombre es obligatorio",
     "nameTooLong": "El nombre es demasiado largo",
