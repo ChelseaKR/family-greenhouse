@@ -1150,6 +1150,85 @@
       }
     }
   },
+  "householdChannel": {
+    "title": "Canal de chat del hogar",
+    "description": "Publica el cuidado de las plantas del hogar en el chat que ya usan —Discord, Slack o Matrix— mediante un webhook entrante.",
+    "privacy": "Las publicaciones solo incluyen nombres de plantas, nombres de tareas y fechas; nunca notas privadas, nombres ni correos de personas, ni enlaces para compartir. Todas las personas de ese chat podrán leerlas.",
+    "adminOnly": "Solo las personas administradoras del hogar pueden conectar un canal de chat.",
+    "unavailable": "Las publicaciones en canales de chat todavía no están disponibles.",
+    "loadFailed": "No pudimos comprobar si hay un canal de chat conectado.",
+    "notConnected": "No hay ningún canal de chat conectado.",
+    "connectedTo": "Publicando en {{platform}} en {{masked}}",
+    "lastDelivered": "Última publicación: {{date}}",
+    "platformLabel": "Servicio de chat",
+    "platform": {
+      "discord": "Discord",
+      "slack": "Slack",
+      "matrix": "Matrix"
+    },
+    "urlLabel": "Dirección del webhook entrante",
+    "urlHelp": {
+      "discord": "En Discord: Ajustes del servidor → Integraciones → Webhooks → Nuevo webhook → Copiar URL del webhook.",
+      "slack": "En Slack: crea una app con los webhooks entrantes activados, añádela a un canal y copia la URL del webhook.",
+      "matrix": "Usa un webhook genérico del puente hookshot de tu servidor doméstico. Debe ser una dirección https en un servidor público."
+    },
+    "urlKeepHint": "Déjalo en blanco para conservar la dirección que ya guardaste.",
+    "eventsLegend": "Qué publicar",
+    "events": {
+      "dailyDue": "Cada mañana: el cuidado de plantas que toca hoy o que está atrasado",
+      "upForGrabs": "Una vez por semana: las próximas tareas que nadie ha tomado"
+    },
+    "quietLegend": "Horas de silencio de este canal",
+    "quietStart": "Desde",
+    "quietEnd": "Hasta",
+    "quietHelp": "No se publica nada durante las horas de silencio. La publicación de la mañana sale cuando terminan —o a las 08:00 si no hay ninguna— en la zona horaria {{zone}}.",
+    "quietBothEnds": "Indica el inicio y el final de las horas de silencio, o deja ambos en blanco.",
+    "localeLabel": "Idioma de las publicaciones",
+    "locale": {
+      "en": "Inglés",
+      "es": "Español"
+    },
+    "connect": "Conectar canal",
+    "save": "Guardar cambios",
+    "test": "Enviar un mensaje de prueba",
+    "disconnect": "Desconectar",
+    "saved": "Guardado.",
+    "disconnected": "Desconectado. No se publicará nada más en ese chat.",
+    "testDelivered": "Mensaje de prueba enviado: revisa tu chat.",
+    "testFailed": "El mensaje de prueba no llegó: {{reason}}.",
+    "stoppedTitle": "Hemos dejado de publicar en este chat",
+    "stoppedBody": "Lo hemos detenido porque {{reason}} Para volver a conectarlo, pega de nuevo la dirección del webhook o envía un mensaje de prueba cuando esté solucionado.",
+    "retrying": "La última publicación no llegó ({{reason}}). Lo volveremos a intentar después del {{date}}.",
+    "reason": {
+      "repeated_client_errors": "el servicio de chat rechazó nuestras últimas publicaciones; puede que el webhook se haya eliminado o que su canal se haya archivado.",
+      "redirect": "la dirección del webhook redirige a otro sitio y nunca seguimos redirecciones.",
+      "blocked_address": "la dirección del webhook apunta a una red privada.",
+      "repeated_failures": "las publicaciones llevan varios días fallando."
+    },
+    "failure": {
+      "client": "el servicio de chat la rechazó",
+      "redirect": "la dirección redirige a otro sitio",
+      "rate_limited": "el servicio de chat nos pidió ir más despacio",
+      "server": "el servicio de chat tuvo un error",
+      "network": "no pudimos conectar con el servicio de chat",
+      "blocked": "la dirección apunta a una red privada",
+      "unsealable": "no pudimos leer la dirección guardada"
+    },
+    "urlError": {
+      "not_a_url": "Eso no es una dirección web.",
+      "too_long": "Esa dirección es demasiado larga para ser un webhook.",
+      "not_https": "La dirección del webhook debe empezar por https://.",
+      "has_credentials": "La dirección del webhook no debe incluir un usuario ni una contraseña.",
+      "has_port": "La dirección del webhook no debe indicar un puerto.",
+      "has_query": "Pega la dirección del webhook sin nada detrás de un ? o un #.",
+      "wrong_host": "Esa dirección no es un webhook del servicio de chat que elegiste.",
+      "ip_literal": "Usa el nombre del servidor, no una dirección IP.",
+      "private_host": "Ese servidor apunta a una red privada, así que no podemos publicar en él.",
+      "wrong_path": "Eso no parece un webhook entrante del servicio de chat que elegiste.",
+      "url_required": "Pega la dirección del webhook para conectar este canal.",
+      "unresolvable": "No encontramos ese servidor. Revisa la dirección e inténtalo de nuevo."
+    }
+  },
   "settings": {
     "title": "Ajustes",
     "description": "Administra notificaciones y consulta el estado del plan de tu hogar.",

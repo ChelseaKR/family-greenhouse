@@ -37,6 +37,30 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   (`reply-to-act`, matching `care@`), its invoke permission and a `replies/*`
   S3 grant. No DNS change: the apex MX already routes to SES. ADR 0031.
 
+- **A household chat channel for Discord, Slack or Matrix (#674).** An admin
+  connects one incoming webhook per household (Settings → Notifications), and
+  the household's plant care is posted where the family already talks: a
+  morning list of what is due today or overdue, and a weekly note of upcoming
+  tasks nobody has claimed, in English or Spanish. It rides the hourly reminder
+  Lambda as a fourth pass and keeps the reminder's timing — the morning post
+  goes out when the channel's own quiet hours end, or at 08:00 local, nothing is
+  posted inside quiet hours, and each post is reserved and finalized so it goes
+  out once. Posts carry plant names, task names and due dates only: no notes, no
+  people, no links, with each platform's markup and mentions (`@everyone`,
+  `<!channel>`, `@room`) neutralised. The webhook address is the first secret
+  the server must replay, so it is sealed with a dedicated KMS key bound to the
+  household by encryption context, never returned (settings show host + last
+  four) and never logged (ADR 0032). Addresses are allow-listed per platform,
+  https-only on the default port, and every delivery goes through an SSRF guard
+  on the socket's own DNS answer that refuses private, loopback, link-local and
+  metadata addresses; redirects are never followed. A failing channel backs off
+  1h → 24h and switches itself off after three 4xx in a row (or at once for a
+  private address), telling the admin why on the settings card; a test message
+  that lands reconnects it. Not plan-gated. Infrastructure (a KMS key + alias,
+  an IAM statement, one environment variable on the `households` and
+  `reminders` Lambdas, four routes) is Terraform and takes effect on the next
+  `v*` tag deploy.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

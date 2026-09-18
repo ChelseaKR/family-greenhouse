@@ -29,6 +29,9 @@ vi.mock('@/features/settings/PreferencesSettings', () => ({
 }));
 vi.mock('@/features/settings/ApiKeysSettings', () => ({ ApiKeysSettings: () => <div /> }));
 vi.mock('@/features/settings/KioskSettings', () => ({ KioskSettings: () => <div /> }));
+vi.mock('@/features/settings/HouseholdChannelSettings', () => ({
+  HouseholdChannelSettings: () => <div />,
+}));
 vi.mock('@/features/settings/AccountSettings', () => ({ AccountSettings: () => <div /> }));
 vi.mock('@/features/tags/TagPinSettings', () => ({ TagPinSettings: () => <div /> }));
 

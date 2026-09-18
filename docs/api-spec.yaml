@@ -2139,6 +2139,127 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /households/{id}/channel:
+    get:
+      summary: >-
+        The household chat channel (#674) — a Discord, Slack or Matrix incoming webhook that
+        receives the morning plant-care list and the weekly up-for-grabs post. Admin only. Never
+        returns the webhook address, only `maskedUrl` (host + last four characters).
+        `available: false` means this environment has no sealing key configured.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: The masked channel summary, or null when none is connected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  channel:
+                    nullable: true
+                    allOf:
+                      - $ref: '#/components/schemas/HouseholdChannelSummary'
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      summary: >-
+        Connect, replace or reconfigure the household chat channel (admin only). `url` is
+        required to connect or to change platform and optional otherwise. It must be https,
+        on the default port, with no credentials, query or fragment; Discord only on
+        discord.com/api/webhooks, Slack only on hooks.slack.com/services, Matrix on the
+        admin's own public homeserver ending /webhook/{id}. The host must resolve only to public
+        addresses. The address is sealed with KMS and never returned.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, events, quietStart, quietEnd, timezone, locale]
+              additionalProperties: false
+              properties:
+                platform: { type: string, enum: [discord, slack, matrix] }
+                url: { type: string, maxLength: 512, writeOnly: true }
+                events:
+                  type: object
+                  required: [dailyDue, upForGrabs]
+                  properties:
+                    dailyDue: { type: boolean }
+                    upForGrabs: { type: boolean }
+                quietStart: { type: string, description: 'HH:MM, or empty for no quiet hours' }
+                quietEnd: { type: string, description: 'HH:MM, or empty for no quiet hours' }
+                timezone:
+                  {
+                    type: string,
+                    description: IANA zone the quiet hours and 08:00 default are read in,
+                  }
+                locale: { type: string, enum: [en, es] }
+      responses:
+        '200':
+          description: Saved. The masked summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  channel: { $ref: '#/components/schemas/HouseholdChannelSummary' }
+        '400':
+          description: >-
+            The address was refused. `details.code` names why (not_https, wrong_host, wrong_path,
+            has_query, ip_literal, private_host, unresolvable, url_required, …). The address is
+            never echoed.
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: The channel changed while saving }
+        '503': { description: This environment has no sealing key; nothing was stored }
+    delete:
+      summary: >-
+        Disconnect the household chat channel (admin only). The sealed address is deleted; the
+        next hourly run posts nothing. Always available, key or no key.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '204': { description: Disconnected }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /households/{id}/channel/test:
+    post:
+      summary: >-
+        Post a short test message to the household chat channel now (admin only). Ignores quiet
+        hours; one per household per 30 seconds. A test that lands re-enables a channel that was
+        disconnected after repeated errors; a failed test changes nothing and reports the HTTP
+        status and category, never the response body.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: The test's outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  outcome: { type: string, enum: [delivered, failed] }
+                  failure:
+                    type: object
+                    properties:
+                      kind:
+                        type: string
+                        enum: [client, redirect, rate_limited, server, network, blocked, unsealable]
+                      httpStatus: { type: integer, nullable: true }
+                  channel: { $ref: '#/components/schemas/HouseholdChannelSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { description: A test was sent in the last 30 seconds }
+
   /households/{id}/trash:
     get:
       summary: >-
@@ -3144,6 +3265,38 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    HouseholdChannelSummary:
+      type: object
+      description: >-
+        Everything a settings page may see about a household chat channel (#674). No URL, no
+        ciphertext, no user id.
+      properties:
+        platform: { type: string, enum: [discord, slack, matrix] }
+        maskedUrl: { type: string, example: 'discord.com/…a1B2' }
+        events:
+          type: object
+          properties:
+            dailyDue: { type: boolean }
+            upForGrabs: { type: boolean }
+        quietStart: { type: string }
+        quietEnd: { type: string }
+        timezone: { type: string }
+        locale: { type: string, enum: [en, es] }
+        status: { type: string, enum: [active, disabled] }
+        disabledReason:
+          type: string
+          nullable: true
+          enum: [repeated_client_errors, redirect, blocked_address, repeated_failures]
+        lastFailure:
+          type: object
+          nullable: true
+          properties:
+            at: { type: string, format: date-time }
+            kind: { type: string }
+            httpStatus: { type: integer, nullable: true }
+        lastDeliveredAt: { type: string, format: date-time, nullable: true }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        connectedAt: { type: string, format: date-time }
     CalendarTokenStatus:
       type: object
       properties:

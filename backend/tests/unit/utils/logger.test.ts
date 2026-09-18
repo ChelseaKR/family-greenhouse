@@ -165,6 +165,23 @@ describe('PII redaction', () => {
     expect(line).not.toContain('AAAA');
   });
 
+  it('censors a chat-channel webhook address and its ciphertext (#674)', () => {
+    const { log, lines } = captureLogger();
+    const webhookUrl = 'https://discord.com/api/webhooks/123456789/secret-token-value';
+    log.warn(
+      { webhookUrl, channel: { webhookUrl, sealedUrl: 'AQICAHh-ciphertext' }, kind: 'client' },
+      'household_channel.delivery_failed'
+    );
+    const line = lines[0];
+    const record = JSON.parse(line);
+    expect(record.webhookUrl).toBe('[redacted]');
+    expect(record.channel.webhookUrl).toBe('[redacted]');
+    expect(record.channel.sealedUrl).toBe('[redacted]');
+    expect(record.kind).toBe('client');
+    expect(line).not.toContain('secret-token-value');
+    expect(line).not.toContain('AQICAHh');
+  });
+
   it('does NOT censor actorEmail — the audit trail keeps its actor, deliberately', () => {
     const { log, lines } = captureLogger();
     log.info({ audit: true, event: 'planttag.issued', actorEmail: 'a@b.com' }, 'planttag.issued');

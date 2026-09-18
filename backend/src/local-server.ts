@@ -81,6 +81,13 @@ import {
   KIOSK_MAX_POLL_SECONDS,
   KIOSK_LOOKAHEAD_DAYS,
 } from './models/kiosk.js';
+// Household chat channel (#674): the pure half only, for the same reason.
+import {
+  parseWebhookUrl,
+  saveHouseholdChannelSchema,
+  toChannelSummary,
+  WEBHOOK_URL_PROBLEM_MESSAGES,
+} from './models/householdChannel.js';
 import {
   computeScheduleDrift,
   nextDueAfterMatch,
@@ -695,6 +702,10 @@ export const db = {
   // OPEN#{caretakerId} row in the visit partition.
   caretakerOpenVisits: new Map<string, { visitId: string; lastActionAt: string }>(),
   kioskLinks: new Map<string, KioskLink>(), // keyed by token (the secret)
+  // Household chat channel (#674), keyed by householdId. The mock keeps no
+  // address at all — only what production's summary exposes — because it
+  // never posts anywhere.
+  householdChannels: new Map<string, any>(),
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
   upgradeRequests: new Map<string, { requestedAt: string }>(),
@@ -766,6 +777,7 @@ export function resetDb(): void {
   db.caretakerVisits.clear();
   db.caretakerOpenVisits.clear();
   db.kioskLinks.clear();
+  db.householdChannels.clear();
   db.upgradeRequests.clear();
   db.helpAsks.clear();
   db.mockUploadGrants.clear();
@@ -1399,6 +1411,7 @@ app.delete('/me', authMiddleware, (req, res) => {
       for (const [token, link] of db.kioskLinks.entries()) {
         if (link.householdId === m.householdId) db.kioskLinks.delete(token);
       }
+      db.householdChannels.delete(m.householdId);
       for (const [token, tag] of db.plantTags.entries()) {
         if (tag.householdId === m.householdId) db.plantTags.delete(token);
       }
@@ -3129,6 +3142,135 @@ app.delete(
       actor: { type: 'member', userId: user.userId },
       details: { count: active.length },
     });
+    res.status(204).end();
+  }
+);
+
+// --- Household chat channel (#674) -------------------------------------------
+// Mirrors handlers/households/channelNotifier.ts: admin-only get / save /
+// test / disconnect. The address is validated with production's own
+// allow-list (models/householdChannel.parseWebhookUrl) and then DROPPED: the
+// mock has no KMS, stores only the masked parts, and its "test post" is a
+// dry-run log line that opens no socket (`simulated: true` says so).
+
+function requireChannelAdmin(req: express.Request, res: express.Response): string | null {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    res.status(403).json({ message: 'Access denied' });
+    return null;
+  }
+  return req.params.id;
+}
+
+// GET /households/:id/channel
+app.get('/households/:id/channel', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
+  const householdId = requireChannelAdmin(req, res);
+  if (!householdId) return;
+  const record = db.householdChannels.get(householdId);
+  res.json({ available: true, channel: record ? toChannelSummary(record) : null });
+});
+
+// PUT /households/:id/channel
+app.put(
+  '/households/:id/channel',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  validateBody(saveHouseholdChannelSchema),
+  (req, res) => {
+    const householdId = requireChannelAdmin(req, res);
+    if (!householdId) return;
+    const body = (req as any).validatedBody;
+    const existing = db.householdChannels.get(householdId);
+    const now = new Date().toISOString();
+    const settings = {
+      events: body.events,
+      quietStart: body.quietStart,
+      quietEnd: body.quietEnd,
+      timezone: body.timezone,
+      locale: body.locale,
+    };
+    if (!body.url) {
+      if (!existing || existing.platform !== body.platform) {
+        return res.status(400).json({
+          message: 'Paste the webhook address to connect this channel.',
+          details: { code: 'url_required' },
+        });
+      }
+      const updated = { ...existing, ...settings, updatedAt: now };
+      db.householdChannels.set(householdId, updated);
+      return res.json({ available: true, channel: toChannelSummary(updated) });
+    }
+    const parsed = parseWebhookUrl(body.platform, body.url);
+    if (!parsed.ok) {
+      return res.status(400).json({
+        message: WEBHOOK_URL_PROBLEM_MESSAGES[parsed.problem],
+        details: { code: parsed.problem },
+      });
+    }
+    const record = {
+      householdId,
+      platform: body.platform,
+      sealedUrl: 'local-mock-not-sealed',
+      urlVersion: uuidv4(),
+      host: parsed.host,
+      last4: parsed.last4,
+      ...settings,
+      status: 'active',
+      disabledReason: null,
+      consecutiveFailures: 0,
+      consecutiveClientErrors: 0,
+      nextAttemptAt: null,
+      lastFailure: null,
+      lastDeliveredAt: null,
+      lastTestAt: existing?.lastTestAt ?? null,
+      connectedBy: (req as any).user.userId,
+      connectedAt: now,
+      updatedAt: now,
+    };
+    db.householdChannels.set(householdId, record);
+    res.json({ available: true, channel: toChannelSummary(record) });
+  }
+);
+
+// POST /households/:id/channel/test
+app.post(
+  '/households/:id/channel/test',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireChannelAdmin(req, res);
+    if (!householdId) return;
+    const record = db.householdChannels.get(householdId);
+    if (!record) return res.status(404).json({ message: 'No chat channel is connected.' });
+    const now = new Date().toISOString();
+    Object.assign(record, {
+      status: 'active',
+      disabledReason: null,
+      consecutiveFailures: 0,
+      consecutiveClientErrors: 0,
+      lastFailure: null,
+      lastTestAt: now,
+      lastDeliveredAt: now,
+    });
+    console.log(`[mock] channel_test_dry_run platform=${record.platform}`);
+    res.json({ outcome: 'delivered', simulated: true, channel: toChannelSummary(record) });
+  }
+);
+
+// DELETE /households/:id/channel
+app.delete(
+  '/households/:id/channel',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireChannelAdmin(req, res);
+    if (!householdId) return;
+    if (!db.householdChannels.delete(householdId)) {
+      return res.status(404).json({ message: 'No chat channel is connected.' });
+    }
     res.status(204).end();
   }
 );

@@ -96,7 +96,11 @@ export type ScheduledJob =
   // Household trash purge (services/trashService.ts, #670): once a day,
   // deletes entries past their 30-day window. A skipped household is only
   // purged a day late, so the rotating start is enough.
-  | 'trashPurge';
+  | 'trashPurge'
+  // Household chat-channel posts (services/householdChannelRun.ts, #674):
+  // visits only households with a configured channel, on the hourly
+  // reminder schedule, after the other three passes.
+  | 'householdChannels';
 
 export interface FanOutSummary {
   /** Households enumerated. Unchanged by truncation — it is the denominator

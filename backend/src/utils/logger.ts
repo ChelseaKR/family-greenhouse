@@ -59,6 +59,12 @@ const REDACTED_PATHS = [
   '*.apiKey',
   'imageBase64',
   '*.imageBase64',
+  // A household chat-channel webhook address is a bearer credential (#674).
+  // Nothing logs one; this is the backstop for the day something tries.
+  'webhookUrl',
+  '*.webhookUrl',
+  'sealedUrl',
+  '*.sealedUrl',
   'authorization',
   '*.authorization',
   'headers.authorization',

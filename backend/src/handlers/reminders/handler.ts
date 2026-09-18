@@ -30,6 +30,12 @@
  * workflows publish Lambda code from a fixed list of handler names, so a new
  * function would keep running its placeholder bundle. Riding this one also
  * gives the pass this function's existing per-function error alarm and DLQ.
+ *
+ *   4. `runHouseholdChannels` — the household chat channel (#674,
+ *      `services/householdChannelRun.ts`): the morning list and the weekly
+ *      up-for-grabs post to a household's Discord, Slack or Matrix webhook,
+ *      on the channel's own quiet hours. Last, for the confirm-reminder
+ *      pass's reason: a post that waits an hour loses nothing.
  */
 import { remindAllHouseholds } from '../../services/reminders.js';
 import {
@@ -40,6 +46,10 @@ import {
   runConfirmReminders,
   type ConfirmReminderRunSummary,
 } from '../../services/confirmReminders.js';
+import {
+  runHouseholdChannels,
+  type ChannelRunSummary,
+} from '../../services/householdChannelRun.js';
 import { deadlineFrom } from '../../services/scheduledFanOut.js';
 import { logger } from '../../utils/logger.js';
 
@@ -73,6 +83,8 @@ export interface ReminderRunSummary {
   householdEmails: HouseholdEmailRunSummary | null;
   /** null when the confirm-reminder pass threw outright, for the same reason. */
   confirmReminders: ConfirmReminderRunSummary | null;
+  /** null when the chat-channel pass threw outright, for the same reason. */
+  householdChannels: ChannelRunSummary | null;
 }
 
 export const handler = async (
@@ -108,5 +120,20 @@ export const handler = async (
       'confirm_reminders.run_failed'
     );
   }
-  return { ...reminders, householdEmails, confirmReminders };
+  let householdChannels: ChannelRunSummary | null = null;
+  try {
+    // Last, on whatever is left: it only visits households that connected a
+    // chat channel, and a post squeezed out of this hour goes out the next.
+    // The log line carries the error's name only — never anything that
+    // could hold a webhook address.
+    householdChannels = await runHouseholdChannels(new Date(), {
+      deadlineAt: deadlineFrom(context),
+    });
+  } catch (err) {
+    logger.error(
+      { errorName: (err as Error).name, msg: 'household_channel.run_failed' },
+      'household_channel.run_failed'
+    );
+  }
+  return { ...reminders, householdEmails, confirmReminders, householdChannels };
 };

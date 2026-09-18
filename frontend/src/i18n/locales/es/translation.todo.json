@@ -27,6 +27,9 @@
     "plantSafetyPage.poisonControlLink",
     "plantTags.scan.pinLabel",
     "publicShell.blog",
-    "spaces.seasonalMoveSummary"
+    "spaces.seasonalMoveSummary",
+    "householdChannel.platform.discord",
+    "householdChannel.platform.slack",
+    "householdChannel.platform.matrix"
   ]
 }
