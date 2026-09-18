@@ -141,10 +141,6 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   are in docs/security.md. Deploy note: seven routes on the existing auth
   Lambda (inert), no new Lambda.
 
-## [0.36.0] - 2026-09-17
-
-### Added
-
 - **A household audit log for admins (#675).** The Household page now shows
   admins who changed the household itself, newest first and a page at a time:
   the household being created; members joining, leaving (including by deleting
@@ -170,27 +166,6 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the privacy policy now describes it. Deploy note: one new route in
   `local.routes`, applied by the next `v*` tag; the Stripe webhook gains one
   never-throwing DynamoDB write after the subscription row is applied.
-
-- **A 30-day household trash with restore (#670).** Deleting a plant or a task
-  now moves it to the household's trash instead of erasing it. While it is
-  there it is gone from every surface — lists, the reminder scan, the calendar
-  feed, digests, the sitter / kiosk / tag / share token views, the export and
-  the public API — because its rows leave the live key space and both GSIs
-  rather than carrying a flag every read would have to honour (ADR 0030). Any
-  member can restore it from Settings → Trash for 30 days, or with Undo on the
-  toast right after deleting a plant; a plant comes back with its tasks, photo
-  timeline, care history, plant tag and share link, and its photos move back
-  to the same S3 keys. Restoring an active plant into a household at its cap
-  is refused with the same 402 wording as `POST /plants`; a tag or share link
-  whose issuer has since left, or a share link past its 14-day life, is not
-  revived, and a task whose assignee has since left comes back unassigned.
-  A daily purge on the digests Lambda (`{ "job": "trashPurge" }`) deletes
-  entries past 30 days through the #603 retry-then-throw batch writer and logs
-  per-kind counts; DynamoDB `ttl` and a `trash/` S3 lifecycle rule at 37 days
-  are backstops. `DELETE /me` erases the trash of any household the account
-  was the only member of, regardless of age. Infrastructure, applied by this
-  release's tag: three routes in the households group, one EventBridge rule,
-  one IAM list prefix and one bucket lifecycle rule — no new Lambda.
 
 - **A household can be restored from its own export (#669).** The JSON that
   Settings → Account → Download full data has always produced can now go back
@@ -222,6 +197,31 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   or on an explicit not-restored list. Deploy note: one new route in
   `local.routes` (households group, no new Lambda), applied by the next `v*`
   tag.
+
+## [0.36.0] - 2026-09-17
+
+### Added
+
+- **A 30-day household trash with restore (#670).** Deleting a plant or a task
+  now moves it to the household's trash instead of erasing it. While it is
+  there it is gone from every surface — lists, the reminder scan, the calendar
+  feed, digests, the sitter / kiosk / tag / share token views, the export and
+  the public API — because its rows leave the live key space and both GSIs
+  rather than carrying a flag every read would have to honour (ADR 0030). Any
+  member can restore it from Settings → Trash for 30 days, or with Undo on the
+  toast right after deleting a plant; a plant comes back with its tasks, photo
+  timeline, care history, plant tag and share link, and its photos move back
+  to the same S3 keys. Restoring an active plant into a household at its cap
+  is refused with the same 402 wording as `POST /plants`; a tag or share link
+  whose issuer has since left, or a share link past its 14-day life, is not
+  revived, and a task whose assignee has since left comes back unassigned.
+  A daily purge on the digests Lambda (`{ "job": "trashPurge" }`) deletes
+  entries past 30 days through the #603 retry-then-throw batch writer and logs
+  per-kind counts; DynamoDB `ttl` and a `trash/` S3 lifecycle rule at 37 days
+  are backstops. `DELETE /me` erases the trash of any household the account
+  was the only member of, regardless of age. Infrastructure, applied by this
+  release's tag: three routes in the households group, one EventBridge rule,
+  one IAM list prefix and one bucket lifecycle rule — no new Lambda.
 
 - **A member can leave a household without deleting their account (#686).**
   `POST /households/{id}/leave`, with its own confirm flow on the Household
