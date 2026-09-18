@@ -24,7 +24,7 @@ removed, or left un-synced without this table moving with it.
 
 | Plugin                          | What it backs                                                                                                                                             |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@capacitor/app`                | `appUrlOpen` delivery for iOS Universal Links (`frontend/src/services/nativeDeepLinks.ts`). Android App Links are not wired yet — see "Deep links" below. |
+| `@capacitor/app`                | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below. |
 | `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
 | `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).      |
 | `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                        |
@@ -127,22 +127,16 @@ app.
 capability from the Apple Developer portal the same way Push Notifications
 did (#469 §3) — expect to enable Associated Domains on the App ID and redo the
 Signing & Capabilities dance (or at minimum regenerate/reselect the Release
-provisioning profile) on the next archive. Android is untouched: the only
-`intent-filter` is `MAIN`/`LAUNCHER`, and there is no `assetlinks.json` — that
-file needs the SHA-256 fingerprint of the release/upload signing certificate
-(`keytool -list -v` against the upload keystore, or Play Console → Setup → App
-integrity), which is a maintainer-held value nothing in this repo can derive.
-Until Android's half lands, every link the backend mails — invites, sitter
-links, the `/tasks?filter=due` reminder link, unsubscribe, the calendar feed —
-opens the browser for an Android user who has the app installed, and asks them
-to sign in again. On iOS the same links open the app once a build carrying
-#803 is installed.
+provisioning profile) on the next archive. On iOS every link the backend
+mails — invites, sitter links, the `/tasks?filter=due` reminder link — opens
+the app once a build carrying #803 is installed.
 
-Half of it is worse than none, which is why the remaining Android piece stays
-staged in the same fixed order this section already established: an
-`intent-filter` with `autoVerify="true"` and no matching `assetlinks.json`
-fails verification on Android 12+, so links keep opening the browser while the
-manifest claims otherwise. Tracked in
+**Android: wired in the app, waiting on two Play fingerprints.** The
+`autoVerify` intent-filter is committed and generated from the same claim; the
+`assetlinks.json` it verifies against is generated the moment the Play app
+signing and upload certificates' SHA-256 fingerprints are pasted in. Until
+that file is live, Android keeps opening those links in the browser. See
+"Android App Links" below. Tracked in
 [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) §2.
 
 ### The iOS association file
@@ -160,7 +154,7 @@ a new route nobody claimed (its links keep opening Safari).
 **What is claimed, and what is deliberately not.** The claim is a decision per
 declared route, recorded in `ROUTE_POLICY`; a route App.tsx declares and the
 policy does not classify fails the gate, so "no" is never the silent default.
-24 of the 47 declared routes are claimed by 22 components. The 23 that stay in
+25 of the 48 declared routes are claimed by 23 components. The 23 that stay in
 the browser are the marketing and content pages (including `/pet-safe/:slug`
 and `/gift`, both added after this count was first written), the email-link
 auth routes (`/login`, `/register`, `/confirm-email`, `/reset-password`,
@@ -201,21 +195,101 @@ publish this object. A wrong Team ID is the most expensive defect the file can
 carry: it parses, uploads, caches, and is fetched successfully by Apple while
 every universal link silently keeps opening Safari.
 
-### The serving half is ready; the Android app half is not
+### Android App Links
 
-The deploy and CDN path for both association files is wired and gated, so
-`assetlinks.json` remains a one-file change the day the Android fingerprint
-exists. The iOS app half is now enabled (Associated Domains entitlement,
-`@capacitor/app`, see "Deep links" above); Android's is not — no
-`autoVerify` intent-filter, no invented fingerprint — for the same reason iOS
-waited: half a setup is worse than none.
+**Built, and waiting on two values only the maintainer can supply.** The app
+half is committed: `MainActivity` carries an `android:autoVerify="true"`
+intent-filter for `https://familygreenhouse.net`, and `nativeDeepLinks.ts`
+already turns Android's `appUrlOpen` into an in-app navigation exactly as it
+does on iOS. The serving half is wired and gated. What is missing is the
+SHA-256 fingerprint of the two certificates an installed copy can be signed
+with, which is what `assetlinks.json` names.
 
-**What is ready.** Drop a file at `frontend/public/.well-known/assetlinks.json`
-or `frontend/public/.well-known/apple-app-site-association`, and:
+**The claim is the iOS claim.** The intent-filter lives between
+`android-app-links:start`/`end` markers in `AndroidManifest.xml` and is
+**generated** by `frontend/scripts/build-asset-links.mjs` from the same
+`componentPatterns()` that builds the Apple file: one `<data>` path per iOS
+component, in the same order. `npm run aasa` regenerates both platforms and
+`npm run aasa:check` checks both, so a route cannot start opening the app on
+one platform and not the other. The check evaluates every declared route
+against the committed manifest with Android's own matching rules, because they
+differ from Apple's: Android's `pathPrefix` and `.*` cross `/`, so `/plants/*`
+becomes `pathPrefix="/plants/"`, which also accepts `/plants/a/b`. That
+widening only ever happens below a claimed prefix, and the gate proves no
+public route (`/account-deletion` included) is opened by any Android path.
+Only `familygreenhouse.net` is claimed, the same single domain as the iOS
+entitlement (the gate asserts the two agree): `www.` redirects to the apex,
+and Android's verifier does not follow redirects.
 
-- Both CD workflows and `scripts/deploy.sh` upload it explicitly, with
+**The fingerprints are config, and a placeholder never ships.** They live in
+`SIGNING_CERTIFICATES` in `frontend/scripts/asset-links.mjs`, as
+`SHA256_PENDING_…` sentinels until they are pasted in. While they are pending:
+
+- `npm run aasa` writes the intent-filter but **not** `assetlinks.json`;
+- `npm run aasa:check` fails if an `assetlinks.json` is in the tree anyway
+  (only a hand-written file could be, and a hand-written fingerprint is a
+  guessed one), and fails if only one of the two is set, if both are the same
+  value, or if either is a SHA-1, lowercase, malformed or a one-byte stand-in;
+- `npm run well-known:check` refuses a committed `assetlinks.json` with any of
+  those, or with the wrong package or relation;
+- all three deploy paths grep the built file for `SHA256_PENDING` and exit 1
+  before uploading it.
+
+A wrong fingerprint deploys green and is fetched by Google's verifier with a
+200, and every App Link silently keeps opening the browser, so this is
+refused at every layer rather than trusted at one.
+
+**Why a store build is not refused while they are pending.** Play creates the
+app signing key when the first bundle is uploaded, so the app-signing
+fingerprint cannot exist before that first upload, and refusing the build
+would deadlock it. A bundle built while the values are pending is the status
+quo: on Android 12+ its links open the browser exactly as with no
+intent-filter, older releases offer a chooser, and Android verifies again on
+every update. `npm run mobile:validate` prints that state (a warning in CI, a
+note in `--production`). Once the values are real, `--production` fetches the
+live `https://familygreenhouse.net/.well-known/assetlinks.json` and refuses the
+build unless it is served as `application/json` and matches the committed
+file, so a store build cannot reach devices ahead of the file it verifies
+against.
+
+**Owner steps.**
+
+1. Upload the first signed bundle to a Play testing track, if that has not
+   happened yet (this is what makes Play create the app signing key).
+2. Play Console → **Test and release → App integrity → App signing**. Copy the
+   **SHA-256 certificate fingerprint** from the **App signing key
+   certificate** card and from the **Upload key certificate** card, exactly as
+   shown (uppercase, colon-separated). The upload value can be cross-checked
+   locally with `keytool -list -v -keystore <upload.jks> -alias <alias>`.
+3. Paste them into `SIGNING_CERTIFICATES` in
+   `frontend/scripts/asset-links.mjs` (`playAppSigning`, then `upload`), run
+   `npm run aasa --workspace frontend`. Commit the module and the generated
+   `frontend/public/.well-known/assetlinks.json` in one PR.
+4. After that release deploys, confirm the file is live and that Google
+   agrees:
+
+   ```bash
+   curl -sSI https://familygreenhouse.net/.well-known/assetlinks.json
+   curl -sS "https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://familygreenhouse.net&relation=delegate_permission/common.handle_all_urls"
+   ```
+
+5. Build the next Android release with `npm run mobile:release`; it refuses
+   to continue if the live file does not match. On a device, check with
+   `adb shell pm get-app-links net.familygreenhouse.app` and expect
+   `verified` for `familygreenhouse.net`. To retry verification on a build
+   that was installed before the file went live:
+
+   ```bash
+   adb shell pm verify-app-links --re-verify net.familygreenhouse.app
+   ```
+
+### The serving half
+
+The deploy and CDN path for both association files is wired and gated:
+
+- Both CD workflows and `scripts/deploy.sh` upload each file explicitly, with
   `--content-type application/json` and `max-age=300`. The uploads are guarded
-  on the file existing, so they are no-ops until it does.
+  on the file existing, so the Android one is a no-op until it does.
 - The immutable asset sync excludes `.well-known/*`, so nothing else can claim
   those keys. This matters: before, `assetlinks.json` was excluded from the
   first sync by its `*.json` filter and not picked up by the second sync's
@@ -231,22 +305,9 @@ or `frontend/public/.well-known/apple-app-site-association`, and:
   carrying HTML, which is the difference between Android's verifier reporting
   "not found" and reporting a JSON parse error.
 - `npm run well-known:check` (`scripts/check-well-known.mjs`, a step in
-  `npm run verify`) fails if any of that is removed, or if a file appears in
-  `frontend/public/.well-known/` that the deploy path does not name or that is
-  not valid JSON.
-
-**What is still blocked, and on whom.** One maintainer-held value remains,
-and it cannot be derived from this repository:
-
-| Needed                                                        | Where it comes from                                                                               | What it unblocks                                                       |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| SHA-256 fingerprint of the release/upload signing certificate | `keytool -list -v -keystore <upload.jks> -alias <alias>`, or Play Console → Setup → App integrity | `assetlinks.json`, and only then the `autoVerify="true"` intent-filter |
-
-Apple Team ID, the Associated Domains entitlement, and `@capacitor/app` are
-all done — see "Deep links" above. The order matters for Android the same way
-it mattered for iOS: the association file has to be **live and verifiable at
-the domain first**, then the intent-filter. Reversed, Android 12+ records a
-failed verification and keeps sending links to the browser.
+  `npm run verify` and CI's Lint job) fails if any of that is removed, or if a
+  file appears in `frontend/public/.well-known/` that the deploy path does not
+  name or that is not valid JSON.
 
 ## Build flow
 
@@ -481,8 +542,9 @@ Step 8 of the setup doc is that check, and it comes before
     above). With a build that carries them, tapping a familygreenhouse.net
     link from one of the app's emails (an invite, a sitter link, a task
     reminder) opens the native app instead of Safari. It doesn't help 0.34.0,
-    which predates it. Android App Links still wait on the
-    signing-certificate fingerprint.
+    which predates it. Android App Links are wired too, but verify only once
+    the Play signing-certificate fingerprints are committed and
+    `assetlinks.json` is live; until then do not claim them for Android.
   - **Everything in "Native capabilities" above.** The validator checks that
     table against the installed plugins and both native projects, so it is
     the list to write review notes from. Keep adding to it as native

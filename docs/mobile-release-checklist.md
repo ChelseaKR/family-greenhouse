@@ -44,12 +44,15 @@
 - [ ] Reviewer account is seeded and its credentials are stored only in the store consoles.
 - [ ] Android upload keystore is created, backed up, and exposed through the four `ANDROID_UPLOAD_*` environment variables.
 - [ ] Deep links, in this order — the serving half is wired and gated
-      (`npm run well-known:check`) and the iOS association file has landed, so
-      what is left is the Android fingerprint and the app-side half. See
-      `docs/mobile.md`, "The iOS association file".
-  - [ ] `keytool -list -v` (or Play Console → Setup → App integrity) for the
-        upload certificate's SHA-256 fingerprint → commit
-        `frontend/public/.well-known/assetlinks.json`.
+      (`npm run well-known:check`), the iOS association file has landed, and
+      both app halves are committed, so what is left is the two Android
+      fingerprints. See `docs/mobile.md`, "Android App Links".
+  - [ ] Play Console → Test and release → App integrity → App signing: the
+        SHA-256 of the **app signing** and the **upload** certificates →
+        `SIGNING_CERTIFICATES` in `frontend/scripts/asset-links.mjs` →
+        `npm run aasa --workspace frontend` → commit the generated
+        `frontend/public/.well-known/assetlinks.json`. Play creates the app
+        signing key on the first bundle upload, so this follows that upload.
   - [x] Apple Developer → Membership for the Team ID → commit
         `frontend/public/.well-known/apple-app-site-association`. **Done** —
         the file is generated from `src/App.tsx` (`npm run aasa --workspace
@@ -62,10 +65,13 @@ frontend`) and carries the real Team ID; `npm run aasa:check` and
   - [ ] Deploy, then confirm both URLs return `200 application/json` on the
         live domain before touching the native projects. A missing file now
         answers 404 rather than the app shell, so this is checkable.
-  - [ ] Only then: `@capacitor/app` + `appUrlOpen` handler, the
-        `autoVerify="true"` intent-filter, and the Associated Domains
-        entitlement. Doing these first makes Android 12+ record a failed
-        verification and keep sending links to the browser.
+  - [x] `@capacitor/app` + `appUrlOpen` handler, the Associated Domains
+        entitlement (#803) and the generated `autoVerify="true"`
+        intent-filter. Android verifies at install and again on every update,
+        so a build made before `assetlinks.json` is live falls back to the
+        browser rather than failing for good; once the fingerprints are real,
+        `npm run mobile:release` refuses to build unless the live file matches
+        the committed one.
 - [ ] Xcode 26+, Apple team signing, and the explicit
       `net.familygreenhouse.app` App ID are configured. Xcode 26.6 is
       installed; the bundle identifier is explicit in both build

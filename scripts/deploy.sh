@@ -123,6 +123,21 @@ aws s3 cp frontend/dist/push-handler.js "s3://${FRONTEND_BUCKET}/push-handler.js
 # is a no-op. Kept in step with the two CD workflows — this script has drifted
 # from them before, and the last time it did every prerendered page went up
 # immutable.
+
+# A placeholder signing-certificate fingerprint must never reach the
+# bucket either. `SHA256_PENDING` starts every sentinel in
+# SIGNING_CERTIFICATES (frontend/scripts/asset-links.mjs) until the two
+# SHA-256 values are pasted from Play Console -> Test and release -> App
+# integrity -> App signing. The generator never writes the file while
+# they are pending, so reaching this line means a hand-made file; published
+# as-is it parses and is fetched by Google's verifier with a 200, and every
+# App Link silently keeps opening the browser.
+if [[ -f frontend/dist/.well-known/assetlinks.json ]] && \
+    grep -q "SHA256_PENDING" frontend/dist/.well-known/assetlinks.json; then
+    echo "frontend/dist/.well-known/assetlinks.json still carries a placeholder fingerprint (SHA256_PENDING)." >&2
+    echo "Refusing to publish it: see docs/mobile.md, Android App Links." >&2
+    exit 1
+fi
 if [[ -f frontend/dist/.well-known/assetlinks.json ]]; then
     aws s3 cp frontend/dist/.well-known/assetlinks.json \
         "s3://${FRONTEND_BUCKET}/.well-known/assetlinks.json" \

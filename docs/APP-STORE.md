@@ -282,8 +282,9 @@ each item it raised, re-verified today:
    emails — household invites, sitter links, the task-due reminder link,
    unsubscribe, the calendar feed — still opens the browser today, not the
    app, and asks a user who has the app installed to sign in again. Android
-   is further behind: no fingerprint, no `assetlinks.json`, no
-   intent-filter beyond `MAIN`/`LAUNCHER`.
+   now has its generated `autoVerify` intent-filter, but no
+   `assetlinks.json` until the two Play signing-certificate fingerprints are
+   committed (`docs/mobile.md`, "Android App Links").
 
 3. **Push notifications — not functional, deliberately hidden from the UI.**
    `@capacitor/push-notifications` is the only Capacitor plugin linked in
