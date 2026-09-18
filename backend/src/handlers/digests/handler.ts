@@ -4,11 +4,15 @@
  * export directly, so there's no API Gateway route, no auth middleware and no
  * request parsing. Each returns a small summary surfaced in CloudWatch logs.
  *
- * Two schedules target this module (see the Terraform notes in the digest
+ * Three schedules target this module (see the Terraform notes in the digest
  * feature report / infrastructure/modules/api/main.tf):
  *   - weekly  → `handler.runDigests`    (e.g. cron(0 13 ? * MON *))
  *   - yearly  → `handler.runYearRecap`  (e.g. cron(0 13 2 1 ? *), Jan 2 —
  *     recaps the PREVIOUS calendar year by default)
+ *   - daily   → `handler.runTrashPurge` — not a digest at all: the household
+ *     trash purge (#670, services/trashService.ts). It rides this function
+ *     rather than getting its own so that shipping it adds a schedule, not a
+ *     Lambda (and not an entry in cd-production.yml's hardcoded list).
  *
  * The admin-facing manual triggers live on the notifications HTTP group
  * (`POST /notifications/run-digests`, `POST /notifications/run-year-recap`)
@@ -16,6 +20,10 @@
  */
 import { runWeeklyDigests, runYearRecaps } from '../../services/digest.js';
 import { deadlineFrom } from '../../services/scheduledFanOut.js';
+import {
+  runTrashPurge as purgeTrash,
+  type TrashPurgeRunSummary,
+} from '../../services/trashService.js';
 
 /** The Lambda context, narrowed to the one thing these entry points need: its
  *  own countdown, so the fan-out's deadline tracks the Terraform timeout
@@ -43,15 +51,21 @@ export const runYearRecap = (
     deadlineAt: deadlineFrom(context),
   });
 
+/** Daily household-trash purge: deletes entries past their 30-day window. */
+export const runTrashPurge = (context?: Countdown): Promise<TrashPurgeRunSummary> =>
+  purgeTrash(new Date(), { deadlineAt: deadlineFrom(context) });
+
 /**
  * Default export used by the deployed Lambda (Terraform configures every
  * function as `handler.handler`). EventBridge rules pass a constant input
- * `{ "job": "weekly" }` or `{ "job": "yearRecap", "year"?: number }` to pick
- * the routine; anything else defaults to the weekly digest, matching the
- * higher-frequency schedule.
+ * `{ "job": "weekly" }`, `{ "job": "yearRecap", "year"?: number }` or
+ * `{ "job": "trashPurge" }` to pick the routine; anything else defaults to the
+ * weekly digest, matching the original higher-frequency schedule.
  */
 export const handler = (
   event?: { job?: string; year?: number } | null,
   context?: Countdown
-): Promise<DigestRunSummary & { year?: number }> =>
-  event?.job === 'yearRecap' ? runYearRecap(event, context) : runDigests(context);
+): Promise<(DigestRunSummary & { year?: number }) | TrashPurgeRunSummary> => {
+  if (event?.job === 'trashPurge') return runTrashPurge(context);
+  return event?.job === 'yearRecap' ? runYearRecap(event, context) : runDigests(context);
+};

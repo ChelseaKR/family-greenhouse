@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/plantService.js');
+vi.mock('../../../src/services/trashService.js');
 vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
@@ -952,21 +953,24 @@ describe('plants handler', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
-  it('deletePlant returns 204 on success', async () => {
+  it('deletePlant moves the plant into the household trash and answers 204', async () => {
+    const trashService = await import('../../../src/services/trashService.js');
     const plantService = await import('../../../src/services/plantService.js');
+    const activity = await import('../../../src/services/activity.js');
     const { deletePlant } = await import('../../../src/handlers/plants/handler.js');
-    vi.mocked(plantService.deletePlant).mockResolvedValueOnce({
+    vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
+    vi.mocked(trashService.trashPlant).mockResolvedValueOnce({
+      kind: 'plant',
       id: 'p1',
-      householdId: 'hh-1',
       name: 'Pothos',
-      species: null,
-      location: null,
-      imageUrl: null,
-      notes: null,
-      tags: [],
-      createdAt: '',
-      createdBy: '',
-      updatedAt: '',
+      taskType: null,
+      plantId: 'p1',
+      plantName: 'Pothos',
+      deletedAt: '2026-09-17T00:00:00.000Z',
+      deletedByName: 'Tester',
+      purgeAfter: '2026-10-17T00:00:00.000Z',
+      contents: { tasks: 1, photos: 0, completions: 3 },
+      restoring: false,
     });
     const event = buildEvent({
       httpMethod: 'DELETE',
@@ -974,13 +978,24 @@ describe('plants handler', () => {
     });
     const res = (await deletePlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(204);
-    expect(plantService.deletePlant).toHaveBeenCalledWith('hh-1', 'p1');
+    expect(trashService.trashPlant).toHaveBeenCalledWith('hh-1', 'p1', {
+      userId: 'user-1',
+      name: 'Tester',
+    });
+    // Never the hard delete: that is the purge's and erasure's alone now.
+    expect(plantService.deletePlant).not.toHaveBeenCalled();
+    expect(activity.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'plant.trashed',
+        payload: { plantId: 'p1', plantName: 'Pothos' },
+      })
+    );
   });
 
-  it('deletePlant returns 404 when service reports plant not found', async () => {
-    const plantService = await import('../../../src/services/plantService.js');
+  it('deletePlant returns 404 when there is no live plant to trash', async () => {
+    const trashService = await import('../../../src/services/trashService.js');
     const { deletePlant } = await import('../../../src/handlers/plants/handler.js');
-    vi.mocked(plantService.deletePlant).mockResolvedValueOnce(null);
+    vi.mocked(trashService.trashPlant).mockResolvedValueOnce(null);
     const event = buildEvent({
       httpMethod: 'DELETE',
       pathParameters: { id: 'missing' },

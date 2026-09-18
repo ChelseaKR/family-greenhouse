@@ -11,6 +11,7 @@ import { KioskSettings } from './KioskSettings';
 import { ReferralSettings } from './ReferralSettings';
 import { TagPinSettings } from '@/features/tags/TagPinSettings';
 import { AccountSettings } from './AccountSettings';
+import { TrashSettings } from './TrashSettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
@@ -22,6 +23,7 @@ type Tab =
   | 'refer'
   | 'kiosk'
   | 'api-keys'
+  | 'trash'
   | 'account';
 
 const TABS: Tab[] = [
@@ -32,6 +34,7 @@ const TABS: Tab[] = [
   'refer',
   'kiosk',
   'api-keys',
+  'trash',
   'account',
 ];
 
@@ -43,6 +46,7 @@ const TAB_LABEL: Record<Tab, string> = {
   refer: 'settings.tabs.refer',
   kiosk: 'settings.tabs.kiosk',
   'api-keys': 'settings.tabs.apiKeys',
+  trash: 'settings.tabs.trash',
   account: 'settings.tabs.account',
 };
 
@@ -150,6 +154,7 @@ export function SettingsPage() {
         {tab === 'refer' && <ReferralSettings />}
         {tab === 'kiosk' && <KioskSettings />}
         {tab === 'api-keys' && <ApiKeysSettings />}
+        {tab === 'trash' && <TrashSettings />}
         {tab === 'account' && <AccountSettings />}
       </div>
     </div>

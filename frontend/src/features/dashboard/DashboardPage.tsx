@@ -615,11 +615,26 @@ function ActivityRow({ event }: ActivityRowProps) {
       });
       break;
     }
+    case 'plant.trashed':
+      // Household trash (#670): the plant is restorable for 30 days, so the
+      // feed says "moved to the trash", never "deleted".
+      body = t('activity.plantTrashed', {
+        actor: actorName,
+        plant: event.payload.plantName ?? t('activity.aPlant'),
+      });
+      break;
     case 'plant.archived':
     case 'plant.restored':
     case 'plant.died':
     case 'plant.gave_away': {
       const p = event.payload;
+      if (event.type === 'plant.restored' && event.payload.fromTrash) {
+        body = t('activity.plantRestoredFromTrash', {
+          actor: actorName,
+          plant: p.plantName ?? t('activity.aPlant'),
+        });
+        break;
+      }
       const verb = {
         'plant.archived': 'archived',
         'plant.restored': 'restored',

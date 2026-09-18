@@ -68,6 +68,9 @@ export interface PlantIdentityActivityPayload {
 
 export interface PlantLifecycleActivityPayload extends PlantIdentityActivityPayload {
   previousStatus?: 'active' | 'died' | 'gave_away' | 'archived';
+  /** True when the plant came back out of the household trash (#670) rather
+   *  than out of a lifecycle status. */
+  fromTrash?: boolean;
 }
 
 /** A sitter link opened or closed. Never carries the token — only the
@@ -94,6 +97,8 @@ export interface ActivityPayloadByType {
   'plant.created': PlantIdentityActivityPayload;
   'plants.imported': { count: number };
   'plant.deleted': PlantIdentityActivityPayload;
+  /** Moved into the household trash (#670); restorable for 30 days. */
+  'plant.trashed': PlantIdentityActivityPayload;
   'plant.died': PlantLifecycleActivityPayload;
   'plant.gave_away': PlantLifecycleActivityPayload;
   'plant.archived': PlantLifecycleActivityPayload;
@@ -161,6 +166,7 @@ export const ACTIVITY_TYPES = [
   'plant.created',
   'plants.imported',
   'plant.deleted',
+  'plant.trashed',
   'plant.died',
   'plant.gave_away',
   'plant.archived',

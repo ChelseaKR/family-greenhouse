@@ -83,16 +83,18 @@ Per-handler middlewares (`authMiddleware`, `requireHousehold`, `requireAdmin`, `
 
 One table named `FamilyGreenhouse` with `PK` (string) + `SK` (string) keys, plus two GSIs.
 
-| Entity            | PK                               | SK                     | GSI1PK                    | GSI1SK           | GSI2PK                                             | GSI2SK      |
-| ----------------- | -------------------------------- | ---------------------- | ------------------------- | ---------------- | -------------------------------------------------- | ----------- |
-| Household         | `HOUSEHOLD#{id}`                 | `METADATA`             | —                         | —                | —                                                  | —           |
-| HouseholdMember   | `HOUSEHOLD#{id}`                 | `MEMBER#{userId}`      | `USER#{userId}`           | `HOUSEHOLD#{id}` | —                                                  | —           |
-| HouseholdInvite   | `INVITE#{code}`                  | `METADATA`             | —                         | —                | —                                                  | —           |
-| Plant             | `HOUSEHOLD#{id}`                 | `PLANT#{plantId}`      | —                         | —                | —                                                  | —           |
-| Task              | `HOUSEHOLD#{id}`                 | `TASK#{taskId}`        | `HOUSEHOLD#{id}`          | `{nextDue ISO}`  | `HOUSEHOLD#{id}#ASSIGNEE#{userId}` _(if assigned)_ | `{nextDue}` |
-| TaskCompletion    | `HOUSEHOLD#{id}#PLANT#{plantId}` | `COMPLETION#{ts}#{id}` | `HOUSEHOLD#{id}#ACTIVITY` | `{completedAt}`  | —                                                  | —           |
-| PushSubscription  | `USER#{userId}`                  | `PUSH#{endpointHash}`  | —                         | —                | —                                                  | —           |
-| NotificationPrefs | `USER#{userId}`                  | `PREFS`                | —                         | —                | —                                                  | —           |
+| Entity            | PK                                     | SK                         | GSI1PK                    | GSI1SK           | GSI2PK                                             | GSI2SK      |
+| ----------------- | -------------------------------------- | -------------------------- | ------------------------- | ---------------- | -------------------------------------------------- | ----------- |
+| Household         | `HOUSEHOLD#{id}`                       | `METADATA`                 | —                         | —                | —                                                  | —           |
+| HouseholdMember   | `HOUSEHOLD#{id}`                       | `MEMBER#{userId}`          | `USER#{userId}`           | `HOUSEHOLD#{id}` | —                                                  | —           |
+| HouseholdInvite   | `INVITE#{code}`                        | `METADATA`                 | —                         | —                | —                                                  | —           |
+| Plant             | `HOUSEHOLD#{id}`                       | `PLANT#{plantId}`          | —                         | —                | —                                                  | —           |
+| Task              | `HOUSEHOLD#{id}`                       | `TASK#{taskId}`            | `HOUSEHOLD#{id}`          | `{nextDue ISO}`  | `HOUSEHOLD#{id}#ASSIGNEE#{userId}` _(if assigned)_ | `{nextDue}` |
+| TaskCompletion    | `HOUSEHOLD#{id}#PLANT#{plantId}`       | `COMPLETION#{ts}#{id}`     | `HOUSEHOLD#{id}#ACTIVITY` | `{completedAt}`  | —                                                  | —           |
+| PushSubscription  | `USER#{userId}`                        | `PUSH#{endpointHash}`      | —                         | —                | —                                                  | —           |
+| NotificationPrefs | `USER#{userId}`                        | `PREFS`                    | —                         | —                | —                                                  | —           |
+| TrashEntry        | `HOUSEHOLD#{id}`                       | `TRASH#{PLANT\|TASK}#{id}` | —                         | —                | —                                                  | —           |
+| TrashedRow        | `HOUSEHOLD#{id}#TRASH#PLANT#{plantId}` | `ROW#{origPK}\|{origSK}`   | —                         | —                | —                                                  | —           |
 
 A few access patterns this supports:
 
@@ -107,7 +109,8 @@ There's no `entityType`-only secondary access — everything fans out from a kno
 Service-level guarantees:
 
 - Household creation is a single `TransactWriteCommand` so the household row + admin member row land atomically.
-- Plant deletion cascades to dependent task rows + completion rows via batched `BatchWriteCommand`s in chunks of 25.
+- `DELETE /plants/{id}` and `DELETE /tasks/{id}` move items into the household trash (#670, [ADR 0030](adr/0030-household-trash-moves-rows-out-of-the-live-key-space.md)): the rows leave the live key space and both GSIs — a `TrashEntry` manifest carries the root item, `TrashedRow`s carry a plant's tasks, completions, photo timeline, tag and share rows — and restore puts them back byte-for-byte. Nothing filters trashed rows out; there is nothing left to filter. Both carry a 37-day `ttl` as a backstop to the daily purge.
+- A permanent plant deletion (the trash purge, or account erasure's `plantService.deletePlant`) cascades to dependent rows via batched `BatchWriteCommand`s in chunks of 25, resubmitting anything DynamoDB declines (#603).
 - Invites carry a `ttl` attribute (epoch seconds) so DynamoDB TTL can sweep expired invites; the app code also checks expiry as a defence-in-depth.
 
 ## Auth flow

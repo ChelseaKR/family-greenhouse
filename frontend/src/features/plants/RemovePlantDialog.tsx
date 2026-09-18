@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { TRASH_RETENTION_DAYS } from '@/services/trashService';
 import { Dialog, Transition } from '@headlessui/react';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +15,8 @@ interface RemovePlantDialogProps {
   /** Record an outcome — keeps history, removes from active views, restorable. */
   onDied: () => void;
   onGaveAway: () => void;
-  /** Permanent hard delete — for mistakes/duplicates. Cannot be undone. */
+  /** Delete — for mistakes/duplicates. Moves the plant to the household trash
+   *  (#670), restorable for 30 days; permanent only after that or via Delete now. */
   onDelete: () => void;
 }
 
@@ -107,7 +109,7 @@ export function RemovePlantDialog({
                     disabled={isLoading}
                     className="mt-1 text-sm text-red-700 underline underline-offset-2 hover:text-red-800 disabled:opacity-50 min-h-touch"
                   >
-                    {t('plants.archive.deletePermanently')}
+                    {t('plants.archive.moveToTrash', { days: TRASH_RETENTION_DAYS })}
                   </button>
                 </div>
 

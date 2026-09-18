@@ -50,6 +50,7 @@ import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
+import { trashService, TRASH_RETENTION_DAYS } from '@/services/trashService';
 import { PlantImage } from '@/components/PlantImage';
 import { useSpaces } from '@/hooks/useSpaces';
 import { plantLocationLabel } from '@/utils/spaces';
@@ -112,11 +113,38 @@ export function PlantDetailPage() {
     (completion) => completion.taskType === 'water'
   );
 
+  // Deleting moves the plant into the household trash (#670). The toast
+  // offers Undo; Settings → Trash is the durable route back for 30 days, so
+  // missing the toast never costs the plant. The undo runs after this page
+  // has unmounted, so it closes over nothing but stable values.
   const deleteMutation = useMutation({
     mutationFn: () => plantService.deletePlant(plantId!),
     onSuccess: () => {
+      const deletedId = plantId!;
+      const deletedName = plant?.name ?? '';
+      const trashHousehold = householdId;
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
-      toast.success('Plant deleted');
+      queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      queryClient.invalidateQueries({ queryKey: ['trash', householdId] });
+      toast.success(t('trash.movedToast', { name: deletedName }), {
+        action: trashHousehold
+          ? {
+              label: t('trash.undo'),
+              onAction: () => {
+                trashService
+                  .restore(trashHousehold, 'plant', deletedId)
+                  .then(() => {
+                    queryClient.invalidateQueries({ queryKey: ['plants', trashHousehold] });
+                    queryClient.invalidateQueries({ queryKey: ['tasks', trashHousehold] });
+                    queryClient.invalidateQueries({ queryKey: ['trash', trashHousehold] });
+                    toast.success(t('trash.restoredToast', { name: deletedName }));
+                    navigate(`/plants/${deletedId}`);
+                  })
+                  .catch((err: unknown) => toast.error(getErrorMessage(err)));
+              },
+            }
+          : undefined,
+      });
       navigate('/plants');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -633,7 +661,7 @@ export function PlantDetailPage() {
         onDied={() => statusMutation.mutate('died')}
         onGaveAway={() => statusMutation.mutate('gave_away')}
         onDelete={() => {
-          // Permanent delete gets a second, explicit confirm.
+          // Deleting (into the trash) gets a second, explicit confirm.
           setShowRemove(false);
           setShowDeleteConfirm(true);
         }}
@@ -643,9 +671,9 @@ export function PlantDetailPage() {
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={() => deleteMutation.mutate()}
-        title="Delete plant"
-        message={`Are you sure you want to delete "${plant.name}"? This permanently removes the plant and all its tasks and history. Use "It died" or "I gave it away" instead if you want to keep the record.`}
-        confirmLabel="Delete"
+        title={t('trash.plantConfirmTitle')}
+        message={t('trash.plantConfirmMessage', { name: plant.name, days: TRASH_RETENTION_DAYS })}
+        confirmLabel={t('trash.moveToTrash')}
         isLoading={deleteMutation.isPending}
       />
     </div>

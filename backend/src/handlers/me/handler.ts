@@ -73,7 +73,9 @@ async function wipeSoloHouseholdPlants(householdId: string, members: unknown[]):
 //      accountCleanup.cancelAbandonedHouseholdSubscription).
 //   3. For households where they're the only member, wipe plants (cascading
 //      task/photo cleanup) and revoke the household's API keys — the
-//      household is being abandoned.
+//      household is being abandoned. Its trash (#670) is erased too, whatever
+//      its age: erasure bypasses the 30-day window
+//      (accountCleanup.deleteAbandonedHouseholdData → trashService.purgeAllTrash).
 //   4. Anonymize their identity in retained shared history and clear active
 //      task assignments, then remove their member row from each household.
 //   5. Delete the complete user-scoped partition: notification prefs, phone

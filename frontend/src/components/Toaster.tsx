@@ -94,6 +94,23 @@ export function Toaster() {
           >
             <Icon className={clsx('h-5 w-5 shrink-0', c.iconColor)} aria-hidden="true" />
             <p className={clsx('flex-1 text-sm', c.text)}>{t.message}</p>
+            {t.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  const { onAction } = t.action!;
+                  dismiss(t.id);
+                  onAction();
+                }}
+                className={clsx(
+                  'inline-flex min-h-touch shrink-0 items-center justify-center rounded-sm px-2 text-sm font-semibold underline underline-offset-2',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+                  c.text
+                )}
+              >
+                {t.action.label}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => dismiss(t.id)}

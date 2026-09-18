@@ -570,6 +570,60 @@ interface MockImageObject {
   contentType: string;
 }
 
+/** Mirrors trashService.TRASH_RETENTION_DAYS. */
+const LOCAL_TRASH_RETENTION_DAYS = 30;
+
+/** One entry in the mock household trash (#670). The rows it took with it
+ *  are held here verbatim, keyed as they were in their live maps. */
+interface LocalTrashEntry {
+  kind: 'plant' | 'task';
+  id: string;
+  householdId: string;
+  name: string;
+  taskType: string | null;
+  plantId: string | null;
+  plantName: string | null;
+  deletedAt: string;
+  deletedBy: string;
+  deletedByName: string;
+  purgeAfter: string;
+  plant: Plant | null;
+  task: Task | null;
+  tasks: Array<[string, Task]>;
+  photos: Array<[string, PlantPhoto]>;
+  completions: Array<[string, Completion]>;
+  tags: Array<[string, LocalPlantTag]>;
+  shares: Array<[string, PlantShare]>;
+}
+
+function localTrashKey(householdId: string, kind: 'plant' | 'task', id: string): string {
+  return `${householdId}|${kind}|${id}`;
+}
+
+/** Mirrors trashService.TrashEntrySummary — a projection, never a spread. */
+function localTrashSummary(entry: LocalTrashEntry) {
+  return {
+    kind: entry.kind,
+    id: entry.id,
+    name: entry.name,
+    taskType: entry.taskType,
+    plantId: entry.plantId,
+    plantName: entry.plantName,
+    deletedAt: entry.deletedAt,
+    deletedByName: entry.deletedByName,
+    purgeAfter: entry.purgeAfter,
+    contents:
+      entry.kind === 'plant'
+        ? {
+            tasks: entry.tasks.length,
+            photos: entry.photos.length,
+            completions: entry.completions.length,
+          }
+        : null,
+    restoring: false,
+  };
+}
+
 export const db = {
   users: new Map<string, User>(),
   households: new Map<string, Household>(),
@@ -577,6 +631,11 @@ export const db = {
   plants: new Map<string, Plant>(),
   spaces: new Map<string, PlantSpace>(),
   shares: new Map<string, PlantShare>(),
+  // Household trash (#670), keyed `${householdId}|${kind}|${id}` — mirrors
+  // services/trashService.ts. Rows that went into the trash are held here,
+  // out of every other map, so every mock read excludes them the way the
+  // production key move does.
+  trash: new Map<string, LocalTrashEntry>(),
   tasks: new Map<string, Task>(),
   completions: new Map<string, Completion>(),
   photos: new Map<string, PlantPhoto>(),
@@ -653,6 +712,7 @@ export function resetDb(): void {
   db.plants.clear();
   db.spaces.clear();
   db.shares.clear();
+  db.trash.clear();
   db.tasks.clear();
   db.completions.clear();
   db.photos.clear();
@@ -2312,6 +2372,137 @@ app.get('/households/:id/sitter-links', authMiddleware, requireHousehold, (req, 
   res.json(links);
 });
 
+// ---------------------------------------------------------------------------
+// Household trash (#670) — mirrors handlers/households/trash.ts and
+// services/trashService.ts: list, restore (plant cap applies to an active
+// plant), delete now.
+// ---------------------------------------------------------------------------
+
+// GET /households/:id/trash
+app.get('/households/:id/trash', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const now = Date.now();
+  const entries = [...db.trash.values()]
+    .filter((e) => e.householdId === req.params.id && Date.parse(e.purgeAfter) > now)
+    .sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1))
+    .map(localTrashSummary);
+  res.json({ retentionDays: LOCAL_TRASH_RETENTION_DAYS, entries });
+});
+
+// POST /households/:id/trash/:kind/:itemId/restore
+app.post(
+  '/households/:id/trash/:kind/:itemId/restore',
+  authMiddleware,
+  requireHousehold,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { kind, itemId } = req.params;
+    if (kind !== 'plant' && kind !== 'task') {
+      return res.status(400).json({ message: 'Trash kind must be "plant" or "task"' });
+    }
+    const key = localTrashKey(req.params.id, kind, itemId);
+    const entry = db.trash.get(key);
+    if (!entry) return res.status(404).json({ message: 'That item is not in the trash' });
+    if (Date.parse(entry.purgeAfter) <= Date.now()) {
+      return res.status(410).json({
+        message: `That item was in the trash for more than ${LOCAL_TRASH_RETENTION_DAYS} days and is being deleted permanently.`,
+      });
+    }
+    if (entry.kind === 'plant' && entry.plant) {
+      if ((entry.plant.status ?? 'active') === 'active') {
+        const plan = entitledPlan(user.householdId);
+        const active = [...db.plants.values()].filter(
+          (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
+        );
+        if (atCap(active.length, limitOf(plan, 'plants'))) {
+          return res.status(402).json({
+            message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
+          });
+        }
+      }
+      const memberIds = new Set(membersOf(req.params.id).map((m) => m.userId));
+      db.plants.set(entry.plant.id, entry.plant);
+      for (const [id, task] of entry.tasks) {
+        db.tasks.set(
+          id,
+          task.assignedTo && !memberIds.has(task.assignedTo)
+            ? { ...task, assignedTo: null, assignedToName: null, assignmentSource: null }
+            : task
+        );
+      }
+      for (const [id, photo] of entry.photos) db.photos.set(id, photo);
+      for (const [id, completion] of entry.completions) db.completions.set(id, completion);
+      // Never revive a credential whose issuer has left (#449).
+      for (const [token, tag] of entry.tags) {
+        if (memberIds.has(tag.createdBy)) db.plantTags.set(token, tag);
+      }
+      for (const [code, share] of entry.shares) {
+        if (memberIds.has(share.createdBy) && Date.parse(share.expiresAt) > Date.now()) {
+          db.shares.set(code, share);
+        }
+      }
+      recordActivity({
+        type: 'plant.restored',
+        householdId: user.householdId,
+        actorId: user.userId,
+        actorName: user.name,
+        payload: { plantId: entry.plant.id, plantName: entry.plant.name, fromTrash: true },
+      });
+    } else if (entry.kind === 'task' && entry.task) {
+      if (!db.plants.has(entry.task.plantId)) {
+        const plantInTrash = db.trash.has(
+          localTrashKey(req.params.id, 'plant', entry.task.plantId)
+        );
+        const plant = entry.plantName ? `“${entry.plantName}”` : 'its plant';
+        return res.status(409).json({
+          message: plantInTrash
+            ? `This task belongs to ${plant}, which is in the trash too. Restore the plant first.`
+            : `This task belonged to ${plant}, which has been deleted permanently, so the task can’t come back.`,
+        });
+      }
+      db.tasks.set(entry.task.id, entry.task);
+    }
+    db.trash.delete(key);
+    res.json({ ...localTrashSummary(entry), restoring: false });
+  }
+);
+
+// DELETE /households/:id/trash/:kind/:itemId
+app.delete('/households/:id/trash/:kind/:itemId', authMiddleware, requireHousehold, (req, res) => {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  const { kind, itemId } = req.params;
+  if (kind !== 'plant' && kind !== 'task') {
+    return res.status(400).json({ message: 'Trash kind must be "plant" or "task"' });
+  }
+  const key = localTrashKey(req.params.id, kind, itemId);
+  const entry = db.trash.get(key);
+  if (!entry) return res.status(404).json({ message: 'That item is not in the trash' });
+  db.trash.delete(key);
+  if (kind === 'plant') {
+    // A task trashed on its own can never come back once its plant is gone.
+    for (const [otherKey, other] of db.trash.entries()) {
+      if (other.kind === 'task' && other.plantId === itemId) db.trash.delete(otherKey);
+    }
+    recordActivity({
+      type: 'plant.deleted',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: user.name,
+      payload: { plantId: itemId, plantName: entry.name },
+    });
+  }
+  res.status(204).send();
+});
+
 // DELETE /households/:id/sitter-links/:linkId
 app.delete('/households/:id/sitter-links/:linkId', authMiddleware, requireHousehold, (req, res) => {
   const user = (req as any).user;
@@ -3794,28 +3985,52 @@ app.delete('/plants/:id', authMiddleware, requireHousehold, (req, res) => {
     return res.status(404).json({ message: 'Plant not found' });
   }
 
-  db.plants.delete(req.params.id);
-
-  // A printed plant tag dies with its plant (mirrors the production handler's
-  // best-effort revoke, ADR 0016).
-  for (const tag of db.plantTags.values()) {
-    if (tag.plantId === req.params.id && tag.status === 'active') {
-      tag.status = 'revoked';
-      tag.revokedAt = new Date().toISOString();
+  // Into the trash, with everything that belongs to it (mirrors
+  // trashService.trashPlant): its tasks, photos, completions, printed tags
+  // and share links leave the live maps and come back together on restore.
+  const plantId = plant.id;
+  const now = new Date();
+  const take = <T>(map: Map<string, T>, match: (value: T) => boolean): Array<[string, T]> => {
+    const taken: Array<[string, T]> = [];
+    for (const [key, value] of map.entries()) {
+      if (match(value)) taken.push([key, value]);
     }
-  }
-
-  // Cascade tasks + photos, like plantService.deletePlant.
-  for (const [taskId, task] of db.tasks.entries()) {
-    if (task.plantId === req.params.id) {
-      db.tasks.delete(taskId);
-    }
-  }
-  for (const [photoId, photo] of db.photos.entries()) {
-    if (photo.plantId === req.params.id) {
-      db.photos.delete(photoId);
-    }
-  }
+    for (const [key] of taken) map.delete(key);
+    return taken;
+  };
+  const tasks = take(db.tasks, (t) => t.plantId === plantId);
+  const photos = take(db.photos, (p) => p.plantId === plantId);
+  const completions = take(db.completions, (c) => c.plantId === plantId);
+  const tags = take(db.plantTags, (t) => t.plantId === plantId);
+  const shares = take(db.shares, (sh) => sh.plantId === plantId);
+  db.plants.delete(plantId);
+  db.trash.set(localTrashKey(user.householdId, 'plant', plantId), {
+    kind: 'plant',
+    id: plantId,
+    householdId: user.householdId,
+    name: plant.name,
+    taskType: null,
+    plantId,
+    plantName: plant.name,
+    deletedAt: now.toISOString(),
+    deletedBy: user.userId,
+    deletedByName: user.name,
+    purgeAfter: new Date(now.getTime() + LOCAL_TRASH_RETENTION_DAYS * 86_400_000).toISOString(),
+    plant,
+    task: null,
+    tasks,
+    photos,
+    completions,
+    tags,
+    shares,
+  });
+  recordActivity({
+    type: 'plant.trashed',
+    householdId: user.householdId,
+    actorId: user.userId,
+    actorName: user.name,
+    payload: { plantId, plantName: plant.name },
+  });
 
   res.status(204).send();
 });
@@ -5389,7 +5604,29 @@ app.delete('/tasks/:id', authMiddleware, requireHousehold, (req, res) => {
     return res.status(404).json({ message: 'Task not found' });
   }
 
-  db.tasks.delete(req.params.id);
+  // Into the trash (mirrors trashService.trashTask); its completions stay.
+  const now = new Date();
+  db.tasks.delete(task.id);
+  db.trash.set(localTrashKey(user.householdId, 'task', task.id), {
+    kind: 'task',
+    id: task.id,
+    householdId: user.householdId,
+    name: task.customType || task.type,
+    taskType: task.type,
+    plantId: task.plantId,
+    plantName: db.plants.get(task.plantId)?.name ?? task.plantName ?? null,
+    deletedAt: now.toISOString(),
+    deletedBy: user.userId,
+    deletedByName: user.name,
+    purgeAfter: new Date(now.getTime() + LOCAL_TRASH_RETENTION_DAYS * 86_400_000).toISOString(),
+    plant: null,
+    task,
+    tasks: [],
+    photos: [],
+    completions: [],
+    tags: [],
+    shares: [],
+  });
   res.status(204).send();
 });
 

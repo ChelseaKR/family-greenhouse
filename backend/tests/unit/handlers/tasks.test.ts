@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 
 vi.mock('../../../src/services/taskService.js');
+vi.mock('../../../src/services/trashService.js');
 vi.mock('../../../src/services/askFamily.js');
 vi.mock('../../../src/services/plantService.js');
 vi.mock('../../../src/services/spaceService.js');
@@ -1078,11 +1079,12 @@ describe('tasks handler', () => {
     });
   });
 
-  it('deleteTask 404s and 204s correctly', async () => {
+  it('deleteTask moves the task into the trash (204) and 404s when there is none', async () => {
     const taskService = await import('../../../src/services/taskService.js');
+    const trashService = await import('../../../src/services/trashService.js');
     const { deleteTask } = await import('../../../src/handlers/tasks/handler.js');
 
-    vi.mocked(taskService.deleteTask).mockResolvedValueOnce(false);
+    vi.mocked(trashService.trashTask).mockResolvedValueOnce(null);
     const missing = (await deleteTask(
       buildEvent({ httpMethod: 'DELETE', pathParameters: { id: 'x' } }),
       fakeContext,
@@ -1090,12 +1092,31 @@ describe('tasks handler', () => {
     )) as APIGatewayProxyResult;
     expect(missing.statusCode).toBe(404);
 
-    vi.mocked(taskService.deleteTask).mockResolvedValueOnce(true);
+    vi.mocked(trashService.trashTask).mockResolvedValueOnce({
+      kind: 'task',
+      id: 't1',
+      name: 'water',
+      taskType: 'water',
+      plantId: 'p1',
+      plantName: 'Fern',
+      deletedAt: '2026-09-17T00:00:00.000Z',
+      deletedByName: 'Tester',
+      purgeAfter: '2026-10-17T00:00:00.000Z',
+      contents: null,
+      restoring: false,
+    });
     const ok = (await deleteTask(
       buildEvent({ httpMethod: 'DELETE', pathParameters: { id: 't1' } }),
       fakeContext,
       () => {}
     )) as APIGatewayProxyResult;
     expect(ok.statusCode).toBe(204);
+    expect(trashService.trashTask).toHaveBeenLastCalledWith(
+      'hh-1',
+      't1',
+      expect.objectContaining({ userId: expect.any(String) })
+    );
+    // The row is moved, never erased: the hard delete is not on this path.
+    expect(taskService.deleteTask).not.toHaveBeenCalled();
   });
 });

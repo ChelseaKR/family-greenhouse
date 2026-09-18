@@ -303,6 +303,12 @@ Three blind spots were closed on 2026-09-04, at roughly $0.80/month:
   It was byte-identical, from the outside, to a quiet week. Metric filters over
   the `reminders.run_complete` / `digest.run_complete` / `recap.run_complete`
   lines publish `failed` and `sent`; the alarms fire on a non-zero `failed`.
+  The household-trash purge (#670) rides the digests function, and its
+  `trash.purge_run_complete` line is in the same `*-digests-run-failed` and
+  `*-digests-run-truncated` filters: a failed purge entry stays in the trash
+  for the next run (it is never half-deleted), but a purge that keeps failing
+  would let the 37-day DynamoDB `ttl` and `trash/` lifecycle backstops do the
+  deleting instead of the 30-day job, so it pages the same way.
   `sent` is published but not alarmed on: a "sent must not be zero" alarm needs
   a volume floor the product does not have data for yet, and one that fires on
   a genuinely quiet week gets trained away within a month.

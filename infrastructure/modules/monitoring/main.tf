@@ -476,7 +476,9 @@ resource "aws_cloudwatch_log_metric_filter" "digests_run_failed" {
   log_group_name = var.digests_lambda_log_group_name
   # One filter for both routines the function runs: the weekly digest and the
   # yearly recap share a log group and a failure shape.
-  pattern = "{ ($.msg = \"digest.run_complete\" && $.failed > 0) || ($.msg = \"recap.run_complete\" && $.failed > 0) }"
+  # The household-trash purge (#670) rides the same function and the same
+  # `failed` shape, so a purge that fails for any household pages here too.
+  pattern = "{ ($.msg = \"digest.run_complete\" && $.failed > 0) || ($.msg = \"recap.run_complete\" && $.failed > 0) || ($.msg = \"trash.purge_run_complete\" && $.failed > 0) }"
 
   metric_transformation {
     name          = "DigestsHouseholdsFailed"
@@ -548,7 +550,7 @@ resource "aws_cloudwatch_log_metric_filter" "digests_run_truncated" {
 
   name           = "${var.project_name}-digests-run-truncated-${var.environment}"
   log_group_name = var.digests_lambda_log_group_name
-  pattern        = "{ ($.msg = \"digest.run_complete\" && $.truncated IS TRUE) || ($.msg = \"recap.run_complete\" && $.truncated IS TRUE) }"
+  pattern        = "{ ($.msg = \"digest.run_complete\" && $.truncated IS TRUE) || ($.msg = \"recap.run_complete\" && $.truncated IS TRUE) || ($.msg = \"trash.purge_run_complete\" && $.truncated IS TRUE) }"
 
   metric_transformation {
     name          = "DigestsRunTruncated"

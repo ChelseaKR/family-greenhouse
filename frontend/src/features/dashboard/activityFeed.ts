@@ -16,6 +16,7 @@ const ACTIVITY_CATEGORIES: Record<ActivityType, ActivityCategory> = {
   'plant.created': 'plants',
   'plants.imported': 'plants',
   'plant.deleted': 'plants',
+  'plant.trashed': 'plants',
   'plant.died': 'plants',
   'plant.gave_away': 'plants',
   'plant.archived': 'plants',

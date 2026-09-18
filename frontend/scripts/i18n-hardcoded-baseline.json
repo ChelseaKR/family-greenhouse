@@ -60,7 +60,7 @@
     "features/plants/EditPlantModal.tsx": 1,
     "features/plants/EditTaskModal.tsx": 2,
     "features/plants/PhotoTimeline.tsx": 1,
-    "features/plants/PlantDetailPage.tsx": 6,
+    "features/plants/PlantDetailPage.tsx": 5,
     "features/plants/PlantsPage.tsx": 7,
     "features/plants/SuggestedCareCard.tsx": 1,
     "features/settings/AccountPage.tsx": 2,

@@ -257,13 +257,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/Plant'
     delete:
-      summary: Delete plant
+      summary: >-
+        Move a plant into the household trash (#670). It disappears from every read at once
+        (lists, reminders, calendar feed, digests, sitter/kiosk/tag views, its share links, the
+        export and this API) with its tasks, photos, care history, tag and share links, and can be
+        restored intact for 30 days via POST /households/{id}/trash/plant/{plantId}/restore.
+        Permanent deletion is DELETE /households/{id}/trash/plant/{plantId} or the daily purge.
       tags: [Plants]
       parameters:
         - $ref: '#/components/parameters/PlantId'
       responses:
         '204':
-          description: Plant deleted
+          description: Plant moved to the trash
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /tasks:
     get:
@@ -1240,11 +1246,14 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
-      summary: Delete a task
+      summary: >-
+        Move a task into the household trash (#670), restorable for 30 days. Its past
+        completions stay where they are, as a task deletion always left them.
       tags: [Tasks]
       parameters: [{ $ref: '#/components/parameters/TaskId' }]
       responses:
-        '204': { description: Task deleted }
+        '204': { description: Task moved to the trash }
+        '404': { $ref: '#/components/responses/NotFound' }
   /tasks/upcoming:
     get:
       summary: Tasks due in the near term across the active household
@@ -2086,6 +2095,71 @@ paths:
         '204': { description: Kiosk link revoked }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /households/{id}/trash:
+    get:
+      summary: >-
+        The household trash (#670): deleted plants and tasks still inside their 30-day window,
+        newest deletion first. Any member. A projection — never the stored rows, so a plant's
+        free-text notes and a tag's token never appear here.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+      responses:
+        '200':
+          description: The restorable entries and the retention window
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  retentionDays: { type: integer, example: 30 }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/TrashEntry' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /households/{id}/trash/{kind}/{itemId}/restore:
+    post:
+      summary: >-
+        Restore a trash entry intact — a plant comes back with its tasks, photo timeline, care
+        history, printed tag and share links (a tag or share link whose issuer has since left the
+        household is not revived). Restoring an active plant is adding a plant, so the plan's
+        plant cap applies with the same 402 and wording as POST /plants.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [plant, task] } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrashEntry' }
+        '400': { description: Unknown trash kind }
+        '402': { description: Restoring this plant would exceed the plan's plant cap }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: A task whose plant is in the trash or gone, or an id already live }
+        '410': { description: Past the 30-day window; the purge owns it }
+
+  /households/{id}/trash/{kind}/{itemId}:
+    delete:
+      summary: >-
+        Delete a trash entry permanently now, ahead of its 30 days ("Delete now"). The same purge
+        the daily job runs: rows, then images (every version), then the entry itself last.
+      tags: [Households]
+      parameters:
+        - $ref: '#/components/parameters/HouseholdId'
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [plant, task] } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Deleted permanently }
+        '400': { description: Unknown trash kind }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: A restore of this plant is part-way through; restore it again first }
 
   /households/{id}/upgrade-requests:
     post:
@@ -3444,6 +3518,37 @@ components:
           enum: [admin, member]
           nullable: true
 
+    TrashEntry:
+      type: object
+      description: One entry in the household trash (#670). A projection of the stored entry.
+      properties:
+        kind: { type: string, enum: [plant, task] }
+        id: { type: string }
+        name: { type: string, description: "Plant name, or a task's custom label / type" }
+        taskType: { type: string, nullable: true, description: Task entries only }
+        plantId: { type: string, nullable: true }
+        plantName: { type: string, nullable: true }
+        deletedAt: { type: string, format: date-time }
+        deletedByName: { type: string }
+        purgeAfter:
+          {
+            type: string,
+            format: date-time,
+            description: After this the entry can no longer be restored,
+          }
+        contents:
+          nullable: true
+          type: object
+          description: Plant entries only — what went into the trash with it
+          properties:
+            tasks: { type: integer }
+            photos: { type: integer }
+            completions: { type: integer }
+        restoring:
+          {
+            type: boolean,
+            description: A restore started and did not finish; restoring again completes it,
+          }
     Plant:
       type: object
       properties:

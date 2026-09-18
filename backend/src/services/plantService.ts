@@ -646,7 +646,7 @@ const BATCH_WRITE_MAX_ATTEMPTS = 4;
 const BATCH_WRITE_RETRY_BASE_MS = 50;
 
 /** Type of a `RequestItems` list, and of what comes back unprocessed. */
-type PendingWrites = NonNullable<BatchWriteCommandOutput['UnprocessedItems']>[string];
+export type PendingWrites = NonNullable<BatchWriteCommandOutput['UnprocessedItems']>[string];
 
 function batchWriteRetryDelayMs(step: number): number {
   const ceiling = BATCH_WRITE_RETRY_BASE_MS * 2 ** (step - 1);
@@ -673,14 +673,29 @@ function batchWriteRetryDelayMs(step: number): number {
  * caller can retry is the only honest answer. Mirrors the S3 half of this same
  * cascade, which already fails on `DeleteObjects`' `Errors`.
  */
-async function batchDeleteKeys(
+export async function batchDeleteKeys(
   keys: Array<{ PK: string; SK: string }>,
   context: { householdId: string; plantId: string }
 ): Promise<void> {
-  for (let i = 0; i < keys.length; i += BATCH_WRITE_MAX_ITEMS) {
-    let pending: PendingWrites = keys
-      .slice(i, i + BATCH_WRITE_MAX_ITEMS)
-      .map((Key) => ({ DeleteRequest: { Key } }));
+  await batchWriteWithRetry(
+    keys.map((Key) => ({ DeleteRequest: { Key } })),
+    context
+  );
+}
+
+/**
+ * The resubmit-then-throw loop behind `batchDeleteKeys`, for any mix of
+ * `PutRequest` / `DeleteRequest` writes. The trash (services/trashService.ts)
+ * moves rows with it, and a move that silently dropped a throttled Put would
+ * lose the very history the trash exists to keep (#603's defect, pointed the
+ * other way). Same bounded attempts, same jittered backoff, same loud failure.
+ */
+export async function batchWriteWithRetry(
+  writes: PendingWrites,
+  context: { householdId: string; plantId: string }
+): Promise<void> {
+  for (let i = 0; i < writes.length; i += BATCH_WRITE_MAX_ITEMS) {
+    let pending: PendingWrites = writes.slice(i, i + BATCH_WRITE_MAX_ITEMS);
     for (let attempt = 1; attempt <= BATCH_WRITE_MAX_ATTEMPTS && pending.length > 0; attempt += 1) {
       if (attempt > 1) {
         await new Promise((resolve) => setTimeout(resolve, batchWriteRetryDelayMs(attempt - 1)));
@@ -821,7 +836,7 @@ export async function deletePlant(householdId: string, plantId: string): Promise
  * error. Worst case on a crash between delete and decrement, the counter
  * over-counts by one and the cap is enforced one plant early.
  */
-async function decrementActivePlantCount(householdId: string): Promise<void> {
+export async function decrementActivePlantCount(householdId: string): Promise<void> {
   try {
     await dynamodb.send(
       new UpdateCommand({
@@ -859,59 +874,74 @@ async function decrementActivePlantCount(householdId: string): Promise<void> {
  * (see `docs/production-checklist.md`).
  */
 async function deletePlantImages(householdId: string, plantId: string): Promise<void> {
-  const bucket = optionalEnv('IMAGES_BUCKET');
-  if (!bucket) return;
-
   try {
-    const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-    const prefix = `plants/${householdId}/${plantId}/`;
-    let keyMarker: string | undefined;
-    let versionIdMarker: string | undefined;
-
-    do {
-      const listed = await s3.send(
-        new ListObjectVersionsCommand({
-          Bucket: bucket,
-          Prefix: prefix,
-          KeyMarker: keyMarker,
-          VersionIdMarker: versionIdMarker,
-        })
-      );
-      const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])].flatMap(
-        (object) => {
-          if (typeof object.Key !== 'string') return [];
-          return [
-            {
-              Key: object.Key,
-              ...(typeof object.VersionId === 'string' ? { VersionId: object.VersionId } : {}),
-            },
-          ];
-        }
-      );
-
-      // DeleteObjects accepts at most 1000 identifiers; ListObjectVersions
-      // already pages at 1000 combined versions/delete markers.
-      if (objects.length > 0) {
-        const deleted = await s3.send(
-          new DeleteObjectsCommand({
-            Bucket: bucket,
-            Delete: { Objects: objects, Quiet: true },
-          })
-        );
-        if (deleted.Errors?.length) {
-          throw new Error(`S3 rejected ${deleted.Errors.length} image version deletion(s)`);
-        }
-      }
-
-      keyMarker = listed.IsTruncated ? listed.NextKeyMarker : undefined;
-      versionIdMarker = listed.IsTruncated ? listed.NextVersionIdMarker : undefined;
-    } while (keyMarker || versionIdMarker);
+    await deleteAllImageVersions(`plants/${householdId}/${plantId}/`);
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, householdId, plantId },
       'plant.image_cleanup_failed'
     );
   }
+}
+
+/**
+ * Permanently remove every version and delete marker under `prefix` in the
+ * images bucket, and return how many identifiers were deleted. A no-op
+ * returning 0 when `IMAGES_BUCKET` is not configured (local dev, tests).
+ *
+ * THROWS on a listing failure or on any `DeleteObjects` error; the caller
+ * decides whether that is fatal. `deletePlantImages` above swallows it (the
+ * rows are already gone); the trash purge counts it.
+ */
+export async function deleteAllImageVersions(prefix: string): Promise<number> {
+  const bucket = optionalEnv('IMAGES_BUCKET');
+  if (!bucket) return 0;
+
+  const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+  let keyMarker: string | undefined;
+  let versionIdMarker: string | undefined;
+  let removed = 0;
+
+  do {
+    const listed = await s3.send(
+      new ListObjectVersionsCommand({
+        Bucket: bucket,
+        Prefix: prefix,
+        KeyMarker: keyMarker,
+        VersionIdMarker: versionIdMarker,
+      })
+    );
+    const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])].flatMap(
+      (object) => {
+        if (typeof object.Key !== 'string') return [];
+        return [
+          {
+            Key: object.Key,
+            ...(typeof object.VersionId === 'string' ? { VersionId: object.VersionId } : {}),
+          },
+        ];
+      }
+    );
+
+    // DeleteObjects accepts at most 1000 identifiers; ListObjectVersions
+    // already pages at 1000 combined versions/delete markers.
+    if (objects.length > 0) {
+      const deleted = await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: objects, Quiet: true },
+        })
+      );
+      if (deleted.Errors?.length) {
+        throw new Error(`S3 rejected ${deleted.Errors.length} image version deletion(s)`);
+      }
+      removed += objects.length;
+    }
+
+    keyMarker = listed.IsTruncated ? listed.NextKeyMarker : undefined;
+    versionIdMarker = listed.IsTruncated ? listed.NextVersionIdMarker : undefined;
+  } while (keyMarker || versionIdMarker);
+  return removed;
 }
 
 export interface PlantPhoto {
@@ -1140,11 +1170,13 @@ export interface PlantShare {
   householdId: string;
   /**
    * Frozen copy of the plant card taken at share time. Sharing a SNAPSHOT
-   * (not a live reference) means later edits or even deletion of the source
-   * plant never break an already-shared link — the recipient sees the card
-   * as it was when it was shared. (The imageUrl may stop resolving if the
-   * source plant is hard-deleted and its S3 prefix swept; the preview just
-   * falls back to the placeholder.)
+   * (not a live reference) means later edits of the source plant never break
+   * an already-shared link — the recipient sees the card as it was when it
+   * was shared. Deleting the source plant is different: the share row moves
+   * into the household trash with the plant (services/trashService.ts), so
+   * the link stops resolving while the plant is in the trash, answers again
+   * if it is restored inside its own 14-day life, and is erased with it on
+   * purge.
    */
   plantSnapshot: PlantShareSnapshot;
   createdBy: string;

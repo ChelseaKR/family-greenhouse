@@ -31,6 +31,8 @@ import {
   TaskFilters,
 } from '../../models/schemas.js';
 import * as taskService from '../../services/taskService.js';
+import * as trashService from '../../services/trashService.js';
+import { audit } from '../../utils/auditLog.js';
 import * as askFamily from '../../services/askFamily.js';
 import * as plantService from '../../services/plantService.js';
 import * as spaceService from '../../services/spaceService.js';
@@ -338,10 +340,25 @@ export const deleteTask = createHandler(
       throw createHttpError(400, 'Task ID is required');
     }
 
-    const deleted = await taskService.deleteTask(user.householdId!, taskId);
-    if (!deleted) {
+    // Into the household trash (#670), not gone: restorable for 30 days from
+    // Settings → Trash, and invisible to every read meanwhile because the row
+    // has left the TASK# key space (services/trashService.ts).
+    const member = await householdService.getMemberByUserId(user.householdId!, user.userId);
+    const entry = await trashService.trashTask(user.householdId!, taskId, {
+      userId: user.userId,
+      name: member?.name || 'Someone',
+    });
+    if (!entry) {
       throw createHttpError(404, 'Task not found');
     }
+
+    audit('task.trashed', {
+      actorId: user.userId,
+      actorEmail: user.email,
+      targetId: taskId,
+      householdId: user.householdId ?? undefined,
+      metadata: { plantId: entry.plantId, purgeAfter: entry.purgeAfter },
+    });
 
     return noContentResponse();
   }
