@@ -49,7 +49,12 @@ export type SignInState =
 export type SignInOutcome =
   | { kind: 'signedIn'; auth: AuthResponse }
   | { kind: 'needsCode'; state: Extract<SignInState, { step: 'code' }> }
-  | { kind: 'wrongCode'; state: Extract<SignInState, { step: 'code' }> };
+  | { kind: 'wrongCode'; state: Extract<SignInState, { step: 'code' }> }
+  /**
+   * A fresh challenge is needed but there are no credentials to get one with
+   * (the code step followed a passkey, not a password): start over.
+   */
+  | { kind: 'restart' };
 
 export type MfaErrorCode =
   | 'REAUTH_FAILED'
@@ -57,7 +62,13 @@ export type MfaErrorCode =
   | 'MFA_SESSION_EXPIRED'
   | 'TOTP_ALREADY_ENABLED'
   | 'TOTP_SETUP_NOT_STARTED'
-  | 'UNSUPPORTED_CHALLENGE';
+  | 'UNSUPPORTED_CHALLENGE'
+  // Passkeys (backend/src/models/passkeys.ts).
+  | 'PASSKEYS_DISABLED'
+  | 'NO_PASSKEY'
+  | 'PASSKEY_REJECTED'
+  | 'PASSKEY_EXPIRED'
+  | 'CODE_REQUIRED';
 
 const MFA_ERROR_CODES: ReadonlySet<string> = new Set<MfaErrorCode>([
   'REAUTH_FAILED',
@@ -66,6 +77,11 @@ const MFA_ERROR_CODES: ReadonlySet<string> = new Set<MfaErrorCode>([
   'TOTP_ALREADY_ENABLED',
   'TOTP_SETUP_NOT_STARTED',
   'UNSUPPORTED_CHALLENGE',
+  'PASSKEYS_DISABLED',
+  'NO_PASSKEY',
+  'PASSKEY_REJECTED',
+  'PASSKEY_EXPIRED',
+  'CODE_REQUIRED',
 ]);
 
 /** The `details.code` of a two-step-verification refusal, or null. */
@@ -103,7 +119,8 @@ export async function submitCredentials(
  */
 export async function submitCode(
   api: SignInApi,
-  credentials: LoginCredentials,
+  /** Null when the challenge followed a passkey sign-in (no password held). */
+  credentials: LoginCredentials | null,
   state: Extract<SignInState, { step: 'code' }>,
   rawCode: string
 ): Promise<SignInOutcome> {
@@ -113,6 +130,7 @@ export async function submitCode(
 
   const rechallenge = async (): Promise<SignInOutcome | null> => {
     rechallenged = true;
+    if (!credentials) return { kind: 'restart' };
     const fresh = await api.login(credentials);
     if (!isMfaChallenge(fresh)) return { kind: 'signedIn', auth: fresh };
     challenge = fresh;

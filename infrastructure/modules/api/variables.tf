@@ -490,3 +490,9 @@ variable "posthog_host" {
   type        = string
   default     = ""
 }
+
+variable "passkeys_enabled" {
+  description = "Sets PASSKEYS_ENABLED=1 on the auth Lambda (#671). Wired from the root passkeys_enabled, the same switch that configures the user pool, so the routes and the pool cannot disagree."
+  type        = bool
+  default     = false
+}

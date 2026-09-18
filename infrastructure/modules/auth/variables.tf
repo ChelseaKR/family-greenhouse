@@ -43,3 +43,15 @@ variable "custom_message_function_name" {
   type        = string
   default     = ""
 }
+
+variable "passkeys_enabled" {
+  description = "Turn on Cognito passkey (WebAuthn) sign-in (#671). OFF by default and in every committed tfvars: the owner flips it after reading the plan, which must show aws_cognito_user_pool.main as `~ update in-place` (web_authn_configuration and sign_in_policy are not ForceNew in provider 6.54) — never `-/+ replace`. Needs passkey_relying_party_id."
+  type        = bool
+  default     = false
+}
+
+variable "passkey_relying_party_id" {
+  description = "WebAuthn relying-party ID for passkeys: the site's registrable domain (e.g. familygreenhouse.net). The browser only offers a passkey on this domain and its subdomains. Required when passkeys_enabled."
+  type        = string
+  default     = ""
+}

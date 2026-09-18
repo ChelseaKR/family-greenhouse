@@ -181,3 +181,17 @@ stripe_automatic_tax_enabled = ""
 # Opened 2026-09-02, after the v0.23.2 deploy wired the live price ids and
 # proved the Stripe webhook secret reached the Lambda.
 payments_enabled = "1"
+
+# Passkeys (#671) — Cognito native WebAuthn sign-in. OFF. The code, routes and
+# UI ship with it off and stay inert (404 PASSKEYS_DISABLED, no passkey control
+# shown) until this is true. Before flipping it:
+#   1. Read the plan: aws_cognito_user_pool.main must be `~ update in-place`
+#      (web_authn_configuration + sign_in_policy), the app client gains
+#      ALLOW_USER_AUTH, and the auth Lambda gains PASSKEYS_ENABLED=1. If the
+#      pool shows `-/+` (replace), STOP: that would recreate every account.
+#   2. No tier or price change: the pool is already PLUS, which includes
+#      passkeys.
+# The relying-party ID is the apex domain the web app is served from, so a
+# passkey made on familygreenhouse.net works there (and on subdomains).
+passkeys_enabled         = false
+passkey_relying_party_id = "familygreenhouse.net"

@@ -641,7 +641,9 @@ locals {
   })
 
   handler_integration_environment = {
-    auth   = {}
+    # Passkeys (#671): the variable is added only when on, so with it off the
+    # auth Lambda's environment — and the plan — is unchanged.
+    auth   = var.passkeys_enabled ? { PASSKEYS_ENABLED = "1" } : {}
     plants = merge(local.plant_integration_environment, local.perenual_environment, local.identify_top_up_offer_environment)
     tasks  = {}
     # Email for the welcome mail + member upgrade requests; VAPID so the
@@ -1075,6 +1077,15 @@ locals {
     "POST /auth/mfa/totp/setup"   = { group = "auth", auth = "jwt" }
     "POST /auth/mfa/totp/verify"  = { group = "auth", auth = "jwt" }
     "POST /auth/mfa/totp/disable" = { group = "auth", auth = "jwt" }
+    # Passkeys (#671). Inert until passkeys_enabled: the handlers answer 404
+    # PASSKEYS_DISABLED without PASSKEYS_ENABLED=1 on the auth Lambda.
+    "GET /auth/passkeys/available"         = { group = "auth", auth = "none" }
+    "POST /auth/login/passkey/start"       = { group = "auth", auth = "none" }
+    "POST /auth/login/passkey/finish"      = { group = "auth", auth = "none" }
+    "GET /auth/passkeys"                   = { group = "auth", auth = "jwt" }
+    "POST /auth/passkeys/register/start"   = { group = "auth", auth = "jwt" }
+    "POST /auth/passkeys/register/finish"  = { group = "auth", auth = "jwt" }
+    "DELETE /auth/passkeys/{credentialId}" = { group = "auth", auth = "jwt" }
 
     # --- household plant spaces + plants ---
     "GET /spaces"                     = { group = "plants", auth = "jwt" }

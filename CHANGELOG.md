@@ -124,6 +124,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the existing auth Lambda in `local.routes`, applied by the next release tag;
   no user-pool change and no new Lambda.
 
+- **Passkeys, built and switched OFF (#671, the second half).** Settings →
+  Security can add, list and remove passkeys, and the sign-in page offers "Use a
+  passkey", all on Cognito's native WebAuthn: Cognito issues the options,
+  verifies attestation and signatures, and stores the keys; the app moves the
+  WebAuthn JSON (converted by hand in `lib/webauthn.ts`, so browsers older than
+  the `parse*FromJSON` APIs still work). Adding a passkey re-authenticates
+  (password, plus a code when an authenticator app is on). **Inert until the
+  owner applies it:** one Terraform switch, `passkeys_enabled` (default
+  `false`), configures the pool's `web_authn_configuration` and `WEB_AUTHN`
+  sign-in factor, the client's `ALLOW_USER_AUTH`, and `PASSKEYS_ENABLED=1` on
+  the auth Lambda; with it off the plan is empty, the routes answer 404
+  `PASSKEYS_DISABLED`, and no passkey control is shown. No cost: the pool is
+  already on PLUS. The native iOS/Android shells never show passkeys (the
+  WebView is not on the relying party's origin); the owner steps to lift that
+  are in docs/security.md. Deploy note: seven routes on the existing auth
+  Lambda (inert), no new Lambda.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

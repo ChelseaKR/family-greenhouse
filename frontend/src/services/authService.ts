@@ -61,6 +61,38 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Whether this deployment offers passkeys (#671). Public and cacheable;
+   * false until the owner turns them on. Callers ask only where a passkey
+   * could run at all (lib/webauthn.ts `passkeysUsableHere`).
+   */
+  async passkeysAvailable(): Promise<boolean> {
+    const response = await api.get<{ available: boolean }>('/auth/passkeys/available');
+    return response.data.available === true;
+  },
+
+  async startPasskeySignIn(email: string): Promise<{
+    session: string;
+    username: string;
+    options: Record<string, unknown>;
+  }> {
+    const response = await api.post<{
+      session: string;
+      username: string;
+      options: Record<string, unknown>;
+    }>('/auth/login/passkey/start', { email });
+    return response.data;
+  },
+
+  async finishPasskeySignIn(input: {
+    username: string;
+    session: string;
+    credential: Record<string, unknown>;
+  }): Promise<LoginResult> {
+    const response = await api.post<LoginResult>('/auth/login/passkey/finish', input);
+    return response.data;
+  },
+
   /** The second sign-in step: answer the authenticator-code challenge. */
   async completeMfaSignIn(input: {
     username: string;

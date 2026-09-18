@@ -75,6 +75,12 @@ backend "production live" rather than "production-ready in code".
       needs only the five `/auth/login/mfa` + `/auth/mfa/*` routes applied —
       no pool change. Before the App Store review build, confirm the review
       demo account does NOT have two-step verification on.
+- [ ] **Passkeys (#671) — off until decided.** `passkeys_enabled` is `false`
+      in every committed tfvars. To turn on: set it `true` in production, run
+      the plan, and confirm `aws_cognito_user_pool.main` is an in-place update
+      (web_authn_configuration + sign_in_policy), the client gains
+      `ALLOW_USER_AUTH`, and the auth Lambda gains `PASSKEYS_ENABLED=1`. A
+      replace (`-/+`) on the pool means stop. No tier or price change (PLUS).
 - [ ] **API Gateway throttling apply check** — the HTTP API stage is configured
       at 100 burst / 50 requests per second; `/auth/*` also has the tighter
       application per-IP limiter. Verify the stage values after apply.

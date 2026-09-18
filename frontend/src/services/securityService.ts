@@ -21,6 +21,15 @@ export interface MfaStatus {
   totp: { enabled: boolean };
 }
 
+/** One registered passkey (#671). */
+export interface PasskeySummary {
+  id: string;
+  name: string;
+  createdAt: string | null;
+  /** 'platform' (a device's keychain) | 'cross-platform' (a security key) | null */
+  attachment: string | null;
+}
+
 function accessTokenHeader(): Record<string, string> {
   const accessToken = useAuthStore.getState().accessToken;
   return accessToken ? { 'X-Cognito-Access-Token': accessToken } : {};
@@ -76,6 +85,49 @@ export const securityService = {
   async disableTotp(password: string, code: string): Promise<MfaStatus> {
     return withTokenRetry(
       async () => (await api.post<MfaStatus>('/auth/mfa/totp/disable', { password, code })).data
+    );
+  },
+
+  // --- Passkeys (#671). Every call below 404s PASSKEYS_DISABLED until the
+  // deployment turns them on; callers check `passkeysAvailable` first.
+
+  async listPasskeys(): Promise<PasskeySummary[]> {
+    return withTokenRetry(
+      async () =>
+        (
+          await api.get<{ passkeys: PasskeySummary[] }>('/auth/passkeys', {
+            headers: accessTokenHeader(),
+          })
+        ).data.passkeys
+    );
+  },
+
+  /** Re-authenticates (password, plus a code when TOTP is on); returns creation options. */
+  async startPasskeyRegistration(
+    password: string,
+    code?: string
+  ): Promise<{ options: Record<string, unknown> }> {
+    return withTokenRetry(
+      async () =>
+        (
+          await api.post<{ options: Record<string, unknown> }>(
+            '/auth/passkeys/register/start',
+            code ? { password, code } : { password },
+            { headers: accessTokenHeader() }
+          )
+        ).data
+    );
+  },
+
+  async finishPasskeyRegistration(credential: Record<string, unknown>): Promise<void> {
+    await withTokenRetry(() =>
+      api.post('/auth/passkeys/register/finish', { credential }, { headers: accessTokenHeader() })
+    );
+  },
+
+  async deletePasskey(id: string): Promise<void> {
+    await withTokenRetry(() =>
+      api.delete(`/auth/passkeys/${encodeURIComponent(id)}`, { headers: accessTokenHeader() })
     );
   },
 };

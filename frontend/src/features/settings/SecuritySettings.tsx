@@ -19,6 +19,9 @@ import { useAuthStore } from '@/store/authStore';
 import { isNativeApp } from '@/lib/platform';
 import { normalizeCode, readMfaErrorCode } from '@/features/auth/signInFlow';
 import { QrCode } from './QrCode';
+import { PasskeySettings } from './PasskeySettings';
+import { authService } from '@/services/authService';
+import { passkeysUsableHere } from '@/lib/webauthn';
 
 const STATUS_KEY = ['mfa-status'] as const;
 
@@ -63,6 +66,18 @@ export function SecuritySettings() {
   });
   const statusUnavailable = !statusQuery.isLoading && statusQuery.data === undefined;
   const enabled = statusQuery.data?.totp.enabled === true;
+
+  // Passkeys (#671): the card exists only where a passkey can be made — a
+  // browser with WebAuthn on the site's own origin, never the native shells
+  // (lib/webauthn.ts) — and only once the deployment says they are on.
+  const usable = passkeysUsableHere();
+  const passkeysQuery = useQuery({
+    queryKey: ['passkeys-available'],
+    queryFn: authService.passkeysAvailable,
+    enabled: usable,
+    staleTime: 300_000,
+  });
+  const showPasskeys = usable && passkeysQuery.data === true;
 
   const settle = (status: MfaStatus, next: 'enabled' | 'disabled' | null) => {
     queryClient.setQueryData(STATUS_KEY, status);
@@ -166,6 +181,8 @@ export function SecuritySettings() {
           </div>
         )}
       </Card>
+
+      {showPasskeys && statusQuery.data !== undefined && <PasskeySettings totpEnabled={enabled} />}
     </div>
   );
 }
