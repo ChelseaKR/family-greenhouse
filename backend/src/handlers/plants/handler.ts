@@ -38,7 +38,7 @@ import * as billing from '../../services/billing.js';
 import * as activity from '../../services/activity.js';
 import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
-import * as plantTagService from '../../services/plantTagService.js';
+import * as trashService from '../../services/trashService.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -692,6 +692,15 @@ export const updatePlant = createHandler(
   .use(validateBody(updatePlantSchema));
 
 // DELETE /plants/:id
+//
+// Moves the plant into the household trash (#670, services/trashService.ts)
+// rather than erasing it: it disappears from every read at once — lists,
+// reminders, the calendar feed, digests, the sitter/kiosk/tag views, its
+// share links and the export — and can be restored intact for 30 days from
+// Settings → Trash. Its printed tag and share links travel into the trash
+// with it and come back on restore (so there is no revoke here any more).
+// Permanent deletion is `DELETE /households/{id}/trash/plant/{plantId}` or
+// the daily purge; account erasure bypasses the trash entirely.
 export const deletePlant = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -701,27 +710,38 @@ export const deletePlant = createHandler(
       throw createHttpError(400, 'Plant ID is required');
     }
 
-    const plant = await plantService.deletePlant(user.householdId!, plantId);
-    if (!plant) {
+    // Read BEFORE the move, uncaught: the name is stored on the trash entry
+    // ("Deleted by …"), so a failed read fails the request with nothing
+    // changed instead of recording a placeholder (ADR 0010).
+    const member = await householdService.getMemberByUserId(user.householdId!, user.userId);
+    const actorName = member?.name || 'Someone';
+    const entry = await trashService.trashPlant(user.householdId!, plantId, {
+      userId: user.userId,
+      name: actorName,
+    });
+    if (!entry) {
       throw createHttpError(404, 'Plant not found');
     }
 
-    // A printed tag for a deleted plant must stop resolving (ADR 0016).
-    // Best-effort: the plant is already gone, so a scan would 404 anyway;
-    // this just keeps the row from counting against the household's cap.
-    try {
-      await plantTagService.revokeTagsForPlant(user.householdId!, plantId);
-    } catch (err) {
-      logger.warn({ err: (err as Error).message, plantId }, 'planttag.revoke_on_delete_failed');
-    }
-
-    audit('plant.deleted', {
+    audit('plant.trashed', {
       actorId: user.userId,
       actorEmail: user.email,
       targetId: plantId,
       householdId: user.householdId ?? undefined,
-      metadata: { plantName: plant.name },
+      metadata: { plantName: entry.name, purgeAfter: entry.purgeAfter },
     });
+
+    activity
+      .recordActivity({
+        type: 'plant.trashed',
+        householdId: user.householdId!,
+        actorId: user.userId,
+        actorName,
+        payload: { plantId, plantName: entry.name },
+      })
+      .catch((err) => {
+        logger.warn({ err }, 'activity_record_failed');
+      });
 
     return noContentResponse();
   }

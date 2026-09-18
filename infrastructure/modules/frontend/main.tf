@@ -165,6 +165,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
       noncurrent_days = 30
     }
   }
+
+  # Household trash (#670). A trashed plant's photos are MOVED to
+  # `trash/plants/...` (CloudFront serves only `/plants/*`, so they stop
+  # resolving) and moved back on restore. The daily purge deletes them at 30
+  # days; this rule is the backstop that stops a purge job that has stopped
+  # running from keeping them forever. 37 days = the purge window plus the
+  # same 7-day slack the rows' DynamoDB `ttl` carries
+  # (TRASH_BACKSTOP_DAYS in backend/src/services/trashService.ts). The copy
+  # is written at trash time, so object age here is time-in-trash.
+  rule {
+    id     = "expire-trash"
+    status = "Enabled"
+
+    filter {
+      prefix = "trash/"
+    }
+
+    expiration {
+      days = 37
+    }
+  }
 }
 
 resource "aws_s3_bucket_cors_configuration" "images" {

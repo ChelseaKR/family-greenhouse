@@ -31,6 +31,12 @@ vi.mock('../../../src/services/kioskService.js', () => ({ revokeKioskLinksCreate
 vi.mock('../../../src/services/plantService.js', () => ({
   revokePlantSharesCreatedBy: vi.fn(),
 }));
+// The household trash (#670) has its own suite (trashService.test.ts and the
+// real-handler trash-restore.test.ts); here only the hand-off is asserted.
+vi.mock('../../../src/services/trashService.js', () => ({
+  purgeAllTrash: vi.fn(),
+  anonymizeUserInTrash: vi.fn(),
+}));
 
 describe('account cleanup', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -123,6 +129,11 @@ describe('account cleanup', () => {
 
     const { anonymizeUserInHousehold } = await import('../../../src/services/accountCleanup.js');
     await anonymizeUserInHousehold('hh', 'u1');
+
+    // The trash holds wrapped copies of these same rows; the same departure
+    // must scrub them too, or a restore would bring the name back.
+    const trashService = await import('../../../src/services/trashService.js');
+    expect(trashService.anonymizeUserInTrash).toHaveBeenCalledWith('hh', 'u1');
 
     const updates = vi
       .mocked(dynamodb.send)
@@ -420,6 +431,14 @@ describe('account cleanup', () => {
         .filter((command) => command.kind === 'Query')
         .every((command) => command.input.ProjectionExpression === 'PK, SK')
     ).toBe(true);
+
+    // Erasure bypasses the 30-day trash window, and does it FIRST: a trashed
+    // plant's rows and photos live outside every partition swept above.
+    const trashService = await import('../../../src/services/trashService.js');
+    expect(trashService.purgeAllTrash).toHaveBeenCalledWith('hh');
+    const purgeOrder = vi.mocked(trashService.purgeAllTrash).mock.invocationCallOrder[0];
+    const firstWrite = vi.mocked(dynamodb.send).mock.invocationCallOrder[0];
+    expect(purgeOrder).toBeLessThan(firstWrite);
   });
 });
 

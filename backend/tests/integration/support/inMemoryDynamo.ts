@@ -16,7 +16,8 @@
  * ----------------
  * This is deliberately NOT a general DynamoDB emulator. It implements exactly
  * the command + expression dialect the services in this repo use:
- *   - Get / Put / Delete / Update / Query / Scan / TransactWrite / BatchWrite
+ *   - Get / Put / Delete / Update / Query / Scan / TransactWrite (Put, Delete,
+ *     Update, ConditionCheck) / BatchWrite
  *   - KeyConditionExpression: `PK = :pk [AND begins_with(SK, :sk)
  *       | AND SK <= :v | AND SK BETWEEN :a AND :b]`, and the same against the
  *       GSI hash/range attributes via IndexName.
@@ -415,6 +416,8 @@ export function createInMemoryDynamo(): InMemoryDynamo {
             body.ExpressionAttributeValues as never
           );
           table.set(keyStr(key.PK, key.SK), updated);
+        } else if (op === 'ConditionCheck') {
+          // Evaluated in the condition phase above; it writes nothing.
         } else {
           throw new UnsupportedExpressionError(`transact op "${op}"`);
         }

@@ -234,12 +234,30 @@ export const HELP_SECTIONS: HelpSection[] = [
             <p>
               All three non-active states drop the plant out of your default list, out of your plan
               limit, and out of the reminder scan — so you stop being nagged about it — while
-              keeping its photos and care history. Deleting is a hard delete, meant for genuine
-              mistakes, and it takes the history with it.
+              keeping its photos and care history. Deleting is meant for genuine mistakes: the plant
+              and its history go to the trash for 30 days, and after that they are gone.
             </p>
           </>
         ),
-        text: 'Probably not. A plant can be active (being cared for), archived (a neutral, reversible not-right-now), or marked died or given away as a recorded outcome. All three non-active states drop the plant out of your default list, out of your plan limit, and out of the reminder scan, so you stop being nagged about it, while keeping its photos and care history. Deleting is a hard delete meant for genuine mistakes, and it takes the history with it.',
+        text: 'Probably not. A plant can be active (being cared for), archived (a neutral, reversible not-right-now), or marked died or given away as a recorded outcome. All three non-active states drop the plant out of your default list, out of your plan limit, and out of the reminder scan, so you stop being nagged about it, while keeping its photos and care history. Deleting is meant for genuine mistakes: the plant and its history go to the trash for 30 days, and after that they are gone.',
+      },
+      {
+        id: 'restore-deleted-plant',
+        q: 'I deleted a plant by mistake. Can I get it back?',
+        a: (
+          <p>
+            Yes, for 30 days. Deleting a plant or a task moves it to the household&rsquo;s trash
+            rather than erasing it, and anyone in the household can open <em>Settings → Trash</em>{' '}
+            and choose <strong>Restore</strong>. A plant comes back with its tasks, photos, care
+            history, printed tag and share link. There is also an <strong>Undo</strong> on the
+            message you see right after deleting. While something is in the trash it is hidden
+            everywhere: lists, reminders, the calendar feed, sitter and wall-display links, and
+            exports. A restored active plant counts toward your plan&rsquo;s plant limit again, so a
+            household at its limit has to make room first. After 30 days, or if someone chooses{' '}
+            <strong>Delete now</strong>, it is deleted permanently.
+          </p>
+        ),
+        text: 'Yes, for 30 days. Deleting a plant or a task moves it to the household trash rather than erasing it, and anyone in the household can open Settings then Trash and choose Restore. A plant comes back with its tasks, photos, care history, printed tag and share link. There is also an Undo on the message you see right after deleting. While something is in the trash it is hidden everywhere: lists, reminders, the calendar feed, sitter and wall-display links, and exports. A restored active plant counts toward your plan plant limit again, so a household at its limit has to make room first. After 30 days, or if someone chooses Delete now, it is deleted permanently.',
       },
       {
         id: 'import-plants',

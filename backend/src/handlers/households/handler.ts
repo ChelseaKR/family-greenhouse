@@ -65,6 +65,7 @@ import { rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
 import { logger } from '../../utils/logger.js';
 import { createUpgradeRequest } from './upgradeRequests.js';
 import { getAwayRecap } from './awayRecap.js';
+import * as trash from './trash.js';
 
 async function sendFirstHouseholdWelcome(
   userId: string,
@@ -1423,6 +1424,10 @@ export const handler = createRouter({
   'GET /households/{id}/away-recap': getAwayRecap,
   'PUT /households/{id}/escalation': setEscalationRule,
   'PUT /households/{id}/timezone': setHouseholdTimeZone,
+  // Household trash (#670) — handlers/households/trash.ts.
+  'GET /households/{id}/trash': trash.listTrash,
+  'POST /households/{id}/trash/{kind}/{itemId}/restore': trash.restoreTrashEntry,
+  'DELETE /households/{id}/trash/{kind}/{itemId}': trash.purgeTrashEntry,
   // Caretaker seats (handlers/caretakers/management.ts) — same posture as
   // sitter links: create/list/revoke are admin-gated, the report is not.
   'POST /households/{id}/caretakers': caretakers.createCaretaker,

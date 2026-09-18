@@ -18,6 +18,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **A 30-day household trash with restore (#670).** Deleting a plant or a task
+  now moves it to the household's trash instead of erasing it. While it is
+  there it is gone from every surface — lists, the reminder scan, the calendar
+  feed, digests, the sitter / kiosk / tag / share token views, the export and
+  the public API — because its rows leave the live key space and both GSIs
+  rather than carrying a flag every read would have to honour (ADR 0030). Any
+  member can restore it from Settings → Trash (or Undo on the toast) for 30
+  days; a plant comes back byte-for-byte with its tasks, photo timeline, care
+  history, plant tag and share link, and its photos move back to the same S3
+  keys. Restoring an active plant into a household at its cap is refused with
+  the same 402 wording as `POST /plants`; a tag or share link whose issuer has
+  since left is not revived. A daily purge on the digests Lambda
+  (`{ "job": "trashPurge" }`) deletes entries past 30 days through the #603
+  retry-then-throw batch writer and logs per-kind counts; DynamoDB `ttl` and a
+  `trash/` S3 lifecycle rule at 37 days are backstops. `DELETE /me` erases the
+  trash regardless of age. Ships on the next `v*` tag: three routes in the
+  households group, one EventBridge rule, one IAM list prefix and one bucket
+  lifecycle rule — no new Lambda.
+
 - **A member can leave a household without deleting their account (#686).**
   `POST /households/{id}/leave`, with its own confirm flow on the Household
   page (EN/ES). It runs the same departure sequence as admin removal, now

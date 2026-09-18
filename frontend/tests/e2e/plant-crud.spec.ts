@@ -114,7 +114,7 @@ test.describe('Plant CRUD', () => {
     await expect(page.getByText('Plant restored')).toBeVisible();
   });
 
-  test('delete a plant → confirm → land on plants list without it', async ({ page }) => {
+  test('delete a plant → confirm → gone from the list → Undo brings it back', async ({ page }) => {
     await login(page);
     await goToPlants(page);
 
@@ -126,25 +126,31 @@ test.describe('Plant CRUD', () => {
     await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
 
     // The lifecycle feature (#37) replaced the bare "Delete" button with a
-    // "Remove" flow: Remove → outcome dialog → "Delete permanently" →
-    // explicit ConfirmDialog. Walk the full flow.
+    // "Remove" flow: Remove → outcome dialog → "Delete — it stays in the
+    // trash" → explicit ConfirmDialog. Deleting moves the plant into the
+    // household trash (#670), restorable for 30 days.
     await page.getByRole('button', { name: /^remove$/i }).click();
     await expect(
       page.getByRole('heading', { name: /move .* out of active care\?/i })
     ).toBeVisible();
-    await page.getByRole('button', { name: /delete permanently/i }).click();
+    await page.getByRole('button', { name: /stays in the trash/i }).click();
     // The ConfirmDialog title doubles as the dialog heading; matching it
-    // anchors the dialog so the "Delete" button below is unambiguous.
-    await expect(page.getByRole('heading', { name: /delete plant/i })).toBeVisible();
-    // Scope to the dialog to pick the confirm button unambiguously.
+    // anchors the dialog so the confirm button below is unambiguous.
+    await expect(
+      page.getByRole('heading', { name: /move this plant to the trash\?/i })
+    ).toBeVisible();
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: /^delete$/i })
+      .getByRole('button', { name: /^move to trash$/i })
       .click();
 
-    // Successful delete navigates back to /plants and the now-gone plant
-    // should not be in the list.
+    // Successful delete navigates back to /plants and the now-trashed plant
+    // is not in the list.
     await expect(page).toHaveURL(/\/plants$/);
     await expect(page.getByRole('link', { name: new RegExp(plantName, 'i') })).toHaveCount(0);
+
+    // The toast offers Undo, which restores it and opens it again.
+    await page.getByRole('button', { name: /^undo$/i }).click();
+    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
   });
 });

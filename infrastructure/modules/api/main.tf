@@ -185,7 +185,10 @@ resource "aws_iam_role_policy" "lambda" {
       {
         # Plant/account deletion enumerates every image below the plant prefix.
         # ListBucket is a bucket-level action and cannot share the object ARN
-        # above; keep it constrained to the only prefix the API manages.
+        # above; keep it constrained to the prefixes the API manages:
+        # `plants/` (served by CloudFront) and `trash/` (the household trash,
+        # #670 — deliberately NOT served, which is what makes a trashed photo
+        # stop resolving).
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
@@ -194,7 +197,7 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = var.images_bucket_arn
         Condition = {
           StringLike = {
-            "s3:prefix" = ["plants/*"]
+            "s3:prefix" = ["plants/*", "trash/*"]
           }
         }
       },
@@ -1084,6 +1087,12 @@ locals {
     "POST /households/{id}/kiosk-link"   = { group = "households", auth = "jwt" }
     "GET /households/{id}/kiosk-link"    = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/kiosk-link" = { group = "households", auth = "jwt" }
+    # Household trash (#670, handlers/households/trash.ts): any member may
+    # list, restore, or delete-now. DELETE /plants/{id} and DELETE /tasks/{id}
+    # move items in; the daily purge rides the digests function (below).
+    "GET /households/{id}/trash"                          = { group = "households", auth = "jwt" }
+    "POST /households/{id}/trash/{kind}/{itemId}/restore" = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/trash/{kind}/{itemId}"       = { group = "households", auth = "jwt" }
     # A member asks the household's admins to upgrade for a locked feature
     # (email + push + activity row; once per member per feature per week).
     "POST /households/{id}/upgrade-requests" = { group = "households", auth = "jwt" }
@@ -1426,6 +1435,42 @@ resource "aws_lambda_permission" "year_recap_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.year_recap.arn
 }
 
+# Household trash purge (#670): once a day, delete trash entries past their
+# 30-day window (services/trashService.ts `runTrashPurge`). It rides the
+# digests function with a constant `{ "job": "trashPurge" }` input rather than
+# getting its own, so shipping it adds a schedule and not a Lambda — and so
+# not an entry in cd-production.yml's hardcoded function list either. The
+# rows' DynamoDB `ttl` and the images bucket's `expire-trash` rule (both at 37
+# days) are the backstop if this stops running; this is what makes "30 days"
+# true.
+resource "aws_cloudwatch_event_rule" "trash_purge" {
+  name                = "${var.project_name}-trash-purge-${var.environment}"
+  description         = "Daily household-trash purge (entries past 30 days)"
+  schedule_expression = "cron(15 9 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "trash_purge" {
+  rule  = aws_cloudwatch_event_rule.trash_purge.name
+  arn   = aws_lambda_function.handlers["digests"].arn
+  input = jsonencode({ job = "trashPurge" })
+
+  retry_policy {
+    maximum_retry_attempts       = 4
+    maximum_event_age_in_seconds = 3600
+  }
+  dead_letter_config {
+    arn = aws_sqs_queue.lambda_dlq.arn
+  }
+}
+
+resource "aws_lambda_permission" "trash_purge_eventbridge" {
+  statement_id  = "AllowEventBridgeInvokeTrashPurge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handlers["digests"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.trash_purge.arn
+}
+
 # --- SES delivery feedback ---------------------------------------------------
 # The configuration set (modules/email) publishes bounce/complaint/delivery
 # events to an SNS topic; this subscribes the emailEvents Lambda to it. The
@@ -1503,6 +1548,7 @@ resource "aws_sqs_queue_policy" "lambda_dlq" {
             aws_cloudwatch_event_rule.digests_weekly.arn,
             aws_cloudwatch_event_rule.year_recap.arn,
             aws_cloudwatch_event_rule.checkout_recovery.arn,
+            aws_cloudwatch_event_rule.trash_purge.arn,
           ]
         }
       }

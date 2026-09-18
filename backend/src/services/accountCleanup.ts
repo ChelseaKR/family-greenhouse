@@ -7,6 +7,7 @@ import * as kioskService from './kioskService.js';
 import * as plantService from './plantService.js';
 import * as plantTagService from './plantTagService.js';
 import * as sitterService from './sitterService.js';
+import * as trashService from './trashService.js';
 
 /** The stable id and display name a departed member's history is rewritten
  *  to. Exported so a producer writing a row AFTER the sweep (the `member.left`
@@ -223,8 +224,18 @@ export async function deleteUserScopedData(userId: string): Promise<void> {
  * plantService.deletePlant before this runs. This final partition sweep is
  * intentionally generic so newly added household row types cannot become
  * account-erasure leaks.
+ *
+ * The household trash (#670) is erased FIRST and regardless of age: erasure
+ * bypasses the 30-day window. Its manifests sit in the base partition swept
+ * below, but a trashed plant's dependents live in their own partition and
+ * its photos under the bucket's `trash/` prefix, and neither is reachable
+ * from anything this sweep enumerates. `purgeAllTrash` reads the manifests
+ * directly — never through the listing, whose "hide expired" rule would skip
+ * exactly the rows a purge is mid-way through.
  */
 export async function deleteAbandonedHouseholdData(householdId: string): Promise<void> {
+  await trashService.purgeAllTrash(householdId);
+
   const sitterItems = await queryAllItems({
     TableName: TABLE_NAME,
     IndexName: 'GSI1',
@@ -709,5 +720,13 @@ export async function anonymizeUserInHousehold(
         );
       })
   );
+
+  // The household trash (#670) holds wrapped copies of exactly these row
+  // types. The same rules apply inside it, so a plant restored after this
+  // departure comes back reading "Former member" like everything else — and
+  // a tag or share link the departing member minted that was sitting in the
+  // trash is dropped, so a restore cannot revive what #449 revoked. Trashed
+  // tasks are not live assignments, so they are not in `summary`.
+  await trashService.anonymizeUserInTrash(householdId, userId);
   return summary;
 }

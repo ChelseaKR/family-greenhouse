@@ -402,9 +402,13 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoDocumentOverflow(page, 'remove plant dialog');
     await expectMinimumControlTargets(page, 'remove plant dialog');
     await expectNoA11yViolations(page, 'remove plant dialog');
-    await removeDialog.getByRole('button', { name: /delete permanently/i }).click();
-    const deleteDialog = page.getByRole('dialog', { name: /delete plant/i });
-    await expect(deleteDialog.getByRole('heading', { name: /delete plant/i })).toBeVisible();
+    // Deleting moves the plant into the household trash (#670); the
+    // confirmation is titled for that, not for a permanent delete.
+    await removeDialog.getByRole('button', { name: /stays in the trash/i }).click();
+    const deleteDialog = page.getByRole('dialog', { name: /move this plant to the trash/i });
+    await expect(
+      deleteDialog.getByRole('heading', { name: /move this plant to the trash/i })
+    ).toBeVisible();
     await expectNoDocumentOverflow(page, 'delete confirmation dialog');
     await expectMinimumControlTargets(page, 'delete confirmation dialog');
     await expectNoA11yViolations(page, 'delete confirmation dialog');

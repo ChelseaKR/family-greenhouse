@@ -196,6 +196,24 @@ slow requests has moved, not that a cold start happened. The `chat` Lambda is 51
 
 Re-run this drill ~quarterly (it's cheap — a few cents on a tiny table).
 
+## A member deleted the wrong plant or task
+
+**Symptom:** "we deleted a plant by mistake" (or a task).
+
+Since #670 a delete moves the item into the household trash for **30 days**.
+Point the household at **Settings → Trash → Restore** — any member can do it,
+and a plant comes back with its tasks, photos, care history, plant tag and
+share link. Two refusals are expected, not bugs: a household at its plant cap
+gets the same 402 as adding a plant (archive or upgrade first), and a task
+whose plant is also in the trash says to restore the plant first.
+
+Past 30 days, or after someone chose **Delete now**, the rows are gone and
+only the PITR restore below can recover them (copy the needed items back; the
+photos under `trash/` are gone too once purged, so a PITR recovery restores
+rows whose images no longer exist). The daily purge is the digests function's
+`{ "job": "trashPurge" }` run; its summary line is `trash.purge_run_complete`
+with per-kind counts, alarmed through `*-digests-run-failed`.
+
 ## Post-deploy test fixtures in production data
 
 **Symptom:** a count of households, members, or plants that does not match what

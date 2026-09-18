@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Toaster } from '@/components/Toaster';
+import { useToastStore } from '@/store/toastStore';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantDetailPage } from '@/features/plants/PlantDetailPage';
@@ -20,6 +23,7 @@ function renderDetail(plantId: string, state?: unknown) {
           <Route path="/plants/:plantId" element={<PlantDetailPage />} />
           <Route path="/plants" element={<div>Plants Index</div>} />
         </Routes>
+        <Toaster />
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -409,5 +413,60 @@ describe('PlantDetailPage', () => {
 
       expect(await screen.findByText(/Couldn.?t check pet toxicity/i)).toBeInTheDocument();
     });
+  });
+});
+
+// --- Household trash (#670) -------------------------------------------------
+describe('PlantDetailPage delete → trash', () => {
+  it('moves the plant to the trash after a confirmation that says so, and Undo restores it', async () => {
+    useAuthStore.setState({ accessToken: 'access-1', activeHouseholdId: 'hh' });
+    useToastStore.setState({ toasts: [] });
+    const deleted = vi.fn();
+    const restored = vi.fn();
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Pothos',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          createdAt: '2026-04-25T00:00:00.000Z',
+          createdBy: 'u1',
+          updatedAt: '2026-04-25T00:00:00.000Z',
+          upcomingTasks: [],
+          recentCompletions: [],
+        })
+      ),
+      http.delete(`${API}/plants/p1`, () => {
+        deleted();
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(`${API}/households/hh/trash/plant/p1/restore`, () => {
+        restored();
+        return HttpResponse.json({ kind: 'plant', id: 'p1', name: 'Pothos', restoring: false });
+      })
+    );
+    renderDetail('p1');
+    await userEvent.click(await screen.findByRole('button', { name: /^remove$/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /stays in the trash for 30 days/i })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: /move this plant to the trash/i });
+    // The confirmation tells the truth about what happens and for how long.
+    expect(within(dialog).getByText(/restore it from Settings → Trash for 30 days/i)).toBeVisible();
+    expect(deleted).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: /^move to trash$/i }));
+
+    await waitFor(() => expect(deleted).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Plants Index')).toBeInTheDocument();
+    expect(await screen.findByText('Moved “Pothos” to the trash')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^undo$/i }));
+    await waitFor(() => expect(restored).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Restored “Pothos”')).toBeInTheDocument();
   });
 });

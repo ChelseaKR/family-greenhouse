@@ -92,7 +92,11 @@ export type ScheduledJob =
   // scans every household for a genuinely stale pending-checkout marker
   // (billing.staleCheckoutMarker, the same read GET /billing/me uses) and
   // mails its admins once per checkout attempt.
-  | 'checkoutRecovery';
+  | 'checkoutRecovery'
+  // Household trash purge (services/trashService.ts, #670): once a day,
+  // deletes entries past their 30-day window. A skipped household is only
+  // purged a day late, so the rotating start is enough.
+  | 'trashPurge';
 
 export interface FanOutSummary {
   /** Households enumerated. Unchanged by truncation — it is the denominator

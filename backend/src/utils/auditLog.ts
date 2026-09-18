@@ -55,6 +55,13 @@ export type AuditEvent =
   | 'api.task_completed'
   | 'api.task_snoozed'
   | 'plant.deleted'
+  // Household trash (#670). `plant.deleted` above now means a PERMANENT
+  // deletion (purge now, or the erasure path); moving into the trash and
+  // coming back out are their own lines so the two are never conflated.
+  | 'plant.trashed'
+  | 'task.trashed'
+  | 'trash.restored'
+  | 'trash.purged'
   | 'rate_limit.tripped'
   | 'chat.message_sent'
   | 'chat.tools_called'
