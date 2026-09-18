@@ -99,6 +99,80 @@ describe('PlantTagsPage', () => {
     expect(within(sheet).getByText('Monstera')).toBeInTheDocument();
   });
 
+  // #450: the server keeps a digest of each tag's token, not the token, so a
+  // listed tag issued since then comes back with `token: null, url: null`.
+  const hashedMonstera = { ...monsteraTag, token: null, url: null };
+
+  it('lists a label issued before this visit as printed — no QR code, no print button', async () => {
+    server.use(
+      http.get(`${API}/households/hh-1/plant-tags`, () =>
+        HttpResponse.json(tagsResponse({ tags: [hashedMonstera] }))
+      )
+    );
+    renderPage();
+
+    expect(await screen.findByText(/Printed — this label keeps working/)).toBeInTheDocument();
+    expect(screen.getByText(/1 label you’ve already printed isn’t shown here/)).toBeInTheDocument();
+    // Nothing to print, and crucially no label built from a missing code: a
+    // QR for `/tag/null` would be a dead label stuck in a pot.
+    expect(screen.queryByRole('region', { name: 'Printable labels' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Print the sheet/ })).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain('/tag/null');
+    // It is still managed from here: re-issue and turn off are both offered.
+    expect(screen.getByRole('button', { name: 'Turn off the label for Monstera' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Print a new code for Monstera and stop the old one' })
+    ).toBeEnabled();
+  });
+
+  it('prints a label issued on this visit from the issue response, though the list never returns its code', async () => {
+    const POTHOS_TOKEN = 'b7c1'.repeat(16);
+    const pothosIssued = {
+      ...monsteraTag,
+      id: 'tag-2',
+      plantId: 'p2',
+      plantName: 'Pothos',
+      plantSpecies: null,
+      token: POTHOS_TOKEN,
+      url: `https://familygreenhouse.net/tag/${POTHOS_TOKEN}`,
+    };
+    let issued = false;
+    server.use(
+      http.get(`${API}/households/hh-1/plant-tags`, () =>
+        HttpResponse.json(
+          tagsResponse({
+            tags: issued
+              ? [{ ...pothosIssued, token: null, url: null }, hashedMonstera]
+              : [hashedMonstera],
+            allowance: { enabled: true, max: 50, used: issued ? 2 : 1 },
+          })
+        )
+      ),
+      http.post(`${API}/plants/p2/tag`, () => {
+        issued = true;
+        return HttpResponse.json(pothosIssued, { status: 201 });
+      })
+    );
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Pothos' }));
+
+    const sheet = await screen.findByRole('region', { name: 'Printable labels' });
+    // Sabotage-landed check for this fixture: the refetched list really does
+    // carry no code for Pothos, so the QR below can only have come from the
+    // issue response.
+    await waitFor(() => expect(screen.getByText(/2 of 50 labels in use/)).toBeInTheDocument());
+    const code = within(sheet).getByRole('img', {
+      name: 'QR code linking to the care page for Pothos',
+    });
+    expect(code.querySelector('path')?.getAttribute('d')?.length ?? 0).toBeGreaterThan(500);
+    // Only the fresh label is on the sheet; Monstera's is already in its pot.
+    expect(within(sheet).queryByText('Monstera')).not.toBeInTheDocument();
+    expect(screen.getByText(/Print these now/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Print the sheet/ })).toBeInTheDocument();
+    expect(screen.getByText(/1 label you’ve already printed/)).toBeInTheDocument();
+  });
+
   it('says the labels could not be loaded instead of implying there are none', async () => {
     server.use(
       http.get(`${API}/households/hh-1/plant-tags`, () => new HttpResponse(null, { status: 500 }))

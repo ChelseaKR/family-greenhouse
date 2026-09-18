@@ -62,6 +62,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   changes. Recipients still on the default `UTC` zone get UTC days and a UTC
   08:00. EN/ES.
 
+### Security
+
+- **Plant-tag tokens and cutting-share codes are hashed at rest, and a table
+  dump no longer yields working sitter, kiosk or caretaker links either
+  (#450).** Tag rows are now `PLANTTAG#{scrypt(token)}` and share rows
+  `SHARE#{scrypt(code)}`, with no plaintext on the row, through one shared
+  helper (`backend/src/utils/tokenHash.ts`) that API keys, calendar feeds,
+  gift codes, sitter, kiosk and caretaker links now also call — the same
+  construction each already had, pinned by a literal digest per surface.
+  Every label already in a pot keeps scanning: reads try the hashed key, then
+  one point read on the old plaintext key. That fallback, as shipped for
+  sitter/kiosk/caretaker in #551/#569, also accepted a **digest** presented as
+  a token (a digest is 64 hex characters, and `{PREFIX}#{digest}` is the
+  hashed row's real key), so the dump those PRs protected against still
+  produced working links; the fallback now honours a row only if it carries
+  the presented token. The print sheet can show a new label's QR code only on
+  the visit that issued it; a label printed earlier is listed as printed and
+  replaced with **New code**. `backend/src/scripts/backfillTokenHashes.ts`
+  re-keys the remaining plaintext rows in place (same token, so no label is
+  reprinted) and drops the `notes` residue from pre-#741 share rows; it is
+  dry-run by default and has not been run.
+
 ## [0.35.0] - 2026-09-17
 
 ### Added

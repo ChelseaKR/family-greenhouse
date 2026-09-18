@@ -510,6 +510,20 @@ describe('caretakerService — the token is not in the table (#568)', () => {
     expect(legacyGet.input.Key.PK).toBe(`CARETAKER#${TOKEN}`);
   });
 
+  it('a digest lifted from a table export does NOT resolve as a seat', async () => {
+    const { dynamodb, svc } = await load();
+    const digest = expectedHash(TOKEN);
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({} as never) // hash(digest): no such row
+      .mockResolvedValueOnce(activeRow({ token: undefined, tokenHash: digest }) as never);
+
+    expect(await svc.getActiveCaretaker(digest)).toBeNull();
+    const fallback = vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+      input: { Key: { PK: string } };
+    };
+    expect(fallback.input.Key.PK).toBe(`CARETAKER#${digest}`);
+  });
+
   it('honours revocation and the window on a hashed row exactly as before', async () => {
     const { dynamodb, svc } = await load();
     // Hashing must not become a way past the checks a plaintext row got.

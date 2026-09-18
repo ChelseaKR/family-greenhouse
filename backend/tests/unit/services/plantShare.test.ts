@@ -4,6 +4,13 @@
  * filter-the-household lineage assembly.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scryptSync } from 'node:crypto';
+
+/** The production digest of a share code, restated so a silent change to the
+ *  salt or the KDF fails here rather than breaking every link in flight. */
+function expectedHash(code: string): string {
+  return scryptSync(code, 'family-greenhouse-plantshare-v1', 32).toString('hex');
+}
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   PutCommand: vi.fn(function (input) {
@@ -107,7 +114,12 @@ describe('plantService — shares + lineage', () => {
       // its whole 14-day life, so keeping it out of the write is what makes
       // the read safe rather than merely projected-safe.
       expect(JSON.stringify(put.input.Item)).not.toContain('PRIVATENOTE-4T6');
-      expect(put.input.Item.PK).toBe(`SHARE#${share!.code}`);
+      // #450: the code is the link's only credential, so the row is keyed by
+      // its digest and carries no plaintext anywhere.
+      expect(put.input.Item.PK).toBe(`SHARE#${expectedHash(share!.code)}`);
+      expect(put.input.Item.codeHash).toBe(expectedHash(share!.code));
+      expect(put.input.Item.code).toBeUndefined();
+      expect(JSON.stringify(put.input.Item)).not.toContain(share!.code);
       expect(put.input.Item.SK).toBe('METADATA');
       expect(put.input.Item.entityType).toBe('PlantShare');
       // ttl ≈ now + 14 days (epoch seconds), so DDB TTL sweeps it.
@@ -247,6 +259,64 @@ describe('plantService — shares + lineage', () => {
         tags: [],
       });
       expect(JSON.stringify(share)).not.toContain('PRIVATENOTE-4T6');
+    });
+
+    it('refuses a code that is not 32 lowercase hex without touching DynamoDB', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlantShare } = await import('../../../src/services/plantService');
+      for (const bad of ['', 'nope', 'F'.repeat(32), 'a'.repeat(31), 'a'.repeat(64)]) {
+        expect(await getPlantShare(bad)).toBeNull();
+      }
+      expect(dynamodb.send).not.toHaveBeenCalled();
+    });
+
+    it('a share written by createPlantShare opens with its own code (hash written, hash read)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { createPlantShare, getPlantShare } =
+        await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: plantRow });
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+      const minted = await createPlantShare('hh-1', 'plant-1', 'user-1');
+      const written = (
+        vi.mocked(dynamodb.send).mock.calls[1][0] as unknown as {
+          input: { Item: Record<string, unknown> };
+        }
+      ).input.Item;
+
+      vi.mocked(dynamodb.send).mockClear();
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: written });
+      const opened = await getPlantShare(minted!.code);
+      expect(opened).toMatchObject({ code: minted!.code, plantId: 'plant-1' });
+      const get = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+        input: { Key: { PK: string } };
+      };
+      expect(get.input.Key.PK).toBe(written.PK);
+      expect(dynamodb.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('a link minted before #450 still opens (one fallback read on the plaintext key)', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlantShare } = await import('../../../src/services/plantService');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({}); // hashed key: nothing
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: storedShare }); // legacy row
+      expect(await getPlantShare(storedShare.code)).toMatchObject({ plantId: 'plant-1' });
+      const keys = vi
+        .mocked(dynamodb.send)
+        .mock.calls.map(([c]) => (c as unknown as { input: { Key: { PK: string } } }).input.Key.PK);
+      expect(keys).toEqual([
+        `SHARE#${expectedHash(storedShare.code)}`,
+        `SHARE#${storedShare.code}`,
+      ]);
+    });
+
+    it('a legacy-keyed row that does not carry the presented code is refused', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb');
+      const { getPlantShare } = await import('../../../src/services/plantService');
+      const { code: _omitted, ...hashedShape } = storedShare;
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({});
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: hashedShape });
+      expect(_omitted).toBe(storedShare.code);
+      expect(await getPlantShare(storedShare.code)).toBeNull();
     });
 
     it('returns null for an expired row that DDB TTL has not swept yet', async () => {

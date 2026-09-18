@@ -1,0 +1,114 @@
+/**
+ * The operator CLI for the #450 backfill. The backfill itself is tested in
+ * tests/unit/services/tokenHashBackfill.test.ts; this pins the parts an
+ * operator relies on: dry run unless told otherwise, surfaces named exactly,
+ * and an exit status that does not read a partial run as a finished one.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../../src/services/tokenHashBackfill.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../src/services/tokenHashBackfill.js')>();
+  return { ...actual, backfillSurface: vi.fn() };
+});
+vi.mock('../../../src/utils/dynamodb.js', () => ({
+  dynamodb: { send: vi.fn() },
+  TABLE_NAME: 'test-table',
+}));
+
+async function load() {
+  const cli = await import('../../../src/scripts/backfillTokenHashes.js');
+  const backfill = await import('../../../src/services/tokenHashBackfill.js');
+  return { cli, backfill };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+describe('parseCliArgs', () => {
+  it('defaults to every surface, as a dry run', async () => {
+    const { cli, backfill } = await load();
+    expect(cli.parseCliArgs([])).toEqual({
+      surfaces: backfill.BACKFILL_SURFACE_NAMES,
+      confirm: false,
+    });
+  });
+
+  it('takes --surface repeated or comma-separated, de-duplicated, and --confirm', async () => {
+    const { cli } = await load();
+    expect(
+      cli.parseCliArgs(['--surface', 'plantTag,kioskLink', '--surface', 'plantTag', '--confirm'])
+    ).toEqual({ surfaces: ['plantTag', 'kioskLink'], confirm: true });
+  });
+
+  it('refuses an unknown surface rather than silently backfilling nothing', async () => {
+    const { cli } = await load();
+    expect(() => cli.parseCliArgs(['--surface', 'apiKey'])).toThrow(/Unknown --surface "apiKey"/);
+    expect(() => cli.parseCliArgs(['--apply'])).toThrow();
+  });
+});
+
+describe('main', () => {
+  const report = (overrides = {}) => ({
+    surface: 'plantTag' as const,
+    legacy: 3,
+    rekeyed: 0,
+    raced: 0,
+    skipped: [],
+    ...overrides,
+  });
+
+  it('dry-runs by default: apply=false, exit 0, and says nothing was written', async () => {
+    const { cli, backfill } = await load();
+    vi.mocked(backfill.backfillSurface).mockResolvedValue(report());
+    expect(await cli.main(['--surface', 'plantTag'])).toBe(0);
+    expect(backfill.backfillSurface).toHaveBeenCalledWith(backfill.LEGACY_SURFACES.plantTag, {
+      apply: false,
+    });
+    expect(vi.mocked(console.info).mock.calls.flat().join('\n')).toMatch(/Nothing was written/);
+  });
+
+  it('writes only with --confirm', async () => {
+    const { cli, backfill } = await load();
+    vi.mocked(backfill.backfillSurface).mockResolvedValue(report({ rekeyed: 3 }));
+    expect(await cli.main(['--surface', 'plantTag', '--confirm'])).toBe(0);
+    expect(backfill.backfillSurface).toHaveBeenCalledWith(backfill.LEGACY_SURFACES.plantTag, {
+      apply: true,
+    });
+  });
+
+  it('exits 2 when any row raced, so a wrapper cannot read "some moved" as "done"', async () => {
+    const { cli, backfill } = await load();
+    vi.mocked(backfill.backfillSurface).mockResolvedValue(report({ rekeyed: 2, raced: 1 }));
+    expect(await cli.main(['--confirm'])).toBe(2);
+  });
+
+  it('exits 1 on bad arguments without touching the table', async () => {
+    const { cli, backfill } = await load();
+    expect(await cli.main(['--surface', 'nope'])).toBe(1);
+    expect(backfill.backfillSurface).not.toHaveBeenCalled();
+  });
+});
+
+describe('formatReport', () => {
+  it('lists skipped rows by reference and reason', async () => {
+    const { cli } = await load();
+    const text = cli.formatReport(
+      {
+        surface: 'kioskLink',
+        legacy: 1,
+        rekeyed: 1,
+        raced: 0,
+        skipped: [{ ref: 'id=k2 household=hh-1', reason: 'already hashed' }],
+      },
+      true
+    );
+    expect(text).toBe(
+      'kioskLink: 1 legacy row(s); 1 re-keyed, 0 raced (re-run to pick up).\n' +
+        '  skipped id=k2 household=hh-1: already hashed'
+    );
+  });
+});

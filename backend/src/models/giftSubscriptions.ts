@@ -30,7 +30,8 @@
  * Pure module: no DynamoDB, no Stripe client. The dev mock server and the
  * webhook both import it.
  */
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken } from '../utils/tokenHash.js';
 import type Stripe from 'stripe';
 import { PLANS, isPlanId, type PlanId } from './plans.js';
 
@@ -181,7 +182,7 @@ export function formatGiftCode(code: GiftCode): string {
  * reason: the row must not carry the credential, only a way to recognise it.
  */
 export function hashGiftCode(code: GiftCode): string {
-  return scryptSync(code, 'family-greenhouse-giftcode-v1', 32).toString('hex');
+  return hashCapabilityToken('giftCode', code);
 }
 
 // ---------------------------------------------------------------------------

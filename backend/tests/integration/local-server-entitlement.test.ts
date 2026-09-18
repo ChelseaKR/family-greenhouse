@@ -401,9 +401,13 @@ describe('starting: what a household may begin (#476)', () => {
       // The sheet must not advertise a cap the write side would refuse.
       expect(sheet.body.allowance).toMatchObject({ enabled: false });
       expect(sheet.body.planId).toBe('seedling');
-      // …but labels already printed are still reprintable, tokens and all.
+      // …but labels already printed are still listed, so they can still be
+      // managed and turned off. Not reprinted from here: since #450 the token
+      // is hashed at rest, so only the issue response ever carried it.
       expect(sheet.body.tags).toHaveLength(1);
-      expect(typeof sheet.body.tags[0].token).toBe('string');
+      expect(sheet.body.tags[0].id).toBe(issued.body.id);
+      expect(typeof issued.body.token).toBe('string');
+      expect(sheet.body.tags[0].token).toBeNull();
     });
 
     it('never gates the public scan of a label already stuck in a pot', async () => {

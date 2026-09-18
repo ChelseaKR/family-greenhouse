@@ -6,9 +6,11 @@
  * Security model: the sitter-link token (services/sitterService.ts) pointed
  * at a permanent, physical, in-home surface, and scoped DOWN rather than
  * across:
- *   - The token is 256 bits of CSPRNG entropy (crypto.randomBytes(32), hex)
- *     and is the partition key directly — a scan is one GetItem, no scan, no
- *     enumeration surface. It is the ONLY secret.
+ *   - The token is 256 bits of CSPRNG entropy (crypto.randomBytes(32), hex).
+ *     It is the ONLY secret, and at rest it is HASHED, never stored (#450):
+ *     the partition key is its scrypt digest, so a scan is still one GetItem
+ *     with no enumeration surface, while a table export, a point-in-time
+ *     restore or `dynamodb:Scan` yields digests rather than working labels.
  *   - A tag is scoped to ONE plant and exactly two actions: read that plant's
  *     last care + due tasks, and complete one of those tasks. It can never
  *     reach another plant, a member record, or the household's location.
@@ -27,16 +29,37 @@
  *     endpoint can't be used as a token-state oracle.
  *
  * Row shapes:
- *   PK = `PLANTTAG#{token}`, SK = 'METADATA'   — one tag. Mirrored onto GSI1
- *     (GSI1PK = HOUSEHOLD#{id}#PLANTTAG) so a household can list its own.
+ *   PK = `PLANTTAG#{scrypt(token)}`, SK = 'METADATA' — one tag. Mirrored onto
+ *     GSI1 (GSI1PK = HOUSEHOLD#{id}#PLANTTAG) so a household can list its own.
  *   PK = `HOUSEHOLD#{id}`, SK = 'PLANTTAG#PIN'  — the household PIN hash.
  *     Lives in the household's base partition so account erasure's generic
  *     partition sweep removes it without a special case.
+ *
+ * The printed labels already in pots (#450). Rows written before this change
+ * are keyed by the PLAINTEXT token and carry it as a `token` attribute. Unlike
+ * a sitter link they never expire, so they would never age out on their own,
+ * and the label is a physical object that cannot be re-sent. So:
+ *   - `getActiveTag` reads the hashed key first and falls back to ONE more
+ *     point read on the plaintext key, so every label printed before the
+ *     change keeps scanning — before, during and after the backfill below.
+ *   - Every write addresses a row by `keyToken` (its own PK suffix), so revoke,
+ *     re-issue and the PIN lockout work on either generation.
+ *   - `src/scripts/backfillTokenHashes.ts` re-keys the legacy rows: same
+ *     token, so the same printed QR code resolves, but hashed. Nothing here
+ *     writes a plaintext row back, so after it runs the generation is gone.
+ *
+ * What hashing costs, stated plainly: a token cannot be recovered after issue,
+ * so the print sheet can show a label's QR code only when it was just minted.
+ * Printing a replacement for a label already in a pot is `issueTag` (a new
+ * code; the old label stops), which is what replacing a lost or faded label
+ * needs anyway. Legacy rows keep returning their token to the print sheet
+ * until they are backfilled.
  */
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { PIN_MAX_FAILURES, PIN_LOCKOUT_MS, PIN_RE } from '../models/plantTags.js';
 import { DynamoDBItem } from '../models/types.js';
 import { logger } from '../utils/logger.js';
@@ -46,8 +69,21 @@ export type PlantTagStatus = 'active' | 'revoked';
 export interface PlantTag {
   /** Opaque id used in the management API (revoke). NOT the secret. */
   id: string;
-  /** The 256-bit secret token — the whole credential a scan presents. */
-  token: string;
+  /**
+   * The 256-bit secret token — the whole credential a scan presents. Present
+   * on the object `issueTag` returns, which is the one moment it exists in
+   * this system, and on a pre-#450 row that still holds its plaintext until
+   * the backfill re-keys it. Null on everything else read back from DynamoDB.
+   */
+  token: string | null;
+  /**
+   * The row's own partition-key suffix: the token's scrypt digest on rows
+   * written since #450, the plaintext token on rows written before it. It
+   * exists so revocation and the PIN lockout can address the base row of
+   * either generation without anyone holding a token. NEVER put it in a
+   * response — for a legacy row it IS the secret; `toSummary` drops it.
+   */
+  keyToken: string;
   householdId: string;
   /** The ONE plant this tag can read and complete tasks for. */
   plantId: string;
@@ -83,16 +119,32 @@ export { PIN_MAX_FAILURES, PIN_LOCKOUT_MS, PIN_RE, TAG_ACTOR_PREFIX } from '../m
 const REVOKED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const PIN_SK = 'PLANTTAG#PIN';
+const TAG_PREFIX = 'PLANTTAG#';
 // scrypt parameters: interactive-strength (N=2^14) — a 4-digit PIN is not a
 // password and the lockout, not the KDF, is the real brake; the KDF only
 // makes a leaked table useless offline.
 const SCRYPT_OPTS = { N: 16384, r: 8, p: 1 } as const;
 const HASH_BYTES = 32;
 
+/**
+ * The tag's digest — the row's partition-key suffix. The shared credential
+ * hash (`utils/tokenHash.ts`, the same construction as API keys, calendar
+ * feeds, sitter and kiosk links) with the plant-tag salt, so a tag token can
+ * never resolve on any other surface and vice versa.
+ */
+function hashTagToken(token: string): string {
+  return hashCapabilityToken('plantTag', token);
+}
+
 function itemToTag(item: Record<string, unknown>): PlantTag {
+  // `tokenHash` on rows written since #450; the plaintext `token` on rows
+  // written before it. Either way this is exactly the row's PK suffix.
+  const legacyToken = typeof item.token === 'string' ? item.token : null;
+  const keyToken = typeof item.tokenHash === 'string' ? item.tokenHash : (legacyToken ?? '');
   return {
     id: item.id as string,
-    token: item.token as string,
+    token: legacyToken,
+    keyToken,
     householdId: item.householdId as string,
     plantId: item.plantId as string,
     createdBy: item.createdBy as string,
@@ -117,6 +169,11 @@ export function toSummary(tag: PlantTag): PlantTagSummary {
   };
 }
 
+/** A tag as `issueTag` returns it — the one place the plaintext token
+ *  exists for a tag minted since #450, and so the only moment it can be
+ *  printed. */
+export type MintedPlantTag = PlantTag & { token: string };
+
 /**
  * Mint a tag for a plant. A plant holds at most one ACTIVE tag: any earlier
  * active tag for the same plant is revoked first, so "re-issue" and "issue"
@@ -127,16 +184,18 @@ export async function issueTag(input: {
   householdId: string;
   plantId: string;
   createdBy: string;
-}): Promise<PlantTag> {
+}): Promise<MintedPlantTag> {
   await revokeTagsForPlant(input.householdId, input.plantId);
 
   // 256-bit CSPRNG token — 64 hex chars. Same source as sitter links; do NOT
   // swap for uuid()/Math.random (predictable / lower entropy).
   const token = randomBytes(32).toString('hex');
+  const tokenHash = hashTagToken(token);
   const now = new Date().toISOString();
-  const tag: PlantTag = {
+  const tag: MintedPlantTag = {
     id: uuid(),
     token,
+    keyToken: tokenHash,
     householdId: input.householdId,
     plantId: input.plantId,
     createdBy: input.createdBy,
@@ -147,16 +206,36 @@ export async function issueTag(input: {
     pinLockedUntil: null,
   };
 
+  // Written field by field rather than spread from the record, because the
+  // record carries the plaintext and the row must NOT (#450).
   const item: DynamoDBItem = {
-    PK: `PLANTTAG#${token}`,
+    PK: `${TAG_PREFIX}${tokenHash}`,
     SK: 'METADATA',
     GSI1PK: `HOUSEHOLD#${input.householdId}#PLANTTAG`,
     GSI1SK: now,
     entityType: 'PlantTag',
-    ...tag,
+    // Both the PK suffix and the attribute every write path addresses the row
+    // by. The plaintext appears nowhere on the row.
+    tokenHash,
+    id: tag.id,
+    householdId: tag.householdId,
+    plantId: tag.plantId,
+    createdBy: tag.createdBy,
+    createdAt: tag.createdAt,
+    status: tag.status,
+    revokedAt: tag.revokedAt,
+    pinFailures: tag.pinFailures,
+    pinLockedUntil: tag.pinLockedUntil,
   };
   await dynamodb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
   return tag;
+}
+
+async function readTagRow(pk: string): Promise<Record<string, unknown> | null> {
+  const result = await dynamodb.send(
+    new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: 'METADATA' } })
+  );
+  return (result?.Item as Record<string, unknown> | undefined) ?? null;
 }
 
 /**
@@ -168,11 +247,19 @@ export async function getActiveTag(token: string): Promise<PlantTag | null> {
   // Defensive length/charset gate: a token that can't be one of ours never
   // hits DynamoDB.
   if (!TOKEN_RE.test(token)) return null;
-  const result = await dynamodb.send(
-    new GetCommand({ TableName: TABLE_NAME, Key: { PK: `PLANTTAG#${token}`, SK: 'METADATA' } })
-  );
-  if (!result.Item) return null;
-  const tag = itemToTag(result.Item);
+  // Hashed row first — every tag minted since #450, and every legacy tag once
+  // the backfill has re-keyed it. A miss falls back to the pre-#450
+  // plaintext-keyed row so a label printed before the change keeps scanning,
+  // and that fallback refuses a hashed row reached by presenting its digest
+  // (see `readTokenRow`).
+  const item = await readTokenRow({
+    surface: 'plantTag',
+    token,
+    pk: (suffix) => `${TAG_PREFIX}${suffix}`,
+    read: readTagRow,
+  });
+  if (!item) return null;
+  const tag = itemToTag(item);
   return tag.status === 'active' ? tag : null;
 }
 
@@ -190,7 +277,8 @@ export async function getActiveTag(token: string): Promise<PlantTag | null> {
 const TAG_PAGE_SIZE = 500;
 
 /** Every tag row for a household (active + not-yet-swept revoked), newest
- *  first. Tokens are included: the household needs them to print. */
+ *  first. Rows carry `keyToken` so the service can address them; a token only
+ *  on a pre-#450 row that has not been backfilled yet (see the file header). */
 export async function listTags(householdId: string): Promise<PlantTag[]> {
   const items: Record<string, unknown>[] = [];
   let exclusiveStartKey: Record<string, unknown> | undefined;
@@ -216,11 +304,11 @@ export async function listActiveTags(householdId: string): Promise<PlantTag[]> {
   return (await listTags(householdId)).filter((tag) => tag.status === 'active');
 }
 
-async function revokeRow(token: string, now: Date): Promise<void> {
+async function revokeRow(tag: PlantTag, now: Date): Promise<void> {
   await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `PLANTTAG#${token}`, SK: 'METADATA' },
+      Key: { PK: `${TAG_PREFIX}${tag.keyToken}`, SK: 'METADATA' },
       UpdateExpression: 'SET #status = :revoked, revokedAt = :now, #ttl = :ttl',
       ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
       ExpressionAttributeValues: {
@@ -242,7 +330,7 @@ async function revokeRow(token: string, now: Date): Promise<void> {
 export async function revokeTag(householdId: string, tagId: string): Promise<boolean> {
   const target = (await listTags(householdId)).find((tag) => tag.id === tagId);
   if (!target) return false;
-  await revokeRow(target.token, new Date());
+  await revokeRow(target, new Date());
   return true;
 }
 
@@ -261,7 +349,7 @@ export async function revokeTagsCreatedBy(householdId: string, userId: string): 
   const active = (await listActiveTags(householdId)).filter((tag) => tag.createdBy === userId);
   const now = new Date();
   for (const tag of active) {
-    await revokeRow(tag.token, now);
+    await revokeRow(tag, now);
   }
   return active.length;
 }
@@ -271,7 +359,7 @@ export async function revokeTagsForPlant(householdId: string, plantId: string): 
   const active = (await listActiveTags(householdId)).filter((tag) => tag.plantId === plantId);
   const now = new Date();
   for (const tag of active) {
-    await revokeRow(tag.token, now);
+    await revokeRow(tag, now);
   }
   return active.length;
 }
@@ -359,7 +447,7 @@ async function bumpFailures(tag: PlantTag): Promise<number> {
   const result = await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `PLANTTAG#${tag.token}`, SK: 'METADATA' },
+      Key: { PK: `${TAG_PREFIX}${tag.keyToken}`, SK: 'METADATA' },
       UpdateExpression: 'ADD pinFailures :one',
       ExpressionAttributeValues: { ':one': 1 },
       ConditionExpression: 'attribute_exists(PK)',
@@ -374,7 +462,7 @@ async function lockTag(tag: PlantTag, lockedUntil: string): Promise<void> {
   await dynamodb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `PLANTTAG#${tag.token}`, SK: 'METADATA' },
+      Key: { PK: `${TAG_PREFIX}${tag.keyToken}`, SK: 'METADATA' },
       UpdateExpression: 'SET pinLockedUntil = :until, pinFailures = :zero',
       ExpressionAttributeValues: { ':until': lockedUntil, ':zero': 0 },
       ConditionExpression: 'attribute_exists(PK)',
@@ -387,7 +475,7 @@ async function clearFailures(tag: PlantTag): Promise<void> {
     await dynamodb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { PK: `PLANTTAG#${tag.token}`, SK: 'METADATA' },
+        Key: { PK: `${TAG_PREFIX}${tag.keyToken}`, SK: 'METADATA' },
         UpdateExpression: 'SET pinFailures = :zero REMOVE pinLockedUntil',
         ExpressionAttributeValues: { ':zero': 0 },
         ConditionExpression: 'attribute_exists(PK)',

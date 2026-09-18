@@ -5,7 +5,10 @@
  *
  *   MANAGEMENT (auth=jwt): issue / re-issue / revoke a tag per plant, list a
  *   household's tags for the print sheet, and set the household PIN. Gated
- *   on the plan (`plans.ts` → `features.plantTags` / `limits.tags`).
+ *   on the plan (`plans.ts` → `features.plantTags` / `limits.tags`). Since
+ *   #450 a tag's token is hashed at rest, so the ISSUE response is the one
+ *   place a new label's QR code can come from; the list carries a token only
+ *   for a pre-#450 row the backfill has not re-keyed yet.
  *
  *   PUBLIC (auth=none): `GET /tag/{token}` and `POST /tag/{token}/tasks/
  *   {taskId}/complete`. The 256-bit token in the path is the only credential.
@@ -84,8 +87,17 @@ function frontendBaseUrl(): string {
   return baseUrl;
 }
 
-/** The management-side view of one tag: includes the token, because the
- *  household needs it to print (see ADR 0016 on why that is safe here). */
+/**
+ * The management-side view of one tag. `token` and `url` are what the print
+ * sheet renders a QR code from, and they are non-null only when this system
+ * actually holds the token: on the tag `issueTag` just minted, and on a
+ * pre-#450 row the backfill has not re-keyed yet. Every other tag answers
+ * null, which the sheet reads as "this label is already printed" — a
+ * replacement is a new code (ADR 0016, amendment 2026-09-17).
+ *
+ * `toSummary` is the only thing spread in, so `keyToken` — the row's PK
+ * suffix, and for a legacy row the secret itself — can never ride along.
+ */
 function tagResponse(tag: plantTagService.PlantTag, plant: Plant, baseUrl: string) {
   return {
     ...plantTagService.toSummary(tag),
@@ -93,7 +105,7 @@ function tagResponse(tag: plantTagService.PlantTag, plant: Plant, baseUrl: strin
     plantSpecies: plant.species,
     plantStatus: plant.status,
     token: tag.token,
-    url: `${baseUrl}/tag/${tag.token}`,
+    url: tag.token === null ? null : `${baseUrl}/tag/${tag.token}`,
   };
 }
 
@@ -110,7 +122,8 @@ function tagResponse(tag: plantTagService.PlantTag, plant: Plant, baseUrl: strin
 // POST /plants/:plantId/tag
 //
 // Issue a tag for the plant. If the plant already has an active tag it is
-// revoked first — this IS the re-issue call. Returns the token + URL.
+// revoked first — this IS the re-issue call. Returns the token + URL, and this
+// response is the only time they exist: the row stores a digest (#450).
 export const issuePlantTag = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -199,8 +212,9 @@ export const revokePlantTag = createHandler(
 // GET /households/:id/plant-tags
 //
 // Everything the print sheet and the settings tab need in one read: the
-// household's ACTIVE tags (with tokens, for the QR codes), whether the PIN is
-// on, and the plan allowance so the client can render the cap honestly.
+// household's ACTIVE tags, whether the PIN is on, and the plan allowance so
+// the client can render the cap honestly. A tag carries its token only while
+// its row is a pre-#450 plaintext row; see `tagResponse`.
 export const listPlantTags = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -219,9 +233,9 @@ export const listPlantTags = createHandler(
     // allowance the WRITE side will actually enforce, or the print sheet
     // offers a household mid-dunning a cap that `issuePlantTag` above will
     // then refuse — the same mint-vs-use disagreement #540 fixed for API
-    // keys. `tags` is unaffected and still lists every ACTIVE tag with its
-    // token, so labels already issued can still be reprinted; only the
-    // allowance to issue MORE narrows.
+    // keys. `tags` is unaffected and still lists every ACTIVE tag, so labels
+    // already issued can still be managed and turned off; only the allowance
+    // to issue MORE narrows.
     const plan = getEntitledPlan(sub);
     const allowance = plantTagAllowance(plan);
     const plantsById = new Map(plants.map((plant) => [plant.id, plant]));
@@ -229,16 +243,19 @@ export const listPlantTags = createHandler(
 
     // Issuing ONE tag is not a privilege escalation (see the block above);
     // taking a copy of every token in the house in a single call is a
-    // different act with a different risk profile, and tags never expire. The
-    // route genuinely needs the tokens — you cannot render a QR code without
-    // them — so the controls are visibility and rate, not withholding: this is
-    // the only audited bulk read of secrets in the API, and the count says how
-    // many walked out of the door (#451).
+    // different act with a different risk profile, and tags never expire.
+    // Since #450 this route holds a token only for a pre-#450 row the backfill
+    // has not re-keyed, so the bulk read shrinks to nothing as that runs —
+    // until then the controls are still visibility and rate: the audit line
+    // counts the tags listed AND how many tokens actually walked out (#451).
     audit('planttag.listed', {
       actorId: user.userId,
       actorEmail: user.email,
       householdId,
-      metadata: { tags: printable.length },
+      metadata: {
+        tags: printable.length,
+        tokens: printable.filter((tag) => tag.token !== null).length,
+      },
     });
 
     return successResponse({

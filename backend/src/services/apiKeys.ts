@@ -45,7 +45,8 @@
  * row. Keys created before scopes existed have no attribute; we read those as
  * "all read scopes" so the change is backward-compatible.
  */
-import { scryptSync, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken } from '../utils/tokenHash.js';
 import { PutCommand, QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
@@ -134,7 +135,7 @@ export interface ApiKeyCreateResult {
  * (N=16384) adds ~10-50ms per public-API auth, which is fine at this scale.
  */
 function hashKey(plaintext: string): string {
-  return scryptSync(plaintext, 'family-greenhouse-apikey-v2', 32).toString('hex');
+  return hashCapabilityToken('apiKey', plaintext);
 }
 
 function generatePlaintext(): string {

@@ -19,6 +19,7 @@ import type { BatchWriteCommandOutput, QueryCommandInput } from '@aws-sdk/lib-dy
 import { S3Client, ListObjectVersionsCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
+import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { atCap, type Limit } from '../models/plans.js';
 import { Plant, PlantStatus, SpeciesSource, DynamoDBItem } from '../models/types.js';
 // The same resolver the sitter brief uses, so "which of the household's own
@@ -1108,6 +1109,9 @@ export async function getLineage(
 
 /** How long a share link stays redeemable. */
 const SHARE_TTL_DAYS = 14;
+/** A share code is `uuid()` with the dashes removed: 32 lowercase hex. */
+const SHARE_CODE_RE = /^[0-9a-f]{32}$/;
+const SHARE_PREFIX = 'SHARE#';
 
 /**
  * The frozen card a cutting link hands to whoever opens it.
@@ -1149,9 +1153,16 @@ export interface PlantShare {
 }
 
 /**
- * Create a SHARE#{code} row for a plant (copies the INVITE#{code} pattern:
- * 32-hex-char code, DDB TTL sweep, defensive expiry check on read).
- * Returns null when the plant doesn't exist in the caller's household.
+ * Create a share row for a plant (copies the INVITE#{code} pattern: 32-hex-char
+ * code, DDB TTL sweep, defensive expiry check on read). Returns null when the
+ * plant doesn't exist in the caller's household.
+ *
+ * The code is a public link's only credential, so at rest it is HASHED like
+ * every other one (#450): PK = `SHARE#{scrypt(code)}` and the row carries no
+ * `code` attribute. Nothing needs it back — the code is returned exactly once,
+ * here, and every revoke path deletes by the row's own key. Rows minted before
+ * this change are keyed by the plaintext and still resolve (`getPlantShare`
+ * falls back to one more point read); their 14-day TTL retires them.
  */
 export async function createPlantShare(
   householdId: string,
@@ -1184,11 +1195,20 @@ export async function createPlantShare(
     expiresAt: expiresAt.toISOString(),
   };
 
+  const codeHash = hashCapabilityToken('plantShare', code);
+  // Field by field rather than spread from `share`, because `share` carries
+  // the plaintext code and the row must NOT (#450).
   const item: DynamoDBItem = {
-    PK: `SHARE#${code}`,
+    PK: `${SHARE_PREFIX}${codeHash}`,
     SK: 'METADATA',
     entityType: 'PlantShare',
-    ...share,
+    codeHash,
+    plantId: share.plantId,
+    householdId: share.householdId,
+    plantSnapshot: share.plantSnapshot,
+    createdBy: share.createdBy,
+    createdAt: share.createdAt,
+    expiresAt: share.expiresAt,
     // Household-scoped index, the same shape sitter links, kiosk links and
     // caretaker seats use (GSI1PK = HOUSEHOLD#{id}#{KIND}, newest first).
     // The row itself lives in a secret-code partition, so without this the
@@ -1279,25 +1299,39 @@ export async function revokePlantSharesCreatedBy(
  * token, and the snapshot contains no PII beyond the plant card itself.
  */
 export async function getPlantShare(code: string): Promise<PlantShare | null> {
-  const result = await dynamodb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `SHARE#${code}`, SK: 'METADATA' },
-    })
-  );
+  // A code that can't be one of ours never reaches DynamoDB — nor scrypt,
+  // which is the more expensive half on an unauthenticated route.
+  if (!SHARE_CODE_RE.test(code)) return null;
 
-  if (!result.Item) return null;
+  // Hashed row first (every share minted since #450); a miss falls back to
+  // one point read on the pre-#450 plaintext key, honoured only when that row
+  // still carries the presented code, so a digest lifted from a table export
+  // is not a working link (see `readTokenRow`).
+  const item = await readTokenRow({
+    surface: 'plantShare',
+    token: code,
+    pk: (suffix) => `${SHARE_PREFIX}${suffix}`,
+    read: async (pk) => {
+      const result = await dynamodb.send(
+        new GetCommand({ TableName: TABLE_NAME, Key: { PK: pk, SK: 'METADATA' } })
+      );
+      return (result?.Item as Record<string, unknown> | undefined) ?? null;
+    },
+    plaintextAttribute: 'code',
+  });
+  if (!item) return null;
 
   // Field-by-field, never a spread: rows minted before the house-rule change
   // still carry a `notes` key in their stored snapshot, and this projection is
   // what keeps those links from serving it for the rest of their 14-day life.
   // A legacy row has no `careRule`, so it degrades to no care note at all —
   // the fail-closed direction.
-  const snapshot = (result.Item.plantSnapshot ?? {}) as Partial<PlantShareSnapshot>;
+  const snapshot = (item.plantSnapshot ?? {}) as Partial<PlantShareSnapshot>;
   const share: PlantShare = {
-    code: result.Item.code as string,
-    plantId: result.Item.plantId as string,
-    householdId: result.Item.householdId as string,
+    // The presented code, not a stored one: a hashed row has none to read.
+    code,
+    plantId: item.plantId as string,
+    householdId: item.householdId as string,
     plantSnapshot: {
       name: (snapshot.name as string) ?? '',
       species: snapshot.species ?? null,
@@ -1305,9 +1339,9 @@ export async function getPlantShare(code: string): Promise<PlantShare | null> {
       imageUrl: snapshot.imageUrl ?? null,
       tags: snapshot.tags ?? [],
     },
-    createdBy: result.Item.createdBy as string,
-    createdAt: result.Item.createdAt as string,
-    expiresAt: result.Item.expiresAt as string,
+    createdBy: item.createdBy as string,
+    createdAt: item.createdAt as string,
+    expiresAt: item.expiresAt as string,
   };
 
   if (new Date(share.expiresAt) < new Date()) {

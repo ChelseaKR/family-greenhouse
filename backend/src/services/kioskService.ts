@@ -86,7 +86,8 @@
  * already revokes the old link in the same call.
  */
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -154,7 +155,7 @@ export interface KioskLinkSummary {
  * other's URL.
  */
 function hashToken(token: string): string {
-  return scryptSync(token, 'family-greenhouse-kiosk-v1', 32).toString('hex');
+  return hashCapabilityToken('kioskLink', token);
 }
 
 function itemToLink(item: Record<string, unknown>): KioskLink {
@@ -373,8 +374,15 @@ export async function getActiveKioskLink(token: string): Promise<KioskLink | nul
   // pre-#450 plaintext-keyed row, so a wall display that has been up for a
   // year does not go dark on deploy. Both are GetItem on the partition key:
   // the fallback costs one extra point read and adds no enumeration surface.
-  const item =
-    (await readLinkRow(`KIOSK#${hashToken(token)}`)) ?? (await readLinkRow(`KIOSK#${token}`));
+  // The fallback only honours a row that still carries the presented token —
+  // without that, a digest from a table export resolved as a working link
+  // (see `readTokenRow`).
+  const item = await readTokenRow({
+    surface: 'kioskLink',
+    token,
+    pk: (suffix) => `KIOSK#${suffix}`,
+    read: readLinkRow,
+  });
   if (!item) return null;
 
   const link = itemToLink(item);
