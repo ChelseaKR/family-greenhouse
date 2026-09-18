@@ -3070,11 +3070,10 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
   /plants/import:
     post:
-      summary: Bulk import up to 100 plants (+tasks); household admins only; partial success at plan cap
+      summary: Bulk import up to 100 plants (+tasks); partial success at plan cap
       tags: [Plants]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
-        '403': { $ref: '#/components/responses/Forbidden' }
   /plants/{id}/share:
     post:
       summary: Mint a 14-day cutting-share link for a plant snapshot

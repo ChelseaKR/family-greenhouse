@@ -18,7 +18,6 @@ import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
-import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import {
   applyMapping,
   detectFileKind,
@@ -38,7 +37,7 @@ import {
 } from './importParse';
 
 /**
- * Bulk CSV/JSON import, for household admins. Flow: pick/drop a file →
+ * Bulk CSV/JSON import, open to every household member. Flow: pick/drop a file →
  * (CSV only) match its columns → preview with per-row states, every column
  * or field that will NOT be imported listed, and the plan's remaining room
  * applied row by row → confirm → submit the admitted rows in batches of ≤100
@@ -51,19 +50,6 @@ import {
 export function ImportPlantsPage() {
   const { t } = useTranslation();
   useDocumentTitle(t('importPlants.title'));
-  const isAdmin = useIsHouseholdAdmin();
-
-  if (!isAdmin) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-6">
-        <PageHeader t={t} />
-        <Card>
-          <CardHeader title={t('importPlants.title')} />
-          <p className="text-sm text-gray-600">{t('importPlants.adminOnly')}</p>
-        </Card>
-      </div>
-    );
-  }
   return <ImportFlow />;
 }
 

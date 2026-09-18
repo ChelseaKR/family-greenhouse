@@ -265,7 +265,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: (
           <>
             <p>
-              Yes, if you are a household admin — <em>Settings → Account</em> has{' '}
+              Yes — <em>Settings → Account</em> has{' '}
               <strong>Import plants from a CSV or JSON file</strong>, which takes up to 100 plants
               per import with up to 10 care tasks each. A spreadsheet with its own column names
               works too: you match its columns (name, species, location, notes, tags, days between
@@ -281,7 +281,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'Yes, if you are a household admin. Settings then Account has Import plants from a CSV or JSON file, which takes up to 100 plants per import with up to 10 care tasks each. A spreadsheet with its own column names works too: you match its columns (name, species, location, notes, tags, days between waterings) before anything is imported, and any column left unmatched is listed rather than dropped silently. The preview shows how many more plants your plan has room for, and rows past that are marked and not sent. If the limit is still reached part-way through, the rows already created are kept and the rest are reported as skipped. Planta, Greg and Vera do not document any way to export your plants to a file, so there is no direct import from them.',
+        text: 'Yes. Settings then Account has Import plants from a CSV or JSON file, which takes up to 100 plants per import with up to 10 care tasks each. A spreadsheet with its own column names works too: you match its columns (name, species, location, notes, tags, days between waterings) before anything is imported, and any column left unmatched is listed rather than dropped silently. The preview shows how many more plants your plan has room for, and rows past that are marked and not sent. If the limit is still reached part-way through, the rows already created are kept and the rest are reported as skipped. Planta, Greg and Vera do not document any way to export your plants to a file, so there is no direct import from them.',
       },
       {
         id: 'identify-photo',

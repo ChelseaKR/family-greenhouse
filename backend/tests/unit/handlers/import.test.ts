@@ -309,11 +309,12 @@ describe('POST /plants/import', () => {
     expect(body.results[1]).toMatchObject({ index: 1, status: 'created', plantId: 'p2' });
   });
 
-  it('refuses a household member who is not an admin with 403, creating nothing (#668)', async () => {
+  it('lets any household member import, not only admins (#668 owner decision)', async () => {
     const plantService = await import('../../../src/services/plantService.js');
     const householdService = await import('../../../src/services/householdService.js');
     const { importPlants } = await import('../../../src/handlers/plants/import.js');
     // The membership row decides the role (auth middleware), not the claim.
+    // Once: a persistent override would run every later test as a member.
     vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
       householdId: 'hh-1',
       userId: 'user-1',
@@ -322,10 +323,13 @@ describe('POST /plants/import', () => {
       role: 'member',
       joinedAt: '',
     });
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'Pothos'));
     const event = buildEvent({ plants: [{ name: 'Pothos' }] });
     const res = (await importPlants(event, fakeContext, () => {})) as APIGatewayProxyResult;
-    expect(res.statusCode).toBe(403);
-    expect(plantService.createPlant).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ created: 1, skipped: 0 });
+    // The plan cap still bounds a member's import exactly as an admin's.
+    expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 20);
   });
 
   it("keeps an imported row's notes private: they reach `notes`, never the house rule a token surface shows (#668)", async () => {

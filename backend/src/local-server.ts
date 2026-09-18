@@ -4156,14 +4156,12 @@ app.post(
   }
 );
 
-// Mirrors handlers/plants/import.ts: admins only, partial success, per-row
-// results, plan cap enforced per row, ONE 'plants.imported' activity entry
-// for the batch.
+// Mirrors handlers/plants/import.ts: partial success, per-row results, plan
+// cap enforced per row, ONE 'plants.imported' activity entry for the batch.
 app.post(
   '/plants/import',
   authMiddleware,
   requireHousehold,
-  requireAdmin,
   validateBody(importPlantsSchema),
   (req, res) => {
     const user = (req as any).user;

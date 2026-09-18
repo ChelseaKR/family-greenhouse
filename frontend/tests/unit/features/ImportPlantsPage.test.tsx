@@ -26,6 +26,8 @@ vi.mock('@/services/billingService', async (importOriginal) => {
   };
 });
 
+// The page must not gate on role: every member may import (#668 owner
+// decision). Mocked so a member-role test can prove the page ignores it.
 const isAdmin = vi.fn(() => true);
 vi.mock('@/hooks/useActiveHouseholdRole', () => ({
   useIsHouseholdAdmin: () => isAdmin(),
@@ -128,11 +130,16 @@ describe('ImportPlantsPage', () => {
     );
   });
 
-  it('is for household admins only: a member gets the reason and no uploader', () => {
+  it('lets a household member who is not an admin import (#668 owner decision)', async () => {
     isAdmin.mockReturnValue(false);
-    renderPage();
-    expect(screen.getByText(/Only a household admin can import plants/)).toBeInTheDocument();
-    expect(screen.queryByLabelText('Choose a file')).not.toBeInTheDocument();
+    await uploadCsvAndSubmit('name\nFiddle Leaf Fig\n', {
+      results: [{ index: 0, status: 'created', plantId: 'plant-1' }],
+      created: 1,
+      skipped: 0,
+      planLimitHit: false,
+    });
+    expect(plantService.importPlants).toHaveBeenCalledWith([{ name: 'Fiddle Leaf Fig' }]);
+    expect(await screen.findByText('1 plant created')).toBeInTheDocument();
   });
 
   it('asks which column is which for a spreadsheet that is not our export, then imports that', async () => {

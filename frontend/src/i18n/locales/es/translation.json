@@ -639,7 +639,6 @@
     "dropHint": "Arrastra y suelta un archivo .csv o .json aquí",
     "browse": "Elegir un archivo",
     "formatHelp": "CSV: cualquier archivo con una fila de encabezados. En el siguiente paso relacionas sus columnas con los datos de cada planta (solo el nombre es obligatorio); una exportación de esta app se reconoce sola. JSON: una lista de plantas o un archivo de exportación de Family Greenhouse.",
-    "adminOnly": "Solo una persona administradora del hogar puede importar plantas en este hogar. Pídele a alguien con ese rol que haga la importación.",
     "otherApps": {
       "title": "¿Vienes de Planta, Greg o Vera?",
       "body": "Sus páginas de ayuda no describen ninguna forma de exportar tus plantas a un archivo, así que no hay nada que podamos importar directamente desde esas apps. Si tienes tu lista de plantas en una hoja de cálculo —escrita por ti o guardada como CSV desde Google Sheets, Excel, Numbers, Notion o Airtable—, súbela aquí y relaciona sus columnas."

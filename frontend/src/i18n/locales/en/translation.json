@@ -626,7 +626,6 @@
     "dropHint": "Drag and drop a .csv or .json file here",
     "browse": "Choose a file",
     "formatHelp": "CSV: any file with a header row. You match its columns to plant details on the next step (only the plant name is required); an export from this app matches itself. JSON: a list of plants or a Family Greenhouse export file.",
-    "adminOnly": "Only a household admin can import plants into this household. Ask one of its admins to run the import.",
     "otherApps": {
       "title": "Coming from Planta, Greg or Vera?",
       "body": "Their help pages don't describe any way to export your plants to a file, so there is nothing we can import from them directly. If your plant list is in a spreadsheet — typed up yourself, or saved as CSV from Google Sheets, Excel, Numbers, Notion or Airtable — upload it here and match its columns."
