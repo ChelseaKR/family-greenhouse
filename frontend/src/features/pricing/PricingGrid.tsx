@@ -5,6 +5,7 @@ import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { buttonStyles } from '@/components/buttonStyles';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { isNativeApp } from '@/lib/platform';
 import { billingService } from '@/services/billingService';
 import { PaidPlanGrid } from './PaidPlanGrid';
 
@@ -25,6 +26,14 @@ import { PaidPlanGrid } from './PaidPlanGrid';
  * Settings -> Billing.
  */
 export function PricingGrid({ publishedFooter }: PricingGridProps = {}) {
+  // Never inside the iOS/Android shells. Neither store lets the app show a
+  // price for a subscription it does not sell through In-App Purchase, nor a
+  // button toward one (Apple 3.1.1, Play Payments). The only page that renders
+  // this grid, the landing page, is no longer where a signed-out native user
+  // starts (App.tsx sends them to /login), and the native /pricing route has
+  // its own purchase-free copy. This guard keeps the next caller that embeds
+  // the grid on a page the shells can reach from repeating #804's defect.
+  if (isNativeApp()) return null;
   // The catalog query lives in the child, not here, so that the held surface
   // mounts no data-fetching hook at all: while the hold is on this page is
   // pure static copy and needs no query client in the tree.

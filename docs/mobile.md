@@ -239,6 +239,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Push notifications | Web push does not exist in the WebViews. Native push UI is hidden until APNs/FCM delivery is complete, so store builds do not promise reminders that cannot arrive. See "Push notifications" below.                                                                                                                                                                                                                                              |
 | Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS. |
 | Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` padding on `body` (index.css) and the sticky mobile header (Layout.tsx) keep content clear of the notch/status bar/home indicator.                                                                                                                                                                                                                                                               |
+| Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                            |
 | Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                              |
 
 ## Store payment rules (read before touching billing UI)
@@ -393,27 +394,38 @@ Remaining work for delivery:
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.
 - [ ] Apple Guideline 4.2 (minimum functionality): wrapped web apps get extra
-      scrutiny. As of 0.34.0 (the first submitted build) **there was no native
-      capability to point a reviewer at** — photo capture is the WebView file
-      picker, identical to the website in mobile Safari; the app opens offline
-      because the bundle is inside the binary, which is what wrapping a web app
-      means rather than a differentiator; and push notifications were
-      deliberately unreachable from the UI. **Since then, iOS Universal Links
-      are wired in the app** (#803; this file's "Deep links" section): with a
-      build carrying them, tapping a familygreenhouse.net link the app mails —
-      an invite, a sitter link, a task reminder — opens straight into the
-      native app instead of Safari. That is a genuine behavioral difference
-      from the mobile website and the thing to name in review notes for any
-      submission after 0.34.0, once a build carrying it has been archived and
-      checked on a device. It does not retroactively help 0.34.0's review.
-      Android still has nothing to point at (App Links await
-      the signing-certificate fingerprint, above) and push delivery is still
-      off end to end. Tracked in
-      [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469). A 4.2
-      rejection is a multi-week loop; if 0.34.0 is rejected under it, the
-      fastest fix is very likely re-submitting once a build with Universal
-      Links lands, rather than reaching for haptics/widgets/native share —
-      talk to review, don't resubmit blind.
+      scrutiny, so the argument is built from what a reviewer can see that
+      mobile Safari does not do, and nothing else. Name only what is true of
+      the build being submitted, and check each item on a device running that
+      build first.
+  - **The first screen is the app, not the website.** Signed out, the shells
+    open on sign-in (`App.tsx` sends a native `/` to `/login`). Up to and
+    including 0.36.0 they opened on the marketing landing page, which is the
+    screen a reviewer sees before typing the demo credentials. That page had
+    its header under the status bar and Dynamic Island, a browser-window
+    mockup captioned "familygreenhouse.net", and the live plan catalog with
+    prices, plan buttons and trial terms. The prices are a 3.1.1 problem on
+    their own; `PricingGrid` now renders nothing inside the shells in case
+    another page embeds it later.
+  - **Links open the app.** iOS Universal Links are wired (#803; "Deep links"
+    above). With a build that carries them, tapping a familygreenhouse.net
+    link from one of the app's emails (an invite, a sitter link, a task
+    reminder) opens the native app instead of Safari. It doesn't help 0.34.0,
+    which predates it. Android App Links still wait on the
+    signing-certificate fingerprint.
+  - **Everything in "Native capabilities" above.** The validator checks that
+    table against the installed plugins and both native projects, so it is
+    the list to write review notes from. Keep adding to it as native
+    behavior lands. A row that isn't in the table isn't in the app.
+  - **What is not an argument.** The WebView file picker behaves exactly like
+    mobile Safari's. Opening offline is what a bundled web app does anyway,
+    so it doesn't count as a feature. Push delivery is still off end to end,
+    tracked in
+    [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469).
+
+  A 4.2 rejection is a multi-week loop. Talk to review, don't resubmit
+  blind.
+
 - [ ] Demo credentials for a seeded household in the review notes (both
       stores log into the app during review).
 
