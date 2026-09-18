@@ -22,10 +22,10 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:start -->
 
-| Plugin                          | What it backs                                                                                                                                      |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@capacitor/app`                | `appUrlOpen` delivery for iOS Universal Links / Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" below.            |
-| `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below. |
+| Plugin                          | What it backs                                                                                                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@capacitor/app`                | `appUrlOpen` delivery for iOS Universal Links (`frontend/src/services/nativeDeepLinks.ts`). Android App Links are not wired yet — see "Deep links" below. |
+| `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below.        |
 
 <!-- capacitor-plugins:end -->
 
@@ -50,32 +50,46 @@ review notes before and neither is true:
   (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
   The PWA offline story is a web-only feature.
 
-Deep links are done on iOS, still half present on Android.
-`frontend/public/.well-known/apple-app-site-association` has carried the real
-Apple Team ID since before this and is the SERVING side of iOS universal
-links; the APP side landed alongside it: `ios/App/App/App.entitlements` now
-declares `com.apple.developer.associated-domains` (`applinks:
-familygreenhouse.net`), `@capacitor/app` is installed and linked into both
-native projects, and `frontend/src/services/nativeDeepLinks.ts` turns the
-`appUrlOpen` event into an in-app navigation via `history.pushState` +
-a manual `popstate` dispatch (`<BrowserRouter>` only re-syncs on `popstate`,
+### Deep links
+
+**iOS: wired in the app, not yet in a shipped build.**
+`frontend/public/.well-known/apple-app-site-association` carries the real
+Apple Team ID and is the SERVING side of iOS universal links. It is live at
+the domain, and Apple's CDN
+(`https://app-site-association.cdn-apple.com/a/v1/familygreenhouse.net`)
+serves it too — checked 2026-09-17, after a stretch of cached 404s — which is
+the "live and Apple-verified first" precondition this section set for the app
+side. The APP side landed in #803: `ios/App/App/App.entitlements` declares
+`com.apple.developer.associated-domains` (`applinks:familygreenhouse.net`),
+`@capacitor/app` is installed and linked into both native projects, and
+`frontend/src/services/nativeDeepLinks.ts` (started from `main.tsx`) turns the
+`appUrlOpen` event into an in-app navigation via `history.pushState` + a
+manual `popstate` dispatch (`<BrowserRouter>` only re-syncs on `popstate`,
 which `pushState` does not fire on its own). `AppDelegate.swift` already
 forwarded `continue userActivity` to `ApplicationDelegateProxy` before any of
 this — nothing to add there.
 
+None of that reaches a user until an iOS build carrying it is archived and
+installed: the binary pins its own copy of the frontend and its entitlements
+(see "Build flow"), and 0.34.0 — the first submitted build — predates #803.
+Before naming universal links in review notes, tap a familygreenhouse.net link
+from Mail or Notes on a device running that build and confirm it opens the
+app.
+
 **Still outstanding, and on whom.** Adding a new entitlement re-requests a
 capability from the Apple Developer portal the same way Push Notifications
-did (#469 §3) — expect to redo the Signing & Capabilities dance (or at minimum
-regenerate/reselect the Release provisioning profile) on the next archive
-after this lands, not before. Android is untouched: the only `intent-filter`
-is `MAIN`/`LAUNCHER`, and there is no `assetlinks.json` — that file needs the
-SHA-256 fingerprint of the release/upload signing certificate (`keytool
--list -v` against the upload keystore, or Play Console → Setup → App
+did (#469 §3) — expect to enable Associated Domains on the App ID and redo the
+Signing & Capabilities dance (or at minimum regenerate/reselect the Release
+provisioning profile) on the next archive. Android is untouched: the only
+`intent-filter` is `MAIN`/`LAUNCHER`, and there is no `assetlinks.json` — that
+file needs the SHA-256 fingerprint of the release/upload signing certificate
+(`keytool -list -v` against the upload keystore, or Play Console → Setup → App
 integrity), which is a maintainer-held value nothing in this repo can derive.
 Until Android's half lands, every link the backend mails — invites, sitter
 links, the `/tasks?filter=due` reminder link, unsubscribe, the calendar feed —
 opens the browser for an Android user who has the app installed, and asks them
-to sign in again; iOS users now go straight into the app.
+to sign in again. On iOS the same links open the app once a build carrying
+#803 is installed.
 
 Half of it is worse than none, which is why the remaining Android piece stays
 staged in the same fixed order this section already established: an
@@ -99,9 +113,10 @@ a new route nobody claimed (its links keep opening Safari).
 **What is claimed, and what is deliberately not.** The claim is a decision per
 declared route, recorded in `ROUTE_POLICY`; a route App.tsx declares and the
 policy does not classify fails the gate, so "no" is never the silent default.
-24 of the 45 declared routes are claimed by 22 components. The 21 that stay in
-the browser are the marketing and content pages, the email-link auth routes
-(`/login`, `/register`, `/confirm-email`, `/reset-password`,
+24 of the 47 declared routes are claimed by 22 components. The 23 that stay in
+the browser are the marketing and content pages (including `/pet-safe/:slug`
+and `/gift`, both added after this count was first written), the email-link
+auth routes (`/login`, `/register`, `/confirm-email`, `/reset-password`,
 `/forgot-password`, `/welcome`) — a confirmation link is followed once, often
 on a device that does not have the app — and `/account-deletion`. That last
 one is not a judgement call: App Review checks that account deletion is
@@ -220,7 +235,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 
 | Area               | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only. That is NOT the same as "all purchase UI is hidden", which this row used to claim: `LockedFeature`/`AskToUpgrade` is not native-gated. See "Store payment rules" below — do not add purchase links without reading it.                                                                                                                                       |
+| Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only, and since #804 so is every other purchase surface: `LockedFeature` shows what a paid feature is with no price and no ask, and `AskToUpgrade` renders only inside the web-only plan grid. One sentence on the billing screen still points outside the app — see "Store payment rules" below, and do not add purchase links without reading it.                |
 | Push notifications | Web push does not exist in the WebViews. Native push UI is hidden until APNs/FCM delivery is complete, so store builds do not promise reminders that cannot arrive. See "Push notifications" below.                                                                                                                                                                                                                                              |
 | Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS. |
 | Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` padding on `body` (index.css) and the sticky mobile header (Layout.tsx) keep content clear of the notch/status bar/home indicator.                                                                                                                                                                                                                                                               |
@@ -233,10 +248,11 @@ the app through Stripe:
 
 - **Apple (Guideline 3.1.1):** no buttons, external links, or calls to action
   that direct users to a purchase mechanism other than In-App Purchase. This
-  is why the native billing screen shows only a neutral "Plan changes aren't
-  available in the app." with **no URL**. Adding a "subscribe on our website"
-  link is a rejection (US storefront external-link entitlements exist but
-  need explicit approval — treat as a separate project).
+  is why the native billing screen shows a neutral "Plan changes aren't
+  available in the app." with **no URL** (one sentence for a household whose
+  payment is failing is the exception; see below). Adding a "subscribe on our
+  website" link is a rejection (US storefront external-link entitlements
+  exist but need explicit approval — treat as a separate project).
 - **Google Play (Payments policy):** same principle with Play Billing.
 
 Options if in-app purchasing is ever wanted: implement StoreKit/Play Billing
@@ -247,31 +263,26 @@ entitlement without directing users to a purchase flow.
 The native `/pricing` route is purchase-free plan information; web prices and
 billing help are not rendered inside the shells.
 
-**One surface is not gated, and it is the one a reviewer reaches first.**
-`LockedFeature` (`frontend/src/components/LockedFeature.tsx`) renders on
-`/chat` (`feature="chat"`), on the trip-sitter offer (`away_kit`) and in API
-key settings (`api_keys`), and it checks the household's plan, not
-`isNativeApp()`. Inside the shells it therefore shows, to a Seedling
-household:
+**The locked-feature card is gated too (#804).** `LockedFeature`
+(`frontend/src/components/LockedFeature.tsx`) renders on `/chat`
+(`feature="chat"`), on the trip-sitter offer (`away_kit`) and in API key
+settings (`api_keys`) — the first screen a reviewer on a free-tier store
+build reaches after reading about the chat assistant. It used to show a
+subscription price ("Included with Garden — $4.99 a month"), a **Change plan**
+button and **"Ask <admin> to upgrade"** inside the shells. It now checks
+`isNativeApp()`: native shows what the feature is and the same neutral
+"Plan changes aren't available in the app." as the billing screen, with no
+price and no ask; the web keeps the full card.
+`frontend/tests/unit/components/LockedFeature.test.tsx` ("inside the native
+(Capacitor) shells") holds it.
 
-- `locked.includedWithPrice` — "Included with Garden — $4.99 a month for the
-  whole household". A subscription price, in the app, for something that
-  cannot be bought with In-App Purchase.
-- to an admin, a **Change plan** button linking to `/settings/billing`. That
-  destination is native-gated and says plan changes are unavailable, so the
-  button does not reach a purchase mechanism — but it is still a call to
-  action about buying a subscription.
-- to a member, **"Ask <admin> to upgrade"**, which mails the admins asking
-  them to buy.
-
-Store builds install at the free tier, so the reviewer's path is: read
-"a plant care assistant answers questions about your plants" in the
-description → tap Chat → land on a priced upgrade prompt. That is the
-2.3.1 (accurate metadata) and 3.1.1 (in-app purchase) surfaces arriving on
-the same screen. Gating `LockedFeature` on `isNativeApp()` — showing what the
-feature is and that it is not included, with no price and no ask — is the
-change that makes the "Billing" row above true as written. Not done here:
-it changes what paying members see in the app, which is a product decision.
+**One sentence still points outside the app.** A household whose payment is
+failing sees, on the read-only billing screen, "Open Family Greenhouse in a
+web browser to update the card." (`settings.billing.paymentFailedActionNative`,
+#767). It carries no URL and no button, and a reviewer's fresh account never
+reaches it, but it is an instruction to pay somewhere other than In-App
+Purchase. Keep it or cut it deliberately; do not copy its pattern onto a
+surface a reviewer can reach.
 
 ## Push notifications
 
@@ -306,7 +317,7 @@ Remaining work for delivery:
    backend, as a delivery bug. `tests/unit/config/iosEntitlements.test.ts`
    holds all of that; `scripts/validate-store-release.mjs` additionally
    requires it once `registerNativePush()` has a call site. What is still
-   outstanding here is the Apple-side key and the AppDelegate forwarding is
+   outstanding here is only the Apple-side key; the AppDelegate forwarding is
    already wired. Easiest delivery path is uploading the APNs key to the same
    Firebase project and sending everything through FCM.
 3. **Backend sender: written and wired; unconfigured.** `notifier.sendDevicePush`
@@ -388,13 +399,14 @@ Remaining work for delivery:
       because the bundle is inside the binary, which is what wrapping a web app
       means rather than a differentiator; and push notifications were
       deliberately unreachable from the UI. **Since then, iOS Universal Links
-      are real** (this file's "Deep links" section): tapping a
-      familygreenhouse.net link the app mails — an invite, a sitter link, a
-      task reminder — opens straight into the native app instead of Safari.
-      That is a genuine behavioral difference from the mobile website and the
-      thing to name in review notes for any submission after 0.34.0, once a
-      build carrying it has been archived. It does not retroactively help
-      0.34.0's review. Android still has nothing to point at (App Links await
+      are wired in the app** (#803; this file's "Deep links" section): with a
+      build carrying them, tapping a familygreenhouse.net link the app mails —
+      an invite, a sitter link, a task reminder — opens straight into the
+      native app instead of Safari. That is a genuine behavioral difference
+      from the mobile website and the thing to name in review notes for any
+      submission after 0.34.0, once a build carrying it has been archived and
+      checked on a device. It does not retroactively help 0.34.0's review.
+      Android still has nothing to point at (App Links await
       the signing-certificate fingerprint, above) and push delivery is still
       off end to end. Tracked in
       [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469). A 4.2
