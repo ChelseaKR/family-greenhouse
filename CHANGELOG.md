@@ -16,187 +16,228 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-09-18
+
+**A privacy fix comes first:** photos no longer carry the phone's location off
+the device (#849, under Security below). Production ran without this fix
+through 0.36.0.
+
+- **Included, but switched off:** passkeys (#830), which stay off until
+  `passkeys_enabled` is set to `true` in the production tfvars (it is `false`),
+  and replying to a reminder email to complete a task (#823), which stays off
+  until `email_reply_actions_enabled` is set (default `false`, not set in the
+  production tfvars).
+- **Not in this release:** Android App Links (#848) and native push
+  notifications (#851) are not merged.
+- **The apps get most of their changes from store builds.** The iPhone and
+  Android shells run the web build packaged inside them, so the app-only
+  changes below (camera, haptics, share sheet, launch screen, Android back,
+  iOS text size, the signed-out start screen) reach people through the
+  0.37.0 store builds (build 3700), not through this tag's web deploy. The
+  shells call the same production API, so the backend changes apply to them
+  as soon as this tag deploys.
+
+### Security
+
+- **Photos no longer carry the phone's location off the device (#849).** Every
+  photo upload path now removes EXIF, XMP, IPTC, MPF secondary images, PNG
+  text chunks and WebP metadata, GPS included, on the device before the
+  upload. That covers plant photos, Add plant and its identification, the
+  leaf-health check, sitter photos and caretaker photos. A file the app cannot
+  rewrite is refused, not uploaded. Before, two paths stored the location:
+  when the browser could not run the canvas resize, the original file was
+  uploaded with its GPS block, and the caretaker page uploaded every photo
+  exactly as picked. Those files were stored in S3, served from the site at
+  unguessable URLs, and, for identification, sent to Plant.id. **Photos
+  uploaded before this release are not rewritten**, and the server does not
+  strip metadata itself: the fix is in the app, so it covers uploads from this
+  release's web build and the 0.37.0 store builds. The privacy policy (EN/ES)
+  now says photos are resized and stripped of location and camera details
+  before upload.
+
 ### Added
 
-- **Take or choose plant photos with the phone's own camera and photo picker.**
-  In the iPhone and Android apps, a plant's page and Add plant now offer
-  **Take photo** and **Choose photo** (`@capacitor/camera`) in place of the
-  web file input: the system camera, which saves nothing to the gallery, and
-  the system photo picker (PHPicker on iOS, the Android Photo Picker), which
-  hands over only the photo picked and needs no storage permission. The OS
-  asks for camera or photo access the first time a button is tapped, never at
-  launch. The website keeps its file input.
+- **Take or choose plant photos with the phone's own camera and photo picker
+  (#849).** In the iPhone and Android apps, a plant's page and Add plant now
+  offer **Take photo** and **Choose photo** (`@capacitor/camera`) in place of
+  the web file input: the system camera, which saves nothing to the gallery,
+  and the system photo picker (PHPicker on iOS, the Android Photo Picker),
+  which hands over only the photo picked and needs no storage permission. The
+  OS asks for camera or photo access the first time a button is tapped, never
+  at launch. The website keeps its file input.
 
-- **Complete or snooze a reminder's tasks by replying to it (#667) — built,
-  switched off.** With `email_reply_actions_enabled = true` (default `false`),
-  each reminder email carries a per-message `Reply-To: care+<token>@…`,
-  numbers every row it lists, and says how to reply; answering `done 1`,
-  `done 1, 2`, `snooze 2 for 3 days` (or `hecho 1`, `posponer 2 por 3 días`)
-  completes or snoozes exactly those rows through the app's own task calls and
-  sends one confirmation. The token is 160 random bits stored only as its
-  scrypt digest (the shared helper from #811), lasts 3 days, and reaches only
-  the rows its email listed, each pinned to the occurrence the email described,
-  so a second action on a task through it can never apply. A reply acts only
-  when its single From mailbox is the member's stored address and SES reports
-  DMARC `PASS`; only the first line above the quoted text is read, against a
-  closed grammar; anything else changes nothing and gets at most one help note.
-  Unknown tokens get no answer at all. Deploy note: while the flag is `false`
-  a `v*` tag creates only the idle `emailReplies` function and a `replies/`
-  lifecycle rule on the inbound bucket; turning it on adds one SES receipt rule
-  (`reply-to-act`, matching `care@`), its invoke permission and a `replies/*`
-  S3 grant. No DNS change: the apex MX already routes to SES. ADR 0031.
+- **Complete or snooze a reminder's tasks by replying to it (issue #667, PR
+  #823) — built, switched off.** With `email_reply_actions_enabled = true`
+  (default `false`), each reminder email carries a per-message
+  `Reply-To: care+<token>@…`, numbers every row it lists, and says how to
+  reply; answering `done 1`, `done 1, 2`, `snooze 2 for 3 days` (or `hecho 1`,
+  `posponer 2 por 3 días`) completes or snoozes exactly those rows through the
+  app's own task calls and sends one confirmation. The token is 160 random
+  bits stored only as its scrypt digest (the shared helper from #811), lasts 3
+  days, and reaches only the rows its email listed, each pinned to the
+  occurrence the email described, so a second action on a task through it can
+  never apply. A reply acts only when its single From mailbox is the member's
+  stored address and SES reports DMARC `PASS`; only the first line above the
+  quoted text is read, against a closed grammar; anything else changes
+  nothing and gets at most one help note. Unknown tokens get no answer at all.
+  Deploy note: while the flag is `false`, this release's tag creates only the
+  idle `emailReplies` function (with its error alarm) and a `replies/`
+  lifecycle rule on the inbound bucket; turning it on adds one SES receipt
+  rule (`reply-to-act`, matching `care@`), its invoke permission and a
+  `replies/*` S3 grant. No DNS change: the apex MX already routes to SES. ADR 0031.
 
-- **A household chat channel for Discord, Slack or Matrix (#674).** An admin
-  connects one incoming webhook per household (Settings → Notifications), and
-  the household's plant care is posted where the family already talks: a
-  morning list of what is due today or overdue, and a weekly note of upcoming
-  tasks nobody has claimed, in English or Spanish. It rides the hourly reminder
-  Lambda as a fourth pass and keeps the reminder's timing — the morning post
-  goes out when the channel's own quiet hours end, or at 08:00 local, nothing is
-  posted inside quiet hours, and each post is reserved and finalized so it goes
-  out once. Posts carry plant names, task names and due dates only: no notes, no
-  people, no links, with each platform's markup and mentions (`@everyone`,
-  `<!channel>`, `@room`) neutralized. The webhook address is the first secret
-  the server must replay, so it is sealed with a dedicated KMS key bound to the
-  household by encryption context, never returned (settings show host + last
-  four) and never logged (ADR 0032). Addresses are allow-listed per platform,
-  https-only on the default port, and every delivery goes through an SSRF guard
-  on the socket's own DNS answer that refuses private, loopback, link-local and
-  metadata addresses; redirects are never followed. A failing channel backs off
-  1h → 24h and switches itself off after three 4xx in a row (or at once for a
-  private address), telling the admin why on the settings card; a test message
-  that lands reconnects it. Not plan-gated. Infrastructure (a KMS key + alias,
-  an IAM statement, one environment variable on the `households` and
-  `reminders` Lambdas, four routes) is Terraform and takes effect on the next
-  `v*` tag deploy.
+- **A household chat channel for Discord, Slack or Matrix (issue #674, PR
+  #829).** An admin connects one incoming webhook per household (Settings →
+  Notifications), and the household's plant care is posted where the family
+  already talks: a morning list of what is due today or overdue, and a weekly
+  note of upcoming tasks nobody has claimed, in English or Spanish. It rides
+  the hourly reminder Lambda as a fourth pass and keeps the reminder's timing —
+  the morning post goes out when the channel's own quiet hours end, or at 08:00
+  local, nothing is posted inside quiet hours, and each post is reserved and
+  finalized so it goes out once. Posts carry plant names, task names and due
+  dates only: no notes, no people, no links, with each platform's markup and
+  mentions (`@everyone`, `<!channel>`, `@room`) neutralized. The webhook
+  address is the first secret the server must replay, so it is sealed with a
+  dedicated KMS key bound to the household by encryption context, never
+  returned (settings show host + last four) and never logged (ADR 0032).
+  Addresses are allow-listed per platform, https-only on the default port, and
+  every delivery goes through an SSRF guard on the socket's own DNS answer that
+  refuses private, loopback, link-local and metadata addresses; redirects are
+  never followed. A failing channel backs off 1h → 24h and switches itself off
+  after three 4xx in a row (or at once for a private address), telling the
+  admin why on the settings card; a test message that lands reconnects it. Not
+  plan-gated. Infrastructure, applied by this release's tag: a KMS key + alias
+  (about $1/month), an IAM statement, one environment variable on the
+  `households` and `reminders` Lambdas, and four routes.
 
 - **Import any spreadsheet by matching its columns — and no Planta, Greg or
-  Vera importer, because none of them has an export file to read (#668).**
-  The import page now takes any CSV: whoever imports picks which column
-  holds the plant name, species, location, notes, tags and days between
+  Vera importer, because none of them has an export file to read (issue #668,
+  PR #821).** The import page now takes any CSV: whoever imports picks which
+  column holds the plant name, species, location, notes, tags and days between
   waterings (which becomes a watering task). Import stays open to every
-  household member, as before. Only this app's own export headers are
-  matched automatically; no other app's column names are guessed. The
-  preview lists every column or JSON field that holds data the import will
-  not keep — including `createdAt`, which was never persisted, and
-  `careRule`, which an import never writes. It also reads the plan's
-  remaining room and marks the rows past it "Over plan limit": they are not
-  sent, and a full plan disables the import and says why. Imported text only
-  reaches the private `notes` field, never the house rule that share, sitter
-  and wall-display links show. Planta, Greg and Vera: their help centers
-  describe no export, and no published sample or open-source parser exists,
-  so the upload card says so plainly instead of implying support. EN/ES; the
-  three import plural forms that were still English in Spanish are
-  translated.
+  household member, as before. Only this app's own export headers are matched
+  automatically; no other app's column names are guessed. The preview lists
+  every column or JSON field that holds data the import will not keep —
+  including `createdAt`, which was never persisted, and `careRule`, which an
+  import never writes. It also reads the plan's remaining room and marks the
+  rows past it "Over plan limit": they are not sent, and a full plan disables
+  the import and says why. Imported text only reaches the private `notes`
+  field, never the house rule that share, sitter and wall-display links show.
+  Planta, Greg and Vera: their help centers describe no export, and no
+  published sample or open-source parser exists, so the upload card says so
+  plainly instead of implying support. EN/ES; the three import plural forms
+  that were still English in Spanish are translated.
 
-- **A printable plant passport for handing a plant on (#676).** Every plant
-  page, whatever its status, links to `/plants/{id}/passport`: one page per
-  plant, laid out for black-and-white printing, with its name, species and how
-  the species was recorded, the house rule, the care schedule (with any
-  seasonal intervals, named by season), the care logged in the last 90 days,
-  its parent plant and cuttings, and pet safety from the curated
+- **A printable plant passport for handing a plant on (issue #676, PR #822).**
+  Every plant page, whatever its status, links to `/plants/{id}/passport`: one
+  page per plant, laid out for black-and-white printing, with its name, species
+  and how the species was recorded, the house rule, the care schedule (with
+  any seasonal intervals, named by season), the care logged in the last 90
+  days, its parent plant and cuttings, and pet safety from the curated
   ASPCA-grounded table only. Private by default: the plant's notes are never
   on it unless a household admin ticks "Include my notes" at print time, and
   whoever did the care is shown by initials unless full names are asked for;
   completion notes, task notes and where the plant sits at home are never on
-  it, and neither choice is saved. Every absence is stated — no house rule,
-  no care yet since the plant was added, a history or pet-safety check that
-  could not load, a care list the server may have cut short — and nothing on
-  the page is generated. A QR code is optional and is the existing 14-day
+  it, and neither choice is saved. Every absence is stated — no house rule, no
+  care yet since the plant was added, a history or pet-safety check that could
+  not load, a care list the server may have cut short — and nothing on the
+  page is generated. A QR code is optional and is the existing 14-day
   cutting-share link, minted only when asked for. "I gave it away" in the
-  remove dialog now offers the passport first. EN/ES. Free on every plan.
-  No new API route: it reads `GET /plants/{id}` and `GET /plants/{id}/history`,
+  remove dialog now offers the passport first. EN/ES. Free on every plan. No
+  new API route: it reads `GET /plants/{id}` and `GET /plants/{id}/history`,
   which already exist. The generated route lists in the CloudFront router and
-  the iOS association file gain the new path and ship with the next `v*` tag;
-  a direct load already reaches the app the same way `/plants/{id}` does,
+  the iOS association file gain the new path, applied by this release's tag; a
+  direct load already reaches the app the same way `/plants/{id}` does,
   through the `/plants/*` behavior's app-shell rescue.
 
-- **Two-step verification with an authenticator app (#671, the TOTP half).**
-  Settings → Security now turns on Cognito's software-token MFA, which the
-  pool has had switched on (`OPTIONAL`) with no way for anyone to enroll. Setup
-  asks for the current password, shows a QR code (drawn in the browser — the
-  secret never goes to a QR service) and the setup key with a copy button,
-  and switches the factor on only after one correct code; it then shows what
-  to do if the phone is lost. Signing in to an account with it on asks for
-  the code after the password (`POST /auth/login` answers with a
+- **Two-step verification with an authenticator app (issue #671, the TOTP
+  half; PR #828).** Settings → Security now turns on Cognito's software-token
+  MFA, which the pool has had switched on (`OPTIONAL`) with no way for anyone
+  to enroll. Setup asks for the current password, shows a QR code (drawn in
+  the browser — the secret never goes to a QR service) and the setup key with
+  a copy button, and switches the factor on only after one correct code; it
+  then shows what to do if the phone is lost. Signing in to an account with it
+  on asks for the code after the password (`POST /auth/login` answers with a
   `SOFTWARE_TOKEN_MFA` challenge; `POST /auth/login/mfa` completes it), and a
   wrong or timed-out code starts a fresh challenge rather than stranding the
   person. Turning it off needs the password and a current code. Cognito
   generates, stores and checks the secret; the app stores none and logs
-  neither secret nor code. EN/ES, labeled inputs, focus moved to each step.
-  An account that meets a Cognito challenge the app does not implement now
-  gets a coded 409 `UNSUPPORTED_CHALLENGE` instead of a bare 500. The local
-  mock checks codes with real RFC 6238 arithmetic, and the e2e enrolls with a
-  secret pinned only in the Playwright webServer. Not in this change:
-  recovery codes (support resets the factor — docs/runbooks.md), security
-  emails, and passkeys, all still open on #671. Deploy note: five routes on
-  the existing auth Lambda in `local.routes`, applied by the next release tag;
-  no user-pool change and no new Lambda.
+  neither secret nor code. EN/ES, labeled inputs, focus moved to each step. An
+  account that meets a Cognito challenge the app does not implement now gets a
+  coded 409 `UNSUPPORTED_CHALLENGE` instead of a bare 500. The local mock
+  checks codes with real RFC 6238 arithmetic, and the e2e enrolls with a
+  secret pinned only in the Playwright webServer. Not in this change: recovery
+  codes (support resets the factor — docs/runbooks.md), security emails, and
+  passkeys, all still open on #671. Deploy note: five routes on the existing
+  auth Lambda in `local.routes`, applied by this release's tag; no user-pool
+  change and no new Lambda.
 
-- **Passkeys, built and switched OFF (#671, the second half).** Settings →
-  Security can add, list and remove passkeys, and the sign-in page offers "Use a
-  passkey", all on Cognito's native WebAuthn: Cognito issues the options,
-  verifies attestation and signatures, and stores the keys; the app moves the
-  WebAuthn JSON (converted by hand in `lib/webauthn.ts`, so browsers older than
-  the `parse*FromJSON` APIs still work). Adding a passkey re-authenticates
-  (password, plus a code when an authenticator app is on). **Inert until the
-  owner applies it:** one Terraform switch, `passkeys_enabled` (default
-  `false`), configures the pool's `web_authn_configuration` and `WEB_AUTHN`
-  sign-in factor, the client's `ALLOW_USER_AUTH`, and `PASSKEYS_ENABLED=1` on
-  the auth Lambda; with it off the plan is empty, the routes answer 404
+- **Passkeys, built and switched OFF (issue #671, the second half; PR #830).**
+  Settings → Security can add, list and remove passkeys, and the sign-in page
+  offers "Use a passkey", all on Cognito's native WebAuthn: Cognito issues the
+  options, verifies attestation and signatures, and stores the keys; the app
+  moves the WebAuthn JSON (converted by hand in `lib/webauthn.ts`, so browsers
+  older than the `parse*FromJSON` APIs still work). Adding a passkey
+  re-authenticates (password, plus a code when an authenticator app is on).
+  **Inert until the owner applies it:** one Terraform switch,
+  `passkeys_enabled` (default `false`, and `false` in the production tfvars),
+  configures the pool's `web_authn_configuration` and `WEB_AUTHN` sign-in
+  factor, the client's `ALLOW_USER_AUTH`, and `PASSKEYS_ENABLED=1` on the auth
+  Lambda; with it off the plan is empty, the routes answer 404
   `PASSKEYS_DISABLED`, and no passkey control is shown. No cost: the pool is
   already on PLUS. The native iOS/Android shells never show passkeys (the
   WebView is not on the relying party's origin); the owner steps to lift that
   are in docs/security.md. Deploy note: seven routes on the existing auth
   Lambda (inert), no new Lambda.
 
-- **A household audit log for admins (#675).** The Household page now shows
-  admins who changed the household itself, newest first and a page at a time:
-  the household being created; members joining, leaving (including by deleting
-  their account), being removed — with the credentials the removal revoked, as
-  counts — or changing role; invitations by link or email; sitter, wall
-  display, caretaker, plant-tag and cutting links created and turned off; API
-  keys created (last four and scopes) and revoked; plan changes, trial starts,
-  gift redemptions, and payments failing or recovering, read from the status
-  the Stripe webhook records; and trash restores and delete-nows. Entries live
-  in their own append-only partition (`HOUSEHOLD#{id}#AUDIT`, Put under
-  `attribute_not_exists`) for **30 days** — the retention the DPIA already
-  states for the security audit log; `AUDIT_RETENTION_DAYS` is the one-line
-  config. Actors are stored as a per-household hash of the user id and shown
-  by current display name, so anyone who has left reads as a former member and
-  a deleted account needs no rewrite. An entry never carries a token, code,
-  key or its hash, an email, card details, a label or a plant note: producers
-  pass allowlisted fields and a value guard refuses anything credential-shaped
-  (tested with every producer's real secret injected). A failed audit write
-  never fails the change it describes; it logs
-  `household_audit.write_failed` and the next entry for that household is
-  marked as following a gap. `GET /households/{id}/audit` is admin-only;
-  `DELETE /me` erases the partition with an abandoned household. EN/ES, and
-  the privacy policy now describes it. Deploy note: one new route in
-  `local.routes`, applied by the next `v*` tag; the Stripe webhook gains one
-  never-throwing DynamoDB write after the subscription row is applied.
+- **A household audit log for admins (issue #675, PR #826).** The Household
+  page now shows admins who changed the household itself, newest first and a
+  page at a time: the household being created; members joining, leaving
+  (including by deleting their account), being removed — with the credentials
+  the removal revoked, as counts — or changing role; invitations by link or
+  email; sitter, wall display, caretaker, plant-tag and cutting links created
+  and turned off; API keys created (last four and scopes) and revoked; plan
+  changes, trial starts, gift redemptions, and payments failing or recovering,
+  read from the status the Stripe webhook records; and trash restores and
+  delete-nows. Entries live in their own append-only partition
+  (`HOUSEHOLD#{id}#AUDIT`, Put under `attribute_not_exists`) for **30 days** —
+  the retention the DPIA already states for the security audit log;
+  `AUDIT_RETENTION_DAYS` is the one-line config. Actors are stored as a
+  per-household hash of the user id and shown by current display name, so
+  anyone who has left reads as a former member and a deleted account needs no
+  rewrite. An entry never carries a token, code, key or its hash, an email,
+  card details, a label or a plant note: producers pass allowlisted fields and
+  a value guard refuses anything credential-shaped (tested with every
+  producer's real secret injected). A failed audit write never fails the
+  change it describes; it logs `household_audit.write_failed` and the next
+  entry for that household is marked as following a gap.
+  `GET /households/{id}/audit` is admin-only; `DELETE /me` erases the
+  partition with an abandoned household. EN/ES, and the privacy policy now
+  describes it. Deploy note: one new route in `local.routes`, applied by this
+  release's tag; the Stripe webhook gains one never-throwing DynamoDB write
+  after the subscription row is applied.
 
-- **A household can be restored from its own export (#669).** The JSON that
-  Settings → Account → Download full data has always produced can now go back
-  in: Settings → Account → Restore a household from an archive, admin-only and
-  into an empty household only (a new one, or one with no plants, tasks or
-  spaces — version 1 never merges). A preview writes nothing and lists what
-  comes back — every plant in every lifecycle state with its private notes,
-  house rule, tags, catalog id and cutting lineage, and its active plants'
-  tasks with their schedules, seasonal cadences and last completions — and
-  what does not: photos (the export holds links, not pictures), spaces, care
-  history and the tasks of past plants (the export has neither), members
-  (tasks for people who are not in the household come back unassigned, listed
-  by name for re-inviting), billing (no plan, subscription or trial carries
-  over) and every sitter, kiosk, tag, share, calendar or API link. The file is
-  untrusted input: 5 MiB cap before parsing, the format and version checked
-  (a newer or unknown version is refused by name), `__proto__` /
-  `constructor` / `prototype` keys refused anywhere, every plant and task
-  parsed through an allowlist so a smuggled token or #811 token hash is
-  dropped, no id, URL or photo key from the file used as a storage key or
+- **A household can be restored from its own export (issue #669, PR #827).**
+  The JSON that Settings → Account → Download full data has always produced
+  can now go back in: Settings → Account → Restore a household from an
+  archive, admin-only and into an empty household only (a new one, or one with
+  no plants, tasks or spaces — version 1 never merges). A preview writes
+  nothing and lists what comes back — every plant in every lifecycle state
+  with its private notes, house rule, tags, catalog id and cutting lineage, and
+  its active plants' tasks with their schedules, seasonal cadences and last
+  completions — and what does not: photos (the export holds links, not
+  pictures), spaces, care history and the tasks of past plants (the export has
+  neither), members (tasks for people who are not in the household come back
+  unassigned, listed by name for re-inviting), billing (no plan, subscription
+  or trial carries over) and every sitter, kiosk, tag, share, calendar or API
+  link. The file is untrusted input: 5 MiB cap before parsing, the format and
+  version checked (a newer or unknown version is refused by name),
+  `__proto__` / `constructor` / `prototype` keys refused anywhere, every plant
+  and task parsed through an allowlist so a smuggled token or #811 token hash
+  is dropped, no id, URL or photo key from the file used as a storage key or
   fetched, and the integration-facing `canonicalSpecies` re-read from the
-  server's own species cache. An archive with more active plants than the
-  plan allows is refused whole with the numbers, not partly imported. Rows get
+  server's own species cache. An archive with more active plants than the plan
+  allows is refused whole with the numbers, not partly imported. Rows get
   deterministic ids and land in atomic chunks that carry the plan-cap counter,
   so committing the same archive again adds nothing, and a restore that stops
   part-way reports exactly what landed and finishes when run again. The client
@@ -204,19 +245,92 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   households in the file. EN/ES. The round trip (export → empty household →
   import → export) is the test: every field the export carries is either equal
   or on an explicit not-restored list. Deploy note: one new route in
-  `local.routes` (households group, no new Lambda), applied by the next `v*`
+  `local.routes` (households group, no new Lambda), applied by this release's
   tag.
+
+- **The app says when what you see may be out of date (#844).** On every
+  signed-in screen, on the website and in the apps, a notice appears when the
+  app is offline, or online but getting no answer from Family Greenhouse (a
+  captive portal, a dead zone, an API outage). It says when the screen was
+  last updated and what happens to a change made now: offline, the change is
+  held and sent once the connection is back, as long as the app stays open;
+  unreachable, it will not save, and a Try again button is offered. The notice
+  goes away on the next answer from the server. In the apps, coming back from
+  the background after a minute or more refetches what is on screen, and
+  pulling down at the top of a signed-in screen (except the chat composer)
+  refreshes it, with "Refreshing" and "Updated" announced to screen readers.
+  EN/ES.
+
+- **Haptics when care is saved, and the share sheet for links (#843).** In the
+  iPhone and Android apps, completing a task plays the system success pattern
+  and skipping or snoozing one plays a light tick, both only after the server
+  accepts the change. Household invites, plant-sitter links, caretaker seats,
+  cutting shares and referral links now open the system share sheet ("Share
+  link") instead of copying; closing the sheet copies nothing, and if the sheet
+  cannot open the old copy path runs. The website still copies.
+
+- **A launch without a blank flash, and the status bar and safe areas kept
+  right (#841).** In the apps, the launch screen stays up until the first page
+  is drawn instead of giving way to a blank WebView for about 2.75 s, and
+  Android 12+ shows the icon on the brand's forest green. Status bar icons stay
+  readable over the app, the launch screen and the navigation drawer, whatever
+  the system appearance. The drawer, the 11 scrolling dialogs, the public page
+  header and toasts keep clear of the Dynamic Island, the status bar and the
+  home indicator. On iOS the WebView shrinks above the keyboard and scrolls
+  the focused field into view; the keyboard plugin's default also hides the
+  iOS form accessory bar (the prev/next/Done row).
+
+- **Android back closes what is open, walks in-app history, and leaves from
+  the first screen (#842).** Back closes the topmost drawer, dialog, menu or
+  listbox first, then goes back through the app's own history, and on the
+  first screen moves the app to the background (before, it did nothing
+  there). The app opts in to Android's predictive back. Not yet tried on a
+  device or emulator; the PR lists the check to make on a device.
+
+- **The iPhone app follows the system text size, and the navigation drawer
+  has a name (#845).** On iOS the app reads the preferred text size on launch
+  and on every return to the foreground, capped at 200%. Android already
+  applies the system font scale. VoiceOver and TalkBack now announce the
+  drawer as "Main navigation, dialog".
+
+### Changed
+
+- **Signed out, the apps open on sign-in, not the priced landing page
+  (#831).** The iPhone and Android apps used to open on the website's landing
+  page, with live prices, plan buttons and trial copy, none of it sold through
+  In-App Purchase: the first screen App Review sees (Guidelines 3.1.1 and
+  4.2). A signed-out native launch now goes to sign-in, with "Sign up free" one
+  tap away, and the pricing grid renders nothing inside the apps. The website
+  is unchanged.
+
+- **The apps no longer run the website's service worker (#846).** On Android
+  it precached the whole build (148 files, about 3.3 MB) again, and after a
+  store update it served the previous version until it caught up and reloaded.
+  On iOS it failed to register on every launch. The apps now register none and
+  remove any worker and caches an earlier build left behind. The website is
+  unchanged.
+
+- **Internal, no user-facing change: runtime dependency updates.**
+  `@aws-sdk/client-sesv2` 3.1118.0 → 3.1127.0 (#836), `@middy/core` 7.8.0 →
+  7.9.2 (#838) and `uuid` 14.0.1 → 14.0.2 (#837) in the backend,
+  `react-i18next` 17.0.9 → 17.0.13 (#835) in the frontend, and the Android
+  `com.google.gms:google-services` plugin 4.4.4 → 4.5.0 (#833).
+
+- **Internal, no user-facing change: tooling and CI.** Development
+  dependencies `eslint` 10.10.0, `globals` 17.12.0, `typescript-eslint` 8.69.0
+  and `@capacitor/cli` 8.5.2 (#834); `github/codeql-action` 4.38.0 (#839) and
+  `zizmor-action` 0.6.4 (#840) in the workflows; Dependabot now also watches
+  the Android Gradle project, with the files it cannot update listed as manual
+  checks (#825); and the audit-log and archive-restore entries refiled from
+  `[0.36.0]` to `[Unreleased]` in this file (#850).
 
 ### Fixed
 
-- **Photos no longer carry their location off the device.** Every photo
-  upload (plant photos, Add plant, identification, the leaf-health check,
-  sitter photos and caretaker photos) now goes through one step that
-  downscales the photo and rewrites it without EXIF, XMP, IPTC, MPF
-  secondary images, PNG text chunks or WebP metadata, GPS included, and
-  refuses a file it cannot rewrite. Before, a phone whose browser could not
-  run the canvas resize uploaded the original with its GPS block, and the
-  caretaker page uploaded every photo as picked.
+- **Referral links shared from the apps open (#847).** A referral link copied
+  or shared in the iPhone or Android app was `capacitor://localhost/…` or
+  `https://localhost/…`, which opens nothing for the person it is sent to. It
+  is now `https://familygreenhouse.net/register?ref=…`. The website keeps using
+  its own origin.
 
 ## [0.36.0] - 2026-09-17
 
