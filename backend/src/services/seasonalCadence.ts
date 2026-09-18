@@ -163,7 +163,7 @@ export function resolveCadence(
     return { frequency: baseFrequency, source: 'base', season: null, reason: unavailableReason };
   }
 
-  const season = seasonForMonth(hemisphere, at.getMonth());
+  const season = seasonForMonth(hemisphere, at.getUTCMonth());
   const match = cadences.find((c) => c.season === season);
   if (!match) {
     // The season IS known — report it, so the UI can say "no autumn cadence
@@ -183,7 +183,9 @@ export function resolveCadence(
  * season: a profile of 7/7/14/14 changes twice a year, not four times, and
  * telling the household its cadence changes on 1 Jun when the number does not
  * move would be noise. Returned as the first day of the month the change lands
- * in, at local midnight — the same granularity the seasons themselves have.
+ * in, at UTC midnight — the same granularity the seasons themselves have.
+ * The month is read in UTC too, explicitly rather than through the process
+ * zone (#342), which is what production already did under `TZ=UTC`.
  */
 export function nextCadenceChange(
   baseFrequency: number,
@@ -198,7 +200,7 @@ export function nextCadenceChange(
   // season table repeats annually, so a frequency that has not moved in twelve
   // months never moves.
   for (let step = 1; step <= 12; step++) {
-    const probe = new Date(at.getFullYear(), at.getMonth() + step, 1, 0, 0, 0, 0);
+    const probe = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + step, 1));
     const next = resolveCadence(baseFrequency, cadences, hemisphere, probe);
     if (next.frequency !== current.frequency) return probe;
   }

@@ -5,8 +5,11 @@ const repositoryRoot = new URL('../../../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, repositoryRoot), 'utf8');
 
 /**
- * The zone the backend Lambdas run in is load-bearing, and until #590 it was
- * nobody's decision.
+ * The zone the backend Lambdas run in was load-bearing, and until #590 it was
+ * nobody's decision. (Since #342 the backend's date math uses explicit UTC
+ * accessors and no longer reads it — `processTimeZoneIndependence.test.ts`
+ * enforces that — so the pin below is defence in depth. The history is kept
+ * because it is why both exist.)
  *
  * `getDailyCompletionCounts` (services/taskService.ts) builds its day buckets
  * from a LOCAL midnight, stringifies them through a UTC formatter, and matches

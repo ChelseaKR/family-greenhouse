@@ -8,11 +8,10 @@ describe('analyticsWindow (ADR 0014: the free tier renders a trailing window)', 
     const w = analyticsWindow(2026, 30, now);
     expect(w.end).toBe(now.toISOString());
     const start = new Date(w.start);
-    // 30 days including today → 29 days back, at local midnight.
-    const expected = new Date(now);
-    expected.setDate(expected.getDate() - 29);
-    expected.setHours(0, 0, 0, 0);
-    expect(start.toISOString()).toBe(expected.toISOString());
+    // 30 days including today → 29 days back, at UTC midnight. Written out
+    // rather than recomputed with Date setters, which would follow the test
+    // process's zone and agree with a zone-dependent implementation (#342).
+    expect(start.toISOString()).toBe('2026-08-05T00:00:00.000Z');
   });
 
   it('is empty for a past year that ended before the window began', () => {
