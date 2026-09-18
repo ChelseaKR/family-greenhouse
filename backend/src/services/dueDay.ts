@@ -97,10 +97,11 @@
  * - **It does not normalise the instant** — no anchoring to local noon. ADR
  *   0025 §5 lists that as needing its own ADR and its own reversal plan.
  *   `nextDue` in, calendar day out.
- * - **It does not decide the reminder SEND time.** That is #343, which ADR
- *   0025 says stays open because "when to send" only becomes answerable once
- *   "which day is this for" has an answer. This module is the answer to the
- *   second question and takes no position on the first.
+ * - **It does not decide the reminder SEND time.** That is #343. Its send
+ *   DAY is decided in `reminders.isDueByEndOfLocalDay`, on the member's own
+ *   notification zone — the zone the reminder's daily slot was already keyed
+ *   on — and leaves the classification here untouched. This module is the
+ *   answer to "which day is this for" and takes no position on when to send.
  * - **It does not model month-end.** "Monthly" is `frequencyDays: 30`, so a
  *   monthly task walks about five days a year. A calendar-day due date does
  *   not fix a day-count recurrence (ADR 0025, closing consequence).
@@ -296,9 +297,10 @@ export function wholeDaysOverdue(
  * `2027-03-15T04:30:00Z`. Taking the maximum keeps the read a superset under
  * both rules, which is what a household changing its zone mid-flight needs.
  *
- * `windowDays: 0` means "through the end of today", which is the reminder
- * scan's natural shape once #343 is answered. This function takes no position
- * on whether it should be.
+ * `windowDays: 0` means "through the end of today". The reminder scan does
+ * not call this: since #343 its day is each member's own zone, which is not
+ * known at query time, so it reads a fixed horizon long enough for any zone
+ * (`reminders.DUE_QUERY_HORIZON_MS`) and applies the day in memory.
  */
 export function dueWindowCutoff(now: Date, windowDays: number, householdTimeZone: unknown): string {
   const zone = normalizeHouseholdTimeZone(householdTimeZone);

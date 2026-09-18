@@ -29,6 +29,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   inside the native apps points only at that in-app page, never at a payment
   step. (#593)
 
+### Changed
+
+- **The daily reminder goes out when your quiet hours end, or at 08:00
+  local if you have none (#343).** It used to go out on the first hourly run
+  that found something due, which with no quiet hours meant just after
+  midnight. It never goes out before local midnight of the due day.
+
+- **Quiet hours now hold browser and device push too, not just email and
+  SMS.** Push used to be exempt on the grounds that the operating system
+  handles Do Not Disturb, and browser-only users with quiet hours over
+  midnight were pushed at about 00:05. Every channel now waits for the
+  window to end, in reminders and in every other notification. The Settings
+  quiet-hours text (EN/ES), the Help answers and the landing page say so.
+
 ### Fixed
 
 - **The payment-failed notice no longer names the free plan when the household
@@ -36,6 +50,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   force under a declined card, so a household that owns Garden was wrongly
   told it now had Seedling's limits. Both the banner and Settings → Plan
   status now describe the plan the household actually keeps.
+
+- **A reminder now arrives on the day its task is due, not the evening
+  before (#343).** The hourly scan used to name every task due within the
+  next 24 hours, while its one-a-day slot is keyed on the recipient's local
+  date. A task due Tuesday was therefore announced on Monday, again at the
+  first run of Tuesday, and then not at all for the rest of the day it was
+  due. The scan now names a task on the calendar day it falls due in the
+  recipient's own zone (the one quiet hours use), and each day after while it
+  stays overdue. No task is classified differently and no stored value
+  changes. Recipients still on the default `UTC` zone get UTC days and a UTC
+  08:00. EN/ES.
 
 ## [0.35.0] - 2026-09-17
 

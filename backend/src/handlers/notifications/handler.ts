@@ -447,8 +447,8 @@ export const emailUnsubscribe = createHandler(
  * POST /notifications/run-reminders
  *
  * Walks through every member of the caller's household, finds their assigned
- * tasks (or all tasks for admins) due in the next 24 hours plus anything
- * already overdue, and sends a single roll-up push per user.
+ * tasks (or all tasks for admins) due today in that member's own zone plus
+ * anything already overdue, and sends a single roll-up push per user.
  *
  * In production, EventBridge invokes the dedicated reminders handler hourly.
  * This HTTP endpoint also accepts an authenticated household admin as a

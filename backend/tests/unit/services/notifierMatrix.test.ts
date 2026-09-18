@@ -140,7 +140,7 @@ const CASES: Row[] = [
     now: '2026-04-25T14:00:00Z',
     expect: { email: false, sms: true, browser: false },
   },
-  // — DND suppresses email + SMS, never browser —
+  // — DND suppresses every channel: email, SMS and browser push (#343) —
   {
     name: 'inside DND, email is suppressed',
     prefs: { email: true, dndStart: '13:00', dndEnd: '15:00' },
@@ -161,10 +161,32 @@ const CASES: Row[] = [
     expect: { email: false, sms: false, browser: false },
   },
   {
-    name: 'browser fires inside DND (OS handles quiet hours)',
+    // Push used to be exempt ("the OS handles quiet hours"). Since the owner
+    // decision on #343 (2026-09-17) quiet hours mean one thing on every
+    // channel, so a push inside the window is not even attempted.
+    name: 'inside DND, browser push is suppressed too',
     prefs: { email: false, browser: true, dndStart: '13:00', dndEnd: '15:00' },
     now: '2026-04-25T14:00:00Z',
+    expect: { email: false, sms: false, browser: false },
+  },
+  {
+    name: 'exactly at DND end, browser push fires',
+    prefs: { email: false, browser: true, dndStart: '13:00', dndEnd: '15:00' },
+    now: '2026-04-25T15:00:00Z',
     expect: { email: false, sms: false, browser: true },
+  },
+  {
+    name: 'browser push waits out a window that wraps midnight, in the user’s zone',
+    prefs: {
+      email: false,
+      browser: true,
+      dndStart: '22:00',
+      dndEnd: '07:00',
+      timezone: 'America/New_York',
+    },
+    // 04:05Z = 00:05 EDT: the moment #682 measured the exempt push landing.
+    now: '2026-06-09T04:05:00Z',
+    expect: { email: false, sms: false, browser: false },
   },
   {
     name: 'just outside DND end → email fires',
@@ -225,7 +247,7 @@ const CASES: Row[] = [
   },
   // — Combined: multi-channel user partially suppressed by DND —
   {
-    name: 'browser + email + sms with DND → only browser fires',
+    name: 'browser + email + sms with DND → nothing fires',
     prefs: {
       browser: true,
       email: true,
@@ -236,7 +258,7 @@ const CASES: Row[] = [
       dndEnd: '23:59',
     },
     now: '2026-04-25T12:00:00Z',
-    expect: { email: false, sms: false, browser: true },
+    expect: { email: false, sms: false, browser: false },
   },
 ];
 
@@ -420,6 +442,20 @@ describe('notifier.sendToUser — `delivered` reflects ACTUAL send, not channel 
     expect(result.delivered).toBe(false);
     expect(result.dndSuppressedOnly).toBe(true);
     expect(result.channels.email).toBe('suppressed');
+  });
+
+  it('browser-only user inside DND → push suppressed, dndSuppressedOnly (retry next run)', async () => {
+    const { sendToUser, pushAttempts } = await loadSendToUser({
+      email: false,
+      browser: true,
+      dndStart: '13:00',
+      dndEnd: '15:00',
+    });
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+    expect(pushAttempts()).toBe(0);
+    expect(result.delivered).toBe(false);
+    expect(result.dndSuppressedOnly).toBe(true);
+    expect(result.channels.browser).toBe('suppressed');
   });
 
   it('fans out only to channels whose caller-owned leases were selected', async () => {

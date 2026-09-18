@@ -401,8 +401,9 @@ export const HELP_SECTIONS: HelpSection[] = [
             <p>Working from the most common cause down:</p>
             <ul>
               <li>
-                <strong>Nothing was due.</strong> We only remind about tasks due in the next 24
-                hours or already overdue, and only for active plants.
+                <strong>Nothing was due.</strong> We remind you about a task on the day it is due
+                and on each day it stays overdue, never the day before, and only for active plants.
+                &ldquo;The day&rdquo; is in the time zone saved with your notification settings.
               </li>
               <li>
                 <strong>You already got one today.</strong> There is at most one reminder per
@@ -415,8 +416,10 @@ export const HELP_SECTIONS: HelpSection[] = [
                 permission.
               </li>
               <li>
-                <strong>Quiet hours.</strong> These pause email (and SMS) inside your window.
-                Nothing is lost — the next hourly pass delivers once the window lifts.
+                <strong>It isn&rsquo;t time yet.</strong> The day&rsquo;s reminder goes out when
+                your quiet hours end, or at 8:00 if you haven&rsquo;t set any. Nothing is sent
+                during quiet hours on any channel, browser notifications included; nothing is lost,
+                either — it arrives once the window lifts.
               </li>
               <li>
                 <strong>You&rsquo;re on vacation.</strong> An active vacation window suppresses all
@@ -428,12 +431,11 @@ export const HELP_SECTIONS: HelpSection[] = [
               </li>
             </ul>
             <p>
-              The scan runs hourly, so a task that becomes due at 09:05 may be notified at 10:00
-              rather than immediately.
+              We check hourly, so a reminder due to go out at 8:00 can arrive a little after it.
             </p>
           </>
         ),
-        text: 'Working from the most common cause down. Nothing was due: we only remind about tasks due in the next 24 hours or already overdue, and only for active plants. You already got one today: there is at most one reminder per person, per household, per channel, per day, and it bundles every due task together rather than pinging per plant. The channel is off: in Settings then Notifications, email is on by default and browser notifications are off until you turn them on and grant permission. Quiet hours pause email and SMS inside your window; nothing is lost, the next hourly pass delivers once the window lifts. An active vacation window suppresses all of your reminders. Browser notifications need more than a tick. The scan runs hourly, so a task that becomes due at 09:05 may be notified at 10:00 rather than immediately.',
+        text: 'Working from the most common cause down. Nothing was due: we remind you about a task on the day it is due and on each day it stays overdue, never the day before, and only for active plants. The day is in the time zone saved with your notification settings. You already got one today: there is at most one reminder per person, per household, per channel, per day, and it bundles every due task together rather than pinging per plant. The channel is off: in Settings then Notifications, email is on by default and browser notifications are off until you turn them on and grant permission. It is not time yet: the day’s reminder goes out when your quiet hours end, or at 8:00 if you have not set any. Nothing is sent during quiet hours on any channel, browser notifications included, and nothing is lost either; it arrives once the window lifts. An active vacation window suppresses all of your reminders. Browser notifications need more than a tick. We check hourly, so a reminder due to go out at 8:00 can arrive a little after it.',
       },
       {
         id: 'browser-notifications',
@@ -463,12 +465,12 @@ export const HELP_SECTIONS: HelpSection[] = [
               </li>
             </ul>
             <p>
-              Quiet hours deliberately do <em>not</em> silence browser notifications — your
-              operating system&rsquo;s own Do Not Disturb handles that better than we can.
+              Quiet hours hold browser notifications too, the same as email and text messages. If
+              one hasn&rsquo;t arrived yet, check whether you&rsquo;re inside your window.
             </p>
           </>
         ),
-        text: 'Browser notifications have more moving parts than the other channels. Your browser must have granted permission: if you dismissed the prompt rather than allowing it the setting is not saved, and if you blocked it you have to unblock the site in your browser first. Permission is per browser and per device, so enabling it on your laptop does nothing for your phone. Some devices support only foreground notifications, meaning pop-ups while a Family Greenhouse tab is open; when that is the case the app tells you explicitly that background delivery is unavailable on that device. In-tab pop-ups for newly overdue tasks only appear on the dashboard, and on the first load in a browser session anything already overdue is marked as seen without popping up, so only tasks that cross the line afterwards announce themselves. Quiet hours deliberately do not silence browser notifications, because your operating system Do Not Disturb handles that better.',
+        text: 'Browser notifications have more moving parts than the other channels. Your browser must have granted permission: if you dismissed the prompt rather than allowing it the setting is not saved, and if you blocked it you have to unblock the site in your browser first. Permission is per browser and per device, so enabling it on your laptop does nothing for your phone. Some devices support only foreground notifications, meaning pop-ups while a Family Greenhouse tab is open; when that is the case the app tells you explicitly that background delivery is unavailable on that device. In-tab pop-ups for newly overdue tasks only appear on the dashboard, and on the first load in a browser session anything already overdue is marked as seen without popping up, so only tasks that cross the line afterwards announce themselves. Quiet hours hold browser notifications too, the same as email and text messages. If one has not arrived yet, check whether you are inside your window.',
       },
       {
         id: 'quiet-hours-timezone',

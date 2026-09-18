@@ -1163,8 +1163,9 @@ export const setEscalationRule = createHandler(
 //
 // Stored and readable, and read by nothing. Due dates are still ISO instants
 // compared in the Lambda's zone on every surface — `taskService.completeTask`,
-// the 7-day upcoming window, the reminder scan's rolling 24h cutoff, the ICS
-// all-day date, the digest's days-overdue. Making any of those consult this
+// the 7-day upcoming window, the ICS all-day date, the digest's days-overdue.
+// (The reminder scan's send DAY follows each member's own notification zone
+// since #343, not this field.) Making any of those consult this
 // field reinterprets `nextDue` for every task already in production, and ADR
 // 0025 is the plan for that decision rather than this route.
 //
