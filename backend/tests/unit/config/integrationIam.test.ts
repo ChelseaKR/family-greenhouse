@@ -10,8 +10,13 @@ describe('production integration IAM invariants', () => {
       /"s3:PutObject",[\s\S]*?"s3:GetObject",[\s\S]*?"s3:DeleteObject",[\s\S]*?"s3:DeleteObjectVersion"[\s\S]*?Resource = "\$\{var\.images_bucket_arn\}\/\*"/
     );
     expect(apiModule).toMatch(
-      /Action\s*=\s*\[[\s\S]*?"s3:ListBucket",[\s\S]*?"s3:ListBucketVersions"[\s\S]*?\][\s\S]*?Resource\s*=\s*var\.images_bucket_arn[\s\S]*?"s3:prefix"\s*=\s*\["plants\/\*"\]/
+      /Action\s*=\s*\[[\s\S]*?"s3:ListBucket",[\s\S]*?"s3:ListBucketVersions"[\s\S]*?\][\s\S]*?Resource\s*=\s*var\.images_bucket_arn[\s\S]*?"s3:prefix"\s*=\s*\["plants\/\*", "trash\/\*"\]/
     );
+  });
+
+  it('lists exactly the two managed prefixes: served plant images and the unserved trash (#670)', () => {
+    const prefixes = apiModule.match(/"s3:prefix"\s*=\s*\[([^\]]*)\]/);
+    expect(prefixes?.[1].split(',').map((p) => p.trim())).toEqual(['"plants/*"', '"trash/*"']);
   });
 
   it('lets self-service account deletion remove the Cognito identity', () => {

@@ -299,16 +299,40 @@ describe('cutting shares', () => {
     expect(accept.body.careRule).toBe(HOUSE_RULE);
   });
 
-  it('survives deletion of the source plant (still previewable + acceptable)', async () => {
+  // Household trash (#670): a deleted plant disappears from every surface,
+  // its share links included, and comes back intact on restore. (Before the
+  // trash, a share snapshot deliberately outlived its source plant.)
+  it('goes into the trash with its source plant, and comes back on restore', async () => {
     const token = await loginAsSeed();
-    const share = await request(app)
-      .post(`/plants/${seedPlantId}/share`)
-      .set('Authorization', `Bearer ${token}`);
-    await request(app).delete(`/plants/${seedPlantId}`).set('Authorization', `Bearer ${token}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const share = await request(app).post(`/plants/${seedPlantId}/share`).set(auth);
+    expect((await request(app).get(`/plants/shared/${share.body.code}`)).status).toBe(200);
 
+    await request(app).delete(`/plants/${seedPlantId}`).set(auth);
+    expect((await request(app).get(`/plants/shared/${share.body.code}`)).status).toBe(404);
+    expect(
+      (await request(app).post(`/plants/shared/${share.body.code}/accept`).set(auth)).status
+    ).toBe(404);
+
+    const restored = await request(app)
+      .post(`/households/${seedHouseholdId}/trash/plant/${seedPlantId}/restore`)
+      .set(auth);
+    expect(restored.status).toBe(200);
     const preview = await request(app).get(`/plants/shared/${share.body.code}`);
     expect(preview.status).toBe(200);
     expect(preview.body.plant.name).toBe('Monstera');
+  });
+
+  it('is gone for good once its trashed source plant is deleted permanently', async () => {
+    const token = await loginAsSeed();
+    const auth = { Authorization: `Bearer ${token}` };
+    const share = await request(app).post(`/plants/${seedPlantId}/share`).set(auth);
+    await request(app).delete(`/plants/${seedPlantId}`).set(auth);
+    const purged = await request(app)
+      .delete(`/households/${seedHouseholdId}/trash/plant/${seedPlantId}`)
+      .set(auth);
+    expect(purged.status).toBe(204);
+    expect((await request(app).get(`/plants/shared/${share.body.code}`)).status).toBe(404);
   });
 
   it('404s for unknown and expired codes', async () => {
