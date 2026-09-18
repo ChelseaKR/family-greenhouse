@@ -242,6 +242,34 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                            |
 | Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                              |
 
+### Fresh data, offline and unreachable
+
+A phone app is resumed far more often than it is launched, and
+`refetchOnWindowFocus` is off app-wide, so the shells used to show whatever
+was loaded last as if it were current. Three things now keep the screen
+honest about its age:
+
+- **Resume.** Back from the background after a minute or more, the app
+  refetches every query on screen (`useNativeResumeRefresh`, through
+  `@capacitor/app`'s `appStateChange`).
+- **Pull to refresh.** At the top of any signed-in screen except the chat
+  composer, pulling down refetches what is on screen (`PullToRefresh.tsx`).
+  Capacitor turns the WebView's bounce off, so the shells had no refresh
+  gesture of their own. A status region announces "Refreshing" and
+  "Updated". Screen reader users get the same result from the resume refresh
+  and the notice's Try again button.
+- **Offline or unreachable.** `ConnectionNotice` (every signed-in screen)
+  says when the app is offline, or online but getting no answer from the
+  API, which covers captive portals, dead zones and an API outage. It says
+  when the screen was last updated and what happens to a change made now:
+  offline, TanStack Query holds the mutation and sends it on reconnect while
+  the app stays open; unreachable, it fails and says so. Any answer from the
+  server, error statuses included, counts as reachable
+  (`services/connectionStatus.ts`).
+
+The notice shows on the website too. The resume refresh and pull to refresh
+are native only.
+
 ## Store payment rules (read before touching billing UI)
 
 Subscriptions here are "digital goods", so both stores forbid selling them in
