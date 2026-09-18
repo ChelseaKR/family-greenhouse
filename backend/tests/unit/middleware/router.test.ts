@@ -86,6 +86,25 @@ describe('createRouter', () => {
   it('exposes its route keys', () => {
     expect(createRouter(routes).routes).toEqual(['GET /plants', 'GET /plants/{id}']);
   });
+
+  // Issue #730: EventBridge's scheduled billing-warm ping sends `{ warmer:
+  // true }`, no `routeKey`, no `headers` — none of the shape a real API
+  // Gateway event has. It must short-circuit before route dispatch, not fall
+  // through to a 404 (which would still be a "success" as far as keeping the
+  // container warm, but would spam CloudWatch with a misleading 404 every
+  // five minutes) or to `routeKeyFor`, which assumes an event shape this one
+  // deliberately doesn't have.
+  it('short-circuits a warmer ping without touching route dispatch', async () => {
+    const handler = createRouter(routes);
+    const res = await handler({ warmer: true }, ctx);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('does not treat a truthy but non-boolean warmer field as a warmer ping', async () => {
+    const handler = createRouter(routes);
+    const res = await handler({ warmer: 'true', routeKey: 'DELETE /plants/{id}' }, ctx);
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 /**
