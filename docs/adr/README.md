@@ -61,6 +61,7 @@ be invisible.
 | [0029](0029-refer-a-friend.md)                                       | Refer-a-friend is a household-invite look-alike that grants a gift, not a household invite with a prize bolted on          | Proposed |
 | [0030](0030-household-trash-moves-rows-out-of-the-live-key-space.md) | The household trash moves rows out of the live key space instead of flagging them                                          | Proposed |
 | [0031](0031-reply-to-act-on-reminder-emails.md)                      | A reminder can be answered by mail, through a hashed per-email reply address that reaches only the tasks that email listed | Proposed |
+| [0032](0032-household-chat-channel-webhooks-sealed-with-kms.md)      | A household chat-channel webhook is the first replayed secret, so it is sealed with KMS                                    | Proposed |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

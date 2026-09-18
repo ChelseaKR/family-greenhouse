@@ -393,6 +393,24 @@ export function taskLabelFor(
   return COPY[locale].taskTypes[type] ?? null;
 }
 
+/**
+ * The three phrases one row is made of — plant, task, due — localised, with
+ * the same "we could not read it" wording the email uses. Exported for the
+ * household chat channel (#674), so a task reads identically in an email and
+ * in a family chat and a failed read is never a blank in either.
+ */
+export function describeRow(
+  row: Pick<ReminderTaskRow, 'plantName' | 'taskLabel' | 'due'>,
+  locale: ReminderLocale
+): { plant: string; task: string; due: string } {
+  const copy = COPY[locale];
+  return {
+    plant: row.plantName ?? copy.unnamedPlant,
+    task: row.taskLabel ?? copy.unnamedTask,
+    due: dueLabel(row.due, locale),
+  };
+}
+
 function renderRow(row: ReminderTaskRow, locale: ReminderLocale, bullet: string): string {
   const copy = COPY[locale];
   const plant = row.plantName ?? copy.unnamedPlant;

@@ -69,6 +69,7 @@ import { createUpgradeRequest } from './upgradeRequests.js';
 import { getAwayRecap } from './awayRecap.js';
 import * as trash from './trash.js';
 import * as importArchive from './importArchive.js';
+import * as chatChannel from './channelNotifier.js';
 
 async function sendFirstHouseholdWelcome(
   userId: string,
@@ -1556,6 +1557,11 @@ export const handler = createRouter({
   'DELETE /households/{id}/trash/{kind}/{itemId}': trash.purgeTrashEntry,
   // Restore from the app's own export (#669) — handlers/households/importArchive.ts.
   'POST /households/{id}/import-archive': importArchive.importArchive,
+  // Household chat channel (#674) — handlers/households/channelNotifier.ts.
+  'GET /households/{id}/channel': chatChannel.getHouseholdChannel,
+  'PUT /households/{id}/channel': chatChannel.saveHouseholdChannel,
+  'POST /households/{id}/channel/test': chatChannel.testHouseholdChannel,
+  'DELETE /households/{id}/channel': chatChannel.deleteHouseholdChannel,
   // Caretaker seats (handlers/caretakers/management.ts) — same posture as
   // sitter links: create/list/revoke are admin-gated, the report is not.
   'POST /households/{id}/caretakers': caretakers.createCaretaker,

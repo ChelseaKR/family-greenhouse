@@ -319,9 +319,73 @@ resource "aws_iam_role_policy" "lambda" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = local.fcm_secret_arn
+      },
+      {
+        # Household chat-channel webhook addresses (#674, ADR 0031):
+        # services/channelSecret.ts seals each one with Encrypt when an admin
+        # saves it (households Lambda) and opens it with Decrypt to post
+        # (households for the test post, reminders for the hourly pass).
+        # Scoped to the one key, and — because this role is shared by every
+        # handler Lambda — to the one encryption-context purpose, so the grant
+        # cannot decrypt anything that was not sealed for this. Every
+        # ciphertext is also bound to its householdId by that context.
+        Effect   = "Allow"
+        Action   = ["kms:Encrypt", "kms:Decrypt"]
+        Resource = aws_kms_key.channel_webhooks.arn
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:purpose" = "household-channel-webhook"
+          }
+        }
       }
     ]
   })
+}
+
+# KMS key for household chat-channel webhook addresses (#674, ADR 0031).
+#
+# A Discord / Slack / Matrix incoming-webhook URL is a bearer credential the
+# server must REPLAY on every post, so unlike every other credential in this
+# product it cannot be stored as an scrypt hash. It is encrypted directly with
+# this key (Encrypt/Decrypt, no data key: the plaintext is ~120 bytes, far
+# under KMS's 4 KB limit), so the application never holds key material.
+#
+# Cost: $1/month for the key plus $0.03 per 10,000 requests — one Decrypt per
+# household with a channel per daily post.
+resource "aws_kms_key" "channel_webhooks" {
+  description         = "Seals household chat-channel webhook URLs for ${var.project_name} (${var.environment}). See services/channelSecret.ts."
+  enable_key_rotation = true
+  # A deleted key makes every stored webhook undecryptable; households would
+  # have to reconnect. Long window, like the email-events key.
+  deletion_window_in_days = 30
+  policy                  = data.aws_iam_policy_document.channel_webhooks_kms.json
+
+  tags = {
+    Name = "${var.project_name}-channel-webhooks-${var.environment}"
+  }
+}
+
+resource "aws_kms_alias" "channel_webhooks" {
+  name          = "alias/${var.project_name}-channel-webhooks-${var.environment}"
+  target_key_id = aws_kms_key.channel_webhooks.key_id
+}
+
+data "aws_iam_policy_document" "channel_webhooks_kms" {
+  # The AWS default root statement: delegates to IAM (the Lambda role policy
+  # above is the actual grant) and keeps the key manageable. Without it KMS
+  # does not fall back to IAM and the key is locked to nobody.
+  statement {
+    sid    = "EnableAccountAdministration"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_xray" {
@@ -542,6 +606,15 @@ locals {
     OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
   }
 
+  # Household chat channel (#674): the key that seals webhook addresses. Only
+  # the two Lambdas that touch a webhook get it — households (save + test
+  # post) and reminders (the hourly pass). Unset anywhere else, and
+  # services/channelSecret.ts refuses to seal or open without it: there is no
+  # plaintext fallback.
+  channel_webhook_environment = {
+    CHANNEL_WEBHOOK_KMS_KEY_ID = aws_kms_key.channel_webhooks.arn
+  }
+
   perenual_environment = {
     PERENUAL_API_KEY_PARAMETER_NAME = var.perenual_api_key_parameter_name
     PERENUAL_DAILY_BUDGET           = var.perenual_daily_budget
@@ -573,7 +646,7 @@ locals {
     tasks  = {}
     # Email for the welcome mail + member upgrade requests; VAPID so the
     # upgrade request can also reach admins as a browser/native push.
-    households = local.notification_environment
+    households = merge(local.notification_environment, local.channel_webhook_environment)
     # SES_FROM_EMAIL: DELETE /me sends the account-deletion confirmation
     # (ADR 0023). Without it `emailNotifier.sendEmail` dry-runs and the
     # confirmation is a log line nobody reads.
@@ -599,7 +672,7 @@ locals {
     # simply omits the line — it never asserts "no rain expected".
     # Cost: the forecast is read at most once per household per reminder run,
     # cached for an hour per ~10km cell and shared with the climate endpoint.
-    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.reply_environment)
+    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.channel_webhook_environment, local.reply_environment)
     digests     = local.email_environment
     emailEvents = {}
     chat        = local.chat_environment
@@ -1113,6 +1186,12 @@ locals {
     "POST /households/{id}/kiosk-link"   = { group = "households", auth = "jwt" }
     "GET /households/{id}/kiosk-link"    = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/kiosk-link" = { group = "households", auth = "jwt" }
+    # Household chat channel (#674, handlers/households/channelNotifier.ts):
+    # admin-only. The webhook address goes in on PUT and never comes back out.
+    "GET /households/{id}/channel"       = { group = "households", auth = "jwt" }
+    "PUT /households/{id}/channel"       = { group = "households", auth = "jwt" }
+    "POST /households/{id}/channel/test" = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/channel"    = { group = "households", auth = "jwt" }
     # Household trash (#670, handlers/households/trash.ts): any member may
     # list, restore, or delete-now. DELETE /plants/{id} and DELETE /tasks/{id}
     # move items in; the daily purge rides the digests function (below).

@@ -131,7 +131,7 @@ const QUEUE_TTL_SECONDS = 4 * 24 * 60 * 60;
  * had to be kept equal by hand. Since #343 they are two different rules and
  * only this one is a constant; changing it moves only this email.
  */
-const REMINDER_DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const REMINDER_DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
  * How far past `REMINDER_DUE_WINDOW_MS` this email looks.
  *
@@ -140,8 +140,11 @@ const REMINDER_DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * up by a later weekly pass while still unclaimed, and one that crosses inside
  * `REMINDER_DUE_WINDOW_MS` before the next pass is picked up by the daily
  * reminder on its due day. No unclaimed task can fall between them.
+ *
+ * Both constants are exported for the household chat channel (#674), whose
+ * weekly up-for-grabs post draws the same line for the same reason.
  */
-const UP_FOR_GRABS_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1000;
+export const UP_FOR_GRABS_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1000;
 /** How many tasks the up-for-grabs email NAMES. It always states the real
  *  total — the digest's docstring records what happens when a display cap
  *  becomes the reported count. */

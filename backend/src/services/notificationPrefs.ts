@@ -199,13 +199,18 @@ export { isValidTimeZone };
 
 /**
  * True iff "now" falls inside the user's DND window. Caller passes the user's
- * timezone so this stays a pure function (no global state on Date).
+ * timezone so this stays a pure function (no global state on Date). It reads
+ * only the window and the zone, so a household chat channel's quiet hours
+ * (#674) are checked by this same function rather than a copy of it.
  *
  * Defensive: a corrupt/legacy timezone makes Intl throw. We fail open ("not
  * in DND") so the user still gets their reminder instead of the exception
  * aborting the whole household's reminder run.
  */
-export function isInDndWindow(prefs: NotificationPreferences, now = new Date()): boolean {
+export function isInDndWindow(
+  prefs: Pick<NotificationPreferences, 'dndStart' | 'dndEnd' | 'timezone'> & { userId?: string },
+  now = new Date()
+): boolean {
   if (!prefs.dndStart || !prefs.dndEnd) return false;
   try {
     const fmt = new Intl.DateTimeFormat('en-US', {

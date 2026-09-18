@@ -12,6 +12,7 @@ import { ReferralSettings } from './ReferralSettings';
 import { TagPinSettings } from '@/features/tags/TagPinSettings';
 import { AccountSettings } from './AccountSettings';
 import { TrashSettings } from './TrashSettings';
+import { HouseholdChannelSettings } from './HouseholdChannelSettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
@@ -148,7 +149,12 @@ export function SettingsPage() {
 
       <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
         {tab === 'preferences' && <PreferencesSettings />}
-        {tab === 'notifications' && <NotificationSettings />}
+        {tab === 'notifications' && (
+          <div className="space-y-6">
+            <NotificationSettings />
+            <HouseholdChannelSettings />
+          </div>
+        )}
         {tab === 'plant-tags' && <TagPinSettings />}
         {tab === 'billing' && <BillingSettings />}
         {tab === 'refer' && <ReferralSettings />}

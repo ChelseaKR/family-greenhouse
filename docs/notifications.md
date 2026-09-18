@@ -8,6 +8,10 @@ Two families of message ride those channels:
 - **[Household emails](#household-emails)** — "the people you share care with did
   something". Email only, event-driven, and each individually switchable.
 
+A fourth channel belongs to the **household**, not to a person: the
+[household chat channel](#household-chat-channel) posts the morning plant-care
+list and a weekly up-for-grabs note into the family's Discord, Slack or Matrix.
+
 ## How a reminder gets delivered
 
 ```
@@ -862,6 +866,120 @@ switch language with no change here.
 Every household email ends with a link to `/settings`. A real
 `List-Unsubscribe` header needs `emailNotifier.sendEmail` to move to the SES v2
 API, which is out of scope here.
+
+## Household chat channel
+
+An admin connects one Discord, Slack or Matrix **incoming webhook** per
+household (Settings → Notifications → Household chat channel). The household's
+plant care is then posted where the family already talks — the member who will
+never install the app still sees what needs doing. #674;
+[ADR 0032](adr/0032-household-chat-channel-webhooks-sealed-with-kms.md) records
+the security decisions.
+
+| Post             | What it lists                                                                                           | When                                                 | Dedupe                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------- |
+| **Morning list** | every task due by the end of today in the channel's zone, or overdue (not yet past the 14-day far edge) | end of the channel's quiet hours, else 08:00 local   | one per channel-local day |
+| **Up for grabs** | unassigned tasks due in (24h, 7d] — the up-for-grabs email's window, so the two never overlap           | same floor, first run of the ISO week with something | one per ISO week          |
+
+Both are opt-in per channel; a day or week with nothing to list posts nothing.
+There is no plan gate: neither the issue nor ADR 0014's tier table puts it on a
+paid plan, and it costs one HTTPS request per household per day.
+
+### What a post may contain
+
+**Plant names, task names and due dates.** Nothing else, structurally: the
+composer's row type (`channelMessages.ChannelRow`) has no field that could hold
+a note or a person, and `householdChannelRun.channelRowFor` copies four facts
+from a task by name.
+
+- No plant `notes`, and not even the `careRule` a sitter link may show
+  (`resolveCareNote`) — a family chat can hold people the household would never
+  hand a sitter link to.
+- No person — no names, emails or phones, not even who a task is assigned to.
+  "Nobody has claimed it" is the only statement about people. This is why the
+  member-named household emails (joined, covering, covered for you) are not
+  posted.
+- No links at all, so no sitter, kiosk, tag, share or calendar token can reach
+  a chat.
+
+Household-typed text is escaped per platform, and so are mentions: Discord gets
+`allowed_mentions: { parse: [] }` plus backslash escaping and `SUPPRESS_EMBEDS`;
+Slack gets `mrkdwn: false` with `&`, `<`, `>` escaped (so `<!channel>` is inert);
+Matrix (matrix-hookshot's `{ text, html }`) gets escaped HTML and a word joiner
+inside `@room`. `tests/unit/services/channelMessages.test.ts` renders every post
+on every platform in both languages from a fixture carrying every sensitive
+field the product stores and asserts none of it appears.
+
+### The address is a password
+
+- **Sealed with KMS**, not hashed — the server must replay it
+  (`services/channelSecret.ts`). Encryption context binds each ciphertext to its
+  household; the IAM grant is conditioned on the context's `purpose`. No key, no
+  feature: `GET` answers `available: false` and `PUT` 503s. There is no plaintext
+  fallback.
+- **Never returned or logged.** Responses carry `maskedUrl` (host + last four);
+  the audit line names the platform only; `webhookUrl` / `sealedUrl` are on the
+  logger's redaction list as a backstop.
+- **Allow-listed** (`models/householdChannel.parseWebhookUrl`): `https:` on the
+  default port, no user-info, query or fragment; Discord only at
+  `discord.com/api/webhooks/{id}/{token}`, Slack only at
+  `hooks.slack.com/services/…`, Matrix at a public DNS name ending
+  `/webhook/{id}`. IP literals and internal names are refused at save time.
+- **SSRF-guarded at the socket** (`services/channelSsrfGuard.ts`): the guard is
+  the `lookup` passed to `https.request`, so the address checked is the address
+  connected to. Any private, loopback, link-local, CGNAT, ULA, NAT64, 6to4 or
+  v4-mapped answer refuses the whole name. Redirects are never followed; a 3xx
+  counts as a refusal.
+
+### Failure
+
+One attempt per channel per hourly run, never retried inside a run, and one
+failed post ends that channel's hour. Then:
+
+| Answer                           | Effect                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| 2xx                              | Marker finalized; failure streak cleared                                |
+| 5xx, timeout, network, KMS error | Backoff 1h, 2h, 4h … capped at 24h                                      |
+| 429                              | Same backoff, or `Retry-After` if longer; not counted towards disabling |
+| 4xx or 3xx, three in a row       | **Disabled** (`repeated_client_errors` / `redirect`)                    |
+| a non-public address             | **Disabled** at once (`blocked_address`)                                |
+| ten failures of any kind         | **Disabled** (`repeated_failures`)                                      |
+
+A disabled channel shows the admin the reason and the way back on the settings
+card. Pasting the address again starts a clean slate; a test message that lands
+re-enables it. A failed test changes nothing but its 30-second cooldown.
+
+### Storage
+
+```
+PK: HOUSEHOLD#{householdId}
+SK: CHANNEL#WEBHOOK
+GSI1PK: HOUSEHOLD_CHANNELS          ← sparse; the hourly pass queries it
+GSI1SK: HOUSEHOLD#{householdId}
+entityType: HouseholdChannel
+platform, sealedUrl (KMS ciphertext), urlVersion, host, last4, events,
+quietStart, quietEnd, timezone, locale, status, disabledReason,
+consecutiveFailures, consecutiveClientErrors, nextAttemptAt, lastFailure,
+lastDeliveredAt, lastTestAt, connectedBy, connectedAt, updatedAt
+
+PK: HOUSEHOLD#{householdId}
+SK: CHANNELPOST#{daily_due|up_for_grabs}#{localDate|isoWeek}
+entityType: ChannelPostMarker
+status: sending|sent, reservationId, leaseExpiresAt, sentAt, ttl (9 days)
+```
+
+The row is in the household partition, so account erasure's partition sweep
+removes it. Outcomes are written conditionally on `urlVersion`, so a post in
+flight when an admin replaces or disconnects the address can neither resurrect
+the row nor count its failure against the new address. Disconnecting deletes the
+row; the next hourly run posts nothing.
+
+### Infrastructure
+
+A KMS key and alias (`alias/family-greenhouse-channel-webhooks-{env}`), a
+`kms:Encrypt`/`kms:Decrypt` statement on the Lambda role, the
+`CHANNEL_WEBHOOK_KMS_KEY_ID` variable on the `households` and `reminders`
+Lambdas, and four routes. All Terraform; live on the next `v*` tag deploy.
 
 ## Sending arbitrary notifications
 

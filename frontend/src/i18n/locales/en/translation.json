@@ -1119,6 +1119,85 @@
       }
     }
   },
+  "householdChannel": {
+    "title": "Household chat channel",
+    "description": "Post the household’s plant care to the chat you already use — Discord, Slack or Matrix — through an incoming webhook.",
+    "privacy": "Posts carry plant names, task names and due dates only — never private notes, people’s names or email addresses, or any sharing link. Everyone in that chat will be able to read them.",
+    "adminOnly": "Only household admins can connect a chat channel.",
+    "unavailable": "Chat channel posts aren’t available yet.",
+    "loadFailed": "We couldn’t check whether a chat channel is connected.",
+    "notConnected": "No chat channel is connected.",
+    "connectedTo": "Posting to {{platform}} at {{masked}}",
+    "lastDelivered": "Last post: {{date}}",
+    "platformLabel": "Chat service",
+    "platform": {
+      "discord": "Discord",
+      "slack": "Slack",
+      "matrix": "Matrix"
+    },
+    "urlLabel": "Incoming webhook address",
+    "urlHelp": {
+      "discord": "In Discord: Server settings → Integrations → Webhooks → New webhook → Copy webhook URL.",
+      "slack": "In Slack: create an app with Incoming Webhooks turned on, add it to a channel, and copy the webhook URL.",
+      "matrix": "Use a generic webhook from your homeserver’s hookshot bridge. It must be an https address on a public server."
+    },
+    "urlKeepHint": "Leave this blank to keep the address you already saved.",
+    "eventsLegend": "What to post",
+    "events": {
+      "dailyDue": "Each morning: the plant care that’s due today or overdue",
+      "upForGrabs": "Once a week: upcoming tasks nobody has claimed"
+    },
+    "quietLegend": "Quiet hours for this channel",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "quietHelp": "Nothing is posted during quiet hours. The morning post goes out when they end — or at 08:00 if none are set — in the {{zone}} time zone.",
+    "quietBothEnds": "Set both ends of the quiet hours, or leave both blank.",
+    "localeLabel": "Language of the posts",
+    "locale": {
+      "en": "English",
+      "es": "Spanish"
+    },
+    "connect": "Connect channel",
+    "save": "Save changes",
+    "test": "Send a test message",
+    "disconnect": "Disconnect",
+    "saved": "Saved.",
+    "disconnected": "Disconnected. Nothing more will be posted to that chat.",
+    "testDelivered": "Test message sent — check your chat.",
+    "testFailed": "The test message didn’t go through: {{reason}}.",
+    "stoppedTitle": "Posting to this chat has stopped",
+    "stoppedBody": "We stopped because {{reason}} To reconnect, paste the webhook address again, or send a test message once it’s fixed.",
+    "retrying": "The last post didn’t go through ({{reason}}). We’ll try again after {{date}}.",
+    "reason": {
+      "repeated_client_errors": "the chat service refused our last few posts — the webhook may have been deleted or its channel archived.",
+      "redirect": "the webhook address redirects somewhere else, and we never follow redirects.",
+      "blocked_address": "the webhook address points into a private network.",
+      "repeated_failures": "posts have been failing for several days."
+    },
+    "failure": {
+      "client": "the chat service refused it",
+      "redirect": "the address redirects somewhere else",
+      "rate_limited": "the chat service asked us to slow down",
+      "server": "the chat service had an error",
+      "network": "we couldn’t reach the chat service",
+      "blocked": "the address points into a private network",
+      "unsealable": "we couldn’t read the saved address"
+    },
+    "urlError": {
+      "not_a_url": "That isn’t a web address.",
+      "too_long": "That address is too long to be a webhook.",
+      "not_https": "The webhook address must start with https://.",
+      "has_credentials": "The webhook address must not contain a user name or password.",
+      "has_port": "The webhook address must not name a port.",
+      "has_query": "Paste the webhook address without anything after a ? or #.",
+      "wrong_host": "That address isn’t a webhook for the chat service you chose.",
+      "ip_literal": "Use the server’s name, not an IP address.",
+      "private_host": "That server points into a private network, so we can’t post to it.",
+      "wrong_path": "That doesn’t look like an incoming webhook for the chat service you chose.",
+      "url_required": "Paste the webhook address to connect this channel.",
+      "unresolvable": "We couldn’t find that server. Check the address and try again."
+    }
+  },
   "settings": {
     "title": "Settings",
     "description": "Manage notifications and view your household plan status.",
