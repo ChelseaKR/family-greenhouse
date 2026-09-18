@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   // The marketing feature grid uses the custom botanical icons below.
   // These Heroicons serve the AppMockup chrome plus the secondary
@@ -49,44 +49,14 @@ import clsx from 'clsx';
 // split into an optional pre-quote / emphasized / post-quote so A can keep
 // its italic "you" without giving B fake quotation marks.
 //
-// Removing the experiment: delete variant B below, inline variant A's copy
-// back into the hero, and drop the variant plumbing in LandingPage.
-const heroCopy: Record<
-  Variant,
-  {
-    eyebrow: string;
-    headlinePre: string;
-    headlineEmphasis: string;
-    headlinePost: string;
-    subhead: React.ReactNode;
-  }
-> = {
-  A: {
-    eyebrow: 'A garden journal for the whole house',
-    headlinePre: '“I thought ',
-    headlineEmphasis: 'you',
-    headlinePost: ' watered it.”',
-    subhead: (
-      <>
-        Family Greenhouse is a shared care journal for the plants in your house. Everyone sees
-        what&rsquo;s due and what&rsquo;s already done, so the fern doesn&rsquo;t get watered twice
-        on Tuesday and then forgotten for two weeks.
-      </>
-    ),
-  },
-  B: {
-    eyebrow: 'A care journal for your plants',
-    headlinePre: 'Keep ',
-    headlineEmphasis: 'every',
-    headlinePost: ' plant alive.',
-    subhead: (
-      <>
-        Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing
-        gets missed or drowned. It works just as well for one person and a windowsill as it does for
-        a whole household sharing the watering can.
-      </>
-    ),
-  },
+// The copy lives in the catalogs under `landing.hero.a` / `landing.hero.b`
+// (#467: this page rendered in English for Spanish-speaking visitors).
+//
+// Removing the experiment: delete variant B below and its catalog keys, and
+// drop the variant plumbing in LandingPage.
+const HERO_COPY_KEY: Record<Variant, string> = {
+  A: 'landing.hero.a',
+  B: 'landing.hero.b',
 };
 
 // Sets expectations right next to the primary CTA instead of a scroll away
@@ -98,47 +68,17 @@ const heroCopy: Record<
 // flagged as "the most likely place a paid-traffic visitor abandons" (§4
 // note 1). Reuses the "five minutes" figure already stated in the Setup
 // section below rather than inventing a new one. Not part of the hero A/B
-// test (heroCopy above): this renders identically under both variants.
-const ctaSignupNote =
-  'No credit card needed — a name, email, and a password, then a one-time code we email you. About five minutes, start to finish.';
+// test (HERO_COPY_KEY above): this renders identically under both variants.
+// Copy: `landing.hero.signupNote`.
 
+// Each entry's copy is `landing.features.<id>.name` / `.description`.
 const features = [
-  {
-    name: 'Reminders per plant',
-    description:
-      "Each plant gets its own schedule, and the nudge goes to whoever the task belongs to. The cactus stops getting watered on the fern's timetable.",
-    icon: ReminderBellbloomIcon,
-  },
-  {
-    name: 'Shared, with names attached',
-    description:
-      "Everyone in the household sees what's due and what's done. The log shows who did what, which settles the watering arguments quickly.",
-    icon: HouseholdSproutsIcon,
-  },
-  {
-    name: 'A week you can scan',
-    description:
-      'Every upcoming task on one calendar. A look on Sunday night tells you whether the week ahead is heavy or quiet.',
-    icon: CalendarLeafIcon,
-  },
-  {
-    name: 'Works at the sink',
-    description:
-      'Installs to your phone like any app. Mark a task done with one thumb, add a note, get back to the watering can.',
-    icon: PhoneLeafIcon,
-  },
-  {
-    name: 'A memory for each plant',
-    description:
-      'Notes, photos, and the full care log live with the plant. When leaves yellow, you check what happened instead of guessing.',
-    icon: GrowthRingsIcon,
-  },
-  {
-    name: 'Yours to keep',
-    description:
-      "Your household's data is encrypted in transit and at rest, and you can export your profile, plants and tasks as JSON or CSV whenever you like.",
-    icon: RootLockIcon,
-  },
+  { id: 'reminders', icon: ReminderBellbloomIcon },
+  { id: 'shared', icon: HouseholdSproutsIcon },
+  { id: 'week', icon: CalendarLeafIcon },
+  { id: 'sink', icon: PhoneLeafIcon },
+  { id: 'memory', icon: GrowthRingsIcon },
+  { id: 'yours', icon: RootLockIcon },
   {
     // The Away Kit was shipped but never named in this grid — the
     // paid-acquisition readiness review (§4 note 2) found that a visitor
@@ -148,9 +88,7 @@ const features = [
     // frontend/src/features/sitter/SitPage.tsx (base link, every plan) and
     // backend/src/models/plans.ts (sitterLinkMaxDays/sitterLinksActive;
     // Away Kit gating via planIncludesAwayKit).
-    name: 'Someone else can cover',
-    description:
-      "Send a link before you travel — no account, no app, nothing to install. They see what's due and tap it done. The Away Kit (Garden and up) stretches coverage to 90 days and adds a printable handoff brief.",
+    id: 'cover',
     icon: BriefcaseIcon,
   },
 ];
@@ -202,13 +140,13 @@ const featureCardVariants = [
 // Plants Thriving" numbers were fabricated; replaced here with concrete,
 // auditable claims about the app itself. When real adoption metrics
 // exist, they belong in this list — sourced from analytics, not vibes.
+// Each fact's copy is `landing.facts.<id>.value` / `.label`; the free-plan
+// caps in it are re-derived from plans.ts by scripts/check-plan-copy.mjs.
 const productFacts = [
-  PUBLIC_REGISTRATION_AVAILABLE
-    ? { value: 'Free', label: 'Up to 20 plants — no credit card' }
-    : { value: 'Existing accounts', label: 'Sign-in and stored care data remain available' },
-  { value: '3 people', label: 'Share one home free — unlimited on Garden' },
-  { value: '5 minutes', label: 'From signup to first task' },
-  { value: 'Portable', label: 'Export plants and tasks any time' },
+  PUBLIC_REGISTRATION_AVAILABLE ? 'free' : 'existing',
+  'people',
+  'minutes',
+  'portable',
 ];
 
 // Testimonials were removed outright (not just gated): the quotes were
@@ -219,92 +157,61 @@ const productFacts = [
 // hard; these four cards let the other big personas the app actually
 // serves self-identify and jump to the part that's for them. Each claim
 // maps to a shipped feature: assign/claim + activity log; unlimited +
-// CSV import; vacation coverage; the care-guide library.
+// CSV import; vacation coverage; the care-guide library. Copy:
+// `landing.who.<id>.label` / `.body`.
 const personas = [
-  {
-    icon: HouseholdSproutsIcon,
-    label: 'Sharing a place',
-    body: "A partner, roommates, a family — and no one's sure who watered what. Assign tasks or leave them up for grabs, and the activity log quietly keeps score.",
-    href: '#features',
-  },
-  {
-    icon: GrowthRingsIcon,
-    label: 'A growing collection',
-    body: 'A few plants turned into ten. Import the spreadsheet you have been keeping, and let one dashboard hold every due date.',
-    href: '#pricing',
-  },
-  {
-    icon: BriefcaseIcon,
-    // Body rewritten to name the actual mechanism (a link, no account, no
-    // app) rather than the vaguer "hand off to whoever's covering" — the
-    // paid-acquisition review (§4 note 2) found a visitor clicking the
-    // vacation/sitter ad or keyword landed on a page that didn't reinforce
-    // what the ad promised. This now mirrors Creative 2's own hook line
-    // ("no app, no account, no confusion") in the section that persona
-    // actually reads first.
-    label: 'Away a lot',
-    body: "Gone for work or just the weekend. Send whoever's covering a link — no account, no app to install — and they check off what's due while you're away.",
-    href: '#features',
-  },
-  {
-    icon: SparklesIcon,
-    label: 'New and a little nervous',
-    body: 'One sad succulent and a dented ego. Start with a plant that forgives you, lean on the care guides, and let the reminders do the remembering.',
-    href: '/care',
-  },
+  { id: 'sharing', icon: HouseholdSproutsIcon, href: '#features' },
+  { id: 'growing', icon: GrowthRingsIcon, href: '#pricing' },
+  // Body names the actual mechanism (a link, no account, no app) rather
+  // than the vaguer "hand off to whoever's covering" — the paid-acquisition
+  // review (§4 note 2) found a visitor clicking the vacation/sitter ad or
+  // keyword landed on a page that didn't reinforce what the ad promised.
+  // It mirrors Creative 2's own hook line ("no app, no account, no
+  // confusion") in the section that persona actually reads first.
+  { id: 'away', icon: BriefcaseIcon, href: '#features' },
+  { id: 'new', icon: SparklesIcon, href: '/care' },
 ];
 
 // "Beyond the basics" band. The feature grid covers the shared-schedule
 // core; these are the parts that show up once you have more than a
-// couple of plants, and the ones competitors mostly don't have.
+// couple of plants, and the ones competitors mostly don't have. Copy:
+// `landing.beyond.<id>.label` / `.body`.
 const differentiators = [
-  {
-    icon: CloudIcon,
-    label: 'Weather-aware nudges',
-    body: 'Add your location and the app offers to skip a watering when rain or a cold snap is on the way.',
-  },
-  {
-    icon: CameraIcon,
-    label: 'Check a leaf from a photo',
-    body: 'Upload a struggling leaf and get a read on what might be going wrong.',
-  },
-  {
-    icon: PruneIcon,
-    label: 'Share a cutting',
-    body: 'Propagating? Track which plant came from which, and send a friend a link to the cutting you are passing on.',
-  },
-  {
-    icon: BellAlertIcon,
-    label: "Reminders where you'll see them",
-    // Browser and email only: SMS is built but gated on SMS_NOTIFICATIONS_ENABLED,
-    // which production leaves empty (environments/production/terraform.tfvars), so
-    // the toggle is disabled for every real user and the help page says as much.
-    // "or text" goes back in when the flag is on, not before.
-    //
-    // Quiet hours are named per channel because they only apply to one of the
-    // two. `eligibleReminderChannels` (backend/src/services/reminders.ts) routes
-    // email and SMS through `inDnd ? dndDeferred : eligible` and pushes
-    // 'browser' unconditionally; services/notifier.ts states the policy in terms
-    // ("Push is NOT suppressed — the OS already manages quiet hours"). The
-    // settings panel and the help page have always said so. This band said the
-    // opposite, which the visitor could only discover after signing up.
-    body: 'Browser or email. Set quiet hours and email waits for them; browser pop-ups follow your device’s own Do Not Disturb.',
-  },
-  {
-    icon: ChartBarIcon,
-    label: 'A year, looked back on',
-    body: 'Come December, see what the household actually did: plants added, tasks finished, the whole season on Garden and Greenhouse, the last 30 days on the free plan.',
-  },
+  { id: 'weather', icon: CloudIcon },
+  { id: 'leaf', icon: CameraIcon },
+  { id: 'cutting', icon: PruneIcon },
+  // `landing.beyond.reminders.body` names browser and email only: SMS is
+  // built but gated on SMS_NOTIFICATIONS_ENABLED, which production leaves
+  // empty (environments/production/terraform.tfvars), so the toggle is
+  // disabled for every real user and the help page says as much. "or text"
+  // goes back in when the flag is on, not before.
+  //
+  // Quiet hours are named per channel because they only apply to one of the
+  // two. `eligibleReminderChannels` (backend/src/services/reminders.ts) routes
+  // email and SMS through `inDnd ? dndDeferred : eligible` and pushes
+  // 'browser' unconditionally; services/notifier.ts states the policy in terms
+  // ("Push is NOT suppressed — the OS already manages quiet hours"). The
+  // settings panel and the help page have always said so. This band said the
+  // opposite, which the visitor could only discover after signing up.
+  // tests/unit/features/PublicAcquisitionHold.test.tsx holds both claims, in
+  // both catalogs.
+  { id: 'reminders', icon: BellAlertIcon },
+  { id: 'year', icon: ChartBarIcon },
 ];
 
 // A few care guides to surface by name in the "before you buy" band.
-// Slugs match features/care/careGuides.ts.
+// Slugs match features/care/careGuides.ts. Monstera and Pothos are genus
+// names, the same in every locale; the other two have common names that
+// differ, so they come from the catalog.
 const featuredGuides = [
   { slug: 'pothos', name: 'Pothos' },
-  { slug: 'snake-plant', name: 'Snake plant' },
-  { slug: 'spider-plant', name: 'Spider plant' },
+  { slug: 'snake-plant', nameKey: 'landing.plants.snakePlant' },
+  { slug: 'spider-plant', nameKey: 'landing.plants.spiderPlant' },
   { slug: 'monstera', name: 'Monstera' },
 ];
+
+/** Shown in the mock browser's address bar. */
+const MOCK_HOST = 'familygreenhouse.net';
 
 /**
  * Marketing-page mockup of the running app. Structure mirrors the live
@@ -325,31 +232,52 @@ const featuredGuides = [
  * content.
  */
 function AppMockup({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  // The in-app nav's own labels, so the mock reads exactly like the product
+  // does in the visitor's language.
   const navItems = [
-    { name: 'Dashboard', icon: HomeIcon, active: true },
-    { name: 'Plants', icon: SidebarLeafIcon, active: false },
-    { name: 'Tasks', icon: ClipboardDocumentListIcon, active: false },
-    { name: 'Analytics', icon: ChartBarIcon, active: false },
-    { name: 'Household', icon: UserGroupIcon, active: false },
-    { name: 'Settings', icon: Cog6ToothIcon, active: false },
+    { id: 'dashboard', name: t('nav.dashboard'), icon: HomeIcon, active: true },
+    { id: 'plants', name: t('nav.plants'), icon: SidebarLeafIcon, active: false },
+    { id: 'tasks', name: t('nav.tasks'), icon: ClipboardDocumentListIcon, active: false },
+    { id: 'analytics', name: t('nav.analytics'), icon: ChartBarIcon, active: false },
+    { id: 'household', name: t('nav.household'), icon: UserGroupIcon, active: false },
+    { id: 'settings', name: t('nav.settings'), icon: Cog6ToothIcon, active: false },
   ];
 
+  const snakePlant = t('landing.plants.snakePlant');
   const todayTasks: Array<{
     type: 'water' | 'fertilize' | 'prune';
     plant: string;
     when: string;
   }> = [
-    { type: 'water', plant: 'Monstera', when: 'Today' },
-    { type: 'fertilize', plant: 'Snake plant', when: 'Today' },
-    { type: 'prune', plant: 'Boston fern', when: 'Tomorrow' },
+    { type: 'water', plant: 'Monstera', when: t('common.today') },
+    { type: 'fertilize', plant: snakePlant, when: t('common.today') },
+    { type: 'prune', plant: t('landing.plants.bostonFern'), when: t('common.tomorrow') },
   ];
 
+  // `plant` feeds the `{{plant}}` slot in `landing.mockup.activity.*`; the
+  // people are fixed illustrative names, the same in every locale.
   const activity = [
-    { name: 'Joyce', action: 'watered', target: 'Fiddle leaf fig', when: '2h ago' },
-    { name: 'Briki', action: 'added', target: 'Pothos', when: '5h ago' },
-    { name: 'Steve', action: 'repotted', target: 'Snake plant', when: 'Yesterday' },
-    { name: 'Kaitlin', action: 'completed 3 tasks', target: '', when: 'Yesterday' },
-    { name: 'Chelsea', action: 'pruned', target: 'Monstera', when: '2 days ago' },
+    {
+      name: 'Joyce',
+      action: 'watered',
+      plant: t('landing.plants.fiddleLeafFig'),
+      when: t('landing.mockup.hoursAgo', { hours: 2 }),
+    },
+    {
+      name: 'Briki',
+      action: 'added',
+      plant: 'Pothos',
+      when: t('landing.mockup.hoursAgo', { hours: 5 }),
+    },
+    { name: 'Steve', action: 'repotted', plant: snakePlant, when: t('common.yesterday') },
+    { name: 'Kaitlin', action: 'completedTasks', plant: '', when: t('common.yesterday') },
+    {
+      name: 'Chelsea',
+      action: 'pruned',
+      plant: 'Monstera',
+      when: t('common.daysAgo', { count: 2 }),
+    },
   ];
 
   const taskIcons = { water: WaterDropIcon, fertilize: FertilizeIcon, prune: PruneIcon };
@@ -360,11 +288,7 @@ function AppMockup({ className }: { className?: string }) {
   };
 
   return (
-    <div
-      className={className}
-      role="img"
-      aria-label="Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity."
-    >
+    <div className={className} role="img" aria-label={t('landing.mockup.label')}>
       <div
         aria-hidden="true"
         className="relative -m-2 rounded-2xl bg-glass/60 p-2 ring-1 ring-inset ring-dew lg:-m-4 lg:rounded-[1.75rem] lg:p-4"
@@ -377,9 +301,7 @@ function AppMockup({ className }: { className?: string }) {
               <div className="w-3 h-3 rounded-full bg-secondary-400/80" />
               <div className="w-3 h-3 rounded-full bg-primary-400/80" />
             </div>
-            <div className="flex-1 text-center text-sm text-primary-900/70">
-              familygreenhouse.net
-            </div>
+            <div className="flex-1 text-center text-sm text-primary-900/70">{MOCK_HOST}</div>
           </div>
 
           {/* App body — sidebar + content. */}
@@ -396,20 +318,22 @@ function AppMockup({ className }: { className?: string }) {
                     Family Greenhouse
                   </span>
                   <span className="text-[8px] uppercase tracking-[0.2em] text-primary-200">
-                    Grow together
+                    {t('brand.tagline')}
                   </span>
                 </span>
               </div>
 
               <div className="rounded-md bg-primary-900/40 ring-1 ring-primary-600/30 px-3 py-2">
-                <p className="text-[10px] text-primary-200">Active household</p>
-                <p className="text-sm font-medium text-white">Apartment 3B</p>
+                <p className="text-[10px] text-primary-200">{t('nav.activeHousehold')}</p>
+                <p className="text-sm font-medium text-white">
+                  {t('landing.mockup.householdName')}
+                </p>
               </div>
 
               <div className="flex-1 -mx-2 space-y-1">
                 {navItems.map((item) => (
                   <span
-                    key={item.name}
+                    key={item.id}
                     className={clsx(
                       'group flex items-center gap-x-3 rounded-md p-2 text-sm font-medium leading-6',
                       item.active
@@ -429,15 +353,13 @@ function AppMockup({ className }: { className?: string }) {
               <header className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-primary-700 font-semibold">
-                    Your household
+                    {t('landing.mockup.eyebrow')}
                   </p>
                   <p className="mt-1 font-serif text-2xl text-ink leading-tight">
-                    Welcome back, Chelsea
+                    {t('landing.mockup.welcome', { name: 'Chelsea' })}
                   </p>
                   <TitleUnderline className="mt-1 ml-0.5 h-2 w-28 text-primary-600" />
-                  <p className="mt-2 text-xs text-gray-600">
-                    Here&rsquo;s what&rsquo;s happening with your plants today.
-                  </p>
+                  <p className="mt-2 text-xs text-gray-600">{t('landing.mockup.lede')}</p>
                 </div>
                 <div className="hidden lg:block shrink-0 w-28">
                   <DashboardHeaderArt className="w-full h-auto" />
@@ -446,38 +368,35 @@ function AppMockup({ className }: { className?: string }) {
 
               {/* Inline metadata row (replaces the old 3-tile KPI grid). */}
               <dl className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-xs">
-                <Metric label="Plants" value="12" />
-                <Metric label="Due today" value="3" />
-                <Metric label="Overdue" value="0" />
+                <Metric label={t('nav.plants')} value="12" />
+                <Metric label={t('landing.mockup.dueToday')} value="3" />
+                <Metric label={t('landing.mockup.overdue')} value="0" />
               </dl>
 
               {/* Today's tasks + Activity. */}
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <section className="rounded-xl bg-paper border border-primary-100/70 shadow-journal overflow-hidden">
                   <header className="px-4 py-3 border-b border-primary-100/70">
-                    <p className="text-sm font-semibold text-ink">Upcoming tasks</p>
+                    <p className="text-sm font-semibold text-ink">{t('landing.mockup.upcoming')}</p>
                   </header>
                   <ul className="divide-y divide-primary-100/60">
-                    {todayTasks.map((t) => {
-                      const Icon = taskIcons[t.type];
+                    {todayTasks.map((task) => {
+                      const Icon = taskIcons[task.type];
                       return (
-                        <li
-                          key={`${t.type}-${t.plant}`}
-                          className="flex items-center gap-3 px-4 py-3"
-                        >
+                        <li key={task.type} className="flex items-center gap-3 px-4 py-3">
                           <span
                             className={clsx(
                               'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1',
-                              taskChip[t.type]
+                              taskChip[task.type]
                             )}
                             aria-hidden="true"
                           >
                             <Icon className="h-5 w-5" />
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-ink truncate">{t.plant}</p>
+                            <p className="text-sm text-ink truncate">{task.plant}</p>
                             <p className="text-[11px] text-gray-600 capitalize">
-                              {t.type} • {t.when}
+                              {t(`tasks.types.${task.type}`)} • {task.when}
                             </p>
                           </div>
                           <span
@@ -494,7 +413,9 @@ function AppMockup({ className }: { className?: string }) {
 
                 <section className="rounded-xl bg-paper border border-primary-100/70 shadow-journal overflow-hidden">
                   <header className="px-4 py-3 border-b border-primary-100/70">
-                    <p className="text-sm font-semibold text-ink">Family activity</p>
+                    <p className="text-sm font-semibold text-ink">
+                      {t('landing.mockup.activityTitle')}
+                    </p>
                   </header>
                   <ul className="divide-y divide-primary-100/60">
                     {activity.map((a, i) => (
@@ -507,13 +428,11 @@ function AppMockup({ className }: { className?: string }) {
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-ink truncate">
-                            <span className="font-medium">{a.name}</span> {a.action}
-                            {a.target && (
-                              <>
-                                {' '}
-                                <span className="font-medium">{a.target}</span>
-                              </>
-                            )}
+                            <Trans
+                              i18nKey={`landing.mockup.activity.${a.action}`}
+                              values={{ name: a.name, plant: a.plant }}
+                              components={{ b: <span className="font-medium" /> }}
+                            />
                           </p>
                           <p className="text-[11px] text-gray-600">{a.when}</p>
                         </div>
@@ -579,13 +498,14 @@ export function LandingPage() {
   // stable per browser; see lib/experiment.ts.
   const variant = useHeroVariant();
   // Both commercial gates decide the plans-band copy, not registration alone.
-  const planBand = planBandFor(COMMERCIAL_HOLD_ACTIVE, PUBLIC_REGISTRATION_AVAILABLE);
+  const planBand = planBandFor(COMMERCIAL_HOLD_ACTIVE, PUBLIC_REGISTRATION_AVAILABLE, t);
+  const hero = HERO_COPY_KEY[variant];
 
   useMetaTags({
-    title: 'Family Greenhouse — Shared Plant Care & Watering Reminders',
+    title: t('landing.meta.title'),
     description: PUBLIC_REGISTRATION_AVAILABLE
-      ? 'Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.'
-      : 'A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in.',
+      ? t('landing.meta.descriptionOpen')
+      : t('landing.meta.descriptionClosed'),
     canonical: siteUrl('/'),
     ogType: 'website',
     ogImage: siteUrl('/brand/og-image.png'),
@@ -645,7 +565,7 @@ export function LandingPage() {
       <header className="absolute inset-x-0 top-0 z-50">
         <nav className="flex items-center justify-between gap-3 px-4 py-5 sm:p-6 lg:px-8 max-w-7xl mx-auto">
           <div className="flex lg:flex-1 items-center gap-2 min-w-0">
-            <Link to="/" aria-label="Family Greenhouse home">
+            <Link to="/" aria-label={t('publicShell.homeLabel')}>
               <BrandMark variant="wordmark" size="sm" compactOnMobile />
             </Link>
             {IS_BETA && (
@@ -659,13 +579,13 @@ export function LandingPage() {
               href="#features"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
             >
-              Features
+              {t('landing.nav.features')}
             </a>
             <a
               href="#pricing"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
             >
-              Plans
+              {t('publicShell.pricing')}
             </a>
             <Link
               to="/gift"
@@ -679,7 +599,7 @@ export function LandingPage() {
               to="/login"
               className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors py-2 whitespace-nowrap"
             >
-              Log in
+              {t('landing.nav.logIn')}
             </Link>
             {PUBLIC_REGISTRATION_AVAILABLE && (
               <Link to="/register" className={buttonStyles()}>
@@ -707,7 +627,7 @@ export function LandingPage() {
               <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
                 <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
                   <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
-                    {heroCopy[variant].eyebrow}
+                    {t(`${hero}.eyebrow`)}
                   </p>
                   {/* `sm:leading-none` pins the ≥sm line-height to 1. Under Tailwind v3
                     the responsive `text-*` utilities won over the unprefixed
@@ -717,18 +637,14 @@ export function LandingPage() {
                     `--tw-leading`, which makes `leading-[1.05]` win at every
                     breakpoint — pinning keeps the shipped rendering unchanged. */}
                   <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
-                    {heroCopy[variant].headlinePre}
-                    <span className="italic text-primary-700">
-                      {heroCopy[variant].headlineEmphasis}
-                    </span>
-                    {heroCopy[variant].headlinePost}
+                    {t(`${hero}.headlinePre`)}
+                    <span className="italic text-primary-700">{t(`${hero}.headlineEmphasis`)}</span>
+                    {t(`${hero}.headlinePost`)}
                   </h1>
                   <div className="mt-4 flex justify-center lg:justify-start">
                     <TitleUnderline className="h-4 w-56 text-primary-600" />
                   </div>
-                  <p className="mt-6 text-lg leading-8 text-gray-700">
-                    {heroCopy[variant].subhead}
-                  </p>
+                  <p className="mt-6 text-lg leading-8 text-gray-700">{t(`${hero}.subhead`)}</p>
                   <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
                     {PUBLIC_REGISTRATION_AVAILABLE && (
                       <Link to="/register" className={buttonStyles({ size: 'lg' })}>
@@ -739,11 +655,11 @@ export function LandingPage() {
                       href="#features"
                       className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
                     >
-                      See how it works <span aria-hidden="true">→</span>
+                      {t('landing.hero.seeHowItWorks')} <span aria-hidden="true">→</span>
                     </a>
                   </div>
                   {PUBLIC_REGISTRATION_AVAILABLE && (
-                    <p className="mt-4 text-sm text-gray-600">{ctaSignupNote}</p>
+                    <p className="mt-4 text-sm text-gray-600">{t('landing.hero.signupNote')}</p>
                   )}
                 </div>
 
@@ -765,11 +681,13 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
               {productFacts.map((fact) => (
-                <div key={fact.label} className="text-center">
+                <div key={fact} className="text-center">
                   <div className="font-serif text-3xl text-white sm:text-4xl tabular-nums">
-                    {fact.value}
+                    {t(`landing.facts.${fact}.value`)}
                   </div>
-                  <div className="mt-2 text-sm text-primary-100">{fact.label}</div>
+                  <div className="mt-2 text-sm text-primary-100">
+                    {t(`landing.facts.${fact}.label`)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -781,24 +699,28 @@ export function LandingPage() {
         <div className="py-20 sm:py-28 bg-parchment">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Who it's for"
-              title="However you ended up with plants"
-              description="The whole house arguing over the watering can is one story. Here are a few of the others."
+              eyebrow={t('landing.who.eyebrow')}
+              title={t('landing.who.title')}
+              description={t('landing.who.description')}
             />
             <div className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-6 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-4">
               {personas.map((persona) => (
                 <a
-                  key={persona.label}
+                  key={persona.id}
                   href={persona.href}
                   className="group flex flex-col rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 transition hover:ring-accent-300/70 hover:shadow-journal-hover"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-700 ring-1 ring-primary-200/60 transition group-hover:bg-accent-50 group-hover:text-accent-700 group-hover:ring-accent-200/60">
                     <persona.icon className="h-6 w-6" aria-hidden="true" />
                   </span>
-                  <span className="mt-4 font-serif text-lg text-ink">{persona.label}</span>
-                  <span className="mt-2 text-sm leading-6 text-gray-700">{persona.body}</span>
+                  <span className="mt-4 font-serif text-lg text-ink">
+                    {t(`landing.who.${persona.id}.label`)}
+                  </span>
+                  <span className="mt-2 text-sm leading-6 text-gray-700">
+                    {t(`landing.who.${persona.id}.body`)}
+                  </span>
                   <span className="mt-4 text-sm font-semibold text-primary-700 group-hover:text-accent-700">
-                    See how <span aria-hidden="true">→</span>
+                    {t('landing.who.seeHow')} <span aria-hidden="true">→</span>
                   </span>
                 </a>
               ))}
@@ -810,9 +732,9 @@ export function LandingPage() {
         <div id="features" className="py-20 sm:py-28 bg-paper">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <SectionHeading
-              eyebrow="What it does"
-              title="One schedule the whole house can see"
-              description="Add a plant once and its schedule, reminders, photos, and history come along. The rest of the household sees the same thing you do."
+              eyebrow={t('landing.features.eyebrow')}
+              title={t('landing.features.title')}
+              description={t('landing.features.description')}
             />
             <div className="mx-auto mt-12 max-w-2xl sm:mt-16 lg:mt-20 lg:max-w-none">
               <dl className="mx-auto grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 md:max-w-none md:grid-cols-2 lg:grid-cols-3">
@@ -820,7 +742,7 @@ export function LandingPage() {
                   const variant = featureCardVariants[index % featureCardVariants.length];
                   return (
                     <div
-                      key={feature.name}
+                      key={feature.id}
                       className={clsx(
                         'relative rounded-2xl p-8 shadow-journal hover:shadow-journal-hover transition-shadow border',
                         variant.surface
@@ -841,7 +763,7 @@ export function LandingPage() {
                           <feature.icon className="h-6 w-6" aria-hidden="true" />
                         </div>
                         <span className="text-lg font-semibold leading-7 text-ink">
-                          {feature.name}
+                          {t(`landing.features.${feature.id}.name`)}
                         </span>
                       </dt>
                       <dd
@@ -850,7 +772,7 @@ export function LandingPage() {
                           variant.horizontal && 'lg:ml-16'
                         )}
                       >
-                        {feature.description}
+                        {t(`landing.features.${feature.id}.description`)}
                       </dd>
                     </div>
                   );
@@ -867,9 +789,9 @@ export function LandingPage() {
         <div className="py-20 sm:py-28 bg-parchment">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Beyond the basics"
-              title="More than a reminder app"
-              description="The shared schedule is where it starts. These are the parts you grow into."
+              eyebrow={t('landing.beyond.eyebrow')}
+              title={t('landing.beyond.title')}
+              description={t('landing.beyond.description')}
             />
             {/* A list of features, not term/definition pairs — so a plain
               role="list" rather than a <dl> (which axe requires to contain
@@ -879,13 +801,15 @@ export function LandingPage() {
               className="mx-auto mt-12 grid max-w-xl grid-cols-1 gap-x-10 gap-y-8 sm:mt-16 sm:max-w-none sm:grid-cols-2 lg:grid-cols-3"
             >
               {differentiators.map((item) => (
-                <li key={item.label} className="flex gap-4">
+                <li key={item.id} className="flex gap-4">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-primary-700 ring-1 ring-primary-200/60">
                     <item.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="font-semibold text-ink">{item.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-700">{item.body}</p>
+                    <p className="font-semibold text-ink">{t(`landing.beyond.${item.id}.label`)}</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-700">
+                      {t(`landing.beyond.${item.id}.body`)}
+                    </p>
                   </div>
                 </li>
               ))}
@@ -896,28 +820,13 @@ export function LandingPage() {
         {/* How It Works Section — on paper between two parchment bands. */}
         <div className="py-20 sm:py-28 bg-paper">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <SectionHeading eyebrow="Setup" title="Three steps, about five minutes" />
+            <SectionHeading eyebrow={t('landing.setup.eyebrow')} title={t('landing.setup.title')} />
             <div className="mx-auto mt-12 sm:mt-16 max-w-5xl">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {[
-                  {
-                    step: '1',
-                    title: 'Add your plants',
-                    description:
-                      'A name and a photo will do. Pick a watering rhythm yourself or start from a species suggestion.',
-                  },
-                  {
-                    step: '2',
-                    title: 'Invite your household',
-                    description:
-                      'Send one link. Whoever lives with you joins and sees the same plants and the same task list.',
-                  },
-                  {
-                    step: '3',
-                    title: 'Split the work',
-                    description:
-                      "Assign tasks, or let whoever's home claim them. Reminders go out, the history fills in.",
-                  },
+                  { step: '1', id: 'add' },
+                  { step: '2', id: 'invite' },
+                  { step: '3', id: 'split' },
                 ].map((item) => (
                   <div key={item.step} className="text-center">
                     <div
@@ -926,8 +835,10 @@ export function LandingPage() {
                     >
                       {item.step}
                     </div>
-                    <h3 className="font-serif text-xl text-ink mb-3">{item.title}</h3>
-                    <p className="text-gray-700">{item.description}</p>
+                    <h3 className="font-serif text-xl text-ink mb-3">
+                      {t(`landing.setup.${item.id}.title`)}
+                    </h3>
+                    <p className="text-gray-700">{t(`landing.setup.${item.id}.description`)}</p>
                   </div>
                 ))}
               </div>
@@ -943,24 +854,19 @@ export function LandingPage() {
             <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
               <div>
                 <p className="text-xs uppercase tracking-[0.22em] font-semibold text-primary-700">
-                  Before you bring one home
+                  {t('landing.care.eyebrow')}
                 </p>
                 {/* `sm:leading-none` — see the hero h1: v3 let `sm:text-5xl` (line-height 1)
                   override the unprefixed `leading-tight` on source order, so this
                   heading has always rendered at 1.0 from `sm` up. */}
                 <h2 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl leading-tight sm:leading-none">
-                  Know what you&rsquo;re getting into
+                  {t('landing.care.title')}
                 </h2>
                 <TitleUnderline className="mt-2 h-3 w-40 text-primary-600" />
-                <p className="mt-6 text-lg leading-8 text-gray-700">
-                  The care guides are honest about the parts the plant-shop label skips: how often
-                  it actually needs water, what the brown tips are telling you, and whether
-                  it&rsquo;s safe around a cat or a curious toddler. Worth a read before the plant
-                  comes home.
-                </p>
+                <p className="mt-6 text-lg leading-8 text-gray-700">{t('landing.care.body')}</p>
               </div>
               <div className="rounded-2xl bg-paper p-6 shadow-journal ring-1 ring-primary-100/60 sm:p-8">
-                <h3 className="font-serif text-lg text-ink">Start with a guide</h3>
+                <h3 className="font-serif text-lg text-ink">{t('landing.care.startWithGuide')}</h3>
                 <ul className="mt-4 grid grid-cols-2 gap-3">
                   {featuredGuides.map((guide) => (
                     <li key={guide.slug}>
@@ -972,17 +878,17 @@ export function LandingPage() {
                           className="h-4 w-4 shrink-0 text-primary-600"
                           aria-hidden="true"
                         />
-                        {guide.name}
+                        {guide.nameKey ? t(guide.nameKey) : guide.name}
                       </Link>
                     </li>
                   ))}
                 </ul>
                 <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
                   <Link to="/care" className="text-primary-700 hover:underline">
-                    All care guides <span aria-hidden="true">→</span>
+                    {t('landing.care.allGuides')} <span aria-hidden="true">→</span>
                   </Link>
                   <Link to="/blog" className="text-primary-700 hover:underline">
-                    Read the blog <span aria-hidden="true">→</span>
+                    {t('landing.care.readBlog')} <span aria-hidden="true">→</span>
                   </Link>
                 </div>
               </div>
@@ -997,7 +903,7 @@ export function LandingPage() {
         <div id="pricing" className="py-20 sm:py-28 bg-paper">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <SectionHeading
-              eyebrow="Plans"
+              eyebrow={t('landing.plans.eyebrow')}
               title={planBand.title}
               description={planBand.description}
             />
@@ -1018,24 +924,22 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
             <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-              <Link to="/" aria-label="Family Greenhouse home">
+              <Link to="/" aria-label={t('publicShell.homeLabel')}>
                 <BrandMark variant="wordmark" tone="light" />
               </Link>
-              <p className="mt-4 text-sm text-primary-200">
-                A shared care journal for the plants in your house.
-              </p>
+              <p className="mt-4 text-sm text-primary-200">{t('landing.footer.tagline')}</p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Product</h3>
+              <h3 className="text-sm font-semibold text-white">{t('landing.footer.product')}</h3>
               <ul className="mt-4 space-y-2">
                 <li>
                   <a href="#features" className="text-sm text-primary-200 hover:text-white">
-                    Features
+                    {t('landing.nav.features')}
                   </a>
                 </li>
                 <li>
                   <a href="#pricing" className="text-sm text-primary-200 hover:text-white">
-                    Plans
+                    {t('publicShell.pricing')}
                   </a>
                 </li>
                 <li>
@@ -1046,54 +950,54 @@ export function LandingPage() {
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Learn</h3>
+              <h3 className="text-sm font-semibold text-white">{t('landing.footer.learn')}</h3>
               <ul className="mt-4 space-y-2">
                 <li>
                   <Link to="/care" className="text-sm text-primary-200 hover:text-white">
-                    Plant care guides
+                    {t('landing.footer.plantCareGuides')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/blog" className="text-sm text-primary-200 hover:text-white">
-                    Blog
+                    {t('publicShell.blog')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/changelog" className="text-sm text-primary-200 hover:text-white">
-                    Changelog
+                    {t('footer.changelog')}
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Company</h3>
+              <h3 className="text-sm font-semibold text-white">{t('landing.footer.company')}</h3>
               <ul className="mt-4 space-y-2">
                 <li>
                   <a
                     href="mailto:hello@familygreenhouse.net"
                     className="text-sm text-primary-200 hover:text-white"
                   >
-                    Contact
+                    {t('landing.footer.contact')}
                   </a>
                 </li>
                 <li>
                   <Link to="/status" className="text-sm text-primary-200 hover:text-white">
-                    Status
+                    {t('footer.status')}
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Legal</h3>
+              <h3 className="text-sm font-semibold text-white">{t('landing.footer.legal')}</h3>
               <ul className="mt-4 space-y-2">
                 <li>
                   <Link to="/legal/privacy" className="text-sm text-primary-200 hover:text-white">
-                    Privacy
+                    {t('footer.privacy')}
                   </Link>
                 </li>
                 <li>
                   <Link to="/legal/terms" className="text-sm text-primary-200 hover:text-white">
-                    Terms
+                    {t('footer.terms')}
                   </Link>
                 </li>
               </ul>
@@ -1101,13 +1005,11 @@ export function LandingPage() {
           </div>
           <div className="mt-12 pt-8 border-t border-primary-700/60 text-center">
             <p className="text-sm text-primary-200">
-              &copy; {new Date().getFullYear()} Family Greenhouse. All rights reserved.
+              {t('landing.footer.copyright', { year: new Date().getFullYear() })}
             </p>
             <div className="mt-6 flex items-center justify-center gap-4">
               <MemorialFrame className="h-8 w-32 text-primary-300/50 hidden sm:block" />
-              <p className="text-sm italic text-primary-200">
-                In loving memory of my mom, Joyce — who taught us to keep growing.
-              </p>
+              <p className="text-sm italic text-primary-200">{t('footer.memorial')}</p>
               <MemorialFrame className="h-8 w-32 text-primary-300/50 hidden sm:block -scale-x-100" />
             </div>
           </div>

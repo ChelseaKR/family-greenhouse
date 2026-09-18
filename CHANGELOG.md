@@ -28,11 +28,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   catalog stays a separate chunk that English-first visitors never request,
   and the picker now fetches it when pressed or focused instead of on mount.
   `VITE_ENABLE_NON_ENGLISH_LOCALES=false` is the build-time kill switch; the
-  per-device `?locales=on|off` opt-in is gone. Copy that never went through
-  the catalog — most of the landing page, the public footer, help, care
-  guides, blog, and the strings the hardcoded-string ratchet still baselines —
-  is still English on a Spanish screen; `docs/i18n.md` § Shipping status lists
-  it.
+  per-device `?locales=on|off` opt-in is gone.
+
+- **A Spanish-speaking visitor's first screens are in Spanish.** The landing
+  page (both hero variants, the dashboard mock-up, every band, the plans band
+  and its footer), the `/pricing` hero and page metadata, the public footer,
+  the header wordmark's tagline and the 404 page now read from the catalogs,
+  with new Latin-American Spanish copy. A render test fails on any visible
+  string left identical in English and Spanish on those pages, and the
+  free-plan caps they state are now re-derived in both catalogs. Help, care
+  guides, blog, changelog, `/pet-safe` and the strings the hardcoded-string
+  ratchet still baselines remain English; `docs/i18n.md` § Shipping status
+  lists them.
 
 ## [0.35.0] - 2026-09-17
 

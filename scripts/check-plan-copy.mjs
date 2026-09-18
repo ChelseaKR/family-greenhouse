@@ -93,26 +93,11 @@ const SURFACES = [
   ['frontend/src/config/seo.ts', 'one home, up to {members} people and {plants} plants', 1],
   ['frontend/src/config/seo.ts', 'Free for up to {plants} plants', 2],
   ['frontend/vite.config.ts', 'free accounts for up to {plants} plants', 1],
-  ['frontend/src/features/landing/LandingPage.tsx', 'Up to {plants} plants', 1],
-  ['frontend/src/features/landing/LandingPage.tsx', "value: '{members} people'", 1],
-  [
-    'frontend/src/features/landing/LandingPage.tsx',
-    'one home, up to {members} people and {plants} plants',
-    1,
-  ],
+  // The JSON-LD Offer stays in the page source: it is crawler metadata, not
+  // copy a visitor reads, so it was not moved into the catalogs.
   [
     'frontend/src/features/landing/LandingPage.tsx',
     'Free for one home, up to {members} household members and {plants} plants',
-    1,
-  ],
-  [
-    'frontend/src/features/landing/planBand.ts',
-    'one home, up to {members} people and {plants} plants',
-    1,
-  ],
-  [
-    'frontend/src/features/landing/planBand.ts',
-    'one home, up to {members} household members and {plants} plants',
     1,
   ],
   ['frontend/src/features/care/CareIndex.tsx', 'Free for up to {plants} plants', 1],
@@ -133,6 +118,46 @@ const SURFACES = [
   ],
 ];
 
+/**
+ * The landing page's visible copy lives in the translation catalogs (#467),
+ * so its statements of the caps are checked where they are authored — one
+ * catalog key each, in BOTH locales. A Spanish sentence that drifted from the
+ * caps would mislead exactly as badly as an English one, and it is the one
+ * nobody on the team reads.
+ *
+ * Keyed rather than counted across the whole file: the catalogs also hold the
+ * pricing surface's statements, which are deliberately not covered (above),
+ * and a whole-file count would move whenever that copy did.
+ */
+const CATALOG_SURFACES = [
+  ['landing.facts.free.label', 'Up to {plants} plants', 'Hasta {plants} plantas'],
+  ['landing.facts.people.value', '{members} people', '{members} personas'],
+  [
+    'landing.meta.descriptionOpen',
+    'one home, up to {members} people and {plants} plants',
+    'un hogar, hasta {members} personas y {plants} plantas',
+  ],
+  [
+    'landing.plans.open.description',
+    'one home, up to {members} people and {plants} plants',
+    'un hogar, hasta {members} personas y {plants} plantas',
+  ],
+  [
+    'landing.plans.held.description',
+    'one home, up to {members} household members and {plants} plants',
+    'un hogar, hasta {members} miembros del hogar y {plants} plantas',
+  ],
+];
+
+const catalogs = Object.fromEntries(
+  ['en', 'es'].map((locale) => [
+    locale,
+    JSON.parse(read(`frontend/src/i18n/locales/${locale}/translation.json`)),
+  ])
+);
+const catalogValue = (locale, key) =>
+  key.split('.').reduce((node, part) => (node == null ? undefined : node[part]), catalogs[locale]);
+
 const flatten = (text) => text.replace(/\s+/g, ' ');
 
 if (plants !== null && members !== null) {
@@ -150,13 +175,39 @@ if (plants !== null && members !== null) {
   }
 }
 
+if (plants !== null && members !== null) {
+  for (const [key, english, spanish] of CATALOG_SURFACES) {
+    for (const [locale, template] of [
+      ['en', english],
+      ['es', spanish],
+    ]) {
+      const where = `frontend/src/i18n/locales/${locale}/translation.json → ${key}`;
+      const value = catalogValue(locale, key);
+      if (typeof value !== 'string') {
+        problems.push(`${where}: no such string. The copy moved; move this check with it.`);
+        continue;
+      }
+      const sentence = template.replace('{plants}', plants).replace('{members}', members);
+      if (!value.includes(sentence)) {
+        problems.push(
+          `${where}: expected it to state "${sentence}". Either the free-plan caps moved in ` +
+            `backend/src/models/plans.ts and this copy still states the old ones, or the ` +
+            `sentence was reworded away from the cap it promises. Fix the copy, or update ` +
+            `this gate deliberately, in the same change.`
+        );
+      }
+    }
+  }
+}
+
 // The free tier is "one home" in prose everywhere above. If that ever stops
 // being 1, every one of those sentences is wrong in a way no cap number can
 // express, so it is checked separately rather than substituted.
 if (homes !== null && homes !== '1') {
   problems.push(
     `backend/src/models/plans.ts: the free tier now allows ${homes} homes, but the public copy ` +
-      `says "one home" in ${SURFACES.length} places. Rewrite those sentences in this change.`
+      `says "one home" in ${SURFACES.length + CATALOG_SURFACES.length} places, in two ` +
+      `languages. Rewrite those sentences in this change.`
   );
 }
 
@@ -168,6 +219,7 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `Plan copy OK — ${SURFACES.length} public statements of the free plan (${homes} home, ` +
+  `Plan copy OK — ${SURFACES.length} public statements of the free plan, plus ` +
+    `${CATALOG_SURFACES.length} catalog statements in each of en and es (${homes} home, ` +
     `${members} members, ${plants} plants) re-derived from backend/src/models/plans.ts.`
 );

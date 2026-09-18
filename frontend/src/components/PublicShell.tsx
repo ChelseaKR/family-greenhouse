@@ -46,9 +46,9 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
             'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',
             WIDTHS[width]
           )}
-          aria-label="Site"
+          aria-label={t('publicShell.siteNavLabel')}
         >
-          <Link to="/" aria-label="Family Greenhouse home">
+          <Link to="/" aria-label={t('publicShell.homeLabel')}>
             <BrandMark variant="wordmark" size="sm" compactOnMobile />
           </Link>
           {!plainHeader && (
