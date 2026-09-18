@@ -102,7 +102,7 @@ describe('resolveEntitlement (per user, across every membership)', () => {
   // not cancel on a failed charge — it retries for weeks, and `planId` stays on
   // the paid tier the whole time.
   it('is locked, not entitled, for a household whose card has failed', async () => {
-    for (const status of ['past_due', 'unpaid', 'incomplete', 'canceled'] as const) {
+    for (const status of ['unpaid', 'incomplete', 'canceled'] as const) {
       vi.mocked(billing.getHouseholdSubscription).mockReset();
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
         subWithStatus('greenhouse', status)

@@ -175,7 +175,7 @@ export const getCurrentSubscription = createHandler(
       getCreditBalance(user.householdId!),
     ]);
     // The meters must show the caps that are actually ENFORCED. Resolving
-    // them off planId alone would advertise Garden's plant cap to a past_due
+    // them off planId alone would advertise Garden's plant cap to an unpaid
     // household whose next POST /plants is refused at Seedling's. `planId`
     // itself stays truthful: it is the plan they are on, which is not the
     // same as the caps they may currently use.

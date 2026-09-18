@@ -54,7 +54,7 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 123 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 124 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
@@ -64,8 +64,9 @@ describe('deferred legal catalog', () => {
     // policy used to leave out: the caretaker-seat collection bullet and the
     // wall-display/caretaker-seat section, −1 when the Google Tag Manager
     // paragraph went with the loader it described (the 2026-09-13 analytics
-    // decision: PostHog only, cookieless).
-    expect(en).toHaveLength(123);
+    // decision: PostHog only, cookieless), +1 for the failed-payment retry
+    // window in the renewal section (#593).
+    expect(en).toHaveLength(124);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

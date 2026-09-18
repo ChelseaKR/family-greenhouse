@@ -1,11 +1,13 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createInstance, type i18n as I18nInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
+import { useState, type ReactNode } from 'react';
 import es from '@/i18n/locales/es/translation.json';
 import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
-import type { SubscriptionState } from '@/services/billingService';
+import type { Plan, PlanCatalog, SubscriptionState } from '@/services/billingService';
 
 const isAdmin = vi.fn(() => true);
 vi.mock('@/hooks/useActiveHouseholdRole', () => ({
@@ -13,24 +15,59 @@ vi.mock('@/hooks/useActiveHouseholdRole', () => ({
   useActiveHouseholdRole: () => (isAdmin() ? 'admin' : 'member'),
 }));
 
-const pastDue: SubscriptionState = {
+const listPlans = vi.fn<() => Promise<PlanCatalog>>();
+vi.mock('@/services/billingService', async () => {
+  const actual = await vi.importActual<typeof import('@/services/billingService')>(
+    '@/services/billingService'
+  );
+  return { ...actual, billingService: { listPlans: () => listPlans() } };
+});
+
+const CATALOG: PlanCatalog = {
+  paymentsAvailable: true,
+  commercialHold: { active: false, effectiveDate: '2026-09-01' },
+  plans: [
+    { id: 'seedling', name: 'Seedling', description: '', maxPlants: 20, maxMembers: 3 },
+    { id: 'garden', name: 'Garden', description: '', maxPlants: 200, maxMembers: null },
+    { id: 'greenhouse', name: 'Greenhouse', description: '', maxPlants: 5000, maxMembers: null },
+  ] as unknown as Plan[],
+};
+
+/** Stripe is still retrying: the household keeps Garden (#593). */
+const retrying: SubscriptionState = {
   planId: 'garden',
   stripeCustomerId: 'cus_1',
   stripeSubscriptionId: 'sub_1',
   status: 'past_due',
 };
 
+/** Stripe gave up: the caps have dropped. */
+const lapsed: SubscriptionState = { ...retrying, status: 'unpaid' };
+
+function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  );
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
 function renderBanner(subscription: SubscriptionState | null | undefined) {
   return render(
-    <MemoryRouter>
+    <Providers>
       <PaymentFailedBanner subscription={subscription} />
-    </MemoryRouter>
+    </Providers>
   );
 }
 
 describe('PaymentFailedBanner', () => {
   beforeEach(() => {
     isAdmin.mockReturnValue(true);
+    listPlans.mockReset();
+    listPlans.mockResolvedValue(CATALOG);
   });
 
   afterEach(() => {
@@ -38,25 +75,64 @@ describe('PaymentFailedBanner', () => {
     delete (window as unknown as { Capacitor?: unknown }).Capacitor;
   });
 
-  it('tells an admin the payment failed, what changed, and where to fix it', () => {
-    renderBanner(pastDue);
+  describe('while Stripe retries (past_due) — access is kept', () => {
+    it('says the plan is kept, names it, and asks for the card before retries run out', async () => {
+      renderBanner(retrying);
 
-    expect(screen.getByText('We couldn’t take your last payment')).toBeInTheDocument();
-    // What changed — the caps, and that nothing is deleted.
-    expect(screen.getByText(/free Seedling plan’s limits/)).toBeInTheDocument();
-    expect(screen.getByText(/nothing is deleted/)).toBeInTheDocument();
-    // How to fix it: an in-app link to the page that holds the portal button.
-    const link = screen.getByRole('link', { name: 'Update the card in Settings → Plan status' });
-    expect(link).toHaveAttribute('href', '/settings/billing');
+      expect(screen.getByText('Your last payment didn’t go through')).toBeInTheDocument();
+      expect(
+        await screen.findByText(/your household keeps the Garden plan and everything it includes/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/nothing has changed yet/)).toBeInTheDocument();
+      expect(screen.getByText(/avoid losing Garden if the retries run out/)).toBeInTheDocument();
+      expect(screen.getByTestId('payment-failed-banner')).toHaveAttribute('data-stage', 'retrying');
+      expect(
+        screen.getByRole('link', { name: 'Update the card in Settings → Plan status' })
+      ).toHaveAttribute('href', '/settings/billing');
+    });
+
+    it('never says anything was taken away while access is kept', async () => {
+      renderBanner(retrying);
+      await screen.findByText(/keeps the Garden plan/);
+      const text = document.body.textContent ?? '';
+      // The lapsed-stage claims, none of which is true during the retries.
+      expect(text).not.toMatch(/Seedling/);
+      expect(text).not.toMatch(/capped/);
+      expect(text).not.toMatch(/limits rather than/);
+      expect(text).not.toMatch(/We couldn’t take your last payment/);
+    });
+
+    it('names no plan, rather than a guessed one, while the catalog has not answered', () => {
+      listPlans.mockReturnValue(new Promise(() => {}));
+      renderBanner(retrying);
+      expect(
+        screen.getByText(/keeps its paid plan and everything it includes/)
+      ).toBeInTheDocument();
+    });
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'incomplete_expired'])(
-    'shows for the unpaid status %s',
-    (status) => {
-      renderBanner({ ...pastDue, status });
-      expect(screen.getByTestId('payment-failed-banner')).toBeInTheDocument();
-    }
-  );
+  describe('once Stripe gives up — the caps have dropped', () => {
+    it.each(['unpaid', 'incomplete', 'incomplete_expired'])(
+      'says so for %s, with the free plan named',
+      (status) => {
+        renderBanner({ ...lapsed, status });
+        expect(screen.getByText('We couldn’t take your last payment')).toBeInTheDocument();
+        expect(screen.getByText(/free Seedling plan’s limits/)).toBeInTheDocument();
+        expect(screen.getByText(/nothing is deleted/)).toBeInTheDocument();
+        expect(screen.getByTestId('payment-failed-banner')).toHaveAttribute('data-stage', 'lapsed');
+        // The catalog is only read to name a KEPT plan; nothing to name here.
+        expect(listPlans).not.toHaveBeenCalled();
+      }
+    );
+
+    it('does not name the free plan when a tier bought outright is the floor', () => {
+      renderBanner({ ...lapsed, planId: 'greenhouse', lifetimePlanId: 'garden' });
+      expect(screen.queryByText(/free Seedling plan/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/the plan it already owns outright or was given/)
+      ).toBeInTheDocument();
+    });
+  });
 
   it.each([
     ['active', 'active'],
@@ -65,7 +141,7 @@ describe('PaymentFailedBanner', () => {
     ['paused', 'paused'],
     ['an absent status', undefined],
   ])('renders nothing for %s', (_label, status) => {
-    const { container } = renderBanner({ ...pastDue, status });
+    const { container } = renderBanner({ ...retrying, status });
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -75,24 +151,23 @@ describe('PaymentFailedBanner', () => {
     expect(renderBanner(null).container).toBeEmptyDOMElement();
   });
 
-  it('disappears once the household pays, with no dismiss state left behind', () => {
-    // Stripe sends past_due -> active when the card goes through; the webhook
-    // writes it and the shared subscription read re-renders the frame.
-    const { rerender } = renderBanner(pastDue);
-    expect(screen.getByTestId('payment-failed-banner')).toBeInTheDocument();
-
-    rerender(
-      <MemoryRouter>
-        <PaymentFailedBanner subscription={{ ...pastDue, status: 'active' }} />
-      </MemoryRouter>
-    );
-    expect(screen.queryByTestId('payment-failed-banner')).not.toBeInTheDocument();
-    expect(screen.queryByText('We couldn’t take your last payment')).not.toBeInTheDocument();
+  it('disappears once the household pays, from either stage, with no dismiss state', async () => {
+    for (const failing of [retrying, lapsed]) {
+      const { rerender } = renderBanner(failing);
+      expect(screen.getByTestId('payment-failed-banner')).toBeInTheDocument();
+      rerender(
+        <Providers>
+          <PaymentFailedBanner subscription={{ ...failing, status: 'active' }} />
+        </Providers>
+      );
+      expect(screen.queryByTestId('payment-failed-banner')).not.toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it('tells a member only an admin can fix it, and does not offer them the card', () => {
     isAdmin.mockReturnValue(false);
-    renderBanner(pastDue);
+    renderBanner(lapsed);
 
     expect(screen.getByText('Only a household admin can manage billing.')).toBeInTheDocument();
     expect(
@@ -103,13 +178,6 @@ describe('PaymentFailedBanner', () => {
     ).toHaveAttribute('href', '/settings/billing');
   });
 
-  it('does not name the free plan when a tier bought outright is the floor', () => {
-    renderBanner({ ...pastDue, planId: 'greenhouse', lifetimePlanId: 'garden' });
-
-    expect(screen.queryByText(/free Seedling plan/)).not.toBeInTheDocument();
-    expect(screen.getByText(/the plan it already owns outright or was given/)).toBeInTheDocument();
-  });
-
   describe('inside the native (Capacitor) shells', () => {
     beforeEach(() => {
       (window as unknown as { Capacitor?: unknown }).Capacitor = {
@@ -118,12 +186,11 @@ describe('PaymentFailedBanner', () => {
       };
     });
 
-    it('states the failure but points only at the in-app page, never at a payment step', () => {
-      renderBanner(pastDue);
-
-      expect(screen.getByText('We couldn’t take your last payment')).toBeInTheDocument();
-      // Guideline 3.1.1: no call to action toward an outside payment
-      // mechanism. The one link is the in-app, native-gated billing page.
+    it.each([
+      ['retrying', retrying],
+      ['lapsed', lapsed],
+    ])('points only at the in-app page while %s, never at a payment step', (_stage, sub) => {
+      renderBanner(sub);
       expect(
         screen.queryByRole('link', { name: 'Update the card in Settings → Plan status' })
       ).not.toBeInTheDocument();
@@ -148,32 +215,48 @@ describe('PaymentFailedBanner under es', () => {
     });
   });
 
+  beforeEach(() => {
+    isAdmin.mockReturnValue(true);
+    listPlans.mockReset();
+    listPlans.mockResolvedValue(CATALOG);
+  });
+
   afterEach(() => cleanup());
 
-  it('renders every line in Spanish, for both the Seedling and the owned-floor wording', () => {
-    isAdmin.mockReturnValue(true);
-    const { rerender } = render(
+  function renderSpanish(subscription: SubscriptionState) {
+    return render(
       <I18nextProvider i18n={spanish}>
-        <MemoryRouter>
-          <PaymentFailedBanner subscription={pastDue} />
-        </MemoryRouter>
+        <Providers>
+          <PaymentFailedBanner subscription={subscription} />
+        </Providers>
       </I18nextProvider>
     );
-    expect(screen.getByText('No hemos podido cobrar tu último pago')).toBeInTheDocument();
-    expect(screen.getByText(/plan gratuito Plántula/)).toBeInTheDocument();
+  }
+
+  it('renders the retrying stage in Spanish, with the kept plan named', async () => {
+    renderSpanish(retrying);
+    expect(screen.getByText('Tu último pago no se ha completado')).toBeInTheDocument();
+    expect(await screen.findByText(/tu hogar conserva el plan Garden/)).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Actualiza la tarjeta en Ajustes → Estado del plan' })
     ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/settings\.billing\./);
+    expect(document.body.textContent).not.toMatch(/Plántula/);
+  });
+
+  it('renders both lapsed wordings in Spanish', () => {
+    const { rerender } = renderSpanish(lapsed);
+    expect(screen.getByText('No hemos podido cobrar tu último pago')).toBeInTheDocument();
+    expect(screen.getByText(/plan gratuito Plántula/)).toBeInTheDocument();
 
     rerender(
       <I18nextProvider i18n={spanish}>
-        <MemoryRouter>
-          <PaymentFailedBanner subscription={{ ...pastDue, lifetimePlanId: 'garden' }} />
-        </MemoryRouter>
+        <Providers>
+          <PaymentFailedBanner subscription={{ ...lapsed, lifetimePlanId: 'garden' }} />
+        </Providers>
       </I18nextProvider>
     );
     expect(screen.getByText(/ya compró de por vida o que recibió como regalo/)).toBeInTheDocument();
-    // No raw key and no English left behind.
     expect(document.body.textContent).not.toMatch(/settings\.billing\./);
     expect(screen.queryByText(/We couldn’t take/)).not.toBeInTheDocument();
   });

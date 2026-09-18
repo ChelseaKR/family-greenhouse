@@ -36,7 +36,7 @@ async function requireGreenhousePlan(householdId: string) {
   const sub = await billing.getHouseholdSubscription(householdId);
   // ENTITLEMENT, not the plan row (#476). middleware/apiKey.ts already gates
   // USING a key on getEntitledPlan, so minting one on `planId` alone was the
-  // inconsistent half: a past_due household could issue a key that its own
+  // inconsistent half: an unpaid household could issue a key that its own
   // next request would then be refused with. Issuing is a new grant, and a
   // household mid-dunning is not entitled to new grants.
   // And the FLAG, not the id (#592). #476 fixed WHICH plan this asks about;

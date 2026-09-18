@@ -155,8 +155,8 @@ const STRIPE_HOUSEHOLDS: Array<[string, EntitlementSubscription, string, string]
     'greenhouse',
   ],
   [
-    'Garden, past due',
-    { planId: 'garden', status: 'past_due', stripeSubscriptionId: 'sub_synthetic_dunning' },
+    'Garden, unpaid after retries',
+    { planId: 'garden', status: 'unpaid', stripeSubscriptionId: 'sub_synthetic_dunning' },
     'seedling',
     'seedling',
   ],

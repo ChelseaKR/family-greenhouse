@@ -115,7 +115,7 @@ describe('GET /households/:id/analytics/coverage', () => {
     expect(coverage.getCoverageReport).toHaveBeenCalledWith('hh-1');
   });
 
-  it.each(['past_due', 'unpaid', 'paused'])(
+  it.each(['unpaid', 'paused'])(
     'returns 402 while the card has failed (%s), without touching the data (#476)',
     async (status) => {
       // A per-request report for a signed-in member of the buying household:

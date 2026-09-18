@@ -21,7 +21,9 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * 14-day trial is `trial_period_days: 14` in services/billing.ts,
  * cancellation runs through the Stripe portal (`createPortalSession`,
  * admin-only) and holds the plan until `customer.subscription.deleted` drops
- * it to seedling, the withdrawn cadences are `withdrawnIntervals` in
+ * it to seedling, a failed payment keeps the plan while Stripe retries because
+ * `past_due` is in `ENTITLED_SUBSCRIPTION_STATUSES` (models/plans.ts, #593)
+ * and ends it on `unpaid`/`canceled`, the withdrawn cadences are `withdrawnIntervals` in
  * models/plans.ts, the refund section describes a system with no refund path
  * at all (see the comment beside it), and the caps that bite after a
  * downgrade are enforced on create/import/invite only, never on read or edit.
@@ -35,7 +37,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-12">
+    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-17">
       <p className="lead">
         <Trans
           i18nKey="legal.terms.lead"
@@ -113,6 +115,9 @@ export function TermsPage() {
       <h2>{t('legal.terms.renewal.heading')}</h2>
       <p>{t('legal.terms.renewal.cadence')}</p>
       <p>{t('legal.terms.renewal.price')}</p>
+      <p>
+        <Trans i18nKey="legal.terms.renewal.failedPayment" components={{ em: <em /> }} />
+      </p>
 
       <h2>{t('legal.terms.cancellation.heading')}</h2>
       <p>

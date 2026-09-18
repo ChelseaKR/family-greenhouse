@@ -29,7 +29,7 @@ import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
-import { isPaymentFailing, paymentFailedBodyKey } from '@/features/billing/paymentFailing';
+import { isPaymentLapsed, paymentFailedCopy } from '@/features/billing/paymentFailing';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
 // resolved and giftSubscriptions is on the offer, so it costs nothing on
@@ -280,12 +280,19 @@ export function BillingSettings() {
   // would contradict itself, so it is guarded directly rather than trusting
   // that invariant silently.
   const staleCheckout = isAdmin && !awaitingEntitlement ? subQuery.data?.staleCheckout : undefined;
-  // Reads a status Stripe actually sent; an ABSENT status is never dunning.
-  // Without this the page said "Your household is on the Garden plan" over
-  // meters showing Seedling's numbers, because `planId` keeps the paid tier
-  // through dunning while the server has already dropped the caps. Shared
-  // with the app-wide banner (`paymentFailing.ts`) so the two cannot disagree.
-  const paymentFailing = isPaymentFailing(subQuery.data);
+  // Reads a status Stripe actually sent; an ABSENT status is never a failed
+  // payment. Two stages (#593): while Stripe retries (`past_due`) the
+  // household keeps its plan and the copy says so; once Stripe gives up
+  // (`unpaid`, …) the server has dropped the caps while `planId` still names
+  // the paid tier, and without this notice the page said "Your household is on
+  // the Garden plan" over meters showing Seedling's numbers. Shared with the
+  // app-wide banner (`paymentFailing.ts`) so the two cannot disagree.
+  const paymentFailure = paymentFailedCopy(
+    subQuery.data,
+    planRead.status === 'ready' ? planRead.planName : null
+  );
+  const paymentFailing = paymentFailure !== null;
+  const paymentLapsed = isPaymentLapsed(subQuery.data);
   // Exactly the condition the portal button below renders on, so the notice
   // never tells someone to press a control that is not on their screen.
   const canOpenPortal = paymentsAvailable && !native && !!subQuery.data?.stripeCustomerId;
@@ -404,16 +411,15 @@ export function BillingSettings() {
         <CardHeader title="Plan status" description="View your household's current plan limits." />
         {/* Named before anything else on the card, because every other line
             here is a consequence of it. */}
-        {paymentFailing && (
-          <Alert
-            variant="warning"
-            title={t('settings.billing.paymentFailedTitle')}
-            className="mb-4"
-          >
-            {/* Names the free plan only when that is what the household
+        {paymentFailure && (
+          <Alert variant="warning" title={t(paymentFailure.titleKey)} className="mb-4">
+            {/* While Stripe retries, says the plan is kept. Once it has given
+                up, names the free plan only when that is what the household
                 keeps: a tier bought outright or a running gift is a floor a
                 declined card cannot take away. */}
-            <p>{t(paymentFailedBodyKey(subQuery.data))}</p>
+            <p data-testid="payment-failed-body">
+              {t(paymentFailure.bodyKey, paymentFailure.values)}
+            </p>
             {canOpenPortal && (
               <p className="mt-2">
                 {isAdmin
@@ -424,12 +430,14 @@ export function BillingSettings() {
             {native && <p className="mt-2">{t('settings.billing.paymentFailedActionNative')}</p>}
           </Alert>
         )}
-        {/* Suppressed while the payment is failing: the caps really are
+        {/* Suppressed once a failed payment has LAPSED: the caps really are
             Seedling's, but "more than your current plan includes" names the
             wrong cause, and the notice above already states the cap effect.
             Two warnings, one of them misattributing the other, is how a
-            household concludes it has been downgraded rather than dunned. */}
-        {limits.overall === 'over' && !paymentFailing && (
+            household concludes it has been downgraded rather than dunned.
+            While Stripe is still retrying the caps are the plan's own, so an
+            over-limit warning then is about the plan and stays. */}
+        {limits.overall === 'over' && !paymentLapsed && (
           <Alert variant="warning" title={t('settings.billing.overLimitTitle')} className="mb-4">
             <p>{t('settings.billing.overLimitBody')}</p>
           </Alert>

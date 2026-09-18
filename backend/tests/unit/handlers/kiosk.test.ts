@@ -122,7 +122,7 @@ describe('GET /kiosk/{token} (public)', () => {
     vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'seedling',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
 
     const { getKioskView } = await import('../../../src/handlers/tasks/kiosk.js');
@@ -399,7 +399,7 @@ describe('POST /households/{id}/kiosk-link (issue)', () => {
     expect(vi.mocked(kiosk.issueKioskLink).mock.calls[0][0].pollIntervalSeconds).toBe(600);
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+  it.each(['unpaid', 'incomplete', 'paused', 'canceled'])(
     '402s while the card has failed (%s) — mounting a NEW display is a new grant (#476)',
     async (status) => {
       const billing = await import('../../../src/services/billing.js');

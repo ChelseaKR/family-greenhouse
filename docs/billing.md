@@ -61,22 +61,43 @@ is **paying** for it. `getEntitledPlan` (`backend/src/models/plans.ts`) resolves
 the second question, and the gates listed below use it rather than
 `getPlan(sub.planId)`:
 
-| Stripe `subscription.status`                                                   | Caps resolve to  |
-| ------------------------------------------------------------------------------ | ---------------- |
-| `active`, `trialing`                                                           | the paid plan    |
-| none recorded (free tier, one-time lifetime grant)                             | the plan on file |
-| `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused`, `canceled` | Seedling         |
+| Stripe `subscription.status`                                       | Caps resolve to  |
+| ------------------------------------------------------------------ | ---------------- |
+| `active`, `trialing`                                               | the paid plan    |
+| `past_due` (Stripe is retrying a failed payment)                   | the paid plan    |
+| none recorded (free tier, one-time lifetime grant)                 | the plan on file |
+| `unpaid`, `incomplete`, `incomplete_expired`, `paused`, `canceled` | Seedling         |
 
 A household with **no** Stripe state at all and a running no-card trial resolves
 to Garden; a household with any Stripe state resolves by the table above and
 nothing else. See [The no-card Garden trial](#the-no-card-garden-trial).
 
-**There is no grace period, and that is an assumption, not a published policy.**
-Nothing in this repository states one — not this file, not
-[`COMMERCIAL-STATUS.md`](./COMMERCIAL-STATUS.md), not the ADRs — so any number
-of days would have been invented. Entitlement therefore ends when good standing
-does. If the owner decides a grace window is the right product behaviour, it
-belongs here first and in `ENTITLED_SUBSCRIPTION_STATUSES` second.
+**A failed payment keeps the plan while Stripe retries it.** This is the
+owner's decision on [#593](https://github.com/ChelseaKR/family-greenhouse/issues/593)
+(2026-09-17), and it replaces the earlier "no grace period" assumption: after a
+failed payment the household keeps paid access while Stripe's automatic retries
+run — that is, while the subscription is `past_due` — and drops to Seedling's
+caps only when Stripe gives up (`unpaid`, `canceled`, `incomplete_expired`).
+`incomplete` (a first payment that never succeeded) and `paused` stay
+non-entitled, unchanged. Lifetime and gift floors apply underneath exactly as
+before. Recovery needs no code path of its own: when the card goes through,
+Stripe sends `customer.subscription.updated` with `→ active`, the webhook writes
+the status, and entitlement follows it.
+
+**How long the window lasts is Stripe's, not ours, and it is not a number of
+days anywhere in this repository.** It is the retry schedule configured in the
+Stripe Dashboard's billing settings, which nothing here reads, so the Terms and the app say "while we retry your card" rather than
+inventing a figure. What ends it is Stripe's "subscription status after all
+retries fail" setting, and **that setting is now load-bearing**:
+
+| Setting after all retries fail  | What the household gets                                                     |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| Cancel the subscription         | `customer.subscription.deleted` → `canceled`, planId `seedling`: free       |
+| Mark the subscription unpaid    | `customer.subscription.updated` → `unpaid`: free                            |
+| Leave the subscription past-due | stays `past_due` **indefinitely: paid access with no payment** — do not use |
+
+Check it before relying on the retry window, and again whenever Stripe billing
+settings change. This repository cannot verify it.
 
 This is deliberately the same shape as a downgrade, not a lockout: see
 "Plan caps and downgrades" below. Existing plants and members stay readable and
@@ -91,7 +112,7 @@ The rule above answers "may this household **start** something?". A second
 question turned out to be hiding underneath it: **what happens to a thing
 already issued and in somebody else's hands?**
 
-A `past_due` household should not be able to mint a new sitter link. But a
+An `unpaid` household should not be able to mint a new sitter link. But a
 sitter standing in that household's kitchen, holding a link that worked when it
 was shared, is not the buyer and cannot enter a payment method — and the plants
 are what pay for the mistake. A printed plant tag is a sticker on a pot. A
@@ -503,19 +524,24 @@ Operational notes:
   household drops to, because that depends on Stripe's "subscription status
   after all retries fail" setting (cancel / mark unpaid / leave `past_due`),
   which is a dashboard control this repository does not read. What entitlement
-  does with whichever status arrives is no longer open: since #364/#540,
-  `getEntitledPlan` entitles `active` and `trialing` only, so a `past_due`,
-  `unpaid`, `incomplete` or `incomplete_expired` household has Seedling's caps
-  from the moment Stripe reports the status — with **no grace period**, and
-  with the lifetime floor still underneath it. Nothing is deleted: existing
+  does with whichever status arrives is settled (#593): `getEntitledPlan`
+  entitles `active`, `trialing` and `past_due`, so the household keeps its plan
+  while Stripe retries, and an `unpaid`, `incomplete` or `incomplete_expired`
+  household has Seedling's caps from the moment Stripe reports the status, with
+  the lifetime floor still underneath it. Nothing is deleted: existing
   plants, tasks, photos and history stay readable and editable, and only new
   creations are refused (see "Plan caps and downgrades"). The email's "nothing
   is deleted either way" is therefore a claim the handlers keep.
-- **The app says so too.** `Settings → Plan status` renders a payment-failed
-  notice for those four statuses (`UNPAID_SUBSCRIPTION_STATUSES` in
-  `frontend/src/features/billing/paymentFailing.ts`) and suppresses the
-  generic over-limit banner while it shows, because that banner blames "your
-  current plan" for a cap the plan does not have. Without it the page stated
+- **The app says so too, in two stages** (`paymentFailureStage` in
+  `frontend/src/features/billing/paymentFailing.ts`). While Stripe retries
+  (`past_due`), `Settings → Plan status` says the payment failed, that the
+  household keeps its plan and nothing has changed yet, and to update the card
+  before the retries run out — no date, for the reason above. Once Stripe has
+  given up (`unpaid`, `incomplete`, `incomplete_expired`) it says the caps have
+  dropped, and suppresses the generic over-limit banner while it shows,
+  because that banner blames "your current plan" for a cap the plan does not
+  have; during the retries the caps are the plan's own, so an over-limit
+  warning then is real and stays. Without the lapsed notice the page stated
   the paid plan as a fact over meters showing Seedling's numbers, and the
   declined card appeared nowhere in the product — the email was the only
   notice, and it depends on the endpoint subscribing `invoice.payment_failed`
@@ -531,13 +557,12 @@ Operational notes:
   `GET /billing/me` reports a paid status. The action is an in-app link to
   Settings → Plan status, never a payment link, so the native shells stay
   within Guideline 3.1.1.
-- **"What changed" follows the floor, not a fixed sentence.** Both notices
-  name the free Seedling plan only when that is what the household keeps.
-  `planWhilePaymentFails` mirrors `getEntitledPlan` for an unpaid status —
-  Seedling, raised by a lifetime tier (`withLifetimeFloor`) or a running gift
-  (`withGift`) — so a household that owns Garden outright is not told it now
-  has Seedling's limits. Neither notice changes entitlement; there is still no
-  grace period (see "There is no grace period" above).
+- **"What changed" follows the floor, not a fixed sentence.** Once the
+  payment has lapsed, both notices name the free Seedling plan only when that
+  is what the household keeps. `planWhilePaymentFails` mirrors
+  `getEntitledPlan` for a non-entitled status — Seedling, raised by a lifetime
+  tier (`withLifetimeFloor`) or a running gift (`withGift`) — so a household
+  that owns Garden outright is not told it now has Seedling's limits.
 - **`STRIPE_CUSTOMER#{id}` pointer.** `customer.source.expiring` carries only a
   customer id, so any notice that knows both ids writes this pointer (400-day
   TTL) and that one reads it. No pointer yet ⇒ no warning, never a guess.

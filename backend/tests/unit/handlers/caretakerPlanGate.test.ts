@@ -100,7 +100,7 @@ describe('POST /households/{id}/caretakers plan gate', () => {
     expect(caretakerService.createCaretaker).toHaveBeenCalledTimes(3);
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'canceled', 'paused'])(
+  it.each(['unpaid', 'incomplete', 'canceled', 'paused'])(
     'refuses to mint while the card has failed (%s), though planId is still greenhouse (#476)',
     async (status) => {
       const createCaretaker = await subject();

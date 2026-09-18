@@ -36,10 +36,14 @@ import {
 const SEED_EMAIL = 'test@example.com';
 const SEED_PASSWORD = 'password123';
 
-/** Statuses `entitlementIsCurrent` accepts. `undefined` = no row ever written. */
-const ENTITLED_STATUSES = ['active', 'trialing', undefined] as const;
-/** Statuses that entitle nothing. Stripe retries `past_due` for WEEKS. */
-const DUNNING_STATUSES = ['past_due', 'unpaid', 'incomplete', 'incomplete_expired'] as const;
+/**
+ * Statuses `entitlementIsCurrent` accepts. `undefined` = no row ever written.
+ * `past_due` is the retry window: the household keeps its plan while Stripe
+ * retries the card (#593).
+ */
+const ENTITLED_STATUSES = ['active', 'trialing', 'past_due', undefined] as const;
+/** Statuses that entitle nothing: Stripe gave up, or the first payment never succeeded. */
+const DUNNING_STATUSES = ['unpaid', 'incomplete', 'incomplete_expired'] as const;
 
 async function loginAsSeed(): Promise<string> {
   const res = await request(app)
@@ -187,7 +191,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await get()).status).toBe(200);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const refused = await get();
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/household toolkit/);
@@ -211,7 +215,7 @@ describe('starting: what a household may begin (#476)', () => {
       expect(full.body.days).toBe(180);
       expect(full.body.historyLimitDays).toBeNull();
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const narrowed = await get();
       expect(narrowed.status).toBe(200);
       expect(narrowed.body.days).toBe(30);
@@ -237,7 +241,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await get()).body.historyLimitDays).toBeNull();
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const windowed = await get();
       expect(windowed.status).toBe(200);
       expect(windowed.body.historyLimitDays).toBe(30);
@@ -260,7 +264,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await mint(30)).status).toBe(201);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const refused = await mint(30);
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/up to 7 days/);
@@ -282,7 +286,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('greenhouse', 'active');
       expect((await create()).status).toBe(201);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       const refused = await create();
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/Greenhouse plan/);
@@ -300,7 +304,7 @@ describe('starting: what a household may begin (#476)', () => {
         .send({ name: 'Dana', expiresAt: inFuture(14) });
       expect(seat.status).toBe(201);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       const list = await request(app)
         .get(`/households/${seedHouseholdId}/caretakers`)
         .set(auth(token));
@@ -321,7 +325,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('greenhouse', 'active');
       expect((await issue()).status).toBe(201);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       const refused = await issue();
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/Greenhouse plan/);
@@ -339,7 +343,7 @@ describe('starting: what a household may begin (#476)', () => {
         .send({});
       expect(issued.status).toBe(201);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       const display = await request(app).get(`/kiosk/${issued.body.token}`);
       expect(display.status).toBe(200);
     });
@@ -354,7 +358,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('greenhouse', 'active');
       expect((await mint('one')).status).toBe(201);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       const refused = await mint('two');
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/Greenhouse plan/);
@@ -372,7 +376,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await issue()).status).toBe(201);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const refused = await issue();
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/Garden plan/);
@@ -393,7 +397,7 @@ describe('starting: what a household may begin (#476)', () => {
       expect(sheetOnPlan.body.allowance).toMatchObject({ enabled: true, max: 50 });
       expect(sheetOnPlan.body.planId).toBe('garden');
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const sheet = await request(app)
         .get(`/households/${seedHouseholdId}/plant-tags`)
         .set(auth(token));
@@ -412,7 +416,7 @@ describe('starting: what a household may begin (#476)', () => {
       const issued = await request(app).post(`/plants/${seedPlantId}/tag`).set(auth(token)).send();
       expect(issued.status).toBe(201);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const scan = await request(app).get(`/tag/${issued.body.token}`);
       expect(scan.status).toBe(200);
     });
@@ -426,7 +430,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('greenhouse', 'active');
       expect((await get()).status).toBe(200);
 
-      onPlan('greenhouse', 'past_due');
+      onPlan('greenhouse', 'unpaid');
       expect((await get()).status).toBe(402);
 
       onCancelledLifetime('greenhouse');
@@ -445,7 +449,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await get()).status).toBe(404);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const refused = await get();
       expect(refused.status).toBe(402);
       expect(refused.body.message).toMatch(/Away Kit/);
@@ -461,7 +465,7 @@ describe('starting: what a household may begin (#476)', () => {
       seedMember('cap-fill-1', 'cap-fill-1@example.com');
       seedMember('cap-fill-2', 'cap-fill-2@example.com');
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const invite = await request(app)
         .post(`/households/${seedHouseholdId}/invites`)
         .set(auth(admin));
@@ -494,7 +498,7 @@ describe('starting: what a household may begin (#476)', () => {
       onPlan('garden', 'active');
       expect((await identify()).body.usage.allowance).toBe(30);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const dunning = await identify();
       expect(dunning.status).toBe(200);
       expect(dunning.body.usage.allowance).toBe(1);
@@ -514,12 +518,12 @@ describe('starting: what a household may begin (#476)', () => {
       expect(paid.body.planId).toBe('garden');
       expect(paid.body.usage.maxPlants).toBe(200);
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const dunning = await get();
       expect(dunning.status).toBe(200);
       // The tier they are ON — truthful, and what production publishes.
       expect(dunning.body.planId).toBe('garden');
-      expect(dunning.body.status).toBe('past_due');
+      expect(dunning.body.status).toBe('unpaid');
       // The caps they may currently USE. Advertising 200 here while the next
       // POST /plants is refused at 20 is the mint-vs-use disagreement again.
       expect(dunning.body.usage.maxPlants).toBe(20);
@@ -542,7 +546,7 @@ describe('starting: what a household may begin (#476)', () => {
         db.plants.set(id, { ...template, id, name: `Filler ${i}` });
       }
 
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
       const refused = await request(app)
         .post('/plants')
         .set(auth(token))
@@ -556,6 +560,63 @@ describe('starting: what a household may begin (#476)', () => {
         .set(auth(token))
         .send({ name: 'One more' });
       expect(accepted.status).toBe(201);
+    });
+  });
+
+  describe('the retry window — a failed payment keeps the plan until Stripe gives up (#593)', () => {
+    /** Twenty active plants: exactly Seedling's cap, well under Garden's. */
+    function fillToSeedlingCap(): void {
+      const existing = [...db.plants.values()].filter((p) => p.householdId === seedHouseholdId);
+      const template = existing[0]!;
+      for (let i = existing.length; i < 20; i += 1) {
+        const id = `retry-plant-${i}`;
+        db.plants.set(id, { ...template, id, name: `Filler ${i}` });
+      }
+    }
+
+    it('keeps Garden while past_due, drops on unpaid, and restores on recovery', async () => {
+      const token = await loginAsSeed();
+      fillToSeedlingCap();
+      const meters = async () => (await request(app).get('/billing/me').set(auth(token))).body;
+      const addPlant = (name: string) =>
+        request(app).post('/plants').set(auth(token)).send({ name });
+
+      // First failed charge: Stripe moves the subscription to past_due and
+      // starts retrying. The household keeps Garden — meters and the gate agree.
+      onPlan('garden', 'past_due');
+      const retrying = await meters();
+      expect(retrying.status).toBe('past_due');
+      expect(retrying.usage.maxPlants).toBe(200);
+      expect((await addPlant('Kept during retries')).status).toBe(201);
+
+      // Retries exhausted, Stripe marks it unpaid: the free tier's caps apply.
+      onPlan('garden', 'unpaid');
+      expect((await meters()).usage.maxPlants).toBe(20);
+      const refused = await addPlant('Refused once retries end');
+      expect(refused.status).toBe(402);
+      expect(refused.body.message).toMatch(/limited to 20 plants/);
+
+      // The card is fixed and the open invoice paid: past_due/unpaid -> active.
+      onPlan('garden', 'active');
+      expect((await meters()).usage.maxPlants).toBe(200);
+      expect((await addPlant('Restored')).status).toBe(201);
+    });
+
+    it.each(['unpaid', 'canceled', 'incomplete_expired'])(
+      'drops to the free tier once Stripe gives up with %s',
+      async (status) => {
+        const token = await loginAsSeed();
+        onPlan('garden', status);
+        const body = (await request(app).get('/billing/me').set(auth(token))).body;
+        expect(body.usage.maxPlants).toBe(20);
+      }
+    );
+
+    it('keeps a lifetime floor underneath a subscription that has lapsed', async () => {
+      const token = await loginAsSeed();
+      onPlan('greenhouse', 'unpaid', 'garden');
+      const body = (await request(app).get('/billing/me').set(auth(token))).body;
+      expect(body.usage.maxPlants).toBe(200);
     });
   });
 
@@ -595,7 +656,7 @@ describe('starting: what a household may begin (#476)', () => {
     it('goes quiet rather than ready while the card is failing, leaving the season UNCLAIMED', async () => {
       const token = await loginAsSeed();
       await makeMoveDayApplicable(token);
-      onPlan('garden', 'past_due');
+      onPlan('garden', 'unpaid');
 
       const dunning = await fire(token);
       // 'quiet', not 'locked': the row still says Garden, so the household is
@@ -639,7 +700,7 @@ describe('continuing: what an already-issued grant keeps (#476)', () => {
     const owner = await loginAsSeed();
     const link = await issueLink(owner);
 
-    onPlan('garden', 'past_due');
+    onPlan('garden', 'unpaid');
     const view = await request(app).get(`/sitter/${link.token}`);
     expect(view.status).toBe(200);
     // The sitter standing in the kitchen is not the buyer and cannot enter a
@@ -664,7 +725,7 @@ describe('continuing: what an already-issued grant keeps (#476)', () => {
     const owner = await loginAsSeed();
     const link = await issueLink(owner);
 
-    onPlan('garden', 'past_due');
+    onPlan('garden', 'unpaid');
     const photos = await request(app).get(`/sitter/${link.token}/photos`);
     expect(photos.status).toBe(200);
     expect(photos.body.enabled).toBe(true);
@@ -728,7 +789,7 @@ describe('continuing: what an already-issued grant keeps (#476)', () => {
     // Card fails on day 3 of the 14-day card window. The tasks are already in
     // the household's list and half the plants are already inside; a
     // half-finished frost move is worse than either whole outcome.
-    onPlan('garden', 'past_due');
+    onPlan('garden', 'unpaid');
     const still = await request(app)
       .post(`/households/${seedHouseholdId}/move-day?season=winter`)
       .set(auth(token));

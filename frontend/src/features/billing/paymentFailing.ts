@@ -1,52 +1,74 @@
 import type { PlanId, SubscriptionState } from '@/services/billingService';
 
 /**
- * Statuses that mean the subscription EXISTS but is not being paid for — the
- * complement of `ENTITLED_SUBSCRIPTION_STATUSES` in
- * `backend/src/models/plans.ts`, which entitles `active` and `trialing` only.
+ * A failed payment has two stages, and they mean opposite things for access.
  *
- * The distinction is invisible without it, and that is the whole reason it
- * exists. `planId` keeps saying `garden` through dunning — Stripe only rewrites
- * it to `seedling` when it finally gives up and deletes the subscription,
- * weeks later — while the server has ALREADY dropped the household's caps
- * (`getEntitledPlan`, #364/#540). The one fact that explains that — the card
- * was declined — has to be said by the app, or the household finds out from a
- * 402 the next time it adds a plant (#593).
+ *   - `retrying` — `past_due`. Stripe is still retrying the card on its own
+ *     schedule and the household KEEPS its paid plan while it does. That is
+ *     the owner's decision on #593 (2026-09-17), implemented server-side by
+ *     `past_due` being in `ENTITLED_SUBSCRIPTION_STATUSES`
+ *     (`backend/src/models/plans.ts`). Nothing has been taken away yet, so
+ *     nothing on screen may say it has.
+ *   - `lapsed` — `unpaid`, `incomplete`, `incomplete_expired`. Stripe has
+ *     given up (or the first payment never succeeded) and the server has
+ *     dropped the household's caps to Seedling's, with the lifetime and gift
+ *     floors underneath.
  *
- * `paused` is deliberately absent: it is a live subscription Stripe is not
- * billing on purpose, not a failed payment, and it is not something this
- * product can put a household into today. `canceled` is absent too: that is
- * the end of dunning, not a payment the household can still fix.
+ * `canceled` is neither: that is the end of the subscription, not a payment
+ * the household can still fix, and the plan row already says `seedling`.
+ * `paused` is neither: a live subscription Stripe is not billing on purpose.
  *
- * Shared by the Settings → Plan status notice and the app-wide banner so the
- * two can never disagree about whether a payment has failed.
+ * Every piece of copy about a failed payment — the app-wide banner and the
+ * Settings → Plan status notice — goes through this module, so the two can
+ * never disagree about which stage a household is in.
  */
-export const UNPAID_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
-  'past_due',
+export type PaymentFailureStage = 'retrying' | 'lapsed';
+
+/** Stripe is still retrying; access is kept. */
+export const PAYMENT_RETRYING_STATUSES: ReadonlySet<string> = new Set(['past_due']);
+
+/** Stripe has given up, or the first payment never went through; caps dropped. */
+export const PAYMENT_LAPSED_STATUSES: ReadonlySet<string> = new Set([
   'unpaid',
   'incomplete',
   'incomplete_expired',
 ]);
 
 /**
- * Whether Stripe has reported this household's subscription as unpaid.
+ * Which stage of a failed payment this household is in, or `null` when there
+ * is no failed payment to describe.
  *
- * Reads a status Stripe actually sent. An ABSENT status is never dunning:
+ * Reads a status Stripe actually sent. An ABSENT status is never a failure:
  * `checkout.session.completed` records the subscription id before any status
  * is known, and calling that window "your payment failed" would be a worse
  * claim than the silence it replaces. Once the card goes through, Stripe sends
- * `customer.subscription.updated` with `past_due -> active`, the webhook writes
- * the new status, and this returns false — which is what hides every notice.
+ * `customer.subscription.updated` with `→ active`, the webhook writes it, and
+ * this returns `null` — which is what hides every notice.
  */
-export function isPaymentFailing(subscription: SubscriptionState | null | undefined): boolean {
+export function paymentFailureStage(
+  subscription: SubscriptionState | null | undefined
+): PaymentFailureStage | null {
   const status = subscription?.status;
-  return !!status && UNPAID_SUBSCRIPTION_STATUSES.has(status);
+  if (!status) return null;
+  if (PAYMENT_RETRYING_STATUSES.has(status)) return 'retrying';
+  if (PAYMENT_LAPSED_STATUSES.has(status)) return 'lapsed';
+  return null;
+}
+
+/** Whether there is a failed payment to tell the household about at all. */
+export function isPaymentFailing(subscription: SubscriptionState | null | undefined): boolean {
+  return paymentFailureStage(subscription) !== null;
+}
+
+/** Whether the failed payment has already cost the household its paid caps. */
+export function isPaymentLapsed(subscription: SubscriptionState | null | undefined): boolean {
+  return paymentFailureStage(subscription) === 'lapsed';
 }
 
 const RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 2 };
 
 /**
- * The tier whose caps the household actually has while its payment is failing.
+ * The tier whose caps a LAPSED household actually has.
  *
  * Mirrors the server's `getEntitledPlan` for a non-entitled status: the
  * subscription falls to Seedling, but two things sit underneath that and
@@ -54,9 +76,8 @@ const RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 2 };
  * (`withLifetimeFloor`) and a running gift (`withGift`). The no-card trial
  * does not apply: a household with Stripe state never has one.
  *
- * Without this, a household that owns Garden outright and let a Greenhouse
- * subscription lapse would be told it now has "the free Seedling plan's
- * limits", which is not what the API enforces.
+ * Only meaningful for the `lapsed` stage; a `retrying` household keeps the
+ * plan it is on.
  */
 export function planWhilePaymentFails(subscription: SubscriptionState | null | undefined): PlanId {
   let plan: PlanId = 'seedling';
@@ -67,13 +88,50 @@ export function planWhilePaymentFails(subscription: SubscriptionState | null | u
   return plan;
 }
 
+export interface PaymentFailedCopy {
+  titleKey: string;
+  bodyKey: string;
+  values: Record<string, string>;
+}
+
 /**
- * The catalog key for "what changed", chosen by the tier the household keeps.
- * Seedling gets the sentence that names the free plan; anything above it gets
- * one that does not, because naming the free plan there would be false.
+ * The title and "what changed" sentence for a failed payment, or `null` when
+ * there is none.
+ *
+ * `retrying` says what is true while Stripe retries: the plan is kept and
+ * nothing has changed yet, and the card needs updating to keep it. It names
+ * the plan when the catalog could name it and says "its paid plan" otherwise —
+ * never a guessed name. No date is given: when the retries end is Stripe's
+ * dunning schedule, which this app does not read.
+ *
+ * `lapsed` names the free plan only when that is what the household keeps; a
+ * tier bought outright or a running gift gets a sentence that does not.
  */
-export function paymentFailedBodyKey(subscription: SubscriptionState | null | undefined): string {
-  return planWhilePaymentFails(subscription) === 'seedling'
-    ? 'settings.billing.paymentFailedBody'
-    : 'settings.billing.paymentFailedBodyOwned';
+export function paymentFailedCopy(
+  subscription: SubscriptionState | null | undefined,
+  planName: string | null | undefined
+): PaymentFailedCopy | null {
+  const stage = paymentFailureStage(subscription);
+  if (stage === null) return null;
+  if (stage === 'retrying') {
+    return planName
+      ? {
+          titleKey: 'settings.billing.paymentRetryingTitle',
+          bodyKey: 'settings.billing.paymentRetryingBody',
+          values: { plan: planName },
+        }
+      : {
+          titleKey: 'settings.billing.paymentRetryingTitle',
+          bodyKey: 'settings.billing.paymentRetryingBodyNoPlan',
+          values: {},
+        };
+  }
+  return {
+    titleKey: 'settings.billing.paymentFailedTitle',
+    bodyKey:
+      planWhilePaymentFails(subscription) === 'seedling'
+        ? 'settings.billing.paymentFailedBody'
+        : 'settings.billing.paymentFailedBodyOwned',
+    values: {},
+  };
 }

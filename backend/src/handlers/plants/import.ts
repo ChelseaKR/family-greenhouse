@@ -62,7 +62,7 @@ export const importPlants = createHandler(
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
     // Entitlement, not the plan row. Import shares POST /plants' cap, so
-    // resolving it differently would let a past_due household import its way
+    // resolving it differently would let an unpaid household import its way
     // past the limit that single-plant creation refuses. See getEntitledPlan.
     const plan = getEntitledPlan(sub);
     const planLimitMessage = `Plan limit reached: your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive existing plants before importing more.`;

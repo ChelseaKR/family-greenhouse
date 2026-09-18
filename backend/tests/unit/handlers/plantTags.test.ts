@@ -156,7 +156,7 @@ describe('POST /plants/{plantId}/tag (issue / re-issue)', () => {
     expect((await svc()).issueTag).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+  it.each(['unpaid', 'incomplete', 'paused', 'canceled'])(
     '402s while the card has failed (%s) — printing a NEW label is a new grant (#476)',
     async (status) => {
       const billing = await import('../../../src/services/billing.js');
@@ -372,7 +372,7 @@ describe('GET /households/{id}/plant-tags', () => {
     const plantService = await import('../../../src/services/plantService.js');
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
       planId: 'garden',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
     vi.mocked(s.listActiveTags).mockResolvedValueOnce([tag()] as never);
     vi.mocked(plantService.getPlants).mockResolvedValueOnce([activePlant()] as never);
@@ -588,7 +588,7 @@ describe('GET /tag/{token} (public)', () => {
     const billing = await import('../../../src/services/billing.js');
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'seedling',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
 
     const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');

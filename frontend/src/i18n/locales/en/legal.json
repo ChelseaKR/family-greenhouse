@@ -91,7 +91,8 @@
       "renewal": {
         "heading": "Automatic renewal",
         "cadence": "Subscriptions renew automatically until they are cancelled. A monthly plan renews every month — counting from the end of the free trial, or from the day of purchase where no trial applied — and each renewal is charged to the card on file without asking again.",
-        "price": "The amount charged is the price of the plan your subscription is on — the price it was started at, not whatever is advertised later. Households still on a yearly plan renew once a year at the price they bought. The withdrawn Garden lifetime purchase never renews: it was a single payment, and there is nothing to cancel."
+        "price": "The amount charged is the price of the plan your subscription is on — the price it was started at, not whatever is advertised later. Households still on a yearly plan renew once a year at the price they bought. The withdrawn Garden lifetime purchase never renews: it was a single payment, and there is nothing to cancel.",
+        "failedPayment": "If a payment for a subscription fails — the first one after a free trial, or any renewal — the household keeps its plan and every paid feature while our payment provider retries the card automatically, and the billing page says the payment failed. Updating the card from <em>Settings → Billing → Manage subscription</em> settles it. If the retries end without a successful payment, the household loses the paid plan and moves to the free Seedling plan, exactly as it would after cancelling; nothing is deleted."
       },
       "cancellation": {
         "heading": "Cancelling",

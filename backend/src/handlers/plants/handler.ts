@@ -369,9 +369,10 @@ export const createPlant = createHandler(
     // are backfilled lazily inside the service from the real (paginated)
     // active-plant count.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     // Propagation: a cutting must point at a real plant in the SAME
@@ -622,9 +623,10 @@ export const updatePlant = createHandler(
     // like createPlant — see plantService.updatePlant for why this can't be
     // left uncapped now that the active-plant count is an atomic counter.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
@@ -1019,9 +1021,10 @@ export const acceptSharedPlant = createHandler(
     const notes = prefix.slice(0, 1000);
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.createPlant>>;

@@ -194,7 +194,7 @@ describe('plants health-check handler', () => {
     // mid-dunning on the paid allowance for the whole dunning window.
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'greenhouse',
-      status: 'past_due',
+      status: 'unpaid',
     } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
     vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(async (lookupPlanId) =>
       (await lookupPlanId()) === 'greenhouse' ? 400 : 200
