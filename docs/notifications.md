@@ -113,12 +113,19 @@ on a day is about that day.
 - **The zone is `prefs.timezone`**, the one quiet hours and the slot already
   use, not the household zone of ADR 0025. No task is classified differently;
   every row still reads exactly as before. A recipient still on the default
-  `'UTC'` (#342) gets UTC days, so in the Americas their reminder can still
-  land on the evening before — once now, where it used to be twice.
-- **The hour is not chosen.** A reminder goes out on the first hourly run of
-  the due day on which a channel is eligible: just after local midnight, or
-  when quiet hours end for email and SMS. Browser push is not held by quiet
-  hours. Choosing a delivery hour is an open product decision on #343.
+  `'UTC'` (#342) gets UTC days and a UTC 08:00 — 04:00 in New York — so a
+  task due late in their evening falls on the next UTC day and is reminded
+  after it was due. Knowing their zone is what fixes that.
+- **The hour** (owner decision, 2026-09-17): the day's reminder goes out when
+  the recipient's quiet hours end, or at 08:00 local with none set
+  (`reminderDeliveryTime`). Never before local midnight of the due day. The
+  rule is literal: a daytime window such as 13:00→15:00 makes 15:00 the
+  delivery time. It is a floor on the hourly scan, so the send is the first
+  run at or after it, and the clocks decide it on a DST day.
+- **Quiet hours hold every channel.** Browser and device push used to be
+  exempt ("the OS manages quiet hours") and reached browser-only recipients at
+  about 00:05; they are now deferred exactly like email and SMS, in the
+  reminder scan and in `notifier.sendToUser` for every other sender.
 - **The query reads 26 hours ahead**, not 24 (`DUE_QUERY_HORIZON_MS`). It has to
   return everything due by the end of any recipient's today before anyone's
   zone is known, and the longest local day in the tz database is 26 hours
@@ -193,9 +200,9 @@ outside this path.
 Failures in one channel never block the others — each call is wrapped in a
 per-channel try/catch that logs the failure and lets the other dispatches
 continue. A provider-accepted channel finalizes only its own daily marker; a
-failed channel releases its lease for the next hourly retry. During DND,
-browser push remains eligible (the OS manages quiet hours) while email and SMS
-remain unmarked and are retried after the window ends.
+failed channel releases its lease for the next hourly retry. During DND every
+channel, browser push included, remains unmarked and is retried after the
+window ends.
 
 ## User-facing surface
 

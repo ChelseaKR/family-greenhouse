@@ -1212,6 +1212,7 @@
     "browser": "Browser",
     "email": "Email",
     "emailDescription": "A daily roll-up to your account email on the day tasks are due, and each day they stay overdue.",
+    "quietHoursDescription": "Nothing is sent during this window: not email, not text messages, not browser notifications. Your daily reminder arrives when it ends. With no quiet hours set, it arrives at 8:00 in the time zone below.",
     "sms": "Text message",
     "deviceTitle": "This device",
     "deviceActive": "Push notifications are enabled on this device.",

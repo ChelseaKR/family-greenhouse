@@ -1241,6 +1241,7 @@
     "browser": "Navegador",
     "email": "Correo",
     "emailDescription": "Un resumen diario en el correo de tu cuenta el día en que vencen tus tareas y cada día que sigan atrasadas.",
+    "quietHoursDescription": "Durante este horario no enviamos nada: ni correos, ni mensajes de texto, ni notificaciones del navegador. Tu recordatorio diario llega cuando termina. Si no tienes horas de silencio, llega a las 8:00 en la zona horaria de abajo.",
     "sms": "Mensaje de texto",
     "deviceTitle": "Este dispositivo",
     "deviceActive": "Las notificaciones push están activadas en este dispositivo.",
