@@ -11,6 +11,7 @@ import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
+import { isNativeApp } from '@/lib/platform';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -204,7 +205,26 @@ function App() {
                   household into the first run without either of those flows
                   knowing it exists. HomeRedirect is imported eagerly (it is a
                   few lines and does no I/O) so this hop stays instant. */}
-              <Route path="/" element={isAuthenticated ? <HomeRedirect /> : <LandingPage />} />
+              {/* Inside the iOS/Android shells a signed-out `/` is the sign-in
+                  screen, never the marketing page. The landing page is a
+                  website: it renders the live plan catalog with prices
+                  (PricingGrid), plan buttons and trial terms, which App
+                  Review reads as a purchase path outside In-App Purchase
+                  (Guideline 3.1.1), and a first screen that is the website
+                  is the "repackaged website" signal Guideline 4.2 rejects.
+                  Registration stays one tap away on the sign-in screen. */}
+              <Route
+                path="/"
+                element={
+                  isAuthenticated ? (
+                    <HomeRedirect />
+                  ) : isNativeApp() ? (
+                    <Navigate to="/login" replace />
+                  ) : (
+                    <LandingPage />
+                  )
+                }
+              />
               <Route
                 path="/login"
                 element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}

@@ -16,6 +16,7 @@ import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
 import { useAuthStore } from './store/authStore';
+import { isNativeApp } from './lib/platform';
 // Self-hosted brand fonts. Bitter Variable is the display face used in the
 // wordmark and major headlines; Instrument Sans is the body face. Both are loaded
 // at app boot from /node_modules so the page renders in-brand on first
@@ -71,7 +72,7 @@ const app = (
  * Hydrate the prerendered markup when — and only when — it is markup for the
  * URL actually being loaded and for the auth state we are about to render in.
  *
- * scripts/prerender.mjs stamps each page with `data-prerendered="<path>"`. Two
+ * scripts/prerender.mjs stamps each page with `data-prerendered="<path>"`. Three
  * cases must NOT hydrate, because React would find markup that doesn't match
  * what it renders, log a hydration error, and throw the whole tree away:
  *
@@ -82,15 +83,20 @@ const app = (
  *  2. `/` while signed in. The prerender runs logged out, so index.html holds
  *     the landing page; App redirects an authenticated visitor to /dashboard
  *     instead of rendering it.
+ *  3. `/` inside the iOS/Android shells. The binary carries the same
+ *     prerendered index.html, but App sends a signed-out native user to
+ *     /login rather than the landing page (see App.tsx), so that markup is
+ *     never what renders there either.
  *
  * Anything else — the empty shell, a first-time visitor — falls through to the
  * plain client render this app has always done.
  */
 const prerenderedPath = rootElement.dataset.prerendered;
 const currentPath = window.location.pathname.replace(/(.)\/$/, '$1');
-const authRedirectsAway = currentPath === '/' && useAuthStore.getState().isAuthenticated;
+const rootRedirectsAway =
+  currentPath === '/' && (useAuthStore.getState().isAuthenticated || isNativeApp());
 
-if (prerenderedPath !== undefined && prerenderedPath === currentPath && !authRedirectsAway) {
+if (prerenderedPath !== undefined && prerenderedPath === currentPath && !rootRedirectsAway) {
   hydrateRoot(rootElement, app);
 } else {
   // Drop any server markup we've decided not to hydrate so React starts from a
