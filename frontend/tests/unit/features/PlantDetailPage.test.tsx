@@ -56,6 +56,35 @@ describe('PlantDetailPage', () => {
     expect(await screen.findByText('No tasks')).toBeInTheDocument();
   });
 
+  it('links to the plant passport, even once the plant has been given away (#676)', async () => {
+    useAuthStore.setState({ accessToken: 'access-1' });
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json({
+          id: 'p1',
+          householdId: 'hh',
+          name: 'Pothos',
+          species: null,
+          location: null,
+          imageUrl: null,
+          notes: null,
+          status: 'gave_away',
+          createdAt: '2026-04-25T00:00:00.000Z',
+          createdBy: 'u1',
+          updatedAt: '2026-04-25T00:00:00.000Z',
+          upcomingTasks: [],
+          recentCompletions: [],
+        })
+      )
+    );
+    renderDetail('p1');
+    expect(await screen.findByRole('heading', { name: 'Pothos' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Passport' })).toHaveAttribute(
+      'href',
+      '/plants/p1/passport'
+    );
+  });
+
   // --- Species provenance (#344) -------------------------------------------
   it('says a species came from a photo when the server recorded that provenance', async () => {
     useAuthStore.setState({ accessToken: 'access-1' });

@@ -256,6 +256,11 @@ export const ROUTE_POLICY = {
   '/onboarding': 'app',
   '/plants': 'app-subtree',
   '/plants/:plantId': 'app',
+  // The printable plant passport (#676). Signed-in and household-scoped like
+  // the plant page it comes from, so the app opens it — the "/plants*" claim
+  // settled for iOS. Two segments below `/plants/`, so it needs its own
+  // component under the segment-wise reading (see the header).
+  '/plants/:plantId/passport': 'app',
   '/plants/import': 'app',
   '/plants/new': 'app',
   '/settings': 'app-subtree',

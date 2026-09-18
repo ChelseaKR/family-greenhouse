@@ -58,6 +58,10 @@ const PlantDetailPage = lazyNamed(
   'PlantDetailPage'
 );
 const AddPlantPage = lazyNamed(() => import('@/features/plants/AddPlantPage'), 'AddPlantPage');
+const PlantPassportPage = lazyNamed(
+  () => import('@/features/plants/PlantPassportPage'),
+  'PlantPassportPage'
+);
 const ImportPlantsPage = lazyNamed(
   () => import('@/features/plants/ImportPlantsPage'),
   'ImportPlantsPage'
@@ -297,6 +301,16 @@ function App() {
                 />
                 <Route path="/welcome" element={<WelcomeFlow />} />
                 <Route path="/account" element={<AccountPage />} />
+                {/* The plant passport (#676) is a print document, so it sits
+                    OUTSIDE the Layout: no sidebar, header or banner reaches
+                    the paper. It still needs a household, like the Layout
+                    routes below. */}
+                <Route
+                  path="/plants/:plantId/passport"
+                  element={
+                    hasHousehold ? <PlantPassportPage /> : <Navigate to="/onboarding" replace />
+                  }
+                />
 
                 <Route element={hasHousehold ? <Layout /> : <Navigate to="/onboarding" replace />}>
                   <Route path="/dashboard" element={<DashboardPage />} />

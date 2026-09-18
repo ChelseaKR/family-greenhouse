@@ -59,6 +59,10 @@
             "comment": "Opens /plants/new, /plants/import, /plants/:plantId in the app."
           },
           {
+            "/": "/plants/*/passport",
+            "comment": "Opens /plants/:plantId/passport in the app."
+          },
+          {
             "/": "/settings",
             "comment": "Opens /settings in the app."
           },
