@@ -61,6 +61,33 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `reminders` Lambdas, four routes) is Terraform and takes effect on the next
   `v*` tag deploy.
 
+- **Import any spreadsheet by matching its columns — and no Planta, Greg or
+  Vera importer, because none of them has an export file to read (#668).**
+  The import page now takes any CSV: the admin picks which column holds the
+  plant name, species, location, notes, tags and days between waterings
+  (which becomes a watering task). Only this app's own export headers are
+  matched automatically; no other app's column names are guessed. The
+  preview lists every column or JSON field that holds data the import will
+  not keep — including `createdAt`, which was never persisted, and
+  `careRule`, which an import never writes. It also reads the plan's
+  remaining room and marks the rows past it "Over plan limit": they are not
+  sent, and a full plan disables the import and says why. Imported text only
+  reaches the private `notes` field, never the house rule that share, sitter
+  and wall-display links show. Planta, Greg and Vera: their help centres
+  describe no export, and no published sample or open-source parser exists,
+  so the upload card says so plainly instead of implying support. EN/ES; the
+  three import plural forms that were still English in Spanish are
+  translated.
+
+### Changed
+
+- **Plant import is for household admins (#668).** `POST /plants/import`
+  now answers 403 to a member who is not an admin (Lambda handler and dev
+  server alike), and the import page tells a member to ask an admin. A bulk
+  import can use up the household's whole plant allowance in one request, so
+  it sits with the role that owns the plan. Deploy note: no route or
+  infrastructure change.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

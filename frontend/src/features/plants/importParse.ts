@@ -12,14 +12,20 @@
  *     plantId; export `createdAt` becomes `acquiredAt`; a present, valid
  *     `perenualSpeciesId` is preserved so the care-guide/toxicity link
  *     survives the round-trip)
- *  - CSV with a header row. The app's own plant-export headers
- *    (id,name,species,location,notes,tags,createdAt,updatedAt) are
- *    recognized; extra columns are ignored and only `name` is required.
+ *  - CSV with a header row, read through a COLUMN MAPPING (see "Column
+ *    matching" below): the person says which of their columns holds the
+ *    name, species, location, notes, tags and watering interval. Only the
+ *    app's own plant-export headers (name,species,location,notes,tags) are
+ *    matched automatically; every other column is the person's call.
  *    `tags` is split on `|`. The OWASP formula-guard apostrophe the export
  *    adds is stripped so exports round-trip cleanly.
+ *
+ * Whatever a file carries that the import will not keep — an unmatched CSV
+ * column, a JSON field with no home — is reported back (`notImported`) so the
+ * preview can list it. Nothing is dropped without the person seeing it.
  */
 import { z } from 'zod';
-import { parseCsvObjects, unescapeFormulaGuard } from '@/utils/csv';
+import { parseCsv, unescapeFormulaGuard } from '@/utils/csv';
 
 export interface ImportTaskDraft {
   type: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
@@ -65,6 +71,14 @@ export const importPlantDraftSchema = z.object({
   tasks: z.array(importTaskDraftSchema).max(10).optional(),
 });
 
+/** A row-level problem. `code`, when present, names a translated message
+ *  (`importPlants.rowErrors.<code>`); otherwise `message` is Zod's text. */
+export interface ParsedRowError {
+  field: string;
+  message: string;
+  code?: 'invalidInterval';
+}
+
 export interface ParsedRow {
   /** Position in the source file (0-based, excluding the CSV header). */
   index: number;
@@ -72,8 +86,8 @@ export interface ParsedRow {
   displayName: string;
   /** Present only when the row validated cleanly. */
   data?: ImportPlantDraft;
-  /** Zod issues keyed by dotted field path. */
-  errors: Array<{ field: string; message: string }>;
+  /** Zod issues keyed by dotted field path, plus mapping problems. */
+  errors: ParsedRowError[];
 }
 
 /** Max rows the backend accepts per request — the page submits in batches. */
@@ -227,57 +241,282 @@ export function extractCandidatesFromJson(text: string): Record<string, unknown>
   throw new ImportParseError('unrecognizedJson');
 }
 
-/** Extract candidate plant objects from header-based CSV text. */
-export function extractCandidatesFromCsv(text: string): Record<string, unknown>[] {
-  const { headers, rows } = parseCsvObjects(text);
-  if (headers.length === 0) {
+/**
+ * Normalize and validate one candidate. `extraErrors` are problems found
+ * before validation (a watering interval that is not a number of days); a
+ * row carrying any is invalid even when Zod would accept what is left, so a
+ * bad cell is never quietly imported as a plant without its schedule.
+ */
+function validateCandidate(
+  raw: Record<string, unknown>,
+  index: number,
+  extraErrors: ParsedRowError[] = []
+): ParsedRow {
+  const normalized = normalizeCandidate(raw);
+  const result = importPlantDraftSchema.safeParse(normalized);
+  const displayName =
+    typeof normalized.name === 'string' && normalized.name !== ''
+      ? normalized.name
+      : `#${index + 1}`;
+  if (result.success && extraErrors.length === 0) {
+    return { index, displayName, data: result.data, errors: [] };
+  }
+  const zodErrors: ParsedRowError[] = result.success
+    ? []
+    : result.error.issues.map((issue) => ({
+        field: issue.path.join('.') || 'row',
+        message: issue.message,
+      }));
+  return { index, displayName, errors: [...extraErrors, ...zodErrors] };
+}
+
+/** A value that actually carries something — what "data" means when we
+ *  promise to list data that will not be imported. */
+function hasData(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/** Plant fields `normalizeCandidate` carries into the request. */
+const CARRIED_PLANT_FIELDS = new Set([
+  'name',
+  'species',
+  'perenualSpeciesId',
+  'location',
+  'notes',
+  'tags',
+  'tasks',
+]);
+/** Task fields `normalizeCandidate` carries into the request. */
+const CARRIED_TASK_FIELDS = new Set(['type', 'customType', 'frequency', 'assignedTo', 'notes']);
+
+/**
+ * Every JSON field, across all candidates, that holds data the import will
+ * not keep. `acquiredAt`/`createdAt` are listed too: the request accepts them
+ * for round-trips, but the server does not persist them (the import date is
+ * used), so calling them imported would be untrue. `careRule` is listed: the
+ * import never writes the house rule, the one care field a share, sitter or
+ * kiosk link may show.
+ */
+export function uncarriedJsonFields(candidates: Record<string, unknown>[]): string[] {
+  const out = new Set<string>();
+  for (const candidate of candidates) {
+    for (const [key, value] of Object.entries(candidate)) {
+      if (!hasData(value)) continue;
+      if (key === 'tasks' && Array.isArray(value)) {
+        for (const task of value) {
+          if (task === null || typeof task !== 'object') continue;
+          for (const [taskKey, taskValue] of Object.entries(task as Record<string, unknown>)) {
+            if (hasData(taskValue) && !CARRIED_TASK_FIELDS.has(taskKey)) {
+              out.add(`tasks.${taskKey}`);
+            }
+          }
+        }
+        continue;
+      }
+      if (!CARRIED_PLANT_FIELDS.has(key)) out.add(key);
+    }
+  }
+  return [...out];
+}
+
+export interface JsonImport {
+  rows: ParsedRow[];
+  /** Fields holding data the import will not keep, for the preview to list. */
+  notImported: string[];
+}
+
+/** Parse a JSON file: validated rows plus the fields that will not be kept. */
+export function parseJsonImport(text: string): JsonImport {
+  const candidates = extractCandidatesFromJson(text);
+  if (candidates.length === 0) {
     throw new ImportParseError('emptyFile');
   }
-  if (!headers.includes('name')) {
-    throw new ImportParseError('missingNameColumn');
+  return {
+    rows: candidates.map((raw, index) => validateCandidate(raw, index)),
+    notImported: uncarriedJsonFields(candidates),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Column matching (#668)
+// ---------------------------------------------------------------------------
+//
+// WHY THERE ARE NO PLANTA, GREG OR VERA ADAPTERS HERE
+//
+// #668 asked for importers for the export files of Planta, Greg and Vera.
+// None could be built honestly: none of the three documents an export file
+// whose structure can be checked. Researched 2026-09-17:
+//
+//  - Planta: the help centre (https://support.getplanta.com/, sections
+//    "Using Planta" and "Account and profile") describes no export. Its only
+//    programmatic access is an authenticated API for Premium subscribers
+//    (https://public.planta-api.com/v1, the client in
+//    https://github.com/natekspencer/ha-planta), which is an account
+//    integration, not a file a person can hand us.
+//  - Greg: the support FAQ (https://greg.app/support/) describes no export.
+//  - Vera (Bloomscape): the FAQ (https://bloomscape.com/vera-faq/) describes
+//    cross-device sync only, and no export.
+//
+// No published sample export and no open-source parser for any of them was
+// found. An adapter written from guessed headers would pass its own fixtures
+// and then map the wrong column into `species` on a real file, which is worse
+// than no adapter, because nobody notices until the care schedule is wrong.
+//
+// So the person tells us which of THEIR columns holds which detail. Nothing
+// below assumes another app's column names: the only automatic match is to
+// this app's own CSV export headers.
+
+export const MAPPING_TARGETS = [
+  'name',
+  'species',
+  'location',
+  'notes',
+  'tags',
+  'wateringIntervalDays',
+] as const;
+export type MappingTarget = (typeof MAPPING_TARGETS)[number];
+
+/** The column index feeding each target; `null` means "not in this file". */
+export type ColumnMapping = Record<MappingTarget, number | null>;
+
+export interface CsvTable {
+  /** Header cells as written in the file (trimmed; may be empty). */
+  headers: string[];
+  /** Data rows, blank lines dropped, cells raw. */
+  rows: string[][];
+}
+
+/** This app's own CSV export headers: the ONLY names matched automatically. */
+const OWN_EXPORT_HEADERS: Partial<Record<MappingTarget, string>> = {
+  name: 'name',
+  species: 'species',
+  location: 'location',
+  notes: 'notes',
+  tags: 'tags',
+};
+
+/** Read CSV text into a header row plus data rows. Throws on an empty file. */
+export function readCsvTable(text: string): CsvTable {
+  // Spreadsheet apps (Excel in particular) often save CSV with a UTF-8 BOM,
+  // which would otherwise stick to the first header.
+  const grid = parseCsv(text.replace(/^\uFEFF/, '')).filter((r) =>
+    r.some((cell) => cell.trim() !== '')
+  );
+  if (grid.length < 2) {
+    throw new ImportParseError('emptyFile');
   }
-  return rows.map((row) => {
-    const clean: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(row)) {
-      clean[key] = unescapeFormulaGuard(value);
+  return { headers: grid[0].map((h) => h.trim()), rows: grid.slice(1) };
+}
+
+export function emptyMapping(): ColumnMapping {
+  return {
+    name: null,
+    species: null,
+    location: null,
+    notes: null,
+    tags: null,
+    wateringIntervalDays: null,
+  };
+}
+
+/** Pre-fill the mapping from this app's own export headers, nothing else. */
+export function suggestMapping(headers: string[]): ColumnMapping {
+  const mapping = emptyMapping();
+  for (const target of MAPPING_TARGETS) {
+    const own = OWN_EXPORT_HEADERS[target];
+    if (!own) continue;
+    const index = headers.findIndex((h) => h.toLowerCase() === own);
+    if (index !== -1) mapping[target] = index;
+  }
+  return mapping;
+}
+
+function columnHasData(table: CsvTable, column: number): boolean {
+  return table.rows.some((row) => (row[column] ?? '').trim() !== '');
+}
+
+/** Indexes of columns that hold data but feed no target — the preview lists
+ *  them, so an unmatched column never disappears unseen. */
+export function unmatchedColumns(table: CsvTable, mapping: ColumnMapping): number[] {
+  const used = new Set(Object.values(mapping).filter((i): i is number => i !== null));
+  return table.headers.map((_, i) => i).filter((i) => !used.has(i) && columnHasData(table, i));
+}
+
+/** The first non-empty value in a column, to show beside its picker. */
+export function sampleValue(table: CsvTable, column: number): string | undefined {
+  for (const row of table.rows) {
+    const value = unescapeFormulaGuard((row[column] ?? '').trim());
+    if (value !== '') return value;
+  }
+  return undefined;
+}
+
+/** A watering interval must be a plain whole number of days, 1 to 365.
+ *  "7 days" or "weekly" is NOT guessed at; the row says what is wrong. */
+export function parseIntervalDays(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const days = Number(trimmed);
+  return days >= 1 && days <= 365 ? days : null;
+}
+
+/**
+ * Turn every data row into a validated draft through the mapping. A mapped
+ * watering interval becomes one `water` task at that frequency. Imported
+ * text only ever reaches `notes`, the private field; there is no target for
+ * the house rule (`careRule`), so nothing from a file can reach a share,
+ * sitter or kiosk link (see resolveCareNote in the backend).
+ */
+export function applyMapping(table: CsvTable, mapping: ColumnMapping): ParsedRow[] {
+  return table.rows.map((cells, index) => {
+    const cell = (target: MappingTarget): string | undefined => {
+      const column = mapping[target];
+      return column === null ? undefined : unescapeFormulaGuard(cells[column] ?? '');
+    };
+    const raw: Record<string, unknown> = {
+      name: cell('name') ?? '',
+      species: cell('species'),
+      location: cell('location'),
+      notes: cell('notes'),
+      tags: cell('tags'),
+    };
+    const extraErrors: ParsedRowError[] = [];
+    const interval = cell('wateringIntervalDays')?.trim();
+    if (interval) {
+      const days = parseIntervalDays(interval);
+      if (days === null) {
+        extraErrors.push({
+          field: 'wateringIntervalDays',
+          message: interval,
+          code: 'invalidInterval',
+        });
+      } else {
+        raw.tasks = [{ type: 'water', frequency: days }];
+      }
     }
-    // CSV column names are lowercased by parseCsvObjects.
-    if (typeof clean.acquiredat === 'string') clean.acquiredAt = clean.acquiredat;
-    if (typeof clean.createdat === 'string') clean.createdAt = clean.createdat;
-    return clean;
+    return validateCandidate(raw, index, extraErrors);
   });
 }
 
 /**
- * Parse file text into candidates by kind, normalize, and validate each row
- * client-side. Never throws on a bad ROW (that's a per-row error in the
- * preview) — only on a file we can't read at all (ImportParseError).
+ * Parse file text by kind with no person in the loop: JSON as-is, CSV with
+ * the automatic (own-export) mapping only, refusing a CSV whose name column
+ * it cannot find. The import page uses the pieces above instead, so a
+ * foreign CSV gets a matching step rather than this refusal. Never throws on
+ * a bad ROW (that's a per-row error in the preview) — only on a file we
+ * can't read at all (ImportParseError).
  */
 export function parseImportFile(kind: 'csv' | 'json', text: string): ParsedRow[] {
-  const candidates =
-    kind === 'json' ? extractCandidatesFromJson(text) : extractCandidatesFromCsv(text);
-  if (candidates.length === 0) {
-    throw new ImportParseError('emptyFile');
+  if (kind === 'json') return parseJsonImport(text).rows;
+  const table = readCsvTable(text);
+  const mapping = suggestMapping(table.headers);
+  if (mapping.name === null) {
+    throw new ImportParseError('missingNameColumn');
   }
-  return candidates.map((raw, index) => {
-    const normalized = normalizeCandidate(raw);
-    const result = importPlantDraftSchema.safeParse(normalized);
-    const displayName =
-      typeof normalized.name === 'string' && normalized.name !== ''
-        ? normalized.name
-        : `#${index + 1}`;
-    if (result.success) {
-      return { index, displayName, data: result.data, errors: [] };
-    }
-    return {
-      index,
-      displayName,
-      errors: result.error.issues.map((issue) => ({
-        field: issue.path.join('.') || 'row',
-        message: issue.message,
-      })),
-    };
-  });
+  return applyMapping(table, mapping);
 }
 
 /** Detect file kind from name/MIME; null when neither looks like csv/json. */

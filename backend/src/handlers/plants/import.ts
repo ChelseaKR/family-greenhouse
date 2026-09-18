@@ -1,6 +1,8 @@
 /**
  * POST /plants/import — bulk CSV/JSON import (max 100 plants per request,
- * each with up to 10 care tasks).
+ * each with up to 10 care tasks). Household ADMINS only: an import can fill
+ * the household's whole plant allowance in one request, so it sits with the
+ * role that owns the plan, not with every member (#668).
  *
  * Contract: PARTIAL SUCCESS, not all-or-nothing. Each row is created via
  * plantService.createPlant — the same path as single create, so the atomic
@@ -16,7 +18,12 @@
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { createHandler } from '../../middleware/handler.js';
-import { authMiddleware, AuthenticatedEvent, requireHousehold } from '../../middleware/auth.js';
+import {
+  authMiddleware,
+  AuthenticatedEvent,
+  requireAdmin,
+  requireHousehold,
+} from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit } from '../../middleware/rateLimit.js';
 import { importPlantsSchema, ImportPlantsInput } from '../../models/schemas.js';
@@ -168,4 +175,5 @@ export const importPlants = createHandler(
   // user still allows a 500-plant collection in one minute.
   .use(userRateLimit({ perWindowMs: 60_000, max: 5 }))
   .use(requireHousehold())
+  .use(requireAdmin())
   .use(validateBody(importPlantsSchema));

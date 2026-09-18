@@ -308,4 +308,45 @@ describe('POST /plants/import', () => {
     expect(body.results[0]).toMatchObject({ index: 0, status: 'skipped' });
     expect(body.results[1]).toMatchObject({ index: 1, status: 'created', plantId: 'p2' });
   });
+
+  it('refuses a household member who is not an admin with 403, creating nothing (#668)', async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const householdService = await import('../../../src/services/householdService.js');
+    const { importPlants } = await import('../../../src/handlers/plants/import.js');
+    // The membership row decides the role (auth middleware), not the claim.
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-1',
+      name: 'Tester',
+      email: 'a@b.com',
+      role: 'member',
+      joinedAt: '',
+    });
+    const event = buildEvent({ plants: [{ name: 'Pothos' }] });
+    const res = (await importPlants(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(403);
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+  });
+
+  it("keeps an imported row's notes private: they reach `notes`, never the house rule a token surface shows (#668)", async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const { resolveCareNote } = await import('../../../src/models/sitterBriefFields.js');
+    const { importPlants } = await import('../../../src/handlers/plants/import.js');
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'Pothos'));
+
+    const notes = 'Bought at the Saturday market; hates the radiator';
+    const event = buildEvent({ plants: [{ name: 'Pothos', notes }] });
+    const res = (await importPlants(event, fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+
+    const [input] = vi.mocked(plantService.createPlant).mock.calls[0];
+    expect(input.notes).toBe(notes);
+    expect(input.careRule).toBeUndefined();
+    // resolveCareNote is what the sitter brief, plant-tag and share surfaces
+    // read; a plant created from this input has no care note to hand out.
+    expect(resolveCareNote({ careRule: input.careRule })).toEqual({
+      careNote: null,
+      careNoteSource: null,
+    });
+  });
 });
