@@ -1296,6 +1296,73 @@ resource "aws_lambda_permission" "checkout_recovery_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.checkout_recovery.arn
 }
 
+# Billing cold-start mitigation (issue #730). GET /billing/plans is public,
+# unauthenticated, and the pricing page's first API call — directly on the
+# paid-conversion path. The issue measured this route at a ~62ms warm median
+# vs an ~860ms cold median, and cold starts account for nearly all of its
+# latency: only 9.3% of five-minute windows across the whole API have any
+# non-health traffic at all, so most visitors land on a cold container.
+#
+# This pings the `billing` Lambda directly every 5 minutes with `{ warmer:
+# true }`. `middleware/router.ts` short-circuits that payload before it
+# reaches route dispatch or the per-route middy stack (CORS/body-parsing/
+# logging all assume a real API Gateway event) — it does nothing but force
+# the container's cold-start work (module load, top-level requires) to
+# happen on this schedule instead of a visitor's, then return the execution
+# environment to the warm pool. Every billing route benefits, not only
+# /plans, since they all share this one Lambda.
+#
+# Chosen over `provisioned_concurrency_config` on this function: provisioned
+# concurrency is billed per GB-second for the entire time it's reserved,
+# whether or not it's invoked (AWS Lambda pricing, Provisioned Concurrency
+# duration, us-east-1: $0.0000041667/GB-s). One unit on this 256 MB function,
+# held 24/7, is roughly 0.25 GB * 2,592,000 s/mo * $0.0000041667/GB-s ≈
+# $2.70/month before request/execution charges. A ping every 5 minutes
+# (8,640 invocations/month, each a near-instant early return) costs a
+# fraction of a cent in Lambda duration/request charges, and EventBridge
+# itself does not charge for rules that target Lambda. See the PR that
+# introduced this for the full comparison — Chelsea should re-check these
+# figures against the Cost Explorer / Billing console before relying on them
+# for a larger decision; this is an estimate from published list pricing,
+# not a measurement.
+#
+# Retries deliberately OFF, unlike the schedules above: EventBridge's own
+# default (no retry_policy set) is up to 185 attempts over 24 hours, which is
+# right for reminders/checkoutRecovery/digests — a failed run there is real
+# product loss worth chasing down. A missed warm ping isn't: the next one is
+# five minutes away, so retrying a stale one is pure waste. No `dead_letter_
+# config` on the target either, for the same reason — not because a failure
+# here would vanish. `aws_lambda_function.handlers["billing"]` already has
+# its own function-level DLQ (dead_letter_config above, shared by every
+# handler) for anything that reaches Lambda and then throws; this only opts
+# out of the EXTRA per-target retry+DLQ the other schedules add on top.
+# (In practice this can't fire at all: `isWarmerPing` returns synchronously
+# with no I/O and nothing that can throw.)
+resource "aws_cloudwatch_event_rule" "billing_warm" {
+  name                = "${var.project_name}-billing-warm-${var.environment}"
+  description         = "Scheduled ping to keep the billing Lambda warm (issue #730)"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "billing_warm" {
+  rule  = aws_cloudwatch_event_rule.billing_warm.name
+  arn   = aws_lambda_function.handlers["billing"].arn
+  input = jsonencode({ warmer = true })
+
+  retry_policy {
+    maximum_retry_attempts       = 0
+    maximum_event_age_in_seconds = 60
+  }
+}
+
+resource "aws_lambda_permission" "billing_warm_eventbridge" {
+  statement_id  = "AllowEventBridgeInvokeWarm"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handlers["billing"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.billing_warm.arn
+}
+
 # Weekly plants-at-risk digest: four Monday passes, six hours apart. Each pass
 # respects the recipient's local quiet hours and per-user weekly markers make
 # the first eligible delivery win without duplicates.

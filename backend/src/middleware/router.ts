@@ -62,8 +62,28 @@ function routeKeyFor(event: Record<string, unknown>): string {
   return `${method} ${resource}`;
 }
 
+/**
+ * Marks a scheduled warming ping (issue #730): EventBridge invokes the
+ * function directly with `{ warmer: true }` and nothing else — no
+ * `routeKey`, no `headers`, none of the shape a real API Gateway event has.
+ * It exists only to force this container's cold-start work (module load,
+ * top-level `require`s) to happen on EventBridge's clock rather than a
+ * visitor's, then let the execution environment return to the warm pool.
+ * Checked before `routeKeyFor` and the per-route middy stack (CORS, body
+ * parsing, logging) so it never has to satisfy the shape those assume, and
+ * never risks reaching real route logic.
+ */
+function isWarmerPing(event: unknown): boolean {
+  return (
+    typeof event === 'object' && event !== null && (event as { warmer?: unknown }).warmer === true
+  );
+}
+
 export function createRouter(routes: Record<string, RouteHandler>): RouterHandler {
   const dispatcher = ((event: unknown, context: Context) => {
+    if (isWarmerPing(event)) {
+      return Promise.resolve({ statusCode: 200, body: '' });
+    }
     const key = routeKeyFor((event ?? {}) as Record<string, unknown>);
     const route = routes[key];
     if (!route) {
