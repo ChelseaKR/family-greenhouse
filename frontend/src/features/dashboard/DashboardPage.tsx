@@ -56,7 +56,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
-import { formatDueDate, isOverdue } from '@/utils/date';
+import { formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
 const filterLabels: Record<ActivityFilter, string> = {
@@ -168,15 +168,14 @@ export function DashboardPage() {
   const unclaimMutation = useUnclaimTaskMutation(householdId);
   const skipMutation = useSkipCycleMutation(householdId);
 
+  // Partitioned by the calendar predicate, never by a display label. These
+  // used to test `formatDueDate(...) === 'Today'`, so translating or rewording
+  // that label would have silently moved every task out of "due today" (#342).
   const overdueTasks = upcomingTasks?.filter((task) => isOverdue(task.nextDue)) || [];
   const todayTasks =
-    upcomingTasks?.filter(
-      (task) => !isOverdue(task.nextDue) && formatDueDate(task.nextDue) === 'Today'
-    ) || [];
+    upcomingTasks?.filter((task) => !isOverdue(task.nextDue) && isToday(task.nextDue)) || [];
   const laterTasks =
-    upcomingTasks?.filter(
-      (task) => !isOverdue(task.nextDue) && formatDueDate(task.nextDue) !== 'Today'
-    ) || [];
+    upcomingTasks?.filter((task) => !isOverdue(task.nextDue) && !isToday(task.nextDue)) || [];
 
   /**
    * What this card lists: work that can be done now. Not a forecast.
