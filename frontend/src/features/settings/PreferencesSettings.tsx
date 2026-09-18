@@ -5,6 +5,7 @@ import { Card, CardHeader } from '@/components/Card';
 import { applyDensity, Density, LangCode, usePrefsStore } from '@/store/prefsStore';
 import { ensureLanguageCatalog, isRTL, SUPPORTED_LANGS } from '@/i18n';
 import { analyticsOptOutStored, setAnalyticsOptOut } from '@/services/analytics';
+import { clearGoogleAnalyticsCookies } from '@/services/googleAnalytics';
 import clsx from 'clsx';
 
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
@@ -31,6 +32,10 @@ export function PreferencesSettings() {
   const [analyticsShared, setAnalyticsShared] = useState(() => !analyticsOptOutStored());
   const onAnalyticsChange = (shared: boolean) => {
     setAnalyticsOptOut(!shared);
+    // The same switch governs Google Analytics on the website: gtag.js reads
+    // the opt-out before every hit (services/googleAnalytics.ts), and the
+    // identifier cookies it already set go now rather than at expiry.
+    if (!shared) clearGoogleAnalyticsCookies();
     setAnalyticsShared(!analyticsOptOutStored());
   };
 

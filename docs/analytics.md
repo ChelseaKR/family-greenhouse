@@ -6,6 +6,13 @@ this repository, and replaced by the narrower posture below: PostHog only,
 cookieless, opt-out-honouring, keyed to a pseudonymous account id after
 sign-in, with test fixtures excluded structurally.
 
+**Addendum, 2026-09-17:** Google Analytics 4 now runs on the **website only**,
+alongside PostHog and independent of it, to count visits to the pages people
+arrive on — the acquisition half this document otherwise calls dark. It is a
+visit counter, not a second funnel: scrubbed page views only, no identity, ads
+features off, never inside the native shells, and silenced by the same three
+opt-outs. See "Google Analytics 4" below.
+
 Why: the funnel has been measured exactly once, by hand, from CloudFront logs
 with smoke fixtures excluded by eye — 12 real sessions, 3 sign-ups, 1
 confirmed, 1 activated, 0 payments over 13 days. That ritual does not scale to
@@ -52,22 +59,23 @@ Two funnels, because identity changes shape at stage 3:
 | Transport                | A `fetch` POST to `/capture/` from `analytics.ts`. **No `posthog-js`**, no vendor script on the page (`script-src 'self'` in both CSPs), no cookie set or read, no localStorage/sessionStorage written by the shim. This is what posthog-js calls `persistence: 'memory'`, without the 50 KB.                            |
 | Identity                 | `distinct_id` = the Cognito `sub`, set by `identify()` **after sign-in only**. Never email or name. Before sign-in nothing is sent at all (events are held in memory; see below). `$groups.household` = the household UUID.                                                                                              |
 | Properties               | Closed vocabulary only — plan id, `first`/`subsequent`, task type, count buckets, a bounded route family. The API accept-list (`backend/src/models/telemetry.ts`) has the same shape and rejects anything else, so a property the server refuses never reaches PostHog either. Never form contents, never free text.     |
-| Page views / clicks      | Not captured. The single page-level event is `billing_opened`, which is a funnel stage. No autocapture, no heatmaps, no surveys.                                                                                                                                                                                         |
+| Page views / clicks      | Not captured on this rail. The single page-level event is `billing_opened`, which is a funnel stage. No autocapture, no heatmaps, no surveys. Website page views are GA4's job; see "Google Analytics 4".                                                                                                                |
 | Session recording        | Never. `docs/audits/dpia.md` line "No session replay" stays true by construction: there is no SDK in the page that could record one.                                                                                                                                                                                     |
 | IP address / location    | The request's IP reaches PostHog at transport. Every payload carries `$geoip_disable: true` so no city/region is derived, and the project's **IP data capture configuration** is set to _discard_ (owner step below) so the address is not stored on the event.                                                          |
 | Retention                | PostHog keeps events for the plan's retention period — one year on the tier we start on. First-party copies are CloudWatch `product_event` log lines under the API log group's retention. **Account deletion does not delete the PostHog person**; a support request does, by hand in the PostHog UI (DPIA open item 7). |
 | Opt-out                  | Three controls, any one of which silences every rail in `analytics.ts` (PostHog **and** the first-party endpoint): the in-app switch (Settings → Preferences → Product analytics, per device), Global Privacy Control, Do Not Track. See "Opt-out signals".                                                              |
 | Consent banner           | None required for this rail: no cookie, no device identifier, no cross-site storage, no vendor script. The cookieless property is a characterization test (`analytics.test.ts`, "cookieless by construction"), not a setting.                                                                                            |
-| Google Tag Manager / GA4 | **Removed 2026-09-13.** A dormant loader shipped unkeyed since the start; GTM/GA4 set cookies (and, on iOS, would have made this "tracking" in Apple's sense — ATT prompt, tracking domains). PostHog only. Nothing from Google remains in either CSP.                                                                   |
+| Google Tag Manager / GA4 | **GA4 on the website since 2026-09-17** (gtag.js, not a Tag Manager container), next to PostHog, never in the native shells — so the iOS answers are unchanged. The dormant GTM loader removed on 2026-09-13 stays removed. See "Google Analytics 4".                                                                    |
 | Sentry                   | **Separate decision; stays off.** See "Sentry" at the end.                                                                                                                                                                                                                                                               |
 
 ### Configuration
 
-| Var                 | Required | Default                    | Notes                                                                                                                                                                                                                                                                        |
-| ------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_POSTHOG_KEY`  | No       | unset                      | Browser rail. Unset, only the PostHog fan-out is skipped; first-party events still flow. In production it is the **repository-scope** secret `PRODUCTION_POSTHOG_KEY` — the `build` job has no `environment:`, so an environment-scoped secret would reach the bundle empty. |
-| `VITE_POSTHOG_HOST` | No       | `https://us.i.posthog.com` | `us.i.posthog.com` or `eu.i.posthog.com`; a custom host also needs an explicit CSP change in `infrastructure/modules/frontend/main.tf`.                                                                                                                                      |
-| `POSTHOG_KEY`       | No       | unset                      | Server rail (Lambda env, via `TF_VAR_posthog_key` from the same GitHub secret). Gates the Stripe-webhook fan-out, i.e. funnel stage 7.                                                                                                                                       |
+| Var                      | Required | Default                    | Notes                                                                                                                                                                                                                                                                        |
+| ------------------------ | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_POSTHOG_KEY`       | No       | unset                      | Browser rail. Unset, only the PostHog fan-out is skipped; first-party events still flow. In production it is the **repository-scope** secret `PRODUCTION_POSTHOG_KEY` — the `build` job has no `environment:`, so an environment-scoped secret would reach the bundle empty. |
+| `VITE_POSTHOG_HOST`      | No       | `https://us.i.posthog.com` | `us.i.posthog.com` or `eu.i.posthog.com`; a custom host also needs an explicit CSP change in `infrastructure/modules/frontend/main.tf`.                                                                                                                                      |
+| `VITE_GA_MEASUREMENT_ID` | No       | unset                      | Website GA4. Unset or not a `G-…` id, nothing loads. Only the production web build sets it: `G-L2JN3PQ75P`, a literal in `cd-production.yml` (IDs are public). Native store builds must not.                                                                                 |
+| `POSTHOG_KEY`            | No       | unset                      | Server rail (Lambda env, via `TF_VAR_posthog_key` from the same GitHub secret). Gates the Stripe-webhook fan-out, i.e. funnel stage 7.                                                                                                                                       |
 
 ## Event vocabulary
 
@@ -186,6 +194,11 @@ excluded by construction, not by filtering after the fact:
   A deployed bundle that ignored the signal would fail the smoke and be rolled
   back — the privacy page's promise, enforced against production on every
   release rather than assumed.
+- **The same declaration keeps Google Analytics off.** Under GPC
+  `googleAnalytics.ts` never loads gtag.js, and the smoke's collector counts
+  any request to `googletagmanager.com`, `google-analytics.com` or
+  `analytics.google.com` as a leak. Production is built with the GA
+  measurement ID, so this half of the control is live on every release.
 - **The health check executes no JavaScript.** Route 53 fetches the HTML and
   matches a string; no script runs, no event can be emitted. It pollutes
   CloudFront logs, not PostHog.
@@ -193,6 +206,105 @@ excluded by construction, not by filtering after the fact:
   stage 7 has no fixture path. Should a smoke ever run a test-mode checkout,
   the household stamp `isTestFixture` on the household row is the field to
   gate `serverAnalytics.capture` on.
+
+## Google Analytics 4 (website only)
+
+**Decision, 2026-09-17:** GA4 on every public site, with the privacy page
+updated to match. Property `554850321`, measurement ID `G-L2JN3PQ75P`,
+event-data retention 14 months, Google signals disabled on the property.
+Implementation: `frontend/src/services/googleAnalytics.ts` (loader, consent,
+scrubbing) and `frontend/src/components/GoogleAnalyticsPageViews.tsx` (one page
+view per route). PostHog is untouched and unrelated: GA never sees an account
+id, a household id or any product event.
+
+**Where the ID lives.** One line, in the production web build's environment:
+`VITE_GA_MEASUREMENT_ID: G-L2JN3PQ75P` in `.github/workflows/cd-production.yml`
+(the `build` job). Measurement IDs are public — every page that loads gtag.js
+carries one — so it is a literal, not a secret. Every other build (local dev,
+CI, Lighthouse, staging, the native store builds) leaves it unset, and unset
+loads nothing. To change or remove it, edit that line and tag a release.
+
+**When it loads.** All of: an ID was built in and looks like `G-…`; not the
+Capacitor shell (`isNativeApp()`), because the iOS App Privacy answers do not
+cover GA — `scripts/validate-store-release.mjs` also refuses a native build or
+env template that sets the ID; and no opt-out — the in-app switch, Global
+Privacy Control or Do Not Track, the same `analyticsOptedOut()` PostHog uses.
+Under an opt-out the loader also deletes any `_ga`/`_ga_*` cookies left from
+before. Test fixtures are excluded by the smoke's GPC declaration (above).
+
+**What it is told.**
+
+- Consent Mode v2 defaults, never updated: `ad_storage`, `ad_user_data` and
+  `ad_personalization` denied everywhere; `analytics_storage` denied for the
+  EEA, the UK and Switzerland (region list in the module) and granted
+  elsewhere. gtag.js knows the visitor's region from the request that served
+  it (the served script embeds it), so no extra lookup is made.
+- `allow_google_signals: false`, `allow_ad_personalization_signals: false`,
+  `ads_data_redaction: true`, `send_page_view: false`.
+- No `user_id`, no custom events. Only `page_view`.
+
+**Page views are explicit, and scrubbed.** Every route change sends one
+`page_view` after a `set` of `page_location`, `page_title` and
+`page_referrer`:
+
+- the path keeps our own published slugs (`/blog/…`, `/care/…`,
+  `/pet-safe/…`, `/help/…`), replaces the bearer credential in `/join`,
+  `/shared`, `/sit`, `/kiosk`, `/tag` and `/caretaker` with `:token`, and
+  record ids with `:id` (`normalizeTelemetryRoute`);
+- the query string keeps only `utm_*`; the fragment is dropped;
+- a page whose path needed scrubbing gets the generic title "Family
+  Greenhouse", because `PlantDetailPage` titles itself with the plant's name;
+- the referrer is another site's origin only, or one of our pages scrubbed the
+  same way.
+
+Because `set` carries these values, GA's automatic events inherit the scrubbed
+address and title rather than reading `location.href` and `document.title`.
+
+**Measured against the real gtag.js (2026-09-17),** with every request to
+Google recorded and aborted in a headless browser, so nothing reached the
+property:
+
+- The explicit page views arrive with the scrubbed address and title; a
+  `ref=` query parameter, a plant UUID and a plant's name do not appear.
+- Setting the opt-out mid-visit (the `ga-disable-<id>` getter) stops every
+  later hit: zero requests after the flip.
+- With `analytics_storage` denied for the visitor's region, no cookie is set
+  and hits still go out, cookieless — Consent Mode's documented behaviour.
+- **Enhanced measurement's "page changes based on browser history events"
+  fires on `pushState` regardless of `send_page_view: false`**, and reads the
+  raw URL: measured on a container that serves the history listener, it
+  produced a second page view carrying the unscrubbed address. The container
+  served for `G-L2JN3PQ75P` today contains no history listener, but whether it
+  does is Google's to change — hence owner step 1 below.
+- gtag.js also sends a copy of every hit to `www.google.com/g/collect`. Neither
+  CSP names that host for `connect-src`; the CloudFront policy lists hosts, so
+  the copy is blocked (a console CSP report per hit), deliberately.
+- The served container has **user-provided data collection** switched on with
+  automatic detection of email, phone and address (`__ogt_1p_data_v2`). No
+  such data appeared in any measured hit with `ad_user_data` denied, but the
+  privacy page says we never send Google an email address — owner step 2.
+
+**Owner steps in the GA admin** (none can be done from this repository):
+
+1. Admin → Data streams → the web stream → Enhanced measurement → Page views →
+   Show advanced settings → untick **Page changes based on browser history
+   events**. The app sends its own scrubbed page views; left on, SPA
+   navigations would be counted twice, once with the raw URL. Consider
+   switching off form interactions too.
+2. Admin → Data collection and modification → Data collection → turn **off
+   User-provided data collection**.
+3. Admin → Account settings: accept the **Data Processing Terms**, and turn
+   off the data-sharing settings (Google products & services; modeling
+   contributions & business insights). The privacy page says Google processes
+   the data on our behalf; that is only true on those terms.
+4. Confirm the property has no Google Ads link (Admin → Product links) and
+   that Google signals stays off.
+
+**CSP.** Both policies admit `https://www.googletagmanager.com` in
+`script-src` and `https://*.google-analytics.com` +
+`https://*.analytics.google.com` in `connect-src` and `img-src`. The
+CloudFront one is Terraform (`infrastructure/modules/frontend/main.tf`) and
+applies on the next tagged release, together with the bundle that needs it.
 
 ## Privacy & data
 
@@ -234,9 +346,11 @@ Privacy: the group key is an opaque household UUID, analogous to the Cognito sub
 
 Every rail in `analytics.ts` is identity-gated: the first-party
 `/telemetry/product` endpoint requires a JWT, and the PostHog rail requires a
-`distinct_id`. An anonymous visitor therefore produces **no network traffic at
-all**. That is the privacy posture working as designed — no beaconing from
-marketing pages — but it means the acquisition half of the funnel is dark.
+`distinct_id`. An anonymous visitor therefore produces **no traffic on these
+rails at all**. That is the privacy posture working as designed, but it leaves
+the acquisition half of the funnel dark here; since 2026-09-17 Google
+Analytics 4 counts it on the website instead (page views only, not joined to
+these events — see "Google Analytics 4").
 
 ### Events fired before sign-in
 
@@ -269,9 +383,9 @@ Observable today (authenticated, or trusted server-side):
 
 | Funnel step                                  | Observable? | Where                                                                 |
 | -------------------------------------------- | ----------- | --------------------------------------------------------------------- |
-| Landing page view                            | No          | no event exists                                                       |
-| Care guide / blog view                       | No          | no event exists                                                       |
-| Pricing page view                            | No          | no event exists                                                       |
+| Landing page view                            | Web only    | GA4 page view (website, not under an opt-out), not in PostHog         |
+| Care guide / blog view                       | Web only    | GA4 page view (website, not under an opt-out), not in PostHog         |
+| Pricing page view                            | Web only    | GA4 page view (website, not under an opt-out), not in PostHog         |
 | Signup started (register form accepted)      | Yes         | `signup_started`, replayed at sign-in                                 |
 | Signup completed                             | Yes         | auth handler, `POST /auth/confirm`; browser event replayed at sign-in |
 | Household created / first plant / first task | Yes         | browser shim, service layer                                           |
@@ -312,11 +426,11 @@ Observable today (authenticated, or trusted server-side):
    stays until the plan's retention period ends or a support request removes it
    by hand. The privacy page says so. Automating it needs a PostHog personal
    API key in the API Lambda, which is a separate decision (DPIA open item 7).
-7. **Top-of-funnel measurement requires a privacy decision.** Making landing,
-   pricing, and care-guide reach measurable means recording something for
-   visitors who have not signed in. The privacy page states we do not record
-   general page views; any change here must update that page in the same
-   commit.
+7. **Top-of-funnel measurement was a privacy decision, taken 2026-09-17.**
+   Landing, pricing and care-guide reach are measured by Google Analytics 4 on
+   the website, and the privacy page describes it. GA4 page views are not
+   joined to the PostHog funnel: GA never receives an account or household id,
+   so "which landing visit became which sign-up" stays unanswerable by design.
 8. **The retention figure is stated, not enforced.** PostHog's plan-level
    retention is what the privacy page quotes ("currently one year"); a plan
    change moves it and nothing here would notice. Confirm it in the project

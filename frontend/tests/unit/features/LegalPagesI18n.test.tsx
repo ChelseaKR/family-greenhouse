@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { createInstance, type i18n as I18nInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
@@ -36,8 +36,8 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    effectiveEn: 'Effective September 13, 2026.',
-    effectiveEs: 'Vigente desde el 13 de septiembre de 2026.',
+    effectiveEn: 'Effective September 17, 2026.',
+    effectiveEs: 'Vigente desde el 17 de septiembre de 2026.',
   },
   {
     name: 'terms',
@@ -160,6 +160,35 @@ describe('legal pages: link targets survive localization', () => {
       'href',
       expect.stringContaining('mailto:support@familygreenhouse.net')
     );
+  });
+
+  it('privacy discloses Google Analytics 4, its cookies and its opt-outs, in both locales', () => {
+    // The 2026-09-17 decision put GA4 on the website; the page must say so in
+    // the words a visitor reads, not only in docs/analytics.md.
+    const english = renderEnglish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Website analytics (Google Analytics 4)',
+      '_ga_L2JN3PQ75P',
+      'never in the iOS or Android app',
+      'keeps Google Analytics off',
+      'Google signals and ad personalization are disabled',
+      '14 months',
+    ]) {
+      expect(english, phrase).toContain(phrase);
+    }
+    expect(english).not.toContain('We do not record general page views');
+    cleanup();
+
+    const spanish = renderSpanish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Analítica del sitio web (Google Analytics 4)',
+      '_ga_L2JN3PQ75P',
+      'mantiene desactivado Google Analytics',
+      'Google Signals y la personalización de anuncios están deshabilitadas',
+      '14 meses',
+    ]) {
+      expect(spanish, phrase).toContain(phrase);
+    }
   });
 
   it('terms and privacy cross-link each other in Spanish', () => {

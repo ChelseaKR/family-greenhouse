@@ -1089,7 +1089,7 @@
       "language": "Idioma",
       "analytics": "Analítica de producto",
       "analyticsToggle": "Compartir eventos de uso para ayudar a mejorar la aplicación",
-      "analyticsDescription": "Un pequeño conjunto de eventos del producto (hogar creado, planta añadida, un límite del plan alcanzado, facturación abierta y similares) vinculados a un identificador de cuenta aleatorio y enviados a nosotros y a PostHog. Nunca nombres de plantas, fotos ni nada que escribas. Este ajuste es por dispositivo; la página de Privacidad tiene los detalles.",
+      "analyticsDescription": "Un pequeño conjunto de eventos del producto (hogar creado, planta añadida, un límite del plan alcanzado, facturación abierta y similares) vinculados a un identificador de cuenta aleatorio y enviados a nosotros y a PostHog. Nunca nombres de plantas, fotos ni nada que escribas. En el sitio web, desactivarlo también detiene Google Analytics en este dispositivo. Este ajuste es por dispositivo; la página de Privacidad tiene los detalles.",
       "analyticsPrivacyLink": "Página de privacidad"
     },
     "apiKeys": {

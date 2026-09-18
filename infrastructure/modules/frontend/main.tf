@@ -515,17 +515,24 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       # because Tailwind utility classes are emitted as inline styles by
       # some Heroicons SVG renders; revisit once those are migrated.
       #
-      # script-src is 'self' alone: no third-party script is ever loaded. The
-      # Google Tag Manager / GA4 allowances went with the GTM loader on
-      # 2026-09-13 (docs/analytics.md): analytics is PostHog only, reached by
-      # fetch from src/services/analytics.ts, so connect-src names the two
-      # documented PostHog cloud regions. Sentry ingestion stays permitted for
-      # the shipped-but-unkeyed error rail; otherwise a DSN set later would
-      # build cleanly and the edge policy would silently stop it reporting.
+      # script-src admits one third-party origin: Google Analytics 4's gtag.js
+      # from www.googletagmanager.com, website only (the 2026-09-17 decision
+      # in docs/analytics.md, "Google Analytics 4"). It is injected by
+      # src/services/googleAnalytics.ts only when a measurement ID was built
+      # in and no opt-out applies. Its hits go to *.google-analytics.com and
+      # *.analytics.google.com, named in connect-src and img-src (img-src
+      # already admits https:; the names are there so a later tightening
+      # keeps them). Nothing else from Google is admitted: gtag.js also
+      # mirrors each hit to www.google.com/g/collect, and that copy is
+      # blocked here on purpose. PostHog is still reached by fetch from
+      # src/services/analytics.ts, so connect-src names its two documented
+      # cloud regions. Sentry ingestion stays permitted for the
+      # shipped-but-unkeyed error rail; otherwise a DSN set later would build
+      # cleanly and the edge policy would silently stop it reporting.
       #
       # The broad `connect-src` AWS allowance is the existing trade for
       # AWS-SDK-in-browser calls (Cognito refresh, presigned-URL S3 PUTs).
-      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com https://us.i.posthog.com https://eu.i.posthog.com https://*.sentry.io; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      content_security_policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://*.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com https://us.i.posthog.com https://eu.i.posthog.com https://*.sentry.io https://*.google-analytics.com https://*.analytics.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
       override                = true
     }
   }

@@ -76,14 +76,26 @@ export function declareGlobalPrivacyControl(): void {
 }
 
 /**
- * A request from the smoke browser to one of these is a product-analytics
- * payload leaving a browser that declared its opt-out — the negative control
- * for the paragraph on the privacy page. PostHog's capture host is the only
- * vendor analytics origin the CSP admits.
+ * A request from the smoke browser to one of these is an analytics payload
+ * leaving a browser that declared its opt-out — the negative control for the
+ * paragraph on the privacy page. These are the vendor analytics origins the
+ * CSP admits: PostHog's capture hosts, and Google Analytics 4's script host
+ * and collection hosts. Production is built with a GA measurement ID, so this
+ * is where a bundle that loaded gtag.js despite Global Privacy Control would
+ * show up — the smoke then fails and the release is rolled back.
  */
+const VENDOR_ANALYTICS_DOMAINS = [
+  'posthog.com',
+  'googletagmanager.com',
+  'google-analytics.com',
+  'analytics.google.com',
+];
+
 export function isVendorAnalyticsHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
-  return normalized === 'posthog.com' || normalized.endsWith('.posthog.com');
+  return VENDOR_ANALYTICS_DOMAINS.some(
+    (domain) => normalized === domain || normalized.endsWith(`.${domain}`)
+  );
 }
 
 /** The first-party product-event endpoint, which GPC must silence as well. */

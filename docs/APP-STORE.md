@@ -159,6 +159,11 @@ What each row actually is, for whoever fills out the questionnaire:
   it. A household can opt out from Settings → Preferences, and Global
   Privacy Control / Do Not Track silence it automatically — all before any
   event is sent, none queued or stored.
+- **Google Analytics 4 (website only — not in the app).** Since 2026-09-17
+  familygreenhouse.net loads GA4 in browsers. It never loads inside the
+  Capacitor shell (`isNativeApp()` in `frontend/src/services/googleAnalytics.ts`),
+  and `scripts/validate-store-release.mjs` refuses a store build that carries
+  the measurement ID, so none of the answers above change because of it.
 - **Sentry (not currently active)** — the code supports an optional Sentry
   DSN for crash/error monitoring, which would add Crash Data and
   Performance Data with stack traces. No DSN is configured on the hosted

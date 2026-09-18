@@ -104,17 +104,46 @@ describe('external integration deployment wiring', () => {
     expect(buildJob).toContain('VITE_POSTHOG_KEY: ${{ secrets.PRODUCTION_POSTHOG_KEY }}');
   });
 
-  it('loads no Google Tag Manager: the loader, its build variable and its CSP allowances are gone', () => {
-    // Removed with the 2026-09-13 analytics decision (docs/analytics.md):
-    // PostHog only, cookieless. GTM/GA4 set cookies and would void that
-    // posture, so the dormant loader went rather than staying one repository
-    // variable away from re-enabling itself.
+  it('builds Google Analytics 4 into the production web bundle only', () => {
+    // The 2026-09-17 decision (docs/analytics.md, "Google Analytics 4"): GA4 on
+    // the website, never in the native shells. The measurement ID is public,
+    // so it is a literal in the build job, not a secret; staging stays dark.
+    const buildJob = productionWorkflow.slice(
+      productionWorkflow.indexOf('\n  build:'),
+      productionWorkflow.indexOf('\n  terraform:')
+    );
+    expect(buildJob).toMatch(/^\s+VITE_GA_MEASUREMENT_ID: G-L2JN3PQ75P$/m);
+    expect(productionWorkflow.match(/VITE_GA_MEASUREMENT_ID:/g)).toHaveLength(1);
+    expect(stagingWorkflow).not.toContain('VITE_GA_MEASUREMENT_ID');
+    // gtag.js, not a Tag Manager container: no GTM build variable anywhere.
     for (const file of [productionWorkflow, stagingWorkflow, frontendModule]) {
       expect(file).not.toContain('GTM_ID');
-      expect(file).not.toContain('googletagmanager');
-      expect(file).not.toContain('google-analytics');
     }
+    // PostHog stays a fetch shim; GA lives in its own module.
     expect(read('frontend/src/services/analytics.ts')).not.toContain('dataLayer');
-    expect(read('frontend/index.html')).not.toContain('googletagmanager');
+  });
+
+  it('admits exactly the GA4 origins in both Content-Security-Policies', () => {
+    const edge = frontendModule.match(/content_security_policy\s*=\s*"([^"]+)"/)?.[1] ?? '';
+    const meta =
+      read('frontend/index.html').match(
+        /http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]+)"/
+      )?.[1] ?? '';
+    for (const policy of [edge, meta]) {
+      const directive = (name: string) =>
+        policy
+          .split(';')
+          .map((part) => part.trim())
+          .find((part) => part.startsWith(`${name} `)) ?? '';
+      expect(directive('script-src')).toBe("script-src 'self' https://www.googletagmanager.com");
+      for (const name of ['connect-src', 'img-src']) {
+        expect(directive(name)).toContain('https://*.google-analytics.com');
+        expect(directive(name)).toContain('https://*.analytics.google.com');
+      }
+    }
+    // The edge policy is the strict one: its connect-src lists hosts, so it is
+    // what blocks gtag.js's www.google.com/g/collect mirror. Keep it blocked.
+    expect(edge).not.toMatch(/connect-src[^;]*https:\/\/www\.google\.com/);
+    expect(edge).not.toMatch(/connect-src[^;]*\shttps:(?:\s|;)/);
   });
 });

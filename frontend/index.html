@@ -95,14 +95,20 @@
           out. Tighten to specific origins once the prod domain is final. The
           PostHog capture endpoint (src/services/analytics.ts) rides on it; the
           CloudFront policy names that host explicitly.
-        - script-src is 'self' alone: no third-party script is loaded, ever.
-          Product analytics is a fetch shim, not a vendor SDK.
+        - script-src admits one third-party origin, www.googletagmanager.com,
+          for Google Analytics 4's gtag.js on the website. It is injected by
+          src/services/googleAnalytics.ts only when a measurement ID was built
+          in and no opt-out applies — never in the native shells. Its hits go
+          to *.google-analytics.com / *.analytics.google.com, named in
+          img-src and connect-src below (already covered by https: here; the
+          CloudFront policy is the one that has to name them). Product
+          analytics is still a fetch shim, not a vendor SDK.
         - We don't allow `frame-src` because we don't embed iframes; Stripe
           Checkout runs as a redirect, not an embedded iframe.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https:; connect-src 'self' __API_ORIGIN__ https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
+      content="default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: __API_ORIGIN__ https: https://*.google-analytics.com https://*.analytics.google.com; connect-src 'self' __API_ORIGIN__ https: https://*.google-analytics.com https://*.analytics.google.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self' https:; manifest-src 'self'"
     />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   </head>

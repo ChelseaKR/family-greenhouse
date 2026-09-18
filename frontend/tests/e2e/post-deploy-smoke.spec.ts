@@ -590,11 +590,14 @@ async function purgeUploadedS3Object(target: SmokeS3ObjectTarget | undefined): P
  * boots (see declareGlobalPrivacyControl in the support module). That is what
  * keeps smoke fixtures out of the product funnel: `services/analytics.ts`
  * treats the signal as an opt-out and sends nothing to PostHog and nothing to
- * POST /telemetry/product. The collector below records any such request, and
+ * POST /telemetry/product, and `services/googleAnalytics.ts` does not load
+ * Google Analytics at all. The collector below records any such request, and
  * each test asserts the list is empty at its end — so a release whose bundle
  * ignores the opt-out is rolled back by the smoke rather than shipped with a
- * privacy-page promise it does not keep. With no PostHog key configured the
- * vendor half is trivially empty; the first-party half is live either way.
+ * privacy-page promise it does not keep. The production build carries a GA
+ * measurement ID, so the Google half is live on every release; the PostHog
+ * half is trivially empty until a PostHog key is configured; the first-party
+ * half is live either way.
  */
 const analyticsLeaks: string[] = [];
 

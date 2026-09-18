@@ -365,6 +365,16 @@ if (templateValues.has('VITE_CHAT_STREAM_URL')) {
 if (templateValues.get('VITE_BETA_MODE') !== 'false') {
   fail(`${envExamplePath} must set VITE_BETA_MODE=false for public store builds`);
 }
+// Google Analytics 4 is website-only (docs/analytics.md, "Google Analytics
+// 4"): the App Privacy answers do not cover it. googleAnalytics.ts already
+// refuses to load inside the shells; a native bundle without the ID cannot
+// load it even if that check ever broke.
+if (templateValues.has('VITE_GA_MEASUREMENT_ID')) {
+  fail(
+    `${envExamplePath} sets VITE_GA_MEASUREMENT_ID; Google Analytics is website-only and ` +
+      'must never be built into a store binary. Remove it.'
+  );
+}
 if (templateValues.has('VITE_API_URL')) {
   assertHttps(templateValues.get('VITE_API_URL'), `${envExamplePath} VITE_API_URL`);
 }
@@ -441,6 +451,11 @@ if (production) {
   // native streaming transport exists.
   if (process.env.VITE_CHAT_STREAM_URL) {
     fail('VITE_CHAT_STREAM_URL must be unset for native store builds');
+  }
+  if (process.env.VITE_GA_MEASUREMENT_ID) {
+    fail(
+      'VITE_GA_MEASUREMENT_ID must be unset for native store builds (Google Analytics is web-only)'
+    );
   }
   if (String(process.env.VITE_BETA_MODE).toLowerCase() !== 'false') {
     fail('VITE_BETA_MODE must be false for public store builds');

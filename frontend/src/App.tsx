@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
 import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
 
@@ -301,6 +302,8 @@ function App() {
           </div>
         </Suspense>
       </RouteErrorBoundary>
+      {/* After the routed content, so its effect reads the new page's title. */}
+      <GoogleAnalyticsPageViews />
     </>
   );
 }

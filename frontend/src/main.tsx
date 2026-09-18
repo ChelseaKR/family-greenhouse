@@ -11,6 +11,7 @@ import App from './App';
 import { initSentry } from './sentry';
 import { initPwaRegistration } from './services/pwaRegistration';
 import { initNativeDeepLinks } from './services/nativeDeepLinks';
+import { initGoogleAnalytics } from './services/googleAnalytics';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
@@ -29,6 +30,9 @@ import './index.css';
 void initSentry();
 initPwaRegistration();
 initNativeDeepLinks();
+// Website visit counting. Loads nothing without a built-in measurement ID, in
+// the native shells, or under any analytics opt-out — see the module header.
+initGoogleAnalytics();
 
 // Apply persisted preferences before React mounts so we don't get the wrong
 // density / language direction on first paint.
