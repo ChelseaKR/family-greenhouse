@@ -42,7 +42,7 @@ const API = 'http://localhost:4000';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 const SECRET_NOTE = 'Spare key is under the blue pot';
-const SECRET_COMPLETION_NOTE = 'Neighbour at no. 12 waters when we are away';
+const SECRET_COMPLETION_NOTE = 'Neighbor at no. 12 waters when we are away';
 const MEMBER_NAME = 'Chelsea Kelly-Reif';
 const SHARE_CODE = 'b'.repeat(32);
 

@@ -30,7 +30,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * DAY).toISOString();
 
 const SECRET_NOTE = 'Spare key is under the blue pot';
-const SECRET_COMPLETION_NOTE = 'Neighbour at no. 12 waters when we are away';
+const SECRET_COMPLETION_NOTE = 'Neighbor at no. 12 waters when we are away';
 
 function completion(n: number, overrides: Partial<TaskCompletion> = {}): TaskCompletion {
   return {
