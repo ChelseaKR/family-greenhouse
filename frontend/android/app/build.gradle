@@ -14,8 +14,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Deterministic SemVer mapping: 0.23.0 -> 2300. Increment this for
         // every store upload; Play never accepts a reused versionCode.
-        versionCode 3500
-        versionName "0.35.0"
+        versionCode 3600
+        versionName "0.36.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

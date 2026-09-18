@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-09-17
+
 ### Added
 
 - **A 30-day household trash with restore (#670).** Deleting a plant or a task
@@ -24,18 +26,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   feed, digests, the sitter / kiosk / tag / share token views, the export and
   the public API — because its rows leave the live key space and both GSIs
   rather than carrying a flag every read would have to honour (ADR 0030). Any
-  member can restore it from Settings → Trash (or Undo on the toast) for 30
-  days; a plant comes back byte-for-byte with its tasks, photo timeline, care
-  history, plant tag and share link, and its photos move back to the same S3
-  keys. Restoring an active plant into a household at its cap is refused with
-  the same 402 wording as `POST /plants`; a tag or share link whose issuer has
-  since left is not revived. A daily purge on the digests Lambda
-  (`{ "job": "trashPurge" }`) deletes entries past 30 days through the #603
-  retry-then-throw batch writer and logs per-kind counts; DynamoDB `ttl` and a
-  `trash/` S3 lifecycle rule at 37 days are backstops. `DELETE /me` erases the
-  trash regardless of age. Ships on the next `v*` tag: three routes in the
-  households group, one EventBridge rule, one IAM list prefix and one bucket
-  lifecycle rule — no new Lambda.
+  member can restore it from Settings → Trash for 30 days, or with Undo on the
+  toast right after deleting a plant; a plant comes back with its tasks, photo
+  timeline, care history, plant tag and share link, and its photos move back
+  to the same S3 keys. Restoring an active plant into a household at its cap
+  is refused with the same 402 wording as `POST /plants`; a tag or share link
+  whose issuer has since left, or a share link past its 14-day life, is not
+  revived, and a task whose assignee has since left comes back unassigned.
+  A daily purge on the digests Lambda (`{ "job": "trashPurge" }`) deletes
+  entries past 30 days through the #603 retry-then-throw batch writer and logs
+  per-kind counts; DynamoDB `ttl` and a `trash/` S3 lifecycle rule at 37 days
+  are backstops. `DELETE /me` erases the trash of any household the account
+  was the only member of, regardless of age. Infrastructure, applied by this
+  release's tag: three routes in the households group, one EventBridge rule,
+  one IAM list prefix and one bucket lifecycle rule — no new Lambda.
 
 - **A member can leave a household without deleting their account (#686).**
   `POST /households/{id}/leave`, with its own confirm flow on the Household
@@ -49,7 +53,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   household whose paid plan will renew until they acknowledge that leaving
   does not cancel it. Billing is never touched. The household's admins are
   emailed and the leaver gets a confirmation, both respecting preferences.
-  Deploy note: one new route in `local.routes`, applied by the next `v*` tag.
+  Deploy note: one new route in `local.routes`, applied by this release's tag.
 
 - **A failed payment is now stated on every screen, not only in Settings.**
   When Stripe reports a household's subscription as unpaid, the household's
@@ -58,9 +62,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   found out from a refused "add plant". A banner in the app frame now says the
   payment failed, what changed, and links to Settings → Plan status to fix
   it. It disappears as soon as Stripe reports the subscription paid again,
-  stays off the Plan status page that already carries the full notice, and
-  inside the native apps points only at that in-app page, never at a payment
-  step. (#593)
+  stays off the Plan status page that already carries the full notice and off
+  the full-height chat screen, and inside the native apps points only at that
+  in-app page, never at a payment step. (#593)
 
 - **Google Analytics 4 on the website.** familygreenhouse.net now counts
   visits with GA4 (measurement ID `G-L2JN3PQ75P`), alongside PostHog and
@@ -73,19 +77,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Privacy Control, Do Not Track or the in-app analytics switch — which is also
   how the post-deploy smoke stays out of it. The privacy page, in English and
   Spanish, describes what it collects, its `_ga` cookies and how to turn it
-  off. A new "Opt out of analytics" link in the site footers — "Opt back in"
-  once used — turns off Google Analytics and PostHog together on that device,
-  with or without an account; it is the same switch as Settings → Preferences.
-  The Content-Security-Policy change (CloudFront, Terraform) applies with the
-  next tagged release.
+  off. A new "Opt out of analytics" link in the landing-page and public-page
+  footers — "Opt back in" once used — turns off Google Analytics and PostHog
+  together on that device, with or without an account; it is the same switch
+  as Settings → Preferences. Two settings in the GA admin that no code
+  controls (history-event page views and user-provided data collection) are
+  owner steps listed in `docs/analytics.md`. The Content-Security-Policy
+  change (CloudFront, Terraform) applies with this release's tag.
 
 ### Changed
 
 - **Every departure (removal, leaving, account deletion from a shared
   household) now also** drops the member from care rotations (anchor kept; a
-  rotation left with one person is cleared), scrubs the asker's name from an
-  open "ask family" request, deletes their calendar-feed token for that
-  household, and drops household emails still queued to them about it.
+  rotation left with one person is cleared) and scrubs the asker's name from
+  an open "ask family" request. Removal and leaving also delete their
+  calendar-feed token for that household and drop household emails still
+  queued to them about it, as account deletion already did.
 
 - **The daily reminder goes out when your quiet hours end, or at 08:00
   local if you have none (#343).** It used to go out on the first hourly run
@@ -95,9 +102,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **Quiet hours now hold browser and device push too, not just email and
   SMS.** Push used to be exempt on the grounds that the operating system
   handles Do Not Disturb, and browser-only users with quiet hours over
-  midnight were pushed at about 00:05. Every channel now waits for the
-  window to end, in reminders and in every other notification. The Settings
-  quiet-hours text (EN/ES), the Help answers and the landing page say so.
+  midnight were pushed at about 00:05. Inside quiet hours no channel is sent
+  now, in reminders and in every other notification that goes through the
+  notifier. The daily reminder and pest alerts go out once the window ends;
+  an ask-family request, an overdue-task escalation or a plan-upgrade request
+  that lands inside quiet hours is not re-sent afterwards, so its push is
+  skipped, as its email and SMS already were (the upgrade request's own email
+  to admins still goes out). The Settings quiet-hours text (EN/ES), the Help
+  answers and the landing page say so.
 
 - **Spanish is reachable (#467).** The Spanish catalog was complete but sat
   behind an opt-in set in no deployed environment. It is now on by default,
@@ -115,12 +127,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   page (both hero variants, the dashboard mock-up, every band, the plans band
   and its footer), the `/pricing` hero and page metadata, the public footer,
   the header wordmark's tagline and the 404 page now read from the catalogs,
-  with new Latin-American Spanish copy. A render test fails on any visible
-  string left identical in English and Spanish on those pages, and the
-  free-plan caps they state are now re-derived in both catalogs. Help, care
+  with new Latin-American Spanish copy. The prerendered HTML is still
+  English, so a Spanish visitor sees it until the catalog loads and the page
+  re-renders. A render test fails on a visible string left identical in
+  English and Spanish on those pages (an allowlist of proper nouns aside),
+  and the free-plan caps the landing page states are now re-derived from
+  `plans.ts` in both catalogs; the `/pricing` statements are not. Help, care
   guides, blog, changelog, `/pet-safe` and the strings the hardcoded-string
   ratchet still baselines remain English; `docs/i18n.md` § Shipping status
   lists them.
+
+- **Backend day arithmetic is explicitly UTC (internal, #342).** Next-due
+  dates, snooze, the due-within, caretaker, upcoming and plant-tag cutoffs,
+  the daily completion-count buckets, the analytics window, the
+  seasonal-cadence month and the year-in-review default now use UTC date
+  accessors rather than the process's local zone, as does the local dev
+  server. The Lambdas already run with `TZ=UTC`, so no production answer
+  changes; what changes is that none of them depends on that setting, which
+  stays as defence in depth. A test now fails on any process-local date
+  accessor in `backend/src`. The dashboard's due-today list is now split by a
+  date comparison instead of matching the English label "Today", with no
+  change in what it shows.
 
 ### Fixed
 
@@ -156,8 +183,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   two.** `www.` moved to a redirect-only CloudFront distribution that accepts
   both schemes, so its function answers `http://www` directly instead of
   CloudFront first bouncing it to `https://www` (#797). `www.` is unreachable
-  for a few minutes during the release that applies this; the apex is not
+  for a few minutes while this release's Terraform applies; the apex is not
   affected.
+
+- **`docs/mobile.md` no longer says iOS users already open links in the
+  app.** Universal links (#803) are wired in the code but in no submitted
+  build: 0.34.0, the only one, predates them. The new "Deep links" section
+  (the heading three cross-references already pointed at) lists what is left
+  (Associated Domains on the App ID, an archive, a device check) and records
+  that Apple's CDN now serves the association file. The page also stops
+  saying `LockedFeature` is not native-gated (it has been since #804), names
+  the one native billing sentence that still points outside the app,
+  says `@capacitor/app` backs iOS Universal Links only, and corrects the
+  association file's counts to 47 declared routes and 23 browser-only.
 
 ### Security
 
@@ -175,11 +213,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   hashed row's real key), so the dump those PRs protected against still
   produced working links; the fallback now honours a row only if it carries
   the presented token. The print sheet can show a new label's QR code only on
-  the visit that issued it; a label printed earlier is listed as printed and
-  replaced with **New code**. `backend/src/scripts/backfillTokenHashes.ts`
-  re-keys the remaining plaintext rows in place (same token, so no label is
-  reprinted) and drops the `notes` residue from pre-#741 share rows; it is
-  dry-run by default and has not been run.
+  the visit that issued it; after that the label is listed as printed and
+  replaced with **New code**, and the tags API returns its `token` and `url`
+  as null. A label issued before this release still shows its code until the
+  backfill re-keys its row. `backend/src/scripts/backfillTokenHashes.ts`
+  re-keys the remaining plaintext rows in place (tag, share, sitter, kiosk
+  and caretaker; same token, so no label is reprinted) and drops the `notes`
+  residue from pre-#741 share rows; it is dry-run by default and has not been
+  run.
+
+  **Operator note:** run the backfill after this release is deployed, never
+  before — the previous code reads tags and shares only by the plaintext key,
+  so re-keying under it would stop every printed label from scanning. Dry run
+  first, then apply:
+  `TABLE_NAME=family-greenhouse-production npm run backfill:token-hashes --workspace backend`,
+  then the same with `-- --confirm`. It is safe to re-run; rows a live request
+  changed mid-run are skipped and counted as `raced`.
 
 ## [0.35.0] - 2026-09-17
 
