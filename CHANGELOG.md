@@ -16,6 +16,36 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-09-17
+
+### Added
+
+- **iOS universal links.** Tapping a familygreenhouse.net link the app already
+  mails — an invite, a sitter link, a task reminder — now opens straight into
+  the app on iOS instead of Safari. The serving side
+  (`apple-app-site-association`, generated from `ROUTE_POLICY`) has been live
+  since the Team ID landed; this closes the app-side half with the Associated
+  Domains entitlement and `@capacitor/app`'s `appUrlOpen` listener. Android
+  App Links are still unwired, pending the release-signing certificate's
+  SHA-256 fingerprint.
+
+- **Keep `GET /billing/plans` warm.** A scheduled EventBridge ping every 5
+  minutes keeps the pricing page's first API call off a cold Lambda start,
+  addressing the largest measured contributor to the missed 500ms p95 latency
+  objective. No material recurring cost — the ping short-circuits before
+  touching auth, the database, or Stripe.
+
+### Fixed
+
+- **Guideline 3.1.1: no price or purchase call-to-action inside the native
+  shells.** `LockedFeature` — the card shown on paid surfaces like chat, the
+  away-kit offer, and API keys — was showing a subscription price ("Included
+  with Garden — $4.99 a month") and an "Ask \<admin\> to upgrade" button (or,
+  for admins, a "Change plan" link) inside the iOS/Android apps, with no In-App
+  Purchase behind either. Native now shows what the feature is with no price
+  and no ask, reusing the same neutral notice the read-only billing screen
+  already shows. Web is unchanged.
+
 ## [0.34.0] - 2026-09-14
 
 ### Added
