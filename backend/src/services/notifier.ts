@@ -246,11 +246,10 @@ function safeEndpointHost(endpoint: string): string {
  *     unconfigured channel (SES/VAPID/SNS not provisioned) does NOT count, so
  *     the caller keeps retrying until a real send happens rather than burning
  *     the day's slot on a notification nobody received.
- *   - `dndSuppressedOnly` — the user has email and/or SMS enabled but NOTHING
- *     delivered, and the only reason the loud channels were skipped is the DND
- *     window. This is the case H1 exists for: a DND user who relies on
- *     email/SMS (no push) is reachable again once the window lifts, so the
- *     caller must NOT claim the daily slot and should retry on the next run.
+ *   - `dndSuppressedOnly` — the user has at least one channel enabled but
+ *     NOTHING delivered, and the only reason is the DND window. The user is
+ *     reachable again once the window lifts, so the caller must NOT claim the
+ *     daily slot and should retry on the next run.
  */
 export interface SendResult {
   delivered: boolean;
@@ -263,10 +262,17 @@ export interface SendResult {
  * one channel never block the others — we want a flaky SES region to still
  * leave the user with a working push.
  *
- * DND policy:
- *   - Inside DND, email + SMS are suppressed (they wake people up loudly).
- *   - Push is NOT suppressed — the OS already manages quiet hours better than
- *     we can, and both push transports respect the OS setting.
+ * DND policy: inside the recipient's quiet hours EVERY channel is suppressed —
+ * browser/device push, email and SMS alike — so the setting means one thing
+ * everywhere (owner decision on #343, 2026-09-17).
+ *
+ * Push used to be exempt, on the theory that "the OS already manages quiet
+ * hours better than we can". That is not reliably true of desktop Web Push,
+ * and #682 measured what it cost: with an hourly scan and a per-local-day
+ * reminder slot, a browser-only recipient with quiet hours 22:00→07:00 was
+ * pushed at about 00:05, every time. A suppressed push is reported as
+ * `suppressed`, like the loud channels, so callers that retry (the reminder
+ * scan, pest alerts) deliver it once the window ends.
  *
  * The `browser` channel covers BOTH push transports: web push to browsers
  * that hold a subscription, and FCM to the native shells' device tokens. One
@@ -296,7 +302,9 @@ export async function sendToUser(
   // subscription reads, VAPID configuration, and stale-subscription cleanup
   // are all external failure points; none may prevent email/SMS from running.
   const work: Promise<void>[] = [];
-  if (requested.has('browser') && prefs.browser) {
+  if (requested.has('browser') && prefs.browser && inDnd) {
+    channels.browser = 'suppressed';
+  } else if (requested.has('browser') && prefs.browser) {
     channels.browser = 'failed';
     const pushPayload = { ...payload, body: compactBody(payload) };
     work.push(
@@ -398,9 +406,8 @@ export async function sendToUser(
   await Promise.all(work);
   const delivered = Object.values(channels).includes('delivered');
 
-  // DND-suppressed-only: the user wants email/SMS, nothing actually went out,
-  // and DND is the cause. (`delivered` already covers browser push delivering
-  // during DND.)
+  // DND-suppressed-only: the user wants at least one channel, nothing
+  // actually went out, and DND is the cause.
   const dndSuppressedOnly = !delivered && Object.values(channels).includes('suppressed');
   return { delivered, dndSuppressedOnly, channels };
 }

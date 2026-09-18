@@ -9,10 +9,10 @@
  *
  *   1. `member_joined`  — the invite you sent was accepted (services/inviteEmail.ts
  *                         sends the invite; this closes the loop).
- *   2. `up_for_grabs`   — upcoming tasks nobody has claimed, scoped strictly
- *                         OUTSIDE the daily reminder's 24-hour window so the
- *                         two can never name the same task on the same day
- *                         (see REMINDER_DUE_WINDOW_MS). Unclaimed work is the
+ *   2. `up_for_grabs`   — upcoming tasks nobody has claimed, scoped to more
+ *                         than 24 hours out, past anything the daily reminder
+ *                         names that day (see REMINDER_DUE_WINDOW_MS).
+ *                         Unclaimed work is the
  *                         bystander-effect shape the product exists to
  *                         prevent; this is the half of it nobody is being told
  *                         about at all.
@@ -98,31 +98,43 @@ const QUEUE_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 const QUEUE_TTL_SECONDS = 4 * 24 * 60 * 60;
 
 /**
- * The daily reminder's due window (`reminders.DUE_WINDOW_MS`), duplicated here
- * as the boundary that keeps the two emails disjoint.
+ * The near edge of this email: the boundary that keeps it disjoint from the
+ * daily reminder.
  *
- * `remindHousehold` queries `nextDue <= now + 24h`, which includes *everything*
- * already overdue, and #427 gives that email an explicit "Up for grabs" section
- * for the unclaimed rows in it. So a dedicated email about unclaimed overdue
- * tasks would be pure duplication: every recipient would get the same task
- * named twice on the same morning.
+ * The reminder names every task due TODAY in its recipient's zone, plus
+ * *everything* already overdue (#343; `reminders.isDueByEndOfLocalDay`), and
+ * #427 gives that email an explicit "Up for grabs" section for the unclaimed
+ * rows in it. So a dedicated email about unclaimed overdue tasks would be pure
+ * duplication: every recipient would get the same task named twice on the same
+ * morning.
  *
  * This email therefore takes the other side of the line — unclaimed tasks the
- * reminder is *not* mentioning at all, because they are not due yet. That is
- * the long tail nobody is being told about, and it is the more on-thesis half:
- * asking for a hand before anything is late is the anti-nag version of the ask.
+ * reminder is *not* mentioning, because they are not due yet. That is the long
+ * tail nobody is being told about, and it is the more on-thesis half: asking
+ * for a hand before anything is late is the anti-nag version of the ask.
  *
- * Change this one constant and the two overlap; nothing else encodes the split.
+ * Why 24 hours, when the reminder's own edge is the end of a local day: this
+ * email is household-level and has no zone to find that day in (#342). The end
+ * of a recipient's today is at most 24 hours away on every ordinary day, so
+ * nothing this email names can be in that day's reminder too. (The one
+ * exception is the first hour of a 25-hour fall-back day, when a task due in
+ * its last hour can be in both.) And nothing falls between them: a task
+ * inside 24 hours that is not due today is due tomorrow, and the reminder
+ * names it then, on its own due day.
+ *
+ * It used to be a copy of the reminder's rolling 24-hour window, and the two
+ * had to be kept equal by hand. Since #343 they are two different rules and
+ * only this one is a constant; changing it moves only this email.
  */
 const REMINDER_DUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /**
- * How far past the reminder's window this email looks.
+ * How far past `REMINDER_DUE_WINDOW_MS` this email looks.
  *
  * Deliberately equal to the send cadence (one per recipient per ISO week), so
  * the two surfaces hand off with no gap: a task further out than this is picked
  * up by a later weekly pass while still unclaimed, and one that crosses inside
  * `REMINDER_DUE_WINDOW_MS` before the next pass is picked up by the daily
- * reminder that morning. No unclaimed task can fall between them.
+ * reminder on its due day. No unclaimed task can fall between them.
  */
 const UP_FOR_GRABS_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1000;
 /** How many tasks the up-for-grabs email NAMES. It always states the real
@@ -710,9 +722,9 @@ export type UpForGrabsOutcome = 'queued' | 'none' | 'unknown';
  * Offer the household the upcoming tasks nobody has claimed.
  *
  * Scope is `REMINDER_DUE_WINDOW_MS < nextDue <= UP_FOR_GRABS_LOOKAHEAD_MS`:
- * strictly outside the daily reminder's window, so this email and the
- * reminder's own "Up for grabs" section can never name the same task on the
- * same day. See the constants for why the line is drawn there.
+ * past anything the daily reminder names today, so this email and the
+ * reminder's own "Up for grabs" section do not name the same task on the same
+ * day. See the constants for why the line is drawn there.
  *
  * `unknown` is a real outcome and not the same as `none`. `computePlantsAtRisk`
  * has the bug this avoids: it intersects overdue tasks against the active-plant
@@ -727,7 +739,7 @@ export async function upForGrabsHousehold(
   now: Date = new Date()
 ): Promise<UpForGrabsOutcome> {
   const lookahead = new Date(now.getTime() + UP_FOR_GRABS_LOOKAHEAD_MS).toISOString();
-  // The reminder owns everything at or inside its window, overdue included.
+  // The reminder owns everything due today or overdue; see the constant.
   const reminderEdge = new Date(now.getTime() + REMINDER_DUE_WINDOW_MS).toISOString();
   const dueTasks = await taskService.getTasksDueBy(householdId, lookahead);
   const unassigned = dueTasks.filter((t) => !t.assignedTo && t.nextDue > reminderEdge);

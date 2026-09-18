@@ -198,8 +198,11 @@ describe('a household with no zone set keeps today’s behaviour, exactly (ADR 0
     }
   });
 
-  it('reproduces the reminder scan’s rolling 24h cutoff', () => {
-    // reminders.ts: `cutoff = new Date(now.getTime() + DUE_WINDOW_MS)`.
+  it('reproduces a rolling N×24h cutoff under the instant rule', () => {
+    // What the reminder scan's `cutoff = now + DUE_WINDOW_MS` was until #343.
+    // The scan no longer uses a rolling window (its day is each member's own
+    // zone, applied in memory), but the instant rule's cutoff is still the one
+    // every unset household's GSI reads are sized by.
     for (const iso of INSTANTS) {
       const now = new Date(iso);
       expect(dueWindowCutoff(now, 1, HOUSEHOLD_TIMEZONE_UNSET)).toBe(
