@@ -195,7 +195,7 @@ describe('apiKeyMiddleware', () => {
     expect((second as Partial<AuthenticatedEvent>).user?.householdId).toBe('hh-1');
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'throws 403 when the Greenhouse subscription is %s — an unpaid plan is not an entitled one',
     async (status) => {
       // The re-check on every use exists so a downgrade revokes an issued key

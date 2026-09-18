@@ -16,6 +16,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **A failed payment no longer costs a household its plan while the card is
+  being retried, and it ends in cancellation.** Until now the first declined
+  charge dropped the household to the free Seedling plan's limits at once, even
+  though Stripe keeps retrying the card for some time afterwards. The household
+  now keeps its plan and every paid feature while those automatic retries run.
+  If the last retry fails, Stripe cancels the subscription and the household
+  moves to the free plan's limits; nothing is deleted. Paying — or updating the
+  card so a retry succeeds — restores everything at once. Plans bought
+  outright and running gifts are unaffected either way. The banner, Settings →
+  Plan status, the Terms of Service ("Automatic renewal") and the payment-failed
+  email all say this plainly, in English and Spanish. No number of days is
+  stated: the window is the retry schedule set in Stripe. **Deploy note, for the
+  owner:** this depends on two Stripe Dashboard settings that nothing in this
+  repository can read, the retry schedule and "Cancel the subscription" as what
+  happens after the last retry (never "leave the subscription past-due", which
+  would keep paid access with no payment). Set them before this ships: the
+  checklist is in `docs/billing.md`. (#593)
+
 ### Added
 
 - **The data export now lists what it holds, so a restore can tell a whole file
@@ -555,12 +575,13 @@ through 0.36.0.
   Deploy note: one new route in `local.routes`, applied by this release's tag.
 
 - **A failed payment is now stated on every screen, not only in Settings.**
-  When Stripe reports a household's subscription as unpaid, the household's
-  caps drop at once (there is no grace period), and until now the only place
-  in the app that said so was Settings → Plan status — so most households
-  found out from a refused "add plant". A banner in the app frame now says the
-  payment failed, what changed, and links to Settings → Plan status to fix
-  it. It disappears as soon as Stripe reports the subscription paid again,
+  Until now the only place in the app that said a payment had failed was
+  Settings → Plan status — so most households found out from a refused "add
+  plant". A banner in the app frame now says the payment failed, what it means
+  right now (the plan is kept while the card is retried; if the last retry
+  fails, the subscription is canceled and the free plan's limits apply), and
+  links to Settings → Plan status to fix it. It disappears as soon as Stripe
+  reports the subscription paid again,
   stays off the Plan status page that already carries the full notice and off
   the full-height chat screen, and inside the native apps points only at that
   in-app page, never at a payment step. (#593)

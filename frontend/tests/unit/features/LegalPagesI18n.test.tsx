@@ -44,8 +44,8 @@ const PAGES = [
     Page: TermsPage,
     en: 'Terms of Service',
     es: 'Términos del servicio',
-    effectiveEn: 'Effective September 12, 2026.',
-    effectiveEs: 'Vigente desde el 12 de septiembre de 2026.',
+    effectiveEn: 'Effective September 17, 2026.',
+    effectiveEs: 'Vigente desde el 17 de septiembre de 2026.',
   },
   {
     name: 'support',

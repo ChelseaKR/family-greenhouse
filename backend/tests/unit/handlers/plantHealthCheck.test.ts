@@ -189,12 +189,14 @@ describe('plants health-check handler', () => {
   });
 
   it('resolves the cap from ENTITLEMENT, so a failed card stops spending a paid allowance (#476)', async () => {
-    // Every scan is a real Bedrock invocation, and Stripe retries a failed
-    // charge for weeks before it cancels — so `planId` alone kept a household
-    // mid-dunning on the paid allowance for the whole dunning window.
+    // Every scan is a real Bedrock invocation, and `planId` stays on the paid
+    // tier until the subscription is deleted — so `planId` alone kept a
+    // household Stripe had given up on (`unpaid`) on the paid allowance. (While
+    // Stripe is still retrying, `past_due`, the paid allowance is kept on
+    // purpose: #593.)
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'greenhouse',
-      status: 'past_due',
+      status: 'unpaid',
     } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
     vi.mocked(leafHealthBudget.resolveMonthlyCap).mockImplementation(async (lookupPlanId) =>
       (await lookupPlanId()) === 'greenhouse' ? 400 : 200

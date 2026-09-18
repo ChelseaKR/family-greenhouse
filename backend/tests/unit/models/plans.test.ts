@@ -508,13 +508,43 @@ describe('getEntitledPlan — caps follow payment status, not just planId', () =
     expect(getEntitledPlan({ planId: 'garden', status: 'trialing' })).toBe(PLANS.garden);
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'incomplete_expired', 'paused', 'canceled'])(
+  it('keeps the paid plan while Stripe retries a failed payment (past_due, #593)', () => {
+    // The owner's decision on #593: a failed payment does not cost the
+    // household its plan while Stripe's automatic retries run. The window is
+    // exactly as long as Stripe keeps the subscription past_due.
+    expect(getEntitledPlan({ planId: 'greenhouse', status: 'past_due' })).toBe(PLANS.greenhouse);
+    expect(getEntitledPlan({ planId: 'garden', status: 'past_due' })).toBe(PLANS.garden);
+    const freePlants = limitOf(PLANS.seedling, 'plants') as number;
+    expect(
+      atCap(
+        freePlants,
+        limitOf(getEntitledPlan({ planId: 'garden', status: 'past_due' }), 'plants')
+      )
+    ).toBe(false);
+  });
+
+  it('restores the paid plan the moment a lapsed subscription is paid again', () => {
+    // Recovery is not a separate code path: the webhook writes the new status
+    // and entitlement is a pure function of it. past_due -> unpaid -> active.
+    const lifecycle: Array<[string, typeof PLANS.garden]> = [
+      ['trialing', PLANS.garden],
+      ['past_due', PLANS.garden],
+      ['unpaid', PLANS.seedling],
+      ['active', PLANS.garden],
+    ];
+    for (const [status, expected] of lifecycle) {
+      expect(getEntitledPlan({ planId: 'garden', status }), status).toBe(expected);
+    }
+  });
+
+  it.each(['unpaid', 'incomplete', 'incomplete_expired', 'paused', 'canceled'])(
     'falls back to Seedling caps when the subscription is %s',
     (status) => {
-      // The defect this pins: a household that has stopped paying kept full
-      // paid caps for the whole of Stripe's dunning cycle, because caps were
-      // resolved from planId alone. There is no published grace period, so
-      // entitlement ends when good standing does.
+      // The defect this pins: a household whose payment has lapsed kept full
+      // paid caps until Stripe finally reset planId, because caps were
+      // resolved from planId alone. `unpaid`, `canceled` and
+      // `incomplete_expired` are Stripe giving up after its retries;
+      // `incomplete` never paid at all; `paused` is not being billed.
       const plan = getEntitledPlan({ planId: 'greenhouse', status });
       expect(plan).toBe(PLANS.seedling);
 
@@ -565,10 +595,14 @@ describe('getEntitledPlan — caps follow payment status, not just planId', () =
     expect(
       getEntitledPlan({ planId: 'greenhouse', status: 'active', lifetimePlanId: 'garden' })
     ).toBe(PLANS.greenhouse);
-    // ...and an unpaid higher subscription drops to the floor, not past it.
+    // ...an unpaid higher subscription drops to the floor, not past it...
+    expect(
+      getEntitledPlan({ planId: 'greenhouse', status: 'unpaid', lifetimePlanId: 'garden' })
+    ).toBe(PLANS.garden);
+    // ...and one still in the retry window keeps its own, higher tier.
     expect(
       getEntitledPlan({ planId: 'greenhouse', status: 'past_due', lifetimePlanId: 'garden' })
-    ).toBe(PLANS.garden);
+    ).toBe(PLANS.greenhouse);
   });
 
   it('never resolves an unknown planId above the free tier', () => {
@@ -582,14 +616,14 @@ describe('getEntitledPlanForIssuedGrant — starting vs continuing (#476)', () =
     // The whole point of the pair: the same subscription answers the two
     // questions differently. A sitter link already in someone's hands keeps
     // the Away Kit; minting a new one does not.
-    for (const status of ['past_due', 'unpaid', 'incomplete', 'paused']) {
+    for (const status of ['unpaid', 'incomplete', 'paused']) {
       expect(getEntitledPlanForIssuedGrant({ planId: 'garden', status })).toBe(PLANS.garden);
       expect(getEntitledPlan({ planId: 'garden', status })).toBe(PLANS.seedling);
     }
   });
 
   it('agrees with getEntitledPlan whenever the subscription is in good standing', () => {
-    for (const status of ['active', 'trialing', undefined, null, '']) {
+    for (const status of ['active', 'trialing', 'past_due', undefined, null, '']) {
       const sub = { planId: 'greenhouse', status };
       expect(getEntitledPlanForIssuedGrant(sub)).toBe(getEntitledPlan(sub));
       expect(getEntitledPlanForIssuedGrant(sub)).toBe(PLANS.greenhouse);
@@ -623,11 +657,19 @@ describe('getEntitledPlanForIssuedGrant — starting vs continuing (#476)', () =
 });
 
 describe('entitlementIsCurrent', () => {
-  it('admits exactly active and trialing', () => {
+  it('admits exactly active, trialing and past_due (the retry window, #593)', () => {
     expect(entitlementIsCurrent('active')).toBe(true);
     expect(entitlementIsCurrent('trialing')).toBe(true);
-    expect(entitlementIsCurrent('past_due')).toBe(false);
-    expect(entitlementIsCurrent('unpaid')).toBe(false);
-    expect(entitlementIsCurrent('incomplete')).toBe(false);
+    expect(entitlementIsCurrent('past_due')).toBe(true);
+    for (const status of [
+      'unpaid',
+      'canceled',
+      'incomplete_expired',
+      'incomplete',
+      'paused',
+      'something_new_from_stripe',
+    ]) {
+      expect(entitlementIsCurrent(status), status).toBe(false);
+    }
   });
 });

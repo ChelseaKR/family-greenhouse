@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  UNPAID_SUBSCRIPTION_STATUSES,
+  PAYMENT_LAPSED_STATUSES,
+  PAYMENT_RETRYING_STATUSES,
   isPaymentFailing,
-  paymentFailedBodyKey,
+  isPaymentLapsed,
+  paymentFailedCopy,
+  paymentFailureStage,
   planWhilePaymentFails,
 } from '@/features/billing/paymentFailing';
 import type { SubscriptionState } from '@/services/billingService';
@@ -14,34 +17,43 @@ const sub = (overrides: Partial<SubscriptionState>): SubscriptionState => ({
   ...overrides,
 });
 
-describe('isPaymentFailing', () => {
-  it.each(['past_due', 'unpaid', 'incomplete', 'incomplete_expired'])(
-    'is true for the unpaid status %s',
+describe('paymentFailureStage', () => {
+  it('calls past_due the retry window — the household keeps its plan (#593)', () => {
+    expect(paymentFailureStage(sub({ status: 'past_due' }))).toBe('retrying');
+    expect(isPaymentFailing(sub({ status: 'past_due' }))).toBe(true);
+    expect(isPaymentLapsed(sub({ status: 'past_due' }))).toBe(false);
+  });
+
+  it.each(['unpaid', 'incomplete', 'incomplete_expired'])(
+    'calls %s lapsed — the caps have dropped',
     (status) => {
+      expect(paymentFailureStage(sub({ status }))).toBe('lapsed');
       expect(isPaymentFailing(sub({ status }))).toBe(true);
+      expect(isPaymentLapsed(sub({ status }))).toBe(true);
     }
   );
 
-  it.each(['active', 'trialing', 'paused', 'canceled'])('is false for %s', (status) => {
+  it.each(['active', 'trialing', 'paused', 'canceled'])('has nothing to say for %s', (status) => {
     // `active`/`trialing` are paid; `paused` is deliberate, not a failure;
-    // `canceled` is the end of dunning, not a card the household can still fix.
+    // `canceled` is the end of the subscription, not a card to fix.
+    expect(paymentFailureStage(sub({ status }))).toBeNull();
     expect(isPaymentFailing(sub({ status }))).toBe(false);
   });
 
   it('never reads an absent status, or no subscription at all, as a failed payment', () => {
-    // checkout.session.completed records the subscription id before any status
-    // arrives; that window is not dunning.
-    expect(isPaymentFailing(sub({}))).toBe(false);
-    expect(isPaymentFailing(sub({ status: '' }))).toBe(false);
-    expect(isPaymentFailing(undefined)).toBe(false);
-    expect(isPaymentFailing(null)).toBe(false);
+    expect(paymentFailureStage(sub({}))).toBeNull();
+    expect(paymentFailureStage(sub({ status: '' }))).toBeNull();
+    expect(paymentFailureStage(undefined)).toBeNull();
+    expect(paymentFailureStage(null)).toBeNull();
   });
 
-  it('is the exact complement of what the server entitles, among real Stripe statuses', () => {
-    // backend/src/models/plans.ts ENTITLED_SUBSCRIPTION_STATUSES = active, trialing.
-    // Everything Stripe can report is either entitled, unpaid, or one of the two
-    // deliberate exclusions — nothing falls through unclassified.
-    const stripeStatuses = [
+  it('mirrors the server: retrying is entitled, lapsed is not, and nothing is both', () => {
+    // backend/src/models/plans.ts ENTITLED_SUBSCRIPTION_STATUSES =
+    // active, trialing, past_due. Every status Stripe can report lands in
+    // exactly one class, so no status falls through unclassified.
+    const entitled = new Set(['active', 'trialing', 'past_due']);
+    const excluded = new Set(['paused', 'canceled']);
+    for (const status of [
       'active',
       'trialing',
       'past_due',
@@ -50,30 +62,28 @@ describe('isPaymentFailing', () => {
       'incomplete_expired',
       'paused',
       'canceled',
-    ];
-    const entitled = new Set(['active', 'trialing']);
-    const excluded = new Set(['paused', 'canceled']);
-    for (const status of stripeStatuses) {
-      const classes = [
-        entitled.has(status),
-        UNPAID_SUBSCRIPTION_STATUSES.has(status),
-        excluded.has(status),
-      ].filter(Boolean);
-      expect(classes, status).toHaveLength(1);
+    ]) {
+      const lapsed = PAYMENT_LAPSED_STATUSES.has(status);
+      expect(
+        [entitled.has(status), lapsed, excluded.has(status)].filter(Boolean),
+        status
+      ).toHaveLength(1);
+      // The retry window is the one failure the server still entitles.
+      if (PAYMENT_RETRYING_STATUSES.has(status)) expect(entitled.has(status), status).toBe(true);
     }
   });
 });
 
-describe('planWhilePaymentFails', () => {
+describe('planWhilePaymentFails (the lapsed stage)', () => {
   it('falls to Seedling when nothing sits underneath the subscription', () => {
-    expect(planWhilePaymentFails(sub({ status: 'past_due' }))).toBe('seedling');
+    expect(planWhilePaymentFails(sub({ status: 'unpaid' }))).toBe('seedling');
     expect(planWhilePaymentFails(undefined)).toBe('seedling');
   });
 
   it('keeps a tier bought outright — the lifetime floor a declined card cannot remove', () => {
     expect(
       planWhilePaymentFails(
-        sub({ planId: 'greenhouse', status: 'past_due', lifetimePlanId: 'garden' })
+        sub({ planId: 'greenhouse', status: 'unpaid', lifetimePlanId: 'garden' })
       )
     ).toBe('garden');
   });
@@ -91,27 +101,37 @@ describe('planWhilePaymentFails', () => {
       )
     ).toBe('seedling');
   });
-
-  it('takes the higher of a lifetime tier and a gift', () => {
-    expect(
-      planWhilePaymentFails(
-        sub({
-          status: 'past_due',
-          lifetimePlanId: 'garden',
-          gift: { planId: 'greenhouse', endsAt: '2027-01-01T00:00:00.000Z', state: 'active' },
-        })
-      )
-    ).toBe('greenhouse');
-  });
 });
 
-describe('paymentFailedBodyKey', () => {
-  it('names the free plan only when the household actually falls to it', () => {
-    expect(paymentFailedBodyKey(sub({ status: 'past_due' }))).toBe(
+describe('paymentFailedCopy', () => {
+  it('says the plan is kept while Stripe retries, naming it when the catalog can', () => {
+    expect(paymentFailedCopy(sub({ status: 'past_due' }), 'Garden')).toEqual({
+      titleKey: 'settings.billing.paymentRetryingTitle',
+      bodyKey: 'settings.billing.paymentRetryingBody',
+      values: { plan: 'Garden' },
+    });
+  });
+
+  it('names no plan while retrying when the catalog could not name it', () => {
+    expect(paymentFailedCopy(sub({ status: 'past_due' }), null)?.bodyKey).toBe(
+      'settings.billing.paymentRetryingBodyNoPlan'
+    );
+  });
+
+  it('never uses the retrying sentence once the payment has lapsed, and vice versa', () => {
+    expect(paymentFailedCopy(sub({ status: 'unpaid' }), 'Garden')?.bodyKey).toBe(
       'settings.billing.paymentFailedBody'
     );
-    expect(paymentFailedBodyKey(sub({ status: 'past_due', lifetimePlanId: 'garden' }))).toBe(
-      'settings.billing.paymentFailedBodyOwned'
-    );
+    expect(
+      paymentFailedCopy(sub({ status: 'unpaid', lifetimePlanId: 'garden' }), 'Garden')?.bodyKey
+    ).toBe('settings.billing.paymentFailedBodyOwned');
+    expect(
+      paymentFailedCopy(sub({ status: 'past_due', lifetimePlanId: 'garden' }), 'Garden')?.bodyKey
+    ).toBe('settings.billing.paymentRetryingBody');
+  });
+
+  it('is null when there is no failed payment', () => {
+    expect(paymentFailedCopy(sub({ status: 'active' }), 'Garden')).toBeNull();
+    expect(paymentFailedCopy(undefined, 'Garden')).toBeNull();
   });
 });

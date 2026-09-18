@@ -650,11 +650,11 @@ const addedComparison = added.filter((f) => f.callee === PLAN_ID_COMPARISON);
 if (addedRow.length > 0) {
   console.error(
     'A paid-feature decision resolved from the plan ROW rather than from ENTITLEMENT.\n' +
-      '`planId` says which tier a household is ON, not whether it is PAYING. Stripe does\n' +
-      'not cancel on a failed charge — it retries for weeks — so a past_due household\n' +
-      'keeps everything resolved this way for the whole dunning window, and a household\n' +
-      'that bought a tier outright loses it when an unrelated subscription is cancelled\n' +
-      '(the lifetime floor). See #364, #476 and docs/billing.md.\n'
+      '`planId` says which tier a household is ON, not whether it is PAYING. It stays on\n' +
+      'the paid tier through every failed-payment state until the subscription is deleted,\n' +
+      'so a household Stripe has given up on (unpaid) keeps everything resolved this way,\n' +
+      'and a household that bought a tier outright loses it when an unrelated subscription\n' +
+      'is canceled (the lifetime floor). See #364, #476, #593 and docs/billing.md.\n'
   );
   for (const f of addedRow) {
     console.error(`  - ${f.key}  (line ${f.line}: ${f.callee}(${f.arg}))`);
