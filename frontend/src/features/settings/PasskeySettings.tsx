@@ -11,13 +11,13 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { getErrorMessage } from '@/services/api';
 import { securityService, type PasskeySummary } from '@/services/securityService';
-import { createPasskey, isCeremonyCancelled } from '@/lib/webauthn';
+import { createPasskey, isCeremonyCanceled } from '@/lib/webauthn';
 import { normalizeCode, readMfaErrorCode } from '@/features/auth/signInFlow';
 
 const LIST_KEY = ['passkeys'] as const;
 
 function passkeyErrorMessage(error: unknown, t: TFunction): string {
-  if (isCeremonyCancelled(error)) return t('security.passkeys.cancelled');
+  if (isCeremonyCanceled(error)) return t('security.passkeys.canceled');
   switch (readMfaErrorCode(error)) {
     case 'REAUTH_FAILED':
       return t('security.totp.wrongPassword');

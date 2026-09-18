@@ -252,9 +252,9 @@ describe('Passkeys card — list, add, remove', () => {
     expect(sent.start).toEqual([{ password: 'Password1234', code: '123456' }]);
   });
 
-  it('a cancelled browser sheet is named as such, and nothing is sent to finish', async () => {
+  it('a canceled browser sheet is named as such, and nothing is sent to finish', async () => {
     installWebAuthn();
-    create.mockRejectedValue(new DOMException('The operation was cancelled', 'NotAllowedError'));
+    create.mockRejectedValue(new DOMException('The operation was canceled', 'NotAllowedError'));
     const sent = passkeyServer();
     const user = userEvent.setup();
     renderSecurity();
@@ -263,7 +263,7 @@ describe('Passkeys card — list, add, remove', () => {
     await user.type(screen.getByLabelText(/current password/i), 'Password1234');
     await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
-    expect(await screen.findByText(/passkey creation was cancelled/i)).toBeInTheDocument();
+    expect(await screen.findByText(/passkey creation was canceled/i)).toBeInTheDocument();
     expect(sent.finish).toHaveLength(0);
   });
 

@@ -144,7 +144,7 @@ export async function getPasskeyAssertion(options: Json): Promise<Json> {
 }
 
 /** The person closed or declined the browser's passkey sheet. */
-export function isCeremonyCancelled(error: unknown): boolean {
+export function isCeremonyCanceled(error: unknown): boolean {
   return (
     error instanceof DOMException &&
     (error.name === 'NotAllowedError' || error.name === 'AbortError')

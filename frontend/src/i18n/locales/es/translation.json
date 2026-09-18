@@ -380,7 +380,7 @@
     "passkey": {
       "use": "Usar una llave de acceso",
       "or": "o",
-      "cancelled": "Se ha cancelado el inicio de sesión con llave de acceso.",
+      "canceled": "Se ha cancelado el inicio de sesión con llave de acceso.",
       "noPasskey": "Esta cuenta todavía no tiene ninguna llave de acceso. Inicia sesión con tu contraseña y añade una en Ajustes → Seguridad.",
       "rejected": "Esa llave de acceso no ha funcionado. Vuelve a intentarlo o inicia sesión con tu contraseña.",
       "expired": "Ha pasado demasiado tiempo. Vuelve a probar con la llave de acceso."
@@ -1613,7 +1613,7 @@
       "kindDevice": "En un dispositivo",
       "kindKey": "Llave de seguridad",
       "addedOn": "Añadida el {{date}}",
-      "cancelled": "Se ha cancelado la creación de la llave de acceso.",
+      "canceled": "Se ha cancelado la creación de la llave de acceso.",
       "codeRequired": "Introduce también un código de tu app de autenticación.",
       "expired": "Ha pasado demasiado tiempo. Vuelve a intentar añadir la llave de acceso.",
       "rejected": "No se ha podido añadir esa llave de acceso. Vuelve a intentarlo o usa otro dispositivo."

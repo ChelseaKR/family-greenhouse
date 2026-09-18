@@ -12,7 +12,7 @@ import {
   type AuthResponse,
   type LoginCredentials,
 } from '@/services/authService';
-import { getPasskeyAssertion, isCeremonyCancelled, passkeysUsableHere } from '@/lib/webauthn';
+import { getPasskeyAssertion, isCeremonyCanceled, passkeysUsableHere } from '@/lib/webauthn';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -63,17 +63,17 @@ export function LoginPage() {
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   useEffect(() => {
     if (!passkeysUsableHere()) return;
-    let cancelled = false;
+    let canceled = false;
     authService
       .passkeysAvailable()
       .then((available) => {
-        if (!cancelled) setPasskeysOffered(available);
+        if (!canceled) setPasskeysOffered(available);
       })
       .catch(() => {
-        if (!cancelled) setPasskeysOffered(false);
+        if (!canceled) setPasskeysOffered(false);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -181,7 +181,7 @@ export function LoginPage() {
         finishSignIn(result);
       }
     } catch (err) {
-      setError(isCeremonyCancelled(err) ? t('auth.passkey.cancelled') : signInErrorMessage(err, t));
+      setError(isCeremonyCanceled(err) ? t('auth.passkey.canceled') : signInErrorMessage(err, t));
     } finally {
       setPasskeyLoading(false);
     }

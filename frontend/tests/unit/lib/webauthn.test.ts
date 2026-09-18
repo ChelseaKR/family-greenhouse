@@ -3,7 +3,7 @@ import {
   assertionToJson,
   base64urlToBuffer,
   bufferToBase64url,
-  isCeremonyCancelled,
+  isCeremonyCanceled,
   passkeysUsableHere,
   registrationToJson,
   toCreationOptions,
@@ -151,10 +151,10 @@ describe('where passkeys can run', () => {
     expect(passkeysUsableHere()).toBe(false);
   });
 
-  it('a closed or declined passkey sheet reads as cancelled; other errors do not', () => {
-    expect(isCeremonyCancelled(new DOMException('x', 'NotAllowedError'))).toBe(true);
-    expect(isCeremonyCancelled(new DOMException('x', 'AbortError'))).toBe(true);
-    expect(isCeremonyCancelled(new DOMException('x', 'SecurityError'))).toBe(false);
-    expect(isCeremonyCancelled(new Error('NotAllowedError'))).toBe(false);
+  it('a closed or declined passkey sheet reads as canceled; other errors do not', () => {
+    expect(isCeremonyCanceled(new DOMException('x', 'NotAllowedError'))).toBe(true);
+    expect(isCeremonyCanceled(new DOMException('x', 'AbortError'))).toBe(true);
+    expect(isCeremonyCanceled(new DOMException('x', 'SecurityError'))).toBe(false);
+    expect(isCeremonyCanceled(new Error('NotAllowedError'))).toBe(false);
   });
 });
