@@ -143,7 +143,7 @@ test.describe('A11y — authenticated routes', () => {
     await expectNoA11yViolations(page, 'settings-preferences');
   });
 
-  for (const section of ['notifications', 'api-keys', 'account'] as const) {
+  for (const section of ['notifications', 'api-keys', 'account', 'security'] as const) {
     test(`settings → ${section}`, async ({ page }) => {
       await page.goto(`/settings?section=${section}`);
       await page.waitForLoadState('networkidle');

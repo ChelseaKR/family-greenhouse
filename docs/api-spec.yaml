@@ -944,6 +944,121 @@ paths:
                   email: { type: string }
                   name: { type: string }
 
+  # --- Two-step verification (#671) ---
+  # Cognito software-token MFA. The secret is generated and stored by Cognito;
+  # it crosses this API once, in the setup response (Cache-Control: no-store).
+  # Coded refusals carry `details.code`: REAUTH_FAILED, INVALID_CODE,
+  # MFA_SESSION_EXPIRED, TOTP_ALREADY_ENABLED, TOTP_SETUP_NOT_STARTED,
+  # UNSUPPORTED_CHALLENGE. `POST /auth/login` answers an account with an
+  # authenticator on with `{ challenge: SOFTWARE_TOKEN_MFA, session, username }`
+  # in place of tokens.
+  /auth/login/mfa:
+    post:
+      summary: Second sign-in step — answer the authenticator-code challenge
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, session, code]
+              properties:
+                username:
+                  { type: string, description: 'The `username` from the challenge, echoed back' }
+                session: { type: string, maxLength: 4096 }
+                code: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200':
+          description: Signed in — the same body as a password-only POST /auth/login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/mfa:
+    get:
+      summary: Which sign-in factors are on for the caller
+      tags: [Auth]
+      responses:
+        '200':
+          description: Factor status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totp:
+                    type: object
+                    properties:
+                      enabled: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/mfa/totp/setup:
+    post:
+      summary: Start authenticator-app setup (re-authenticates with the password; needs X-Cognito-Access-Token)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: The base32 secret for the QR code and manual entry. Not stored by the app.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secretCode: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/mfa/totp/verify:
+    post:
+      summary: Confirm the authenticator with its first code and turn two-step verification on (needs X-Cognito-Access-Token)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200':
+          description: Two-step verification is on
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/mfa/totp/disable:
+    post:
+      summary: Turn two-step verification off (re-authenticates with the password and a current code)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password: { type: string }
+                code: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200':
+          description: Two-step verification is off
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # --- Me ---
   /me:
     delete:

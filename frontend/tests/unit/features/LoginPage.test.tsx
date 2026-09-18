@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -97,5 +98,128 @@ describe('LoginPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(/invalid credentials/i);
     });
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+});
+
+describe('LoginPage — two-step verification (#671)', () => {
+  const API = 'http://localhost:4000';
+
+  /**
+   * A mock of the Cognito-backed contract: every password sign-in answers
+   * with a NEW challenge session, and only `123456` against a live session
+   * signs in. Sessions are spent by a failed attempt, as Cognito may do.
+   */
+  function mfaServer() {
+    let issued = 0;
+    const live = new Set<string>();
+    const logins: string[] = [];
+    const answers: Array<{ session: string; code: string }> = [];
+    server.use(
+      http.post(`${API}/auth/login`, async ({ request }) => {
+        const body = (await request.json()) as { password: string };
+        if (body.password !== 'password123') {
+          return HttpResponse.json({ message: 'Invalid email or password' }, { status: 401 });
+        }
+        const session = `s-${++issued}`;
+        live.add(session);
+        logins.push(session);
+        return HttpResponse.json({ challenge: 'SOFTWARE_TOKEN_MFA', session, username: 'u1' });
+      }),
+      http.post(`${API}/auth/login/mfa`, async ({ request }) => {
+        const body = (await request.json()) as { session: string; code: string };
+        answers.push(body);
+        const wasLive = live.delete(body.session);
+        if (!wasLive) {
+          return HttpResponse.json(
+            { message: 'expired', details: { code: 'MFA_SESSION_EXPIRED' } },
+            { status: 401 }
+          );
+        }
+        if (body.code !== '123456') {
+          return HttpResponse.json(
+            { message: 'mismatch', details: { code: 'INVALID_CODE' } },
+            { status: 400 }
+          );
+        }
+        return HttpResponse.json({
+          user: {
+            id: 'u1',
+            email: 'test@example.com',
+            name: 'Test',
+            householdId: 'hh-1',
+            householdRole: 'admin',
+          },
+          idToken: 'id-mfa',
+          accessToken: 'access-mfa',
+          refreshToken: 'refresh-mfa',
+        });
+      })
+    );
+    return { logins, answers };
+  }
+
+  async function passPasswordStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    return screen.findByRole('heading', { name: /two-step verification/i });
+  }
+
+  it('asks for the code instead of signing in, and focuses the code field', async () => {
+    const calls = mfaServer();
+    const user = userEvent.setup();
+    renderLogin();
+    await passPasswordStep(user);
+
+    const field = screen.getByLabelText(/authentication code/i);
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(field).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(calls.answers).toHaveLength(0);
+  });
+
+  it('a wrong code is refused, and the retry uses a fresh challenge and signs in', async () => {
+    const calls = mfaServer();
+    const user = userEvent.setup();
+    renderLogin();
+    await passPasswordStep(user);
+
+    await user.type(screen.getByLabelText(/authentication code/i), '000000');
+    await user.click(screen.getByRole('button', { name: /verify code/i }));
+    expect(await screen.findByText(/didn.t match/i)).toBeInTheDocument();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+
+    await user.type(screen.getByLabelText(/authentication code/i), '123 456');
+    await user.click(screen.getByRole('button', { name: /verify code/i }));
+    await screen.findByText('Dashboard Page');
+
+    // Second attempt ran against a NEW session, never the spent one.
+    expect(calls.logins).toEqual(['s-1', 's-2']);
+    expect(calls.answers.map((a) => a.session)).toEqual(['s-1', 's-2']);
+    expect(calls.answers[1].code).toBe('123456');
+    expect(useAuthStore.getState().accessToken).toBe('access-mfa');
+  });
+
+  it('rejects a malformed code without a request', async () => {
+    const calls = mfaServer();
+    const user = userEvent.setup();
+    renderLogin();
+    await passPasswordStep(user);
+
+    await user.type(screen.getByLabelText(/authentication code/i), '12ab');
+    await user.click(screen.getByRole('button', { name: /verify code/i }));
+    expect(await screen.findByText(/enter the 6 digits/i)).toBeInTheDocument();
+    expect(calls.answers).toHaveLength(0);
+  });
+
+  it('"Start over" returns to the password step', async () => {
+    mfaServer();
+    const user = userEvent.setup();
+    renderLogin();
+    await passPasswordStep(user);
+
+    await user.click(screen.getByRole('button', { name: /start over/i }));
+    expect(await screen.findByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/authentication code/i)).not.toBeInTheDocument();
   });
 });

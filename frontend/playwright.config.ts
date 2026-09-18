@@ -77,7 +77,13 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'ALLOW_TEST_ACCOUNT_PROVISIONING=1 npm --workspace backend run dev',
+      // E2E_TOTP_SECRET_SEED pins the authenticator secret the mock issues
+      // (#671) so two-step-verification.spec.ts can compute codes from a known
+      // key; it must equal TOTP_SECRET_SEED in tests/e2e/totp.ts (not imported
+      // here: scripts/*.test.mjs loads this file with plain node). The mock
+      // ignores it without the fixture opt-in beside it.
+      command:
+        'ALLOW_TEST_ACCOUNT_PROVISIONING=1 E2E_TOTP_SECRET_SEED=TestSecretTestSecret npm --workspace backend run dev',
       url: 'http://localhost:4000/health',
       cwd: '..',
       reuseExistingServer: !process.env.CI,

@@ -5,7 +5,6 @@ import {
   InitiateAuthCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
-  GetUserCommand,
   ResendConfirmationCodeCommand,
   ChangePasswordCommand,
   UpdateUserAttributesCommand,
@@ -39,6 +38,8 @@ import { cognito, CLIENT_ID } from '../../utils/cognito.js';
 import { getUserName } from '../../services/cognitoUsers.js';
 import { recordSignup } from '../../services/signupConfirmRecord.js';
 import { successResponse, createdResponse } from '../../utils/response.js';
+import { challengeResponse, signedInResponse, verifiedCallerAccessToken } from './shared.js';
+import { disableTotp, getMfaStatus, loginMfa, startTotpSetup, verifyTotpSetup } from './mfa.js';
 import { audit } from '../../utils/auditLog.js';
 import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
 import type { LoggedEvent } from '../../middleware/logging.js';
@@ -196,45 +197,14 @@ export const login = createHandler(
         })
       );
 
+      // An account with an authenticator app on (#671) gets Cognito's
+      // SOFTWARE_TOKEN_MFA challenge here instead of tokens. The client
+      // answers it through POST /auth/login/mfa (handlers/auth/mfa.ts).
       if (!result.AuthenticationResult) {
-        throw createHttpError(500, 'Authentication failed');
+        return challengeResponse(result, validatedBody.email);
       }
 
-      // Get user details
-      const userResult = await cognito.send(
-        new GetUserCommand({
-          AccessToken: result.AuthenticationResult.AccessToken,
-        })
-      );
-
-      const attributes = userResult.UserAttributes || [];
-      const getAttribute = (name: string) => attributes.find((a) => a.Name === name)?.Value || null;
-
-      const user = {
-        id: getAttribute('sub'),
-        email: getAttribute('email'),
-        name: getAttribute('name'),
-        householdId: getAttribute('custom:household_id'),
-        householdRole: getAttribute('custom:household_role'),
-      };
-
-      audit('auth.login.success', {
-        actorId: user.id ?? undefined,
-        actorEmail: user.email ?? undefined,
-      });
-
-      // Two tokens. The ID token rides the Authorization header for all
-      // API calls — it's the only one that carries `custom:household_id`,
-      // which the requireHousehold middleware reads. The access token is
-      // for Cognito-direct calls (ChangePassword, UpdateUserAttributes)
-      // which reject ID tokens.
-      return successResponse({
-        user,
-        idToken: result.AuthenticationResult.IdToken,
-        accessToken: result.AuthenticationResult.AccessToken,
-        refreshToken: result.AuthenticationResult.RefreshToken,
-        expiresIn: result.AuthenticationResult.ExpiresIn,
-      });
+      return await signedInResponse(result.AuthenticationResult);
     } catch (error) {
       const name = (error as Error).name;
       if (name === 'NotAuthorizedException') {
@@ -385,34 +355,10 @@ export const updateProfile = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { validatedBody } = event as ValidatedEvent<UpdateProfileInput>;
     const ev = event as AuthenticatedEvent;
-    // Read the Cognito access token from a dedicated header so the
-    // Authorization header stays the ID token (which API Gateway's JWT
-    // authorizer validates + which authMiddleware reads custom claims from).
-    // Cognito ChangePassword + UpdateUserAttributes reject ID tokens.
-    const accessToken =
-      event.headers?.['x-cognito-access-token'] ?? event.headers?.['X-Cognito-Access-Token'];
-    if (typeof accessToken !== 'string' || accessToken.length === 0) {
-      throw createHttpError(401, 'Missing Cognito access token');
-    }
-
     // Verify the access token actually belongs to the authenticated caller
-    // before mutating attributes with it. Without this check, a caller could
-    // present THEIR ID token (passing authMiddleware) alongside someone
-    // else's access token and rewrite that other user's profile — and our
-    // DDB fan-out below would then run under the wrong identity.
-    let tokenSub: string | null;
-    try {
-      const tokenUser = await cognito.send(new GetUserCommand({ AccessToken: accessToken }));
-      tokenSub =
-        tokenUser.UserAttributes?.find((a) => a.Name === 'sub')?.Value ??
-        tokenUser.Username ??
-        null;
-    } catch {
-      throw createHttpError(401, 'Invalid Cognito access token');
-    }
-    if (!tokenSub || tokenSub !== ev.user?.userId) {
-      throw createHttpError(403, 'Access token does not match the authenticated user');
-    }
+    // before mutating attributes with it — otherwise our DDB fan-out below
+    // could run under the wrong identity (see verifiedCallerAccessToken).
+    const accessToken = await verifiedCallerAccessToken(event);
 
     await cognito.send(
       new UpdateUserAttributesCommand({
@@ -521,4 +467,10 @@ export const handler = createRouter({
   'POST /auth/change-password': changePassword,
   'GET /auth/me': getMe,
   'PATCH /auth/me': updateProfile,
+  // Two-step verification (#671) — handlers/auth/mfa.ts.
+  'POST /auth/login/mfa': loginMfa,
+  'GET /auth/mfa': getMfaStatus,
+  'POST /auth/mfa/totp/setup': startTotpSetup,
+  'POST /auth/mfa/totp/verify': verifyTotpSetup,
+  'POST /auth/mfa/totp/disable': disableTotp,
 });

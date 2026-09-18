@@ -13,6 +13,7 @@ import { TagPinSettings } from '@/features/tags/TagPinSettings';
 import { AccountSettings } from './AccountSettings';
 import { TrashSettings } from './TrashSettings';
 import { HouseholdChannelSettings } from './HouseholdChannelSettings';
+import { SecuritySettings } from './SecuritySettings';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
@@ -25,6 +26,7 @@ type Tab =
   | 'kiosk'
   | 'api-keys'
   | 'trash'
+  | 'security'
   | 'account';
 
 const TABS: Tab[] = [
@@ -36,6 +38,8 @@ const TABS: Tab[] = [
   'kiosk',
   'api-keys',
   'trash',
+  // Security sits before Account so Account stays the last tab (End key).
+  'security',
   'account',
 ];
 
@@ -49,6 +53,7 @@ const TAB_LABEL: Record<Tab, string> = {
   'api-keys': 'settings.tabs.apiKeys',
   trash: 'settings.tabs.trash',
   account: 'settings.tabs.account',
+  security: 'settings.tabs.security',
 };
 
 export function SettingsPage() {
@@ -162,6 +167,7 @@ export function SettingsPage() {
         {tab === 'api-keys' && <ApiKeysSettings />}
         {tab === 'trash' && <TrashSettings />}
         {tab === 'account' && <AccountSettings />}
+        {tab === 'security' && <SecuritySettings />}
       </div>
     </div>
   );

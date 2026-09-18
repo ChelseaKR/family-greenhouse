@@ -364,7 +364,19 @@
     "resendCode": "Reenviar código",
     "confirmationResent": "Enviamos un código de confirmación nuevo. Revisa tu correo.",
     "sending": "Enviando…",
-    "referredNotice": "Te han invitado a Family Greenhouse — crea tu cuenta y ambos recibirán un mes gratis de Garden."
+    "referredNotice": "Te han invitado a Family Greenhouse — crea tu cuenta y ambos recibirán un mes gratis de Garden.",
+    "mfa": {
+      "title": "Verificación en dos pasos",
+      "subtitle": "Introduce el código de tu app de autenticación para terminar de iniciar sesión.",
+      "codeLabel": "Código de verificación",
+      "codeHelper": "El código de 6 dígitos que muestra tu app de autenticación para Family Greenhouse.",
+      "verify": "Verificar código",
+      "back": "Empezar de nuevo",
+      "wrongCode": "Ese código no coincide. Espera al siguiente código de tu app y vuelve a intentarlo.",
+      "expired": "El inicio de sesión ha caducado. Vuelve a introducir tu correo y tu contraseña.",
+      "unsupported": "Esta cuenta necesita un paso de inicio de sesión que la app todavía no admite. Escribe a support@familygreenhouse.net y te ayudaremos.",
+      "lostDevice": "¿Has perdido tu app de autenticación? Escribe a support@familygreenhouse.net desde la dirección con la que inicias sesión."
+    }
   },
   "joinInvite": {
     "signInOrCreate": "Inicia sesión o crea una cuenta para aceptar esta invitación.",
@@ -1362,7 +1374,8 @@
       "account": "Cuenta",
       "help": "Ayuda",
       "plantTags": "Etiquetas",
-      "refer": "Recomendar a un amigo"
+      "refer": "Recomendar a un amigo",
+      "security": "Seguridad"
     },
     "preferences": {
       "title": "Preferencias",
@@ -1522,6 +1535,53 @@
       "statsEmpty": "Todavía no hay registros. Cuando alguien se una con tu enlace, aparecerá aquí.",
       "rowGranted": "Bonificación otorgada",
       "rowSkipped": "Sin bonificación — tu hogar ya tenía un plan o regalo activo cuando llegó esta recomendación"
+    }
+  },
+  "security": {
+    "totp": {
+      "title": "Verificación en dos pasos",
+      "description": "Pide un código de una app de autenticación, además de tu contraseña, al iniciar sesión. Aunque alguien descubra tu contraseña, no podrá entrar sin tu teléfono.",
+      "onSummary": "La verificación en dos pasos está activada. Cada vez que inicies sesión te pediremos un código de tu app de autenticación.",
+      "offSummary": "La verificación en dos pasos está desactivada. Para iniciar sesión solo se necesita tu contraseña.",
+      "loadFailed": "No hemos podido comprobar si la verificación en dos pasos está activada.",
+      "retry": "Reintentar",
+      "setUp": "Configurar una app de autenticación",
+      "passwordStepTitle": "Confirma que eres tú",
+      "passwordStepHelp": "Introduce tu contraseña actual para empezar a configurar la verificación en dos pasos.",
+      "currentPassword": "Contraseña actual",
+      "continue": "Continuar",
+      "cancel": "Cancelar",
+      "scanTitle": "Añade Family Greenhouse a tu app de autenticación",
+      "scanStep1": "Abre una app de autenticación, como Google Authenticator, Microsoft Authenticator, 1Password o el gestor de contraseñas integrado en tu teléfono.",
+      "scanStep2": "Escanea este código QR o escribe la clave de configuración.",
+      "scanStep3": "Introduce el código de 6 dígitos que muestra la app para Family Greenhouse.",
+      "nativeHint": "¿Lo estás configurando en este teléfono? Copia la clave de configuración y añádela en tu app de autenticación.",
+      "qrLabel": "Código QR para añadir Family Greenhouse a una app de autenticación",
+      "qrUnavailable": "No se ha podido dibujar el código QR. Escribe la clave de configuración.",
+      "manualKey": "Clave de configuración",
+      "manualKeyHelp": "¿No puedes escanearlo? Elige «introducir una clave» en tu app y escribe esta. Es una clave basada en el tiempo.",
+      "copyKey": "Copiar clave",
+      "copied": "Copiada",
+      "copyFailed": "No se pudo copiar automáticamente. Selecciona la clave y cópiala a mano.",
+      "codeLabel": "Código de 6 dígitos de la app",
+      "codeFormat": "Introduce los 6 dígitos de tu app de autenticación.",
+      "verify": "Activar la verificación en dos pasos",
+      "wrongPassword": "Esa contraseña no es correcta.",
+      "wrongCode": "Ese código no coincide. Comprueba que la entrada sea la de Family Greenhouse y prueba con el código más reciente.",
+      "alreadyOn": "La verificación en dos pasos ya está activada.",
+      "setupExpired": "La configuración se ha interrumpido. Introduce tu contraseña para empezar de nuevo.",
+      "enabledTitle": "La verificación en dos pasos está activada",
+      "enabledNotice": "La verificación en dos pasos está activada. Necesitarás tu app de autenticación la próxima vez que inicies sesión.",
+      "recoveryTitle": "Guarda una forma de volver a entrar",
+      "recovery1": "Guarda la clave de configuración en un lugar seguro, como tu gestor de contraseñas. Si pierdes el teléfono, añadirla a una nueva app de autenticación te permitirá volver a entrar.",
+      "recovery2": "Si tu app de autenticación puede hacer copias de seguridad o sincronizar los códigos, activa esa opción.",
+      "recovery3": "¿Has perdido el teléfono y la clave? Escribe a support@familygreenhouse.net desde la dirección con la que inicias sesión. Comprobaremos que eres tú antes de desactivar la verificación en dos pasos.",
+      "done": "Hecho",
+      "turnOff": "Desactivar la verificación en dos pasos",
+      "turnOffTitle": "Desactivar la verificación en dos pasos",
+      "turnOffHelp": "Confírmalo con tu contraseña y un código actual de tu app de autenticación. Después, para iniciar sesión solo se necesitará tu contraseña.",
+      "turnOffConfirm": "Desactivar",
+      "disabledNotice": "La verificación en dos pasos está desactivada."
     }
   },
   "notifications": {

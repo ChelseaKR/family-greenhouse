@@ -352,7 +352,19 @@
     "resendCode": "Resend code",
     "confirmationResent": "A new confirmation code was sent. Check your email.",
     "sending": "Sending…",
-    "referredNotice": "You've been invited to Family Greenhouse — create your account and you'll both get a free month of Garden."
+    "referredNotice": "You've been invited to Family Greenhouse — create your account and you'll both get a free month of Garden.",
+    "mfa": {
+      "title": "Two-step verification",
+      "subtitle": "Enter the code from your authenticator app to finish signing in.",
+      "codeLabel": "Authentication code",
+      "codeHelper": "The 6-digit code your authenticator app shows for Family Greenhouse.",
+      "verify": "Verify code",
+      "back": "Start over",
+      "wrongCode": "That code didn’t match. Wait for the next code in your app and try again.",
+      "expired": "Your sign-in timed out. Enter your email and password again.",
+      "unsupported": "This account needs a sign-in step the app can’t do yet. Email support@familygreenhouse.net and we’ll help.",
+      "lostDevice": "Lost your authenticator? Email support@familygreenhouse.net from the address you sign in with."
+    }
   },
   "joinInvite": {
     "signInOrCreate": "Please sign in or create an account to accept this invitation.",
@@ -1326,7 +1338,8 @@
       "account": "Account",
       "help": "Help",
       "plantTags": "Plant tags",
-      "refer": "Refer a friend"
+      "refer": "Refer a friend",
+      "security": "Security"
     },
     "preferences": {
       "title": "Preferences",
@@ -1486,6 +1499,53 @@
       "statsEmpty": "No signups yet. Once someone joins using your link, they'll show up here.",
       "rowGranted": "Bonus granted",
       "rowSkipped": "No bonus — your household already had an active plan or gift when this one landed"
+    }
+  },
+  "security": {
+    "totp": {
+      "title": "Two-step verification",
+      "description": "Ask for a code from an authenticator app as well as your password when you sign in. Someone who learns your password still can’t get in without your phone.",
+      "onSummary": "Two-step verification is on. You’ll be asked for a code from your authenticator app each time you sign in.",
+      "offSummary": "Two-step verification is off. Signing in needs only your password.",
+      "loadFailed": "We couldn’t check whether two-step verification is on.",
+      "retry": "Try again",
+      "setUp": "Set up an authenticator app",
+      "passwordStepTitle": "Confirm it’s you",
+      "passwordStepHelp": "Enter your current password to start setting up two-step verification.",
+      "currentPassword": "Current password",
+      "continue": "Continue",
+      "cancel": "Cancel",
+      "scanTitle": "Add Family Greenhouse to your authenticator app",
+      "scanStep1": "Open an authenticator app, such as Google Authenticator, Microsoft Authenticator, 1Password or your phone’s built-in password manager.",
+      "scanStep2": "Scan this QR code, or type in the setup key.",
+      "scanStep3": "Enter the 6-digit code the app shows for Family Greenhouse.",
+      "nativeHint": "Setting up on this phone? Copy the setup key and add it in your authenticator app.",
+      "qrLabel": "QR code for adding Family Greenhouse to an authenticator app",
+      "qrUnavailable": "The QR code couldn’t be drawn. Type in the setup key instead.",
+      "manualKey": "Setup key",
+      "manualKeyHelp": "Can’t scan? Choose “enter a setup key” in your app and type this in. It’s a time-based key.",
+      "copyKey": "Copy key",
+      "copied": "Copied",
+      "copyFailed": "Couldn’t copy automatically. Select the key and copy it by hand.",
+      "codeLabel": "6-digit code from the app",
+      "codeFormat": "Enter the 6 digits from your authenticator app.",
+      "verify": "Turn on two-step verification",
+      "wrongPassword": "That password isn’t right.",
+      "wrongCode": "That code didn’t match. Check the entry says Family Greenhouse and try the newest code.",
+      "alreadyOn": "Two-step verification is already on.",
+      "setupExpired": "Setup was interrupted. Enter your password to start again.",
+      "enabledTitle": "Two-step verification is on",
+      "enabledNotice": "Two-step verification is on. You’ll need your authenticator app the next time you sign in.",
+      "recoveryTitle": "Keep a way back in",
+      "recovery1": "Save the setup key somewhere safe, such as your password manager. Adding it to a new authenticator app gets you back in if you lose your phone.",
+      "recovery2": "If your authenticator app can back up or sync its codes, turn that on.",
+      "recovery3": "Lost your phone and the key? Email support@familygreenhouse.net from the address you sign in with. We’ll check it’s you before turning two-step verification off.",
+      "done": "Done",
+      "turnOff": "Turn off two-step verification",
+      "turnOffTitle": "Turn off two-step verification",
+      "turnOffHelp": "Confirm with your password and a current code from your authenticator app. After this, signing in needs only your password.",
+      "turnOffConfirm": "Turn off",
+      "disabledNotice": "Two-step verification is off."
     }
   },
   "notifications": {

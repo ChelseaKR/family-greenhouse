@@ -1068,6 +1068,13 @@ locals {
     "POST /auth/change-password" = { group = "auth", auth = "jwt" }
     "GET /auth/me"               = { group = "auth", auth = "jwt" }
     "PATCH /auth/me"             = { group = "auth", auth = "jwt" }
+    # Two-step verification (#671). The second sign-in step is public — the
+    # caller has no token yet, only Cognito's challenge session.
+    "POST /auth/login/mfa"        = { group = "auth", auth = "none" }
+    "GET /auth/mfa"               = { group = "auth", auth = "jwt" }
+    "POST /auth/mfa/totp/setup"   = { group = "auth", auth = "jwt" }
+    "POST /auth/mfa/totp/verify"  = { group = "auth", auth = "jwt" }
+    "POST /auth/mfa/totp/disable" = { group = "auth", auth = "jwt" }
 
     # --- household plant spaces + plants ---
     "GET /spaces"                     = { group = "plants", auth = "jwt" }

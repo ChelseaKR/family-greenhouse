@@ -185,6 +185,20 @@ api.interceptors.response.use(
 );
 
 /**
+ * Run the shared token refresh (or join the one already in flight) and resolve
+ * with the new bearer. For the few AUTHENTICATED `/auth/*` routes — the
+ * interceptor above never retries a `/auth/*` 401, because on the sign-in
+ * routes a 401 means "wrong password", not "stale token". Rejects without
+ * touching the session when this tab holds no refresh token.
+ */
+export function refreshSession(): Promise<string> {
+  const refreshToken = useAuthStore.getState().refreshToken;
+  if (!refreshToken) return Promise.reject(new Error('No refresh token in this tab'));
+  if (!refreshPromise) refreshPromise = startRefresh(refreshToken);
+  return refreshPromise;
+}
+
+/**
  * Shape of a backend error body. The `details` field is populated by the
  * Zod-backed validation middleware as `{ "field": ["message1", ...] }`.
  */
