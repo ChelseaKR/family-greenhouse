@@ -281,6 +281,8 @@ describe('senderAddress', () => {
     ['two mailboxes', ['a@b.test, c@d.test']],
     ['a group', ['team: a@b.test;']],
     ['two angle addresses', ['<a@b.test> <c@d.test>']],
+    ['a separator beside one angle address', ['Sam, Jo <sam@example.com>']],
+    ['a group around one angle address', ['team: <sam@example.com>;']],
     ['a bare LF (the #617 shape)', ['"Ev\nBcc: victim@example.com" <ev@bad.test>']],
     ['a CR', ['ev@bad.test\rBcc: victim@example.com']],
     ['not an address', ['Sam']],

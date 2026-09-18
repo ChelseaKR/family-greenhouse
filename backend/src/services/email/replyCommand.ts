@@ -463,7 +463,11 @@ export function senderAddress(fromHeaders: readonly string[] | undefined): strin
   const value = fromHeaders[0];
   if (typeof value !== 'string' || value.length > 512 || /[\r\n]/.test(value)) return null;
   const stripped = value.replace(/"(?:[^"\\]|\\.)*"/g, ' ').replace(/\([^()]*\)/g, ' ');
-  if (/[,;:]/.test(stripped.replace(/<[^<>]*>/g, ''))) return null;
+  // A separator outside every <...> means a list or a group. Tested per
+  // segment between the brackets rather than on a copy with them replaced
+  // out: this is a structural check on a header, never HTML sanitization, and
+  // the split form says so without looking like a tag stripper.
+  if (stripped.split(/<[^<>]*>/).some((outside) => /[,;:]/.test(outside))) return null;
   const bracketed = stripped.match(/<[^<>]*>/g);
   let address: string;
   if (bracketed) {
