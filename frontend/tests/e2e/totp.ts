@@ -5,7 +5,7 @@
  * FIXED_TOTP_SECRET is the secret the local mock backend hands out when the
  * Playwright webServer starts it with `E2E_TOTP_SECRET_SEED=<the seed below>`
  * (see playwright.config.ts): the base32 form of a readable phrase, never a
- * key-shaped literal. The mock honours that pin only alongside the
+ * key-shaped literal. The mock honors that pin only alongside the
  * test-fixture opt-in, so no hand-started dev server, and no deployed
  * environment, ever issues it.
  */

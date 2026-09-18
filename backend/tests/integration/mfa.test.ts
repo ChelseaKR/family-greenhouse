@@ -102,7 +102,7 @@ function authed(req: request.Test, session: Session, withAccessToken = true): re
   return withAccessToken ? req.set('X-Cognito-Access-Token', session.accessToken) : req;
 }
 
-/** A code that is NOT the current one (nor either neighbour). */
+/** A code that is NOT the current one (nor either neighbor). */
 function wrongCode(secret: string): string {
   const now = Date.now();
   const valid = new Set([-1, 0, 1].map((d) => totpCode(secret, now + d * 30_000)));
@@ -135,7 +135,7 @@ afterEach(() => {
   delete process.env.ALLOW_TEST_ACCOUNT_PROVISIONING;
 });
 
-describe('enrolment', () => {
+describe('enrollment', () => {
   it('starts off, and setup + first code turns it on', async () => {
     const session = await signIn();
     const before = await authed(request(app).get('/auth/mfa'), session, false);

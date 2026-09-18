@@ -14,7 +14,7 @@ interface TotpChallengeFormProps {
 }
 
 /**
- * The second sign-in step (#671): one labelled field for the six-digit code
+ * The second sign-in step (#671): one labeled field for the six-digit code
  * from the person's authenticator app. Focus moves to the field when the step
  * appears, so keyboard and screen-reader users land where the page changed.
  */

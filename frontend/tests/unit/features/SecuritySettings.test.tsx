@@ -125,7 +125,7 @@ describe('SecuritySettings — status', () => {
   });
 });
 
-describe('SecuritySettings — enrolment', () => {
+describe('SecuritySettings — enrollment', () => {
   it('password, then QR + key, then one code; the secret is never stored', async () => {
     const sent = securityServer(false);
     const user = userEvent.setup();
@@ -154,7 +154,7 @@ describe('SecuritySettings — enrolment', () => {
     // The access token rides its own header, as Cognito's self-service calls need.
     expect(sent.setup.at(-1)?.accessToken).toBe('access-1');
 
-    // Structural a11y on the busiest step: labelled inputs, named image, lists.
+    // Structural a11y on the busiest step: labeled inputs, named image, lists.
     expect(
       await axe(container, { runOnly: { type: 'tag', values: WCAG_TAGS } })
     ).toHaveNoViolations();

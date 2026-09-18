@@ -2,8 +2,8 @@
  * Settings → Security (#671): two-step verification with an authenticator app.
  *
  * Cognito holds the secret and checks every code; these calls only move the
- * person through its enrolment. The secret arrives once, from `startTotpSetup`,
- * lives in the enrolment component's state until the step closes, and is
+ * person through its enrollment. The secret arrives once, from `startTotpSetup`,
+ * lives in the enrollment component's state until the step closes, and is
  * never persisted, logged or sent anywhere else — the QR code is drawn in the
  * browser, not by a QR service.
  *

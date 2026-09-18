@@ -4,7 +4,7 @@ import { FIXED_TOTP_SECRET, acceptedCodes, rejectedCode, totpCode } from './totp
 
 /**
  * Two-step verification (#671), end to end in a real browser against the
- * local mock backend: enrol an authenticator in Settings → Security, sign
+ * local mock backend: enroll an authenticator in Settings → Security, sign
  * out, then sign in with password + code.
  *
  * The mock checks codes with real RFC 6238 arithmetic (backend
@@ -30,7 +30,7 @@ async function signOut(page: Page) {
   await expect(page).not.toHaveURL(/\/(dashboard|settings)/, { timeout: 15000 });
 }
 
-async function enrol(page: Page, password: string): Promise<string> {
+async function enroll(page: Page, password: string): Promise<string> {
   await page.goto('/settings?section=security');
   await page.getByRole('button', { name: /set up an authenticator app/i }).click();
   await page.getByLabel(/current password/i).fill(password);
@@ -68,12 +68,12 @@ async function passwordStep(page: Page, email: string, password: string) {
 }
 
 test.describe('Two-step verification (TOTP)', () => {
-  test('enrol, sign out, then sign in with password + code; a wrong code fails', async ({
+  test('enroll, sign out, then sign in with password + code; a wrong code fails', async ({
     page,
   }) => {
     const account = await provisionAccount({ emailPrefix: 'totp' });
     await uiLogin(page, account.email, account.password);
-    const secret = await enrol(page, account.password);
+    const secret = await enroll(page, account.password);
     await signOut(page);
 
     // The server really enforces it: a password alone no longer mints tokens.
@@ -109,7 +109,7 @@ test.describe('Two-step verification (TOTP)', () => {
   test('turning it off needs a code, and then the password alone signs in', async ({ page }) => {
     const account = await provisionAccount({ emailPrefix: 'totp-off' });
     await uiLogin(page, account.email, account.password);
-    const secret = await enrol(page, account.password);
+    const secret = await enroll(page, account.password);
 
     await page.getByRole('button', { name: /turn off two-step verification/i }).click();
     const form = page.getByRole('form', { name: /turn off two-step verification/i });

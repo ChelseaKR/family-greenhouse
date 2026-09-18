@@ -28,7 +28,7 @@ export const loginMfaSchema = z.object({
 });
 
 /**
- * POST /auth/mfa/totp/setup — enrolment starts with the current password.
+ * POST /auth/mfa/totp/setup — enrollment starts with the current password.
  * A stolen session must not be able to bind the attacker's authenticator to
  * the account, which would lock the real owner out of their own sign-in.
  */

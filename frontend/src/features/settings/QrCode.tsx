@@ -22,18 +22,18 @@ export function QrCode({ value, label, unavailableText }: QrCodeProps) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     setModules(null);
     setFailed(false);
     import('uqr')
       .then(({ encode }) => {
-        if (!cancelled) setModules(encode(value, { ecc: 'M', border: 2 }).data);
+        if (!canceled) setModules(encode(value, { ecc: 'M', border: 2 }).data);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!canceled) setFailed(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [value]);
 

@@ -16,7 +16,7 @@
  *
  * Sessions are single-use and expire after three minutes, matching Cognito's
  * default auth-session validity. A failed code spends the session, which is the
- * stricter of the two behaviours Cognito can show; the client's sign-in flow
+ * stricter of the two behaviors Cognito can show; the client's sign-in flow
  * (frontend/src/features/auth/signInFlow.ts) starts a fresh challenge after a
  * wrong code either way, so it works against both.
  */
