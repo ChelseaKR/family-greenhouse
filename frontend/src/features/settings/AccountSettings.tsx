@@ -24,10 +24,10 @@ import { track } from '@/services/analytics';
 
 /**
  * Account-level settings: change password, view profile, delete account.
- * Leaving a household isn't here yet — it's bundled into account deletion
- * because that's the support-burdened operation we want behind a friction
- * wall. A future "leave household but keep account" deserves its own
- * confirm flow.
+ * Leaving ONE household while keeping the account is not here: it has its own
+ * confirm flow on the Household page (`features/household/LeaveHouseholdCard`,
+ * #686), so account deletion keeps its friction wall and is no longer the only
+ * way out of a household.
  */
 export function AccountSettings() {
   const navigate = useNavigate();

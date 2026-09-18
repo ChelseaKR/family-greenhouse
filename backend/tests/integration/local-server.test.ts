@@ -848,6 +848,127 @@ describe('DELETE /households/:householdId/members/:userId', () => {
   });
 });
 
+describe('POST /households/:id/leave (#686)', () => {
+  async function loginAs(email: string): Promise<string> {
+    const login = await request(app).post('/auth/login').send({ email, password: 'password-123' });
+    expect(login.status).toBe(200);
+    return login.body.accessToken as string;
+  }
+
+  it('lets a member leave: account and other households untouched, tasks released, rotation pruned, feed entry anonymised', async () => {
+    seedMember('leaver', 'leaver@example.com', 'member');
+    seedMember('third', 'third@example.com', 'member');
+    const leaver = db.users.get('leaver')!;
+    // A second household the leaver also belongs to, which is their default.
+    leaver.memberships.push({
+      householdId: 'hh-cabin',
+      role: 'admin',
+      joinedAt: new Date().toISOString(),
+    } as never);
+    leaver.householdId = 'hh-cabin';
+    leaver.householdRole = 'admin';
+    const task = db.tasks.get(seedTaskId)!;
+    task.assignedTo = 'leaver';
+    task.assignedToName = 'User leaver';
+    task.assignmentSource = null; // an explicit claim
+    const space = [...db.spaces.values()][0];
+    space.rotation = {
+      memberIds: [seedUserId, 'leaver', 'third'],
+      cadence: 'weekly',
+      anchor: '2026-01-05T00:00:00.000Z',
+    };
+
+    const token = await loginAs('leaver@example.com');
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Household-Id', seedHouseholdId)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      householdId: seedHouseholdId,
+      releasedTasks: 1,
+      defaultHouseholdId: 'hh-cabin',
+      remainingHouseholds: 1,
+    });
+    expect(db.users.has('leaver')).toBe(true);
+    expect(leaver.memberships.map((m) => m.householdId)).toEqual(['hh-cabin']);
+    expect(leaver.householdId).toBe('hh-cabin');
+    expect(task.assignedTo).toBeNull();
+    expect(space.rotation).toEqual({
+      memberIds: [seedUserId, 'third'],
+      cadence: 'weekly',
+      anchor: '2026-01-05T00:00:00.000Z',
+    });
+    const left = [...db.activity.values()].find((e) => e.type === 'member.left');
+    expect(left).toMatchObject({
+      householdId: seedHouseholdId,
+      actorId: 'deleted-user',
+      actorName: 'Former member',
+      payload: { role: 'member', releasedTasks: 1 },
+    });
+    // …and the household is closed to them on their next request.
+    const plants = await request(app)
+      .get('/plants')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Household-Id', seedHouseholdId);
+    expect(plants.status).toBe(403);
+  });
+
+  it('refuses the only member with a coded 409', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(409);
+    expect(res.body.details).toEqual({ code: 'LAST_MEMBER' });
+    expect(db.users.get(seedUserId)!.memberships).toHaveLength(1);
+  });
+
+  it('refuses the sole admin while others remain, and the household keeps its admin', async () => {
+    seedMember('other', 'other@example.com', 'member');
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/households/${seedHouseholdId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(409);
+    expect(res.body.details).toEqual({ code: 'LAST_ADMIN' });
+    const admins = [...db.users.values()].filter((u) =>
+      u.memberships.some((m) => m.householdId === seedHouseholdId && m.role === 'admin')
+    );
+    expect(admins.map((u) => u.id)).toEqual([seedUserId]);
+  });
+
+  it('asks an admin of a renewing paid household to acknowledge billing, then lets them go', async () => {
+    seedMember('co-admin', 'co-admin@example.com', 'admin');
+    const household = db.households.get(seedHouseholdId)!;
+    household.stripeSubscriptionId = 'sub_local';
+    household.subscriptionStatus = 'active';
+    const token = await loginAs('co-admin@example.com');
+
+    const first = await request(app)
+      .post(`/households/${seedHouseholdId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(first.status).toBe(409);
+    expect(first.body.details.code).toBe('BILLING_ACK_REQUIRED');
+    expect(db.users.get('co-admin')!.memberships).toHaveLength(1);
+
+    const second = await request(app)
+      .post(`/households/${seedHouseholdId}/leave`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ acknowledgeBilling: true });
+    expect(second.status).toBe(200);
+    expect(db.users.get('co-admin')!.memberships).toHaveLength(0);
+    // Billing is untouched by a leave.
+    expect(household.stripeSubscriptionId).toBe('sub_local');
+    expect(household.subscriptionStatus).toBe('active');
+  });
+});
+
 describe('POST /tasks/:id/snooze', () => {
   it('pushes nextDue forward by N days', async () => {
     const token = await loginAsSeed();

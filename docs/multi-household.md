@@ -63,6 +63,56 @@ The switcher exposes a "+ Add a household" affordance that links to `/onboarding
 1. Skip the "create vs join" choice screen (we know it's a create flow).
 2. On success, set the new household as the _active_ one (via `setActiveHouseholdId`) but leave the user's default unchanged. The new household becomes the focus immediately without breaking the default-household contract.
 
+## Leaving a household
+
+`POST /households/{id}/leave` (#686) lets a member leave ONE household and keep
+their account and every other household. It is admin removal seen from the
+other side, so both run the same departure sequence
+(`services/householdDeparture.ts`): the membership row goes under the
+TOCTOU-safe last-admin guard, the credentials the leaver minted are revoked
+(#449), then `accountCleanup.anonymizeUserInHousehold` clears their live
+references and rewrites their history to "Former member", and finally the
+Cognito default moves only if this was it.
+
+Leaving is **instant** — like removal and `DELETE /me` — behind its own confirm
+dialog on the Household page. There is no grace window an admin can see: the
+point of the route is leaving without having to ask the admin.
+
+Every dangling reference has a stated outcome:
+
+| Reference                                     | Outcome                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Tasks assigned to or claimed by the leaver    | unassigned — up for grabs; the count is returned, put in the feed row and in the admins' email         |
+| `SpaceRotation.memberIds`                     | the leaver is removed, anchor kept; a rotation left with fewer than two people is cleared              |
+| A space's `defaultCaregiverId`                | cleared                                                                                                |
+| Vacation windows naming the leaver            | deleted (as away member or as cover)                                                                   |
+| Open "ask family" requests they raised        | stay open (the task is already up for grabs); the asker reads as Former member                         |
+| Sitter links, kiosk links, plant tags, shares | revoked                                                                                                |
+| Their calendar-feed token for the household   | deleted                                                                                                |
+| Pending household emails about the household  | dropped from their queue                                                                               |
+| Notification preferences, phone verification  | untouched — both belong to the account (`USER#` partition), not to a household                         |
+| The Cognito default claim                     | unchanged for a secondary household; re-pointed at a remaining membership, or cleared when none remain |
+
+A token issued before the leave still carries the old `custom:household_id`
+until it refreshes. With no `X-Household-Id`, `authMiddleware` finds no
+membership row and degrades to "no active household" — `GET /me/households`
+still answers, and household routes get a coherent 403 ("User must belong to a
+household"), never a 500. The client refreshes its token and switches to the
+remaining default (or onboarding) straight after leaving.
+
+Three states are refused with a coded 409 (`details.code`) and nothing changed:
+
+- `LAST_MEMBER` — the only member. A leave never ends or deletes a household;
+  invite and promote someone first, or delete the account (below), which is
+  the existing path for abandoning a household.
+- `LAST_ADMIN` — the only admin of a household with other members.
+- `BILLING_ACK_REQUIRED` — an **admin** leaving a household whose Stripe
+  subscription will renew (`active`/`trialing`/`past_due`/`unpaid`, not set to
+  cancel at period end), until they send `acknowledgeBilling: true`. Leaving
+  never touches billing — subscriptions belong to households — but the card on
+  file may be theirs, and once gone they cannot reach this household's billing.
+  Plain members are never asked: billing is admin-only.
+
 ## Deletion
 
 `DELETE /me` walks every membership the user has. For each one:

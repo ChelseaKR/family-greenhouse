@@ -9,6 +9,14 @@ vi.mock('../../../src/services/inviteEmail.js', () => ({
 }));
 vi.mock('../../../src/services/householdEmails.js', () => ({
   notifyMemberJoined: vi.fn(async () => 1),
+  notifyMemberLeft: vi.fn(async () => 1),
+  discardQueuedForHousehold: vi.fn(async () => 0),
+  sendLeaveConfirmation: vi.fn(async () => 'sent'),
+}));
+// The departure sequence (services/householdDeparture.ts) deletes the departed
+// member's calendar-feed token for the household they left.
+vi.mock('../../../src/services/calendarTokens.js', () => ({
+  revokeCalendarToken: vi.fn(async () => false),
 }));
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
@@ -73,7 +81,11 @@ describe('households handler', () => {
     const activity = await import('../../../src/services/activity.js');
     vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
     const accountCleanup = await import('../../../src/services/accountCleanup.js');
-    vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue(undefined);
+    vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue({
+      releasedTasks: 0,
+      rotationsUpdated: 0,
+      helpAsksAnonymized: 0,
+    });
     const householdService = await import('../../../src/services/householdService.js');
     vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
     // authMiddleware now validates the claim household against the
@@ -2333,5 +2345,410 @@ describe('households handler — PUT /households/{id}/timezone (#342, ADR 0025)'
       () => {}
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('households handler — POST /households/{id}/leave (#686)', () => {
+  const member = (userId: string, role: 'admin' | 'member', name = userId) => ({
+    householdId: 'hh-1',
+    userId,
+    name,
+    email: `${userId}@example.com`,
+    role,
+    joinedAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+    const activity = await import('../../../src/services/activity.js');
+    vi.mocked(activity.recordActivity).mockResolvedValue(undefined);
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    vi.mocked(accountCleanup.revokeCredentialsCreatedBy).mockResolvedValue({
+      plantTags: 1,
+      sitterLinks: 0,
+      kioskLinks: 0,
+      cuttingShares: 0,
+    });
+    vi.mocked(accountCleanup.anonymizeUserInHousehold).mockResolvedValue({
+      releasedTasks: 2,
+      rotationsUpdated: 1,
+      helpAsksAnonymized: 0,
+    });
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([]);
+    vi.mocked(householdService.removeMember).mockResolvedValue(undefined);
+    vi.mocked(householdService.getHousehold).mockResolvedValue({
+      id: 'hh-1',
+      name: 'Maple Street',
+      createdAt: '',
+      createdBy: 'user-9',
+    });
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    // Default: the left household is NOT the leaver's claim household.
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValue({
+      householdId: 'hh-home',
+      role: 'admin',
+    });
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+  });
+
+  async function asCaller(role: 'admin' | 'member') {
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', role);
+    return role === 'admin' ? adminClaims : memberClaims;
+  }
+
+  function leaveEvent(claims: Record<string, unknown>, body?: unknown, id = 'hh-1') {
+    return buildEvent(claims, {
+      httpMethod: 'POST',
+      pathParameters: { id },
+      body: body === undefined ? null : JSON.stringify(body),
+      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    });
+  }
+
+  async function leave(claims: Record<string, unknown>, body?: unknown, id = 'hh-1') {
+    const { leaveHousehold } = await import('../../../src/handlers/households/handler.js');
+    return (await leaveHousehold(
+      leaveEvent(claims, body, id),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+  }
+
+  it('lets a member of a three-person household leave: the shared departure sequence runs, their account and default household are untouched', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const calendarTokens = await import('../../../src/services/calendarTokens.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    const billing = await import('../../../src/services/billing.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(
+      member('user-1', 'member', 'Sam')
+    );
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member', 'Sam'),
+      member('user-3', 'member'),
+    ]);
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+      { householdId: 'hh-home', role: 'admin', name: 'Home', joinedAt: '' },
+    ]);
+
+    const res = await leave(claims);
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      householdId: 'hh-1',
+      releasedTasks: 2,
+      revokedCredentials: { plantTags: 1, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+      defaultHouseholdId: 'hh-home',
+      defaultHouseholdRole: 'admin',
+      remainingHouseholds: 1,
+    });
+    // Identity from the JWT: the caller, and only the caller, departs.
+    expect(householdService.removeMember).toHaveBeenCalledWith('hh-1', 'user-1');
+    // Revocation strictly before anonymisation (#449), both after the member row.
+    const order = (fn: unknown) => vi.mocked(fn as never as () => void).mock.invocationCallOrder[0];
+    expect(order(householdService.removeMember)).toBeLessThan(
+      order(accountCleanup.revokeCredentialsCreatedBy)
+    );
+    expect(order(accountCleanup.revokeCredentialsCreatedBy)).toBeLessThan(
+      order(accountCleanup.anonymizeUserInHousehold)
+    );
+    expect(calendarTokens.revokeCalendarToken).toHaveBeenCalledWith('user-1', 'hh-1');
+    expect(householdEmails.discardQueuedForHousehold).toHaveBeenCalledWith('user-1', 'hh-1');
+    // A secondary household: the default claim is never touched.
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+    expect(cognitoUsers.clearHouseholdClaims).not.toHaveBeenCalled();
+    // A plain member is never asked about billing, and billing is never read.
+    expect(billing.getHouseholdSubscription).not.toHaveBeenCalled();
+    // The account itself is not part of a leave.
+    expect(cognitoUsers.deleteUser).not.toHaveBeenCalled();
+    expect(accountCleanup.deleteUserScopedData).not.toHaveBeenCalled();
+  });
+
+  it('records the departure in the household feed already anonymised, with the released-task count', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const activity = await import('../../../src/services/activity.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(
+      member('user-1', 'member', 'Sam')
+    );
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member', 'Sam'),
+    ]);
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(200);
+    expect(activity.recordActivity).toHaveBeenCalledWith({
+      type: 'member.left',
+      householdId: 'hh-1',
+      actorId: 'deleted-user',
+      actorName: 'Former member',
+      payload: { role: 'member', releasedTasks: 2 },
+    });
+  });
+
+  it("tells the household's admins by name and sends the leaver a confirmation", async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(
+      member('user-1', 'member', '  Sam  ')
+    );
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member', 'Sam'),
+    ]);
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([]);
+    await leave(claims);
+    expect(householdEmails.notifyMemberLeft).toHaveBeenCalledWith({
+      householdId: 'hh-1',
+      leftUserId: 'user-1',
+      memberName: 'Sam',
+      releasedTasks: 2,
+    });
+    expect(householdEmails.sendLeaveConfirmation).toHaveBeenCalledWith({
+      userId: 'user-1',
+      email: 'a@b.com',
+      householdName: 'Maple Street',
+      releasedTasks: 2,
+      remainingHouseholds: 0,
+    });
+  });
+
+  it('never fails a departure that already happened because an email could not be queued', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'member'));
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member'),
+    ]);
+    vi.mocked(householdEmails.notifyMemberLeft).mockRejectedValueOnce(new Error('ddb down'));
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('does not send a confirmation that would have to guess how many households remain', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const householdEmails = await import('../../../src/services/householdEmails.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'member'));
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member'),
+    ]);
+    vi.mocked(householdService.getMembershipsByUser).mockRejectedValueOnce(new Error('gsi down'));
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).remainingHouseholds).toBeNull();
+    expect(householdEmails.sendLeaveConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('re-points the default claim when the leaver leaves their default household', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'member'));
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-9', 'admin'),
+      member('user-1', 'member'),
+    ]);
+    vi.mocked(cognitoUsers.getHouseholdClaims).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      role: 'member',
+    });
+    vi.mocked(householdService.getMembershipsByUser).mockResolvedValue([
+      { householdId: 'hh-cabin', role: 'admin', name: 'Cabin', joinedAt: '' },
+    ]);
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(200);
+    expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-1', 'hh-cabin', 'admin');
+    expect(JSON.parse(res.body)).toMatchObject({
+      defaultHouseholdId: 'hh-cabin',
+      defaultHouseholdRole: 'admin',
+    });
+  });
+
+  it('refuses the only member with LAST_MEMBER and changes nothing', async () => {
+    const claims = await asCaller('admin');
+    const householdService = await import('../../../src/services/householdService.js');
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'admin'));
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-1', 'admin'),
+    ]);
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(409);
+    const body = JSON.parse(res.body);
+    expect(body.details).toEqual({ code: 'LAST_MEMBER' });
+    expect(body.message).toMatch(/only member/);
+    expect(householdService.removeMember).not.toHaveBeenCalled();
+    expect(accountCleanup.revokeCredentialsCreatedBy).not.toHaveBeenCalled();
+    expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalled();
+  });
+
+  it('refuses the sole admin of a household with other members, and the household keeps its admin', async () => {
+    const claims = await asCaller('admin');
+    const householdService = await import('../../../src/services/householdService.js');
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'admin'));
+    const roster = [member('user-1', 'admin'), member('user-2', 'member')];
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce(roster);
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(409);
+    const body = JSON.parse(res.body);
+    expect(body.details).toEqual({ code: 'LAST_ADMIN' });
+    expect(body.message).toMatch(/Make another member an admin/);
+    // Nothing that could remove the admin ran, so the household still has one.
+    expect(householdService.removeMember).not.toHaveBeenCalled();
+    expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalled();
+    expect(roster.filter((m) => m.role === 'admin').map((m) => m.userId)).toEqual(['user-1']);
+  });
+
+  it('maps a lost last-admin race (the service guard refusing inside the transaction) to LAST_ADMIN before any cleanup', async () => {
+    const claims = await asCaller('admin');
+    const householdService = await import('../../../src/services/householdService.js');
+    const accountCleanup = await import('../../../src/services/accountCleanup.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(member('user-1', 'admin'));
+    vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+      member('user-1', 'admin'),
+      member('user-2', 'admin'),
+    ]);
+    const lastAdmin = new Error('Cannot remove the last admin');
+    lastAdmin.name = 'LastAdminError';
+    vi.mocked(householdService.removeMember).mockRejectedValueOnce(lastAdmin);
+    const res = await leave(claims);
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).details).toEqual({ code: 'LAST_ADMIN' });
+    expect(accountCleanup.revokeCredentialsCreatedBy).not.toHaveBeenCalled();
+    expect(accountCleanup.anonymizeUserInHousehold).not.toHaveBeenCalled();
+  });
+
+  describe('an admin leaving a paid household', () => {
+    async function adminOfTwoAdminHousehold() {
+      const claims = await asCaller('admin');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(
+        member('user-1', 'admin')
+      );
+      vi.mocked(householdService.getHouseholdMembers).mockResolvedValueOnce([
+        member('user-1', 'admin'),
+        member('user-2', 'admin'),
+      ]);
+      return claims;
+    }
+
+    it('is refused with BILLING_ACK_REQUIRED while the subscription will renew, and nothing changes', async () => {
+      const claims = await adminOfTwoAdminHousehold();
+      const billing = await import('../../../src/services/billing.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+        currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+      });
+      const res = await leave(claims);
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      expect(body.details).toEqual({
+        code: 'BILLING_ACK_REQUIRED',
+        planId: 'garden',
+        currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+      });
+      expect(body.message).toMatch(/keeps renewing/);
+      expect(householdService.removeMember).not.toHaveBeenCalled();
+    });
+
+    it('leaves once acknowledged — and billing is never written', async () => {
+      const claims = await adminOfTwoAdminHousehold();
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
+        planId: 'garden',
+        stripeSubscriptionId: 'sub_1',
+        status: 'active',
+      });
+      const res = await leave(claims, { acknowledgeBilling: true });
+      expect(res.statusCode).toBe(200);
+      // The billing module mock exposes only the read; any write the leave
+      // path attempted would have thrown "not a function" and failed the test.
+      expect(Object.keys(billing)).toEqual(['getHouseholdSubscription']);
+    });
+
+    it.each([
+      ['set to cancel at period end', { cancelAtPeriodEnd: true, status: 'active' }],
+      ['already canceled', { status: 'canceled' }],
+      ['past due (still retrying the card) — refused', { status: 'past_due' }],
+    ])('subscription %s', async (label, fields) => {
+      const claims = await adminOfTwoAdminHousehold();
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'garden',
+        stripeSubscriptionId: 'sub_1',
+        ...fields,
+      });
+      const res = await leave(claims);
+      expect(res.statusCode).toBe(label.endsWith('refused') ? 409 : 200);
+    });
+
+    it('is not asked when the household has no subscription on file (free, lifetime, gift or no-card trial)', async () => {
+      const claims = await adminOfTwoAdminHousehold();
+      const billing = await import('../../../src/services/billing.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        lifetimePlanId: 'greenhouse',
+      });
+      const res = await leave(claims);
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('fails closed when the subscription read does not settle: 500, nothing changed', async () => {
+      const claims = await adminOfTwoAdminHousehold();
+      const billing = await import('../../../src/services/billing.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      vi.mocked(billing.getHouseholdSubscription).mockRejectedValueOnce(new Error('throttled'));
+      const res = await leave(claims);
+      expect(res.statusCode).toBe(500);
+      expect(householdService.removeMember).not.toHaveBeenCalled();
+    });
+  });
+
+  it('refuses a path household the request did not resolve to (self only, one household at a time)', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const res = await leave(claims, undefined, 'hh-other');
+    expect(res.statusCode).toBe(403);
+    expect(householdService.removeMember).not.toHaveBeenCalled();
+  });
+
+  it('gives a leaver whose stale default claim names the household a coherent 403 — not a 500 — on a household route', async () => {
+    // No cached membership and no X-Household-Id: the claim still says hh-1,
+    // but the membership row is gone.
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const householdService = await import('../../../src/services/householdService.js');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    const res = await leave(memberClaims);
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).message).toBe('User must belong to a household');
+    expect(householdService.removeMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects an attempt to name someone else in the body', async () => {
+    const claims = await asCaller('member');
+    const householdService = await import('../../../src/services/householdService.js');
+    const res = await leave(claims, { userId: 'user-9' });
+    expect(res.statusCode).toBe(400);
+    expect(householdService.removeMember).not.toHaveBeenCalled();
   });
 });

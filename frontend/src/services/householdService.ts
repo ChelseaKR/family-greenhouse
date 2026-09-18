@@ -120,6 +120,24 @@ export interface SitterLinkActivityPayload {
   expiresAt: string;
 }
 
+/** POST /households/{id}/leave (#686). */
+export interface LeaveHouseholdResult {
+  householdId: string;
+  /** Tasks that carried the leaver's name and are now up for grabs. */
+  releasedTasks: number;
+  revokedCredentials: {
+    plantTags: number;
+    sitterLinks: number;
+    kioskLinks: number;
+    cuttingShares: number;
+  };
+  /** The default household after leaving; null when the caller has none left. */
+  defaultHouseholdId: string | null;
+  defaultHouseholdRole: 'admin' | 'member' | null;
+  /** Households still belonged to; null when the server could not read it. */
+  remainingHouseholds: number | null;
+}
+
 export const householdService = {
   async getHousehold(id: string): Promise<HouseholdWithMembers> {
     const response = await api.get<HouseholdWithMembers>(`/households/${id}`);
@@ -176,6 +194,23 @@ export const householdService = {
 
   async removeMember(householdId: string, userId: string): Promise<void> {
     await api.delete(`/households/${householdId}/members/${userId}`);
+  },
+
+  /**
+   * Leave `householdId` without deleting the account (#686). Self only — the
+   * server takes the leaver from the session, never from this call. An admin
+   * of a household with a renewing paid plan is refused (409
+   * `BILLING_ACK_REQUIRED`) until `acknowledgeBilling` is sent.
+   */
+  async leaveHousehold(
+    householdId: string,
+    options: { acknowledgeBilling?: boolean } = {}
+  ): Promise<LeaveHouseholdResult> {
+    const response = await api.post<LeaveHouseholdResult>(
+      `/households/${householdId}/leave`,
+      options.acknowledgeBilling ? { acknowledgeBilling: true } : {}
+    );
+    return response.data;
   },
 
   async updateMemberRole(
@@ -379,7 +414,7 @@ export interface ActivityPayloadByType {
     sitterLinkId?: string;
   };
   'member.joined': { role: 'admin' | 'member' };
-  'member.left': { role?: 'admin' | 'member' };
+  'member.left': { role?: 'admin' | 'member'; releasedTasks?: number };
   'sitter_link.created': SitterLinkActivityPayload;
   'sitter_link.revoked': SitterLinkActivityPayload;
   'task.schedule_matched': TaskScheduleMatchedActivityPayload;

@@ -15,7 +15,7 @@
     "features/auth/ResetPasswordPage.tsx": 6,
     "features/chat/ChatPage.tsx": 8,
     "features/dashboard/ClimateCard.tsx": 4,
-    "features/dashboard/DashboardPage.tsx": 16,
+    "features/dashboard/DashboardPage.tsx": 15,
     "features/dashboard/YearInReviewCard.tsx": 1,
     "features/household/HouseholdPage.tsx": 8,
     "features/household/JoinHouseholdPage.tsx": 12,

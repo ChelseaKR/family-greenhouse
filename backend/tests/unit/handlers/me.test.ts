@@ -816,6 +816,37 @@ describe('me handler', () => {
       ]);
     });
 
+    it('still answers a member whose default claim names a household they have LEFT (#686): no header, no 500', async () => {
+      // The token's `custom:household_id` lags a leave by up to the token
+      // lifetime. With the membership row gone, the middleware must degrade to
+      // "no active household" rather than failing, so the switcher can still
+      // discover where the caller does belong.
+      const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+      __resetMembershipCacheForTests();
+      const householdService = await import('../../../src/services/householdService.js');
+      const { listMyHouseholds } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValue(null); // left hh-1
+      vi.mocked(householdService.getMembershipsByUser).mockResolvedValueOnce([
+        { householdId: 'hh-2', role: 'member', name: '', joinedAt: '2025-02-02' },
+      ]);
+      vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+        id: 'hh-2',
+        name: 'Cabin',
+        location: null,
+        createdAt: '',
+        createdBy: 'user-2',
+      });
+
+      const res = (await listMyHouseholds(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual([
+        { householdId: 'hh-2', name: 'Cabin', role: 'member', joinedAt: '2025-02-02' },
+      ]);
+      // The membership row — not the stale claim — was what decided it.
+      expect(householdService.getMemberByUserId).toHaveBeenCalledWith('hh-1', 'user-1');
+    });
+
     it('returns 401 without auth claims', async () => {
       const { listMyHouseholds } = await import('../../../src/handlers/me/handler.js');
       const res = (await listMyHouseholds(

@@ -22,6 +22,9 @@ export type AuditEvent =
   | 'household.created'
   | 'household.member_added'
   | 'household.member_removed'
+  // A member left on their own (#686); `household.member_removed` stays the
+  // admin-removes-someone line, so the two are countable apart.
+  | 'household.member_left'
   | 'household.role_changed'
   | 'household.settings_changed'
   | 'billing.subscription_changed'

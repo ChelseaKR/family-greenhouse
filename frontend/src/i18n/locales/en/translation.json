@@ -44,7 +44,10 @@
     "scheduleMatched": "{{actor}} matched the {{task}} schedule for {{plant}} to reality ({{from}} → {{to}} days)",
     "upgradeRequested": "{{actor}} asked the household admins to upgrade for {{feature}}",
     "upgradeRequestedUnknown": "{{actor}} asked the household admins to upgrade",
-    "caretakerNote": "{{actor}} left a note: {{note}}"
+    "caretakerNote": "{{actor}} left a note: {{note}}",
+    "memberLeft": "A member left the household",
+    "memberLeftReleased_one": "A member left the household — {{count}} task went back up for grabs",
+    "memberLeftReleased_other": "A member left the household — {{count}} tasks went back up for grabs"
   },
   "spaces": {
     "all": "All spaces",
@@ -915,7 +918,25 @@
     "timeZoneClear": "Clear time zone",
     "timeZoneSaved": "Time zone saved.",
     "timeZoneCleared": "Time zone cleared. This household is back to having no zone set, which is not the same as choosing UTC.",
-    "timeZonePlaceholder": "America/New_York"
+    "timeZonePlaceholder": "America/New_York",
+    "leave": {
+      "title": "Leave this household",
+      "description": "Stop being a member of {{household}}. Your account, and any other households you belong to, stay exactly as they are.",
+      "button": "Leave household",
+      "blockedLastMember": "You’re the only member, so there’s nobody to leave this household to. Invite someone and make them an admin first. If you’re done with Family Greenhouse altogether, you can delete your account in Settings instead — that removes you from every household.",
+      "blockedLastAdmin": "You’re the only admin. Make another member an admin above, and then you can leave.",
+      "confirmTitle": "Leave {{household}}?",
+      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags and wall-display links you created stop working. To come back, an admin would have to invite you again.",
+      "confirmTasks_one": "You have {{count}} task with your name on it; it goes back up for grabs.",
+      "confirmTasks_other": "You have {{count}} tasks with your name on them; they go back up for grabs.",
+      "confirmTasksUnknown": "Any tasks with your name on them go back up for grabs.",
+      "confirmLabel": "Leave household",
+      "cancel": "Stay",
+      "billingTitle": "This household’s paid plan keeps renewing",
+      "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Billing before you leave: once you’ve left, you can’t reach this household’s billing.",
+      "billingConfirm": "Leave anyway",
+      "left": "You left {{household}}."
+    }
   },
   "sitter": {
     "coveringUntil": "You’re covering until {{date}}. After that this page stops working on its own.",
@@ -1223,8 +1244,8 @@
     "householdEmailsTitle": "Household emails",
     "householdEmailsDescription": "Messages about the people you share plant care with, not just the plants. Each one is separate.",
     "householdEmailsRequiresEmail": "Turn on email notifications to receive household emails.",
-    "memberJoinedTitle": "Someone joins the household",
-    "memberJoinedDescription": "When an invitation is accepted.",
+    "memberJoinedTitle": "Someone joins or leaves the household",
+    "memberJoinedDescription": "When an invitation is accepted, or when a member leaves (sent to admins).",
     "taskUpForGrabsTitle": "A task is up for grabs",
     "taskUpForGrabsDescription": "Once a week, the tasks coming up in the next seven days that nobody is assigned to. Anything already due or overdue is in your daily reminder instead.",
     "coverageUpdatesTitle": "You're covering for someone",

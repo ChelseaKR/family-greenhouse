@@ -28,6 +28,7 @@ import {
   refreshTokenSchema,
   createHouseholdSchema,
   updateMemberRoleSchema,
+  leaveHouseholdSchema,
   createPlantSchema,
   updatePlantSchema,
   movePlantsSchema,
@@ -136,6 +137,12 @@ import {
 import { STORE_DEMO_LOGIN, seedStoreDemoHousehold } from './local-server-store-demo.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
+import {
+  LEAVE_REFUSAL_CODES,
+  LEAVE_REFUSAL_MESSAGES,
+  isRenewingSubscription,
+  rosterRefusal,
+} from './services/leaveHouseholdRules.js';
 import { buildCaretakerReport, resolveReportRange } from './services/caretakerReport.js';
 import {
   SITTER_PHOTO_BODY_MAX_BYTES,
@@ -2933,6 +2940,148 @@ app.put(
   }
 );
 
+/**
+ * Mirrors services/householdDeparture.departHousehold — the one departure
+ * sequence admin removal and self-leave (#686) share: credentials the departed
+ * member minted are revoked (#449), then every live reference to them is
+ * cleared and their history anonymised (accountCleanup.anonymizeUserInHousehold),
+ * then their default household moves only if this was it. Returns what the
+ * production summary reports, counted from what actually changed.
+ */
+function departLocalHousehold(
+  target: User,
+  householdId: string
+): {
+  releasedTasks: number;
+  rotationsUpdated: number;
+  helpAsksAnonymized: number;
+  revokedCredentials: {
+    plantTags: number;
+    sitterLinks: number;
+    kioskLinks: number;
+    cuttingShares: number;
+  };
+} {
+  const summary = {
+    releasedTasks: 0,
+    rotationsUpdated: 0,
+    helpAsksAnonymized: 0,
+    revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+  };
+  const revoked = summary.revokedCredentials;
+  const userId = target.id;
+  target.memberships = target.memberships.filter((m) => m.householdId !== householdId);
+  // Revoke what they minted, BEFORE `createdBy` is scrubbed below (#449).
+  for (const [token, link] of db.sitterLinks.entries()) {
+    if (link.householdId === householdId && link.createdBy === userId) {
+      db.sitterLinks.delete(token);
+      revoked.sitterLinks += 1;
+    }
+  }
+  for (const [token, link] of db.kioskLinks.entries()) {
+    if (link.householdId === householdId && link.createdBy === userId) {
+      db.kioskLinks.delete(token);
+      revoked.kioskLinks += 1;
+    }
+  }
+  for (const [token, tag] of db.plantTags.entries()) {
+    if (tag.householdId === householdId && tag.createdBy === userId) {
+      db.plantTags.delete(token);
+      revoked.plantTags += 1;
+    }
+  }
+  for (const [code, share] of db.shares.entries()) {
+    if (share.householdId === householdId && share.createdBy === userId) {
+      db.shares.delete(code);
+      revoked.cuttingShares += 1;
+    }
+  }
+  for (const [token, calendar] of db.calendarTokens.entries()) {
+    if (calendar.householdId === householdId && calendar.userId === userId) {
+      db.calendarTokens.delete(token);
+    }
+  }
+  // Clear every live reference to the departed member, matching
+  // accountCleanup.anonymizeUserInHousehold in production.
+  const household = db.households.get(householdId);
+  if (household?.createdBy === userId) household.createdBy = 'deleted-user';
+  for (const plant of db.plants.values()) {
+    if (plant.householdId === householdId && plant.createdBy === userId) {
+      plant.createdBy = 'deleted-user';
+    }
+  }
+  for (const task of db.tasks.values()) {
+    if (task.householdId !== householdId) continue;
+    if (task.createdBy === userId) task.createdBy = 'deleted-user';
+    if (task.assignedTo === userId) {
+      task.assignedTo = null;
+      task.assignedToName = null;
+      task.assignmentSource = null;
+      summary.releasedTasks += 1;
+    }
+    if (task.helpAskedBy === userId) {
+      task.helpAskedBy = 'deleted-user';
+      task.helpAskedByName = 'Former member';
+      summary.helpAsksAnonymized += 1;
+    }
+  }
+  for (const space of db.spaces.values()) {
+    if (space.householdId !== householdId) continue;
+    if (space.createdBy === userId) space.createdBy = 'deleted-user';
+    if (space.defaultCaregiverId === userId) space.defaultCaregiverId = null;
+    if (space.rotation?.memberIds.includes(userId)) {
+      const remaining = space.rotation.memberIds.filter((id) => id !== userId);
+      // Anchor kept; fewer than two is no rotation at all.
+      space.rotation = remaining.length < 2 ? null : { ...space.rotation, memberIds: remaining };
+      summary.rotationsUpdated += 1;
+    }
+  }
+  for (const [key, vacation] of db.vacations.entries()) {
+    if (
+      vacation.householdId === householdId &&
+      (vacation.userId === userId || vacation.coveredBy === userId)
+    ) {
+      db.vacations.delete(key);
+    }
+  }
+  for (const completion of db.completions.values()) {
+    if (completion.householdId === householdId && completion.completedBy === userId) {
+      completion.completedBy = 'deleted-user';
+      completion.completedByName = 'Former member';
+    }
+  }
+  for (const event of db.activity.values()) {
+    if (event.householdId === householdId && event.actorId === userId) {
+      event.actorId = 'deleted-user';
+      event.actorName = 'Former member';
+    }
+  }
+  for (const photo of db.photos.values()) {
+    if (photo.householdId === householdId && photo.uploadedBy === userId) {
+      photo.uploadedBy = 'deleted-user';
+    }
+  }
+  for (const report of db.chatReports.values()) {
+    if (report.householdId === householdId && report.userId === userId) {
+      report.userId = 'deleted-user';
+    }
+  }
+  // Claims hygiene, mirroring production: only re-point the default household
+  // when the departed one WAS the default; pick another remaining membership
+  // or clear.
+  if (target.householdId === householdId) {
+    const next = target.memberships[0];
+    if (next) {
+      target.householdId = next.householdId;
+      target.householdRole = next.role;
+    } else {
+      target.householdId = null;
+      target.householdRole = null;
+    }
+  }
+  return summary;
+}
+
 // DELETE /households/:householdId/members/:userId
 app.delete(
   '/households/:householdId/members/:userId',
@@ -2953,84 +3102,72 @@ app.delete(
     if (!target || !membership) {
       return res.status(404).json({ message: 'Member not found' });
     }
-    target.memberships = target.memberships.filter((m) => m.householdId !== householdId);
-    // Clear every live reference to the departed member, matching
-    // accountCleanup.anonymizeUserInHousehold in production.
-    const household = db.households.get(householdId);
-    if (household?.createdBy === userId) household.createdBy = 'deleted-user';
-    for (const plant of db.plants.values()) {
-      if (plant.householdId === householdId && plant.createdBy === userId) {
-        plant.createdBy = 'deleted-user';
-      }
-    }
-    for (const task of db.tasks.values()) {
-      if (task.householdId !== householdId) continue;
-      if (task.createdBy === userId) task.createdBy = 'deleted-user';
-      if (task.assignedTo === userId) {
-        task.assignedTo = null;
-        task.assignedToName = null;
-        task.assignmentSource = null;
-      }
-    }
-    for (const space of db.spaces.values()) {
-      if (space.householdId !== householdId) continue;
-      if (space.createdBy === userId) space.createdBy = 'deleted-user';
-      if (space.defaultCaregiverId === userId) space.defaultCaregiverId = null;
-    }
-    for (const [key, vacation] of db.vacations.entries()) {
-      if (
-        vacation.householdId === householdId &&
-        (vacation.userId === userId || vacation.coveredBy === userId)
-      ) {
-        db.vacations.delete(key);
-      }
-    }
-    for (const completion of db.completions.values()) {
-      if (completion.householdId === householdId && completion.completedBy === userId) {
-        completion.completedBy = 'deleted-user';
-        completion.completedByName = 'Former member';
-      }
-    }
-    for (const event of db.activity.values()) {
-      if (event.householdId === householdId && event.actorId === userId) {
-        event.actorId = 'deleted-user';
-        event.actorName = 'Former member';
-      }
-    }
-    for (const photo of db.photos.values()) {
-      if (photo.householdId === householdId && photo.uploadedBy === userId) {
-        photo.uploadedBy = 'deleted-user';
-      }
-    }
-    for (const link of db.sitterLinks.values()) {
-      if (link.householdId === householdId && link.createdBy === userId) {
-        link.createdBy = 'deleted-user';
-      }
-    }
-    for (const link of db.kioskLinks.values()) {
-      if (link.householdId === householdId && link.createdBy === userId) {
-        link.createdBy = 'deleted-user';
-      }
-    }
-    for (const report of db.chatReports.values()) {
-      if (report.householdId === householdId && report.userId === userId) {
-        report.userId = 'deleted-user';
-      }
-    }
-    // Claims hygiene, mirroring production removeMember: only re-point the
-    // default household when the removed one WAS the default; pick another
-    // remaining membership or clear.
-    if (target.householdId === householdId) {
-      const next = target.memberships[0];
-      if (next) {
-        target.householdId = next.householdId;
-        target.householdRole = next.role;
-      } else {
-        target.householdId = null;
-        target.householdRole = null;
-      }
-    }
+    departLocalHousehold(target, householdId);
     res.status(204).send();
+  }
+);
+
+// POST /households/:id/leave — mirrors handlers/households leaveHousehold
+// (#686): self only, the same departure sequence as removal, refused with a
+// coded 409 (services/leaveHouseholdRules.ts) for the last member, the last
+// admin, and an admin of a renewing paid household who has not acknowledged it.
+app.post(
+  '/households/:id/leave',
+  authMiddleware,
+  requireHousehold,
+  validateBody(leaveHouseholdSchema),
+  (req, res) => {
+    const householdId = req.params.id;
+    const caller = (req as any).user;
+    const body = (req as any).validatedBody as { acknowledgeBilling?: boolean } | null | undefined;
+    if (caller.householdId !== householdId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const target = db.users.get(caller.userId);
+    const membership = target?.memberships.find((m) => m.householdId === householdId);
+    if (!target || !membership) {
+      return res.status(404).json({ message: 'You are not a member of this household' });
+    }
+    const refusal = rosterRefusal(target.id, membersOf(householdId));
+    if (refusal) {
+      return res
+        .status(409)
+        .json({ message: LEAVE_REFUSAL_MESSAGES[refusal], details: { code: refusal } });
+    }
+    const household = db.households.get(householdId);
+    if (
+      membership.role === 'admin' &&
+      body?.acknowledgeBilling !== true &&
+      isRenewingSubscription({
+        stripeSubscriptionId: household?.stripeSubscriptionId,
+        status: household?.subscriptionStatus,
+      })
+    ) {
+      return res.status(409).json({
+        message: LEAVE_REFUSAL_MESSAGES.BILLING_ACK_REQUIRED,
+        details: {
+          code: LEAVE_REFUSAL_CODES.billingAckRequired,
+          planId: household?.planId,
+          currentPeriodEnd: null,
+        },
+      });
+    }
+    const summary = departLocalHousehold(target, householdId);
+    recordActivity({
+      type: 'member.left',
+      householdId,
+      actorId: 'deleted-user',
+      actorName: 'Former member',
+      payload: { role: membership.role, releasedTasks: summary.releasedTasks },
+    });
+    res.json({
+      householdId,
+      releasedTasks: summary.releasedTasks,
+      revokedCredentials: summary.revokedCredentials,
+      defaultHouseholdId: target.householdId,
+      defaultHouseholdRole: target.householdRole,
+      remainingHouseholds: target.memberships.length,
+    });
   }
 );
 

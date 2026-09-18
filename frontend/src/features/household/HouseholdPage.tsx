@@ -31,6 +31,7 @@ import { CaretakerSeatsCard } from './CaretakerSeatsCard';
 import { CareLoadCard } from './CareLoadCard';
 import { AutoHandoffCard } from './AutoHandoffCard';
 import { HouseholdTimeZoneCard } from './HouseholdTimeZoneCard';
+import { LeaveHouseholdCard } from './LeaveHouseholdCard';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -521,6 +522,16 @@ export function HouseholdPage() {
           ))}
         </ul>
       </Card>
+
+      {/* Leaving (#686) — every member, admins included: the card itself
+          explains when a leave would be refused (only member, only admin). */}
+      {householdId && (
+        <LeaveHouseholdCard
+          householdId={householdId}
+          householdName={household.name}
+          members={household.members}
+        />
+      )}
 
       {/* Remove member confirmation */}
       <ConfirmDialog
