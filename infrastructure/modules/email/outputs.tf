@@ -42,3 +42,28 @@ output "cognito_custom_message_function_name" {
   description = "Function name for the auth module's aws_lambda_permission (source_arn is the user pool, which lives there)."
   value       = aws_lambda_function.cognito_messages.function_name
 }
+
+# --- Inbound reply-to-act (#667, ADR 0031) ------------------------------------
+# The api module owns the `reply-to-act` receipt rule, next to the function it
+# invokes, so this module never has to know a function ARN (the same one-way
+# email -> api dependency as event_topic_arn above).
+
+output "inbound_rule_set_name" {
+  description = "The active SES receipt rule set. The api module adds the reply-to-act rule to it."
+  value       = aws_ses_receipt_rule_set.main.rule_set_name
+}
+
+output "inbound_forward_rule_name" {
+  description = "Name of the forward-to-maintainer receipt rule, so the reply-to-act rule can be ordered after it."
+  value       = aws_ses_receipt_rule.forward.name
+}
+
+output "inbound_mail_bucket_name" {
+  description = "Bucket SES writes raw inbound mail to. Replies to reminders land under replies/."
+  value       = aws_s3_bucket.inbound_mail.bucket
+}
+
+output "inbound_mail_bucket_arn" {
+  description = "ARN of the inbound-mail bucket, for the reply Lambda's replies/* grant."
+  value       = aws_s3_bucket.inbound_mail.arn
+}

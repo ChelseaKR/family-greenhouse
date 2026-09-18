@@ -399,6 +399,15 @@ see [ADR 0022](adr/0022-email-deliverability-and-bounce-handling.md). Under
 `SendRawEmailCommand` that value becomes a `Reply-To:` MIME header rather than
 a command parameter, because raw sends have no `ReplyToAddresses`.
 
+When reply-to-act is switched on (`email_reply_actions_enabled`, off by
+default — [ADR 0031](adr/0031-reply-to-act-on-reminder-emails.md)), the daily
+reminder's email leg instead carries a per-message `Reply-To:
+care+<token>@<domain>`, numbers every row it lists (up-for-grabs rows continue
+after the member's own), and ends with a line on how to reply (`done 1`,
+`snooze 2 for 3 days`). A reply is handled by the `emailReplies` Lambda, which
+can complete or snooze only those rows. Push and SMS never see the address.
+Every other email keeps `Reply-To: support@`.
+
 Without `SES_FROM_EMAIL`, the notifier logs an `email_dry_run` line and returns.
 
 `SES_FROM_EMAIL` reaches the `households`, `notifications`, `reminders`,

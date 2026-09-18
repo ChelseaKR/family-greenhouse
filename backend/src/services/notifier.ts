@@ -45,11 +45,28 @@ export interface NotificationPayload {
   url?: string;
   /** De-dupe tag for browser-push (replaces a previous notification with the same tag). */
   tag?: string;
+  /**
+   * Reply-To for the EMAIL leg only (#667): the reminder's per-message reply
+   * address. Push and SMS have no reply path and ignore it. Omitted keeps the
+   * configured `SES_REPLY_TO`.
+   */
+  emailReplyTo?: string;
 }
 
 /** `shortBody` when the caller supplied one, else the full body. */
 function compactBody(payload: NotificationPayload): string {
   return payload.shortBody?.trim() || payload.body;
+}
+
+/**
+ * The payload the push legs send. `emailReplyTo` is removed: it is a bearer
+ * credential for the email leg only (#667), and the browser leg serializes the
+ * whole payload to the push service — and logs it on a dry run.
+ */
+function pushPayloadOf(payload: NotificationPayload): NotificationPayload {
+  const push: NotificationPayload = { ...payload, body: compactBody(payload) };
+  delete push.emailReplyTo;
+  return push;
 }
 
 /**
@@ -306,7 +323,7 @@ export async function sendToUser(
     channels.browser = 'suppressed';
   } else if (requested.has('browser') && prefs.browser) {
     channels.browser = 'failed';
-    const pushPayload = { ...payload, body: compactBody(payload) };
+    const pushPayload = pushPayloadOf(payload);
     work.push(
       (async () => {
         // Web push and native device push are ONE channel to the user (and
@@ -347,6 +364,7 @@ export async function sendToUser(
             to: recipient.email,
             subject: payload.title,
             text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
+            ...(payload.emailReplyTo ? { replyTo: payload.emailReplyTo } : {}),
           })
           .then((result) => {
             // `accepted` is SES custody, not receipt — see emailNotifier. It

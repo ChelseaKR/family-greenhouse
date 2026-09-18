@@ -16,6 +16,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Complete or snooze a reminder's tasks by replying to it (#667) — built,
+  switched off.** With `email_reply_actions_enabled = true` (default `false`),
+  each reminder email carries a per-message `Reply-To: care+<token>@…`,
+  numbers every row it lists, and says how to reply; answering `done 1`,
+  `done 1, 2`, `snooze 2 for 3 days` (or `hecho 1`, `posponer 2 por 3 días`)
+  completes or snoozes exactly those rows through the app's own task calls and
+  sends one confirmation. The token is 160 random bits stored only as its
+  scrypt digest (the shared helper from #811), lasts 3 days, and reaches only
+  the rows its email listed, each pinned to the occurrence the email described,
+  so a second action on a task through it can never apply. A reply acts only
+  when its single From mailbox is the member's stored address and SES reports
+  DMARC `PASS`; only the first line above the quoted text is read, against a
+  closed grammar; anything else changes nothing and gets at most one help note.
+  Unknown tokens get no answer at all. Deploy note: while the flag is `false`
+  a `v*` tag creates only the idle `emailReplies` function and a `replies/`
+  lifecycle rule on the inbound bucket; turning it on adds one SES receipt rule
+  (`reply-to-act`, matching `care@`), its invoke permission and a `replies/*`
+  S3 grant. No DNS change: the apex MX already routes to SES. ADR 0031.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added

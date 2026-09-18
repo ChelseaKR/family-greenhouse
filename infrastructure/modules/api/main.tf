@@ -366,6 +366,12 @@ locals {
     # (see the subscription below), and the handler maintains the outbound
     # suppression list. Same harmless unused API integration as reminders.
     "emailEvents" = "emailEvents"
+    # Also not an HTTP group — SES-invoked. Replies to reminder emails
+    # (care+<token>@, #667 / ADR 0031) are stored by the `reply-to-act`
+    # receipt rule below and handed to this function. That rule exists only
+    # when var.email_reply_actions_enabled is true; until then the function is
+    # deployed and receives nothing, exactly like emailEvents with no topic.
+    "emailReplies" = "emailReplies"
     # Bedrock-backed plant care chatbot. Memory + timeout are higher than the
     # default because a turn can run up to 5 tool calls, each one a Bedrock
     # InvokeModel that takes 2-6 seconds.
@@ -473,6 +479,15 @@ locals {
     # on for a message. An unset value sends without one — mail still goes out,
     # but nothing ever learns that it bounced.
     SES_CONFIGURATION_SET = var.ses_configuration_set
+  }
+
+  # Reply-to-act (#667). Both values or neither: services/email/replyAddress.ts
+  # mints a reply address only when the flag is "true" AND the domain is set,
+  # and the flag here is the same variable that creates the receipt rule, so a
+  # reminder can never carry a reply address nothing is listening on.
+  reply_environment = {
+    EMAIL_REPLY_ACTIONS_ENABLED = var.email_reply_actions_enabled ? "true" : "false"
+    EMAIL_REPLY_DOMAIN          = var.email_reply_actions_enabled ? var.email_reply_domain : ""
   }
 
   notification_environment = merge(local.email_environment, {
@@ -584,7 +599,7 @@ locals {
     # simply omits the line — it never asserts "no rain expected".
     # Cost: the forecast is read at most once per household per reminder run,
     # cached for an hour per ~10km cell and shared with the climate endpoint.
-    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment)
+    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.reply_environment)
     digests     = local.email_environment
     emailEvents = {}
     chat        = local.chat_environment
@@ -592,6 +607,16 @@ locals {
     # through emailNotifier.ts like reminders/digests, no Stripe key needed:
     # it never creates or touches a Stripe object.
     checkoutRecovery = local.email_environment
+
+    # Reads the stored reply (replies/ in the inbound bucket) and answers it
+    # through emailNotifier, so it needs the send config and the bucket — and
+    # the reply domain even while minting is off, to resolve tokens already
+    # issued (services/email/replyAddress.ts replyDomain).
+    emailReplies = merge(local.email_environment, {
+      EMAIL_REPLY_DOMAIN = var.email_reply_domain
+      EMAIL_REPLY_BUCKET = var.inbound_mail_bucket_name
+      EMAIL_REPLY_PREFIX = "replies/"
+    })
   }
 
   handler_environments = {
@@ -1517,6 +1542,92 @@ resource "aws_lambda_permission" "email_events_sns" {
   function_name = aws_lambda_function.handlers["emailEvents"].function_name
   principal     = "sns.amazonaws.com"
   source_arn    = var.ses_event_topic_arn
+}
+
+# --- Reply-to-act (#667, ADR 0031) --------------------------------------------
+# Replies to a reminder's per-message address, care+<token>@<domain>, go to
+# the emailReplies Lambda. One receipt rule serves every token: SES matches a
+# recipient of `care@<domain>` against every `care+<label>@<domain>`, so there
+# is no new MX record and no new domain — the apex MX (modules/email
+# inbound.tf) already routes this domain to SES.
+#
+# EVERYTHING below is counted on var.email_reply_actions_enabled (default
+# false) and nothing else, so merging this and cutting a `v*` tag creates none
+# of it. Turning it on is one tfvars line; see ADR 0031 for the checklist.
+#
+# The rule lives here, next to the function it invokes, and joins the rule set
+# the email module created — the same one-way email -> api arrangement as the
+# SNS subscription above. It is ordered after forward-to-maintainer, and the
+# two can never both match one recipient: `care` is not a forwarded mailbox.
+locals {
+  email_reply_rule_name = "reply-to-act"
+}
+
+# Read and delete ONLY the replies/ prefix. The forwarded support@/security@
+# mail under inbox/ stays out of reach of every backend Lambda. The grant is on
+# the shared Lambda role (the emailReplies function is part of the handler
+# fleet), which is why it is its own policy and its own `count`.
+resource "aws_iam_role_policy" "email_replies_inbound" {
+  count = var.email_reply_actions_enabled ? 1 : 0
+
+  name = "${var.project_name}-email-replies-inbound-${var.environment}"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject", "s3:DeleteObject"]
+      Resource = "${var.inbound_mail_bucket_arn}/replies/*"
+    }]
+  })
+}
+
+resource "aws_lambda_permission" "email_replies_ses" {
+  count = var.email_reply_actions_enabled ? 1 : 0
+
+  statement_id   = "AllowSESInvokeEmailReplies"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.handlers["emailReplies"].function_name
+  principal      = "ses.amazonaws.com"
+  source_account = data.aws_caller_identity.current.account_id
+  # Built by hand, as in modules/email inbound.tf: SES validates the invoke
+  # permission when the rule is CREATED, so the permission must exist first and
+  # cannot reference the rule resource without a cycle.
+  source_arn = "arn:aws:ses:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:receipt-rule-set/${var.inbound_rule_set_name}:receipt-rule/${local.email_reply_rule_name}"
+}
+
+resource "aws_ses_receipt_rule" "email_replies" {
+  count = var.email_reply_actions_enabled ? 1 : 0
+
+  name          = local.email_reply_rule_name
+  rule_set_name = var.inbound_rule_set_name
+  after         = var.inbound_forward_rule_name
+  recipients    = ["care@${var.email_reply_domain}"]
+  enabled       = true
+  # Spam/virus verdicts AND the DMARC verdict are what the Lambda gates on
+  # (services/emailReplies.ts); with scanning off every reply would be dropped.
+  scan_enabled = true
+
+  s3_action {
+    bucket_name       = var.inbound_mail_bucket_name
+    object_key_prefix = "replies/"
+    position          = 1
+  }
+
+  lambda_action {
+    function_arn    = aws_lambda_function.handlers["emailReplies"].arn
+    invocation_type = "Event"
+    position        = 2
+  }
+
+  depends_on = [aws_lambda_permission.email_replies_ses]
+
+  lifecycle {
+    precondition {
+      condition     = var.email_reply_domain != "" && var.inbound_rule_set_name != "" && var.inbound_mail_bucket_name != ""
+      error_message = "email_reply_actions_enabled needs the email module (domain_name set): the reply rule joins its receipt rule set and bucket."
+    }
+  }
 }
 
 # Dead-letter queue for failed ASYNCHRONOUS Lambda invocations. The only async

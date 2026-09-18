@@ -77,6 +77,8 @@ import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
 import { resolveEmailLocale } from './email/locale.js';
+import { replyAddress, replyConfig } from './email/replyAddress.js';
+import * as emailReplyTokens from './emailReplyTokens.js';
 import { localDay } from './dueDay.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -619,6 +621,59 @@ async function readReminderClimate(householdId: string): Promise<ReminderClimate
 }
 
 /**
+ * The reminder with a reply address (#667, ADR 0031), or null to send it
+ * exactly as before.
+ *
+ * Null unless the feature is switched on (`replyConfig`: both the flag and a
+ * domain, which the Terraform sets together with the receipt rule) AND this
+ * send includes the email channel — push and SMS have nowhere to reply to.
+ *
+ * The composition is built with `replyHint` first, because the token is bound
+ * to exactly the rows that composition numbers and to each one's current
+ * occurrence (`nextDue`). If the mint fails, the caller falls back to the
+ * plain composition and the ordinary Reply-To: a reminder whose footer says
+ * "reply done 1" must never go out with a Reply-To that cannot act on it.
+ */
+async function replyableComposition(
+  input: reminderEmail.ReminderEmailInput,
+  tasks: readonly Task[],
+  context: {
+    userId: string;
+    householdId: string;
+    channels: ReadonlyMap<notifier.NotificationChannel, string>;
+    now: Date;
+  }
+): Promise<{ composed: reminderEmail.ReminderComposition; replyTo: string } | null> {
+  const config = replyConfig();
+  if (!config.enabled || !context.channels.has('email')) return null;
+
+  const composed = reminderEmail.composeReminderEmail({ ...input, replyHint: true });
+  const nextDueById = new Map(tasks.map((t) => [t.id, t.nextDue]));
+  const bound: emailReplyTokens.ReplyTokenTask[] = [];
+  for (const row of composed.listed) {
+    const expectedNextDue = row.taskId ? nextDueById.get(row.taskId) : undefined;
+    // Every listed row came from `tasks`, so this cannot miss — but a row the
+    // token could not pin would be a number the reply cannot honour, so the
+    // whole email falls back rather than going out half-bound.
+    if (!row.taskId || typeof expectedNextDue !== 'string') return null;
+    bound.push({ taskId: row.taskId, expectedNextDue });
+  }
+
+  const minted = await emailReplyTokens.mintReplyToken(
+    {
+      userId: context.userId,
+      householdId: context.householdId,
+      locale: input.locale,
+      timeZone: input.timeZone,
+      tasks: bound,
+    },
+    context.now
+  );
+  if (minted.status !== 'ok') return null;
+  return { composed, replyTo: replyAddress(minted.token, config.domain) };
+}
+
+/**
  * Notify each member of one household about tasks due today in their own zone
  * (or already overdue): the member's own assigned tasks plus the household's
  * unassigned ones (otherwise unassigned tasks would notify nobody). Returns
@@ -723,6 +778,7 @@ export async function remindHousehold(
       due: dueStateFor(t.nextDue, now),
       upForGrabs,
       url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
+      taskId: t.id,
     });
 
     // The forecast is read at most once per household per run, and only when a
@@ -854,7 +910,7 @@ export async function remindHousehold(
         awayUntil: vacations.get(userId)?.endDate ?? null,
       }));
 
-      const composed = reminderEmail.composeReminderEmail({
+      const composeInput: reminderEmail.ReminderEmailInput = {
         rows,
         covering,
         climate: await householdClimate(),
@@ -862,7 +918,14 @@ export async function remindHousehold(
         timeZone,
         restingCount: restingForMember,
         restingAfterDays: REMINDER_OVERDUE_DECAY_DAYS,
+      };
+      const replyable = await replyableComposition(composeInput, fresh, {
+        userId: member.userId,
+        householdId,
+        channels: reservations,
+        now,
       });
+      const composed = replyable?.composed ?? reminderEmail.composeReminderEmail(composeInput);
 
       let result: notifier.SendResult;
       try {
@@ -874,6 +937,7 @@ export async function remindHousehold(
             shortBody: composed.shortBody,
             tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
             url: frontendUrl('/tasks?filter=due'),
+            ...(replyable ? { emailReplyTo: replyable.replyTo } : {}),
           },
           {
             channels: [...reservations.keys()],

@@ -110,6 +110,12 @@ variable "email_reply_to" {
   default     = ""
 }
 
+variable "email_reply_actions_enabled" {
+  description = "Reply-to-act (#667, ADR 0031): reminder emails carry a care+<token>@<domain_name> Reply-To, and an SES receipt rule hands replies to the emailReplies Lambda, which can complete or snooze the tasks that one email listed. Default false creates nothing and changes no reminder. Needs domain_name (the existing MX + receipt rule set); no new DNS."
+  type        = bool
+  default     = false
+}
+
 variable "dmarc_rua_email" {
   description = "Mailbox to receive DMARC aggregate reports. Defaults to dmarc@<domain>."
   type        = string

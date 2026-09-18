@@ -161,6 +161,19 @@ describe('emailNotifier', () => {
     expect(rawOf()).toContain('Reply-To: support@x.com');
   });
 
+  it("lets one message carry its own Reply-To (a reminder's reply address, #667)", async () => {
+    process.env = {
+      ...ORIGINAL,
+      SES_FROM_EMAIL: 'Family Greenhouse <hello@x.com>',
+      SES_REPLY_TO: 'support@x.com',
+    };
+    sesSendMock.mockResolvedValueOnce({});
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'hello', replyTo: 'care+abc@x.com' });
+    expect(rawOf()).toContain('Reply-To: care+abc@x.com');
+    expect(rawOf()).not.toContain('support@x.com');
+  });
+
   it('omits Reply-To and the configuration set when neither is configured', async () => {
     process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
     delete process.env.SES_REPLY_TO;

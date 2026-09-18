@@ -61,6 +61,10 @@ const GOLDEN: ReadonlyArray<{ surface: TokenHashSurface; digest: string }> = [
     surface: 'plantShare',
     digest: '09c0552fc6045764394e1572481873b1c04c5e444395b024a06fa0a6e463bdbd',
   },
+  {
+    surface: 'emailReply',
+    digest: '794a8be3e85c12e8f8e8d07fb31f9af0d61b32d7c976229af0900918ddbdca52',
+  },
 ];
 
 describe('hashCapabilityToken', () => {

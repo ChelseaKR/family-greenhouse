@@ -336,8 +336,8 @@ const checks = [
   // `reminders` — kept per-function precisely because an async failure
   // surfaces nowhere else — could not fire for the failure it existed for.
   [
-    'async lambdas alarm on a single error, and digests/emailEvents/checkoutRecovery are covered',
-    /-\(reminders\|digests\|emailEvents\|checkoutRecovery\)-/u.test(monitoring) &&
+    'async lambdas alarm on a single error, and digests/emailEvents/emailReplies/checkoutRecovery are covered',
+    /-\(reminders\|digests\|emailEvents\|emailReplies\|checkoutRecovery\)-/u.test(monitoring) &&
       /contains\(local\.scheduled_lambda_names, each\.value\) \? 0 : 5/u.test(monitoring),
   ],
   // #458. The scheduled fan-out now stops on a deadline and resumes next run

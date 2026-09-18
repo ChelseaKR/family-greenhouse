@@ -186,6 +186,15 @@ module "api" {
   web_push_vapid_private_key = var.web_push_vapid_private_key
   web_push_vapid_subject     = var.web_push_vapid_subject
 
+  # Reply-to-act (#667, ADR 0031). Off unless the tfvars turn it on AND the
+  # email module exists — the rule joins that module's rule set and bucket.
+  email_reply_actions_enabled = var.email_reply_actions_enabled && var.domain_name != ""
+  email_reply_domain          = var.domain_name
+  inbound_rule_set_name       = var.domain_name == "" ? "" : module.email[0].inbound_rule_set_name
+  inbound_forward_rule_name   = var.domain_name == "" ? "" : module.email[0].inbound_forward_rule_name
+  inbound_mail_bucket_name    = var.domain_name == "" ? "" : module.email[0].inbound_mail_bucket_name
+  inbound_mail_bucket_arn     = var.domain_name == "" ? "" : module.email[0].inbound_mail_bucket_arn
+
   # External integrations. Empty defaults disable the corresponding feature
   # — set via tfvars when you have credentials.
   # Perenual uses Parameter Store indirection so the API key never

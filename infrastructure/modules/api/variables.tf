@@ -218,6 +218,49 @@ variable "ses_events_enabled" {
   default     = false
 }
 
+# --- Reply-to-act (#667, ADR 0031) --------------------------------------------
+# OFF by default, and the only switch. While false: no receipt rule, no SES
+# invoke permission, no S3 grant, and the reminders Lambda mints no reply
+# addresses — reminders keep Reply-To: support@ exactly as before. The
+# emailReplies function itself is deployed either way (like emailEvents with no
+# topic), and receives nothing. Plan-time known for the same reason as
+# ses_events_enabled: it gates `count`.
+variable "email_reply_actions_enabled" {
+  description = "Turn on reply-to-act: the SES `reply-to-act` receipt rule for care+<token>@<email_reply_domain>, its Lambda permission and S3 grant, and reply addresses on reminder emails. Requires the email module (inbound rule set + bucket) to be provisioned."
+  type        = bool
+  default     = false
+}
+
+variable "email_reply_domain" {
+  description = "Domain the reply address lives on (care+<token>@<this>). Must be a domain the email module's MX + receipt rule set already receives for. Empty when the email module is not provisioned."
+  type        = string
+  default     = ""
+}
+
+variable "inbound_rule_set_name" {
+  description = "Active SES receipt rule set (modules/email). The reply-to-act rule is added to it."
+  type        = string
+  default     = ""
+}
+
+variable "inbound_forward_rule_name" {
+  description = "The forward-to-maintainer receipt rule (modules/email); the reply-to-act rule is ordered after it."
+  type        = string
+  default     = ""
+}
+
+variable "inbound_mail_bucket_name" {
+  description = "Bucket SES stores raw inbound mail in (modules/email). Replies land under replies/."
+  type        = string
+  default     = ""
+}
+
+variable "inbound_mail_bucket_arn" {
+  description = "ARN of the inbound-mail bucket, for the replies/* read + delete grant."
+  type        = string
+  default     = ""
+}
+
 variable "web_push_vapid_public_key" {
   description = "VAPID public key for web push. Generate with `npx web-push generate-vapid-keys`."
   type        = string

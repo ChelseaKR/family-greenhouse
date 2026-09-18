@@ -624,10 +624,11 @@ locals {
   # invoked and have no user to notice, which is verbatim the argument the
   # strategy note above makes for keeping `reminders`. `checkoutRecovery`
   # joined the same way: it is EventBridge-invoked with no user watching it
-  # either.
+  # either. `emailReplies` (#667) is SES-invoked: a reply it cannot handle is
+  # retried and dead-lettered, and the person who sent it is not watching.
   scheduled_lambda_names = [
     for name in var.lambda_function_names : name
-    if length(regexall("-(reminders|digests|emailEvents|checkoutRecovery)-", name)) > 0
+    if length(regexall("-(reminders|digests|emailEvents|emailReplies|checkoutRecovery)-", name)) > 0
   ]
 
   # Functions whose LATENCY is worth its own alarm: the two the strategy note

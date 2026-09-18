@@ -29,6 +29,9 @@ data "aws_ssm_parameter" "inbound_forward" {
 }
 
 locals {
+  # `care` is deliberately NOT here: `care+<token>@` is the reply address on a
+  # reminder (#667), handled by its own receipt rule in the api module. Adding
+  # it to this list would forward every "done" to the maintainer's inbox.
   inbound_mailboxes = ["support", "security", "hello", "dmarc"]
   inbound_recipients = [
     for box in local.inbound_mailboxes : "${box}@${var.domain_name}"
@@ -73,6 +76,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "inbound_mail" {
 
 # Mail is forwarded within seconds; the S3 copy is a 90-day safety net for
 # forwarding failures, then it expires.
+#
+# `replies/` holds replies to reminder emails (#667, ADR 0031), written by the
+# `reply-to-act` receipt rule in the api module — which exists only while
+# `email_reply_actions_enabled` is true, so until then nothing is ever written
+# under it. The emailReplies Lambda deletes each reply as soon as it has read
+# its first line; this rule is the backstop for one it never reached, and it is
+# deliberately short because a reply is personal mail, not an audit record.
 resource "aws_s3_bucket_lifecycle_configuration" "inbound_mail" {
   bucket = aws_s3_bucket.inbound_mail.id
   rule {
@@ -83,6 +93,16 @@ resource "aws_s3_bucket_lifecycle_configuration" "inbound_mail" {
     }
     expiration {
       days = 90
+    }
+  }
+  rule {
+    id     = "expire-task-replies"
+    status = "Enabled"
+    filter {
+      prefix = "replies/"
+    }
+    expiration {
+      days = 3
     }
   }
 }
