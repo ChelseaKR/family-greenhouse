@@ -350,7 +350,7 @@ export function parseJsonImport(text: string): JsonImport {
 // None could be built honestly: none of the three documents an export file
 // whose structure can be checked. Researched 2026-09-17:
 //
-//  - Planta: the help centre (https://support.getplanta.com/, sections
+//  - Planta: the help center (https://support.getplanta.com/, sections
 //    "Using Planta" and "Account and profile") describes no export. Its only
 //    programmatic access is an authenticated API for Premium subscribers
 //    (https://public.planta-api.com/v1, the client in
