@@ -137,7 +137,7 @@ async function seedDueReminderHousehold(
   const { householdId } = await seedHousehold(store, { admin: ADMIN, members });
   const plant = await seedPlant(store, householdId, ADMIN.userId, { name: 'Monstera' });
   const taskService = await import('../../src/services/taskService.js');
-  // Due at `nextDue`; every run uses a cutoff of now+24h, so the task is due.
+  // Due at `nextDue`, on or before the day of every run below, so the task is due.
   await taskService.createTask(
     { plantId: plant.id, type: 'water', frequency: 7, nextDue },
     householdId,
@@ -425,7 +425,7 @@ describe('notification dispatch (end-to-end) — channel-scoped retry and dedupe
     expect(snsSendMock).toHaveBeenCalledTimes(2);
   });
 
-  it('sends browser push during DND, then only email/SMS after DND ends', async () => {
+  it('holds browser push through DND with email and SMS, then sends all three when it ends', async () => {
     const user = { userId: 'u-dnd-mixed', email: 'dnd-mixed@x.com', name: 'Dnd Mixed' };
     const householdId = await seedDueReminderHousehold([user]);
     seedPrefs(ADMIN.userId, { email: false });
@@ -442,16 +442,16 @@ describe('notification dispatch (end-to-end) — channel-scoped retry and dedupe
     seedPushSub(user.userId, householdId, 'https://fcm.googleapis.com/fcm/send/dnd-channel-retry');
 
     const reminders = await import('../../src/services/reminders.js');
+    // 14:00, inside quiet hours: push waits exactly like email and SMS (#343,
+    // owner decision 2026-09-17). It used to go out here on its own.
     vi.setSystemTime(new Date('2026-04-25T14:00:00Z'));
-    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'))).toBe(1);
-    expect(pushRecipientEndpoints()).toEqual([
-      'https://fcm.googleapis.com/fcm/send/dnd-channel-retry',
-    ]);
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T14:00:00Z'))).toBe(0);
+    expect(pushRecipientEndpoints()).toHaveLength(0);
     expect(emailRecipients()).toHaveLength(0);
     expect(smsRecipients()).toHaveLength(0);
 
-    // DND is half-open. At 15:00 the loud channels are eligible, while the
-    // completed browser marker keeps push from firing twice.
+    // DND is half-open, and its end is this user's delivery time. At 15:00
+    // every channel goes out, once.
     vi.setSystemTime(new Date('2026-04-25T15:00:00Z'));
     expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T15:00:00Z'))).toBe(1);
     expect(pushRecipientEndpoints()).toEqual([
@@ -459,6 +459,10 @@ describe('notification dispatch (end-to-end) — channel-scoped retry and dedupe
     ]);
     expect(emailRecipients()).toEqual(['dnd-mixed@x.com']);
     expect(smsRecipients()).toEqual(['+15550000007']);
+
+    vi.setSystemTime(new Date('2026-04-25T16:00:00Z'));
+    expect(await reminders.remindHousehold(householdId, new Date('2026-04-25T16:00:00Z'))).toBe(0);
+    expect(pushRecipientEndpoints()).toHaveLength(1);
   });
 });
 

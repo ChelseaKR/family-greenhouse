@@ -43,6 +43,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   off. The Content-Security-Policy change (CloudFront, Terraform) applies with
   the next tagged release.
 
+### Changed
+
+- **The daily reminder goes out when your quiet hours end, or at 08:00
+  local if you have none (#343).** It used to go out on the first hourly run
+  that found something due, which with no quiet hours meant just after
+  midnight. It never goes out before local midnight of the due day.
+
+- **Quiet hours now hold browser and device push too, not just email and
+  SMS.** Push used to be exempt on the grounds that the operating system
+  handles Do Not Disturb, and browser-only users with quiet hours over
+  midnight were pushed at about 00:05. Every channel now waits for the
+  window to end, in reminders and in every other notification. The Settings
+  quiet-hours text (EN/ES), the Help answers and the landing page say so.
+
 ### Fixed
 
 - **The payment-failed notice no longer names the free plan when the household
@@ -50,6 +64,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   force under a declined card, so a household that owns Garden was wrongly
   told it now had Seedling's limits. Both the banner and Settings → Plan
   status now describe the plan the household actually keeps.
+
+- **A reminder now arrives on the day its task is due, not the evening
+  before (#343).** The hourly scan used to name every task due within the
+  next 24 hours, while its one-a-day slot is keyed on the recipient's local
+  date. A task due Tuesday was therefore announced on Monday, again at the
+  first run of Tuesday, and then not at all for the rest of the day it was
+  due. The scan now names a task on the calendar day it falls due in the
+  recipient's own zone (the one quiet hours use), and each day after while it
+  stays overdue. No task is classified differently and no stored value
+  changes. Recipients still on the default `UTC` zone get UTC days and a UTC
+  08:00. EN/ES.
 
 ## [0.35.0] - 2026-09-17
 
@@ -70,6 +95,36 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   objective. No material recurring cost — the ping short-circuits before
   touching auth, the database, or Stripe.
 
+- **Refer a friend.** A new Settings panel gives each person a link to share
+  (`/register?ref=…`). When someone new signs up with it and creates their
+  first household, that household starts with a free month of Garden, and so
+  does the referrer's — the household they were in when they first opened
+  the panel — unless it already has a live subscription, a gift or earlier
+  referral month still running, or a lifetime plan at Garden or above, in
+  which case the referrer's month is skipped rather than stacked. An account
+  can use one referral, ever, and only on its first household. The same inbox
+  on both sides (ignoring `+tag` aliases), or two addresses on one private
+  domain, earns no bonus, though the sign-up still goes through; sharing
+  gmail.com or another common provider does not count as a match. The panel
+  lists each referral by date and whether it earned a bonus, never the other
+  person's name or email. Household invites are unchanged and earn nothing.
+  The panel also appears in the iOS and Android apps, because nothing on it
+  is a purchase. EN/ES.
+
+- **An email when a plan checkout is left unfinished.** A job that runs every
+  20 minutes emails a household's admins once a plan checkout has gone 45
+  minutes without Stripe reporting it paid or expired — the same condition
+  behind the unfinished-checkout notice added to Settings → Billing in
+  0.34.0, which only an admin who opened that page would see. Each admin gets
+  it once per checkout attempt; a later attempt that is also abandoned gets
+  its own email, and a send that fails is retried on a later run. It is not
+  governed by notification settings (the email says so, and says it will not
+  repeat), and it is never sent to an address on the suppression list, where
+  a hard bounce, a spam complaint or repeated soft bounces put it. Like the
+  in-app notice, it does not promise nothing was charged: it says a bank
+  transfer or other delayed payment method can take days to confirm, and to
+  look for a Stripe receipt before trying again. EN/ES.
+
 ### Fixed
 
 - **Guideline 3.1.1: no price or purchase call-to-action inside the native
@@ -80,6 +135,41 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Purchase behind either. Native now shows what the feature is with no price
   and no ask, reusing the same neutral notice the read-only billing screen
   already shows. Web is unchanged.
+
+- **Six public pages had placeholder search descriptions.** The changelog,
+  status, privacy, terms, support and account-deletion pages each carried a
+  51–74 character meta description of generic copy ("Plain language.", "and
+  recent incidents"), well short of what a search result shows. Each now
+  says what the page actually covers — the monitored components on status,
+  the named third parties on privacy, the sections of the terms — in 124–142
+  characters, drawn from text already on the page; the social-card
+  descriptions follow automatically. The "How to actually remember to water
+  your plants" post, which fell back to its shorter index-card blurb, now has
+  a search description of its own.
+
+- **The identification top-up could still be bought inside the iOS and
+  Android apps.** When a household runs out of plant identifications on the
+  Add plant page, the web app offers a top-up pack with a Buy button that
+  opens Stripe Checkout. The native apps showed that button too, a purchase
+  outside the stores' own billing of the kind Apple's Guideline 3.1.1
+  rejects. The apps now show only "This month's plant identifications are used up. Your
+  allowance resets at the start of next month." Web is unchanged.
+
+- **Price-change notices and refunds had no tooling.** The Terms promise
+  that a household's admins are emailed at least 14 days before a running
+  subscription's price moves, and nothing could send that email; a refund
+  could only be made by hand in the Stripe dashboard, leaving no record in
+  the repository. Two operator-run tools now exist, neither reachable from
+  the app. `npm run notify:price-change --workspace backend` (a dry run
+  unless `--confirm` is given) emails every admin of every household with a
+  live subscription on the announced plan, refuses an effective date less
+  than 14 days away, sends once per admin per announcement, changes no
+  price, and records the notice in `docs/price-change-notices.json`.
+  `scripts/issue-refund.mjs` (a dry run unless `--apply` is given) issues a
+  refund the operator has already decided on and appends it to
+  `docs/refund-log.json`. It does not decide whether a refund is owed, and no
+  refund policy comes with it: the questions in #426, a refund window among
+  them, are still open, and nothing in the deployed service issues a refund.
 
 ## [0.34.0] - 2026-09-14
 

@@ -315,7 +315,8 @@ export interface UpForGrabsTask {
 export interface UpForGrabsCopyInput {
   householdName: string | null;
   /** The tasks named in the body — upcoming and unclaimed, never overdue: the
-   *  daily reminder owns everything inside its own 24-hour window. */
+   *  daily reminder owns everything due today or overdue, and this email
+   *  starts more than 24 hours out (`householdEmails.REMINDER_DUE_WINDOW_MS`). */
   tasks: UpForGrabsTask[];
   /** The real number of unclaimed upcoming tasks, which may exceed
    *  `tasks.length`. The digest's own docstring records why a listed count
