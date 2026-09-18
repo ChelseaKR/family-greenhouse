@@ -379,7 +379,7 @@ describe('plants handler', () => {
     );
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'createPlant hands down SEEDLING caps when the Garden subscription is %s',
     async (status) => {
       // The defect: caps resolved off planId alone, so a household that had

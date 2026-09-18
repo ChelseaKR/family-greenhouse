@@ -342,7 +342,7 @@ describe('households handler', () => {
       const { getDailyAnalytics } = await import('../../../src/handlers/households/handler.js');
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
         planId: 'garden',
-        status: 'past_due',
+        status: 'unpaid',
       } as never);
       vi.mocked(taskService.getDailyCompletionCounts).mockResolvedValueOnce([]);
       const res = (await getDailyAnalytics(
@@ -394,7 +394,7 @@ describe('households handler', () => {
       const { getYearInReview } = await import('../../../src/handlers/households/handler.js');
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
         planId: 'greenhouse',
-        status: 'past_due',
+        status: 'unpaid',
       } as never);
       vi.mocked(taskService.getCompletionReview).mockResolvedValueOnce({
         totalCompletions: 2,
@@ -1542,7 +1542,7 @@ describe('households handler', () => {
     expect(cognitoUsers.setHouseholdClaims).toHaveBeenCalledWith('user-2', 'hh-9', 'member');
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'joinHousehold hands down the SEEDLING member cap when the Greenhouse subscription is %s',
     async (status) => {
       // Greenhouse members is UNLIMITED (`null`), Seedling's is 3 (ADR
@@ -1787,7 +1787,7 @@ describe('households handler — PUT /households/{id}/escalation (ADR 0018)', ()
     expect(escalation.setEscalationRule).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'paused'])(
+  it.each(['unpaid', 'paused'])(
     'is entitlement-gated: 402 while the card has failed (%s), and nothing is stored (#476)',
     async (status) => {
       // Turning auto-handoff ON starts a new class of email for the whole
@@ -1958,7 +1958,7 @@ describe('sitter links — member access and revocation model', () => {
     expect(sitterService.createSitterLink).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+  it.each(['unpaid', 'incomplete', 'paused', 'canceled'])(
     'refuses (402) a Garden-length window while the card has failed (%s) — issuing is a NEW grant (#476)',
     async (status) => {
       // The half of the sitter-link decision that follows the card. A

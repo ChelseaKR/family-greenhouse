@@ -988,7 +988,7 @@ function recordActivity(input: RecordActivityInput): void {
  * Before this pass every gate below read `PLANS[h?.planId ?? 'seedling']`,
  * which is `getPlan(h?.planId)` with the fallback written out by hand: it
  * could see the first field and neither of the other two. So the mock granted
- * a `past_due` household everything for the whole dunning window, and dropped
+ * an `unpaid` household everything until planId was reset, and dropped
  * a household that had bought a tier outright to Seedling the moment an
  * unrelated subscription was cancelled — the same two defects #364 and #476
  * fixed in the handlers. That divergence matters here for one reason: the
@@ -5721,7 +5721,7 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
   // `planId` below stays the tier the household is ON — that is what
   // production publishes from the subscription row, and it is truthful. The
   // CAPS have to be the ones actually ENFORCED (#476): resolving them off
-  // planId alone would advertise Garden's plant cap to a past_due household
+  // planId alone would advertise Garden's plant cap to an unpaid household
   // whose next POST /plants is refused at Seedling's.
   const planId = h?.planId ?? 'seedling';
   const plan = entitledPlan(user.householdId);
@@ -6673,7 +6673,7 @@ app.post(
     const user = (req as any).user;
     // ENTITLEMENT, not the plan row (#476/#540). Using a key is gated on
     // entitlement in production's middleware/apiKey.ts, so minting one off
-    // `planId` alone was the inconsistent half: a past_due household could
+    // `planId` alone was the inconsistent half: an unpaid household could
     // issue a key its own next request would then be refused with.
     // And the FLAG, not the id (#592), mirroring the production handler.
     if (!featureOf(entitledPlan(user.householdId), 'apiKeys')) {

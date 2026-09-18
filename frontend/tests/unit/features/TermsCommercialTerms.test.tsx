@@ -183,6 +183,66 @@ describe('terms: the refund section says what the billing code does', () => {
   });
 });
 
+describe('terms: a failed payment keeps the plan while the card is retried (#593)', () => {
+  /**
+   * The Terms describe what the entitlement code does, and since #593 that is:
+   * a `past_due` subscription keeps its plan while Stripe retries the card,
+   * and the household moves to the free plan only once the retries end. The
+   * sentence and the status set live in different workspaces, so this reads
+   * the backend source as text — the same approach as the trial-length check
+   * below — and fails if either side moves without the other.
+   */
+  const plansPath = ['../backend/src/models/plans.ts', 'backend/src/models/plans.ts']
+    .map((candidate) => resolve(process.cwd(), candidate))
+    .find(existsSync);
+  const plansSource = plansPath === undefined ? '' : readFileSync(plansPath, 'utf8');
+
+  it('reads the entitled statuses from models/plans.ts', () => {
+    const match = plansSource.match(/ENTITLED_SUBSCRIPTION_STATUSES = new Set\(\[([^\]]*)\]\)/);
+    expect(match, 'ENTITLED_SUBSCRIPTION_STATUSES not found in models/plans.ts').not.toBeNull();
+    const statuses = [...(match![1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    expect(statuses).toContain('past_due');
+    expect(statuses).not.toContain('unpaid');
+  });
+
+  it.each([
+    [
+      'English',
+      renderEnglish,
+      /keeps its plan and every paid feature while our payment provider retries the card automatically/,
+    ],
+    [
+      'Spanish',
+      renderSpanish,
+      /conserva su plan y todas las funciones de pago mientras nuestro proveedor de pagos vuelve a intentar/,
+    ],
+  ])('%s states the retry window without inventing a day count', (_locale, renderPage, pattern) => {
+    const text = renderPage().container.textContent ?? '';
+    expect(text).toMatch(pattern);
+    // The retry schedule is Stripe's dunning setting, which nothing here reads.
+    const paragraph = [...renderPage().container.querySelectorAll('p')]
+      .map((p) => p.textContent ?? '')
+      .find((p) => pattern.test(p));
+    expect(paragraph).toBeDefined();
+    expect(paragraph).not.toMatch(/\d+\s*(days?|días?)/i);
+  });
+
+  it.each([
+    [
+      'English',
+      renderEnglish,
+      /If the retries end without a successful payment, the household loses the paid plan and moves to the free Seedling plan/,
+    ],
+    [
+      'Spanish',
+      renderSpanish,
+      /Si los reintentos terminan sin un pago correcto, el hogar pierde el plan de pago y pasa al plan gratuito Plántula/,
+    ],
+  ])('%s says what happens when the retries end', (_locale, renderPage, pattern) => {
+    expect(renderPage().container.textContent ?? '').toMatch(pattern);
+  });
+});
+
 describe('terms: the trial length is the one the backend actually asks Stripe for', () => {
   /**
    * The 14 days on the Terms page is not a house number — it is

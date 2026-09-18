@@ -571,7 +571,7 @@ export async function gatherScheduleDrift(
     );
     return { status: 'unavailable' };
   }
-  // ENTITLEMENT, not the plan row (#476): a past_due household is not being
+  // ENTITLEMENT, not the plan row (#476): an unpaid household is not being
   // granted the toolkit, so it does not get the toolkit's insight by email.
   if (!hasHouseholdToolkit(plan)) return { status: 'not_in_plan' };
 

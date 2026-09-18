@@ -91,7 +91,8 @@
       "renewal": {
         "heading": "Renovación automática",
         "cadence": "Las suscripciones se renuevan automáticamente hasta que se cancelan. Un plan mensual se renueva cada mes —a partir del final de la prueba gratuita o, si no hubo prueba, desde el día de la compra— y cada renovación se cobra a la tarjeta registrada sin volver a preguntarte.",
-        "price": "El importe cobrado es el precio del plan que tiene tu suscripción: el precio con el que se contrató, no el que se anuncie más adelante. Los hogares que siguen en un plan anual se renuevan una vez al año al precio con el que lo compraron. La compra de por vida de Garden, ya retirada de la venta, no se renueva nunca: fue un pago único y no hay nada que cancelar."
+        "price": "El importe cobrado es el precio del plan que tiene tu suscripción: el precio con el que se contrató, no el que se anuncie más adelante. Los hogares que siguen en un plan anual se renuevan una vez al año al precio con el que lo compraron. La compra de por vida de Garden, ya retirada de la venta, no se renueva nunca: fue un pago único y no hay nada que cancelar.",
+        "failedPayment": "Si falla un pago de una suscripción —el primero después de una prueba gratuita o cualquier renovación—, el hogar conserva su plan y todas las funciones de pago mientras nuestro proveedor de pagos vuelve a intentar el cobro de la tarjeta automáticamente, y la página de facturación indica que el pago falló. Actualizar la tarjeta desde <em>Ajustes → Facturación → Gestionar suscripción</em> lo resuelve. Si los reintentos terminan sin un pago correcto, el hogar pierde el plan de pago y pasa al plan gratuito Plántula, igual que después de cancelar; no se borra nada."
       },
       "cancellation": {
         "heading": "Cancelar",

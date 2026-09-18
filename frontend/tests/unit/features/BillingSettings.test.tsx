@@ -556,19 +556,67 @@ describe('purchase controls once payment activity is available', () => {
     expect(screen.getByText(/You will not be charged before then/)).toBeInTheDocument();
   });
 
-  it('names the failed payment when the first charge after a trial is declined', async () => {
-    // The scenario this exists for: a card-based trial converts, Stripe cannot
-    // take the money, and the subscription goes trialing -> past_due. `planId`
-    // still says garden (Stripe only rewrites it to seedling weeks later, when
-    // dunning gives up), while the server has already dropped the household to
-    // Seedling's caps. Before this, the page stated the paid plan as a fact and
-    // said nothing at all about the declined card.
+  it('says the plan is kept while Stripe retries the first declined charge (#593)', async () => {
+    // A card-based trial converts, Stripe cannot take the money, and the
+    // subscription goes trialing -> past_due. The owner's decision on #593:
+    // the household keeps its plan while Stripe's automatic retries run, and
+    // the server entitles `past_due` to match. So the page names the failed
+    // payment and asks for the card, but says nothing has been taken away.
     await renderBilling(
       {
         planId: 'garden',
         stripeCustomerId: 'cus_1',
         stripeSubscriptionId: 'sub_1',
         status: 'past_due',
+        usageDetail: { plantCount: 12, maxPlants: 200, memberCount: 2, maxMembers: null },
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText('Your last payment didn’t go through')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-failed-body')).toHaveTextContent(
+      /keeps the Garden plan and everything it includes — nothing has changed yet/
+    );
+    expect(screen.getByTestId('payment-failed-body')).toHaveTextContent(
+      /avoid losing Garden if the retries run out/
+    );
+    expect(
+      screen.getByText(/Update the card under “Manage subscription” below\./)
+    ).toBeInTheDocument();
+    // The plan line still says the payment has not gone through.
+    expect(screen.getByText(/but its last payment has not gone through/)).toBeInTheDocument();
+    // Nothing on the page may say the caps dropped while they have not.
+    expect(screen.queryByText(/We couldn’t take your last payment/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/free Seedling plan’s limits/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a real over-limit warning during the retries, when the caps are still the plan’s', async () => {
+    // While retrying, the caps are the paid plan's own, so an over-limit
+    // warning is about the plan and is not a misattribution of the failure.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'past_due',
+        usageDetail: { plantCount: 300, maxPlants: 200, memberCount: 2, maxMembers: null },
+      },
+      { paid: true }
+    );
+
+    expect(screen.getByText('Your last payment didn’t go through')).toBeInTheDocument();
+    expect(screen.getByText('Over your plan limit')).toBeInTheDocument();
+  });
+
+  it('names the dropped caps once Stripe has given up on the payment (unpaid)', async () => {
+    // Retries exhausted: Stripe marks the subscription unpaid and the server
+    // drops the household to Seedling's caps. `planId` still says garden.
+    await renderBilling(
+      {
+        planId: 'garden',
+        stripeCustomerId: 'cus_1',
+        stripeSubscriptionId: 'sub_1',
+        status: 'unpaid',
         usage: { plantCount: 25, maxPlants: 10, memberCount: 4, maxMembers: 1 },
       },
       { paid: true }
@@ -618,7 +666,7 @@ describe('purchase controls once payment activity is available', () => {
         planId: 'greenhouse',
         stripeCustomerId: 'cus_1',
         stripeSubscriptionId: 'sub_1',
-        status: 'past_due',
+        status: 'unpaid',
         lifetimePlanId: 'garden',
       },
       { paid: true }

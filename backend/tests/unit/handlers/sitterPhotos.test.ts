@@ -310,7 +310,7 @@ describe('POST /sitter/{token}/photos (public)', () => {
     expect(s3.send).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'paused'])(
+  it.each(['unpaid', 'paused'])(
     'still accepts a photo while the household card has failed (%s) (#476)',
     async (status) => {
       // CONTINUING, not starting. The link was issued while entitled and is
@@ -336,7 +336,7 @@ describe('POST /sitter/{token}/photos (public)', () => {
     }
   );
 
-  it('still 402s a free-tier household that is past_due (#476)', async () => {
+  it('still 402s a free-tier household that is unpaid (#476)', async () => {
     // Paired positive control: leniency about STATUS is not leniency about
     // the TIER. Seedling never had photo-back and still does not.
     await wireDynamo({});
@@ -344,7 +344,7 @@ describe('POST /sitter/{token}/photos (public)', () => {
     const billing = await import('../../../src/services/billing.js');
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'seedling',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
     const { uploadSitterPhoto } = await import('../../../src/handlers/tasks/sitterPhotos.js');
 
@@ -566,7 +566,7 @@ describe('GET /sitter/{token}/photos (public)', () => {
     const billing = await import('../../../src/services/billing.js');
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'garden',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
     const { getSitterPhotoStatus } = await import('../../../src/handlers/tasks/sitterPhotos.js');
     const res = (await getSitterPhotoStatus(

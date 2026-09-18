@@ -487,10 +487,10 @@ describe('gatherScheduleDrift', () => {
     expect(doubleCare.getScheduleDriftForPlant).not.toHaveBeenCalled();
   });
 
-  it('reads entitlement, not the plan row: a past_due Garden household is not in plan', async () => {
+  it('reads entitlement, not the plan row: an unpaid Garden household is not in plan', async () => {
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({
       planId: 'garden',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
     await expect(report.gatherScheduleDrift('hh', [row()])).resolves.toEqual({
       status: 'not_in_plan',

@@ -86,7 +86,7 @@ describe('POST /api-keys plan gate', () => {
 
   it('refuses to mint while the card has failed, even though planId is still greenhouse (#476)', async () => {
     const createKey = await subject();
-    for (const status of ['past_due', 'unpaid', 'incomplete', 'canceled', 'paused']) {
+    for (const status of ['unpaid', 'incomplete', 'canceled', 'paused']) {
       vi.mocked(apiKeysService.createApiKey).mockClear();
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
         subscription({ planId: 'greenhouse', status })

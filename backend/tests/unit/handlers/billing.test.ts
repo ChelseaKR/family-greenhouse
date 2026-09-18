@@ -1591,7 +1591,7 @@ describe('billing handler', () => {
   });
 
   describe('GET /billing/me — meters show the caps that are actually enforced', () => {
-    it.each(['past_due', 'unpaid', 'incomplete'])(
+    it.each(['unpaid', 'incomplete', 'incomplete_expired'])(
       'reports Seedling caps for a %s household still sitting on a paid planId',
       async (status) => {
         const billing = await import('../../../src/services/billing.js');
@@ -1616,6 +1616,28 @@ describe('billing handler', () => {
         expect(body.usageDetail.maxMembers).toBe(3);
       }
     );
+
+    it('keeps full paid caps while Stripe retries a failed payment (past_due, #593)', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
+        planId: 'greenhouse',
+        status: 'past_due',
+      });
+      vi.mocked(getHouseholdCounters).mockResolvedValueOnce({ plantCount: 42, memberCount: 3 });
+
+      const res = (await getCurrentSubscription(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      const body = JSON.parse(res.body);
+      // The status is still reported, so the app can say the payment failed,
+      // but the caps are the plan's — nothing is taken until Stripe gives up.
+      expect(body.status).toBe('past_due');
+      expect(body.usageDetail.maxPlants).toBe(5000);
+    });
 
     it('keeps full paid caps while the subscription is active or trialing', async () => {
       const billing = await import('../../../src/services/billing.js');

@@ -114,7 +114,7 @@ describe('POST /households/:id/move-day', () => {
 
   // -- #476: starting a Move Day vs continuing one already claimed ---------
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+  it.each(['unpaid', 'incomplete', 'paused', 'canceled'])(
     'still evaluates while the card has failed (%s) but refuses to CLAIM a new season (#476)',
     async (status) => {
       // The 14-day card survives: the tasks are already in the household's
@@ -138,7 +138,7 @@ describe('POST /households/:id/move-day', () => {
     // The paired positive control on the leniency above: `mayFire: false` is
     // not "everyone gets in". A tier that never included Move Day is still
     // locked before any evaluation happens.
-    const { evaluateMoveDay, moveDay } = await setup('seedling', true, { status: 'past_due' });
+    const { evaluateMoveDay, moveDay } = await setup('seedling', true, { status: 'unpaid' });
     const res = await evaluateMoveDay(buildEvent(), ctx);
     expect(JSON.parse(res.body)).toEqual({ status: 'locked' });
     expect(moveDay.evaluateMoveDay).not.toHaveBeenCalled();

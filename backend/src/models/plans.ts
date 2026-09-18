@@ -409,20 +409,32 @@ export function planHasMoveDay(plan: Plan): boolean {
  *
  * NOT the same set as `LIVE_SUBSCRIPTION_STATUSES` in services/billing.ts,
  * which answers a different question ("would a new checkout create a second,
- * concurrent subscription?"). A `past_due` subscription is live enough that
- * checking out again would double-bill, and simultaneously not paid, so it
- * entitles nothing.
+ * concurrent subscription?"). The two now overlap on `past_due`, for different
+ * reasons: checking out again would double-bill, and access is kept on purpose.
  *
- * Grace period: NONE. No document in this repository publishes one — not
- * docs/billing.md, not COMMERCIAL-STATUS.md, not the ADRs — so choosing any
- * number of days would be inventing a policy. Entitlement therefore ends the
- * moment Stripe stops reporting the subscription as in good standing, and the
- * household falls back to Seedling's free caps. That is the documented
- * downgrade contract, not a punishment: docs/billing.md's "Plan caps and
- * downgrades" says existing data stays readable and editable and only NEW
- * creations pause.
+ * `past_due` is the RETRY WINDOW, and it keeps the paid plan. That is the
+ * owner's decision on #593 (2026-09-17): after a failed payment the household
+ * keeps paid access while Stripe's automatic retries run, and drops to
+ * Seedling's free caps only when Stripe gives up. How long the retries run is
+ * Stripe's dunning schedule, a dashboard setting this repository does not
+ * read, so no number of days is stated anywhere here — the window is exactly
+ * as long as Stripe keeps the subscription `past_due`.
+ *
+ * What "gives up" looks like depends on Stripe's "subscription status after
+ * all retries fail" setting: `unpaid` or `canceled` (via
+ * `customer.subscription.deleted`) both end entitlement here. The third option,
+ * leaving the subscription `past_due`, would keep paid access indefinitely —
+ * which is why docs/billing.md makes that setting a deploy-time check.
+ *
+ * Everything else that is not `active`/`trialing`/`past_due` stays
+ * non-entitled, unchanged: `unpaid`, `canceled`, `incomplete_expired` (Stripe
+ * gave up), `incomplete` (a first payment that never succeeded — there was
+ * never paid access to keep) and `paused`. Falling to Seedling is the
+ * documented downgrade contract, not a punishment: docs/billing.md's "Plan caps
+ * and downgrades" says existing data stays readable and editable and only NEW
+ * creations pause. Lifetime and gift floors apply underneath either way.
  */
-const ENTITLED_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing']);
+const ENTITLED_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
 /**
  * Whether a recorded subscription status entitles the household to its plan.
@@ -646,10 +658,11 @@ export function getMeteredPlanId(sub: EntitlementSubscription, now: Date = new D
  * The plan a household may START something new on.
  *
  * Call sites used to resolve caps with `getPlan(sub.planId)`, which reads the
- * plan a household is ON and ignores whether it is PAYING for it. A `past_due`
- * / `unpaid` / `incomplete` household kept full paid caps for as long as
- * Stripe's dunning ran — weeks — before `customer.subscription.deleted`
- * finally reset planId.
+ * plan a household is ON and ignores whether it is PAYING for it. An `unpaid`
+ * / `incomplete` household kept full paid caps until
+ * `customer.subscription.deleted` finally reset planId. (`past_due` is
+ * different on purpose: it is the retry window, and it keeps the paid plan —
+ * see `ENTITLED_SUBSCRIPTION_STATUSES`.)
  *
  * This is the DEFAULT question and the one nearly every gate is asking. Use
  * `getEntitledPlanForIssuedGrant` only where the pair of functions below says
