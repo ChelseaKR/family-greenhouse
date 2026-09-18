@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { MemorialFrame } from './brand/MemorialFrame';
+import { AnalyticsOptOutToggle } from './AnalyticsOptOutToggle';
 
 // Labels are catalog keys (#467). Several are shared with the site header and
 // the landing footer, so one word is not translated three different ways.
@@ -45,6 +46,7 @@ export function Footer() {
             </Link>
           ))}
         </nav>
+        <AnalyticsOptOutToggle className="mt-4" />
         <div className="mt-8 flex items-center justify-center gap-4">
           <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50" />
           <p className="text-sm italic text-primary-200">{t('footer.memorial')}</p>

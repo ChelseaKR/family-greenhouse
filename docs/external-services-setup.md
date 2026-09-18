@@ -342,10 +342,35 @@ Delete the `PRODUCTION_POSTHOG_KEY` secret and redeploy. Both rails read the key
 at build/deploy time and no-op without it; the first-party `/telemetry/product`
 events keep flowing to CloudWatch.
 
-There is no Google Tag Manager rail. One shipped, unkeyed, until 2026-09-13;
-GTM/GA4 set cookies and would have voided the cookieless posture above, so it
-was removed rather than left one repository variable away from re-enabling
-itself.
+There is no Google Tag Manager rail. One shipped, unkeyed, until 2026-09-13,
+and was removed rather than left one repository variable away from
+re-enabling itself.
+
+---
+
+## Google Analytics 4 — website visit counting
+
+Separate from PostHog, website only, never in the native shells. The design,
+the measured behaviour and the privacy posture are in `docs/analytics.md`,
+"Google Analytics 4"; this section is the setup.
+
+- **Property:** `554850321`, web stream measurement ID `G-L2JN3PQ75P`,
+  event-data retention 14 months, Google signals off.
+- **Where the ID goes:** `VITE_GA_MEASUREMENT_ID: G-L2JN3PQ75P` in the `build`
+  job of `.github/workflows/cd-production.yml`. It is public, so it is a
+  literal, not a secret or variable. Nothing else sets it; unset, nothing
+  loads. Never put it in `frontend/.env.mobile.production` —
+  `scripts/validate-store-release.mjs` fails a store build that has it.
+- **CSP:** `script-src https://www.googletagmanager.com`;
+  `connect-src`/`img-src https://*.google-analytics.com
+https://*.analytics.google.com`, in both `frontend/index.html` and the
+  CloudFront policy (Terraform — applied by the next tagged release).
+- **GA admin settings the code depends on** (owner, in the GA UI): Enhanced
+  measurement → Page views → advanced → **Page changes based on browser
+  history events: off** (the app sends its own scrubbed page views); **User-
+  provided data collection: off**; Data Processing Terms accepted and the
+  account's data-sharing settings off; no Google Ads link.
+- **Disabling:** delete that one line in `cd-production.yml` and tag a release.
 
 ---
 

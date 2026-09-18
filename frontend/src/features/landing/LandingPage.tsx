@@ -34,6 +34,7 @@ import { CalendarLeafIcon } from '@/components/icons/CalendarLeafIcon';
 import { PhoneLeafIcon } from '@/components/icons/PhoneLeafIcon';
 import { GrowthRingsIcon } from '@/components/icons/GrowthRingsIcon';
 import { RootLockIcon } from '@/components/icons/RootLockIcon';
+import { AnalyticsOptOutToggle } from '@/components/AnalyticsOptOutToggle';
 import { useHeroVariant, HERO_EXPERIMENT, type Variant } from '@/lib/experiment';
 import { track, registerSuperProperties } from '@/services/analytics';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -999,6 +1000,7 @@ export function LandingPage() {
                     {t('footer.terms')}
                   </Link>
                 </li>
+                <AnalyticsOptOutToggle as="li" />
               </ul>
             </div>
           </div>

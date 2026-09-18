@@ -43,6 +43,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   inside the native apps points only at that in-app page, never at a payment
   step. (#593)
 
+- **Google Analytics 4 on the website.** familygreenhouse.net now counts
+  visits with GA4 (measurement ID `G-L2JN3PQ75P`), alongside PostHog and
+  independent of it. It sends one page view per route with invite, sharing
+  and sitter tokens, record ids and every non-campaign query parameter
+  scrubbed out, never an account or household id; Google signals and ad
+  personalization are off, and the advertising consent settings are denied
+  everywhere, with analytics cookies also denied in the EEA, the UK and
+  Switzerland. It never loads in the iOS or Android app, or under Global
+  Privacy Control, Do Not Track or the in-app analytics switch — which is also
+  how the post-deploy smoke stays out of it. The privacy page, in English and
+  Spanish, describes what it collects, its `_ga` cookies and how to turn it
+  off. A new "Opt out of analytics" link in the site footers — "Opt back in"
+  once used — turns off Google Analytics and PostHog together on that device,
+  with or without an account; it is the same switch as Settings → Preferences.
+  The Content-Security-Policy change (CloudFront, Terraform) applies with the
+  next tagged release.
+
 ### Changed
 
 - **Every departure (removal, leaving, account deletion from a shared

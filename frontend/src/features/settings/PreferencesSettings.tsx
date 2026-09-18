@@ -4,7 +4,8 @@ import { Link } from 'react-router';
 import { Card, CardHeader } from '@/components/Card';
 import { applyDensity, Density, LangCode, usePrefsStore } from '@/store/prefsStore';
 import { ensureLanguageCatalog, isRTL, SUPPORTED_LANGS } from '@/i18n';
-import { analyticsOptOutStored, setAnalyticsOptOut } from '@/services/analytics';
+import { analyticsOptOutStored } from '@/services/analytics';
+import { setAnalyticsPreference } from '@/services/googleAnalytics';
 import clsx from 'clsx';
 
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
@@ -30,7 +31,10 @@ export function PreferencesSettings() {
   // source of truth and this state just mirrors it for the checkbox.
   const [analyticsShared, setAnalyticsShared] = useState(() => !analyticsOptOutStored());
   const onAnalyticsChange = (shared: boolean) => {
-    setAnalyticsOptOut(!shared);
+    // The same switch as the public footer's "Opt out of analytics": one flag
+    // silences PostHog and Google Analytics alike, and deletes the GA cookies
+    // now rather than at expiry (services/googleAnalytics.ts).
+    setAnalyticsPreference(!shared);
     setAnalyticsShared(!analyticsOptOutStored());
   };
 

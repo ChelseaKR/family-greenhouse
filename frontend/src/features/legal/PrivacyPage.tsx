@@ -40,7 +40,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-13">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-09-17">
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"
@@ -81,6 +81,12 @@ export function PrivacyPage() {
           <Trans i18nKey="legal.privacy.collect.telemetryEvents" components={{ code: <code /> }} />
         </li>
         <li>{t('legal.privacy.collect.telemetryRum')}</li>
+        <li>
+          <Trans
+            i18nKey="legal.privacy.collect.googleAnalytics"
+            components={{ strong: <strong />, code: <code /> }}
+          />
+        </li>
       </ul>
       <p>
         <Trans i18nKey="legal.privacy.collect.optOut" components={{ code: <code />, em: <em /> }} />
@@ -119,6 +125,12 @@ export function PrivacyPage() {
             i18nKey="legal.privacy.thirdParties.posthog"
             values={{ supportEmail: SUPPORT_EMAIL }}
             components={{ strong: <strong />, code: <code />, supportLink }}
+          />
+        </li>
+        <li>
+          <Trans
+            i18nKey="legal.privacy.thirdParties.googleAnalytics"
+            components={{ strong: <strong />, code: <code /> }}
           />
         </li>
         <li>

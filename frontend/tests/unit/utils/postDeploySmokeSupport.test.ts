@@ -53,11 +53,20 @@ describe('post-deploy smoke support', () => {
   });
 
   describe('analytics leak detection', () => {
-    it('names PostHog capture hosts and nothing else', () => {
+    it('names the PostHog and Google Analytics hosts and nothing else', () => {
       expect(isVendorAnalyticsHostname('us.i.posthog.com')).toBe(true);
       expect(isVendorAnalyticsHostname('EU.I.POSTHOG.COM')).toBe(true);
       expect(isVendorAnalyticsHostname('posthog.com')).toBe(true);
+      // Google Analytics 4: the gtag.js host and the collection hosts, which
+      // are exactly what a bundle ignoring GPC would request first.
+      expect(isVendorAnalyticsHostname('www.googletagmanager.com')).toBe(true);
+      expect(isVendorAnalyticsHostname('www.google-analytics.com')).toBe(true);
+      expect(isVendorAnalyticsHostname('region1.google-analytics.com')).toBe(true);
+      expect(isVendorAnalyticsHostname('region1.analytics.google.com')).toBe(true);
       expect(isVendorAnalyticsHostname('notposthog.com')).toBe(false);
+      expect(isVendorAnalyticsHostname('not-google-analytics.com')).toBe(false);
+      expect(isVendorAnalyticsHostname('google.com')).toBe(false);
+      expect(isVendorAnalyticsHostname('fcm.googleapis.com')).toBe(false);
       expect(isVendorAnalyticsHostname('familygreenhouse.net')).toBe(false);
       expect(isVendorAnalyticsHostname('s3.us-east-1.amazonaws.com')).toBe(false);
     });

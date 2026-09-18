@@ -69,6 +69,22 @@ describe('PreferencesSettings: product analytics opt-out', () => {
     expect(localStorage.getItem(ANALYTICS_OPT_OUT_STORAGE_KEY)).toBe('1');
   });
 
+  it('also drops the Google Analytics cookies when turned off', async () => {
+    document.cookie = '_ga=GA1.1.123.456; path=/';
+    document.cookie = '_ga_L2JN3PQ75P=GS2.1.s1; path=/';
+    // The sabotage landed: both identifiers exist before the click.
+    expect(document.cookie).toContain('_ga=');
+    expect(document.cookie).toContain('_ga_L2JN3PQ75P=');
+
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(screen.getByRole('checkbox', { name: /share usage events/i }));
+
+    expect(analyticsOptedOut()).toBe(true);
+    expect(document.cookie).not.toContain('_ga=');
+    expect(document.cookie).not.toContain('_ga_L2JN3PQ75P=');
+  });
+
   it('reflects a stored opt-out on mount and clears it when turned back on', async () => {
     localStorage.setItem(ANALYTICS_OPT_OUT_STORAGE_KEY, '1');
     const user = userEvent.setup();
