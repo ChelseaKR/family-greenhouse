@@ -237,5 +237,32 @@ export function headToTags(head: ResolvedHead): string {
   ].join('\n    ');
 }
 
+/**
+ * The <head> for `dist/404.html`, the not-found document CloudFront returns,
+ * with a 404 status, for any path the frontend bucket has no object for
+ * (issue #719). Deliberately a SUBSET of `headToTags()`: title, description and
+ * robots, and nothing else.
+ *
+ *   - No canonical and no `og:url`, for the SPA shell's reason: the document
+ *     answers for arbitrary URLs, so any canonical in it would be wrong.
+ *   - No Open Graph or Twitter card at all. A dead link is not something to
+ *     share, and one tag in that set is load-bearing elsewhere:
+ *     `og:site_name` is the literal `aws_route53_health_check.site` matches.
+ *     The distribution's 404 rule cannot be scoped to a prefix, so this same
+ *     document is also what a missing `/assets/` chunk returns — and the
+ *     release smoke (`synthetic-page-check.mjs --missing-asset-404`) requires
+ *     that response NOT to carry the health check's string, so a lost JS
+ *     bundle can never read as the app to the monitor (#615).
+ *
+ * `check-prerender-coverage.mjs` re-asserts both properties on the built file.
+ */
+export function notFoundHeadToTags(head: ResolvedHead): string {
+  return [
+    `<title>${esc(head.title)}</title>`,
+    `<meta name="description" content="${esc(head.description)}" />`,
+    `<meta name="robots" content="${esc(head.robots)}" />`,
+  ].join('\n    ');
+}
+
 /** Re-exported so callers building absolute URLs don't need a second import. */
 export { SITE_URL, siteUrl };

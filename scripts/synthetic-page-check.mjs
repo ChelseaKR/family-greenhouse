@@ -52,7 +52,15 @@
  * #615 established — under `/assets/` every name is content-addressed, so the
  * object exists or it does not, and the SPA shell is never the right answer.
  *
- * It lives on the release path (`cd-production.yml`'s post-deploy smoke), not
+ * `--missing-route-404` is its sibling for PAGES (issue #719): a fabricated
+ * `/care/<slug>` must answer 404. A 200 there asserts a care guide exists that
+ * does not, and makes a link check against this host structurally unable to
+ * fail. It asserts the status only, not which body came with it: the body is
+ * gated at build time (`check-prerender-coverage.mjs` on `dist/404.html`), and a
+ * rollback — which restores the frontend and the Lambdas, not Terraform —
+ * could not repair a body the distribution chose.
+ *
+ * Both live on the release path (`cd-production.yml`'s post-deploy smoke), not
  * on the fifteen-minute cron, because it asserts a property of the distribution
  * that only becomes true when `terraform apply` runs. On the cron it would page
  * every fifteen minutes for the gap between a merge and the next release, about
@@ -73,6 +81,8 @@
  *   node scripts/synthetic-page-check.mjs --base-url https://familygreenhouse.net
  *   node scripts/synthetic-page-check.mjs --base-url https://example.test \
  *     --route /robots.txt --expect-failure
+ *   node scripts/synthetic-page-check.mjs --base-url https://familygreenhouse.net \
+ *     --missing-asset-404 --missing-route-404
  */
 import process from 'node:process';
 
@@ -118,6 +128,14 @@ const JS_CONTENT_TYPES = new Set([
  * content hash of its own bytes. Used by `--missing-asset-404`.
  */
 const FABRICATED_ASSET = '/assets/index-DOESNOTEXIST.js';
+
+/**
+ * A care guide that is not published. `/care/` is the namespace #719 names as
+ * where a stale external link most often lands, and every real member of it is
+ * prerendered, so the edge function leaves anything else to S3's 404. Used by
+ * `--missing-route-404`.
+ */
+const FABRICATED_ROUTE = '/care/synthetic-check-no-such-guide';
 
 /**
  * The literal `aws_route53_health_check.site` searches for
@@ -247,6 +265,19 @@ export function missingAssetFailures({ status, body }) {
   return failures;
 }
 
+/**
+ * Evaluate the response to an unpublished content URL. Pure. One assertion: it
+ * is a 404. Anything else — the shell's 200, a redirect that lands on a 200 —
+ * tells every crawler, archiver and link checker that the page exists (#719).
+ */
+export function missingRouteFailures({ status }) {
+  if (status === 404) return [];
+  return [
+    `HTTP ${status} for ${FABRICATED_ROUTE} (expected 404). No such care guide is published, ` +
+      'so anything but a 404 tells a crawler or a link checker that it exists (#719).',
+  ];
+}
+
 const USER_AGENT = 'family-greenhouse-synthetic-page-check';
 
 /**
@@ -334,12 +365,30 @@ export async function checkMissingAsset(baseUrl, timeoutMs = DEFAULT_TIMEOUT_MS)
   }
 }
 
+/** Fetch an unpublished content URL and evaluate the CDN's answer. */
+export async function checkMissingRoute(baseUrl, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const url = new URL(FABRICATED_ROUTE, baseUrl).href;
+  try {
+    const response = await fetchOnce(url, timeoutMs);
+    return {
+      route: FABRICATED_ROUTE,
+      url,
+      status: response.status,
+      failures: missingRouteFailures(response),
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? (error.name ?? 'Error') : 'Error';
+    return { route: FABRICATED_ROUTE, url, status: 0, failures: [`request failed (${reason})`] };
+  }
+}
+
 /** Minimal flag parser: `--flag value`, plus repeatable `--route`. */
 function parseArgs(argv) {
   const options = {
     routes: [],
     expectFailure: false,
     missingAsset404: false,
+    missingRoute404: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   };
 
@@ -359,6 +408,7 @@ function parseArgs(argv) {
     else if (arg === '--timeout-ms') options.timeoutMs = Number(value());
     else if (arg === '--expect-failure') options.expectFailure = true;
     else if (arg === '--missing-asset-404') options.missingAsset404 = true;
+    else if (arg === '--missing-route-404') options.missingRoute404 = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
@@ -375,8 +425,13 @@ export async function main(argv) {
   // Sequential on purpose: four requests every fifteen minutes is not worth
   // parallelising, and a serial run keeps the log readable when one fails.
   const results = [];
-  if (options.missingAsset404) {
-    results.push(await checkMissingAsset(options.baseUrl, options.timeoutMs));
+  if (options.missingAsset404 || options.missingRoute404) {
+    if (options.missingAsset404) {
+      results.push(await checkMissingAsset(options.baseUrl, options.timeoutMs));
+    }
+    if (options.missingRoute404) {
+      results.push(await checkMissingRoute(options.baseUrl, options.timeoutMs));
+    }
   } else {
     for (const route of options.routes) {
       results.push(await checkRoute(options.baseUrl, route, options.timeoutMs));

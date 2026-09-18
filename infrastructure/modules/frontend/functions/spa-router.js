@@ -25,7 +25,7 @@
 //      Rewritten to `/app-shell.html` BY NAME — the object always exists, so
 //      the request is a hit rather than an error.
 //   4. An extensionless path that is neither. Left alone, so S3 answers 404
-//      and the viewer is told the truth.
+//      and the viewer gets it, with /404.html as the body (main.tf).
 //
 // Anything with a dot in its last segment is a file request and is left alone.
 //
@@ -141,23 +141,7 @@ function handler(event) {
   var request = event.request;
   var uri = request.uri;
 
-  // (0) One canonical host: `www.` 301s to the apex, before any rewrite below
-  // so it covers every path. Why, and what it repairs: see the note in
-  // frontend/scripts/build-spa-router.mjs.
-  var hh = request.headers && request.headers.host;
-  var h = hh && hh.value;
-  if (h && h.indexOf('www.') === 0) {
-    var qs = '';
-    for (var k in request.querystring) {
-      qs += (qs ? '&' : '?') + k;
-      if (request.querystring[k].value) qs += '=' + request.querystring[k].value;
-    }
-    return {
-      statusCode: 301,
-      statusDescription: 'Moved Permanently',
-      headers: { location: { value: 'https://' + h.slice(4) + uri + qs } },
-    };
-  }
+  // `www.` never reaches this function: its own distribution 301s it (#797).
 
   // (1) Content-addressed build output. Never a route, never rewritten: a
   // request for a chunk that is not there has to be a miss, not the shell.
@@ -177,7 +161,7 @@ function handler(event) {
   // verifier reporting "no such file" and reporting a JSON parse error on a
   // page of HTML. Same reasoning as `/assets/` above, and it works for the
   // same reason: the frontend bucket grants `s3:ListBucket`, so a missing
-  // object is a 404 that no `custom_error_response` rescues.
+  // object is a 404 that no `custom_error_response` turns into a 200.
   if (uri === '/.well-known' || uri.indexOf('/.well-known/') === 0) {
     return request;
   }
@@ -227,8 +211,8 @@ function handler(event) {
 
     // (4) Extensionless and matched by nothing. Leaving the URI alone asks S3
     // for an object that is not there; the frontend bucket grants
-    // `s3:ListBucket`, so that is a 404, and the surviving
-    // `custom_error_response` covers 403 only.
+    // `s3:ListBucket`, so that is a 404, and the distribution's 404 rule keeps
+    // the status and serves /404.html as the body.
     return request;
   }
 

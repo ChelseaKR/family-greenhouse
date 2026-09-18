@@ -399,6 +399,18 @@ the comment "a typo, a stale inbound link, an unknown deep path: all still boot
 the app" — which is the plainest example this repository has of a gate pinned
 to the defect it should have caught.
 
+Two neighbours in the same step. `frontend/scripts/www-redirect.test.mjs`
+covers `functions/www-redirect.js`, the `www.` distribution's one-line job
+(#797), and — because the hop count is decided in HCL rather than in the
+function — pins the Terraform shape too: `www.` has its own `allow-all`
+distribution, the main one no longer claims it, and the new one is created only
+after the old one lets go. `terraform validate` accepts every one of those
+regressions. `frontend/scripts/check-prerender-coverage.test.mjs` feeds the
+build gate on `dist/404.html` (#719) one fixture per defect, above all an
+`og:site_name` in its head: that page also answers for a missing `/assets/`
+chunk, and the release smoke fails — rolling production back — if one carries
+the Route 53 health check's string.
+
 ### The production availability predicates
 
 `scripts/synthetic-page-check.test.mjs` (`npm run test:checks`, `node --test`)

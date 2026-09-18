@@ -13,6 +13,11 @@ locals {
     var.include_www_alias ? ["www.${var.domain_name}"] : []
   )
   route53_zone_name = var.hosted_zone_name != "" ? var.hosted_zone_name : var.domain_name
+
+  # `www.` is served by its own redirect-only distribution (issue #797), so the
+  # main distribution answers for the apex alone. `frontend_aliases` above still
+  # lists both: the certificate and the images bucket's CORS origins use it.
+  www_redirect = var.domain_name != "" && var.include_www_alias
 }
 
 # Frontend S3 Bucket
@@ -303,15 +308,16 @@ resource "aws_cloudfront_distribution" "frontend" {
   # app-shell.html is the pristine empty shell that frontend/scripts/prerender.mjs
   # writes for exactly this purpose; the app boots from it the way it always has.
   #
-  # THE 404 RULE IS GONE ON PURPOSE (issue #615). `custom_error_response` is a
-  # property of the DISTRIBUTION, not of a cache behavior — there is no way to
-  # spell "rescue routes but not /assets/". So the rescue has to stop covering
-  # the status code that a missing ASSET produces, and the frontend bucket's
-  # `s3:ListBucket` grant is what makes that status 404 rather than 403:
+  # THE 404 RESCUE IS GONE ON PURPOSE (issue #615). `custom_error_response` is
+  # a property of the DISTRIBUTION, not of a cache behavior — there is no way
+  # to spell "rescue routes but not /assets/". So the rescue has to stop
+  # covering the status code that a missing ASSET produces, and the frontend
+  # bucket's `s3:ListBucket` grant is what makes that status 404 rather than
+  # 403. (The 404 rule below changes the BODY of that 404, never its status.)
   #
-  #   /assets/index-<hash>.js  missing  -> S3 404 -> no rule  -> 404 to viewer
-  #   /brand/missing.png       missing  -> S3 404 -> no rule  -> 404 to viewer
-  #   /plants/abc-123          missing  -> S3 403 -> rescued  -> app shell, 200
+  #   /assets/index-<hash>.js  missing  -> S3 404 -> not rescued -> 404 to viewer
+  #   /brand/missing.png       missing  -> S3 404 -> not rescued -> 404 to viewer
+  #   /plants/abc-123          missing  -> S3 403 -> rescued     -> app shell, 200
   #
   # Before this, the first two lines read "-> 200 with the app shell", which is
   # the CDN rendering absence as a value: a total loss of the JS bundle would
@@ -320,13 +326,39 @@ resource "aws_cloudfront_distribution" "frontend" {
   # a frontend outage would have reported healthy while no browser could boot
   # the app.
   #
-  # Restoring a 404 rule re-breaks that. If a future change needs a friendly
-  # 404 PAGE, add it as `error_code = 404, response_code = 404` — a page is
-  # fine, a 200 is not.
+  # A `404 -> 200` rule re-breaks that, and `observability:check` fails on one.
   custom_error_response {
     error_code         = 403
     response_code      = 200
     response_page_path = "/app-shell.html"
+  }
+
+  # The not-found PAGE (issue #719), and deliberately `404 -> 404`: the status
+  # the viewer gets is still the one S3 gave, and only the body changes, from
+  # S3's XML error document to the app's own "Nothing growing here" page.
+  #
+  # Like every `custom_error_response`, it covers the whole distribution, so it
+  # answers for a missing `/assets/` chunk too. That is safe for two reasons,
+  # and both are gated rather than assumed:
+  #
+  #   - the status stays 404, so a browser still refuses the chunk and Route
+  #     53's HTTPS_STR_MATCH (2xx/3xx only) still reads the miss as a failure;
+  #   - /404.html carries NO `og:site_name`, the literal that health check
+  #     matches (`notFoundHeadToTags` in frontend/src/config/seo.ts), so a
+  #     missing chunk can never impersonate the app. The build fails if it does
+  #     (check-prerender-coverage.mjs), and so does the release smoke
+  #     (synthetic-page-check.mjs --missing-asset-404).
+  #
+  #   /care/no-such-plant   no object -> S3 404 -> 404.html, 404 to viewer
+  #   /assets/missing.js    no object -> S3 404 -> 404.html, 404 to viewer
+  #   /plants/abc-123       images    -> S3 403 -> app shell, 200 (rule above)
+  #
+  # `observability:check` accepts a 404 rule only in exactly this shape: a
+  # response code of 404 and a page that is not the app shell.
+  custom_error_response {
+    error_code         = 404
+    response_code      = 404
+    response_page_path = "/404.html"
   }
 
   restrictions {
@@ -335,7 +367,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  aliases = local.frontend_aliases
+  # The apex only. `www.` moved to aws_cloudfront_distribution.www_redirect
+  # (issue #797): an alias can belong to one distribution at a time, and this
+  # one's `redirect-to-https` would otherwise answer http://www before any
+  # function could send it to the apex.
+  aliases = var.domain_name == "" ? [] : [var.domain_name]
 
   viewer_certificate {
     cloudfront_default_certificate = var.domain_name == ""
@@ -420,15 +456,117 @@ resource "aws_route53_record" "apex" {
 }
 
 resource "aws_route53_record" "www" {
-  count   = var.domain_name == "" || !var.include_www_alias ? 0 : 1
+  count   = local.www_redirect ? 1 : 0
   zone_id = data.aws_route53_zone.primary[0].zone_id
   name    = "www.${var.domain_name}"
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.frontend.domain_name
-    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    name                   = aws_cloudfront_distribution.www_redirect[0].domain_name
+    zone_id                = aws_cloudfront_distribution.www_redirect[0].hosted_zone_id
     evaluate_target_health = false
+  }
+}
+
+# ---------------------------------------------------------------------------
+# www. -> apex in ONE hop, from either scheme (issue #797).
+#
+# Until this, `www.` was a second alias on the main distribution, and rule 0 of
+# its viewer-request function 301'd it to the apex (#760). That is one hop for
+# https://www and two for http://www: the main distribution's default behavior
+# has `viewer_protocol_policy = "redirect-to-https"`, and CloudFront answers
+# that redirect itself BEFORE any function runs. So http://www.<domain>/x went
+# to https://www.<domain>/x first (`X-Cache: Redirect from cloudfront`) and
+# only then to https://<domain>/x (`X-Cache: FunctionGeneratedResponse`). A
+# function cannot act on a request CloudFront has already answered, and the
+# main distribution cannot `allow-all` without serving the app over HTTP.
+#
+# So `www.` gets a distribution of its own whose only job is the redirect:
+# `allow-all`, so its function sees both schemes, and a viewer-request function
+# that answers every request with a 301 to https://<apex><path><query>. No
+# request ever reaches its origin, so nothing is served over plain HTTP.
+#
+# ROLLOUT, in one `terraform apply`. An alias can belong to one distribution at
+# a time, so `depends_on` below makes Terraform finish removing `www.` from the
+# main distribution BEFORE creating this one, which is what keeps the apply
+# from failing on CNAMEAlreadyExists. Between those two steps `www.` is served
+# by neither, so it errors for the few minutes the new distribution takes to
+# deploy. The apex is untouched throughout, and the Route 53 site health check
+# probes the apex.
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_function" "www_redirect" {
+  count   = local.www_redirect ? 1 : 0
+  name    = "${var.project_name}-www-redirect-${var.environment}"
+  runtime = "cloudfront-js-2.0"
+  comment = "301 every www request, http or https, straight to https on the apex"
+  publish = true
+  # The apex is substituted here rather than derived from the Host header; see
+  # the header of functions/www-redirect.js for why.
+  code = replace(file("${path.module}/functions/www-redirect.js"), "__APEX_DOMAIN__", var.domain_name)
+}
+
+# Caching is moot — the function answers before the cache is consulted — but a
+# behavior must name a policy, and this one says so.
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+resource "aws_cloudfront_distribution" "www_redirect" {
+  count           = local.www_redirect ? 1 : 0
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = "PriceClass_100"
+  comment         = "${var.project_name} ${var.environment} www redirect"
+  aliases         = ["www.${var.domain_name}"]
+
+  # Never contacted: the viewer-request function answers every request. A
+  # distribution must still name an origin, so it names the apex.
+  origin {
+    domain_name = var.domain_name
+    origin_id   = "apex"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "apex"
+    # THE line. `redirect-to-https` here would bring back the first hop.
+    viewer_protocol_policy = "allow-all"
+    compress               = true
+
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.www_redirect[0].arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  # The existing certificate already carries `www.` as a SAN.
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.frontend[0].certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  depends_on = [aws_cloudfront_distribution.frontend]
+
+  tags = {
+    Name = "${var.project_name}-www-redirect-${var.environment}"
   }
 }
 

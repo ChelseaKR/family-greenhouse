@@ -26,6 +26,9 @@ const syntheticPageCheck = read('scripts/synthetic-page-check.mjs');
 const frontendTf = read('infrastructure/modules/frontend/main.tf');
 const spaRouter = read('infrastructure/modules/frontend/functions/spa-router.js');
 const syntheticPageCheckTest = read('scripts/synthetic-page-check.test.mjs');
+const prerenderCoverage = read('frontend/scripts/check-prerender-coverage.mjs');
+const prerender = read('frontend/scripts/prerender.mjs');
+const seoConfig = read('frontend/src/config/seo.ts');
 const billingService = read('backend/src/services/billing.ts');
 
 /**
@@ -119,6 +122,27 @@ function stripComments(source) {
 function stripHclComments(source) {
   return source.replaceAll(/^\s*#.*$/gmu, '');
 }
+
+/**
+ * Every `custom_error_response` block in an HCL source, as
+ * `{ errorCode, responseCode, pagePath }` strings (null when a field is
+ * absent). Comments are stripped first, for the reason `stripHclComments`
+ * gives. The blocks are flat — three scalar attributes — so a brace-free body
+ * match is exact.
+ */
+function customErrorResponses(source) {
+  const field = (body, name) =>
+    new RegExp(`^\\s*${name}\\s*=\\s*"?([^"\\n]*?)"?\\s*$`, 'mu').exec(body)?.[1] ?? null;
+  return [...stripHclComments(source).matchAll(/custom_error_response\s*\{([^{}]*)\}/gu)].map(
+    ([, body]) => ({
+      errorCode: field(body, 'error_code'),
+      responseCode: field(body, 'response_code'),
+      pagePath: field(body, 'response_page_path'),
+    })
+  );
+}
+
+const frontendErrorResponses = customErrorResponses(frontendTf);
 
 /**
  * The first `import` statement in a module, which is the one whose side
@@ -496,12 +520,57 @@ const checks = [
   //    ListBucket grant turns every miss back into a 403 the surviving 403 rule
   //    rescues. Either one silently reopens the blind spot, so both are asserted
   //    here rather than only in a comment.
+  //
+  //    Until #719 this read "no `error_code = 404` at all". That was stricter
+  //    than the property: what reopens the blind spot is a 404 answered with a
+  //    200, or with the shell. A `404 -> 404` rule serving a page that is NOT
+  //    the shell keeps the status every one of these checks reads, and is how
+  //    the not-found page reaches a viewer — so that exact shape, and only it,
+  //    is allowed.
   [
     'the CDN answers a missing object with a miss, not with the app shell',
     /"s3:ListBucket"/u.test(frontendTf) &&
-      !/error_code\s*=\s*404/u.test(stripHclComments(frontendTf)) &&
+      frontendErrorResponses.length > 0 &&
+      frontendErrorResponses
+        .filter(({ errorCode }) => errorCode === '404')
+        .every(
+          ({ responseCode, pagePath }) =>
+            responseCode === '404' &&
+            pagePath !== null &&
+            !/^\/(?:app-shell|index)\.html$/u.test(pagePath)
+        ) &&
       /'\/assets\/'/u.test(spaRouter) &&
       /request\.uri = '\/app-shell\.html'/u.test(spaRouter),
+  ],
+  // 4. The page that 404 rule serves also answers for a missing /assets/ chunk,
+  //    so it must never carry the string the Route 53 check matches. The
+  //    release smoke above would catch it — by failing, which rolls production
+  //    back. This is what catches it at build time instead: the not-found head
+  //    omits og:site_name by construction, prerender.mjs writes the page the
+  //    rule names, and check-prerender-coverage.mjs fails the build if the file
+  //    carries the tag anyway.
+  [
+    'the not-found page the 404 rule serves cannot carry the health check string',
+    frontendErrorResponses.some(
+      ({ errorCode, pagePath }) => errorCode === '404' && pagePath === '/404.html'
+    ) &&
+      /export function notFoundHeadToTags\(/u.test(seoConfig) &&
+      !/og:site_name/u.test(
+        seoConfig.slice(seoConfig.indexOf('export function notFoundHeadToTags('))
+      ) &&
+      /join\(DIST, '404\.html'\)/u.test(prerender) &&
+      /export function notFoundDocumentFailures\(/u.test(prerenderCoverage) &&
+      /og:site_name/u.test(prerenderCoverage) &&
+      /failures\.push\(\.\.\.notFoundDocumentFailures\(/u.test(prerenderCoverage),
+  ],
+  // 5. #719 in production: an unpublished content URL is a 404 on every
+  //    release, not only on the day it was fixed.
+  [
+    'the release smoke requires an unpublished care guide to 404',
+    /--missing-route-404/u.test(production) &&
+      /export function missingRouteFailures\(/u.test(syntheticPageCheck) &&
+      /missingRouteFailures\(response\)/u.test(syntheticPageCheck) &&
+      /missingRouteFailures/u.test(syntheticPageCheckTest),
   ],
   // Retired claims. docs/observability.md described a Route53 health check
   // that did not exist and a 30-second probe that did not exist (#464), then

@@ -170,3 +170,32 @@ where `observability:check` fails on `error_code = 404` reappearing in
 separable, and only the status changed here. `/plants/{plantId}` is also
 untouched: that prefix is served by the images cache behavior, which has no
 function association and still relies on the `403 → 200` rule.
+
+## Update — 2026-09-17 (issues #719, #797)
+
+**The body.** The prerender now writes a fourth kind of output,
+`dist/404.html`: the app's own `NotFoundPage`, rendered through `<App />` at a
+URL no route declares, with no `data-prerendered` stamp (so `main.tsx` client-
+renders the real URL instead of hydrating it) and a head from
+`notFoundHeadToTags()` — title, description, `noindex`, and nothing else. The
+distribution gained `custom_error_response { 404 → 404, /404.html }`.
+
+That is the rule the previous update said could not ship, and what changed is
+the page, not the rule. The rule still answers for `/assets/`, and the
+objection was that its body would then carry `og:site_name`, the literal the
+Route 53 health check matches. This page does not carry it, by construction;
+`check-prerender-coverage.mjs` fails the build if it ever does; and the
+`observability:check` tripwire now forbids the harmful shapes — a 404 answered
+with a 200, or with the shell — rather than every 404 rule. The status a
+viewer, a crawler or the smoke sees is unchanged: 404, from S3.
+
+In a browser, an unpublished `/care/<slug>` or `/blog/<slug>` still ends where
+it did before #723: the app boots, and `CareGuidePage` / `BlogPost` redirect to
+their index. The page is for everything that does not run JavaScript.
+
+**One canonical host, in one hop.** `www.` now has its own distribution, whose
+only job is a 301 to `https://<apex>`. Rule 0 of `spa-router.js` did that
+since #760, but on the main distribution `redirect-to-https` answers a plain
+HTTP request before any function runs, so `http://www.` took two hops. The new
+distribution is `allow-all`, so its function sees both schemes; the main one
+answers for the apex alone.

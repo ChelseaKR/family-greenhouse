@@ -20,7 +20,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import './i18n';
 import { MetaSinkContext, type MetaSink } from './hooks/metaSink';
-import { headToTags, resolveHead, type MetaTags } from './config/seo';
+import { headToTags, notFoundHeadToTags, resolveHead, type MetaTags } from './config/seo';
 
 /** Rendered HTML for a route plus the <head> tags the route asked for. */
 export interface RenderedRoute {
@@ -78,7 +78,8 @@ function newQueryClient(): QueryClient {
 }
 
 /**
- * Render one route to HTML.
+ * Render the app at `url` and return the markup plus the meta the rendered
+ * route asked for.
  *
  * Uses React 19's `prerender` (react-dom/static) rather than `renderToString`
  * because every route in App.tsx is behind `React.lazy`. `renderToString`
@@ -86,7 +87,9 @@ function newQueryClient(): QueryClient {
  * for all 25 pages. `prerender` waits for the whole tree to settle and only
  * then resolves.
  */
-export async function renderRoute(url: string): Promise<RenderedRoute> {
+async function renderApp(
+  url: string
+): Promise<{ body: string; hoisted: string; meta: MetaTags | null }> {
   const sink: MetaSink = { current: null };
   const errors: unknown[] = [];
 
@@ -110,9 +113,36 @@ export async function renderRoute(url: string): Promise<RenderedRoute> {
   if (errors.length > 0) throw errors[0];
 
   const rendered = await new Response(prelude).text();
-  const { body, hoisted } = extractHoistables(rendered);
-  const head = headToTags(resolveHead(sink.current as MetaTags | null, url));
+  return { ...extractHoistables(rendered), meta: sink.current as MetaTags | null };
+}
 
+/** Render one route to HTML. */
+export async function renderRoute(url: string): Promise<RenderedRoute> {
+  const { body, hoisted, meta } = await renderApp(url);
+  const head = headToTags(resolveHead(meta, url));
+  return { html: body, head: hoisted ? `${head}\n    ${hoisted}` : head };
+}
+
+/**
+ * A URL no `<Route>` in App.tsx declares, so React Router resolves it to the
+ * `*` route — the same `NotFoundPage` a browser renders for an unknown URL.
+ */
+const NOT_FOUND_RENDER_URL = '/__not-found__';
+
+/**
+ * The not-found document, `dist/404.html` (issue #719). CloudFront returns it
+ * WITH a 404 status for any path the frontend bucket has no object for, so a
+ * crawler, a link checker and a browser with JavaScript off all get the app's
+ * own "Nothing growing here" page rather than S3's XML error.
+ *
+ * It answers for arbitrary URLs, so its head is resolved with no path (no
+ * canonical) and serialized by `notFoundHeadToTags` — which also leaves out
+ * `og:site_name`, because the same document answers for a missing `/assets/`
+ * chunk. See that function for why that matters.
+ */
+export async function renderNotFound(): Promise<RenderedRoute> {
+  const { body, hoisted, meta } = await renderApp(NOT_FOUND_RENDER_URL);
+  const head = notFoundHeadToTags(resolveHead(meta, null));
   return { html: body, head: hoisted ? `${head}\n    ${hoisted}` : head };
 }
 
