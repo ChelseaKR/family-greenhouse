@@ -672,7 +672,7 @@ locals {
     # simply omits the line — it never asserts "no rain expected".
     # Cost: the forecast is read at most once per household per reminder run,
     # cached for an hour per ~10km cell and shared with the climate endpoint.
-    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.reply_environment, local.channel_webhook_environment)
+    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.channel_webhook_environment, local.reply_environment)
     digests     = local.email_environment
     emailEvents = {}
     chat        = local.chat_environment
