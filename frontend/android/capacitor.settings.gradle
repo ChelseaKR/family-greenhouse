@@ -19,3 +19,6 @@ project(':capacitor-share').projectDir = new File('../../node_modules/@capacitor
 
 include ':capacitor-splash-screen'
 project(':capacitor-splash-screen').projectDir = new File('../../node_modules/@capacitor/splash-screen/android')
+
+include ':capacitor-text-zoom'
+project(':capacitor-text-zoom').projectDir = new File('../../node_modules/@capacitor/text-zoom/android')

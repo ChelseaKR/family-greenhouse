@@ -11,6 +11,7 @@ import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
 import { NativeLaunchReady } from '@/components/NativeLaunchReady';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
+import { useNativeTextSize } from '@/hooks/useNativeTextSize';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
 import { isNativeApp } from '@/lib/platform';
 
@@ -189,6 +190,8 @@ function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const hasHousehold = user?.householdId != null;
+  // iOS shell: honor the system text size (Dynamic Type). No-op elsewhere.
+  useNativeTextSize();
 
   return (
     <>
