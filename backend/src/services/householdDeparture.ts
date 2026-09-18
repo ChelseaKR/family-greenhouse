@@ -23,8 +23,11 @@
  *   4. Rows in the departed user's OWN partition that are scoped to this
  *      household: the calendar-feed token (the feed already re-checks
  *      membership per fetch; deleting the row means a later re-invite does not
- *      silently revive an old URL) and any household email still queued about
- *      this household (otherwise delivered by another household's hourly pass).
+ *      silently revive an old URL), any household email still queued about
+ *      this household (otherwise delivered by another household's hourly
+ *      pass), and the native push devices registered under it (the app
+ *      registers a device again, under the household they still have, when
+ *      it next opens, at most six hours later).
  *   5. Cognito claims — only when this household IS their default: re-point at
  *      a remaining membership, or clear when none is left. A secondary
  *      household's departure never touches the claims.
@@ -42,6 +45,7 @@
 import * as householdService from './householdService.js';
 import * as accountCleanup from './accountCleanup.js';
 import * as calendarTokens from './calendarTokens.js';
+import * as deviceTokens from './deviceTokens.js';
 import * as householdEmails from './householdEmails.js';
 import * as cognitoUsers from './cognitoUsers.js';
 
@@ -73,6 +77,7 @@ export async function departHousehold(
 
   await calendarTokens.revokeCalendarToken(userId, householdId);
   const droppedQueuedEmails = await householdEmails.discardQueuedForHousehold(userId, householdId);
+  await deviceTokens.deleteDeviceTokensForHousehold(userId, householdId);
 
   // Same claims hygiene removal has always done, and the same reads: the
   // membership list is only consulted when the default has to move.

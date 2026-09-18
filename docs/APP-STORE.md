@@ -113,7 +113,7 @@ it's the source of truth, was updated today alongside the analytics launch
 (`ba7b3096`, PR #791, "product analytics, cookieless by construction"), and
 is broader than the 7-type/all-App-Functionality summary still written in
 `docs/mobile-release-checklist.md`, which predates that PR and is now stale
-on this specific point. The manifest currently declares 9 data types:
+on this specific point. The manifest currently declares 10 data types:
 
 | Data type                  | Linked to identity | Used to track you | Purpose                      |
 | -------------------------- | ------------------ | ----------------- | ---------------------------- |
@@ -123,6 +123,7 @@ on this specific point. The manifest currently declares 9 data types:
 | Photos or Videos           | Yes                | No                | App Functionality            |
 | Other User Content         | Yes                | No                | App Functionality            |
 | User ID                    | Yes                | No                | App Functionality, Analytics |
+| Device ID (optional)       | Yes                | No                | App Functionality            |
 | Product Interaction        | Yes                | No                | Analytics                    |
 | Performance Data           | No                 | No                | Analytics                    |
 | Coarse Location (optional) | Yes                | No                | App Functionality            |
@@ -147,6 +148,16 @@ What each row actually is, for whoever fills out the questionnaire:
   user taps to add a photo.
 - **Other User Content** — plant names, notes, task text, and similar
   free-text fields a household enters.
+- **Device ID (optional)** — the APNs push token, collected only when the
+  person turns notifications on in the app (native push ships switched off;
+  see `docs/native-push-setup.md`). Used only to deliver this app's own
+  reminders: not advertising, not analytics, not tracking. It is deleted when
+  they turn notifications off on that phone, sign out on it, leave the
+  household it was set up under, or delete the account. It is declared in
+  `PrivacyInfo.xcprivacy` now so the manifest never lags a build that turns
+  push on; answer the App Privacy question the same way. On Google Play the
+  counterpart is **Device or other IDs**: collected, not shared, App
+  functionality, optional.
 - **Coarse Location (optional)** — only if a household sets one. This is a
   city name plus the coordinates a geocoder returns for it, not device GPS
   — the app never requests precise location. It's used to fetch local
@@ -291,6 +302,15 @@ each item it raised, re-verified today:
    says so in two places (subtitle-adjacent bullet and the "EMAIL
    REMINDERS" section above) — don't let a reviewer find a push toggle that
    does nothing, because there isn't one to find.
+
+   **Update, 2026-09-18:** native push is now built (APNs directly for iOS,
+   FCM for Android, an opt-in on the Tasks page and a Settings row), but it
+   is behind two switches that are both off: `VITE_NATIVE_PUSH_ENABLED` in
+   the store build and `native_push_enabled` in Terraform. With either off,
+   a build shows no push UI at all, so everything above still holds for any
+   build made without them. Claim push in review notes only for a build made
+   after `docs/native-push-setup.md` is done, and after step 8 there
+   (a reminder received on a device running that build).
 
 4. **One more, not from #469: a locked feature can show a price with no way
    to pay.** `LockedFeature` (gating `/chat`, the trip-sitter offer, and API

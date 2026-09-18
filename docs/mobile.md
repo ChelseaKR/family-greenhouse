@@ -28,7 +28,7 @@ removed, or left un-synced without this table moving with it.
 | `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
 | `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).      |
 | `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                        |
-| `@capacitor/push-notifications` | APNs/FCM device-token registration (`frontend/src/services/nativePush.ts`). Deliberately unreachable from the UI — see "Push notifications" below.        |
+| `@capacitor/push-notifications` | APNs/FCM device-token registration and notification taps (`frontend/src/services/nativePush.ts`). Off until setup — see "Push notifications" below.       |
 | `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                    |
 | `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                       |
 | `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).             |
@@ -285,7 +285,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only, and since #804 so is every other purchase surface: `LockedFeature` shows what a paid feature is with no price and no ask, and `AskToUpgrade` renders only inside the web-only plan grid. One sentence on the billing screen still points outside the app — see "Store payment rules" below, and do not add purchase links without reading it.                                                                                                                                                                                                                                                                                                    |
 | Haptics            | Completing a task plays the system success pattern and snoozing one a light tick, fired from the mutation's `onSuccess`, so the tap means the server accepted it. The OS decides whether to play them (System Haptics on iOS).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Share sheet        | Every link the app hands out (household invite, plant-sitter link, caretaker seat, cutting share, referral link) opens the system share sheet instead of copying, and the button reads "Share link". Copy is one of the sheet's actions. Closing the sheet does not copy behind the person's back. The website keeps its copy buttons.                                                                                                                                                                                                                                                                                                                                                                                               |
-| Push notifications | Web push does not exist in the WebViews. Native push UI is hidden until APNs/FCM delivery is complete, so store builds do not promise reminders that cannot arrive. See "Push notifications" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Push notifications | Web push does not exist in the WebViews. Native push (APNs for iOS, FCM for Android) is built and OFF: the opt-in and the Settings row appear only when the build sets `VITE_NATIVE_PUSH_ENABLED` and the deployment sets `native_push_enabled`. See "Push notifications" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Back (Android)     | `nativeBackButton.ts` listens through `@capacitor/app`: back closes an open dialog, menu or the drawer first, then goes back in the app, and on the first screen moves the app to the background like any Android app. It was a no-op there before. Predictive back works: the handler is switched off whenever back would leave, so Android animates it.                                                                                                                                                                                                                                                                                                                                                                            |
 | Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS.                                                                                                                                                                                                                                                                                     |
 | Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` keep content clear of the notch, status bar and home indicator: `body` (index.css), the sticky headers (Layout.tsx, PublicShell.tsx), the navigation drawer, the `safe-area-y` utility on every scrolling dialog overlay, and the toasts. Android WebViews older than 140 report 0 here; Capacitor pads them inside the system bars instead.                                                                                                                                                                                                                                                                                                                                         |
@@ -370,67 +370,50 @@ surface a reviewer can reach.
 
 ## Push notifications
 
-Current state: native registration and delivery are disabled in the product UI.
-Email reminders still work; SMS is built but switched off in production (see
-`notifications.md`). Do not restore the toggle until the following
-delivery work is complete and verified end to end.
+**Built, and switched off until the owner setup is done.** The steps, the
+secret names, and the device checklist are in
+[`docs/native-push-setup.md`](native-push-setup.md). There are two switches,
+both off by default:
 
-This is now enforced rather than remembered. `scripts/validate-store-release.mjs`
-treats a call site for `registerNativePush()` anywhere in `frontend/src` as
-"the push UI is reachable", and from that point requires the committed iOS
-entitlements below in every mode, plus `google-services.json` in
-`--production`. Wiring the toggle back up without the delivery material fails
-the build instead of shipping a reminder switch that cannot deliver.
+- **Deployment:** Terraform `native_push_enabled` (`NATIVE_PUSH_ENABLED` on the
+  Lambdas). While it is off, no device push is sent, and the notification
+  preferences report `devicePush: {ios: false, android: false}`, so the apps
+  show no opt-in and no Settings row, whatever credentials exist.
+- **Store build:** `VITE_NATIVE_PUSH_ENABLED` in the local
+  `.env.mobile.production`. The committed template must say `false`
+  (`scripts/validate-store-release.mjs` enforces that). A `--production` build
+  that sets it `true` must carry `google-services.json` for the Android
+  package, and every mode requires the committed iOS `aps-environment`
+  entitlement.
 
-Remaining work for delivery:
+**Delivery.** iOS goes to APNs directly (`backend/src/services/apnsNotifier.ts`,
+HTTP/2 with a `.p8` provider token). Android goes through FCM HTTP v1
+(`services/fcmNotifier.ts`). They differ because the Capacitor plugin hands
+the iOS app a raw APNs token, and FCM can't send to that without the Firebase
+iOS SDK in the app, so the earlier "upload the APNs key to Firebase" plan
+would have failed every iOS send. Both run under the `browser` channel of
+`notifier.sendToUser`, so quiet hours and the reminder rules (daily slot,
+per-channel lease) apply unchanged. A reminder sets the app-icon badge to the
+number of tasks it names. The app clears it when opened.
 
-1. **Android (FCM):** create a Firebase project, add the app
-   (`net.familygreenhouse.app`), download `google-services.json` into
-   `frontend/android/app/`. The Gradle build already applies the
-   google-services plugin only when that file exists, so the project builds
-   fine without it (push simply won't work).
-2. **iOS (APNs):** in the Apple Developer portal create an APNs key, and
-   enable the Push Notifications capability for the App ID. The Xcode half is
-   **already committed** and no longer a manual step:
-   `ios/App/App/App.entitlements` declares `aps-environment` and both build
-   configurations set `CODE_SIGN_ENTITLEMENTS`, so a fresh clone archives with
-   the entitlement instead of silently omitting it. The value is
-   `$(APS_ENVIRONMENT)`, set to `development` in Debug and `production` in
-   Release, so an archive cannot ship a sandbox APNs environment — the failure
-   that mints tokens the production gateway rejects and reads, from the
-   backend, as a delivery bug. `tests/unit/config/iosEntitlements.test.ts`
-   holds all of that; `scripts/validate-store-release.mjs` additionally
-   requires it once `registerNativePush()` has a call site. What is still
-   outstanding here is only the Apple-side key; the AppDelegate forwarding is
-   already wired. Easiest delivery path is uploading the APNs key to the same
-   Firebase project and sending everything through FCM.
-3. **Backend sender: written and wired; unconfigured.** `notifier.sendDevicePush`
-   is the sibling of `sendBrowserPush`, and `services/fcmNotifier.ts` is the
-   FCM HTTP v1 transport behind it (RS256 service-account JWT → OAuth2 access
-   token → `messages:send`, no `firebase-admin` in the Lambda bundle). It runs
-   on the same `browser` preference and the same reminder marker as web push,
-   because to a user they are one channel reached over two transports, and it
-   prunes tokens FCM reports as `UNREGISTERED` — the native form of the
-   404/410 cleanup the web-push path does. `INVALID_ARGUMENT` deliberately
-   does NOT prune: FCM returns it for a malformed message as well as a
-   malformed token, so pruning on it would delete the whole installed base's
-   registrations over one bad payload.
+**When permission is asked.** Only after a tap: the opt-in card on the Tasks
+page (`NativePushPrompt`), shown when there's care on the list and the OS
+hasn't been asked yet, or **This device → Turn on** in Settings →
+Notifications. Never at launch. "Not now" holds for 30 days. If the OS
+already said no, the app explains where to turn it back on rather than
+offering a button that can't work. Badges follow the same permission.
 
-   What is left is credentials, not code. The Lambdas read the Firebase
-   service-account JSON from the Secrets Manager id in
-   `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
-   `fcm_service_account_secret_id`), which is **blank in every environment**.
-   While it is blank the sender makes no network call and no Secrets Manager
-   call: it logs one `device_push_unconfigured` line per Lambda container and
-   the reminder path behaves exactly as it did before it existed. Filling it
-   in needs items 1 and 2 above to have happened first — the Firebase project
-   issues the service account, and the APNs key uploaded to that project is
-   what makes iOS work.
+**Device-token lifecycle.** A token is one account's at a time. Registering
+it removes any other account's row for it. It's deleted when the person turns
+notifications off on that phone, signs out on it (a public
+`POST /notifications/devices/release`, keyed by the token, so it works after
+a refused refresh), leaves the household it was registered under, or deletes
+the account, and when APNs or FCM reports it dead. The full table is in
+`docs/notifications.md`.
 
-   Delivery is still not verified end to end, and the toggle stays off until
-   it is. Restoring it is a separate frontend change (a `registerNativePush()`
-   call site), and `scripts/validate-store-release.mjs` will then require
-   `google-services.json` and the iOS entitlements.
+**Not verified end to end.** Nothing has been sent to a real device yet.
+Step 8 of the setup doc is that check, and it comes before
+`native_push_enabled = true` in production.
 
 ## Store submission checklist
 

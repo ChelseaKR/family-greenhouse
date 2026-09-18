@@ -26,6 +26,14 @@
 
         </activity>
 
+        <!-- Native push (docs/native-push-setup.md): the small icon Android
+             draws for a notification. It must be a single-color silhouette,
+             which the launcher's monochrome layer already is; without it
+             Android draws the app icon as a white square. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_monochrome" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -57,4 +65,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: asked only when the person taps "Turn on notifications"
+         (NativePushPrompt, Settings → Notifications), never at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

@@ -25,6 +25,7 @@
  * needs that.
  */
 import { create } from 'zustand';
+import { isNativeApp } from '@/lib/platform';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import {
   identify,
@@ -178,6 +179,19 @@ const splitStorage: StateStorage = {
   },
 };
 
+/**
+ * Signing out inside the iOS/Android app releases this device's push
+ * registration, whatever state the session is in (a refused refresh signs out
+ * with no valid token). Loaded lazily and only in the shells: nativePush.ts
+ * imports the API client, which imports this store.
+ */
+function releaseNativePushDevice(): void {
+  if (!isNativeApp()) return;
+  void import('@/services/nativePush')
+    .then(({ signOutNativePush }) => signOutNativePush())
+    .catch(() => undefined);
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -238,6 +252,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         resetAnalytics();
+        releaseNativePushDevice();
         set({
           user: null,
           idToken: null,
@@ -254,6 +269,7 @@ export const useAuthStore = create<AuthState>()(
 
       clearLocalSession: () => {
         resetAnalytics();
+        releaseNativePushDevice();
         // Same state reset as logout(), but with persistence suppressed so
         // the shared localStorage payload survives for other tabs. This
         // tab's ProtectedRoute will route to /login as usual.

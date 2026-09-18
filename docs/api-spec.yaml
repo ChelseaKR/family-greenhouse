@@ -2816,6 +2816,11 @@ paths:
   /notifications/prefs:
     get:
       summary: Read the caller's notification preferences
+      description: >-
+        Also carries what the deployment can deliver: `smsAvailable`, and `devicePush`
+        (`{ios, android}`), true for a platform only while `native_push_enabled` is on AND that
+        platform's credential is configured (APNs for iOS, FCM for Android). The iOS and Android
+        apps offer native notifications only where it is true.
       tags: [Notifications]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
@@ -2848,23 +2853,43 @@ paths:
   /notifications/unsubscribe:
     post:
       summary: Remove a Web Push subscription
+      description: >-
+        Returns `remainingSubscriptions`: the caller's push endpoints left afterwards, browser
+        subscriptions AND native devices, because the `browser` preference gates both. A client
+        switches that preference off only when this is 0.
       tags: [Notifications]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
   /notifications/devices:
     post:
       summary:
-        'Register a native (Capacitor iOS/Android) push device token (body: platform ios|android,
-        token). Capture-only until the APNs/FCM sender ships — see docs/mobile.md'
+        "Register a native (Capacitor iOS/Android) push device token (body: platform ios|android,
+        token) when the person turns notifications on in the app. The token becomes the caller's
+        alone: any other account's row for the same device is removed. iOS tokens are sent to
+        APNs directly, Android tokens through FCM — see docs/native-push-setup.md"
       tags: [Notifications]
       responses:
         '200': { $ref: '#/components/responses/Ok' }
   /notifications/devices/remove:
     post:
-      summary: Remove a native push device token
+      summary:
+        Remove a native push device token (turning notifications off on the device, or signing
+        out on it). Returns `remainingSubscriptions`, counted as for /notifications/unsubscribe.
       tags: [Notifications]
       responses:
-        '204': { description: Device token removed }
+        '200': { $ref: '#/components/responses/Ok' }
+  /notifications/devices/release:
+    post:
+      summary: Sign out on a native device (body token)
+      description: >-
+        Removes every account's row for that device token. Public on purpose: the device token is
+        the credential, because a sign-out after a refused refresh has no session. IP
+        rate-limited, and always 204.
+      tags: [Notifications]
+      security: []
+      responses:
+        '204': { description: Released (whether or not a row existed) }
+        '429': { description: Too many requests }
   /notifications/email/unsubscribe:
     get:
       summary:

@@ -41,6 +41,12 @@ locals {
   fcm_secret_arn = var.fcm_service_account_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/fcm-disabled" : (
     startswith(var.fcm_service_account_secret_id, "arn:") ? var.fcm_service_account_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.fcm_service_account_secret_id}*"
   )
+  # The APNs auth key services/apnsNotifier.ts signs its provider tokens with
+  # (iOS goes to APNs directly). Same sentinel pattern: blank grants a secret
+  # that does not exist.
+  apns_secret_arn = var.apns_auth_key_secret_id == "" ? "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:family-greenhouse/apns-disabled" : (
+    startswith(var.apns_auth_key_secret_id, "arn:") ? var.apns_auth_key_secret_id : "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.apns_auth_key_secret_id}*"
+  )
 }
 
 # API Gateway
@@ -310,14 +316,14 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = local.sprout_secret_arn
       },
       {
-        # Firebase service-account JSON for native (APNs/FCM) push delivery.
-        # Read by services/fcmNotifier.ts on the reminders / notifications /
-        # households Lambdas. While fcm_service_account_secret_id is blank the
-        # resource is the disabled sentinel above and the code never calls
-        # Secrets Manager at all.
+        # Firebase service-account JSON for Android native push (FCM), and the
+        # APNs auth key for iOS native push. Read by services/fcmNotifier.ts
+        # and services/apnsNotifier.ts on the reminders / notifications /
+        # households Lambdas. While a secret id is blank its resource is the
+        # disabled sentinel above and the code never calls Secrets Manager.
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = local.fcm_secret_arn
+        Resource = [local.fcm_secret_arn, local.apns_secret_arn]
       },
       {
         # Household chat-channel webhook addresses (#674, ADR 0031):
@@ -557,13 +563,16 @@ locals {
     WEB_PUSH_VAPID_PRIVATE_KEY = var.web_push_vapid_private_key
     WEB_PUSH_VAPID_SUBJECT     = var.web_push_vapid_subject
     SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
-    # Native (APNs/FCM) push. Blank in every environment today, which is what
-    # makes services/fcmNotifier.ts a no-op: it logs one line per Lambda
-    # container and never opens a socket. Filling this in is the last step of
-    # docs/mobile.md § Push notifications, AFTER the Firebase project and the
-    # APNs key exist — and it still does not make the app's push toggle
-    # reachable, which is a separate frontend change.
+    # Native push (docs/native-push-setup.md). NATIVE_PUSH_ENABLED is the
+    # switch: "false" (the default) sends no device push and tells the apps
+    # not to offer it, whatever credentials exist. The secret ids are blank in
+    # every environment today, which keeps each transport a no-op that logs
+    # one line per container and never opens a socket. Android goes through
+    # FCM, iOS to APNs directly (services/apnsNotifier.ts explains why).
+    NATIVE_PUSH_ENABLED           = var.native_push_enabled ? "true" : "false"
     FCM_SERVICE_ACCOUNT_SECRET_ID = var.fcm_service_account_secret_id
+    APNS_AUTH_KEY_SECRET_ID       = var.apns_auth_key_secret_id
+    APNS_ENVIRONMENT              = var.apns_environment
   })
 
   plant_integration_environment = {
@@ -1277,10 +1286,13 @@ locals {
     "POST /notifications/run-year-recap"             = { group = "notifications", auth = "jwt" }
     "POST /notifications/phone/start-verification"   = { group = "notifications", auth = "jwt" }
     "POST /notifications/phone/confirm-verification" = { group = "notifications", auth = "jwt" }
-    # Native (Capacitor iOS/Android) push device tokens — capture-only until
-    # the APNs/FCM sender ships (docs/mobile.md § Push notifications).
-    "POST /notifications/devices"        = { group = "notifications", auth = "jwt" }
-    "POST /notifications/devices/remove" = { group = "notifications", auth = "jwt" }
+    # Native (Capacitor iOS/Android) push device tokens (docs/native-push-setup.md).
+    # `release` is sign-out on a device and is public on purpose: the device
+    # token is the credential, because a sign-out after a refused refresh has
+    # no session. IP rate-limited in the handler; always 204.
+    "POST /notifications/devices"         = { group = "notifications", auth = "jwt" }
+    "POST /notifications/devices/remove"  = { group = "notifications", auth = "jwt" }
+    "POST /notifications/devices/release" = { group = "notifications", auth = "none" }
     # RFC 8058 one-click unsubscribe (auth=none). The capability token in the
     # query string is the whole credential; it can only turn ONE email
     # category off for ONE user and is revocable per user. GET renders a

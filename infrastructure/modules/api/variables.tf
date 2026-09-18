@@ -397,9 +397,27 @@ variable "sprout_integration_secret_id" {
 }
 
 variable "fcm_service_account_secret_id" {
-  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON used for native APNs/FCM push. Blank disables device push entirely."
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON used for Android native push (FCM). Blank disables Android device push."
   type        = string
   default     = ""
+}
+
+variable "apns_auth_key_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the APNs auth key JSON ({keyId, teamId, privateKey}) used for iOS native push. Blank disables iOS device push."
+  type        = string
+  default     = ""
+}
+
+variable "apns_environment" {
+  description = "APNs gateway: production or sandbox."
+  type        = string
+  default     = "production"
+}
+
+variable "native_push_enabled" {
+  description = "Native (APNs/FCM) push switch. False: no device push is sent and the apps hide the opt-in."
+  type        = bool
+  default     = false
 }
 
 # --- Sentry / release tagging ---

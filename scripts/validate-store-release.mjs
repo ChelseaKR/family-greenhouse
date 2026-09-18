@@ -280,6 +280,9 @@ for (const dataType of [
   'PhotosorVideos',
   'OtherUserContent',
   'UserID',
+  // The push token (docs/native-push-setup.md): collected only when the person
+  // turns notifications on, used only to deliver them.
+  'DeviceID',
   'CoarseLocation',
   // Product analytics (docs/analytics.md): funnel events keyed to the account
   // id, and the first-party Web Vitals rail. Linked to the user for the
@@ -415,6 +418,16 @@ if (templateValues.has('VITE_GA_MEASUREMENT_ID')) {
 if (templateValues.has('VITE_API_URL')) {
   assertHttps(templateValues.get('VITE_API_URL'), `${envExamplePath} VITE_API_URL`);
 }
+// Native push is off until the owner setup in docs/native-push-setup.md is
+// done. The template is what every release env is copied from, so it has to
+// say so explicitly: a template that turned it on would ship an Android build
+// that tries to register with no google-services.json in it.
+if (templateValues.get('VITE_NATIVE_PUSH_ENABLED') !== 'false') {
+  fail(
+    `${envExamplePath} must set VITE_NATIVE_PUSH_ENABLED=false; native push is turned on per ` +
+      'build, in the local .env.mobile.production, once docs/native-push-setup.md is done'
+  );
+}
 
 // "Native push UI must remain hidden for this release" used to be a warn()
 // string, and warn() never touches the exit code (#469, #470) — a requirement
@@ -442,7 +455,14 @@ const pushCallSites = execFileSync(
   .split('\n')
   .filter(Boolean)
   .filter((path) => path !== nativePushEntryPoint);
-const nativePushIsReachable = pushCallSites.length > 0;
+const nativePushHasCallSite = pushCallSites.length > 0;
+// A call site is not enough on its own any more: registerNativePush() is
+// behind VITE_NATIVE_PUSH_ENABLED (frontend/src/services/nativePush.ts), which
+// is false in the committed template. The iOS entitlement is committed, so it
+// is required whenever a call site exists; the Android credential only when a
+// production build actually turns push on.
+const nativePushBuildEnabled = process.env.VITE_NATIVE_PUSH_ENABLED === 'true';
+const nativePushIsReachable = nativePushHasCallSite && (!production || nativePushBuildEnabled);
 
 if (nativePushIsReachable) {
   const entitlements = ['frontend/ios/App/App/App.entitlements'].filter((path) =>
@@ -523,8 +543,8 @@ if (production) {
     }
   } else if (nativePushIsReachable) {
     fail(
-      'Native push UI is reachable but frontend/android/app/google-services.json is absent; ' +
-        'a store build would ship a reminder toggle that cannot deliver'
+      'VITE_NATIVE_PUSH_ENABLED=true but frontend/android/app/google-services.json is absent; ' +
+        'the Android build could not register for push. See docs/native-push-setup.md'
     );
   }
 }

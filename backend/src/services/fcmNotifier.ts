@@ -2,20 +2,20 @@ import { createSign } from 'node:crypto';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { z } from 'zod';
 import { logger } from '../utils/logger.js';
-// Borrowed from the SMS channel rather than written twice: APNs caps the
-// collapse id in BYTES, the same units and the same code-point-splitting
-// hazard `truncateToBytes` was written for.
+// Borrowed from the SMS channel rather than written twice: collapse keys are
+// capped in BYTES, the same units and the same code-point-splitting hazard
+// `truncateToBytes` was written for.
 import { truncateToBytes } from './smsNotifier.js';
 
 /**
- * Firebase Cloud Messaging HTTP v1 transport for native (iOS/Android) push.
+ * Firebase Cloud Messaging HTTP v1 transport for the ANDROID shell.
  *
  * The sibling of `web-push` in `notifier.sendBrowserPush`: this module owns
  * the provider protocol, `notifier.sendDevicePush` owns the fan-out and the
- * dead-token cleanup. iOS goes through FCM as well rather than talking to
- * APNs directly — the APNs key is uploaded to the same Firebase project (see
- * docs/mobile.md § Push notifications), so one credential and one code path
- * cover both shells.
+ * dead-token cleanup. iOS does not come through here. The iOS shell's
+ * `@capacitor/push-notifications` registers a raw APNs token, which FCM
+ * cannot deliver to without the Firebase iOS SDK in the app, so iOS goes to
+ * APNs directly — see `apnsNotifier.ts` for that decision.
  *
  * FCM v1 authenticates with a short-lived OAuth2 access token derived from a
  * service-account key, which is why this file signs a JWT with `node:crypto`
@@ -27,8 +27,8 @@ import { truncateToBytes } from './smsNotifier.js';
  * NOTHING IS CONFIGURED IN ANY ENVIRONMENT TODAY. `FCM_SERVICE_ACCOUNT_SECRET_ID`
  * is blank everywhere, so `sendDevicePushMessages` answers `unconfigured`
  * after one info line per Lambda container and never makes a network call.
- * That is the state this ships in: the Firebase project, the APNs key and the
- * service-account JSON are all maintainer-side work.
+ * That is the state this ships in: the Firebase project and the
+ * service-account JSON are maintainer-side work (docs/native-push-setup.md).
  */
 
 /**
@@ -80,6 +80,16 @@ export interface DevicePushMessage {
   url?: string;
   /** Collapse key — a newer reminder replaces an unread older one. */
   tag?: string;
+  /**
+   * The number the app icon should show: the tasks a reminder names. Omitted
+   * leaves the icon alone. Shown only where the person allowed notifications.
+   */
+  badge?: number;
+}
+
+/** Whether a Firebase service account is named at all. Reads no secret. */
+export function fcmConfigured(): boolean {
+  return Boolean(process.env.FCM_SERVICE_ACCOUNT_SECRET_ID?.trim());
 }
 
 const OAUTH_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
@@ -99,7 +109,7 @@ const REQUEST_TIMEOUT_MS = 5_000;
  * re-attempt it and log about it.
  */
 const CREDENTIAL_RETRY_MS = 15 * 60_000;
-/** APNs rejects a collapse id longer than 64 bytes. */
+/** Kept to APNs' 64-byte collapse-id limit so both platforms collapse the same way. */
 const MAX_COLLAPSE_ID_BYTES = 64;
 
 let secretsClient: SecretsManagerClient | null = null;
@@ -303,9 +313,16 @@ const fcmErrorSchema = z.object({
  */
 const DEAD_TOKEN_ERROR_CODES = new Set(['UNREGISTERED', 'NOT_FOUND']);
 
-/** The FCM v1 message body for one device. */
-function messageBody(message: DevicePushMessage): Record<string, unknown> {
+/** The FCM v1 message body for one Android device. */
+export function messageBody(message: DevicePushMessage): Record<string, unknown> {
   const collapseId = message.tag ? truncateToBytes(message.tag, MAX_COLLAPSE_ID_BYTES) : undefined;
+  const androidNotification = {
+    ...(collapseId ? { tag: collapseId } : {}),
+    // The launcher's badge / notification-dot count, where the launcher shows one.
+    ...(typeof message.badge === 'number'
+      ? { notification_count: Math.max(0, message.badge) }
+      : {}),
+  };
   return {
     message: {
       token: message.token,
@@ -313,10 +330,12 @@ function messageBody(message: DevicePushMessage): Record<string, unknown> {
       // `data` is what the shell reads on tap. Strings only — FCM rejects
       // any other JSON type in this map.
       ...(message.url ? { data: { url: message.url } } : {}),
-      ...(collapseId
+      ...(collapseId || Object.keys(androidNotification).length > 0
         ? {
-            android: { collapse_key: collapseId, notification: { tag: collapseId } },
-            apns: { headers: { 'apns-collapse-id': collapseId } },
+            android: {
+              ...(collapseId ? { collapse_key: collapseId } : {}),
+              notification: androidNotification,
+            },
           }
         : {}),
     },

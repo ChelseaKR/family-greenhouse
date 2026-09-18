@@ -11,7 +11,10 @@ const notificationApi = vi.hoisted(() => ({
   permission: 'default' as NotificationPermission | 'unsupported',
 }));
 
-vi.mock('@/services/notificationService', () => ({
+vi.mock('@/services/notificationService', async (importOriginal) => ({
+  // The pure PUT-body builder is real; only the network calls are stubbed.
+  buildPreferencesUpdate: (await importOriginal<typeof import('@/services/notificationService')>())
+    .buildPreferencesUpdate,
   notificationService: {
     getPreferences: vi.fn(),
     updatePreferences: vi.fn(),
@@ -34,6 +37,17 @@ vi.mock('@/utils/notifications', () => ({
 
 vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
+}));
+
+const nativePushMock = vi.hoisted(() => ({
+  permission: 'prompt' as 'prompt' | 'granted' | 'denied',
+  registerNativePush: vi.fn(),
+}));
+vi.mock('@/services/nativePush', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/nativePush')>()),
+  getNativePushPermission: vi.fn(async () => nativePushMock.permission),
+  isNativePushEnabled: () => false,
+  registerNativePush: nativePushMock.registerNativePush,
 }));
 
 function prefs(over: Partial<NotificationPreferences> = {}): NotificationPreferences {
@@ -925,5 +939,47 @@ describe('NotificationSettings', () => {
     } finally {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     }
+  });
+});
+
+describe('NotificationSettings inside the native shells', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nativePushMock.permission = 'prompt';
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      timeZone: 'UTC',
+    } as unknown as Intl.ResolvedDateTimeFormatOptions);
+    vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+    (window as unknown as { Capacitor: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+    };
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it('offers "This device" only while the deployment can deliver to this platform', async () => {
+    await renderSettings(prefs({ devicePush: { ios: true, android: false } }));
+    expect(screen.queryByText('This device')).toBeNull();
+    cleanupRender();
+
+    await renderSettings(prefs({ devicePush: { ios: true, android: true } }));
+    expect(await screen.findByText('This device')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeEnabled();
+    // Rendering the row asks the OS for nothing.
+    expect(nativePushMock.registerNativePush).not.toHaveBeenCalled();
+  });
+
+  it('explains where to turn it back on once the OS said no', async () => {
+    nativePushMock.permission = 'denied';
+    await renderSettings(prefs({ devicePush: { ios: true, android: true } }));
+    expect(
+      await screen.findByText(/Notifications are off for Family Greenhouse in your phone/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeDisabled();
   });
 });

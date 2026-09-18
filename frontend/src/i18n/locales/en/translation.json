@@ -1593,6 +1593,18 @@
       "rejected": "That passkey couldn’t be added. Try again, or use a different device."
     }
   },
+  "nativePush": {
+    "promptTitle": "Get a reminder on this phone when care is due",
+    "promptBody": "Family Greenhouse can tell you on this phone when a plant needs watering or other care, and put the count on the app icon. Your quiet hours still apply, and you can turn it off in Settings.",
+    "promptEnable": "Turn on notifications",
+    "promptDismiss": "Not now",
+    "turnOn": "Turn on",
+    "turnOff": "Turn off",
+    "deniedHint": "Notifications are off for Family Greenhouse in your phone’s Settings. Turn them on there, then come back here.",
+    "deniedError": "Your phone didn’t allow notifications. Turn them on for Family Greenhouse in your phone’s Settings, then try again.",
+    "enabled": "Notifications are on for this phone.",
+    "disabled": "Notifications are off for this phone."
+  },
   "notifications": {
     "title": "Notifications",
     "browser": "Browser",

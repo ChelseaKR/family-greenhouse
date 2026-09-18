@@ -29,6 +29,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
+import { NativePushPrompt } from '@/components/NativePushPrompt';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyTasks } from '@/components/illustrations/EmptyTasks';
@@ -325,6 +326,11 @@ export function TasksPage() {
         title="Tasks"
         description="Manage your plant care tasks."
       />
+
+      {/* The native push opt-in, at the moment it is worth something: this
+          person has care on the list. Renders nothing on the web, in a build
+          without push, or while native_push_enabled is off. */}
+      <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
 
       {activeSpaceName && (
         <Card

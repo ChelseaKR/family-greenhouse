@@ -881,6 +881,9 @@ export async function remindHousehold(
             shortBody: composed.shortBody,
             tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
             url: frontendUrl('/tasks?filter=due'),
+            // The app icon shows how many tasks this reminder names (device
+            // push only; the app clears it when opened).
+            badge: rows.length,
             ...(replyable ? { emailReplyTo: replyable.replyTo } : {}),
           },
           {

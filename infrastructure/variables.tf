@@ -241,9 +241,38 @@ variable "sprout_integration_secret_id" {
 # Manager grant beyond a deliberately nonexistent secret, and
 # services/fcmNotifier.ts never makes a call.
 variable "fcm_service_account_secret_id" {
-  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON for native push. Blank disables device push."
+  description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON for ANDROID native push (FCM). Blank disables Android device push."
   type        = string
   default     = ""
+}
+
+# iOS native push goes to APNs directly, not through FCM: the iOS shell
+# registers a raw APNs token, which FCM cannot deliver to without the Firebase
+# iOS SDK in the app (services/apnsNotifier.ts). The secret holds
+# {"keyId","teamId","privateKey"} from Apple Developer -> Keys.
+variable "apns_auth_key_secret_id" {
+  description = "Secrets Manager id (name or ARN) holding the APNs auth key JSON ({keyId, teamId, privateKey}) for iOS native push. Blank disables iOS device push."
+  type        = string
+  default     = ""
+}
+
+variable "apns_environment" {
+  description = "APNs gateway: \"production\" for TestFlight/App Store builds, \"sandbox\" for builds run from Xcode."
+  type        = string
+  default     = "production"
+  validation {
+    condition     = contains(["production", "sandbox"], var.apns_environment)
+    error_message = "apns_environment must be \"production\" or \"sandbox\"."
+  }
+}
+
+# The native push switch. OFF until the owner setup in
+# docs/native-push-setup.md is done and verified on a device: while false no
+# device push is sent and the apps never offer it, whatever credentials exist.
+variable "native_push_enabled" {
+  description = "Turn native (APNs/FCM) push on. False keeps it off end to end: no sends, and the apps hide the opt-in."
+  type        = bool
+  default     = false
 }
 
 # Plant.id identify monthly meter. "1" ENFORCES the per-household monthly cap;

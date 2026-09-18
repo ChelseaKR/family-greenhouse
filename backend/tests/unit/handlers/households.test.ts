@@ -21,6 +21,10 @@ vi.mock('../../../src/services/householdEmails.js', () => ({
 vi.mock('../../../src/services/calendarTokens.js', () => ({
   revokeCalendarToken: vi.fn(async () => false),
 }));
+// ...and the native push devices registered under that household.
+vi.mock('../../../src/services/deviceTokens.js', () => ({
+  deleteDeviceTokensForHousehold: vi.fn(async () => 0),
+}));
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
 vi.mock('../../../src/services/accountCleanup.js');
@@ -2430,6 +2434,7 @@ describe('households handler — POST /households/{id}/leave (#686)', () => {
     const accountCleanup = await import('../../../src/services/accountCleanup.js');
     const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
     const calendarTokens = await import('../../../src/services/calendarTokens.js');
+    const deviceTokens = await import('../../../src/services/deviceTokens.js');
     const householdEmails = await import('../../../src/services/householdEmails.js');
     const billing = await import('../../../src/services/billing.js');
     vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(
@@ -2467,6 +2472,8 @@ describe('households handler — POST /households/{id}/leave (#686)', () => {
     );
     expect(calendarTokens.revokeCalendarToken).toHaveBeenCalledWith('user-1', 'hh-1');
     expect(householdEmails.discardQueuedForHousehold).toHaveBeenCalledWith('user-1', 'hh-1');
+    // A phone registered while they were in this household stops receiving its reminders.
+    expect(deviceTokens.deleteDeviceTokensForHousehold).toHaveBeenCalledWith('user-1', 'hh-1');
     // A secondary household: the default claim is never touched.
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
     expect(cognitoUsers.clearHouseholdClaims).not.toHaveBeenCalled();

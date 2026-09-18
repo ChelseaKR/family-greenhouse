@@ -283,23 +283,35 @@ shells through `POST /notifications/devices`:
 
 ```
 PK: USER#{userId}
-SK: DEVICE#{tokenHash}
+SK: DEVICE#{sha256(token)[:16]}
+GSI1PK: DEVICE_TOKEN#{sha256(token)}     GSI1SK: USER#{userId}
 entityType: DeviceToken
 userId, householdId, platform: ios|android, token, createdAt
 ```
 
-`notifier.sendDevicePush` reads these, sends through `services/fcmNotifier.ts`,
-and deletes any row FCM answers `UNREGISTERED` for — the native half of the
-404/410 rule above, and the mechanism that clears rows left behind when a
-device rotates its token. It is capped at the 20 newest devices per user for
-the fan-out, after following every DynamoDB page; a user over that cap logs
-`device_tokens_capped`.
+A row's lifecycle, and what removes it:
 
-Nothing about this channel is live: `FCM_SERVICE_ACCOUNT_SECRET_ID` is blank
-everywhere, so the sender logs `device_push_unconfigured` once per Lambda
-container and returns without a network call. The app's push toggle is
-unreachable too. See docs/mobile.md § Push notifications for what is still
-outstanding.
+| Event                                               | What happens                                                                                                                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The person turns notifications on in the app        | `POST /notifications/devices` writes the row, and first deletes every OTHER account's row for the same token (found through GSI1), so a phone that changes hands never shows the last account's reminders |
+| They turn it off on that phone                      | `POST /notifications/devices/remove` deletes it, and answers how many push endpoints (browsers + devices) remain                                                                                          |
+| They sign out on that phone                         | `POST /notifications/devices/release` (public; the device token is the credential) deletes every row for that token, so it works after a refused refresh too                                              |
+| They leave, or are removed from, the household      | `householdDeparture` deletes the rows registered under that household; if they still have one, the app registers again under it when it next opens (at most six hours later)                              |
+| They delete their account                           | `deleteUserScopedData` sweeps the whole `USER#` partition                                                                                                                                                 |
+| APNs answers 410 `Unregistered`, FCM `UNREGISTERED` | The send deletes the row (token rotation, app removed)                                                                                                                                                    |
+| The OS permission was revoked in Settings           | The app notices on its next launch or resume and removes the row                                                                                                                                          |
+
+`notifier.sendDevicePush` reads these, sends iOS rows to APNs directly
+(`services/apnsNotifier.ts`) and Android rows through FCM
+(`services/fcmNotifier.ts`), and deletes any row either reports dead. It is
+capped at the 20 newest devices per user for the fan-out, after following
+every DynamoDB page; a user over that cap logs `device_tokens_capped`.
+
+**The channel is off.** `native_push_enabled` (Terraform, default `false`)
+becomes `NATIVE_PUSH_ENABLED`; while it is not `"true"` no device push is
+sent, and the preferences payload tells the apps `devicePush: {ios: false,
+android: false}`, so they offer nothing. The two credentials are blank in
+every environment as well. The owner setup is docs/native-push-setup.md.
 
 ### Reminder channel markers
 
@@ -356,22 +368,35 @@ headers so browsers see handler fixes promptly.
 
 Without these env vars, `notifier.sendBrowserPush` logs a `push_dry_run` line and returns — the rest of the fan-out is unaffected.
 
-### Native push (APNs/FCM)
+### Native push (APNs for iOS, FCM for Android)
 
 The `browser` preference covers both push transports. Web push reaches
-browsers; the native shells have no Push API, so they register an APNs/FCM
-device token instead and `notifier.sendDevicePush` delivers to it through the
-FCM HTTP v1 API. Both legs run concurrently under the one `browser` channel
-and one reminder marker, and either arriving counts as the delivery.
+browsers; the native shells have no Push API, so they register a device token
+instead and `notifier.sendDevicePush` delivers to it. Both legs run
+concurrently under the one `browser` channel and one reminder marker, and
+either arriving counts as the delivery. Quiet hours suppress it exactly like
+every other channel (`sendToUser`), and the reminder rules — the daily slot,
+the per-channel lease, the overdue decay — are the reminder path's own, so
+native push adds none of its own. A reminder carries the number of tasks it
+names as the app-icon badge (`aps.badge` on iOS, `notification_count` on
+Android); the app clears it when opened.
 
-Set `FCM_SERVICE_ACCOUNT_SECRET_ID` (Terraform:
-`fcm_service_account_secret_id`) to the Secrets Manager name or ARN of a
-Firebase service-account JSON. `services/fcmNotifier.ts` reads it once per
-Lambda container, signs an RS256 JWT with the key, exchanges it for a
-`firebase.messaging` access token, and reuses that token for the whole
-fan-out. There is no `firebase-admin` dependency: everything needed is one
-`node:crypto` signature and two `fetch` calls, and the Lambda bundles ship to
-every notification handler.
+**Why iOS goes to APNs directly.** `@capacitor/push-notifications` gives the
+iOS shell a raw APNs token. FCM cannot send to that without the Firebase iOS
+SDK compiled into the app (and a GoogleService-Info.plist, AppDelegate
+swizzling and more for the privacy manifest to declare). Sending to APNs
+directly needs one Apple-issued key and no app change, and fits the backend
+the same way the FCM sender does: `node:http2` and one ES256 signature from
+`node:crypto`, no provider SDK in the Lambda bundle.
+
+- iOS: `APNS_AUTH_KEY_SECRET_ID` (Terraform `apns_auth_key_secret_id`) names a
+  Secrets Manager secret holding `{"keyId", "teamId", "privateKey"}`;
+  `APNS_ENVIRONMENT` (`apns_environment`) is `production` or `sandbox`.
+- Android: `FCM_SERVICE_ACCOUNT_SECRET_ID` (`fcm_service_account_secret_id`)
+  names a Firebase service-account JSON. `services/fcmNotifier.ts` reads it
+  once per Lambda container, signs an RS256 JWT, exchanges it for a
+  `firebase.messaging` access token, and reuses that token for the whole
+  fan-out.
 
 Failure states are deliberately distinct:
 
@@ -385,7 +410,11 @@ Failure states are deliberately distinct:
 The last two rows are the important pair. `INVALID_ARGUMENT` is a 400 and is
 NOT treated as a dead token: FCM returns it for a message body it cannot parse
 as well as for a token it cannot parse, so pruning on it would delete every
-registration in the installed base the first time a payload bug shipped.
+registration in the installed base the first time a payload bug shipped. APNs
+has the same trap: `BadDeviceToken` is also what a token from the other APNs
+environment gets, so only 410 `Unregistered` prunes an iOS row
+(`apns_unconfigured`, `apns_credentials_unavailable` and `apns_send_failed`
+are the APNs log lines).
 
 ### Email (SES)
 

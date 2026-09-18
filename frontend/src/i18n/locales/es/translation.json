@@ -1629,6 +1629,18 @@
       "rejected": "No se ha podido añadir esa llave de acceso. Vuelve a intentarlo o usa otro dispositivo."
     }
   },
+  "nativePush": {
+    "promptTitle": "Recibe un aviso en este teléfono cuando toque cuidar una planta",
+    "promptBody": "Family Greenhouse puede avisarte en este teléfono cuando una planta necesite riego u otro cuidado, y mostrar el número en el icono de la app. Tus horas de silencio se siguen respetando, y puedes desactivarlo en Ajustes.",
+    "promptEnable": "Activar notificaciones",
+    "promptDismiss": "Ahora no",
+    "turnOn": "Activar",
+    "turnOff": "Desactivar",
+    "deniedHint": "Las notificaciones de Family Greenhouse están desactivadas en los Ajustes del teléfono. Actívalas allí y vuelve aquí.",
+    "deniedError": "Tu teléfono no permitió las notificaciones. Actívalas para Family Greenhouse en los Ajustes del teléfono y vuelve a intentarlo.",
+    "enabled": "Las notificaciones están activadas en este teléfono.",
+    "disabled": "Las notificaciones están desactivadas en este teléfono."
+  },
   "notifications": {
     "title": "Notificaciones",
     "browser": "Navegador",

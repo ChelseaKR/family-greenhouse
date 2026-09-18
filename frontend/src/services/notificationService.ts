@@ -13,6 +13,13 @@ export interface NotificationPreferences {
   /** Server-side delivery capability. False when the SMS provider/feature is
    * unavailable, so the UI never offers a verification flow that will 503. */
   smsAvailable: boolean;
+  /**
+   * Server-side native push capability, per platform: the deployment's
+   * `native_push_enabled` switch is on AND that platform's credential is
+   * configured. The shells offer notifications only where this is true.
+   * Absent on older servers — treat as unavailable.
+   */
+  devicePush?: { ios: boolean; android: boolean };
   phone: string;
   /** "HH:MM" 24-hour pair in the user's IANA timezone. Both empty = no DND. */
   dndStart: string;
@@ -142,3 +149,38 @@ export const notificationService = {
     return response.data;
   },
 };
+
+/** The full body PUT /notifications/prefs takes. */
+export type PreferencesUpdate = Parameters<typeof notificationService.updatePreferences>[0];
+
+/**
+ * The full PUT body from the last PERSISTED preferences plus a patch, so a
+ * caller changing one field never resets another. Shared by the settings
+ * form and the native push opt-in.
+ */
+export function buildPreferencesUpdate(
+  current: NotificationPreferences,
+  overrides: Partial<PreferencesUpdate>
+): PreferencesUpdate {
+  return {
+    browser: current.browser,
+    email: current.email,
+    sms: current.sms,
+    phone: current.phone,
+    dndStart: current.dndStart,
+    dndEnd: current.dndEnd,
+    timezone: current.timezone,
+    pestAlerts: current.pestAlerts ?? false,
+    weeklyDigest: current.weeklyDigest ?? true,
+    // Household emails. `?? true` matches the server's read-time defaulting for
+    // rows written before these toggles existed (on iff email is on), so a
+    // save from this form never silently flips one off.
+    memberJoined: current.memberJoined ?? true,
+    taskUpForGrabs: current.taskUpForGrabs ?? true,
+    coverageUpdates: current.coverageUpdates ?? true,
+    careCredit: current.careCredit ?? true,
+    yearRecap: current.yearRecap ?? true,
+    emailLocale: current.emailLocale ?? '',
+    ...overrides,
+  };
+}
