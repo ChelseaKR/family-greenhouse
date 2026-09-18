@@ -25,6 +25,10 @@
  *                              non-prerendered path (the dashboard, an unknown
  *                              URL) still boots the app with an empty #root and
  *                              no hydration mismatch.
+ *   dist/404.html              the not-found document: the app's own
+ *                              NotFoundPage, which CloudFront returns WITH a
+ *                              404 status for any path the bucket has no
+ *                              object for (issue #719).
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -38,7 +42,7 @@ const HEAD_START = '<!--head:start-->';
 const HEAD_END = '<!--head:end-->';
 const ROOT_DIV = '<div id="root"></div>';
 
-const { renderRoute, shellHead } = await import(
+const { renderNotFound, renderRoute, shellHead } = await import(
   pathToFileURL(join(FRONTEND_ROOT, 'dist-ssr', 'entry-server.js')).href
 );
 
@@ -116,6 +120,20 @@ await writeFile(
   buildPage({ head: shellHead(), body: '', path: null })
 );
 
+// The not-found document (issue #719). The distribution's `404 -> 404` error
+// response serves it for every miss, so it answers for arbitrary URLs: no
+// `data-prerendered` stamp (`path: null`), which makes main.tsx client-render
+// whatever route the browser is actually on rather than hydrate this markup
+// against it. `/care/<unpublished>` therefore still reaches CareGuidePage's own
+// redirect in a browser; what changes is what a crawler, a link checker or a
+// browser without JavaScript receives: this page and a 404, not S3's XML.
+const notFound = await renderNotFound();
+if (!notFound.html.trim()) throw new Error('empty render for the not-found page');
+await writeFile(
+  join(DIST, '404.html'),
+  buildPage({ head: notFound.head, body: notFound.html, path: null })
+);
+
 // Fail the build if the advertised sitemap and the rendered crawl surface drift
 // apart, or if anything behind auth got rendered. Runs here so every build that
 // prerenders is covered, not just CI.
@@ -129,4 +147,4 @@ checkPrerenderCoverage();
 const { checkPlantSafetyPages } = await import('./check-plant-safety-pages.mjs');
 checkPlantSafetyPages();
 
-console.log(`prerender: ${rendered} public routes + app-shell.html written to dist/`);
+console.log(`prerender: ${rendered} public routes + app-shell.html + 404.html written to dist/`);

@@ -71,35 +71,19 @@ const rewrite = (uri) => handler({ request: { uri } }).uri;
 const respond = (host, uri, querystring = {}) =>
   handler({ request: { uri, headers: { host: { value: host } }, querystring } });
 
-// Rule 0. `www.` and the apex both resolve to this distribution, so without a
-// redirect both answered 200 and Google indexed the site twice — on 2026-09-11
-// seven paths were indexed only under `www.` and fifteen only under the apex,
-// none on both. The pages' self-canonical did not prevent it.
-test('www is redirected to the apex, permanently', () => {
-  const res = respond('www.familygreenhouse.net', '/care/zz-plant');
-  assert.equal(res.statusCode, 301);
-  assert.equal(res.headers.location.value, 'https://familygreenhouse.net/care/zz-plant');
-});
-
-test('the redirect preserves the path and the querystring', () => {
-  const res = respond('www.familygreenhouse.net', '/pricing', {
-    ref: { value: 'abc' },
-    flag: { value: '' },
-  });
-  assert.equal(res.headers.location.value, 'https://familygreenhouse.net/pricing?ref=abc&flag');
-});
-
-test('the redirect happens before any rewriting, so it covers every path', () => {
-  // /assets/* is rule 1's untouched passthrough and would otherwise never be
-  // reached by a later rule; a duplicate host has to be settled first.
-  for (const uri of ['/assets/app.js', '/', '/care/zz-plant', '/nope']) {
-    assert.equal(respond('www.familygreenhouse.net', uri).statusCode, 301, uri);
-  }
-});
-
-test('the apex is never redirected', () => {
-  for (const uri of ['/', '/care/zz-plant', '/assets/app.js']) {
-    assert.equal(respond('familygreenhouse.net', uri).statusCode, undefined, uri);
+// Rule 0 — the `www.` -> apex 301 (#760) — lived here until #797 and moved to
+// its own distribution and function (www-redirect.js, tested by
+// www-redirect.test.mjs): on this distribution `redirect-to-https` answered
+// http://www before the function ran, so it took two hops. `www.` is no longer
+// an alias of this distribution, so this function only ever ROUTES. A response
+// generated here would short-circuit S3 for every path it matched.
+test('the router only rewrites; it never answers a request itself', () => {
+  for (const host of ['familygreenhouse.net', 'www.familygreenhouse.net']) {
+    for (const uri of ['/', '/care/zz-plant', '/dashboard', '/assets/app.js', '/nope']) {
+      const result = respond(host, uri, { ref: { value: 'abc' } });
+      assert.equal(result.statusCode, undefined, `${host}${uri}`);
+      assert.equal(typeof result.uri, 'string', `${host}${uri}`);
+    }
   }
 });
 

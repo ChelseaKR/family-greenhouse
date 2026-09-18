@@ -159,6 +159,62 @@ function checkPageMetadata(routePath, html, failures) {
   }
 }
 
+/**
+ * `dist/404.html`, the not-found document (issue #719). The distribution's
+ * `404 -> 404` error response serves it for EVERY miss in the frontend bucket —
+ * an unpublished `/care/<slug>`, and also a missing `/assets/` chunk, because a
+ * distribution's error response cannot be scoped to a prefix. Each assertion
+ * below is a property the edge relies on and nothing downstream can repair:
+ *
+ *   - it exists, or the error response has nothing to serve;
+ *   - it carries NO `og:site_name`. That tag is the literal
+ *     `aws_route53_health_check.site` matches, and the post-deploy smoke
+ *     (`synthetic-page-check.mjs --missing-asset-404`) FAILS — rolling the
+ *     release back — if a missing chunk's body contains it. Catching it here
+ *     turns a production rollback into a red build;
+ *   - no canonical, no `data-prerendered` stamp: it answers for arbitrary
+ *     URLs, so it must not claim one, and main.tsx must not hydrate it;
+ *   - `noindex`, and the not-found page actually rendered into #root.
+ *
+ * Exported with `dist` injectable so the unit test can hand it a fixture.
+ */
+export function notFoundDocumentFailures(dist = DIST) {
+  const file = join(dist, '404.html');
+  if (!existsSync(file)) {
+    return [
+      "dist/404.html is missing — CloudFront's 404 error response points at it, so every miss would fall back to S3's XML error document.",
+    ];
+  }
+
+  const html = readFileSync(file, 'utf8');
+  const failures = [];
+  if (/property=["']og:site_name["']/.test(html)) {
+    failures.push(
+      '404.html carries og:site_name — the string the Route 53 site health check matches. The same document answers for a missing /assets/ chunk, so the release smoke would fail and roll production back. Serialize its head with notFoundHeadToTags().'
+    );
+  }
+  if (/<link rel="canonical"/.test(html)) {
+    failures.push('404.html carries a <link rel="canonical">, but it answers for arbitrary URLs.');
+  }
+  if (/data-prerendered=/.test(html)) {
+    failures.push(
+      '404.html is stamped with data-prerendered, so main.tsx could hydrate it against a URL it was not rendered for.'
+    );
+  }
+  if (!/<meta name="robots" content="noindex/.test(html)) {
+    failures.push('404.html is not noindex.');
+  }
+  // The page's own <h1> inside #root: an empty or spinner-only render has none.
+  const root = html.match(/<div id="root"[^>]*>([\s\S]*?)<\/div>\s*<noscript>/);
+  if (!root || !/<h1\b/.test(root[1])) {
+    failures.push('404.html has no rendered page in #root — the not-found render came back empty.');
+  }
+  if (html.includes('<!--head:start-->') || html.includes('<!--head:end-->')) {
+    failures.push('404.html: head markers leaked into the shipped HTML');
+  }
+  return failures;
+}
+
 export function checkPrerenderCoverage() {
   const failures = [];
 
@@ -220,6 +276,8 @@ export function checkPrerenderCoverage() {
   if (shell.includes('<!--head:start-->')) {
     failures.push('app-shell.html: head markers leaked into the shipped HTML');
   }
+
+  failures.push(...notFoundDocumentFailures(DIST));
 
   if (failures.length > 0) {
     const message = [

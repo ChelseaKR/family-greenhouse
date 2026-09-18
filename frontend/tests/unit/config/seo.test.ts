@@ -4,6 +4,7 @@ import {
   DEFAULT_OG_IMAGE,
   headToTags,
   jsonLdScript,
+  notFoundHeadToTags,
   resolveHead,
 } from '@/config/seo';
 
@@ -161,5 +162,43 @@ describe('article Open Graph properties', () => {
       resolveHead({ title: 'x', article: { publishedTime: '2026-05-05' } }, '/pricing')
     );
     expect(page).not.toContain('article:');
+  });
+});
+
+/**
+ * `dist/404.html` is what CloudFront returns for EVERY miss in the frontend
+ * bucket, `/assets/` included, because a distribution's error response cannot
+ * be scoped to a prefix (#719). So its head must never carry the string the
+ * Route 53 site health check matches: a missing JS chunk that did would read as
+ * a healthy app to the monitor built to catch a frontend outage (#615).
+ */
+describe('notFoundHeadToTags', () => {
+  const head = resolveHead(
+    {
+      title: 'Page not found — Family Greenhouse',
+      description: 'This page does not exist in Family Greenhouse.',
+      robots: 'noindex, nofollow',
+    },
+    null
+  );
+  const tags = notFoundHeadToTags(head);
+
+  it('never emits og:site_name, the literal the site health check matches', () => {
+    expect(headToTags(head)).toContain('og:site_name');
+    expect(tags).not.toContain('og:site_name');
+  });
+
+  it('emits no canonical and no share card, since it answers for arbitrary URLs', () => {
+    expect(tags).not.toContain('rel="canonical"');
+    expect(tags).not.toContain('og:');
+    expect(tags).not.toContain('twitter:');
+  });
+
+  it('keeps the title, description and noindex a crawler reads', () => {
+    expect(tags).toContain('<title>Page not found — Family Greenhouse</title>');
+    expect(tags).toContain(
+      '<meta name="description" content="This page does not exist in Family Greenhouse." />'
+    );
+    expect(tags).toContain('<meta name="robots" content="noindex, nofollow" />');
   });
 });

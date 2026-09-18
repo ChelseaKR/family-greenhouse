@@ -149,11 +149,16 @@ Two changes close that, and both are asserted by `npm run observability:check`:
 
 - **The CDN stopped rescuing misses under `/assets/`.** The viewer-request
   function resolves every route to an object that exists, so the
-  distribution's one remaining `custom_error_response` (403 → 200
-  `/app-shell.html`) no longer has to cover them; the frontend bucket's
-  `s3:ListBucket` grant makes a missing object a 404; and the `404 → 200` rule
-  is gone. `error_code = 404` reappearing in `modules/frontend/main.tf`, or the
-  ListBucket grant disappearing, fails the observability gate.
+  distribution's `403 → 200 /app-shell.html` rule no longer has to cover
+  them; the frontend bucket's `s3:ListBucket` grant makes a missing object a
+  404; and the `404 → 200` rule is gone. A 404 rule that answers with anything
+  but a 404, or with the app shell, or the ListBucket grant disappearing,
+  fails the observability gate. The one 404 rule the gate accepts is the one
+  that exists since #719 — `404 → 404 /404.html`, the app's not-found page —
+  and it is safe here only because that page carries no `og:site_name`: it
+  also answers for a missing `/assets/` chunk. `check-prerender-coverage.mjs`
+  fails the build if it ever does, so that failure lands on a pull request
+  rather than as a post-deploy rollback.
 - **The deeper check stopped trusting the tag.** `bundleFailures` in
   `synthetic-page-check.mjs` fetches the module script and requires a
   JavaScript content type — the first assertion in that script a served shell

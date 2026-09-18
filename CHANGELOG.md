@@ -62,6 +62,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   changes. Recipients still on the default `UTC` zone get UTC days and a UTC
   08:00. EN/ES.
 
+- **A missing page now answers 404 with the app's own not-found page, not
+  S3's XML error.** Since #723, `/care/no-such-plant` and every other URL that
+  is not a route answered the right status, but with
+  `<Error><Code>NoSuchKey</Code>…`, `application/xml`, as the body. The
+  prerender now writes `dist/404.html` ("Nothing growing here") and the
+  distribution serves it with the 404 (`404 → 404`, never a 200). The page
+  carries no `og:site_name`, because the same rule answers for a missing
+  `/assets/` chunk and that tag is what the Route 53 health check matches; the
+  build fails if it ever does. The release smoke now also requires an
+  unpublished care guide to 404 (#719).
+
+- **`http://www.familygreenhouse.net` reaches the apex in one redirect, not
+  two.** `www.` moved to a redirect-only CloudFront distribution that accepts
+  both schemes, so its function answers `http://www` directly instead of
+  CloudFront first bouncing it to `https://www` (#797). `www.` is unreachable
+  for a few minutes during the release that applies this; the apex is not
+  affected.
+
 ### Security
 
 - **Plant-tag tokens and cutting-share codes are hashed at rest, and a table

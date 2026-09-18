@@ -46,46 +46,6 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-/**
- * Why the CloudFront function 301s `www.` to the apex (rule 0 in
- * spa-router.js, which keeps only a pointer because it is under a 10 KB
- * limit and this file is not).
- *
- * `www.<domain>` is a second alias on the same distribution over the same
- * bucket (`include_www_alias`), so both hostnames answered 200 with identical
- * content. Google treated them as two sites. Measured in Search Console on
- * 2026-09-11, over the preceding three months:
- *
- *   - 7 paths were indexed ONLY under `www.` (/care, /care/zz-plant,
- *     /care/monstera, /care/snake-plant, /care/spider-plant, /care/peace-lily,
- *     /care/heartleaf-philodendron)
- *   - 15 paths were indexed ONLY under the apex
- *   - 0 paths on both
- *
- * So one site's ranking signal was split across two hostnames, and the `www.`
- * half sat at average position 55-75 while the apex homepage sat at 6.2.
- *
- * Every page already emits a self-canonical naming the apex, and that was not
- * enough: a canonical is a hint a crawler may ignore, and here it did. A 301
- * is not a hint. It is rule 0 because it has to apply to every path, including
- * the ones later rules rewrite or pass through untouched.
- *
- * Known residual gap (issue #797), checked live 2026-09-15: this rule only fires for
- * HTTPS requests. `apex` and `www.` are aliases on the SAME distribution
- * (`local.frontend_aliases`, infrastructure/modules/frontend/main.tf) sharing
- * ONE `viewer_protocol_policy = "redirect-to-https"` on the default cache
- * behavior — so a plain `http://www.<domain>/...` request never reaches this
- * function at all. CloudFront's own protocol-policy redirect answers first
- * (301 to `https://www.<domain>/...`, same host), and only THEN, on the
- * follow-up HTTPS request, does rule 0 fire and 301 again to the apex. That
- * is a two-hop chain for any inbound link that spells out `http://www.`,
- * confirmed by tracing `X-Cache: Redirect from cloudfront` (the native
- * redirect, function not invoked) vs `X-Cache: FunctionGeneratedResponse
- * from cloudfront` (this rule). No change here or in spa-router.js can
- * collapse it: the function is simply never called for that first hop.
- * Fixing it for real needs a protocol-policy or distribution-topology change
- * in Terraform, which is outside what a viewer-request function can do.
- */
 import { join } from 'node:path';
 import process from 'node:process';
 import { runInNewContext } from 'node:vm';
