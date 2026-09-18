@@ -47,7 +47,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   posted inside quiet hours, and each post is reserved and finalized so it goes
   out once. Posts carry plant names, task names and due dates only: no notes, no
   people, no links, with each platform's markup and mentions (`@everyone`,
-  `<!channel>`, `@room`) neutralised. The webhook address is the first secret
+  `<!channel>`, `@room`) neutralized. The webhook address is the first secret
   the server must replay, so it is sealed with a dedicated KMS key bound to the
   household by encryption context, never returned (settings show host + last
   four) and never logged (ADR 0032). Addresses are allow-listed per platform,
