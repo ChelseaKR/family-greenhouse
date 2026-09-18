@@ -82,7 +82,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
           <div className="fixed inset-0 bg-primary-950/70 transition-opacity" />
         </Transition.Child>
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
+        <div className="fixed inset-0 z-10 overflow-y-auto safe-area-y">
           <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
             <Transition.Child
               as={Fragment}

@@ -9,6 +9,7 @@ import { NotFoundPage } from '@/components/NotFoundPage';
 import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
+import { NativeLaunchReady } from '@/components/NativeLaunchReady';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
 import { isNativeApp } from '@/lib/platform';
@@ -333,6 +334,9 @@ function App() {
 
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
+            {/* Inside the Suspense boundary on purpose: it commits with the
+                first rendered route, not with the loading fallback. */}
+            <NativeLaunchReady />
           </div>
         </Suspense>
       </RouteErrorBoundary>

@@ -39,8 +39,11 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
       {/* print:hidden — the sticky site header is chrome, not content; a
-          printed page (the sitter handoff brief) should start at the title. */}
-      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 backdrop-blur-xs print:hidden">
+          printed page (the sitter handoff brief) should start at the title.
+          The safe-area padding carries its background under the status bar
+          in the native shells (help, legal and pricing pages are reachable
+          there); env() is 0 in a browser tab. */}
+      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-xs print:hidden">
         <nav
           className={clsx(
             'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',
