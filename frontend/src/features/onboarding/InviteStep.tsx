@@ -2,6 +2,8 @@ import { useRef, useState, type Ref } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { UserPlusIcon } from '@heroicons/react/24/outline';
+import { isNativeApp } from '@/lib/platform';
+import { shareLinkNatively } from '@/services/nativeShare';
 import { householdService } from '@/services/householdService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
@@ -58,6 +60,7 @@ export function InviteStep({
 
   const copyLink = async () => {
     if (!invite) return;
+    if (await shareLinkNatively({ url: invite.url, dialogTitle: t('common.shareLink') })) return;
     try {
       if (!navigator.clipboard) throw new Error('clipboard unavailable');
       await navigator.clipboard.writeText(invite.url);
@@ -109,7 +112,7 @@ export function InviteStep({
                 aria-label={t('firstRun.invite.linkLabel')}
               />
               <Button variant="secondary" onClick={copyLink}>
-                {t('firstRun.invite.copy')}
+                {isNativeApp() ? t('common.shareLink') : t('firstRun.invite.copy')}
               </Button>
             </div>
             <p className="text-sm text-gray-600" aria-live="polite">

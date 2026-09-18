@@ -27,6 +27,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
+import { playHaptic } from '@/services/nativeHaptics';
 import { computeStreak, streakLabel } from '@/utils/streaks';
 import { isOverdue } from '@/utils/date';
 import { findCareGuide } from '@/utils/careGuidance';
@@ -216,6 +217,7 @@ export function PlantDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      playHaptic('snoozed');
       toast.info('Task snoozed');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
