@@ -225,20 +225,15 @@ describe('free registration with paid activity on hold', () => {
     // both get respected" while naming the browser channel first.
     //
     // The reminder run defers a channel during quiet hours by routing its
-    // `push(...)` through `inDnd ? dndDeferred : eligible`. Email and SMS are
-    // routed that way; 'browser' — one preference covering both web push and
-    // the native shells' device push — is pushed unconditionally, on purpose:
-    // services/notifier.ts states the policy ("Push is NOT suppressed — the OS
-    // already manages quiet hours better than we can"), the settings panel says
-    // "Browser pop-ups follow your OS Do Not Disturb settings instead", the help
-    // page says quiet hours "deliberately do not silence browser notifications",
-    // and backend/tests/integration/notification-dispatch.test.ts pins it end to
-    // end. Every surface a customer reads AFTER signing up was right; the one
-    // they read BEFORE was not.
+    // `push(...)` through `inDnd ? dndDeferred : eligible`. Email and SMS have
+    // always been routed that way. 'browser' — one preference covering both
+    // web push and the native shells' device push — used to be pushed
+    // unconditionally, and this band had to name the exception. Since the
+    // owner decision on #343 (2026-09-17) push is deferred like the loud
+    // channels, so the caveat is no longer required; if push is ever exempted
+    // again, this test demands it back.
     //
     // So this reads the eligibility function rather than trusting either copy.
-    // If push is ever deferred like the loud channels, the caveat stops being
-    // required and this test says so instead of pinning a stale sentence.
     const repositoryRoot = resolve(process.cwd(), '..');
     const reminders = readFileSync(
       resolve(repositoryRoot, 'backend/src/services/reminders.ts'),

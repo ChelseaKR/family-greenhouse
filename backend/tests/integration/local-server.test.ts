@@ -2460,7 +2460,7 @@ describe('analytics window (ADR 0014: free renders the trailing 30 days; nothing
   it('windows the year-in-review on Seedling and leaves the completion rows alone', async () => {
     const token = await loginAsSeed();
     const before = db.completions.size;
-    const year = new Date().getFullYear();
+    const year = new Date().getUTCFullYear();
     const res = await request(app)
       .get(`/households/${seedHouseholdId}/year-in-review?year=${year}`)
       .set('Authorization', `Bearer ${token}`);

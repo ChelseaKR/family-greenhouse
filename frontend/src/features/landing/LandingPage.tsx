@@ -186,15 +186,14 @@ const differentiators = [
   // disabled for every real user and the help page says as much. "or text"
   // goes back in when the flag is on, not before.
   //
-  // Quiet hours are named per channel because they only apply to one of the
-  // two. `eligibleReminderChannels` (backend/src/services/reminders.ts) routes
-  // email and SMS through `inDnd ? dndDeferred : eligible` and pushes
-  // 'browser' unconditionally; services/notifier.ts states the policy in terms
-  // ("Push is NOT suppressed — the OS already manages quiet hours"). The
-  // settings panel and the help page have always said so. This band said the
-  // opposite, which the visitor could only discover after signing up.
-  // tests/unit/features/PublicAcquisitionHold.test.tsx holds both claims, in
-  // both catalogs.
+  // Quiet hours cover both channels. Until #343's owner decision (2026-09-17)
+  // they covered only email — browser push was exempt, and this band had to
+  // say so (#702). Now `eligibleReminderChannels`
+  // (backend/src/services/reminders.ts) routes every channel through
+  // `inDnd ? dndDeferred : eligible` and `notifier.sendToUser` suppresses
+  // push inside the window too. PublicAcquisitionHold.test.tsx reads that
+  // function, in both catalogs, so if push is ever exempted again this
+  // sentence has to change.
   { id: 'reminders', icon: BellAlertIcon },
   { id: 'year', icon: ChartBarIcon },
 ];

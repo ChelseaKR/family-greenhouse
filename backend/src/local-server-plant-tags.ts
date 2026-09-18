@@ -418,7 +418,7 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
 
     const now = new Date();
     const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() + DUE_WITHIN_DAYS);
+    cutoff.setUTCDate(cutoff.getUTCDate() + DUE_WITHIN_DAYS);
     const cutoffIso = cutoff.toISOString();
     const nowIso = now.toISOString();
 
@@ -501,7 +501,7 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
 
     const now = new Date();
     const nextDue = new Date(now);
-    nextDue.setDate(nextDue.getDate() + task.frequency);
+    nextDue.setUTCDate(nextDue.getUTCDate() + task.frequency);
     task.lastCompleted = now.toISOString();
     task.nextDue = nextDue.toISOString();
 

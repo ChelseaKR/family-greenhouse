@@ -25,9 +25,14 @@ const SEVEN_FOURTEEN: SeasonalCadence[] = [
   { season: 'winter', frequency: 14 },
 ];
 
-/** Local-zone midday on a date. Midday, so no fixture sits on a day boundary. */
+/** UTC midday on a date. The resolver reads the UTC month (#342), so the
+ *  fixtures say so rather than borrowing the test process's zone; midday, so
+ *  no fixture sits on a day boundary. */
 const at = (year: number, monthIndex: number, day: number) =>
-  new Date(year, monthIndex, day, 12, 0, 0, 0);
+  new Date(Date.UTC(year, monthIndex, day, 12));
+
+/** UTC midnight on the first of a month: what `nextCadenceChange` returns. */
+const monthStart = (year: number, monthIndex: number) => new Date(Date.UTC(year, monthIndex, 1));
 
 describe('seasonForMonth', () => {
   // The whole table, both hemispheres, because the only interesting months are
@@ -136,9 +141,8 @@ describe('resolveCadence', () => {
   });
 
   it('changes cadence on the first of the month, not part-way through it', () => {
-    // The northern autumn→winter boundary. `at()` uses local midday because
-    // the suite pins TZ=UTC to the deployed Lambdas' zone; a fixture at
-    // midnight would be the one instant a zone slip could hide behind.
+    // The northern autumn→winter boundary. `at()` uses UTC midday; a fixture
+    // at midnight would be the one instant a zone slip could hide behind.
     const lastOfAutumn = resolveCadence(9, SEVEN_FOURTEEN, 'north', at(2026, 10, 30));
     const firstOfWinter = resolveCadence(9, SEVEN_FOURTEEN, 'north', at(2026, 11, 1));
     expect(lastOfAutumn.season).toBe('autumn');
@@ -232,12 +236,12 @@ describe('nextCadenceChange', () => {
     // 7/7/14/14 changes twice a year. From mid-November (northern autumn, 14
     // days) the next different number is the spring 7, on 1 March.
     const change = nextCadenceChange(9, SEVEN_FOURTEEN, 'north', at(2026, 10, 15));
-    expect(change).toEqual(new Date(2027, 2, 1, 0, 0, 0, 0));
+    expect(change).toEqual(monthStart(2027, 2));
 
     // From mid-May (spring, 7 days) the next different number is 1 September,
     // when autumn's 14 starts — NOT 1 June, when summer starts at the same 7.
     const fromSpring = nextCadenceChange(9, SEVEN_FOURTEEN, 'north', at(2026, 4, 15));
-    expect(fromSpring).toEqual(new Date(2026, 8, 1, 0, 0, 0, 0));
+    expect(fromSpring).toEqual(monthStart(2026, 8));
   });
 
   it('returns null when the cadence never changes', () => {
@@ -256,7 +260,7 @@ describe('nextCadenceChange', () => {
     // 9, and the change is the start of winter's 21.
     const winterOnly: SeasonalCadence[] = [{ season: 'winter', frequency: 21 }];
     expect(nextCadenceChange(9, winterOnly, 'north', at(2026, 10, 15))).toEqual(
-      new Date(2026, 11, 1, 0, 0, 0, 0)
+      monthStart(2026, 11)
     );
   });
 

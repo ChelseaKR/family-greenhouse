@@ -10,12 +10,13 @@ import { resolve } from 'path';
 // agree by reference, and tests/unit/config/lambdaTimeZone.test.ts fails if
 // either side moves.
 //
-// The recurrence math in taskService (`setDate(getDate() + frequency)`) is
-// local-zone arithmetic, so without this the snooze/next-due date assertions
-// were only green on laptops whose zone happened to have no DST transition
-// inside the fixture window. Set here, in the main process, for the same
-// reason as the frontend config: worker threads inherit it, but assigning TZ
-// inside one is inert.
+// The backend's own date math no longer reads the process zone (#342;
+// tests/unit/config/processTimeZoneIndependence.test.ts enforces it), so this
+// pin is no longer what keeps the recurrence assertions green on a laptop in
+// a DST zone. It stays so a fixture that builds its EXPECTED value with local
+// Date setters cannot pass or fail by the machine it runs on. Set here, in
+// the main process, for the same reason as the frontend config: worker
+// threads inherit it, but assigning TZ inside one is inert.
 //
 // `??=`, not `=`, deliberately. This pins the TEST PROCESS, which is a
 // different fact from the deployed Lambdas' zone — no unit test can observe

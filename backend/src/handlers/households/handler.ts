@@ -718,7 +718,7 @@ export const getYearInReview = createHandler(
       throw createHttpError(403, 'Access denied');
     }
     const yearParam = event.queryStringParameters?.year;
-    const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+    const year = yearParam ? parseInt(yearParam, 10) : new Date().getUTCFullYear();
     if (!Number.isFinite(year) || year < 2020 || year > 2100) {
       throw createHttpError(400, 'year must be between 2020 and 2100');
     }
@@ -1163,8 +1163,9 @@ export const setEscalationRule = createHandler(
 //
 // Stored and readable, and read by nothing. Due dates are still ISO instants
 // compared in the Lambda's zone on every surface — `taskService.completeTask`,
-// the 7-day upcoming window, the reminder scan's rolling 24h cutoff, the ICS
-// all-day date, the digest's days-overdue. Making any of those consult this
+// the 7-day upcoming window, the ICS all-day date, the digest's days-overdue.
+// (The reminder scan's send DAY follows each member's own notification zone
+// since #343, not this field.) Making any of those consult this
 // field reinterprets `nextDue` for every task already in production, and ADR
 // 0025 is the plan for that decision rather than this route.
 //

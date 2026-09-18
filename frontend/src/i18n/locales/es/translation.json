@@ -1135,6 +1135,11 @@
       "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Plántula en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
       "paymentFailedActionAdmin": "Actualiza la tarjeta en “Gestionar suscripción”, más abajo.",
       "paymentFailedActionNative": "Abre Family Greenhouse en un navegador web para actualizar la tarjeta.",
+      "paymentFailedBodyOwned": "Hasta que se resuelva, tu hogar tiene los límites del plan que ya compró de por vida o que recibió como regalo, en lugar de los de tu suscripción. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras de ese plan.",
+      "paymentFailedBanner": {
+        "actionAdmin": "Actualiza la tarjeta en Ajustes → Estado del plan",
+        "actionView": "Consulta los detalles en Ajustes → Estado del plan"
+      },
       "planUnknownTitle": "No pudimos comprobar en qué plan estás",
       "planUnknownBody": "Tu plan no se cargó, así que no podemos decir en qué plan está tu hogar ni cómo se compara con sus límites. Es un problema al leer tu plan, no un cambio en él: tu plan y tu suscripción siguen exactamente igual, y no se ha cobrado ni cancelado nada. Vuelve a cargar la página para intentarlo de nuevo.",
       "changePlanUnavailable": "Los cambios de plan están en pausa aquí hasta que podamos comprobar en qué plan está ya tu hogar; ofrecerte uno ahora podría significar comprar un plan que ya tienes. Vuelve a cargar la página para intentarlo de nuevo.",
@@ -1237,6 +1242,8 @@
     "title": "Notificaciones",
     "browser": "Navegador",
     "email": "Correo",
+    "emailDescription": "Un resumen diario en el correo de tu cuenta el día en que vencen tus tareas y cada día que sigan atrasadas.",
+    "quietHoursDescription": "Durante este horario no enviamos nada: ni correos, ni mensajes de texto, ni notificaciones del navegador. Tu recordatorio diario llega cuando termina. Si no tienes horas de silencio, llega a las 8:00 en la zona horaria de abajo.",
     "sms": "Mensaje de texto",
     "deviceTitle": "Este dispositivo",
     "deviceActive": "Las notificaciones push están activadas en este dispositivo.",
@@ -2038,7 +2045,7 @@
       },
       "reminders": {
         "label": "Recordatorios donde sí los vas a ver",
-        "body": "En el navegador o por correo. Configura tus horas de silencio y el correo espera a que terminen; las notificaciones del navegador siguen el modo No molestar de tu dispositivo."
+        "body": "En el navegador o por correo, el día en que vence la tarea. Configura tus horas de silencio y todos los recordatorios esperan a que terminen."
       },
       "year": {
         "label": "Tu año en retrospectiva",
@@ -2115,7 +2122,7 @@
     "privacy": "Privacidad",
     "deleteAccount": "Eliminar cuenta",
     "terms": "Términos",
-    "memorial": "Con cariño, en memoria de mi mamá, Joyce, que nos enseñó a seguir creciendo.",
+    "memorial": "En cariñosa memoria de mi mamá, Joyce, quien nos enseñó a seguir creciendo.",
     "copyrightPlantData": "© {{year}} Family Greenhouse. Datos de plantas proporcionados por"
   },
   "notFound": {
@@ -2156,6 +2163,6 @@
     }
   },
   "brand": {
-    "tagline": "Crecer en familia"
+    "tagline": "Crecer juntos"
   }
 }

@@ -396,7 +396,7 @@ export const getTagView = createHandler(
 
     const now = new Date();
     const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() + DUE_WITHIN_DAYS);
+    cutoff.setUTCDate(cutoff.getUTCDate() + DUE_WITHIN_DAYS);
     const cutoffIso = cutoff.toISOString();
     const nowIso = now.toISOString();
 

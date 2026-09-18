@@ -30,9 +30,9 @@ export interface NotificationPreferences {
    * timezone. Both empty = no quiet hours.
    *
    * If `dndStart` > `dndEnd` we treat it as wrapping past midnight (e.g.
-   * 22:00 → 07:00). Reminder dispatch checks the current local hour against
-   * this window and silently skips channels that aren't push-with-grouping
-   * (push respects OS DND so we don't double-mute).
+   * 22:00 → 07:00). Every channel — push, email and SMS — waits out this
+   * window (`notifier.sendToUser`), and the daily reminder is sent when it
+   * ends (`reminders.reminderDeliveryTime`).
    */
   dndStart: string;
   dndEnd: string;
