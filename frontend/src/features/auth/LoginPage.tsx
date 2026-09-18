@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,7 +6,13 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuthStore } from '@/store/authStore';
-import { authService, type AuthResponse, type LoginCredentials } from '@/services/authService';
+import {
+  authService,
+  isMfaChallenge,
+  type AuthResponse,
+  type LoginCredentials,
+} from '@/services/authService';
+import { getPasskeyAssertion, isCeremonyCancelled, passkeysUsableHere } from '@/lib/webauthn';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -49,6 +55,27 @@ export function LoginPage() {
   const [codeError, setCodeError] = useState<string | null>(null);
   const credentialsRef = useRef<LoginCredentials | null>(null);
   useDocumentTitle(codeStep ? t('auth.mfa.title') : t('auth.signInButton'));
+  // Passkeys (#671): offered only where one can run (a browser with WebAuthn
+  // on the site's own origin — never the native shells) AND the deployment
+  // has them on. Unknown or failed = not offered: the password form is
+  // always there, so a missing alternative is not a false all-clear.
+  const [passkeysOffered, setPasskeysOffered] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  useEffect(() => {
+    if (!passkeysUsableHere()) return;
+    let cancelled = false;
+    authService
+      .passkeysAvailable()
+      .then((available) => {
+        if (!cancelled) setPasskeysOffered(available);
+      })
+      .catch(() => {
+        if (!cancelled) setPasskeysOffered(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // An explicit ?redirect= (e.g. from a shared cutting card) wins, then the
   // ProtectedRoute's saved location, then the dashboard. Only same-origin
@@ -70,6 +97,8 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    trigger,
+    getValues,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -94,7 +123,7 @@ export function LoginPage() {
       const outcome = await submitCredentials(authService, data);
       if (outcome.kind === 'signedIn') {
         finishSignIn(outcome.auth);
-      } else {
+      } else if (outcome.kind === 'needsCode') {
         credentialsRef.current = { email: data.email, password: data.password };
         setCodeError(null);
         setCodeStep(outcome.state);
@@ -107,14 +136,16 @@ export function LoginPage() {
   };
 
   const onSubmitCode = async (code: string) => {
-    const credentials = credentialsRef.current;
-    if (!codeStep || !credentials) return;
+    if (!codeStep) return;
     setCodeError(null);
     setIsLoading(true);
     try {
-      const outcome = await submitCode(authService, credentials, codeStep, code);
+      const outcome = await submitCode(authService, credentialsRef.current, codeStep, code);
       if (outcome.kind === 'signedIn') {
         finishSignIn(outcome.auth);
+      } else if (outcome.kind === 'restart') {
+        backToCredentials();
+        setError(t('auth.mfa.expired'));
       } else {
         setCodeStep(outcome.state);
         if (outcome.kind === 'wrongCode') setCodeError(t('auth.mfa.wrongCode'));
@@ -123,6 +154,36 @@ export function LoginPage() {
       setCodeError(signInErrorMessage(err, t));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Passkey sign-in: the email says which account; the browser's passkey
+  // sheet does the rest. Cognito verifies the assertion.
+  const onPasskey = async () => {
+    setError(null);
+    if (!(await trigger('email'))) return;
+    setPasskeyLoading(true);
+    try {
+      const started = await authService.startPasskeySignIn(getValues('email'));
+      const credential = await getPasskeyAssertion(started.options);
+      const result = await authService.finishPasskeySignIn({
+        username: started.username,
+        session: started.session,
+        credential,
+      });
+      if (isMfaChallenge(result)) {
+        // Cognito asked for the authenticator code after the passkey. There
+        // is no password to re-challenge with, so a wrong code starts over.
+        credentialsRef.current = null;
+        setCodeError(null);
+        setCodeStep({ step: 'code', challenge: result, spent: false });
+      } else {
+        finishSignIn(result);
+      }
+    } catch (err) {
+      setError(isCeremonyCancelled(err) ? t('auth.passkey.cancelled') : signInErrorMessage(err, t));
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -214,6 +275,25 @@ export function LoginPage() {
           {t('auth.signInButton')}
         </Button>
       </form>
+
+      {passkeysOffered && (
+        <div className="mt-6 space-y-4">
+          <p className="flex items-center gap-3 text-xs uppercase tracking-wide text-gray-600">
+            <span className="h-px flex-1 bg-gray-200" aria-hidden="true" />
+            {t('auth.passkey.or')}
+            <span className="h-px flex-1 bg-gray-200" aria-hidden="true" />
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            isLoading={passkeyLoading}
+            onClick={() => void onPasskey()}
+          >
+            {t('auth.passkey.use')}
+          </Button>
+        </div>
+      )}
     </AuthShell>
   );
 }
@@ -227,6 +307,12 @@ function signInErrorMessage(error: unknown, t: TFunction): string {
       return t('auth.mfa.expired');
     case 'UNSUPPORTED_CHALLENGE':
       return t('auth.mfa.unsupported');
+    case 'NO_PASSKEY':
+      return t('auth.passkey.noPasskey');
+    case 'PASSKEY_REJECTED':
+      return t('auth.passkey.rejected');
+    case 'PASSKEY_EXPIRED':
+      return t('auth.passkey.expired');
     default:
       return getErrorMessage(error);
   }

@@ -128,6 +128,8 @@ module "auth" {
   environment                 = var.environment
   project_name                = var.project_name
   public_registration_enabled = var.public_registration_enabled
+  passkeys_enabled            = var.passkeys_enabled
+  passkey_relying_party_id    = var.passkey_relying_party_id
   email_identity_arn          = var.domain_name == "" ? "" : module.email[0].identity_arn
   email_from_address          = var.email_from_address
   email_reply_to              = var.email_reply_to
@@ -160,6 +162,7 @@ module "api" {
   project_name         = var.project_name
   cognito_user_pool_id = module.auth.user_pool_id
   cognito_client_id    = module.auth.client_id
+  passkeys_enabled     = var.passkeys_enabled
   dynamodb_table_name  = module.database.table_name
   dynamodb_table_arn   = module.database.table_arn
   images_bucket_name   = module.frontend.images_bucket_name

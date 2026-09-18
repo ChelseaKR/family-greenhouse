@@ -1059,6 +1059,159 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  # --- Passkeys (#671) ---
+  # Cognito native WebAuthn. INERT until Terraform `passkeys_enabled = true`
+  # sets PASSKEYS_ENABLED=1 on the auth Lambda: until then every route below
+  # except the availability probe answers 404 with details.code
+  # PASSKEYS_DISABLED. Other coded refusals: NO_PASSKEY, PASSKEY_REJECTED,
+  # PASSKEY_EXPIRED, CODE_REQUIRED (plus REAUTH_FAILED / INVALID_CODE from
+  # re-authentication). Options and credentials are WebAuthn Level 3 JSON.
+  /auth/passkeys/available:
+    get:
+      summary: Whether this deployment offers passkeys (cacheable, public)
+      tags: [Auth]
+      security: []
+      responses:
+        '200':
+          description: Availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+  /auth/login/passkey/start:
+    post:
+      summary: Start a passkey sign-in (Cognito USER_AUTH, PREFERRED_CHALLENGE=WEB_AUTHN)
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Request options for navigator.credentials.get, plus the challenge session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session: { type: string }
+                  username: { type: string }
+                  options: { type: object }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/login/passkey/finish:
+    post:
+      summary: Finish a passkey sign-in with the browser's assertion
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, session, credential]
+              properties:
+                username: { type: string }
+                session: { type: string, maxLength: 4096 }
+                credential: { type: object, description: AuthenticationResponseJSON }
+      responses:
+        '200':
+          description: Signed in — the same body as POST /auth/login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/passkeys:
+    get:
+      summary: List the caller's passkeys (needs X-Cognito-Access-Token)
+      tags: [Auth]
+      responses:
+        '200':
+          description: Registered passkeys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passkeys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        createdAt: { type: [string, 'null'] }
+                        attachment: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/passkeys/register/start:
+    post:
+      summary: Start adding a passkey (re-authenticates; needs X-Cognito-Access-Token)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+                code:
+                  {
+                    type: string,
+                    pattern: '^\d{6}$',
+                    description: Required when an authenticator app is on,
+                  }
+      responses:
+        '200':
+          description: Creation options for navigator.credentials.create
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/passkeys/register/finish:
+    post:
+      summary: Finish adding a passkey with the browser's attestation (needs X-Cognito-Access-Token)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential: { type: object, description: RegistrationResponseJSON }
+      responses:
+        '201':
+          description: Passkey added
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/passkeys/{credentialId}:
+    delete:
+      summary: Remove one of the caller's passkeys (needs X-Cognito-Access-Token)
+      tags: [Auth]
+      parameters:
+        - in: path
+          name: credentialId
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Removed
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # --- Me ---
   /me:
     delete:

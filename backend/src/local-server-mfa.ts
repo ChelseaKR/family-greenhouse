@@ -144,8 +144,14 @@ function issueSecret(): string {
   return base32Encode(randomBytes(20));
 }
 
-function isTotpEnabled(userId: string): boolean {
+export function isTotpEnabled(userId: string): boolean {
   return Boolean(totp.get(userId)?.secret);
+}
+
+/** For the passkey mock's re-authentication: does `code` match right now? */
+export function totpCodeMatchesFor(userId: string, code: string): boolean {
+  const secret = totp.get(userId)?.secret;
+  return Boolean(secret) && totpMatches(secret as string, code, Date.now());
 }
 
 /**

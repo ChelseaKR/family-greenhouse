@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { useAuthStore } from '@/store/authStore';
 import { server, handlers } from '../../msw/server';
+import { bufferToBase64url } from '@/lib/webauthn';
 
 function renderLogin(entry = '/login') {
   return render(
@@ -221,5 +222,141 @@ describe('LoginPage — two-step verification (#671)', () => {
     await user.click(screen.getByRole('button', { name: /start over/i }));
     expect(await screen.findByRole('button', { name: /sign in/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/authentication code/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('LoginPage — passkeys (#671)', () => {
+  const API = 'http://localhost:4000';
+  type WindowWithShims = Window & { PublicKeyCredential?: unknown };
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer;
+  const get = vi.fn();
+
+  function installWebAuthn() {
+    (window as WindowWithShims).PublicKeyCredential = function PublicKeyCredential() {};
+    Object.defineProperty(navigator, 'credentials', {
+      configurable: true,
+      value: { create: vi.fn(), get },
+    });
+  }
+
+  afterEach(() => {
+    get.mockReset();
+    delete (window as WindowWithShims).PublicKeyCredential;
+    Object.defineProperty(navigator, 'credentials', { configurable: true, value: undefined });
+  });
+
+  function passkeyLoginServer(opts: { available: boolean; noPasskey?: boolean }) {
+    const sent = { probes: 0, start: [] as unknown[], finish: [] as unknown[] };
+    server.use(
+      http.get(`${API}/auth/passkeys/available`, () => {
+        sent.probes += 1;
+        return HttpResponse.json({ available: opts.available });
+      }),
+      http.post(`${API}/auth/login/passkey/start`, async ({ request }) => {
+        sent.start.push(await request.json());
+        if (opts.noPasskey) {
+          return HttpResponse.json(
+            { message: 'none', details: { code: 'NO_PASSKEY' } },
+            { status: 409 }
+          );
+        }
+        return HttpResponse.json({
+          session: 'webauthn-session',
+          username: 'u1',
+          options: { challenge: bufferToBase64url(bytes(1, 2)), rpId: 'localhost' },
+        });
+      }),
+      http.post(`${API}/auth/login/passkey/finish`, async ({ request }) => {
+        sent.finish.push(await request.json());
+        return HttpResponse.json({
+          user: {
+            id: 'u1',
+            email: 'test@example.com',
+            name: 'Test',
+            householdId: 'hh-1',
+            householdRole: 'admin',
+          },
+          idToken: 'id-pk',
+          accessToken: 'access-pk',
+          refreshToken: 'refresh-pk',
+        });
+      })
+    );
+    return sent;
+  }
+
+  it('not offered when the deployment has passkeys off (after the probe answers)', async () => {
+    installWebAuthn();
+    const sent = passkeyLoginServer({ available: false });
+    renderLogin();
+    await waitFor(() => expect(sent.probes).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: /use a passkey/i })).not.toBeInTheDocument();
+  });
+
+  it('signs in with a passkey: email, browser ceremony, assertion JSON, dashboard', async () => {
+    installWebAuthn();
+    get.mockResolvedValue({
+      id: 'cred-1',
+      rawId: bytes(3),
+      type: 'public-key',
+      authenticatorAttachment: 'platform',
+      getClientExtensionResults: () => ({}),
+      response: {
+        clientDataJSON: bytes(4),
+        authenticatorData: bytes(5),
+        signature: bytes(6),
+        userHandle: null,
+      },
+    });
+    const sent = passkeyLoginServer({ available: true });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.click(await screen.findByRole('button', { name: /use a passkey/i }));
+    await screen.findByText('Dashboard Page');
+
+    expect(sent.start).toEqual([{ email: 'test@example.com' }]);
+    const publicKey = get.mock.calls[0][0].publicKey as PublicKeyCredentialRequestOptions;
+    expect(Array.from(new Uint8Array(publicKey.challenge as ArrayBuffer))).toEqual([1, 2]);
+    expect(sent.finish).toEqual([
+      {
+        username: 'u1',
+        session: 'webauthn-session',
+        credential: expect.objectContaining({
+          id: 'cred-1',
+          response: {
+            clientDataJSON: bufferToBase64url(bytes(4)),
+            authenticatorData: bufferToBase64url(bytes(5)),
+            signature: bufferToBase64url(bytes(6)),
+          },
+        }),
+      },
+    ]);
+    expect(useAuthStore.getState().accessToken).toBe('access-pk');
+  });
+
+  it('an account without a passkey is told so and stays on the page', async () => {
+    installWebAuthn();
+    passkeyLoginServer({ available: true, noPasskey: true });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.click(await screen.findByRole('button', { name: /use a passkey/i }));
+    expect(await screen.findByText(/no passkey for this account yet/i)).toBeInTheDocument();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('asks for a valid email before starting', async () => {
+    installWebAuthn();
+    const sent = passkeyLoginServer({ available: true });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.click(await screen.findByRole('button', { name: /use a passkey/i }));
+    expect(await screen.findByText(/valid email/i)).toBeInTheDocument();
+    expect(sent.start).toHaveLength(0);
   });
 });

@@ -111,10 +111,39 @@ default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-sr
   a fail-closed registration flag separate from the paid-activity hold, and
   deployed smoke coverage asserts Cognito&rsquo;s self-signup policy explicitly.
 
-**Deferred product option:** WebAuthn/passkeys would be a stronger alternative
-to passwords, but no account-takeover signal currently justifies adding a
-second enrollment/recovery surface. Re-open on user demand or elevated auth
-incidents.
+**Passkeys (#671) — built, OFF until the owner applies them.** Sign-in with a
+passkey runs on Cognito's native WebAuthn: Cognito issues the creation and
+request options, verifies attestation and every signature, and stores the
+public keys; the app only moves WebAuthn JSON between the browser and Cognito
+(`handlers/auth/passkeys.ts`, `frontend/src/lib/webauthn.ts`). Adding a passkey
+re-authenticates first (password, plus a code when an authenticator app is on);
+removing one does not, because removal can only take a way in away and the
+password remains. Everything is behind one Terraform switch,
+`passkeys_enabled` (default `false` everywhere), which sets the pool's
+`web_authn_configuration` (relying party `passkey_relying_party_id`,
+`user_verification = "required"`), adds `WEB_AUTHN` to its sign-in policy,
+adds `ALLOW_USER_AUTH` to the app client, and sets `PASSKEYS_ENABLED=1` on the
+auth Lambda. With it off every passkey route answers 404 `PASSKEYS_DISABLED`,
+the public probe `GET /auth/passkeys/available` says `false`, and the client
+renders no passkey control. Cost: none — passkeys need the ESSENTIALS or PLUS
+feature plan and this pool is already PLUS. Owner steps: set
+`passkeys_enabled = true` in `environments/production/terraform.tfvars`, and
+read the plan before the tag applies it: `aws_cognito_user_pool.main` must be
+`~ update in-place` (neither block is ForceNew in provider 6.54), never
+`-/+ replace`.
+
+**Passkeys in the native apps are gated off.** The Capacitor shells serve the
+web bundle from `capacitor://localhost` (iOS) and `https://localhost`
+(Android), not from the relying party's domain, so a WebAuthn ceremony for
+`familygreenhouse.net` cannot run inside the WebView; `passkeysUsableHere()`
+is false there and no passkey control is shown (TOTP works as on the web).
+Lifting that gate needs, on iOS: a `webcredentials` entry for
+`6X5YH93QNM.net.familygreenhouse.app` in the apple-app-site-association file,
+`webcredentials:familygreenhouse.net` in the Associated Domains entitlement,
+and a native passkey bridge (ASAuthorizationPlatformPublicKeyCredentialProvider)
+that hands the options/credential JSON to the same API routes; on Android, the
+equivalent Digital Asset Links `get_login_creds` relation plus Credential
+Manager. None of that is in this change.
 
 ## A08:2021 — Software and Data Integrity Failures
 

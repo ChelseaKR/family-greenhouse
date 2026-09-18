@@ -18,13 +18,18 @@ import {
 import createHttpError from 'http-errors';
 import type { AuthenticatedEvent } from '../../middleware/auth.js';
 import type { MfaChallengeResponse, MfaErrorCode } from '../../models/mfa.js';
+import type { PasskeyErrorCode } from '../../models/passkeys.js';
 import { cognito, CLIENT_ID } from '../../utils/cognito.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
 import { successResponse } from '../../utils/response.js';
 
 /** A refusal whose `details.code` the client words in the user's language. */
-export function mfaError(statusCode: number, message: string, code: MfaErrorCode) {
+export function mfaError(
+  statusCode: number,
+  message: string,
+  code: MfaErrorCode | PasskeyErrorCode
+) {
   return createHttpError(statusCode, message, { details: { code } });
 }
 

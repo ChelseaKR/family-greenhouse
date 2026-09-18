@@ -86,6 +86,35 @@ resource "aws_cognito_user_pool" "main" {
     enabled = true
   }
 
+  # Passkeys (#671) — Cognito's native WebAuthn, on the PLUS tier this pool is
+  # already on (passkeys need ESSENTIALS or PLUS, so there is no tier change
+  # and no price change). OFF unless var.passkeys_enabled: with it off both
+  # dynamic blocks render nothing, which is byte-for-byte the configuration
+  # before this change, so the plan is empty. Turned on, both are in-place
+  # updates (SetUserPoolMfaConfig / UpdateUserPool); the owner confirms the
+  # plan says `~ update in-place` for this pool before applying — a replaced
+  # pool would be every account in the product.
+  #
+  # user_verification "required": a passkey is a whole sign-in on its own, so
+  # the authenticator must check it is the person (biometric or device PIN),
+  # not merely that a key is present.
+  dynamic "web_authn_configuration" {
+    for_each = var.passkeys_enabled ? [var.passkey_relying_party_id] : []
+    content {
+      relying_party_id  = web_authn_configuration.value
+      user_verification = "required"
+    }
+  }
+
+  # Choice-based sign-in may start with a password or a passkey. PASSWORD must
+  # stay listed: it is what every existing account signs in with.
+  dynamic "sign_in_policy" {
+    for_each = var.passkeys_enabled ? [1] : []
+    content {
+      allowed_first_auth_factors = ["PASSWORD", "WEB_AUTHN"]
+    }
+  }
+
   account_recovery_setting {
     recovery_mechanism {
       name     = "verified_email"
@@ -162,6 +191,11 @@ resource "aws_cognito_user_pool" "main" {
       condition     = var.email_identity_arn == "" || var.email_from_address != ""
       error_message = "email_from_address is required when an SES identity (email_identity_arn / domain_name) is set: DEVELOPER email mode has no usable sender without it."
     }
+    # Passkeys (#671): WebAuthn cannot be configured without a relying party.
+    precondition {
+      condition     = !var.passkeys_enabled || var.passkey_relying_party_id != ""
+      error_message = "passkey_relying_party_id is required when passkeys_enabled: WebAuthn needs the domain browsers will offer the passkey on."
+    }
   }
 }
 
@@ -171,11 +205,16 @@ resource "aws_cognito_user_pool_client" "main" {
 
   generate_secret = false
 
-  explicit_auth_flows = [
-    "ALLOW_USER_PASSWORD_AUTH",
-    "ALLOW_REFRESH_TOKEN_AUTH",
-    "ALLOW_USER_SRP_AUTH",
-  ]
+  # ALLOW_USER_AUTH (choice-based sign-in, the flow passkeys use) only with
+  # passkeys on (#671); off, this list is exactly what it was.
+  explicit_auth_flows = concat(
+    [
+      "ALLOW_USER_PASSWORD_AUTH",
+      "ALLOW_REFRESH_TOKEN_AUTH",
+      "ALLOW_USER_SRP_AUTH",
+    ],
+    var.passkeys_enabled ? ["ALLOW_USER_AUTH"] : []
+  )
 
   supported_identity_providers = ["COGNITO"]
 

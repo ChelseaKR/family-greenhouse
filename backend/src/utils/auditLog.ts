@@ -26,6 +26,9 @@ export type AuditEvent =
   | 'auth.mfa.totp_setup_started'
   | 'auth.mfa.totp_enabled'
   | 'auth.mfa.totp_disabled'
+  // Passkeys (#671). Neither line carries a credential id or public key.
+  | 'auth.passkey.added'
+  | 'auth.passkey.removed'
   | 'household.created'
   | 'household.member_added'
   | 'household.member_removed'

@@ -40,6 +40,15 @@ import { recordSignup } from '../../services/signupConfirmRecord.js';
 import { successResponse, createdResponse } from '../../utils/response.js';
 import { challengeResponse, signedInResponse, verifiedCallerAccessToken } from './shared.js';
 import { disableTotp, getMfaStatus, loginMfa, startTotpSetup, verifyTotpSetup } from './mfa.js';
+import {
+  deletePasskey,
+  listPasskeys,
+  passkeyRegisterFinish,
+  passkeyRegisterStart,
+  passkeySignInFinish,
+  passkeySignInStart,
+  passkeysAvailable,
+} from './passkeys.js';
 import { audit } from '../../utils/auditLog.js';
 import { publicRegistrationIsAvailable } from '../../config/commercialStatus.js';
 import type { LoggedEvent } from '../../middleware/logging.js';
@@ -473,4 +482,13 @@ export const handler = createRouter({
   'POST /auth/mfa/totp/setup': startTotpSetup,
   'POST /auth/mfa/totp/verify': verifyTotpSetup,
   'POST /auth/mfa/totp/disable': disableTotp,
+  // Passkeys (#671) — handlers/auth/passkeys.ts. Inert (404 PASSKEYS_DISABLED)
+  // until Terraform's passkeys_enabled sets PASSKEYS_ENABLED=1 on this Lambda.
+  'GET /auth/passkeys/available': passkeysAvailable,
+  'POST /auth/login/passkey/start': passkeySignInStart,
+  'POST /auth/login/passkey/finish': passkeySignInFinish,
+  'GET /auth/passkeys': listPasskeys,
+  'POST /auth/passkeys/register/start': passkeyRegisterStart,
+  'POST /auth/passkeys/register/finish': passkeyRegisterFinish,
+  'DELETE /auth/passkeys/{credentialId}': deletePasskey,
 });

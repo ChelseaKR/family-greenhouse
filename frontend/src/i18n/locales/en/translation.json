@@ -364,6 +364,14 @@
       "expired": "Your sign-in timed out. Enter your email and password again.",
       "unsupported": "This account needs a sign-in step the app can’t do yet. Email support@familygreenhouse.net and we’ll help.",
       "lostDevice": "Lost your authenticator? Email support@familygreenhouse.net from the address you sign in with."
+    },
+    "passkey": {
+      "use": "Use a passkey",
+      "or": "or",
+      "cancelled": "Passkey sign-in was cancelled.",
+      "noPasskey": "There’s no passkey for this account yet. Sign in with your password, then add one under Settings → Security.",
+      "rejected": "That passkey didn’t work. Try again, or sign in with your password.",
+      "expired": "That took too long. Try the passkey again."
     }
   },
   "joinInvite": {
@@ -1546,6 +1554,33 @@
       "turnOffHelp": "Confirm with your password and a current code from your authenticator app. After this, signing in needs only your password.",
       "turnOffConfirm": "Turn off",
       "disabledNotice": "Two-step verification is off."
+    },
+    "passkeys": {
+      "title": "Passkeys",
+      "description": "Sign in with your fingerprint, face or screen lock instead of typing your password. A passkey only works on Family Greenhouse, so it can’t be phished.",
+      "listLabel": "Your passkeys",
+      "none": "No passkeys yet.",
+      "loadFailed": "We couldn’t load your passkeys.",
+      "add": "Add a passkey",
+      "addTitle": "Add a passkey",
+      "addHelp": "Confirm with your current password. Your browser will then ask you to create the passkey.",
+      "addHelpWithCode": "Confirm with your current password and a code from your authenticator app. Your browser will then ask you to create the passkey.",
+      "addConfirm": "Continue",
+      "added": "Passkey added. Next time, choose “Use a passkey” on the sign-in page.",
+      "removed": "Passkey removed.",
+      "remove": "Remove",
+      "removeNamed": "Remove passkey {{name}}",
+      "removeTitle": "Remove this passkey?",
+      "removeMessage": "“{{name}}” will stop working for signing in. Your password still works.",
+      "removeConfirm": "Remove passkey",
+      "unnamed": "Passkey",
+      "kindDevice": "On a device",
+      "kindKey": "Security key",
+      "addedOn": "Added {{date}}",
+      "cancelled": "Passkey creation was cancelled.",
+      "codeRequired": "Enter a code from your authenticator app as well.",
+      "expired": "That took too long. Try adding the passkey again.",
+      "rejected": "That passkey couldn’t be added. Try again, or use a different device."
     }
   },
   "notifications": {

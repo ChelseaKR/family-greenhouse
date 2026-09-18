@@ -151,7 +151,14 @@ import {
   type LocalPlantTagPin,
 } from './local-server-plant-tags.js';
 import { STORE_DEMO_LOGIN, seedStoreDemoHousehold } from './local-server-store-demo.js';
-import { beginMfaSignIn, registerMfaRoutes, resetMfaState } from './local-server-mfa.js';
+import {
+  beginMfaSignIn,
+  isTotpEnabled,
+  registerMfaRoutes,
+  resetMfaState,
+  totpCodeMatchesFor,
+} from './local-server-mfa.js';
+import { registerPasskeyRoutes, resetPasskeyState } from './local-server-passkeys.js';
 import { isAllowedPushEndpoint } from './services/pushEndpoint.js';
 import { composeInviteEmail, normalizeEmailLocale } from './services/emailCopy.js';
 import {
@@ -792,6 +799,7 @@ export function resetDb(): void {
   identifyUsage.clear();
   // Authenticator secrets and sign-in challenges (#671) live in their module.
   resetMfaState();
+  resetPasskeyState();
 
   const now = new Date().toISOString();
 
@@ -8012,6 +8020,16 @@ registerMfaRoutes(app, {
   authMiddleware,
   validateBody,
   getUser: (userId) => db.users.get(userId),
+  signInBody: (userId) => signInBody(db.users.get(userId)),
+});
+
+registerPasskeyRoutes(app, {
+  authMiddleware,
+  validateBody,
+  getUser: (userId) => db.users.get(userId),
+  findUserByEmail,
+  isTotpEnabled,
+  totpCodeMatches: totpCodeMatchesFor,
   signInBody: (userId) => signInBody(db.users.get(userId)),
 });
 
