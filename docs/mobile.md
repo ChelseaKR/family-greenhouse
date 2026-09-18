@@ -44,11 +44,18 @@ review notes before and neither is true:
   plugin. What they are not is a native capability a reviewer can distinguish
   from the mobile website.
 - **Offline.** The shells work offline because `dist/` is copied into the
-  binary, not because anything caches at runtime. On iOS the shell is served
-  from `capacitor://localhost`, a custom `WKURLSchemeHandler` scheme where
-  service workers are unavailable, so `initPwaRegistration()`
-  (`frontend/src/services/pwaRegistration.ts`) fails into its `console.warn`.
-  The PWA offline story is a web-only feature.
+  binary, not because anything caches at runtime. The PWA service worker is
+  a web-only feature, and `initPwaRegistration()`
+  (`frontend/src/services/pwaRegistration.ts`) no longer registers it inside
+  the shells. On iOS it never could: the shell is served from
+  `capacitor://localhost`, a custom `WKURLSchemeHandler` scheme where service
+  workers are unavailable. On Android it did. The shell is served from
+  `https://localhost`, so the worker precached the whole build again (148
+  files, about 3.3 MB, measured on an API 36 emulator) and answered launches
+  from that copy. The first launch after a store update therefore ran the
+  previous build until the new worker took over and reloaded the page. The
+  shells now remove a worker an earlier build left behind, along with its
+  caches.
 
 ### Deep links
 
