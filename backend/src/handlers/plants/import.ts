@@ -1,6 +1,7 @@
 /**
  * POST /plants/import — bulk CSV/JSON import (max 100 plants per request,
- * each with up to 10 care tasks).
+ * each with up to 10 care tasks). Open to every household member, like
+ * single create: the plan's plant cap below is what bounds it, not the role.
  *
  * Contract: PARTIAL SUCCESS, not all-or-nothing. Each row is created via
  * plantService.createPlant — the same path as single create, so the atomic

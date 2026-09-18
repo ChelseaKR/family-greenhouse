@@ -635,10 +635,14 @@
   },
   "importPlants": {
     "title": "Importar plantas",
-    "description": "Trae tu colección existente de una sola vez. Sube un archivo CSV o JSON, incluidas las exportaciones de esta app.",
+    "description": "Trae tu colección existente de una sola vez. Sube un archivo CSV o JSON: una exportación de esta app o una hoja de cálculo propia.",
     "dropHint": "Arrastra y suelta un archivo .csv o .json aquí",
     "browse": "Elegir un archivo",
-    "formatHelp": "El CSV necesita una fila de encabezados con al menos una columna \"name\" (species, location, notes, tags y tareas por planta son opcionales). El JSON acepta una lista de plantas o un archivo de exportación de Family Greenhouse.",
+    "formatHelp": "CSV: cualquier archivo con una fila de encabezados. En el siguiente paso relacionas sus columnas con los datos de cada planta (solo el nombre es obligatorio); una exportación de esta app se reconoce sola. JSON: una lista de plantas o un archivo de exportación de Family Greenhouse.",
+    "otherApps": {
+      "title": "¿Vienes de Planta, Greg o Vera?",
+      "body": "Sus páginas de ayuda no describen ninguna forma de exportar tus plantas a un archivo, así que no hay nada que podamos importar directamente desde esas apps. Si tienes tu lista de plantas en una hoja de cálculo —escrita por ti o guardada como CSV desde Google Sheets, Excel, Numbers, Notion o Airtable—, súbela aquí y relaciona sus columnas."
+    },
     "errors": {
       "unsupportedType": "Ese tipo de archivo no es compatible — usa un archivo .csv o .json.",
       "readFailed": "No se pudo leer el archivo. Inténtalo de nuevo o elige otro.",
@@ -659,25 +663,77 @@
       "colTasks": "Tareas",
       "ready": "Lista",
       "hasErrors": "Con errores",
-      "invalidRowsSkipped": "Las filas con errores se omiten — corrígelas en el archivo y vuelve a subirlo."
+      "invalidRowsSkipped": "Las filas con errores se omiten — corrígelas en el archivo y vuelve a subirlo.",
+      "overCap": "Por encima del límite del plan"
     },
     "submit_other": "Importar {{count}} plantas",
-    "submit_many": "Import {{count}} plants",
+    "submit_many": "Importar {{count}} plantas",
     "submit_one": "Importar 1 planta",
     "importing": "Importando…",
     "startOver": "Empezar de nuevo",
     "results": {
       "title": "Importación completada",
       "created_other": "{{count}} plantas creadas",
-      "created_many": "{{count}} plants created",
+      "created_many": "{{count}} plantas creadas",
       "created_one": "1 planta creada",
       "skipped_other": "{{count}} filas omitidas",
-      "skipped_many": "{{count}} rows skipped",
+      "skipped_many": "{{count}} filas omitidas",
       "skipped_one": "1 fila omitida",
       "skippedRowsTitle": "Filas omitidas",
       "skippedRowLabel": "Fila {{row}} — {{name}}",
       "planLimit": "Alcanzaste el límite de plantas de tu plan actual, así que las filas restantes se omitieron. Archiva alguna planta que ya no cuides, o sube de plan, y vuelve a importar el resto.",
-      "viewPlants": "Ver mis plantas"
+      "viewPlants": "Ver mis plantas",
+      "overCapNotSent_one": "1 fila lista superaba el límite de tu plan y no se envió.",
+      "overCapNotSent_many": "{{count}} filas listas superaban el límite de tu plan y no se enviaron.",
+      "overCapNotSent_other": "{{count}} filas listas superaban el límite de tu plan y no se enviaron."
+    },
+    "mapping": {
+      "title": "Relaciona tus columnas",
+      "description": "Elige la columna que contiene cada dato. Solo el nombre de la planta es obligatorio. Una columna que no elijas no se importa, y aparece en la lista de abajo para que nada desaparezca sin que lo veas.",
+      "targets": {
+        "name": "Nombre de la planta (obligatorio)",
+        "species": "Especie",
+        "location": "Ubicación",
+        "notes": "Notas",
+        "tags": "Etiquetas",
+        "wateringIntervalDays": "Días entre riegos"
+      },
+      "hints": {
+        "name": "Cómo llamas a la planta, por ejemplo «Monty» o «Helecho de la cocina».",
+        "species": "La especie o el tipo, por ejemplo «Monstera deliciosa».",
+        "location": "Dónde vive, por ejemplo «Sala».",
+        "notes": "Se mantienen privadas: las notas nunca aparecen en los enlaces para compartir, para cuidadores ni en la pantalla de pared.",
+        "tags": "Separa varias etiquetas con |, por ejemplo fácil|colgante.",
+        "wateringIntervalDays": "Un número entero del 1 al 365. Cada planta recibe una tarea de riego con esa frecuencia."
+      },
+      "notInFile": "— No está en este archivo —",
+      "unnamedColumn": "Columna {{n}} (sin encabezado)",
+      "sample": "Primer valor: {{value}}",
+      "continue": "Ver vista previa",
+      "change": "Cambiar la relación de columnas"
+    },
+    "notImported": {
+      "title": "No se importa",
+      "csv_one": "Esta columna tiene datos que no se importarán:",
+      "csv_many": "Estas {{count}} columnas tienen datos que no se importarán:",
+      "csv_other": "Estas {{count}} columnas tienen datos que no se importarán:",
+      "json_one": "Este campo del archivo tiene datos que no se importarán:",
+      "json_many": "Estos {{count}} campos del archivo tienen datos que no se importarán:",
+      "json_other": "Estos {{count}} campos del archivo tienen datos que no se importarán:"
+    },
+    "room": {
+      "checking": "Comprobando cuánto espacio le queda a tu plan…",
+      "unknown": "No pudimos comprobar cuánto espacio le queda a tu plan. Aun así puedes importar: si el archivo supera el límite de plantas de tu plan, las que lo sobrepasen no se añaden, y el resumen final indica exactamente cuáles.",
+      "fullTitle": "Alcanzaste el límite de plantas de tu plan",
+      "fullBody": "Tu hogar ya tiene tantas plantas como incluye tu plan, así que no se puede importar ninguna de estas. Todo lo que tienes sigue funcionando. Archiva las plantas que ya no cuides, o sube de plan, y luego impórtalas.",
+      "overTitle": "{{admitted}} de {{ready}} plantas listas caben en tu plan",
+      "overBody_one": "Tu plan tiene espacio para una planta más, así que solo se importará la primera fila lista. Las filas marcadas como «Por encima del límite del plan» no se enviarán. Archiva las plantas que ya no cuides, o sube de plan, y luego impórtalas.",
+      "overBody_many": "Tu plan tiene espacio para {{count}} plantas más, así que solo se importarán las primeras {{count}} filas listas. Las filas marcadas como «Por encima del límite del plan» no se enviarán. Archiva las plantas que ya no cuides, o sube de plan, y luego impórtalas.",
+      "overBody_other": "Tu plan tiene espacio para {{count}} plantas más, así que solo se importarán las primeras {{count}} filas listas. Las filas marcadas como «Por encima del límite del plan» no se enviarán. Archiva las plantas que ya no cuides, o sube de plan, y luego impórtalas.",
+      "seePlan": "Ver tu plan"
+    },
+    "rowErrors": {
+      "invalidInterval": "Los días entre riegos son «{{value}}»: tiene que ser un número entero del 1 al 365."
     }
   },
   "tasks": {

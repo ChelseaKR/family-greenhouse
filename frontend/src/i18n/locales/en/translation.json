@@ -622,10 +622,14 @@
   },
   "importPlants": {
     "title": "Import plants",
-    "description": "Bring an existing collection over in one go. Upload a CSV or JSON file — including exports from this app.",
+    "description": "Bring an existing collection over in one go. Upload a CSV or JSON file — an export from this app, or a spreadsheet of your own.",
     "dropHint": "Drag and drop a .csv or .json file here",
     "browse": "Choose a file",
-    "formatHelp": "CSV needs a header row with at least a \"name\" column (species, location, notes, tags, and per-plant tasks are optional). JSON accepts a list of plants or a Family Greenhouse export file.",
+    "formatHelp": "CSV: any file with a header row. You match its columns to plant details on the next step (only the plant name is required); an export from this app matches itself. JSON: a list of plants or a Family Greenhouse export file.",
+    "otherApps": {
+      "title": "Coming from Planta, Greg or Vera?",
+      "body": "Their help pages don't describe any way to export your plants to a file, so there is nothing we can import from them directly. If your plant list is in a spreadsheet — typed up yourself, or saved as CSV from Google Sheets, Excel, Numbers, Notion or Airtable — upload it here and match its columns."
+    },
     "errors": {
       "unsupportedType": "That file type is not supported — use a .csv or .json file.",
       "readFailed": "Could not read that file. Try again or pick a different file.",
@@ -646,7 +650,8 @@
       "colTasks": "Tasks",
       "ready": "Ready",
       "hasErrors": "Has errors",
-      "invalidRowsSkipped": "Rows with errors are skipped — fix them in the file and re-upload."
+      "invalidRowsSkipped": "Rows with errors are skipped — fix them in the file and re-upload.",
+      "overCap": "Over plan limit"
     },
     "submit_other": "Import {{count}} plants",
     "submit_one": "Import 1 plant",
@@ -661,7 +666,54 @@
       "skippedRowsTitle": "Skipped rows",
       "skippedRowLabel": "Row {{row}} — {{name}}",
       "planLimit": "You reached your current plan’s plant limit, so the remaining rows were skipped. Archive a plant you are not caring for, or move up a plan, then import the rest.",
-      "viewPlants": "View my plants"
+      "viewPlants": "View my plants",
+      "overCapNotSent_one": "1 ready row was over your plan's limit and was not sent.",
+      "overCapNotSent_other": "{{count}} ready rows were over your plan's limit and were not sent."
+    },
+    "mapping": {
+      "title": "Match your columns",
+      "description": "Pick the column that holds each detail. Only the plant name is required. A column you don't pick is not imported, and it is listed below so nothing disappears unseen.",
+      "targets": {
+        "name": "Plant name (required)",
+        "species": "Species",
+        "location": "Location",
+        "notes": "Notes",
+        "tags": "Tags",
+        "wateringIntervalDays": "Days between waterings"
+      },
+      "hints": {
+        "name": "What you call the plant, like “Monty” or “Kitchen fern”.",
+        "species": "The species or type, like “Monstera deliciosa”.",
+        "location": "Where it lives, like “Living room”.",
+        "notes": "Kept private: notes never appear on share, sitter or wall-display links.",
+        "tags": "Separate several tags with |, like easy|trailing.",
+        "wateringIntervalDays": "A whole number from 1 to 365. Each plant gets a watering task on that schedule."
+      },
+      "notInFile": "— Not in this file —",
+      "unnamedColumn": "Column {{n}} (no header)",
+      "sample": "First value: {{value}}",
+      "continue": "Preview import",
+      "change": "Change column matching"
+    },
+    "notImported": {
+      "title": "Not imported",
+      "csv_one": "This column has data that won't be imported:",
+      "csv_other": "These {{count}} columns have data that won't be imported:",
+      "json_one": "This field in the file has data that won't be imported:",
+      "json_other": "These {{count}} fields in the file have data that won't be imported:"
+    },
+    "room": {
+      "checking": "Checking how much room your plan has left…",
+      "unknown": "We couldn't check how much room your plan has left. You can still import: if the file goes past your plan's plant limit, the plants over it are not added, and the summary afterwards lists exactly which ones.",
+      "fullTitle": "Your plan's plant limit is reached",
+      "fullBody": "Your household already has as many plants as your plan includes, so none of these can be imported. Everything you have keeps working. Archive plants you no longer care for, or move up a plan, then import these.",
+      "overTitle": "{{admitted}} of {{ready}} ready plants fit your plan",
+      "overBody_one": "Your plan has room for one more plant, so only the first ready row will be imported. Rows marked “Over plan limit” won't be sent. Archive plants you no longer care for, or move up a plan, then import them.",
+      "overBody_other": "Your plan has room for {{count}} more plants, so only the first {{count}} ready rows will be imported. Rows marked “Over plan limit” won't be sent. Archive plants you no longer care for, or move up a plan, then import them.",
+      "seePlan": "See your plan"
+    },
+    "rowErrors": {
+      "invalidInterval": "Days between waterings is “{{value}}” — it needs to be a whole number from 1 to 365."
     }
   },
   "tasks": {
