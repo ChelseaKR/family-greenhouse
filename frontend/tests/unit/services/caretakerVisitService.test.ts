@@ -3,6 +3,15 @@ import {
   caretakerVisitService,
   CaretakerLinkInactiveError,
 } from '@/services/caretakerVisitService';
+import { prepareImageForUpload } from '@/utils/image';
+
+// The real pipeline (downscale + metadata strip) is covered by
+// tests/unit/utils/imageMetadata.test.ts. Here it returns a recognizable
+// stand-in, so the tests can tell the prepared photo from the original.
+const PREPARED = new Blob(['downscaled, no metadata'], { type: 'image/webp' });
+vi.mock('@/utils/image', () => ({
+  prepareImageForUpload: vi.fn(async () => PREPARED),
+}));
 
 /**
  * The public caretaker client talks to the API with a bare `fetch` (no axios
@@ -101,7 +110,7 @@ describe('caretakerVisitService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to jpeg for a file type the server does not presign', async () => {
+  it('uploads the prepared photo, never the original, typed by its bytes', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -113,10 +122,15 @@ describe('caretakerVisitService', () => {
       );
     globalThis.fetch = fetchMock;
 
+    // This path used to PUT the file as picked, EXIF and GPS included.
     const file = new File(['bytes'], 'leaf.heic', { type: 'image/heic' });
     await caretakerVisitService.addPhoto(TOKEN, 'p1', file);
+    expect(prepareImageForUpload).toHaveBeenCalledWith(file);
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
-      contentType: 'image/jpeg',
+      contentType: 'image/webp',
     });
+    const put = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(put.body).toBe(PREPARED);
+    expect(put.headers).toEqual({ 'Content-Type': 'image/webp' });
   });
 });

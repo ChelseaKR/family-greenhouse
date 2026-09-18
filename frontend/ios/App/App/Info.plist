@@ -27,9 +27,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Take plant photos for profiles, identification, and leaf-health checks.</string>
+	<string>Family Greenhouse uses the camera only when you tap Take photo, to photograph a plant for its profile, to identify it, or to check a leaf. Location details are removed from the photo before it is uploaded.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Choose plant photos for profiles, identification, and leaf-health checks.</string>
+	<string>Family Greenhouse opens your photos only when you tap Choose photo, and uses only the one plant photo you pick. Location details are removed from it before it is uploaded.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

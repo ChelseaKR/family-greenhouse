@@ -18,6 +18,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Take or choose plant photos with the phone's own camera and photo picker.**
+  In the iPhone and Android apps, a plant's page and Add plant now offer
+  **Take photo** and **Choose photo** (`@capacitor/camera`) in place of the
+  web file input: the system camera, which saves nothing to the gallery, and
+  the system photo picker (PHPicker on iOS, the Android Photo Picker), which
+  hands over only the photo picked and needs no storage permission. The OS
+  asks for camera or photo access the first time a button is tapped, never at
+  launch. The website keeps its file input.
+
 - **Complete or snooze a reminder's tasks by replying to it (#667) — built,
   switched off.** With `email_reply_actions_enabled = true` (default `false`),
   each reminder email carries a per-message `Reply-To: care+<token>@…`,
@@ -197,6 +206,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   or on an explicit not-restored list. Deploy note: one new route in
   `local.routes` (households group, no new Lambda), applied by the next `v*`
   tag.
+
+### Fixed
+
+- **Photos no longer carry their location off the device.** Every photo
+  upload (plant photos, Add plant, identification, the leaf-health check,
+  sitter photos and caretaker photos) now goes through one step that
+  downscales the photo and rewrites it without EXIF, XMP, IPTC, MPF
+  secondary images, PNG text chunks or WebP metadata, GPS included, and
+  refuses a file it cannot rewrite. Before, a phone whose browser could not
+  run the canvas resize uploaded the original with its GPS block, and the
+  caretaker page uploaded every photo as picked.
 
 ## [0.36.0] - 2026-09-17
 

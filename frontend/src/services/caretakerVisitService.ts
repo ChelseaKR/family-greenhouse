@@ -14,6 +14,8 @@
  * photo.
  */
 
+import { prepareImageForUpload } from '@/utils/image';
+
 export interface CaretakerTask {
   taskId: string;
   /** Opaque plant id — the caretaker's photo routes are scoped by it. */
@@ -116,9 +118,11 @@ export const caretakerVisitService = {
    * object before attaching it to the plant.
    */
   async addPhoto(token: string, plantId: string, file: File): Promise<CaretakerPhotoConfirmation> {
-    const contentType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-      ? file.type
-      : 'image/jpeg';
+    // Downscaled and stripped of its metadata before it leaves the phone.
+    // This path used to PUT the original file, EXIF and GPS coordinates
+    // included, to a photo the household then sees at a public URL.
+    const photo = await prepareImageForUpload(file);
+    const contentType = photo.type;
     const grant = await request<{ uploadUrl: string; imageUrl: string }>(
       `/caretaker/${encodeURIComponent(token)}/plants/${encodeURIComponent(plantId)}/photo`,
       {
@@ -131,7 +135,7 @@ export const caretakerVisitService = {
     const upload = await fetch(grant.uploadUrl, {
       method: 'PUT',
       headers: { 'Content-Type': contentType },
-      body: file,
+      body: photo,
     });
     if (!upload.ok) {
       throw new Error(`Photo upload failed (${upload.status})`);

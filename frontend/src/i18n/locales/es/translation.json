@@ -498,6 +498,15 @@
       "title": "Planta guardada; foto no subida",
       "description": "Tu planta está a salvo. Vuelve a elegir la foto abajo para reintentar la subida."
     },
+    "photoPicker": {
+      "take": "Tomar foto",
+      "choose": "Elegir foto",
+      "cameraDenied": "Family Greenhouse no puede usar la cámara. Activa el acceso a la cámara para Family Greenhouse en los Ajustes del teléfono, o elige una foto.",
+      "libraryDenied": "Family Greenhouse no puede abrir tus fotos. Activa el acceso a las fotos para Family Greenhouse en los Ajustes del teléfono, o toma una foto.",
+      "noCamera": "Este dispositivo no tiene cámara. Elige una foto.",
+      "failed": "No se pudo abrir esa foto. Inténtalo de nuevo o elige otra.",
+      "prepareFailed": "No se pudo preparar esa foto para subirla. Prueba con una foto JPEG, PNG o WebP."
+    },
     "petToxicity": {
       "toxicTitle": "Tóxica para las mascotas",
       "toxicBody": "Es tóxica para gatos y perros si la mastican; mantenla fuera de su alcance. Puedes añadirla de todos modos; esto es solo un aviso.",

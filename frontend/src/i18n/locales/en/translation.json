@@ -486,6 +486,15 @@
       "title": "Plant saved; photo not uploaded",
       "description": "Your plant is safe. Choose the photo again below to retry the upload."
     },
+    "photoPicker": {
+      "take": "Take photo",
+      "choose": "Choose photo",
+      "cameraDenied": "Family Greenhouse can’t use the camera. Turn on camera access for Family Greenhouse in your phone’s Settings, or choose a photo instead.",
+      "libraryDenied": "Family Greenhouse can’t open your photos. Turn on photo access for Family Greenhouse in your phone’s Settings, or take a photo instead.",
+      "noCamera": "This device has no camera. Choose a photo instead.",
+      "failed": "That photo couldn’t be opened. Try again, or pick a different one.",
+      "prepareFailed": "That photo couldn’t be prepared for upload. Try a JPEG, PNG or WebP photo."
+    },
     "petToxicity": {
       "toxicTitle": "Toxic to pets",
       "toxicBody": "Toxic to cats and dogs if chewed — keep it out of reach. You can still add it; this is just a heads-up.",

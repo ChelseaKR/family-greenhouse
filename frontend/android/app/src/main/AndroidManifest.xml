@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -34,6 +35,23 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Plant photos are chosen through the Android Photo Picker
+             (@capacitor/camera chooseFromGallery), which hands the app only
+             the photo the person picked and needs no storage permission. This
+             entry asks Google Play services to install the backported picker
+             on Android 11 and 12 devices that do not have it built in; without
+             it they fall back to the system document picker, which also needs
+             no permission. -->
+        <service android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
+            </intent-filter>
+            <meta-data android:name="photopicker_activity:0:required" android:value="" />
+        </service>
     </application>
 
     <!-- Permissions -->

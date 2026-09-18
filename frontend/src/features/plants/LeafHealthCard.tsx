@@ -8,15 +8,13 @@ import { plantService, LeafHealthResult, LeafHealthObservation } from '@/service
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
-import { downscaleImage } from '@/utils/image';
+import { prepareImageForUpload } from '@/utils/image';
 
 interface LeafHealthCardProps {
   plantId: string;
   isOpen: boolean;
   onClose: () => void;
 }
-
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 // The backend body cap is 256 KiB of base64 (~190 KiB binary). Downscaling a
 // leaf close-up to 1024px lands far under that while keeping enough detail
@@ -139,8 +137,8 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
     try {
       // Downscale BEFORE encoding; fall back to the original only when the
       // canvas pipeline is unavailable AND the original is small enough.
-      const downscaled = await downscaleImage(file, LEAF_PHOTO_MAX_EDGE);
-      const blob: Blob = downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : file;
+      // Either way the photo's metadata, GPS included, is removed first.
+      const blob = await prepareImageForUpload(file, LEAF_PHOTO_MAX_EDGE);
       const dataUrl = await blobToDataUrl(blob);
       if (dataUrl.length > MAX_BASE64_CHARS) {
         setPickError(t('plants.leafHealth.tooLarge'));

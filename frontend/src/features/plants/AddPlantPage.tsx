@@ -29,7 +29,9 @@ import { PetToxicityNote } from './PetToxicityNote';
 import { PlantNameNursery } from './PlantNameNursery';
 import { SpacePicker } from './SpacePicker';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
-import { downscaleImage } from '@/utils/image';
+import { prepareImageForUpload } from '@/utils/image';
+import { ImageMetadataError } from '@/utils/imageMetadata';
+import { NativePhotoButtons } from '@/components/NativePhotoButtons';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
@@ -162,6 +164,14 @@ export function AddPlantPage() {
     [speciesValue, taskTemplates]
   );
 
+  const acceptPhoto = async (file: File) => {
+    setPickedFile(file);
+    // The preview never leaves the device; only prepareImageForUpload()'s
+    // output (downscaled, metadata removed) is ever sent anywhere.
+    const dataUrl = await fileToBase64(file);
+    setPickedPreview(dataUrl);
+  };
+
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     setSuggestions(null);
@@ -176,9 +186,18 @@ export function AddPlantPage() {
       setError(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
       return;
     }
-    setPickedFile(file);
-    const dataUrl = await fileToBase64(file);
-    setPickedPreview(dataUrl);
+    await acceptPhoto(file);
+  };
+
+  // The native camera and picker hand over what the phone stores (HEIC
+  // included on iOS), so the extension and original-size checks above do not
+  // apply: prepareImageForUpload() re-encodes what the WebView can decode,
+  // downscales it, and refuses what it cannot strip.
+  const handleNativePick = async (file: File) => {
+    setError(null);
+    setSuggestions(null);
+    setConfidence(null);
+    await acceptPhoto(file);
   };
 
   const runIdentify = async () => {
@@ -196,9 +215,9 @@ export function AddPlantPage() {
     try {
       // Downscale BEFORE encoding — a raw iPhone photo (multi-MB HEIC/JPEG)
       // blows past the endpoint's body cap and the server rejects it outright.
-      const downscaled = await downscaleImage(pickedFile, IDENTIFY_PHOTO_MAX_EDGE);
-      const blob: Blob =
-        downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
+      // This photo goes to a third party (Plant.id), so its metadata, GPS
+      // included, is removed first.
+      const blob = await prepareImageForUpload(pickedFile, IDENTIFY_PHOTO_MAX_EDGE);
       const dataUrl = await fileToBase64(blob);
       if (dataUrl.length > MAX_BASE64_CHARS) {
         setError('Image is too large to identify — try a smaller or less detailed photo.');
@@ -234,7 +253,11 @@ export function AddPlantPage() {
           setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
         return;
       }
-      setError(getErrorMessage(err));
+      setError(
+        err instanceof ImageMetadataError
+          ? t('plants.photoPicker.prepareFailed')
+          : getErrorMessage(err)
+      );
     } finally {
       setIsIdentifying(false);
     }
@@ -319,15 +342,14 @@ export function AddPlantPage() {
       if (pickedFile) {
         try {
           // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
-          // fallback); upload the original if the canvas pipeline fails. The
+          // fallback) and remove the metadata, GPS included; the original is
+          // uploaded, still stripped, if the canvas pipeline fails. The
           // presign contentType must match the PUT's Content-Type header.
-          const downscaled = await downscaleImage(pickedFile);
-          const blob: Blob =
-            downscaled && ACCEPTED_TYPES.includes(downscaled.type) ? downscaled : pickedFile;
+          const blob = await prepareImageForUpload(pickedFile);
           if (blob.size > MAX_BYTES) {
             throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
           }
-          const contentType = blob.type || pickedFile.type;
+          const contentType = blob.type;
           const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
             plant.id,
             contentType
@@ -481,15 +503,23 @@ export function AddPlantPage() {
                   intrinsic min-width in Chrome, which otherwise overflows the
                   viewport on small screens and breaks tap targets. */}
               <div className="min-w-0 flex-1 space-y-2">
-                <label className="block">
-                  <span className="sr-only">Choose a photo</span>
-                  <input
-                    type="file"
-                    accept={ACCEPTED_TYPES.join(',')}
-                    onChange={handleFilePick}
-                    className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+                {native ? (
+                  <NativePhotoButtons
+                    onPick={(file) => void handleNativePick(file)}
+                    onError={setError}
+                    disabled={mutation.isPending}
                   />
-                </label>
+                ) : (
+                  <label className="block">
+                    <span className="sr-only">Choose a photo</span>
+                    <input
+                      type="file"
+                      accept={ACCEPTED_TYPES.join(',')}
+                      onChange={handleFilePick}
+                      className="block w-full max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+                    />
+                  </label>
+                )}
                 {pickedFile && (
                   <Button
                     type="button"
