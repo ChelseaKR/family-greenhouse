@@ -180,11 +180,14 @@ export function ArchiveImportCard() {
         >
           {t(file ? 'archiveImport.chooseAnother' : 'archiveImport.chooseFile')}
         </Button>
+        {/* Not rendered: the button above is the one control, for pointer and
+            keyboard alike. A 1px sr-only input is a second, undersized control
+            (responsive-ux.spec.ts's 24px target floor). */}
         <input
           ref={fileInputRef}
           type="file"
           accept=".json,application/json"
-          className="sr-only"
+          hidden
           aria-label={t('archiveImport.chooseFile')}
           onChange={(e) => {
             const chosen = e.target.files?.[0];
