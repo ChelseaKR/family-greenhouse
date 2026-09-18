@@ -79,6 +79,16 @@ describe('ReferralSettings', () => {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     });
 
+    it("links to the public site, not the app's own origin", async () => {
+      // The shells' page origin is capacitor://localhost (iOS) or
+      // https://localhost (Android); a link built from it opens nothing for
+      // the person it is sent to.
+      server.use(http.get(`${API}/me/referral`, () => HttpResponse.json(STATUS)));
+      renderPage();
+      const input = (await screen.findByTestId('referral-link-input')) as HTMLInputElement;
+      expect(input.value).toBe('https://familygreenhouse.net/register?ref=RF-00000-00001');
+    });
+
     it('still renders the link — this page is intentionally NOT hidden on native (nothing here is a purchase)', async () => {
       server.use(http.get(`${API}/me/referral`, () => HttpResponse.json(STATUS)));
       renderPage();
