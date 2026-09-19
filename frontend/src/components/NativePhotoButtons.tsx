@@ -40,12 +40,21 @@ export function NativePhotoButtons({ onPick, onError, disabled }: NativePhotoBut
     }
   }
 
+  // Side by side only when both labels fit, stacked otherwise. This was a
+  // two-column grid, and a grid's columns shrink below their content: in the
+  // 192px photo column of the plant page at iPad widths, and beside the
+  // 128px preview on Add plant, each column was narrower than its no-wrap
+  // label, so "Take photo" ran over the camera icon of "Choose photo". A
+  // wrapping row lets the labels decide instead, at any width and text size.
+  // Each button grows to fill its row. From the accessibility text sizes up
+  // they always stack. Held by tests/e2e/native-photo-buttons.spec.ts.
   return (
-    <div className="grid grid-cols-2 gap-2 large-text:grid-cols-1">
+    <div className="flex flex-wrap gap-2 large-text:flex-col" data-testid="native-photo-buttons">
       <Button
         type="button"
         variant="secondary"
         size="sm"
+        className="grow"
         isLoading={opening === 'camera'}
         disabled={disabled || opening !== null}
         onClick={() => void open('camera')}
@@ -57,6 +66,7 @@ export function NativePhotoButtons({ onPick, onError, disabled }: NativePhotoBut
         type="button"
         variant="secondary"
         size="sm"
+        className="grow"
         isLoading={opening === 'library'}
         disabled={disabled || opening !== null}
         onClick={() => void open('library')}

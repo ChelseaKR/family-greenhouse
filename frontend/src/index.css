@@ -206,6 +206,16 @@ html[data-text-size='large'] .whitespace-nowrap {
     min-height: 100dvh;
   }
 
+  /* Not on paper. A browser measures 100dvh against the printed page, but
+     the iOS app's print sheet (PrintPlugin.swift) lays the page out in the
+     web view, where 100dvh is the screen: on an iPad that is taller than a
+     sheet of Letter paper, so every printout gained a blank last page. */
+  @media print {
+    body {
+      min-height: 0;
+    }
+  }
+
   ::selection {
     background: rgb(192 221 151 / 0.72);
     color: #173404;

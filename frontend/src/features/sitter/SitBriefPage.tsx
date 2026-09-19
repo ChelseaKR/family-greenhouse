@@ -13,6 +13,7 @@ import {
   type SitterBriefPlant,
 } from '@/services/sitterService';
 import { formatDate } from '@/i18n/format';
+import { printPage } from '@/services/nativePrint';
 import { MapPinIcon, PrinterIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -215,7 +216,7 @@ export function SitBriefPage() {
               variant="secondary"
               size="sm"
               className="print:hidden"
-              onClick={() => window.print()}
+              onClick={(event) => void printPage(event.currentTarget)}
               leftIcon={<PrinterIcon className="h-4 w-4" aria-hidden="true" />}
             >
               {t('sitterBrief.print')}

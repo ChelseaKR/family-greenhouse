@@ -18,6 +18,7 @@ import { getErrorMessage } from '@/services/api';
 import { formatDate } from '@/i18n/format';
 import { plantService, type PlantWithTasks } from '@/services/plantService';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
+import { printPage } from '@/services/nativePrint';
 import { QrCode } from '@/features/tags/QrCode';
 import {
   PASSPORT_HISTORY_DAYS,
@@ -197,7 +198,7 @@ export function PlantPassportPage() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button
-                  onClick={() => window.print()}
+                  onClick={(event) => void printPage(event.currentTarget)}
                   disabled={!readsSettled}
                   leftIcon={<PrinterIcon className="h-4 w-4" aria-hidden="true" />}
                 >

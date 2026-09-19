@@ -109,11 +109,12 @@ still slips a price into the app (§4 below covers it).
 ## 2. Privacy nutrition label (App Privacy questionnaire)
 
 Answer this section from `frontend/ios/App/App/PrivacyInfo.xcprivacy` —
-it's the source of truth, was updated today alongside the analytics launch
-(`ba7b3096`, PR #791, "product analytics, cookieless by construction"), and
-is broader than the 7-type/all-App-Functionality summary still written in
-`docs/mobile-release-checklist.md`, which predates that PR and is now stale
-on this specific point. The manifest currently declares 10 data types:
+it's the source of truth. It gained the analytics types with PR #791
+("product analytics, cookieless by construction"), Device ID with native
+push (#851), and Crash Data for 0.37.1: the first-party error rail had been
+sending error summaries from the shells without a manifest entry.
+`scripts/validate-store-release.mjs` fails a store build whose manifest
+drops any of these. The manifest currently declares 11 data types:
 
 | Data type                  | Linked to identity | Used to track you | Purpose                      |
 | -------------------------- | ------------------ | ----------------- | ---------------------------- |
@@ -126,6 +127,7 @@ on this specific point. The manifest currently declares 10 data types:
 | Device ID (optional)       | Yes                | No                | App Functionality            |
 | Product Interaction        | Yes                | No                | Analytics                    |
 | Performance Data           | No                 | No                | Analytics                    |
+| Crash Data                 | No                 | No                | App Functionality            |
 | Coarse Location (optional) | Yes                | No                | App Functionality            |
 
 **"Data Used to Track You": No.** `NSPrivacyTracking` is `false` and
@@ -175,17 +177,37 @@ What each row actually is, for whoever fills out the questionnaire:
   it. A household can opt out from Settings → Preferences, and Global
   Privacy Control / Do Not Track silence it automatically — all before any
   event is sent, none queued or stored.
+- **Crash Data (App Functionality, not linked)** — the first-party error
+  rail (`frontend/src/services/frontendTelemetry.ts`) posts a report to our
+  own `/telemetry/frontend` when the app hits an uncaught JavaScript error,
+  an unhandled promise rejection, or a screen that fails to render. It runs
+  inside the shells as well as on the website, so the app collects it. A
+  report holds the error class (`TypeError` and so on, or "Network request
+  failed"), the route with ids and tokens replaced by placeholders, a hash
+  of those two, the build's commit id, and a random id made fresh for each
+  app session; after an outage, also a count of reports that could not be
+  delivered. No stack trace, no error message text, nothing typed into the
+  app. It sends no account, household or device id and no auth header, and
+  its session id is shared only with the (also unlinked) Performance Data
+  reports, which is why it is **not linked**. API Gateway's access log keeps
+  the connection's IP address for 30 days, as it does for every request;
+  the report is never joined to it. The in-app analytics opt-out does not
+  cover this rail. It was collected but undeclared through 0.37.0; the
+  manifest declares it from 0.37.1, and the App Privacy answers in App
+  Store Connect have to add it by hand.
 - **Google Analytics 4 (website only — not in the app).** Since 2026-09-17
   familygreenhouse.net loads GA4 in browsers. It never loads inside the
   Capacitor shell (`isNativeApp()` in `frontend/src/services/googleAnalytics.ts`),
   and `scripts/validate-store-release.mjs` refuses a store build that carries
   the measurement ID, so none of the answers above change because of it.
 - **Sentry (not currently active)** — the code supports an optional Sentry
-  DSN for crash/error monitoring, which would add Crash Data and
-  Performance Data with stack traces. No DSN is configured on the hosted
-  service today, so nothing is sent to Sentry. Re-check this before
-  submission if that has changed — it would need a Privacy manifest update
-  and a questionnaire answer to match.
+  DSN for crash/error monitoring, which would send stack traces and
+  breadcrumbs to a third party, well beyond the first-party Crash Data row
+  above. No DSN is configured on the hosted service or in the store build
+  template today, so nothing is sent to Sentry. Re-check this before
+  submission if that has changed — the Crash Data and Performance Data
+  rows, the manifest comment, and the privacy page would all need to say
+  what Sentry receives.
 
 ## 3. Screenshots
 

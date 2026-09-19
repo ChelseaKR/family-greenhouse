@@ -68,6 +68,34 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   on, so moving between fields and closing the keyboard on a notes field work
   the way they do in every other app.
 
+### Fixed
+
+- **Print works in the iPhone and iPad app.** "Print passport", the plant
+  tags' "Print the sheet", and the Print buttons on the sitter brief and the
+  caretaker report did nothing in the iOS app, because WKWebView drops
+  `window.print()`. They now open the iOS print sheet, which prints the page
+  with the same print layout as the website and can save or share it as a
+  PDF. It is a small print plugin in the app itself (`PrintPlugin.swift`),
+  with no new dependency. The page no longer gains a blank last page when
+  printed from an iPad, and the website is otherwise unchanged. Android's
+  WebView drops `window.print()` too and is not fixed yet.
+
+- **"Take photo" and "Choose photo" no longer overlap on iPad.** In the photo
+  column of a plant's page at iPad widths, and beside the preview on Add
+  plant, the two buttons sat in a two-column grid narrower than their labels,
+  so one label ran over the other button's icon. They now sit side by side
+  only when both fit, and stack otherwise, at every text size up to AX5. A new
+  end-to-end check (`tests/e2e/native-photo-buttons.spec.ts`) holds this on
+  two iPads and an iPhone, at the default size and at AX5.
+
+- **The iOS privacy manifest declares Crash Data.** The app sends sanitized
+  JavaScript error summaries to our own API (the error class, the route with
+  ids removed, and a random per-session id; no stack trace, message text,
+  account or household id), and `PrivacyInfo.xcprivacy` did not list them.
+  It now declares Crash Data as not linked to the person, not used for
+  tracking, for App Functionality, and the store release check fails a build
+  that drops it. The App Store privacy answers in `docs/APP-STORE.md` list it.
+
 ### Security
 
 - **Plant photos are served only through short-lived signed URLs.** Every

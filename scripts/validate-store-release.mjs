@@ -291,6 +291,10 @@ for (const dataType of [
   // manifest keeps NSPrivacyTracking false and needs no ATT prompt.
   'ProductInteraction',
   'PerformanceData',
+  // The first-party error rail (frontendTelemetry.ts): sanitized error
+  // summaries keyed to a random session id, sent from the shells too. Not
+  // linked, not tracking, App Functionality.
+  'CrashData',
 ]) {
   if (!privacyManifest.includes(`NSPrivacyCollectedDataType${dataType}`)) {
     fail(`iOS privacy manifest is missing collected data type ${dataType}`);
