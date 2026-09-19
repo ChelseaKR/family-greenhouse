@@ -172,7 +172,11 @@ const future = (days: number) => new Date(Date.now() + days * 86_400_000).toISOS
 const past = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
 
 /** What the client is told about a failure, minus anything per-request. */
-const failureOf = (res: InvokeResult) => ({ statusCode: res.statusCode, body: res.body });
+const failureOf = (res: InvokeResult) => ({
+  statusCode: res.statusCode,
+  body: res.body,
+  headers: res.headers,
+});
 
 // ---------------------------------------------------------------------------
 // Plant tags
