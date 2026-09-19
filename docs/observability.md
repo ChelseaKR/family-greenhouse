@@ -180,14 +180,6 @@ and nothing in the check ever loaded a page.
 
 Still open, and deliberately not claimed as solved here:
 
-- **A missing plant photo still answers 200 with the app shell.** `/plants/*`
-  is both a React route (`/plants/{plantId}`) and the image prefix
-  (`/plants/{householdId}/{plantId}/...`), so that cache behavior has to keep
-  the 403 → 200 rescue for the route to work at all — which means a missing
-  photo gets it too. Same defect as #615, one prefix narrower; fixing it means
-  separating the image prefix from the route prefix, which is a URL change with
-  stored data behind it.
-
 - **Deleting the health check deletes its alarm.** Setting
   `enable_site_health_check = false` removes the probe and the alarm together,
   so there is no runtime signal left to go missing. `check

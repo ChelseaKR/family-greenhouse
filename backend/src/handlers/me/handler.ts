@@ -268,7 +268,12 @@ export const exportMe = createHandler(
       },
       body: JSON.stringify(payload, null, 2),
     };
-  }
+  },
+  // The file NAMES each plant's photo and does not carry it (the privacy
+  // policy says photos are not part of the export), so the stored reference
+  // stays as it is rather than becoming an hour-long link inside a file that
+  // lives on disk (ADR 0033).
+  { signPhotoUrls: false }
 )
   .use(authMiddleware())
   // The heaviest read in the API: every plant and every task of every

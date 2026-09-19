@@ -30,6 +30,7 @@ import {
 } from '../../models/caretakerSchemas.js';
 import * as plantService from '../../services/plantService.js';
 import { recordActivity } from '../../services/activity.js';
+import { scopePhotoUrls } from '../../services/photoAccess.js';
 import {
   IMAGE_CONTENT_TYPES,
   MAX_IMAGE_BYTES,
@@ -73,7 +74,9 @@ export const getCaretakerPhotoUploadUrl = createHandler(
     );
 
     return successResponse({ uploadUrl, imageUrl: publicImageUrl(key) });
-  }
+  },
+  // `imageUrl` is the reference the confirm call sends back (ADR 0033).
+  { signPhotoUrls: false }
 )
   // Each presign invites an S3 PUT; anonymous, so cap harder than the member
   // path (20/min per user) does.
@@ -152,6 +155,12 @@ export const confirmCaretakerPhoto = createHandler(
       payload: { plantId: plantId!, photoId: photo.id },
     });
 
+    // No account on this route, so the seat says which household's photos
+    // the response may sign, and the URL dies with the seat (ADR 0033).
+    scopePhotoUrls(event, {
+      householdIds: [caretaker.householdId],
+      notAfter: caretaker.expiresAt,
+    });
     return successResponse({ imageUrl: validatedBody.imageUrl, photo, visitRecorded });
   }
 )

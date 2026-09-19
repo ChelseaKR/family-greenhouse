@@ -37,16 +37,8 @@ vi.mock('../../src/utils/dynamodb.js', () => ({
   dynamodb: store.client,
   TABLE_NAME: 'test-table',
 }));
-// Only the AWS boundary is faked. Signing is real crypto against a real role
-// in production; here it just has to produce a URL so the photo clause is
-// checkable.
-vi.mock('../../src/utils/s3.js', async (orig) => {
-  const actual = await orig<typeof import('../../src/utils/s3.js')>();
-  return {
-    ...actual,
-    signedImageUrl: async (key: string, ttl: number) => `https://signed.example/${key}?ttl=${ttl}`,
-  };
-});
+// Photo signing is REAL SigV4 against fake role credentials (set below): no
+// network, and the photo clause is checked against the URL's own expiry.
 vi.mock('../../src/services/cognitoUsers.js', () => ({
   getUserName: async () => 'Ada Admin',
   getUserEmail: async () => null,
@@ -207,8 +199,13 @@ beforeEach(async () => {
   store.reset();
   vi.clearAllMocks();
   process.env.FRONTEND_URL = 'https://app.fixture.invalid';
+  process.env.IMAGES_BUCKET = 'fixture-images-bucket';
+  process.env.AWS_ACCESS_KEY_ID = 'AKIAFIXTURESIGNER';
+  process.env.AWS_SECRET_ACCESS_KEY = 'fixture-secret';
   const { __resetMembershipCacheForTests } = await import('../../src/middleware/auth.js');
   __resetMembershipCacheForTests();
+  const { __resetPhotoSigningClientForTests } = await import('../../src/services/photoAccess.js');
+  __resetPhotoSigningClientForTests();
 });
 
 const originalLog = console.log;
@@ -337,9 +334,12 @@ describe('what a sitter link exposes, measured against that paragraph', () => {
 
     expect(ruled.careNote).toBe(HOUSE_RULE);
     expect(ruled.petSafety).toMatchObject({ slug: 'monstera', cats: 'toxic', dogs: 'toxic' });
-    // A photo URL, and one whose lifetime is bounded by the link's (#453).
-    expect(String(ruled.photoUrl)).toContain(`/${seeded.ruledPlantId}/pic1.jpg`);
-    const ttl = Number(new URL(String(ruled.photoUrl)).searchParams.get('ttl'));
+    // A signed photo URL, and one whose lifetime is bounded by the link's
+    // (#453; ADR 0033).
+    const photo = new URL(String(ruled.photoUrl));
+    expect(photo.pathname).toContain(`/${seeded.ruledPlantId}/pic1.jpg`);
+    expect(photo.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+    const ttl = Number(photo.searchParams.get('X-Amz-Expires'));
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(60 * 60);
   });

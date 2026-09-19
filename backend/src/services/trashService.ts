@@ -52,14 +52,14 @@
  *
  * ## Images
  *
- * Plant photos are served PUBLICLY through CloudFront's `/plants/*`
- * behaviour, so a moved row alone would not make a photo disappear: its URL
- * would keep answering. Trashing a plant therefore moves its objects from
+ * Plant photos are served only through short-lived signed URLs (ADR 0033),
+ * minted for rows a response returns, so a moved row stops a photo from being
+ * handed out; a URL minted before the move keeps working until it expires,
+ * within the hour. Trashing a plant also moves its objects from
  * `plants/{household}/{plant}/` to `trash/plants/{household}/{plant}/`, which
- * nothing serves; restore moves them back to the same keys, so every stored
- * URL resolves again unchanged. Edge caches can hold an already-fetched image
- * for up to the images cache policy's TTL — the same exposure a hard delete
- * has always had.
+ * no response signs; restore moves them back to the same keys, so every
+ * stored reference resolves again unchanged. The move predates ADR 0033 and
+ * stays: a photo in the trash cannot be signed for anyone, by construction.
  *
  * ## Erasure bypasses all of this
  *

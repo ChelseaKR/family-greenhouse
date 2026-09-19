@@ -75,8 +75,6 @@ export interface AtRiskRow {
    *  load-bearing: the old code produced NaN here and rendered "waiting NaN
    *  days for some care". */
   daysOverdue: number | null;
-  /** Most recent photo of this plant, on our own asset origin or null. */
-  imageUrl: string | null;
   assignedTo: string | null;
   assignedToName: string | null;
   /** True when nobody has taken this task — the "up for grabs" case. */
@@ -292,7 +290,6 @@ export async function gatherAtRisk(householdId: string, now: Date): Promise<AtRi
       taskType: task.type,
       customLabel: task.customType,
       daysOverdue: days,
-      imageUrl: plant.imageUrl,
       assignedTo: task.assignedTo,
       assignedToName: task.assignedToName,
       unclaimed: task.assignedTo === null,
@@ -942,7 +939,6 @@ export function composeDigestEmail(
         title: row.plantName,
         href: taskUrl(row.plantId, row.taskId),
         lines,
-        imageUrl: row.imageUrl,
         badge: row.unclaimed ? t(locale, 'digest.upForGrabs') : null,
       });
     }

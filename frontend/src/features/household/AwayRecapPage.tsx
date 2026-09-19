@@ -8,6 +8,7 @@ import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
 import { awayRecapService, type AwayRecap } from '@/services/awayRecapService';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { formatDate } from '@/i18n/format';
@@ -33,6 +34,7 @@ function statusOf(error: unknown): number | undefined {
 
 function RecapBody({ recap }: { recap: AwayRecap }) {
   const { t } = useTranslation();
+  const refreshSignedPhotos = useRefreshSignedPhotos();
   const nothingRecorded =
     recap.counts.tasks === 0 && recap.counts.photos === 0 && recap.counts.notes === 0;
 
@@ -119,6 +121,7 @@ function RecapBody({ recap }: { recap: AwayRecap }) {
                       loading="lazy"
                       decoding="async"
                       className="h-32 w-32 rounded-md bg-parchment object-cover"
+                      onError={refreshSignedPhotos}
                     />
                   ) : (
                     // The event predates URL-carrying photo rows: say the

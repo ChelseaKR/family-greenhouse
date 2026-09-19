@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import clsx from 'clsx';
+import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -23,8 +24,10 @@ interface PlantImageProps {
  */
 export function PlantImage({ plant, className, width, height }: PlantImageProps) {
   const [thumbFailed, setThumbFailed] = useState(false);
+  const refreshSignedPhotos = useRefreshSignedPhotos();
 
   if (plant.imageUrl) {
+    // A signed URL that has run out asks for fresh ones (ADR 0033).
     return (
       <img
         src={plant.imageUrl}
@@ -34,6 +37,7 @@ export function PlantImage({ plant, className, width, height }: PlantImageProps)
         loading="lazy"
         decoding="async"
         className={clsx('w-full h-full object-cover', className)}
+        onError={refreshSignedPhotos}
       />
     );
   }

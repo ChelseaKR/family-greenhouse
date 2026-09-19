@@ -100,35 +100,33 @@ describe('renderEmail', () => {
     expect(html).not.toContain('<i>settings</i>');
   });
 
-  it('drops an image that is not on our own asset origin, and keeps one that is', () => {
-    const outside = renderEmail(
+  it('emits no image at all, for every kind of block (ADR 0033)', () => {
+    // A photo URL cannot live in an email: it is served only through a
+    // signature that expires within the hour or so, and a mailbox keeps a
+    // message for years. So the renderer has no image path to take, whatever
+    // a composer hands it.
+    const { html } = renderEmail(
       doc({
         blocks: [
+          { kind: 'heading', text: 'Could use a hand' },
+          { kind: 'text', text: 'Two plants are waiting.' },
+          { kind: 'notice', text: 'We could not load the forecast.' },
           {
             kind: 'row',
             title: 'Monstera',
-            lines: [],
-            imageUrl: 'https://tracker.example/plants/pixel.png',
+            href: 'https://app.example/plants/p1',
+            lines: ['Water 3 days overdue'],
+            badge: 'Up for grabs',
+            // A stale caller passing a photo the old way is ignored.
+            ...({ imageUrl: 'https://app.example/plants/h1/p1/photo.jpg' } as object),
           },
+          { kind: 'button', label: 'Open', href: 'https://app.example/tasks' },
+          { kind: 'divider' },
         ],
       })
-    ).html;
-    expect(outside).not.toContain('tracker.example');
-    expect(outside).not.toContain('<img');
-
-    const ours = renderEmail(
-      doc({
-        blocks: [
-          {
-            kind: 'row',
-            title: 'Monstera',
-            lines: [],
-            imageUrl: 'https://app.example/plants/h1/p1/photo.jpg',
-          },
-        ],
-      })
-    ).html;
-    expect(ours).toContain('<img src="https://app.example/plants/h1/p1/photo.jpg"');
+    );
+    expect(html).not.toMatch(/<img\b/i);
+    expect(html).not.toContain('/plants/h1/p1/photo.jpg');
   });
 
   it('refuses a javascript: href rather than linking it', () => {

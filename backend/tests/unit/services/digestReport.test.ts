@@ -96,7 +96,6 @@ const row = (over: Partial<report.AtRiskRow> = {}): report.AtRiskRow => ({
   taskType: 'water',
   customLabel: null,
   daysOverdue: 6,
-  imageUrl: null,
   assignedTo: null,
   assignedToName: null,
   unclaimed: true,
@@ -768,19 +767,22 @@ describe('composeDigestEmail', () => {
     expect(text).toContain('Nobody has claimed this yet.');
   });
 
-  it('shows the most recent photo when it is on our own asset origin', () => {
-    const { html } = report.composeDigestEmail(
-      emptyReport({
-        atRisk: {
-          status: 'ok',
-          rows: [row({ imageUrl: 'https://app.example/plants/hh/p1/a.jpg' })],
-          onTrack: 0,
-          orphanTasks: 0,
-        },
-      }),
-      recipient()
-    );
-    expect(html).toContain('<img src="https://app.example/plants/hh/p1/a.jpg"');
+  it('never puts a plant photo in the email, even when the plant has one (ADR 0033)', async () => {
+    // End to end from the plant row: a photo reference on the plant must not
+    // reach the at-risk row, and nothing in the composed mail may load it.
+    vi.mocked(plantService.getPlants).mockResolvedValue([
+      plant({ id: 'p1', imageUrl: 'https://app.example/plants/hh/p1/a.jpg' }),
+    ] as never);
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([task({ plantId: 'p1' })] as never);
+    const atRisk = await report.gatherAtRisk('hh', NOW);
+    expect(atRisk.status).toBe('ok');
+    if (atRisk.status !== 'ok') return;
+    expect(JSON.stringify(atRisk.rows)).not.toContain('/plants/hh/p1/a.jpg');
+
+    const { html, text } = report.composeDigestEmail(emptyReport({ atRisk }), recipient());
+    expect(html).toContain('Monstera');
+    expect(html).not.toMatch(/<img\b/i);
+    expect(html + text).not.toContain('/plants/hh/p1/a.jpg');
   });
 
   it('carries one schedule-drift reading, with both intervals and a deep link', () => {

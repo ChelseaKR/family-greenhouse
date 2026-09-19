@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { plantService } from '@/services/plantService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 interface PhotoTimelineProps {
@@ -14,6 +15,7 @@ interface PhotoTimelineProps {
  */
 export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
   const householdId = useActiveHouseholdId();
+  const refreshSignedPhotos = useRefreshSignedPhotos();
   const { data: photos, isLoading } = useQuery({
     queryKey: ['plants', householdId, plantId, 'photos'],
     queryFn: () => plantService.listPhotos(plantId),
@@ -46,6 +48,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
                 loading="lazy"
                 decoding="async"
                 className="h-32 w-32 rounded-md object-cover bg-parchment"
+                onError={refreshSignedPhotos}
               />
               <figcaption className="mt-1 text-xs text-gray-600">
                 {new Date(photo.uploadedAt).toLocaleDateString()}

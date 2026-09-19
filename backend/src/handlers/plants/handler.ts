@@ -30,6 +30,7 @@ import {
   publicImageUrl,
   resolveIssuedImageKey,
 } from '../../services/plantImageRules.js';
+import { scopePhotoUrls } from '../../services/photoAccess.js';
 import * as plantService from '../../services/plantService.js';
 import * as caretakerPhotos from '../caretakers/photos.js';
 import * as spaceService from '../../services/spaceService.js';
@@ -794,7 +795,10 @@ export const getImageUploadUrl = createHandler(
     const imageUrl = publicImageUrl(key);
 
     return successResponse({ uploadUrl, imageUrl });
-  }
+  },
+  // `imageUrl` here is the reference the confirm call sends back, not a photo
+  // to show, so it leaves unsigned (ADR 0033).
+  { signPhotoUrls: false }
 )
   .use(authMiddleware())
   .use(requireHousehold())
@@ -1003,6 +1007,9 @@ export const getSharedPlant = createHandler(
 
     const household = await householdService.getHousehold(share.householdId);
 
+    // A public link: the card's photo is signed only for the household that
+    // shared it, and never outlives the link (ADR 0033).
+    scopePhotoUrls(event, { householdIds: [share.householdId], notAfter: share.expiresAt });
     return successResponse({
       plant: share.plantSnapshot,
       householdName: household?.name ?? 'A Family Greenhouse household',

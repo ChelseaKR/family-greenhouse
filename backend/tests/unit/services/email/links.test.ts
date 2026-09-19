@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiBaseUrl,
   appUrl,
-  isOwnAssetUrl,
   plantUrl,
   safeLinkUrl,
   taskUrl,
@@ -83,29 +82,5 @@ describe('safeLinkUrl', () => {
     expect(safeLinkUrl('/relative')).toBeNull();
     expect(safeLinkUrl(null)).toBeNull();
     expect(safeLinkUrl('')).toBeNull();
-  });
-});
-
-describe('isOwnAssetUrl', () => {
-  it('accepts an image under our own asset origin', () => {
-    expect(isOwnAssetUrl('https://cdn.example/plants/h/p/photo.jpg')).toBe(true);
-  });
-
-  it('rejects any other host, however similar', () => {
-    expect(isOwnAssetUrl('https://cdn.example.attacker.test/plants/x.jpg')).toBe(false);
-    expect(isOwnAssetUrl('https://evil.example/plants/x.jpg')).toBe(false);
-    expect(isOwnAssetUrl('https://cdn.example:8443/plants/x.jpg')).toBe(false);
-  });
-
-  it('rejects non-http schemes and unparseable values', () => {
-    expect(isOwnAssetUrl('data:image/png;base64,AAAA')).toBe(false);
-    expect(isOwnAssetUrl('not a url')).toBe(false);
-    expect(isOwnAssetUrl(null)).toBe(false);
-  });
-
-  it('honours a path prefix on the asset base', () => {
-    process.env.ASSETS_BASE_URL = 'https://cdn.example/media';
-    expect(isOwnAssetUrl('https://cdn.example/media/plants/x.jpg')).toBe(true);
-    expect(isOwnAssetUrl('https://cdn.example/other/plants/x.jpg')).toBe(false);
   });
 });

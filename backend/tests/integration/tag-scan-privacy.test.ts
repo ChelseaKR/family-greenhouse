@@ -37,14 +37,8 @@ vi.mock('../../src/utils/dynamodb.js', () => ({
   dynamodb: store.client,
   TABLE_NAME: 'test-table',
 }));
-// Only the AWS boundary is faked, exactly as in sitter-privacy.test.ts.
-vi.mock('../../src/utils/s3.js', async (orig) => {
-  const actual = await orig<typeof import('../../src/utils/s3.js')>();
-  return {
-    ...actual,
-    signedImageUrl: async (key: string, ttl: number) => `https://signed.example/${key}?ttl=${ttl}`,
-  };
-});
+// Photo signing is real SigV4 against fake role credentials, exactly as in
+// sitter-privacy.test.ts.
 vi.mock('../../src/services/cognitoUsers.js', () => ({
   getUserName: async () => 'ADMINFIRST-2P5 ADMINLAST-8J3',
   getUserEmail: async () => null,
@@ -323,8 +317,13 @@ beforeEach(async () => {
   store.reset();
   vi.clearAllMocks();
   process.env.FRONTEND_URL = 'https://app.fixture.invalid';
+  process.env.IMAGES_BUCKET = 'fixture-images-bucket';
+  process.env.AWS_ACCESS_KEY_ID = 'AKIAFIXTURESIGNER';
+  process.env.AWS_SECRET_ACCESS_KEY = 'fixture-secret';
   const { __resetMembershipCacheForTests } = await import('../../src/middleware/auth.js');
   __resetMembershipCacheForTests();
+  const { __resetPhotoSigningClientForTests } = await import('../../src/services/photoAccess.js');
+  __resetPhotoSigningClientForTests();
 });
 
 const originalLog = console.log;

@@ -7990,6 +7990,10 @@ app.put(
 );
 
 // Regex routing preserves the slash-delimited S3-style key as one capture.
+// Dev only, and deliberately simpler than production: here a confirmed photo
+// is served at its stored URL, unsigned. Production serves photos only through
+// short-lived S3 presigned URLs minted per response (ADR 0033), which the
+// real-handler suite checks (tests/integration/photo-access.test.ts).
 app.get(/^\/mock-images\/(.+)$/, (req, res) => {
   const rawKey: unknown = req.params[0];
   if (typeof rawKey !== 'string') {
