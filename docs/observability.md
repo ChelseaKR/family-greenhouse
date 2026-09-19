@@ -208,11 +208,11 @@ tell them apart.
 
 Three signals now separate them.
 
-| Metric (`FamilyGreenhouse/Frontend/{env}`) | Source                                                                 | Alarm                  | `treat_missing_data` |
-| ------------------------------------------ | ---------------------------------------------------------------------- | ---------------------- | -------------------- |
-| `FrontendErrors`                           | Browser error reports that arrived                                     | > 2 in 5 min           | `notBreaching`       |
-| `FrontendReportsUndelivered`               | One point per browser **session** that reports it lost earlier reports | > 2 in 5 min           | `notBreaching`       |
-| `FrontendTelemetryProbe`                   | The synthetic delivery check, every 15 min                             | **< 1 over two hours** | **`breaching`**      |
+| Metric (`FamilyGreenhouse/Frontend/{env}`) | Source                                                               | Alarm                  | `treat_missing_data` |
+| ------------------------------------------ | -------------------------------------------------------------------- | ---------------------- | -------------------- |
+| `FrontendErrors`                           | Browser error reports that arrived                                   | > 2 in 5 min           | `notBreaching`       |
+| `FrontendReportsUndelivered`               | One point per browser delivery-report **log line** (not per session) | > 2 in 5 min           | `notBreaching`       |
+| `FrontendTelemetryProbe`                   | The synthetic delivery check, every 15 min                           | **< 1 over two hours** | **`breaching`**      |
 
 **The browser keeps the count.** A failed send increments a counter in
 `localStorage` (a count and a first-failure timestamp — never a payload, never
@@ -265,6 +265,18 @@ Not covered, stated because an overstating observability doc is what produced
   attestations.** A forged body can add a point to either delivery metric;
   `undelivered` is capped at 9999 and `ageMinutes` at 14 days so the skew is
   bounded. This is the same trust model `error` and `vital` have always had.
+- **`FrontendReportsUndelivered` counts log lines, not sessions.** The metric
+  filter adds 1 for every browser `kind: "delivery"` line, so one browser that
+  sends several adds several points; single automated browsers sent bursts of 14
+  and 15 lines (2026-09-08, 2026-09-18, 2026-09-19) and tripped the alarm with no
+  outage. Since the frontend rate limit (#862) an up-to-date browser sends at
+  most one delivery report per 10 minutes, but a browser still running an older
+  bundle can send more, and a client that forges delivery bodies can still add
+  points. When the alarm fires, check the `sessionId` distribution of the
+  `kind: "delivery"` lines in the API Lambda log (one `sessionId` across all
+  lines means one client, not an outage) and the source `ip` and status of
+  `POST /telemetry/frontend` in the API Gateway access log before treating it as
+  an outage.
 - **`MAX_ERRORS_PER_SESSION` still caps reports at 10 per session.** That is a
   deliberate suppression, not a delivery failure, and it is not counted as one.
 
