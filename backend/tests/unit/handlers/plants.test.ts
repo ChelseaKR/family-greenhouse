@@ -47,6 +47,11 @@ vi.mock('../../../src/utils/s3.js', () => ({
   s3: { send: vi.fn() },
   IMAGES_BUCKET: 'test-bucket',
 }));
+// The server-side metadata strip has its own suites (services/photoIntake,
+// integration/photo-upload-strip). Here it passes unless a test says not.
+vi.mock('../../../src/services/photoIntake.js', () => ({
+  sanitizeUploadedPhoto: vi.fn(async () => ({ ok: true, changed: false })),
+}));
 
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
@@ -1153,6 +1158,37 @@ describe('plants handler', () => {
         Bucket: 'test-bucket',
         Key: 'plants/hh-1/p1/abc.jpg',
       });
+      // The photo was cleaned, as the type it was uploaded as, before it was attached.
+      const { sanitizeUploadedPhoto } = await import('../../../src/services/photoIntake.js');
+      expect(sanitizeUploadedPhoto).toHaveBeenCalledWith('plants/hh-1/p1/abc.jpg', 'image/jpeg');
+      expect(vi.mocked(sanitizeUploadedPhoto).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(plantService.appendPlantPhoto).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('attaches nothing when the server-side strip refuses the photo', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { sanitizeUploadedPhoto } = await import('../../../src/services/photoIntake.js');
+      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+      await mockHeadOk();
+      vi.mocked(sanitizeUploadedPhoto).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        message: 'Uploaded file is not a valid image',
+      });
+      const event = buildEvent({
+        httpMethod: 'POST',
+        pathParameters: { id: 'p1' },
+        body: JSON.stringify({
+          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
+        }),
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).message).toBe('Uploaded file is not a valid image');
+      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
     });
 
     it('accepts the ASSETS_BASE_URL form of the minted URL', async () => {

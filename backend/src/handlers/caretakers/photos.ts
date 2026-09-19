@@ -31,6 +31,7 @@ import {
 import * as plantService from '../../services/plantService.js';
 import { recordActivity } from '../../services/activity.js';
 import { scopePhotoUrls } from '../../services/photoAccess.js';
+import { sanitizeUploadedPhoto } from '../../services/photoIntake.js';
 import {
   IMAGE_CONTENT_TYPES,
   MAX_IMAGE_BYTES,
@@ -127,6 +128,9 @@ export const confirmCaretakerPhoto = createHandler(
       });
       throw createHttpError(400, 'Uploaded file is not a valid image');
     }
+    // The same server-side strip as the member route (services/photoIntake.ts).
+    const sanitized = await sanitizeUploadedPhoto(key, contentType);
+    if (!sanitized.ok) throw createHttpError(sanitized.status, sanitized.message);
 
     const actorId = `caretaker:${caretaker.id}`;
     const photo = await plantService.appendPlantPhoto(

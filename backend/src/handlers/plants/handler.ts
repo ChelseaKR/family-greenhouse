@@ -31,6 +31,7 @@ import {
   resolveIssuedImageKey,
 } from '../../services/plantImageRules.js';
 import { scopePhotoUrls } from '../../services/photoAccess.js';
+import { sanitizeUploadedPhoto } from '../../services/photoIntake.js';
 import * as plantService from '../../services/plantService.js';
 import * as caretakerPhotos from '../caretakers/photos.js';
 import * as spaceService from '../../services/spaceService.js';
@@ -861,6 +862,11 @@ export const confirmImageUpload = createHandler(
       });
       throw createHttpError(400, 'Uploaded file is not a valid image');
     }
+    // The server's own strip, after the device's (#849): the bytes must be
+    // the declared image type, and lose every EXIF/XMP/IPTC block, GPS
+    // included, before anything can show them (services/photoIntake.ts).
+    const sanitized = await sanitizeUploadedPhoto(key, contentType);
+    if (!sanitized.ok) throw createHttpError(sanitized.status, sanitized.message);
     // Append to the photo timeline (which atomically also updates plant.imageUrl
     // to the latest). The previous behavior of bare updatePlantImage is now
     // a degenerate case of this — there's no need for both.

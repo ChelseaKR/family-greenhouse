@@ -45,6 +45,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Deploy note: a release applies Terraform before it deploys the backend, so
   photos in the app do not load for the few minutes between the two.
 
+- **The server now removes location and other metadata from every uploaded
+  photo before it is kept.** The app has done this on the device since 0.37.0
+  (#849); the server now does it too, when an upload is confirmed, so a
+  stored photo is clean whatever sent it. The same reader the stored-photo
+  cleanup uses (#852) inspects the bytes, and the cleaned copy is what gets
+  stored; image data is copied, never re-encoded. A photo that cannot be
+  checked, including a HEIC file, is refused with an explanation rather than
+  stored as it came. Sitter photos are cleaned the same way before they are
+  stored.
+
 ## [0.37.0] - 2026-09-18
 
 **A privacy fix comes first:** photos no longer carry the phone's location off
