@@ -147,6 +147,27 @@ const MAX_UNDELIVERED = 9999;
 /** 14 days, matching the schema bound in backend/src/models/telemetry.ts. */
 const MAX_UNDELIVERED_AGE_MINUTES = 20_160;
 
+/**
+ * At most one browser delivery report per browser per window.
+ *
+ * `FrontendReportsUndelivered` is a metric-filter count of `kind: "delivery"`
+ * log lines, and the alarm on it says "three or more browser SESSIONS lost
+ * reports". Those are only the same thing if a browser sends one line. It did
+ * not: every page load that finds a stored count sends it again, so ONE
+ * session loading fifteen pages produced fifteen points. That single session
+ * fired the alarm on 2026-09-08, 2026-09-18 and 2026-09-19 with no API failure
+ * behind any of them — the access log showed every request it made arriving
+ * as a 204.
+ *
+ * The stamp lives in its own localStorage key rather than on the loss record,
+ * because the record is deleted the moment a report is acknowledged and a
+ * flapping connection would otherwise start a fresh window each time.
+ * Whatever this defers is not lost: the count stays stored and goes out on the
+ * first init or successful send after the window closes.
+ */
+const DELIVERY_REPORTED_AT_KEY = 'fg-telemetry-delivery-reported-at';
+const DELIVERY_REPORT_MIN_INTERVAL_MS = 10 * 60_000;
+
 interface UndeliveredRecord {
   /** Reports that failed to reach the API. Never a payload — only a count. */
   count: number;
@@ -190,6 +211,28 @@ function recordUndelivered(): void {
   });
 }
 
+/** True while a delivery report from this browser went out inside the window. */
+function deliveryReportRecentlySent(now: number): boolean {
+  try {
+    const stamp = Number(localStorage.getItem(DELIVERY_REPORTED_AT_KEY));
+    if (!Number.isFinite(stamp) || stamp <= 0) return false;
+    // A stamp from the future (clock change, hand-edited value) must not mute
+    // the rail until the clock catches up, so only a non-negative age counts.
+    const elapsed = now - stamp;
+    return elapsed >= 0 && elapsed < DELIVERY_REPORT_MIN_INTERVAL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function stampDeliveryReport(now: number): void {
+  try {
+    localStorage.setItem(DELIVERY_REPORTED_AT_KEY, String(now));
+  } catch {
+    // Best-effort, like the counter it protects.
+  }
+}
+
 /** Subtract what we just successfully reported, keeping anything newer. */
 function clearReportedLosses(reported: number): void {
   const current = readUndelivered();
@@ -215,9 +258,15 @@ function flushUndelivered(): void {
   if (deliveryReportInFlight || !telemetryAllowed() || typeof fetch === 'undefined') return;
   const record = readUndelivered();
   if (!record) return;
+  const now = Date.now();
+  // Deferred, not dropped: see DELIVERY_REPORT_MIN_INTERVAL_MS. The stamp is
+  // written before the request goes out because the caller that most needs it
+  // is the one that never lives to see the response.
+  if (deliveryReportRecentlySent(now)) return;
+  stampDeliveryReport(now);
   deliveryReportInFlight = true;
   const ageMinutes = Math.min(
-    Math.max(Math.round((Date.now() - record.since) / 60_000), 0),
+    Math.max(Math.round((now - record.since) / 60_000), 0),
     MAX_UNDELIVERED_AGE_MINUTES
   );
   send(

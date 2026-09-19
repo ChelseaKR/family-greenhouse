@@ -209,3 +209,104 @@ describe('delivery failures are counted, not swallowed', () => {
     expect(localStorage.getItem(UNDELIVERED_KEY)).toBeNull();
   });
 });
+
+/**
+ * `FrontendReportsUndelivered` counts delivery log lines but its alarm reads
+ * them as browser SESSIONS. One browser walking fifteen pages therefore fired
+ * the alarm three times in ten days (2026-09-08, -18, -19) while the API
+ * answered every request with a 204. A browser gets one delivery report per
+ * window; the count it holds is deferred, never dropped.
+ */
+describe('one delivery report per browser per window', () => {
+  const UNDELIVERED_KEY = 'fg-telemetry-undelivered';
+  const REPORTED_AT_KEY = 'fg-telemetry-delivery-reported-at';
+  const WINDOW_MS = 10 * 60_000;
+
+  const settle = async () => {
+    for (let index = 0; index < 5; index += 1) await Promise.resolve();
+  };
+
+  /** Each call is a fresh page load: module state (the in-flight latch) is gone, storage is not. */
+  async function pageLoad(fetchMock: ReturnType<typeof vi.fn>) {
+    vi.resetModules();
+    vi.stubGlobal('fetch', fetchMock);
+    const { initFrontendTelemetry } = await import('./frontendTelemetry');
+    initFrontendTelemetry();
+    await settle();
+  }
+
+  it('does not re-send an unacknowledged count from every page load', async () => {
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 3, since: Date.now() }));
+    // A response that never arrives: the page is gone before the answer, so the
+    // count is never cleared and the next page finds it again.
+    const fetchMock = vi.fn().mockReturnValue(new Promise(() => {}));
+
+    for (let page = 0; page < 15; page += 1) await pageLoad(fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ kind: 'delivery', undelivered: 3 });
+    // Deferred, not dropped.
+    expect(JSON.parse(localStorage.getItem(UNDELIVERED_KEY) ?? 'null')).toMatchObject({ count: 3 });
+  });
+
+  it('sends the deferred count once the window has passed', async () => {
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 2, since: Date.now() }));
+    const fetchMock = vi.fn().mockReturnValue(new Promise(() => {}));
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1_800_000_000_000);
+
+    await pageLoad(fetchMock);
+    now.mockReturnValue(1_800_000_000_000 + WINDOW_MS - 1);
+    await pageLoad(fetchMock);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_800_000_000_000 + WINDOW_MS);
+    await pageLoad(fetchMock);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds the window open after an acknowledged report deleted the loss record', async () => {
+    // A flapping connection: lose, recover, report, lose again. Without a
+    // stamp of its own, each recovery would open a fresh window.
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 1, since: Date.now() }));
+    await pageLoad(vi.fn().mockResolvedValue({ ok: true }));
+    expect(localStorage.getItem(UNDELIVERED_KEY)).toBeNull();
+    expect(localStorage.getItem(REPORTED_AT_KEY)).not.toBeNull();
+
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 1, since: Date.now() }));
+    const second = vi.fn().mockResolvedValue({ ok: true });
+    await pageLoad(second);
+
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it('does not let a timestamp from the future mute the rail', async () => {
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 1, since: Date.now() }));
+    localStorage.setItem(REPORTED_AT_KEY, String(Date.now() + 24 * 60 * 60_000));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+
+    await pageLoad(fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a garbled stamp', async () => {
+    localStorage.setItem(UNDELIVERED_KEY, JSON.stringify({ count: 1, since: Date.now() }));
+    localStorage.setItem(REPORTED_AT_KEY, 'not a number');
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+
+    await pageLoad(fetchMock);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('writes no stamp when there is nothing to report', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+
+    await pageLoad(fetchMock);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REPORTED_AT_KEY)).toBeNull();
+  });
+});
