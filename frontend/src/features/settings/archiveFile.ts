@@ -13,9 +13,14 @@
  * prototype-pollution keys anywhere in it.
  */
 
-/** Mirrors ARCHIVE_FORMAT / ARCHIVE_VERSION / ARCHIVE_MAX_BYTES in backend/src/models/householdArchive.ts. */
+/**
+ * Mirrors ARCHIVE_FORMAT / ARCHIVE_VERSION / ARCHIVE_MAX_BYTES in
+ * backend/src/models/householdArchive.ts. ARCHIVE_VERSION is the newest format
+ * this app reads; every version from 1 up to it is readable (version 2 added a
+ * manifest, and a version 1 file, which has none, still restores).
+ */
 export const ARCHIVE_FORMAT = 'family-greenhouse-export';
-export const ARCHIVE_VERSION = 1;
+export const ARCHIVE_VERSION = 2;
 export const ARCHIVE_MAX_BYTES = 5 * 1024 * 1024;
 
 export type ArchiveFileError =
@@ -60,7 +65,6 @@ export function readArchiveFile(text: string, size: number): ArchiveFileResult {
     return { ok: false, error: 'unsupportedVersion' };
   }
   if (version > ARCHIVE_VERSION) return { ok: false, error: 'newerVersion', version };
-  if (version !== ARCHIVE_VERSION) return { ok: false, error: 'unsupportedVersion', version };
 
   const households: ArchiveHouseholdSummary[] = [];
   if (Array.isArray(parsed.households)) {

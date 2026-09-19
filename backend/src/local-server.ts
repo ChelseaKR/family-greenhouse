@@ -179,9 +179,12 @@ import {
 } from './services/sitterPhotoPolicy.js';
 import { buildAwayRecap, pickRecapLink, recapWindow } from './services/awayRecapModel.js';
 import {
+  ARCHIVE_FORMAT,
   ARCHIVE_MAX_BYTES,
+  ARCHIVE_VERSION,
   ArchiveRejectedError,
   IMPORT_TARGET_REFUSALS,
+  buildArchiveManifest,
   importTargetState,
   planArchiveImport,
   readArchive,
@@ -1655,19 +1658,22 @@ app.get('/me/export', authMiddleware, (req, res) => {
 
   const households = dbUser.memberships.map((m) => {
     const h = db.households.get(m.householdId);
+    const plants = [...db.plants.values()].filter((p) => p.householdId === m.householdId);
+    const tasks = [...db.tasks.values()].filter((t) => t.householdId === m.householdId);
     return {
       id: m.householdId,
       name: h?.name ?? '',
       role: m.role,
       joinedAt: m.joinedAt,
-      plants: [...db.plants.values()].filter((p) => p.householdId === m.householdId),
-      tasks: [...db.tasks.values()].filter((t) => t.householdId === m.householdId),
+      plants,
+      tasks,
+      manifest: buildArchiveManifest(plants, tasks),
     };
   });
 
   const payload = {
-    format: 'family-greenhouse-export',
-    version: 1,
+    format: ARCHIVE_FORMAT,
+    version: ARCHIVE_VERSION,
     exportedAt: new Date().toISOString(),
     user: { id: dbUser.id, email: dbUser.email, name: dbUser.name },
     notificationPreferences: db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId),
@@ -2700,6 +2706,7 @@ app.post(
           name: archive.household.name,
           exportedAt: archive.exportedAt,
           version: archive.version,
+          manifest: archive.manifest,
         },
         counts: importPlan.counts,
         notRestored: importPlan.notRestored,

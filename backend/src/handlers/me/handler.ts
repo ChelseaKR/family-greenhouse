@@ -21,6 +21,11 @@ import {
   formatReferralCode,
 } from '../../models/referrals.js';
 import { buildIcs } from '../../services/icsExport.js';
+import {
+  ARCHIVE_FORMAT,
+  ARCHIVE_VERSION,
+  buildArchiveManifest,
+} from '../../models/householdArchive.js';
 import { myToday } from './today.js';
 import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
@@ -211,7 +216,8 @@ export const deleteMe = createHandler(
 ).use(authMiddleware());
 
 // GET /me/export
-// GDPR-style "right to data portability" export. Returns, as a downloadable
+// GDPR-style "right to data portability" export (format version 2: version 1
+// plus a per-household `manifest`; the import still reads version 1). Returns, as a downloadable
 // JSON document, the personal data we hold for the caller: their profile,
 // notification preferences, household memberships, and — for each household
 // they belong to — the plants and tasks they have access to. We deliberately
@@ -244,13 +250,17 @@ export const exportMe = createHandler(
           joinedAt: m.joinedAt,
           plants,
           tasks,
+          // Version 2 (#669): what this section holds, so the import can tell
+          // a whole file from a cut-short or edited one. Digests and counts
+          // only; it carries none of the rows' content.
+          manifest: buildArchiveManifest(plants, tasks),
         };
       })
     );
 
     const payload = {
-      format: 'family-greenhouse-export',
-      version: 1,
+      format: ARCHIVE_FORMAT,
+      version: ARCHIVE_VERSION,
       exportedAt: new Date().toISOString(),
       user: { id: user.userId, email: user.email, name },
       notificationPreferences: preferences,

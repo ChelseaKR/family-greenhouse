@@ -18,6 +18,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **The data export now lists what it holds, so a restore can tell a whole file
+  from a cut-short or edited one (issue #669, format version 2).**
+  `GET /me/export` writes `version: 2`: the same file as before, plus a
+  `manifest` in each household section with the number of plants and tasks and
+  one SHA-256 digest for each (digests, not just counts, because two edits that
+  balance out leave a count unchanged). The restore checks a version 2 file
+  against its manifest before it reads the target household or writes anything,
+  and refuses one that does not match with `400 manifest_mismatch` and how far
+  off it is in counts only; the preview says when the check passed. It is a
+  check on the file, not a signature, and it grants nothing. Files the released
+  app wrote (version 1, no manifest) restore exactly as before, and the preview
+  says they had no contents list to check; a newer version than this build
+  reads is still refused by name. The digest recipe is pinned by a test, since
+  changing it would strand every version 2 file already downloaded. EN/ES. Not
+  in this change, and still open on #669: a photo bundle (needs a decision on
+  the privacy policy's "photos are not in the export" and a download path that
+  is not the 6 MB Lambda response), spaces, care history and photo timelines in
+  the export, and merging into a household that already has data. Deploy note:
+  no new route and no infrastructure change.
+
 - **Conversion events in Google Analytics 4, so ads and search can be judged
   on sales.** On the website only, and under the same opt-outs as page views,
   GA4 now also receives `landing_cta_click` (the home page's sign-up buttons

@@ -94,7 +94,7 @@ describe('local-server: POST /households/:id/import-archive', () => {
       .set(seed)
       .send({
         mode: 'preview',
-        archive: { format: 'family-greenhouse-export', version: 2, households: [] },
+        archive: { format: 'family-greenhouse-export', version: 3, households: [] },
       });
     expect(res.status).toBe(400);
     expect(res.body.details.code).toBe('unsupported_version');

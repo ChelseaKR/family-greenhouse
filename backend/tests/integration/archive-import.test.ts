@@ -12,6 +12,7 @@
  *
  * Every address here is `example.invalid`; every string is synthetic.
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDynamo } from './support/inMemoryDynamo.js';
 import { invokeHandler } from './support/invokeHandler.js';
@@ -61,7 +62,13 @@ afterEach(() => {
 type Json = Record<string, unknown>;
 
 interface ExportDoc extends Json {
-  households: Array<{ id: string; name: string; plants: Json[]; tasks: Json[] }>;
+  households: Array<{
+    id: string;
+    name: string;
+    plants: Json[];
+    tasks: Json[];
+    manifest?: Json;
+  }>;
 }
 
 /** Rows that are credentials: a restore must never create or touch one. */
@@ -330,6 +337,9 @@ describe('POST /households/{id}/import-archive — the round trip', () => {
     expect(sourceSection.plants.some((p) => p.imageUrl)).toBe(true);
     expect(sourceSection.plants.some((p) => p.spaceId)).toBe(true);
     expect(sourceSection.plants.some((p) => p.parentPlantId)).toBe(true);
+    // The export is version 2: the section carries its own manifest.
+    expect(archive.version).toBe(2);
+    expect(sourceSection.manifest).toMatchObject({ counts: { plants: 5, tasks: 3 } });
 
     const targetId = await newEmptyHousehold();
     const tokensBefore = tokenRows();
@@ -349,6 +359,8 @@ describe('POST /households/{id}/import-archive — the round trip', () => {
     };
     expect(p.target).toEqual({ state: 'empty' });
     expect(p.canImport).toBe(true);
+    // The manifest was read and every plant and task matched it.
+    expect(p).toMatchObject({ source: { version: 2, manifest: 'verified' } });
     expect(p.counts).toEqual({
       plants: 5,
       activePlants: 2,
@@ -525,12 +537,12 @@ describe('POST /households/{id}/import-archive — refusals, before any write', 
 
     const newer = await importArchive(targetId, {
       mode: 'preview',
-      archive: { ...syntheticArchive(1), version: 2 },
+      archive: { ...syntheticArchive(1), version: 3 },
     });
     expect(newer.statusCode).toBe(400);
     expect(newer.body).toMatchObject({
       message: expect.stringContaining('newer version'),
-      details: { code: 'unsupported_version', version: 2, supported: 1 },
+      details: { code: 'unsupported_version', version: 3, supported: 2 },
     });
     const unknown = await importArchive(targetId, {
       mode: 'commit',
@@ -660,6 +672,168 @@ describe('POST /households/{id}/import-archive — refusals, before any write', 
     const at = await previewThenCommit(targetId, syntheticArchive(cap));
     expect(at.commit.statusCode).toBe(200);
     expect(rowsOf(targetId).filter((r) => r.entityType === 'Plant')).toHaveLength(cap);
+  });
+});
+
+describe('POST /households/{id}/import-archive — format versions (#669)', () => {
+  /** An export written by the app as it was released: version 1, no manifest. */
+  const releasedExport = (): ExportDoc =>
+    JSON.parse(
+      readFileSync(new URL('../fixtures/household-export-v1.json', import.meta.url), 'utf8')
+    ) as ExportDoc;
+
+  it('still restores an export the released app wrote (version 1, no manifest)', async () => {
+    const archive = releasedExport();
+    // The fixture really is the old shape: version 1, and nothing like a manifest.
+    expect(archive.version).toBe(1);
+    expect(archive.households[0].manifest).toBeUndefined();
+    expect(JSON.stringify(archive)).not.toContain('manifest');
+    expect(archive.households[0].plants).toHaveLength(5);
+
+    const targetId = await newEmptyHousehold();
+    const { preview, commit } = await previewThenCommit(targetId, archive);
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body).toMatchObject({
+      // No manifest to check, and the preview says so instead of implying a check.
+      source: { version: 1, manifest: 'absent', name: 'The Old House' },
+      counts: { plants: 5, activePlants: 2, pastPlants: 2, archivedPlants: 1, tasks: 3 },
+      canImport: true,
+    });
+    expect(commit.statusCode).toBe(200);
+    expect(commit.body).toMatchObject({ status: 'complete', imported: { plants: 5, tasks: 3 } });
+
+    // The restored household exports as version 2 with a manifest that verifies:
+    // an old file goes in, a current one comes out.
+    const after = await exportAs({ ...ADMIN, householdId: targetId });
+    expect(after.version).toBe(2);
+    expect(after.households.find((h) => h.id === targetId)?.plants).toHaveLength(5);
+    const again = await importArchive(await newEmptyHousehold(), {
+      mode: 'preview',
+      sourceHouseholdId: targetId,
+      archive: after,
+    });
+    expect(again.body).toMatchObject({ source: { version: 2, manifest: 'verified' } });
+  });
+
+  it('restores the same plants from a version 1 file and from its version 2 successor', async () => {
+    const old = releasedExport();
+    const successor: ExportDoc = JSON.parse(JSON.stringify(old));
+    successor.version = 2;
+    const { buildArchiveManifest } = await import('../../src/models/householdArchive.js');
+    const section = successor.households[0];
+    section.manifest = buildArchiveManifest(section.plants, section.tasks) as unknown as Json;
+
+    const first = await previewThenCommit(await newEmptyHousehold(), old);
+    const second = await previewThenCommit(await newEmptyHousehold(), successor);
+    expect(first.commit.statusCode).toBe(200);
+    expect(second.commit.statusCode).toBe(200);
+    // Same rows, told apart only by what was checked.
+    expect(second.preview.body).toMatchObject({ source: { version: 2, manifest: 'verified' } });
+    expect((second.preview.body as Json).counts).toEqual((first.preview.body as Json).counts);
+    expect((second.commit.body as Json).imported).toEqual((first.commit.body as Json).imported);
+  });
+
+  it('refuses a version 2 export that does not match its manifest, before any write', async () => {
+    const source = await buildSource();
+    const archive = await exportAs({ ...ADMIN, householdId: source.householdId });
+    const pristine = JSON.stringify(archive);
+    const targetId = await newEmptyHousehold();
+    const snapshot = JSON.stringify(store.all());
+
+    const tamper = (change: (section: ExportDoc['households'][number]) => void): ExportDoc => {
+      const doc = JSON.parse(pristine) as ExportDoc;
+      change(doc.households.find((h) => h.id === source.householdId)!);
+      // The manifest is left exactly as the export wrote it.
+      expect(JSON.stringify(doc.households[0].manifest)).toBe(
+        JSON.stringify(JSON.parse(pristine).households[0].manifest)
+      );
+      return doc;
+    };
+    const cases: Array<[string, ExportDoc]> = [
+      ['a plant cut out', tamper((s) => s.plants.pop())],
+      ['a task cut out', tamper((s) => s.tasks.shift())],
+      [
+        'a plant swapped for another (the count still matches)',
+        tamper((s) => {
+          s.plants.pop();
+          s.plants.push({ ...s.plants[0], id: 'a-different-plant', name: 'Swapped in' });
+        }),
+      ],
+      [
+        'a note edited',
+        tamper((s) => {
+          s.plants[0].notes = 'edited by hand';
+        }),
+      ],
+      [
+        'a cadence edited',
+        tamper((s) => {
+          s.tasks[0].frequency = 99;
+        }),
+      ],
+    ];
+    for (const [label, doc] of cases) {
+      // Negative control: the edit really is in the file the server is sent.
+      expect(JSON.stringify(doc), label).not.toBe(pristine);
+      for (const mode of ['preview', 'commit'] as const) {
+        const res = await importArchive(targetId, {
+          mode,
+          sourceHouseholdId: source.householdId,
+          confirmDigest: '0'.repeat(64),
+          archive: doc,
+        });
+        expect(res.statusCode, `${label} (${mode})`).toBe(400);
+        expect(res.body, `${label} (${mode})`).toMatchObject({
+          details: { code: 'manifest_mismatch' },
+        });
+        // Counts only: no name, note or id from the file rides in the refusal.
+        expect(JSON.stringify(res.body)).not.toContain(PRIVATE_NOTE);
+        expect(JSON.stringify(res.body)).not.toContain('Swapped in');
+      }
+    }
+    // Nothing was written by any of them.
+    expect(JSON.stringify(store.all())).toBe(snapshot);
+
+    // Control: the untouched export restores through the same route.
+    const ok = await previewThenCommit(targetId, JSON.parse(pristine));
+    expect(ok.commit.statusCode).toBe(200);
+  });
+
+  it('refuses a version 2 export with no manifest at all', async () => {
+    const source = await buildSource();
+    const archive = await exportAs({ ...ADMIN, householdId: source.householdId });
+    delete archive.households[0].manifest;
+    expect(archive.version).toBe(2);
+    const targetId = await newEmptyHousehold();
+    const snapshot = JSON.stringify(store.all());
+    const res = await importArchive(targetId, { mode: 'preview', archive });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({
+      details: { code: 'invalid_content', path: 'households.0.manifest' },
+    });
+    expect(JSON.stringify(store.all())).toBe(snapshot);
+  });
+
+  it('writes the manifest as counts and digests only', async () => {
+    const source = await buildSource();
+    const archive = await exportAs({ ...ADMIN, householdId: source.householdId });
+    const manifest = archive.households[0].manifest as {
+      counts: Json;
+      plantDigests: string[];
+      taskDigests: string[];
+    };
+    expect(manifest.counts).toEqual({ plants: 5, tasks: 3 });
+    expect(manifest.plantDigests).toHaveLength(5);
+    expect(manifest.taskDigests).toHaveLength(3);
+    const text = JSON.stringify(manifest);
+    // Not a note, a name, a token, an id or a Stripe reference: hex digests.
+    expect(text).not.toContain(PRIVATE_NOTE);
+    expect(text).not.toContain('Monstera');
+    for (const token of Object.values(source.tokens)) expect(text).not.toContain(token);
+    expect(text).not.toMatch(/cus_|sub_|price_|pi_/);
+    for (const digest of [...manifest.plantDigests, ...manifest.taskDigests]) {
+      expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 });
 

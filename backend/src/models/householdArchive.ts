@@ -6,15 +6,24 @@
  * import (services/archiveImport.ts) and the dev server's mirror
  * (local-server.ts) run the same validation and the same restore plan.
  *
- * ## The format this reads, and only this format
+ * ## The formats this reads
  *
- * `{ format: 'family-greenhouse-export', version: 1, exportedAt, user,
+ * `{ format: 'family-greenhouse-export', version, exportedAt, user,
  *    notificationPreferences, households: [{ id, name, role, joinedAt,
- *    plants, tasks }] }`, where `plants` is `plantService.getPlants(id, 'all')`
- * and `tasks` is `taskService.getTasks(id)` — every plant, and the tasks of the
- * ACTIVE plants. That is everything version 1 carries. Spaces, completion
- * history, photo timelines and photos themselves are not in it, so they cannot
- * be restored from it; the preview says so instead of implying otherwise.
+ *    plants, tasks, manifest? }] }`, where `plants` is
+ * `plantService.getPlants(id, 'all')` and `tasks` is `taskService.getTasks(id)`
+ * — every plant, and the tasks of the ACTIVE plants. That is everything the
+ * export carries. Spaces, completion history, photo timelines and photos
+ * themselves are not in it, so they cannot be restored from it; the preview
+ * says so instead of implying otherwise.
+ *
+ * - **Version 1** is what every released app wrote before manifests. It has no
+ *   `manifest`, and it must keep importing exactly as it did: nothing about it
+ *   is renamed, reinterpreted or newly required.
+ * - **Version 2** is version 1 plus a per-household `manifest` (counts, and one
+ *   SHA-256 per plant and per task; see `buildArchiveManifest`). A version 2
+ *   file is checked against its manifest BEFORE anything is written, so a
+ *   truncated or partly edited file is refused rather than restored short.
  *
  * A version this build does not know — newer or otherwise — is refused with a
  * message that says which version the file is, never guessed at.
@@ -50,8 +59,15 @@ import type { Plant, SpeciesSource, Task } from './types.js';
 /** The `format` string `exportMe` writes. Anything else is not our archive. */
 export const ARCHIVE_FORMAT = 'family-greenhouse-export';
 
-/** The one archive version this build can restore. */
-export const ARCHIVE_VERSION = 1;
+/**
+ * The archive version `exportMe` writes, and the newest this build can read.
+ * Every version from 1 up to it is readable: a bump adds to the format and
+ * never strands a file an earlier release wrote.
+ */
+export const ARCHIVE_VERSION = 2;
+
+/** The first version that carries a `manifest`. */
+export const ARCHIVE_MANIFEST_VERSION = 2;
 
 /**
  * The largest request body the import route accepts. A Lambda's synchronous
@@ -90,7 +106,8 @@ export type ArchiveRejectionCode =
   | 'invalid_content'
   | 'household_not_found'
   | 'household_required'
-  | 'duplicate_id';
+  | 'duplicate_id'
+  | 'manifest_mismatch';
 
 export class ArchiveRejectedError extends Error {
   readonly code: ArchiveRejectionCode;
@@ -184,11 +201,25 @@ const archivedTaskSchema = z.object({
   createdAt: instantSchema,
 });
 
+const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** What a version 2 household section says it holds; see `buildArchiveManifest`. */
+const manifestSchema = z.object({
+  counts: z.object({
+    plants: z.number().int().min(0).max(ARCHIVE_MAX_PLANTS),
+    tasks: z.number().int().min(0).max(ARCHIVE_MAX_TASKS),
+  }),
+  plantDigests: z.array(sha256Schema).max(ARCHIVE_MAX_PLANTS),
+  taskDigests: z.array(sha256Schema).max(ARCHIVE_MAX_TASKS),
+});
+
 const householdSectionSchema = z.object({
   id: archiveIdSchema,
   name: z.string().trim().min(1).max(100),
   plants: z.array(z.unknown()).max(ARCHIVE_MAX_PLANTS),
   tasks: z.array(z.unknown()).max(ARCHIVE_MAX_TASKS),
+  /** Read by version, not here: version 1 has none and version 2 requires one. */
+  manifest: z.unknown().optional(),
 });
 
 const envelopeSchema = z.object({
@@ -198,11 +229,18 @@ const envelopeSchema = z.object({
 
 export type ArchivedPlant = z.infer<typeof archivedPlantSchema>;
 export type ArchivedTask = z.infer<typeof archivedTaskSchema>;
+export type ArchiveManifest = z.infer<typeof manifestSchema>;
 
 /** One household of an archive, validated, plus what identifies the archive. */
 export interface ValidatedArchive {
   version: number;
   exportedAt: string | null;
+  /**
+   * `verified`: the file carried a manifest and every plant and task matched
+   * it. `absent`: the file is from before manifests (version 1), so nothing
+   * said what it should hold and its completeness could not be checked.
+   */
+  manifest: 'verified' | 'absent';
   /** sha256 over the canonical form of the selected household's validated content. */
   digest: string;
   household: {
@@ -230,6 +268,70 @@ function canonicalJson(value: unknown): string {
     .sort()
     .map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`);
   return `{${entries.join(',')}}`;
+}
+
+/**
+ * One entity's digest: SHA-256 over its kind and its canonical JSON AS THE
+ * IMPORT SCHEMA READS IT. Digesting the schema's output rather than the raw
+ * object means a field the import ignores cannot change it, and the writer
+ * (`buildArchiveManifest`) and the reader (`readArchive`) cannot disagree about
+ * which fields count. The kind is part of the input so a plant and a task can
+ * never share a digest.
+ */
+function entityDigest(kind: 'plant' | 'task', value: unknown): string {
+  return createHash('sha256')
+    .update(`${kind}:${canonicalJson(value)}`)
+    .digest('hex');
+}
+
+/**
+ * The manifest `exportMe` writes into each household section of a version 2
+ * export: how many plants and tasks the section holds, and one digest for each,
+ * sorted so the manifest does not depend on the order the rows were read in.
+ *
+ * It is a check on the FILE, not a signature. It catches a truncated download,
+ * a hand edit that drops or changes a row, and a merge of two files; anyone who
+ * rewrites the manifest along with the rows can still make them agree, and the
+ * import never treats a manifest as authority for anything else (it grants no
+ * plan, member or credential). Digests, not just counts, because a count
+ * collapses silently when one edit adds a row and another drops one.
+ *
+ * Never throws and never leaves an entity out: a row the import schema would
+ * refuse is digested as it stands, so a portability export is never blocked by
+ * its own manifest (the import refuses such a row on its own, before this
+ * check matters).
+ */
+export function buildArchiveManifest(
+  plants: readonly unknown[],
+  tasks: readonly unknown[]
+): ArchiveManifest {
+  const digestOf = (kind: 'plant' | 'task', schema: z.ZodType, entity: unknown): string => {
+    const parsed = schema.safeParse(entity);
+    return entityDigest(kind, parsed.success ? parsed.data : entity);
+  };
+  return {
+    counts: { plants: plants.length, tasks: tasks.length },
+    plantDigests: plants.map((p) => digestOf('plant', archivedPlantSchema, p)).sort(),
+    taskDigests: tasks.map((t) => digestOf('task', archivedTaskSchema, t)).sort(),
+  };
+}
+
+/** How many digests the manifest lists that the file lacks, and the reverse. */
+function compareDigests(
+  listed: readonly string[],
+  found: readonly string[]
+): { missing: number; unexpected: number } {
+  const remaining = new Map<string, number>();
+  for (const digest of listed) remaining.set(digest, (remaining.get(digest) ?? 0) + 1);
+  let unexpected = 0;
+  for (const digest of found) {
+    const left = remaining.get(digest) ?? 0;
+    if (left > 0) remaining.set(digest, left - 1);
+    else unexpected += 1;
+  }
+  let missing = 0;
+  for (const left of remaining.values()) missing += left;
+  return { missing, unexpected };
 }
 
 /**
@@ -265,12 +367,10 @@ export function readArchive(raw: unknown, sourceHouseholdId?: string | null): Va
       { version: null, supported: ARCHIVE_VERSION }
     );
   }
-  if (version !== ARCHIVE_VERSION) {
+  if (version > ARCHIVE_VERSION) {
     throw new ArchiveRejectedError(
       'unsupported_version',
-      version > ARCHIVE_VERSION
-        ? `This export was made by a newer version of Family Greenhouse (format version ${version}). This version can restore format version ${ARCHIVE_VERSION} only.`
-        : `This export uses format version ${version}, which this version of Family Greenhouse cannot restore.`,
+      `This export was made by a newer version of Family Greenhouse (format version ${version}). This version can restore format versions 1 to ${ARCHIVE_VERSION}.`,
       { version, supported: ARCHIVE_VERSION }
     );
   }
@@ -318,7 +418,24 @@ export function readArchive(raw: unknown, sourceHouseholdId?: string | null): Va
     );
   }
 
+  // Version 2 says what the section holds; read that first so a missing or
+  // malformed manifest is refused before the entities are walked.
+  const wantsManifest = version >= ARCHIVE_MANIFEST_VERSION;
+  let manifest: ArchiveManifest | null = null;
+  if (wantsManifest) {
+    const parsedManifest = manifestSchema.safeParse(section.data.manifest);
+    if (!parsedManifest.success) {
+      throw new ArchiveRejectedError(
+        'invalid_content',
+        'This export is missing its manifest or the manifest is damaged, so it cannot be restored.',
+        firstIssue(parsedManifest.error, `households.${index}.manifest`)
+      );
+    }
+    manifest = parsedManifest.data;
+  }
+
   const plants: ArchivedPlant[] = [];
+  const plantDigests: string[] = [];
   const plantIds = new Set<string>();
   for (let i = 0; i < section.data.plants.length; i += 1) {
     const parsed = archivedPlantSchema.safeParse(section.data.plants[i]);
@@ -337,9 +454,11 @@ export function readArchive(raw: unknown, sourceHouseholdId?: string | null): Va
     }
     plantIds.add(parsed.data.id);
     plants.push(parsed.data);
+    if (wantsManifest) plantDigests.push(entityDigest('plant', parsed.data));
   }
 
   const tasks: ArchivedTask[] = [];
+  const taskDigests: string[] = [];
   const taskIds = new Set<string>();
   for (let i = 0; i < section.data.tasks.length; i += 1) {
     const parsed = archivedTaskSchema.safeParse(section.data.tasks[i]);
@@ -358,6 +477,32 @@ export function readArchive(raw: unknown, sourceHouseholdId?: string | null): Va
     }
     taskIds.add(parsed.data.id);
     tasks.push(parsed.data);
+    if (wantsManifest) taskDigests.push(entityDigest('task', parsed.data));
+  }
+
+  if (manifest) {
+    // Before the digest, before any target is read, before any write: a file
+    // that does not hold what its manifest lists is refused, and the message
+    // says how far off it is in counts only — never a name or a note.
+    const plantsCheck = compareDigests(manifest.plantDigests, plantDigests);
+    const tasksCheck = compareDigests(manifest.taskDigests, taskDigests);
+    const agrees =
+      manifest.counts.plants === plants.length &&
+      manifest.plantDigests.length === plants.length &&
+      manifest.counts.tasks === tasks.length &&
+      manifest.taskDigests.length === tasks.length &&
+      plantsCheck.missing + plantsCheck.unexpected + tasksCheck.missing + tasksCheck.unexpected ===
+        0;
+    if (!agrees) {
+      throw new ArchiveRejectedError(
+        'manifest_mismatch',
+        'This export does not match its own manifest, so it may be cut short or have been edited. Nothing was restored. Download a fresh export and try again.',
+        {
+          plants: { manifest: manifest.counts.plants, file: plants.length, ...plantsCheck },
+          tasks: { manifest: manifest.counts.tasks, file: tasks.length, ...tasksCheck },
+        }
+      );
+    }
   }
 
   const household = { id: section.data.id, name: section.data.name, plants, tasks };
@@ -369,7 +514,13 @@ export function readArchive(raw: unknown, sourceHouseholdId?: string | null): Va
     .update(canonicalJson({ format: ARCHIVE_FORMAT, version, household }))
     .digest('hex');
 
-  return { version, exportedAt: envelope.data.exportedAt ?? null, digest, household };
+  return {
+    version,
+    exportedAt: envelope.data.exportedAt ?? null,
+    manifest: manifest ? 'verified' : 'absent',
+    digest,
+    household,
+  };
 }
 
 /** The distinct catalog ids an archive names, for the species-cache lookup. */

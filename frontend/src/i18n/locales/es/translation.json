@@ -2635,6 +2635,7 @@
       "newerVersion": "Esta exportación es de una versión más nueva de la aplicación (formato {{version}}). Actualiza la aplicación primero.",
       "version": "Esta aplicación no puede leer la versión de formato de esta exportación.",
       "invalid": "Esta exportación está incompleta o se modificó, así que no se puede restaurar.",
+      "manifest": "Esta exportación no coincide con su propia lista de contenido, así que puede estar incompleta o modificada. No se restauró nada. Descarga una exportación nueva e inténtalo de nuevo.",
       "notEmpty": "Este hogar no está vacío. Restaura en un hogar nuevo.",
       "otherArchive": "Este hogar se restauró desde otra exportación. Restaura en un hogar nuevo.",
       "changed": "Algo cambió desde que la revisaste. Vuelve a revisarla.",
@@ -2647,7 +2648,11 @@
       "from": "De «{{name}}», exportado el {{date}}",
       "plants": "Plantas: {{n}} (activas {{active}}, pasadas {{past}}, archivadas {{archived}}), con notas, reglas de la casa y etiquetas",
       "tasks": "Tareas y sus calendarios: {{n}}",
-      "lineage": "Vínculos de esquejes: {{n}}"
+      "lineage": "Vínculos de esquejes: {{n}}",
+      "manifest": {
+        "verified": "Comprobada con la lista de contenido de la propia exportación: no falta ni cambió nada.",
+        "absent": "Esta exportación es anterior a las listas de contenido, así que no podemos comprobar que no falte nada."
+      }
     },
     "notRestored": {
       "title": "Qué no se restaura",

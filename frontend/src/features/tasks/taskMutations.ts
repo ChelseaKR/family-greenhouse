@@ -23,6 +23,8 @@ import { toast } from '@/store/toastStore';
 import { useDoubleCareStore } from '@/store/doubleCareStore';
 import { readDuplicateCare } from './doubleCare';
 import { playHaptic } from '@/services/nativeHaptics';
+import { connectionStoreFor } from '@/services/connectionStatus';
+import { enqueueMutation } from '@/services/offlineQueue';
 
 export interface CompleteTaskVariables {
   taskId: string;
@@ -166,6 +168,22 @@ export function useCompleteTaskMutation(householdId: string | null) {
         );
       }
 
+      // If offline, queue the mutation for later replay instead of sending it.
+      const connection = connectionStoreFor(queryClient).getState();
+      if (!connection.online || !connection.reachable) {
+        const { expectedNextDue, confirmDuplicate } = {} as CompleteTaskVariables;
+        await enqueueMutation({
+          type: 'complete',
+          taskId,
+          householdId: householdId ?? '',
+          args: { expectedNextDue, confirmDuplicate },
+          queryKey: ['tasks', householdId],
+        });
+        toast.info(t('tasks.queuedForSync', "Queued — will sync when you're back online"));
+        // Return early — don't let TanStack Query call mutationFn.
+        throw new Error('__offline_queued__');
+      }
+
       return { previousTasks, previousPlants };
     },
     onSuccess: (updatedTask, variables) => {
@@ -184,6 +202,11 @@ export function useCompleteTaskMutation(householdId: string | null) {
       toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');
     },
     onError: (err, variables, context) => {
+      // If we queued the mutation for offline replay, the optimistic update
+      // stays on screen — don't roll it back.
+      if (err instanceof Error && err.message === '__offline_queued__') {
+        return;
+      }
       context?.previousTasks.forEach(([key, value]) => queryClient.setQueryData(key, value));
       context?.previousPlants.forEach(([key, value]) => queryClient.setQueryData(key, value));
       // Double-care: the server held the completion back (nothing was logged)
@@ -224,8 +247,10 @@ function useOptimisticTasksMutation(
   householdId: string | null,
   mutationFn: (taskId: string) => Promise<Task>,
   patchFor: (taskId: string) => TasksPatch,
-  successMessage: string
+  successMessage: string,
+  queueType: 'claim' | 'unclaim'
 ) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
@@ -238,11 +263,27 @@ function useOptimisticTasksMutation(
       queryClient.setQueriesData<TaskWithCoverage[]>({ queryKey: ['tasks', householdId] }, (old) =>
         old ? patch(old) : old
       );
+
+      // If offline, queue the mutation for later replay.
+      const connection = connectionStoreFor(queryClient).getState();
+      if (!connection.online || !connection.reachable) {
+        await enqueueMutation({
+          type: queueType,
+          taskId,
+          householdId: householdId ?? '',
+          args: {},
+          queryKey: ['tasks', householdId],
+        });
+        toast.info(t('tasks.queuedForSync', "Queued — will sync when you're back online"));
+        throw new Error('__offline_queued__');
+      }
+
       return { previous };
     },
     onError: (err, _taskId, context) => {
-      // Roll the optimistic patch back before surfacing the error (e.g. the
-      // 409 "Already claimed" race loss).
+      if (err instanceof Error && err.message === '__offline_queued__') {
+        return;
+      }
       context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
       toast.error(getErrorMessage(err));
     },
@@ -268,7 +309,8 @@ export function useClaimTaskMutation(householdId: string | null) {
             }
           : task
       ),
-    t('tasks.claimedToast')
+    t('tasks.claimedToast'),
+    'claim'
   );
 }
 
@@ -283,7 +325,8 @@ export function useUnclaimTaskMutation(householdId: string | null) {
           ? { ...task, assignedTo: null, assignedToName: null, assignmentSource: null }
           : task
       ),
-    t('tasks.unclaimedToast')
+    t('tasks.unclaimedToast'),
+    'unclaim'
   );
 }
 
@@ -338,11 +381,32 @@ export function useSkipCycleMutation(householdId: string | null) {
         reason,
         expectedNextDue: task.nextDue,
       }),
+    onMutate: async ({ task, reason }: { task: Task; reason: SnoozeReason }) => {
+      // If offline, queue the mutation for later replay.
+      const connection = connectionStoreFor(queryClient).getState();
+      if (!connection.online || !connection.reachable) {
+        await enqueueMutation({
+          type: 'snooze',
+          taskId: task.id,
+          householdId: householdId ?? '',
+          args: { days: task.frequency, reason, expectedNextDue: task.nextDue },
+          queryKey: ['tasks', householdId],
+        });
+        toast.info(t('tasks.queuedForSync', "Queued — will sync when you're back online"));
+        throw new Error('__offline_queued__');
+      }
+      return undefined;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       playHaptic('snoozed');
       toast.success(t('tasks.skippedToast'));
     },
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError: (err) => {
+      if (err instanceof Error && err.message === '__offline_queued__') {
+        return;
+      }
+      toast.error(getErrorMessage(err));
+    },
   });
 }

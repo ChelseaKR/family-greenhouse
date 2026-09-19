@@ -39,7 +39,8 @@ const PREVIEW = {
     householdId: 'h1',
     name: 'The Old House',
     exportedAt: '2026-09-01T00:00:00.000Z',
-    version: 1,
+    version: 2,
+    manifest: 'verified',
   },
   counts: {
     plants: 5,
@@ -107,8 +108,8 @@ describe('ArchiveImportCard', () => {
   it('names a newer export version and uploads nothing', async () => {
     answer(() => HttpResponse.json(PREVIEW));
     renderCard();
-    await chooseFile(exportFile({ version: 2 }));
-    expect(await screen.findByText(/format 2/)).toBeInTheDocument();
+    await chooseFile(exportFile({ version: 3 }));
+    expect(await screen.findByText(/format 3/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Check this export' })).toBeNull();
     expect(requests).toHaveLength(0);
   });
@@ -160,6 +161,67 @@ describe('ArchiveImportCard', () => {
       await screen.findByText('Restored “The Old House”. Plants: 5, tasks: 3.')
     ).toBeInTheDocument();
     expect(requests[1]).toMatchObject({ mode: 'commit', confirmDigest: PREVIEW.digest });
+  });
+
+  it('says whether the export was checked against its own contents list', async () => {
+    answer(() => HttpResponse.json(PREVIEW));
+    renderCard();
+    await chooseFile(exportFile({ version: 2 }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Check this export' }));
+    const checked = await screen.findByRole('region', { name: 'What this restores' });
+    expect(
+      within(checked).getByText(
+        'Checked against the export’s own contents list: nothing is missing or changed.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('says so when an older export has no contents list to check, and still restores it', async () => {
+    answer(() =>
+      HttpResponse.json({
+        ...PREVIEW,
+        source: { ...PREVIEW.source, version: 1, manifest: 'absent' },
+      })
+    );
+    renderCard();
+    // A file the released app wrote: version 1.
+    await chooseFile(exportFile({ version: 1 }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Check this export' }));
+    const older = await screen.findByRole('region', { name: 'What this restores' });
+    expect(
+      within(older).getByText(
+        'This export is from before contents lists, so we can’t check that nothing is missing.'
+      )
+    ).toBeInTheDocument();
+    expect(within(older).queryByText(/Checked against the export’s own contents list/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Restore into this household' })).toBeInTheDocument();
+    // The version 1 file was sent as version 1, untouched.
+    expect((requests[0].archive as Record<string, unknown>).version).toBe(1);
+  });
+
+  it('answers a file that does not match its contents list, and nothing was restored', async () => {
+    server.use(
+      http.post(ROUTE, () =>
+        HttpResponse.json(
+          {
+            message: 'This export does not match its own manifest.',
+            details: {
+              code: 'manifest_mismatch',
+              plants: { manifest: 5, file: 4, missing: 1, unexpected: 0 },
+              tasks: { manifest: 3, file: 3, missing: 0, unexpected: 0 },
+            },
+          },
+          { status: 400 }
+        )
+      )
+    );
+    renderCard();
+    await chooseFile(exportFile({ version: 2 }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Check this export' }));
+    expect(
+      await screen.findByText(/doesn’t match its own contents list.*Nothing was restored/)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore into this household' })).toBeNull();
   });
 
   it('points a non-empty household at creating a new one, with no restore button', async () => {

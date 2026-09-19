@@ -245,6 +245,17 @@ What to expect, none of which is a bug:
   `metadata.outcome` (`complete`, `plan_limit`, `write_failed`), the counts
   and the archive digest — never the file or a note.
 
+- **Format versions.** Exports are version 2 since #669: version 1 plus a
+  per-household `manifest` (counts and one SHA-256 per plant and task). The
+  restore reads both. A version 2 file is checked against its manifest before
+  anything is written; `400 manifest_mismatch` means the file is cut short or
+  was edited (the response gives plant and task counts only, never content).
+  Have them download a fresh export. A version 1 file has no manifest, so
+  the preview says its completeness could not be checked; it is otherwise
+  restored the same. A restore begun from a version 1 file cannot be finished
+  from a version 2 file of the same household (a different archive:
+  `409 other_archive`); finish it with the file it started from.
+
 A newer export version than the deployed build reads is refused by name
 (`400 unsupported_version`); that resolves itself once the newer build ships.
 

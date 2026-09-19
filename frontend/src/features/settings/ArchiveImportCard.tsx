@@ -36,6 +36,7 @@ const ERROR_KEYS: Record<ArchiveFileError | string, string> = {
   unsafe_content: 'invalid',
   invalid_content: 'invalid',
   duplicate_id: 'invalid',
+  manifest_mismatch: 'manifest',
   household_not_found: 'invalid',
   not_empty: 'notEmpty',
   other_archive: 'otherArchive',
@@ -285,6 +286,11 @@ function ArchivePreview({
           name: preview.source.name,
           date: formatDate(preview.source.exportedAt) || '—',
         })}
+      </p>
+      <p className="text-gray-600">
+        {t(
+          `archiveImport.preview.manifest.${preview.source.manifest === 'verified' ? 'verified' : 'absent'}`
+        )}
       </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>

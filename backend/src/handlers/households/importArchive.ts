@@ -9,8 +9,8 @@
  *
  * Who and where:
  *   - an ADMIN of the target household, a human (never an API key);
- *   - into an EMPTY household only (no plants, tasks or spaces) — version 1
- *     never merges. Restoring into "a new household" is creating one
+ *   - into an EMPTY household only (no plants, tasks or spaces) — neither
+ *     format version merges. Restoring into "a new household" is creating one
  *     (`POST /households`, which applies the homes cap) and restoring into it.
  *
  * What is never imported: members (assignments to non-members are cleared and
@@ -72,7 +72,14 @@ const importArchiveRequestSchema = z.object({
 
 export interface ArchiveImportPreview {
   digest: string;
-  source: { householdId: string; name: string; exportedAt: string | null; version: number };
+  source: {
+    householdId: string;
+    name: string;
+    exportedAt: string | null;
+    version: number;
+    /** `verified` against the file's manifest, or `absent` (a version 1 file has none). */
+    manifest: ValidatedArchive['manifest'];
+  };
   counts: ArchiveImportCounts;
   notRestored: ArchiveNotRestored;
   planLimit: {
@@ -172,6 +179,7 @@ export const importArchive = createHandler(
           name: archive.household.name,
           exportedAt: archive.exportedAt,
           version: archive.version,
+          manifest: archive.manifest,
         },
         counts: importPlan.counts,
         notRestored: importPlan.notRestored,
@@ -293,6 +301,7 @@ export const importArchive = createHandler(
         outcome: 'complete',
         digest: importPlan.digest,
         formatVersion: archive.version,
+        manifest: archive.manifest,
         sourceHouseholdId: archive.household.id,
         resumed: state === 'resumable',
         landed,

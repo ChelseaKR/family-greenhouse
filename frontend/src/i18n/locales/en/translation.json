@@ -2584,6 +2584,7 @@
       "newerVersion": "This export is from a newer version of the app (format {{version}}). Update the app first.",
       "version": "This app can’t read this export’s format version.",
       "invalid": "This export is incomplete or was edited, so it can’t be restored.",
+      "manifest": "This export doesn’t match its own contents list, so it may be cut short or edited. Nothing was restored. Download a fresh export and try again.",
       "notEmpty": "This household isn’t empty. Restore into a new household.",
       "otherArchive": "This household was restored from another export. Restore into a new household.",
       "changed": "Something changed since you checked. Check again.",
@@ -2596,7 +2597,11 @@
       "from": "From “{{name}}”, exported {{date}}",
       "plants": "Plants: {{n}} (active {{active}}, past {{past}}, archived {{archived}}), with notes, house rules and tags",
       "tasks": "Tasks and their schedules: {{n}}",
-      "lineage": "Cutting links: {{n}}"
+      "lineage": "Cutting links: {{n}}",
+      "manifest": {
+        "verified": "Checked against the export’s own contents list: nothing is missing or changed.",
+        "absent": "This export is from before contents lists, so we can’t check that nothing is missing."
+      }
     },
     "notRestored": {
       "title": "Not restored",
