@@ -22,6 +22,7 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
 import { atCap, type Limit } from '../models/plans.js';
 import { Plant, PlantStatus, SpeciesSource, DynamoDBItem } from '../models/types.js';
+import { parsePassportSummary, type PassportSummary } from '../models/plantPassport.js';
 // The same resolver the sitter brief uses, so "which of the household's own
 // words may leave the household" has ONE answer across every link we mint.
 import { resolveCareNote } from '../models/sitterBriefFields.js';
@@ -1179,6 +1180,15 @@ export interface PlantShare {
    * purge.
    */
   plantSnapshot: PlantShareSnapshot;
+  /**
+   * The plant passport's frozen summary (#676), present only on a link made
+   * by `POST /plants/{id}/passport-share` while the feature is on. It sits
+   * BESIDE the snapshot rather than inside it, so the cutting routes' card
+   * (`plantSnapshot`) is byte-for-byte what it was. Read back through
+   * `parsePassportSummary`: a stored block that is not exactly a summary is
+   * null here, which reads as a plain cutting link.
+   */
+  passport?: PassportSummary | null;
   createdBy: string;
   createdAt: string;
   expiresAt: string;
@@ -1199,7 +1209,8 @@ export interface PlantShare {
 export async function createPlantShare(
   householdId: string,
   plantId: string,
-  userId: string
+  userId: string,
+  options: { passport?: PassportSummary } = {}
 ): Promise<PlantShare | null> {
   const plant = await getPlant(householdId, plantId);
   if (!plant) return null;
@@ -1222,6 +1233,7 @@ export async function createPlantShare(
       imageUrl: plant.imageUrl,
       tags: plant.tags,
     },
+    passport: options.passport ?? null,
     createdBy: userId,
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
@@ -1238,6 +1250,8 @@ export async function createPlantShare(
     plantId: share.plantId,
     householdId: share.householdId,
     plantSnapshot: share.plantSnapshot,
+    // Absent (not null) on every cutting link, so those rows are unchanged.
+    ...(share.passport ? { passport: share.passport } : {}),
     createdBy: share.createdBy,
     createdAt: share.createdAt,
     expiresAt: share.expiresAt,
@@ -1371,6 +1385,7 @@ export async function getPlantShare(code: string): Promise<PlantShare | null> {
       imageUrl: snapshot.imageUrl ?? null,
       tags: snapshot.tags ?? [],
     },
+    passport: parsePassportSummary(item.passport),
     createdBy: item.createdBy as string,
     createdAt: item.createdAt as string,
     expiresAt: item.expiresAt as string,

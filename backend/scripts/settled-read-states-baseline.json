@@ -70,12 +70,13 @@
       "callers": ["handlers/plants/handler.ts::listPhotos"]
     },
     "services/taskService.ts::getTaskCompletions::unpaginated-limit": {
-      "reason": "Recent-history page for one plant, newest first, `limit` defaulting to 20. Every caller wants the top of the list, not all of it: digestReport.gatherLastCare asks for exactly 1 ('when was this last cared for'), and the plant and tag history views render a bounded 'recent care' list. Year in Review, which DOES need every row, deliberately uses the uncapped path (taskService.getHouseholdActivity) after this cap produced a wrong total.",
+      "reason": "Recent-history page for one plant, newest first, `limit` defaulting to 20. Every caller wants the top of the list, not all of it: digestReport.gatherLastCare asks for exactly 1 ('when was this last cared for'), and the plant and tag history views render a bounded 'recent care' list. Year in Review, which DOES need every row, deliberately uses the uncapped path (taskService.getHouseholdActivity) after this cap produced a wrong total. The plant passport (createPassportShare) reads 100 and counts the last 90 days from them, and it does not publish the ceiling as a count: when the read comes back full and its oldest entry is still inside the window it freezes `atLeast: true`, and the note it writes says 'at least N'. A read that throws is never frozen at all.",
       "callers": [
         "handlers/plantTags/handler.ts::readHistory",
         "handlers/plants/handler.ts::getPlant",
         "handlers/plants/handler.ts::getPlantHistory",
-        "services/digestReport.ts::gatherLastCare"
+        "services/digestReport.ts::gatherLastCare",
+        "services/plantPassport.ts::createPassportShare"
       ]
     },
     "services/doubleCare.ts::findRecentDuplicate::unpaginated-limit": {
