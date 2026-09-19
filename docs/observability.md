@@ -45,6 +45,55 @@ keeps the SLO, route wiring, release correlation, and metric dimensions from dri
   Lambda log group because Cognito confirmation precedes login; Stripe-confirmed events land in the
   billing Lambda log group. Select all three groups for a complete funnel query.
 
+## What the latency objective is made of
+
+The standing burn against `p95 <= 500ms` (#730) is a cold-start burn, and the synthetic traffic in
+the population is not what causes it. Measured 2026-09-19, read-only, from
+`/aws/apigateway/family-greenhouse-production` over the seven days to 14:13Z: 1,988 requests, with
+`GET /health` left out because the indicator leaves it out. The access log carries no user agent, so
+a request counts as a probe or smoke run when its source IP is in GitHub's published Actions ranges
+(`api.github.com/meta`), and the owner's own IP is set aside as testing.
+
+| population                                                 | requests | p50 ms | p95 ms | over 500 ms |
+| ---------------------------------------------------------- | -------: | -----: | -----: | ----------: |
+| everything the indicator counts                            |    1,988 |     51 |  1,671 |       18.2% |
+| from GitHub Actions ranges                                 |    1,391 |     44 |  1,221 |       10.2% |
+| — the uptime probe's preflight and telemetry POST          |    1,223 |     41 |    207 |        3.9% |
+| — the post-deploy smoke run (every route, once per deploy) |      168 |    685 |  2,619 |       56.0% |
+| real visitors (the rest, owner's IP excluded)              |      453 |     90 |  1,053 |       36.2% |
+| — CORS preflight                                           |      102 |    764 |    915 |       65.7% |
+| — `GET /billing/plans` (nearly all before the warm ping)   |       70 |    890 |  1,043 |       65.7% |
+| — every other route                                        |       81 |    446 |  2,322 |       48.1% |
+
+- **Probes dilute the burn; they do not cause it.** They are 70% of the requests and 10% of them
+  are slow, so removing them raises the burn from 3.6x to 7.2x. The real-visitor p95 is about 1.0 s
+  (971 ms if two multi-request sessions that may be the owner's are also set aside, n = 371). No
+  measurement change to exclude probes would improve the number, so none is proposed. Sixty of the
+  72 distinct real IPs had at least one request over 500 ms.
+- **The slow requests are cold starts.** The preflight does no work (it answers in about 0.1 ms
+  locally), yet two thirds of real preflights are over 500 ms. The uptime probe's own `GET /health`
+  is over 500 ms on 89% of its runs: an idle container does not survive its 15-minute interval.
+- **A cold request pays twice.** X-Ray shows function initialization of 586 ms (`api`) to 778 ms
+  (`plants`), then a first invocation of 650 to 800 ms in `api`, `plants`, `tasks`, `households`, `me`
+  and `climate`, against 80 to 250 ms for the same routes on a warm container. The first DynamoDB call
+  in a fresh container takes 240 to 410 ms in those groups and 580 to 770 ms in `api` (`/health`) and
+  `billing`; the same call warm takes 40 to 80 ms. Those functions have 256 MB, about 14% of a CPU
+  during an invocation, which fits work that takes a few milliseconds locally taking hundreds here.
+  That is an inference from the timings, not a measurement of the allocation.
+- **What has moved it.** The billing warm ping (#805) took real `GET /billing/plans` from 58.4% over
+  500 ms (214 requests) to 0 of 13 since it went live on 2026-09-18. The bundles no longer carry every
+  command class of every SDK client (`backend/esbuild.options.js`): 18.5% fewer bytes across the 19
+  bundles, and 18% to 34% less time to import one in a fresh process.
+- **What code alone cannot do.** A cold request is initialization plus a first call, and the floor of
+  the first is above 500 ms, so the share over the objective falls only as the share of cold requests
+  falls. That is a decision about spend or about the objective, and it stays with the owner (#730).
+
+Two facts for anyone touching the build. `NODE_OPTIONS=--enable-source-maps` is set on every Lambda,
+but the bundle names `plants.js.map` and the zip ships `handler.mjs.map`, so production stack traces
+are unmapped (`file:///var/task/handler.mjs:195:77703`). The flag costs nothing today for that reason;
+renaming the map so it resolves would add about 50 ms to the local import and 75 MB of resident memory
+on a 256 MB function.
+
 ## External availability checks
 
 Almost every alarm in `infrastructure/modules/monitoring` uses
