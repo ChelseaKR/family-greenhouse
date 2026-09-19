@@ -51,6 +51,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   The privacy policy and the App Store privacy notes now describe the push
   token as a device identifier used only to deliver notifications.
 
+- **Android App Links, waiting on two Play fingerprints (#469 §2).** The
+  Android app now declares an `autoVerify` intent-filter for
+  `familygreenhouse.net`, generated from the same claim as the iOS universal
+  links (`npm run aasa`), so invites, sitter links and reminder links open the
+  app on Android exactly where they do on iOS, and never for `/account-deletion`,
+  sign-in or any public page. `assetlinks.json` is generated from the Play app
+  signing and upload certificates' SHA-256 fingerprints in
+  `frontend/scripts/asset-links.mjs`; until those are pasted in the file is not
+  written, `aasa:check` and `well-known:check` refuse a placeholder, a SHA-1, a
+  malformed or duplicated value, and all three deploy paths refuse to upload a
+  file carrying the `SHA256_PENDING` sentinel. Once the values are real,
+  `npm run mobile:release` refuses an Android build unless the live file
+  matches the committed one. Nothing changes for Android users until then.
+
 ### Changed
 
 - **The iPhone app follows every text size, and the keyboard's Prev / Next /

@@ -247,7 +247,7 @@ export const STEPS = [
     script: 'aasa:check',
     workspace: 'frontend',
     weight: 0,
-    why: 'the iOS universal-link claim drifting from App.tsx — a claimed path the app no longer routes opens the app onto "Nothing growing here", and a public entry point that gets claimed by accident (/account-deletion is one wildcard from /account) becomes unreachable for anyone without the app',
+    why: 'the iOS universal-link claim, or the Android App Links intent-filter generated from it, drifting from App.tsx — a claimed path the app no longer routes opens the app onto "Nothing growing here", a public entry point that gets claimed by accident (/account-deletion is one wildcard from /account) becomes unreachable for anyone without the app, and an assetlinks.json built from placeholder fingerprints publishes a claim Android can never verify',
   },
   {
     id: 'brand:check',

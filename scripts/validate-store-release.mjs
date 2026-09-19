@@ -5,6 +5,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
+import {
+  APP_LINKS_HOST,
+  committedAssetLinks,
+  readManifestBlock,
+  signingCertificateState,
+} from '../frontend/scripts/asset-links.mjs';
+
 const root = resolve(import.meta.dirname, '..');
 const production = process.argv.includes('--production');
 const synced = process.argv.includes('--synced');
@@ -572,6 +579,57 @@ if (synced) {
     if (!builtText.includes(process.env.VITE_API_URL)) {
       fail('Built frontend does not contain VITE_API_URL; production variables were not embedded');
     }
+  }
+}
+
+// Android App Links (#469 §2). The intent-filter is generated and gated by
+// `npm run aasa:check`; what is checked HERE is the release-time half: that a
+// store build which declares `autoVerify` is not shipped ahead of the file
+// Android verifies it against.
+//
+// Pending fingerprints are deliberately NOT fatal in --production. Play creates
+// the app signing key when the first bundle is uploaded (Play Console Help,
+// "Use Play App Signing"), so the app-signing fingerprint cannot exist before
+// that first upload, and refusing the build would deadlock it. The cost of a
+// bundle with pending fingerprints is the status quo, not a regression: on
+// Android 12+ its links open the browser exactly as they do with no
+// intent-filter, older releases offer a chooser, and Android verifies again on
+// every update. So it is printed, not refused. Once the fingerprints are real,
+// the LIVE file must match the committed one before a store build is made —
+// verification happens at install, and a build that reaches devices before
+// the file does records a failure.
+const appLinks = readManifestBlock(read('frontend/android/app/src/main/AndroidManifest.xml'));
+const appLinksDeclared = /android:autoVerify="true"/.test(appLinks.block);
+const certificates = signingCertificateState();
+if (appLinksDeclared && certificates.state === 'invalid') {
+  fail(`Android App Links signing certificates are invalid: ${certificates.problems.join('; ')}`);
+} else if (appLinksDeclared && certificates.state === 'pending') {
+  const message =
+    'Android App Links: the manifest declares autoVerify but the Play signing-certificate ' +
+    'fingerprints in frontend/scripts/asset-links.mjs are still placeholders, so Android ' +
+    'links keep opening the browser. Expected only until the first Play upload creates the ' +
+    'app signing key; see docs/mobile.md, "Android App Links".';
+  if (production) console.log(`NOTE: ${message}`);
+  else warn(message);
+} else if (appLinksDeclared && certificates.state === 'ready' && production) {
+  const url = `https://${APP_LINKS_HOST}/.well-known/assetlinks.json`;
+  try {
+    const response = await fetch(url, { redirect: 'manual' });
+    const contentType = response.headers.get('content-type') ?? '';
+    if (response.status !== 200) {
+      fail(`${url} answered ${response.status}; deploy the web app before building for Play`);
+    } else if (!contentType.startsWith('application/json')) {
+      fail(`${url} is served as ${contentType || 'no content type'}, not application/json`);
+    } else if (
+      JSON.stringify(await response.json()) !== JSON.stringify(JSON.parse(committedAssetLinks()))
+    ) {
+      fail(
+        `${url} is not the committed frontend/public/.well-known/assetlinks.json; deploy the ` +
+          'web app (the file is live-cached for at most 300s) before building for Play'
+      );
+    }
+  } catch (error) {
+    fail(`Could not fetch ${url} to confirm App Links will verify: ${String(error)}`);
   }
 }
 

@@ -6,11 +6,11 @@
  *
  * `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association`
  * are the two documents that let an installed app claim its own domain's
- * links. `apple-app-site-association` is now in the tree;
- * `assetlinks.json` is not, because the Android half still needs the release
- * keystore's SHA-256 fingerprint. Either way the deploy path has to carry
- * them, and until this gate existed it would not have. Three separate ways,
- * none of which reports an error:
+ * links. `apple-app-site-association` is in the tree; `assetlinks.json` is
+ * generated the moment the two Play signing-certificate fingerprints are
+ * pasted in (frontend/scripts/asset-links.mjs) and is absent until then.
+ * Either way the deploy path has to carry them, and until this gate existed
+ * it would not have. Three separate ways, none of which reports an error:
  *
  *   1. The immutable asset sync in both CD workflows and `scripts/deploy.sh`
  *      excludes `*.json`, and the second sync is `--exclude "*" --include
@@ -87,6 +87,20 @@
  * here unconditionally, for the reason the whole file exists: CI is not the
  * last thing that can publish this object. `scripts/deploy.sh` is run by hand.
  *
+ * ## The same refusal for Android's fingerprints
+ *
+ * `assetlinks.json` names the SHA-256 fingerprints of the Play app signing and
+ * upload certificates, and a wrong one fails exactly as silently as a wrong
+ * Team ID: Google's verifier fetches the file with a 200 and every App Link
+ * keeps opening the browser. The fingerprints are config
+ * (`SIGNING_CERTIFICATES` in frontend/scripts/asset-links.mjs), held as
+ * `SHA256_PENDING…` sentinels until they are pasted from Play Console, and
+ * `androidAssetLinksProblems()` refuses a committed file that carries a
+ * sentinel, a SHA-1, a lowercase or malformed value, a one-byte stand-in, only
+ * one of the two certificates, or the wrong package. All three deploy paths
+ * grep the built file for the sentinel prefix and exit 1, asserted here
+ * unconditionally for the same reason as the Team ID refusal.
+ *
  * ## What it deliberately does not check
  *
  * Nothing here asserts that a fingerprint is correct, that a Team ID of the
@@ -95,8 +109,9 @@
  * `autoVerify="true"` and no matching `assetlinks.json` fails verification on
  * Android 12+ — so this gate covers the serving side only, which is the half
  * the repository can be right about on its own. Whether the Apple file's
- * CLAIM matches the app's route table is `aasa:check`
- * (frontend/scripts/build-app-site-association.mjs). See docs/mobile.md.
+ * CLAIM matches the app's route table, and whether Android's intent-filter
+ * mirrors it, is `aasa:check` (frontend/scripts/build-app-site-association.mjs
+ * and frontend/scripts/build-asset-links.mjs). See docs/mobile.md.
  *
  * This script reads. It never edits a workflow to match.
  */
@@ -112,6 +127,12 @@ import {
   TEAM_ID_PLACEHOLDER,
   teamIdProblem,
 } from '../frontend/scripts/app-site-association.mjs';
+import {
+  ANDROID_PACKAGE,
+  FINGERPRINT_PLACEHOLDER_PREFIX,
+  HANDLE_ALL_URLS,
+  signingCertificateState,
+} from '../frontend/scripts/asset-links.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -123,6 +144,17 @@ const ASSOCIATION_FILES = ['assetlinks.json', 'apple-app-site-association'];
 
 /** The one of the two whose `appID` names an Apple Team ID. */
 const APPLE_ASSOCIATION = 'apple-app-site-association';
+
+/** The one of the two that names Android signing-certificate fingerprints. */
+const ANDROID_ASSOCIATION = 'assetlinks.json';
+
+/** Where the real fingerprints come from, said the same way everywhere. */
+const FINGERPRINT_SOURCE =
+  'The real values are at Play Console → Test and release → App integrity → App signing: ' +
+  'the "SHA-256 certificate fingerprint" of BOTH the app signing key certificate and the ' +
+  'upload key certificate. Set them in SIGNING_CERTIFICATES in ' +
+  'frontend/scripts/asset-links.mjs and run `npm run aasa --workspace frontend`; the file is ' +
+  'generated, and `npm run aasa:check` refuses a hand-edited one.';
 
 /** Where an association file would be committed, to be copied into `dist/`. */
 const PUBLIC_WELL_KNOWN = 'frontend/public/.well-known';
@@ -277,6 +309,60 @@ function appleAppIdProblems(parsed) {
   return found;
 }
 
+/**
+ * The Android file's statements, checked for what makes it unshippable: a
+ * fingerprint that is not a real SHA-256 digest, only one of the two
+ * certificates, or a package that is not the app's. Same predicate as the
+ * generator (`signingCertificateState()`), so the thing that WRITES the file
+ * and the thing that CHECKS it cannot disagree about what may ship.
+ */
+function androidAssetLinksProblems(parsed) {
+  const where = `${PUBLIC_WELL_KNOWN}/${ANDROID_ASSOCIATION}`;
+  if (!Array.isArray(parsed) || parsed.length !== 1) {
+    return [
+      `${where}: expected exactly one statement. The file is generated from ` +
+        `SIGNING_CERTIFICATES; regenerate it. ${FINGERPRINT_SOURCE}`,
+    ];
+  }
+  const [statement] = parsed;
+  const found = [];
+  if (!Array.isArray(statement?.relation) || !statement.relation.includes(HANDLE_ALL_URLS)) {
+    found.push(`${where}: the statement does not grant ${HANDLE_ALL_URLS}, so it claims no links.`);
+  }
+  const target = statement?.target ?? {};
+  if (target.namespace !== 'android_app' || target.package_name !== ANDROID_PACKAGE) {
+    found.push(
+      `${where}: the target is ${JSON.stringify(target.namespace)}/` +
+        `${JSON.stringify(target.package_name)}, not android_app/${ANDROID_PACKAGE}, the ` +
+        'package the apps are built with (frontend/capacitor.config.ts, docs/mobile.md).'
+    );
+  }
+  const fingerprints = target.sha256_cert_fingerprints;
+  if (!Array.isArray(fingerprints) || fingerprints.length !== 2) {
+    found.push(
+      `${where}: this file CANNOT SHIP — it must name exactly two certificates (the Play app ` +
+        'signing certificate, which every install from Play carries, and the upload ' +
+        'certificate), and it names ' +
+        `${Array.isArray(fingerprints) ? fingerprints.length : 'none'}. ${FINGERPRINT_SOURCE}`
+    );
+    return found;
+  }
+  const { state, problems } = signingCertificateState({
+    playAppSigning: fingerprints[0],
+    upload: fingerprints[1],
+  });
+  if (state !== 'ready') {
+    found.push(
+      `${where}: this file CANNOT SHIP — ` +
+        `${state === 'pending' ? 'its fingerprints are placeholders' : problems.join('; ')}. ` +
+        "Published as-is it parses, uploads, and is fetched successfully by Google's verifier, " +
+        'and every App Link silently keeps opening the browser. ' +
+        FINGERPRINT_SOURCE
+    );
+  }
+  return found;
+}
+
 // --- The deploy paths -------------------------------------------------------
 
 for (const { file, dist, viaArtifact } of DEPLOY_PATHS) {
@@ -355,31 +441,31 @@ for (const { file, dist, viaArtifact } of DEPLOY_PATHS) {
           `as application/json.`
       );
     }
-    // The placeholder refusal. Asserted for the Apple file in every deploy
-    // path, present or absent, because a deploy is the last thing that can
-    // publish this object and `scripts/deploy.sh` is run by hand without CI.
-    // Both halves are required: a `grep` whose failure nobody acts on is a
-    // gate that cannot fail.
-    if (name === APPLE_ASSOCIATION) {
-      const refusalAt = commands.findIndex(
-        (line) =>
-          line.includes('grep') && line.includes(TEAM_ID_PLACEHOLDER) && line.includes(source)
+    // The placeholder refusal. Asserted for both files in every deploy path,
+    // present or absent, because a deploy is the last thing that can publish
+    // these objects and `scripts/deploy.sh` is run by hand without CI. Both
+    // halves are required: a `grep` whose failure nobody acts on is a gate
+    // that cannot fail.
+    const sentinel =
+      name === APPLE_ASSOCIATION ? TEAM_ID_PLACEHOLDER : FINGERPRINT_PLACEHOLDER_PREFIX;
+    const whereToFind = name === APPLE_ASSOCIATION ? TEAM_ID_SOURCE : FINGERPRINT_SOURCE;
+    const refusalAt = commands.findIndex(
+      (line) => line.includes('grep') && line.includes(sentinel) && line.includes(source)
+    );
+    if (refusalAt === -1) {
+      problems.push(
+        `${file}: nothing refuses to publish ${source} when it carries the placeholder ` +
+          `\`${sentinel}\`. Add a guard that greps the file for the sentinel and exits 1 ` +
+          `before the upload. ${whereToFind}`
       );
-      if (refusalAt === -1) {
-        problems.push(
-          `${file}: nothing refuses to publish ${source} when it carries the placeholder Team ` +
-            `ID \`${TEAM_ID_PLACEHOLDER}\`. Add a guard that greps the file for the sentinel ` +
-            `and exits 1 before the upload. ${TEAM_ID_SOURCE}`
-        );
-      } else if (
-        !commands.slice(refusalAt + 1, refusalAt + 6).some((line) => /^exit 1$/.test(line))
-      ) {
-        problems.push(
-          `${file}: the \`${TEAM_ID_PLACEHOLDER}\` grep over ${source} is not followed by an ` +
-            `\`exit 1\`, so it reports the placeholder and publishes it anyway. A check whose ` +
-            'failure nothing acts on is a check that cannot fail.'
-        );
-      }
+    } else if (
+      !commands.slice(refusalAt + 1, refusalAt + 6).some((line) => /^exit 1$/.test(line))
+    ) {
+      problems.push(
+        `${file}: the \`${sentinel}\` grep over ${source} is not followed by an ` +
+          `\`exit 1\`, so it reports the placeholder and publishes it anyway. A check whose ` +
+          'failure nothing acts on is a check that cannot fail.'
+      );
     }
 
     const maxAge = upload.match(/--cache-control\s+"?max-age=(\d+)/);
@@ -460,6 +546,8 @@ if (existsSync(join(ROOT, PUBLIC_WELL_KNOWN))) {
 
     if (name === APPLE_ASSOCIATION) {
       problems.push(...appleAppIdProblems(parsed));
+    } else {
+      problems.push(...androidAssetLinksProblems(parsed));
     }
   }
 }
