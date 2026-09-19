@@ -352,7 +352,7 @@ export function DashboardPage() {
             hint="Takes less than a minute."
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 large-text:grid-cols-1">
             {plants.slice(0, 8).map((plant) => (
               <Link
                 key={plant.id}
@@ -855,7 +855,7 @@ function TaskItem({
           )}
         </div>
       </div>
-      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end [&>button]:w-full sm:[&>button]:w-auto large-text:grid-cols-1">
         <ClaimControls
           task={task}
           onClaim={onClaim}

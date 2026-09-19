@@ -1,6 +1,7 @@
 /**
  * Native-shell setup that runs before the app: the launch-screen fallback,
- * and keeping the focused field in view when the keyboard opens.
+ * keeping the focused field in view when the keyboard opens, and the iOS
+ * keyboard's Prev / Next / Done bar.
  *
  * **This must stay the second import in `main.tsx`, directly after
  * `telemetryBoot`.** `capacitor.config.ts` keeps the native launch screen up
@@ -14,9 +15,14 @@
  * Same reasoning as telemetryBoot.ts, one module later. Outside the shells
  * this does nothing.
  */
-import { armNativeSplashFallback, initNativeKeyboardScroll } from './services/nativeShell';
+import {
+  armNativeSplashFallback,
+  initNativeKeyboardScroll,
+  restoreKeyboardAccessoryBar,
+} from './services/nativeShell';
 
 armNativeSplashFallback();
-// Not order-sensitive like the line above; it lives here because this is the
+// Not order-sensitive like the line above; they live here because this is the
 // one native-shell entry point main.tsx already has.
 initNativeKeyboardScroll();
+restoreKeyboardAccessoryBar();

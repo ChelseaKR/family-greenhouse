@@ -78,7 +78,7 @@ export function PreferencesSettings() {
         {/* Density */}
         <fieldset>
           <legend className="label">{t('settings.preferences.density')}</legend>
-          <div className="flex gap-2" role="radiogroup">
+          <div className="flex flex-wrap gap-2" role="radiogroup">
             {DENSITY_OPTIONS.map((value) => (
               <button
                 key={value}

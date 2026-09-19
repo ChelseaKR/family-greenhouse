@@ -5,7 +5,7 @@ const getPreferred = vi.fn(() => Promise.resolve({ value: 1.35 }));
 const set = vi.fn((_options: { value: number }) => Promise.resolve());
 vi.mock('@capacitor/text-zoom', () => ({ TextZoom: { getPreferred, set } }));
 
-import { MAX_TEXT_SCALE, clampTextScale, useNativeTextSize } from '@/hooks/useNativeTextSize';
+import { textScaleFor, useNativeTextSize } from '@/hooks/useNativeTextSize';
 
 function enterShell(platform: 'ios' | 'android') {
   (window as unknown as { Capacitor?: unknown }).Capacitor = {
@@ -50,15 +50,33 @@ describe('useNativeTextSize', () => {
   });
 });
 
-describe('clampTextScale', () => {
-  it('keeps smaller and larger settings, up to the 200% the layout is built for', () => {
-    expect(clampTextScale(0.82)).toBe(0.82);
-    expect(clampTextScale(1.76)).toBe(1.76);
-    expect(clampTextScale(3.12)).toBe(MAX_TEXT_SCALE);
+describe('textScaleFor', () => {
+  it('applies every size the person chose, with no ceiling, the accessibility sizes included', () => {
+    expect(textScaleFor(0.82)).toBe(0.82);
+    expect(textScaleFor(1.76)).toBe(1.76);
+    expect(textScaleFor(2)).toBe(2);
+    // AX5, the largest iOS size: 53pt body text over the 17pt default.
+    expect(textScaleFor(53 / 17)).toBe(53 / 17);
   });
 
   it('falls back to the default on a value it cannot use', () => {
-    expect(clampTextScale(Number.NaN)).toBe(1);
-    expect(clampTextScale(0)).toBe(1);
+    expect(textScaleFor(Number.NaN)).toBe(1);
+    expect(textScaleFor(0)).toBe(1);
+    expect(textScaleFor(-1)).toBe(1);
   });
+});
+
+it('hands the largest iOS size to the WebView as it is, not capped at 200%', async () => {
+  (window as unknown as { Capacitor?: unknown }).Capacitor = {
+    isNativePlatform: () => true,
+    getPlatform: () => 'ios',
+  };
+  getPreferred.mockResolvedValueOnce({ value: 3.12 });
+  set.mockClear();
+  try {
+    renderHook(() => useNativeTextSize());
+    await waitFor(() => expect(set).toHaveBeenCalledWith({ value: 3.12 }));
+  } finally {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  }
 });

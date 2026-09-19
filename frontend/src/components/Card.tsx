@@ -52,7 +52,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, description, action }: CardHeaderProps) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="mb-4 flex items-start justify-between gap-3 large-text:flex-col">
       <div className="min-w-0">
         <h2 className="font-serif text-lg text-ink">{title}</h2>
         {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}

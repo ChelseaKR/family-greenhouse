@@ -253,7 +253,7 @@ export function LoginPage() {
           {...register('password')}
         />
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <label className="inline-flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"

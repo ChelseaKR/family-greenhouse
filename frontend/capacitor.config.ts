@@ -39,6 +39,9 @@ const config: CapacitorConfig = {
     // out against a viewport the keyboard covered. Android needs nothing
     // either: Capacitor's SystemBars already pads the WebView by the IME inset.
     // The keyboard's appearance follows UIUserInterfaceStyle (Info.plist).
+    // The plugin also hides the iOS Prev / Next / Done accessory bar when it
+    // loads, and has no setting for that; nativeShell.ts
+    // (restoreKeyboardAccessoryBar) turns it back on at launch.
     Keyboard: {},
     CapacitorHttp: {
       // Route fetch/XMLHttpRequest through URLSession (iOS) / the native HTTP

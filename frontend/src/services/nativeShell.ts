@@ -1,4 +1,4 @@
-import { isNativeApp } from '@/lib/platform';
+import { getNativePlatform, isNativeApp } from '@/lib/platform';
 
 /**
  * Launch screen and status bar inside the iOS/Android shells.
@@ -164,6 +164,24 @@ export function initNativeKeyboardScroll(): void {
     if (!shrank || !(field instanceof HTMLElement) || !field.matches(FIELD_SELECTOR)) return;
     requestAnimationFrame(() => field.scrollIntoView({ block: 'center', inline: 'nearest' }));
   });
+}
+
+/**
+ * THE KEYBOARD ACCESSORY BAR. @capacitor/keyboard hides the iOS form
+ * accessory bar (the Prev / Next / Done row above the keyboard) the moment it
+ * loads, with no setting to stop it. That row is how someone moves between
+ * the fields of a form without reaching up to tap each one, and the only
+ * built-in way to put the keyboard away on a multi-line field such as plant
+ * notes; iOS and every other app keep it. So it is turned back on at launch.
+ *
+ * iOS only (Android has no such bar), after the platform check and through a
+ * dynamic import, so neither Android nor the website loads the plugin for it.
+ */
+export function restoreKeyboardAccessoryBar(): void {
+  if (getNativePlatform() !== 'ios') return;
+  void import('@capacitor/keyboard')
+    .then(({ Keyboard }) => Keyboard.setAccessoryBarVisible({ isVisible: true }))
+    .catch(() => undefined);
 }
 
 /** Test seam: forget the module-level launch state between tests. */

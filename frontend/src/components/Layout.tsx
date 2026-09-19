@@ -209,7 +209,10 @@ export function Layout() {
             the native shells and installed PWAs draw edge-to-edge, so the bar
             extends its own background under the iOS/Android status bar and
             keeps its content below it. env() is 0 in regular browser tabs. */}
-        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden">
+        {/* At the iOS accessibility text sizes the wordmark wraps and the bar
+            grows to about a quarter of the screen, so there it scrolls away
+            with the page instead of covering that much of every screen. */}
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden large-text:static">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"
