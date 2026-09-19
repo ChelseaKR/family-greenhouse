@@ -14,6 +14,7 @@ import { authRateLimit, rateLimit, userRateLimit } from '../../middleware/rateLi
 import * as pushSubscriptions from '../../services/pushSubscriptions.js';
 import * as deviceTokens from '../../services/deviceTokens.js';
 import * as notificationPrefs from '../../services/notificationPrefs.js';
+import { devicePushAvailability } from '../../services/notifier.js';
 import * as emailSuppression from '../../services/emailSuppression.js';
 import { remindHousehold } from '../../services/reminders.js';
 import { digestHousehold, recapHousehold, defaultRecapYear } from '../../services/digest.js';
@@ -135,12 +136,36 @@ function smsAvailable(): boolean {
   return process.env.SMS_NOTIFICATIONS_ENABLED === '1';
 }
 
+/**
+ * What the deployment can deliver, alongside the stored preferences.
+ *
+ * `devicePush` is the native-push flag as the apps see it: per platform,
+ * `native_push_enabled` is on AND that platform's credential is named. The
+ * iOS and Android shells offer "Notifications on this phone" only when their
+ * platform is true here, so a store build never shows a switch nothing can
+ * deliver. Environment only — no secret read, no network.
+ */
 function withNotificationCapabilities<T extends object>(
   preferences: T
 ): T & {
   smsAvailable: boolean;
+  devicePush: { ios: boolean; android: boolean };
 } {
-  return { ...preferences, smsAvailable: smsAvailable() };
+  return { ...preferences, smsAvailable: smsAvailable(), devicePush: devicePushAvailability() };
+}
+
+/**
+ * Push endpoints the user still has after one is removed: browser
+ * subscriptions AND native devices. The `browser` preference gates both
+ * transports, so a client may only switch it off when this is 0 — turning
+ * off a laptop must not silence the phone, or the reverse.
+ */
+async function remainingPushEndpoints(userId: string, remainingBrowser?: number): Promise<number> {
+  const [browser, devices] = await Promise.all([
+    remainingBrowser ?? pushSubscriptions.getUserSubscriptions(userId).then((subs) => subs.length),
+    deviceTokens.countUserDeviceTokens(userId),
+  ]);
+  return browser + devices;
 }
 
 /**
@@ -277,9 +302,10 @@ export const subscribe = createHandler(
 
 /**
  * POST /notifications/devices — register a native (iOS/Android) push device
- * token from the Capacitor shells. Mirrors /notifications/subscribe for web
- * push. CAPTURE-ONLY until the APNs/FCM sender lands (docs/mobile.md): tokens
- * are stored so the sender covers existing installs the day it ships.
+ * token from the Capacitor shells, when the person turns notifications on in
+ * the app. Mirrors /notifications/subscribe for web push. The token becomes
+ * this user's alone (deviceTokens.saveDeviceToken): a phone that changes
+ * hands between accounts stops receiving the previous account's reminders.
  */
 // POST /notifications/devices
 export const registerDevice = createHandler(
@@ -302,16 +328,38 @@ export const registerDevice = createHandler(
   .use(authMiddleware())
   .use(validateBody(registerDeviceSchema));
 
-// POST /notifications/devices/remove
+// POST /notifications/devices/remove — turning notifications off on this
+// phone, or signing out on it. Answers how many push endpoints remain.
 export const unregisterDevice = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<UnregisterDeviceInput>;
     await deviceTokens.deleteDeviceToken(user.userId, validatedBody.token);
-    return noContentResponse();
+    const remainingSubscriptions = await remainingPushEndpoints(user.userId);
+    return successResponse({ ok: true, remainingSubscriptions });
   }
 )
   .use(authMiddleware())
+  .use(validateBody(unregisterDeviceSchema));
+
+/**
+ * POST /notifications/devices/release — signing out on a device. Public: the
+ * device token in the body is the credential (see
+ * deviceTokens.releaseDeviceToken), because a sign-out after a refused
+ * refresh has no session to authenticate with, and that is exactly the case
+ * where a phone would otherwise keep showing the previous account's
+ * reminders. Always 204, so it says nothing about whether a row existed.
+ * IP rate-limited like the other public routes.
+ */
+// POST /notifications/devices/release
+export const releaseDevice = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { validatedBody } = event as ValidatedEvent<UnregisterDeviceInput>;
+    await deviceTokens.releaseDeviceToken(validatedBody.token);
+    return noContentResponse();
+  }
+)
+  .use(rateLimit({ perWindowMs: 60_000, max: 10 }))
   .use(validateBody(unregisterDeviceSchema));
 
 // POST /notifications/unsubscribe
@@ -319,10 +367,12 @@ export const unsubscribe = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<UnsubscribeInput>;
-    const remainingSubscriptions = await pushSubscriptions.deleteSubscription(
+    const remainingBrowser = await pushSubscriptions.deleteSubscription(
       user.userId,
       validatedBody.endpoint
     );
+    // Counts the user's native devices too: see remainingPushEndpoints.
+    const remainingSubscriptions = await remainingPushEndpoints(user.userId, remainingBrowser);
     return successResponse({ ok: true, remainingSubscriptions });
   }
 )
@@ -591,6 +641,7 @@ export const handler = createRouter({
   'POST /notifications/unsubscribe': unsubscribe,
   'POST /notifications/devices': registerDevice,
   'POST /notifications/devices/remove': unregisterDevice,
+  'POST /notifications/devices/release': releaseDevice,
   'GET /notifications/email/unsubscribe': emailUnsubscribeForm,
   'POST /notifications/email/unsubscribe': emailUnsubscribe,
   'POST /notifications/run-reminders': runReminders,

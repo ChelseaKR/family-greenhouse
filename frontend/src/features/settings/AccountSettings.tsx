@@ -69,6 +69,8 @@ export function AccountSettings() {
   const deleteMe = useMutation({
     mutationFn: () => authService.deleteMe(),
     onSuccess: () => {
+      // The server already deleted this account's devices with the account;
+      // logout() also releases this device's push registration.
       logout();
       navigate('/');
     },

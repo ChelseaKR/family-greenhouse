@@ -13,9 +13,15 @@ import {
   isSupported,
   requestPermission,
 } from '@/utils/notifications';
-import { notificationService, type NotificationPreferences } from '@/services/notificationService';
+import {
+  buildPreferencesUpdate,
+  notificationService,
+  type NotificationPreferences,
+  type PreferencesUpdate,
+} from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
 import { isNativeApp } from '@/lib/platform';
+import { useNativePush } from '@/hooks/useNativePush';
 import { resolveBrowserTimeZone } from '@/utils/timeZone';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
@@ -43,7 +49,6 @@ async function registerPushSubscription(): Promise<PushSubscription | null> {
 }
 
 const E164 = /^\+[1-9]\d{6,14}$/;
-type PreferencesUpdate = Parameters<typeof notificationService.updatePreferences>[0];
 
 interface SaveVariables {
   overrides: Partial<PreferencesUpdate>;
@@ -63,33 +68,6 @@ const UTC_ALIASES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
  */
 function isServerDefaultTimeZone(zone: string): boolean {
   return zone === '' || zone === 'UTC';
-}
-
-function buildPreferencesUpdate(
-  current: NotificationPreferences,
-  overrides: Partial<PreferencesUpdate>
-): PreferencesUpdate {
-  return {
-    browser: current.browser,
-    email: current.email,
-    sms: current.sms,
-    phone: current.phone,
-    dndStart: current.dndStart,
-    dndEnd: current.dndEnd,
-    timezone: current.timezone,
-    pestAlerts: current.pestAlerts ?? false,
-    weeklyDigest: current.weeklyDigest ?? true,
-    // Household emails. `?? true` matches the server's read-time defaulting for
-    // rows written before these toggles existed (on iff email is on), so a
-    // save from this form never silently flips one off.
-    memberJoined: current.memberJoined ?? true,
-    taskUpForGrabs: current.taskUpForGrabs ?? true,
-    coverageUpdates: current.coverageUpdates ?? true,
-    careCredit: current.careCredit ?? true,
-    yearRecap: current.yearRecap ?? true,
-    emailLocale: current.emailLocale ?? '',
-    ...overrides,
-  };
 }
 
 /** The household-email toggles, in the order they appear in the form. Kept as
@@ -539,9 +517,12 @@ export function NotificationSettings() {
         {error && <Alert variant="error">{error}</Alert>}
         {info && <Alert variant="success">{info}</Alert>}
 
-        {/* Native delivery is deliberately hidden until the APNs/FCM sender
-            is live. Showing a permission toggle before reminders can arrive
-            would be a misleading, non-functional control in store builds. */}
+        {/* Native push: rendered only inside a shell built with push whose
+            deployment can deliver to its platform (native_push_enabled plus a
+            credential; see useNativePush). Everywhere else it is nothing, so a
+            store build never shows a switch that cannot deliver. */}
+        {native && <NativePushSetting />}
+
         {!native && browserSupported && (
           <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
             <div>
@@ -914,5 +895,57 @@ export function NotificationSettings() {
         </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * "This device" inside the iOS and Android apps. Tapping Turn on is the only
+ * way the OS permission prompt appears from Settings; if the OS already said
+ * no, it explains where to change that instead of offering a button that
+ * cannot work.
+ */
+function NativePushSetting() {
+  const { t } = useTranslation();
+  const { offered, enabled, permission, enable, disable } = useNativePush();
+  if (!offered) return null;
+
+  const pending = enable.isPending || disable.isPending;
+  const error = enable.error ?? disable.error;
+  const denied = permission === 'denied' && !enabled;
+
+  return (
+    <div className="space-y-2 border-b border-primary-100/70 pb-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{t('notifications.deviceTitle')}</p>
+          <p className="text-sm text-gray-600">
+            {enabled
+              ? t('notifications.deviceActive')
+              : denied
+                ? t('nativePush.deniedHint')
+                : t('notifications.deviceInactive')}
+          </p>
+        </div>
+        {enabled ? (
+          <Button
+            variant="secondary"
+            onClick={() => disable.mutate()}
+            isLoading={disable.isPending}
+            disabled={pending}
+          >
+            {t('nativePush.turnOff')}
+          </Button>
+        ) : (
+          <Button
+            onClick={() => enable.mutate()}
+            isLoading={enable.isPending}
+            disabled={pending || denied}
+          >
+            {t('nativePush.turnOn')}
+          </Button>
+        )}
+      </div>
+      {error && <Alert variant="error">{getErrorMessage(error)}</Alert>}
+    </div>
   );
 }

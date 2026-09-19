@@ -213,6 +213,9 @@ module "api" {
   sprout_api_url                  = var.sprout_api_url
   sprout_integration_secret_id    = var.sprout_integration_secret_id
   fcm_service_account_secret_id   = var.fcm_service_account_secret_id
+  apns_auth_key_secret_id         = var.apns_auth_key_secret_id
+  apns_environment                = var.apns_environment
+  native_push_enabled             = var.native_push_enabled
   identify_metering_enabled       = var.identify_metering_enabled
   sms_notifications_enabled       = var.sms_notifications_enabled
   git_sha                         = var.git_sha

@@ -1,6 +1,7 @@
 /**
- * Native (APNs/FCM) push delivery — `notifier.sendDevicePush` through
- * `services/fcmNotifier.ts`.
+ * Native push delivery to ANDROID devices — `notifier.sendDevicePush` through
+ * `services/fcmNotifier.ts`. iOS devices go to APNs directly and are covered
+ * by apnsNotifier.test.ts; every device row here is an Android one.
  *
  * Exercised through `sendToUser` rather than against the private sender,
  * because the wiring is half of what is being claimed: the `browser` channel
@@ -107,7 +108,7 @@ function prefs(): notificationPrefs.NotificationPreferences {
 
 interface DeviceRow {
   token: string;
-  platform: 'ios' | 'android';
+  platform: 'android' | 'android';
   createdAt: string;
 }
 
@@ -182,6 +183,7 @@ beforeEach(() => {
   vi.mocked(notificationPrefs.getPreferences).mockResolvedValue(prefs());
   secretsSend.mockResolvedValue({ SecretString: SERVICE_ACCOUNT });
   process.env.FCM_SERVICE_ACCOUNT_SECRET_ID = 'family-greenhouse/fcm';
+  process.env.NATIVE_PUSH_ENABLED = 'true';
   // Web push stays unconfigured throughout: this suite is about the native
   // transport, and the VAPID leg contributing a delivery would hide it.
   delete process.env.WEB_PUSH_VAPID_PUBLIC_KEY;
@@ -191,13 +193,51 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.FCM_SERVICE_ACCOUNT_SECRET_ID;
+  delete process.env.NATIVE_PUSH_ENABLED;
+});
+
+describe('device push — the native_push_enabled switch', () => {
+  it('with the switch off, reads no device, no secret and no network, whatever is configured', async () => {
+    process.env.NATIVE_PUSH_ENABLED = 'false';
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
+    const fetchMock = withFcm({});
+
+    const result = await sendToUser(RECIPIENT, PAYLOAD);
+
+    // The browser leg still reads its own subscriptions; no DEVICE# row is read.
+    const deviceReads = dynamoSend.mock.calls.filter(
+      ([command]) =>
+        (command as { input: { ExpressionAttributeValues?: Record<string, string> } }).input
+          .ExpressionAttributeValues?.[':sk'] === 'DEVICE#'
+    );
+    expect(deviceReads).toHaveLength(0);
+    expect(secretsSend).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.channels.browser).toBe('failed');
+  });
+
+  it('carries the reminder badge count to Android as notification_count', async () => {
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
+    const fetchMock = withFcm({});
+
+    await sendToUser(RECIPIENT, { ...PAYLOAD, badge: 3 });
+
+    const [, init] = fetchMock.mock.calls.find(([url]) => url !== TOKEN_URI) as [
+      string,
+      { body: string },
+    ];
+    const body = JSON.parse(init.body) as {
+      message: { android: { notification: { notification_count?: number } } };
+    };
+    expect(body.message.android.notification.notification_count).toBe(3);
+  });
 });
 
 describe('device push — delivery', () => {
   it('sends one FCM v1 message per device and reports the channel delivered', async () => {
     withDevices([
       { token: 'tok-android', platform: 'android', createdAt: '2026-09-01T00:00:00Z' },
-      { token: 'tok-ios', platform: 'ios', createdAt: '2026-09-02T00:00:00Z' },
+      { token: 'tok-ios', platform: 'android', createdAt: '2026-09-02T00:00:00Z' },
     ]);
     const fetchMock = withFcm({});
 
@@ -229,7 +269,7 @@ describe('device push — delivery', () => {
   });
 
   it('reuses the access token across a second fan-out', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     const fetchMock = withFcm({});
 
     await sendToUser(RECIPIENT, PAYLOAD);
@@ -245,7 +285,7 @@ describe('device push — dead-token cleanup', () => {
   it('prunes a token FCM reports as UNREGISTERED and keeps the healthy one', async () => {
     withDevices([
       { token: 'tok-dead', platform: 'android', createdAt: '2026-09-01T00:00:00Z' },
-      { token: 'tok-live', platform: 'ios', createdAt: '2026-09-02T00:00:00Z' },
+      { token: 'tok-live', platform: 'android', createdAt: '2026-09-02T00:00:00Z' },
     ]);
     withFcm({
       'tok-dead': {
@@ -275,7 +315,7 @@ describe('device push — dead-token cleanup', () => {
   });
 
   it('reports the channel failed when every token is dead', async () => {
-    withDevices([{ token: 'tok-dead', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-dead', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     withFcm({ 'tok-dead': { status: 404, body: { error: { status: 'NOT_FOUND' } } } });
 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
@@ -288,7 +328,7 @@ describe('device push — dead-token cleanup', () => {
   it('a failed cleanup does not fail the send that succeeded alongside it', async () => {
     withDevices([
       { token: 'tok-dead', platform: 'android', createdAt: '2026-09-01T00:00:00Z' },
-      { token: 'tok-live', platform: 'ios', createdAt: '2026-09-02T00:00:00Z' },
+      { token: 'tok-live', platform: 'android', createdAt: '2026-09-02T00:00:00Z' },
     ]);
     const routed = dynamoSend.getMockImplementation();
     dynamoSend.mockImplementation((command: { kind: string }) =>
@@ -326,7 +366,7 @@ describe('device push — transient failures never prune', () => {
       },
     ],
   ])('keeps the token after %s', async (_name, reply) => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     withFcm({ 'tok-a': reply as FcmReply });
 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
@@ -336,7 +376,7 @@ describe('device push — transient failures never prune', () => {
   });
 
   it('keeps every token when the send throws (network error / abort)', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) =>
@@ -357,7 +397,7 @@ describe('device push — transient failures never prune', () => {
   });
 
   it('keeps every token when the access-token exchange fails', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     const fetchMock = withFcm({}, { status: 401, body: { error: 'invalid_grant' } });
 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
@@ -375,7 +415,7 @@ describe('device push — unconfigured is a silent no-op', () => {
   });
 
   it('makes no Secrets Manager or network call, and leaves the channel exactly as before', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     const fetchMock = withFcm({});
 
     const result = await sendToUser(RECIPIENT, PAYLOAD);
@@ -390,7 +430,7 @@ describe('device push — unconfigured is a silent no-op', () => {
   });
 
   it('says so once per container, not once per reminder run', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     withFcm({});
     const info = vi.spyOn(logger, 'info');
 
@@ -420,7 +460,7 @@ describe('device push — unconfigured is a silent no-op', () => {
 
 describe('device push — an unreadable secret is not the same as an absent one', () => {
   it('warns, sends nothing, prunes nothing, and backs off instead of retrying every run', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     secretsSend.mockRejectedValue(new Error('AccessDeniedException'));
     const fetchMock = withFcm({});
     const warn = vi.spyOn(logger, 'warn');
@@ -443,7 +483,7 @@ describe('device push — an unreadable secret is not the same as an absent one'
   });
 
   it('treats a secret that is not a service-account JSON the same way', async () => {
-    withDevices([{ token: 'tok-a', platform: 'ios', createdAt: '2026-09-01T00:00:00Z' }]);
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     secretsSend.mockResolvedValue({ SecretString: '{"project_id":"only-this"}' });
     const fetchMock = withFcm({});
 
@@ -467,7 +507,7 @@ describe('device push — storage read', () => {
             {
               userId: 'u-1',
               householdId: 'h-1',
-              platform: 'ios',
+              platform: 'android',
               token: 'tok-a',
               createdAt: '2026-09-01T00:00:00Z',
             },
@@ -480,7 +520,7 @@ describe('device push — storage read', () => {
           {
             userId: 'u-1',
             householdId: 'h-1',
-            platform: 'ios',
+            platform: 'android',
             token: 'tok-a',
             createdAt: '2026-09-03T00:00:00Z',
           },

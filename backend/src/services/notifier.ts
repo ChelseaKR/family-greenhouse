@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import * as pushSubscriptions from './pushSubscriptions.js';
 import * as deviceTokens from './deviceTokens.js';
 import * as fcmNotifier from './fcmNotifier.js';
+import * as apnsNotifier from './apnsNotifier.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
 import * as smsNotifier from './smsNotifier.js';
@@ -45,6 +46,11 @@ export interface NotificationPayload {
   url?: string;
   /** De-dupe tag for browser-push (replaces a previous notification with the same tag). */
   tag?: string;
+  /**
+   * The count the native app icon should show — the tasks a reminder names.
+   * Device push only; omitted leaves the icon's badge as it was.
+   */
+  badge?: number;
   /**
    * Reply-To for the EMAIL leg only (#667): the reminder's per-message reply
    * address. Push and SMS have no reply path and ignore it. Omitted keeps the
@@ -179,9 +185,35 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
 }
 
 /**
+ * Whether native (APNs/FCM) push is switched on for this deployment
+ * (Terraform `native_push_enabled` → `NATIVE_PUSH_ENABLED`). OFF by default
+ * and until the owner setup in docs/native-push-setup.md is done: while it is
+ * off no device push is sent and the apps never offer it, whatever
+ * credentials exist.
+ */
+export function nativePushEnabled(): boolean {
+  return process.env.NATIVE_PUSH_ENABLED === 'true';
+}
+
+/**
+ * Which platforms the apps may offer native push on right now: the flag is on
+ * AND a credential for that platform's transport is named. The prefs payload
+ * carries this, so a store build never shows a switch nothing can deliver.
+ * Reads environment only — no secret, no network.
+ */
+export function devicePushAvailability(): { ios: boolean; android: boolean } {
+  const enabled = nativePushEnabled();
+  return {
+    ios: enabled && apnsNotifier.apnsConfigured(),
+    android: enabled && fcmNotifier.fcmConfigured(),
+  };
+}
+
+/**
  * The native sibling of `sendBrowserPush`: APNs/FCM device tokens registered
- * by the Capacitor shells (`frontend/src/services/nativePush.ts`), delivered
- * through the FCM HTTP v1 API.
+ * by the Capacitor shells (`frontend/src/services/nativePush.ts`). iOS tokens
+ * go to APNs directly (`apnsNotifier.ts`) and Android tokens through the FCM
+ * HTTP v1 API (`fcmNotifier.ts`) — see apnsNotifier.ts for why the two differ.
  *
  * Same contract as its browser twin, for the same reason. Returns whether at
  * least one device ACTUALLY received the notification, so an unconfigured
@@ -195,26 +227,36 @@ async function sendBrowserPush(userId: string, payload: NotificationPayload): Pr
  * installs actually produced, and `prefs.browser` (the user's "send me push
  * notifications" intent) governs both.
  *
- * UNCONFIGURED IS THE NORMAL CASE TODAY. No environment has the Firebase
- * service account, so `sendDevicePushMessages` answers `unconfigured` without
- * a network call and this returns false — the same answer, and the same
- * `channels.browser` value, that the reminder path produced before this
- * existed. See `services/fcmNotifier.ts` for the one-line-per-container
- * signal that says so.
+ * OFF IS THE NORMAL CASE TODAY. With `NATIVE_PUSH_ENABLED` unset this returns
+ * false before reading a single token — the same answer, and the same
+ * `channels.browser` value, that the reminder path produced before device
+ * push existed. With it on but a platform's credential unnamed, that
+ * platform's transport answers `unconfigured` without a network call.
  */
 async function sendDevicePush(userId: string, payload: NotificationPayload): Promise<boolean> {
+  if (!nativePushEnabled()) return false;
   const devices = await deviceTokens.getUserDeviceTokens(userId);
   if (devices.length === 0) return false;
 
-  const outcomes = await fcmNotifier.sendDevicePushMessages(
-    devices.map((device) => ({
-      token: device.token,
-      title: payload.title,
-      body: payload.body,
-      url: payload.url,
-      tag: payload.tag,
-    }))
-  );
+  const messageFor = (device: deviceTokens.StoredDeviceToken): fcmNotifier.DevicePushMessage => ({
+    token: device.token,
+    title: payload.title,
+    body: payload.body,
+    url: payload.url,
+    tag: payload.tag,
+    ...(typeof payload.badge === 'number' ? { badge: payload.badge } : {}),
+  });
+  const ios = devices.filter((device) => device.platform === 'ios');
+  const android = devices.filter((device) => device.platform !== 'ios');
+  const [iosOutcomes, androidOutcomes] = await Promise.all([
+    apnsNotifier.sendApnsMessages(ios.map(messageFor)),
+    fcmNotifier.sendDevicePushMessages(android.map(messageFor)),
+  ]);
+  // Back into `devices` order, so the cleanup below indexes the right row.
+  const outcomeByToken = new Map<string, fcmNotifier.DevicePushOutcome>();
+  ios.forEach((device, index) => outcomeByToken.set(device.token, iosOutcomes[index]));
+  android.forEach((device, index) => outcomeByToken.set(device.token, androidOutcomes[index]));
+  const outcomes = devices.map((device) => outcomeByToken.get(device.token) ?? 'failed');
 
   let anyDelivered = false;
   await Promise.all(

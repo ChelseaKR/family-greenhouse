@@ -31,6 +31,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `POST /households` says when the create began the trial. The privacy page
   describes the four events.
 
+- **Native push notifications for the iPhone and Android apps — built,
+  switched off.** Reminders can reach the phone itself: iOS through APNs
+  directly (an HTTP/2 sender with a `.p8` provider token, because the
+  Capacitor plugin hands iOS a raw APNs token that FCM cannot reach without
+  the Firebase iOS SDK) and Android through FCM. They run under the existing
+  push channel, so quiet hours and the reminder rules apply unchanged, and a
+  reminder puts its task count on the app icon. The app asks for permission
+  only when someone taps "Turn on notifications" on the Tasks page (shown when
+  there is care on the list, "Not now" holds 30 days) or "This device → Turn
+  on" in Settings, never at launch. A device token belongs to one account at a
+  time and is removed when notifications are turned off there, on sign-out
+  (a public, token-keyed release that works after a refused refresh), on
+  leaving the household it was registered under, with the account, and when
+  APNs or FCM reports it dead. Off until the owner setup in
+  `docs/native-push-setup.md` is done: Terraform `native_push_enabled` and the
+  store build's `VITE_NATIVE_PUSH_ENABLED` both default to false, and the
+  APNs key and Firebase service account are read from Secrets Manager by name.
+  The privacy policy and the App Store privacy notes now describe the push
+  token as a device identifier used only to deliver notifications.
+
 ### Changed
 
 - **The iPhone app follows every text size, and the keyboard's Prev / Next /

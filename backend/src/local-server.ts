@@ -473,6 +473,7 @@ interface PushSubscriptionRecord {
 
 interface DeviceTokenRecord {
   userId: string;
+  householdId?: string;
   platform: 'ios' | 'android';
   token: string;
   createdAt: string;
@@ -6966,6 +6967,20 @@ function withEmailDeliverability<T extends object>(
   };
 }
 
+/** Mirrors the API's `devicePush` capability: the native-push switch, both platforms at once. */
+function localDevicePush(): { ios: boolean; android: boolean } {
+  const enabled = process.env.NATIVE_PUSH_ENABLED === 'true';
+  return { ios: enabled, android: enabled };
+}
+
+/** Browser subscriptions plus native devices: the API's "remaining push endpoints". */
+function localRemainingPushEndpoints(userId: string): number {
+  return (
+    [...db.pushSubscriptions.values()].filter((subscription) => subscription.userId === userId)
+      .length + [...db.deviceTokens.values()].filter((device) => device.userId === userId).length
+  );
+}
+
 app.get('/notifications/prefs', authMiddleware, (req, res) => {
   const user = (req as any).user;
   res.json({
@@ -6974,6 +6989,7 @@ app.get('/notifications/prefs', authMiddleware, (req, res) => {
       user.email
     ),
     smsAvailable: true,
+    devicePush: localDevicePush(),
   });
 });
 
@@ -6986,6 +7002,7 @@ app.delete('/notifications/email-suppression', authMiddleware, (req, res) => {
       user.email
     ),
     smsAvailable: true,
+    devicePush: localDevicePush(),
   });
 });
 
@@ -7026,7 +7043,11 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     updatedAt: new Date().toISOString(),
   };
   db.notificationPrefs.set(user.userId, updated);
-  res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
+  res.json({
+    ...withEmailDeliverability(updated, user.email),
+    smsAvailable: true,
+    devicePush: localDevicePush(),
+  });
 });
 
 /**
@@ -7226,7 +7247,11 @@ app.post(
       updatedAt: new Date().toISOString(),
     };
     db.notificationPrefs.set(user.userId, updated);
-    res.json({ ...withEmailDeliverability(updated, user.email), smsAvailable: true });
+    res.json({
+      ...withEmailDeliverability(updated, user.email),
+      smsAvailable: true,
+      devicePush: localDevicePush(),
+    });
   }
 );
 
@@ -7253,10 +7278,7 @@ app.post(
     const user = (req as any).user;
     const { endpoint } = (req as any).validatedBody;
     db.pushSubscriptions.delete(`${user.userId}|${endpoint}`);
-    const remainingSubscriptions = [...db.pushSubscriptions.values()].filter(
-      (subscription) => subscription.userId === user.userId
-    ).length;
-    res.json({ ok: true, remainingSubscriptions });
+    res.json({ ok: true, remainingSubscriptions: localRemainingPushEndpoints(user.userId) });
   }
 );
 
@@ -7270,8 +7292,13 @@ app.post(
       return res.status(403).json({ message: 'User must belong to a household' });
     }
     const { platform, token } = (req as any).validatedBody;
+    // One owner per device, as in deviceTokens.saveDeviceToken.
+    for (const [key, device] of db.deviceTokens.entries()) {
+      if (device.token === token && device.userId !== user.userId) db.deviceTokens.delete(key);
+    }
     db.deviceTokens.set(`${user.userId}|${token}`, {
       userId: user.userId,
+      householdId: user.householdId,
       platform,
       token,
       createdAt: new Date().toISOString(),
@@ -7288,9 +7315,18 @@ app.post(
     const user = (req as any).user;
     const { token } = (req as any).validatedBody;
     db.deviceTokens.delete(`${user.userId}|${token}`);
-    res.status(204).send();
+    res.json({ ok: true, remainingSubscriptions: localRemainingPushEndpoints(user.userId) });
   }
 );
+
+// Public: the device token is the credential (sign-out may have no session).
+app.post('/notifications/devices/release', validateBody(unregisterDeviceSchema), (req, res) => {
+  const { token } = (req as any).validatedBody;
+  for (const [key, device] of db.deviceTokens.entries()) {
+    if (device.token === token) db.deviceTokens.delete(key);
+  }
+  res.status(204).send();
+});
 
 function localReminderDate(now: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {

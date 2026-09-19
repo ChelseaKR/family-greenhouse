@@ -35,6 +35,13 @@ import './index.css';
 void initSentry();
 initPwaRegistration();
 initNativeDeepLinks();
+// Native push: registration sync + notification taps. Never asks for
+// permission: that happens only from a button (NativePushPrompt, Settings →
+// Notifications). Loaded only inside the shells, so the website's entry
+// chunk does not carry it.
+if (isNativeApp()) {
+  void import('./services/nativePush').then(({ initNativePush }) => initNativePush());
+}
 initNativeBackButton();
 // Website visit counting. Loads nothing without a built-in measurement ID, in
 // the native shells, or under any analytics opt-out — see the module header.

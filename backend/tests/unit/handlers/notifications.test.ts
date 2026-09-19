@@ -20,6 +20,13 @@ vi.mock('../../../src/services/pushSubscriptions.js', () => ({
   }),
   saveSubscription: vi.fn(async () => undefined),
   deleteSubscription: vi.fn(async () => 0),
+  getUserSubscriptions: vi.fn(async () => []),
+}));
+vi.mock('../../../src/services/deviceTokens.js', () => ({
+  saveDeviceToken: vi.fn(async () => undefined),
+  deleteDeviceToken: vi.fn(async () => undefined),
+  releaseDeviceToken: vi.fn(async () => 0),
+  countUserDeviceTokens: vi.fn(async () => 0),
 }));
 vi.mock('../../../src/services/notificationPrefs.js', () => ({
   getPreferences: vi.fn(),
@@ -156,6 +163,104 @@ describe('notification browser subscription routes', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ ok: true, remainingSubscriptions: 2 });
     expect(push.deleteSubscription).toHaveBeenCalledWith('user-1', endpoint);
+  });
+
+  it('counts the native devices too, so turning off a browser never silences the phone', async () => {
+    const push = await import('../../../src/services/pushSubscriptions.js');
+    const devices = await import('../../../src/services/deviceTokens.js');
+    const { unsubscribe } = await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(push.deleteSubscription).mockResolvedValueOnce(0);
+    vi.mocked(devices.countUserDeviceTokens).mockResolvedValueOnce(1);
+
+    const res = (await unsubscribe(
+      buildEvent({
+        path: '/notifications/unsubscribe',
+        body: JSON.stringify({ endpoint: 'https://fcm.googleapis.com/fcm/send/device-1' }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(JSON.parse(res.body)).toEqual({ ok: true, remainingSubscriptions: 1 });
+  });
+});
+
+describe('native device routes', () => {
+  const TOKEN = 'a'.repeat(64);
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
+    __resetMembershipCacheForTests();
+    const { __resetRateLimitForTests } = await import('../../../src/middleware/rateLimit.js');
+    __resetRateLimitForTests();
+  });
+
+  it('turning off this phone removes it and answers what is left (browsers + devices)', async () => {
+    const push = await import('../../../src/services/pushSubscriptions.js');
+    const devices = await import('../../../src/services/deviceTokens.js');
+    const { unregisterDevice } = await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(push.getUserSubscriptions).mockResolvedValueOnce([{} as never]);
+    vi.mocked(devices.countUserDeviceTokens).mockResolvedValueOnce(0);
+
+    const res = (await unregisterDevice(
+      buildEvent({ path: '/notifications/devices/remove', body: JSON.stringify({ token: TOKEN }) }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true, remainingSubscriptions: 1 });
+    expect(devices.deleteDeviceToken).toHaveBeenCalledWith('user-1', TOKEN);
+  });
+
+  it('sign-out releases the device with no session at all, and says nothing either way', async () => {
+    const devices = await import('../../../src/services/deviceTokens.js');
+    const { releaseDevice } = await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(devices.releaseDeviceToken).mockResolvedValueOnce(1);
+    const event = buildEvent({
+      path: '/notifications/devices/release',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    delete (event.requestContext as { authorizer?: unknown }).authorizer;
+    delete (event.headers as Record<string, string | undefined>).Authorization;
+    delete (event.headers as Record<string, string | undefined>).authorization;
+
+    const res = (await releaseDevice(event, ctx, () => {})) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
+    expect(devices.releaseDeviceToken).toHaveBeenCalledWith(TOKEN);
+  });
+
+  it('refuses a token that is not one', async () => {
+    const devices = await import('../../../src/services/deviceTokens.js');
+    const { releaseDevice } = await import('../../../src/handlers/notifications/handler.js');
+    const res = (await releaseDevice(
+      buildEvent({ path: '/notifications/devices/release', body: JSON.stringify({ token: 'x' }) }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(devices.releaseDeviceToken).not.toHaveBeenCalled();
+  });
+
+  it('tells the apps native push is unavailable while native_push_enabled is off', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { getPrefs } = await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValueOnce({ userId: 'user-1' } as never);
+    process.env.APNS_AUTH_KEY_SECRET_ID = 'family-greenhouse/production/apns-auth-key';
+    delete process.env.NATIVE_PUSH_ENABLED;
+    try {
+      const res = (await getPrefs(
+        buildEvent({ path: '/notifications/prefs', httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(JSON.parse(res.body).devicePush).toEqual({ ios: false, android: false });
+    } finally {
+      delete process.env.APNS_AUTH_KEY_SECRET_ID;
+    }
   });
 });
 

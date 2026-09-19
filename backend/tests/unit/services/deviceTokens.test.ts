@@ -77,15 +77,108 @@ describe('native device-token registration', () => {
     });
 
     const { createHash } = await import('node:crypto');
-    const command = vi.mocked(dynamodb.send).mock.calls[0][0] as unknown as {
+    const command = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (call) => call[0] as unknown as { kind: string; input: Record<string, never> }
+      )
+      .find((candidate) => candidate.kind === 'Put') as unknown as {
       kind: string;
       input: { Item: Record<string, unknown> };
     };
-    expect(command.kind).toBe('Put');
     expect(command.input.Item.SK).toBe(
       `DEVICE#${createHash('sha256').update('tok-a').digest('hex').slice(0, 16)}`
     );
+    expect(command.input.Item.GSI1PK).toBe(
+      `DEVICE_TOKEN#${createHash('sha256').update('tok-a').digest('hex')}`
+    );
+    expect(command.input.Item.GSI1SK).toBe('USER#u1');
     expect(command.input.Item.entityType).toBe('DeviceToken');
+  });
+
+  it("takes the device over from any other account, so it never shows that account's reminders", async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    // Someone else signed in on this phone before, and their row is still there.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          { PK: 'USER#previous', SK: 'DEVICE#x' },
+          { PK: 'USER#u1', SK: 'DEVICE#x' },
+        ],
+      } as never)
+      .mockResolvedValue({} as never);
+
+    const { saveDeviceToken } = await import('../../../src/services/deviceTokens.js');
+    await saveDeviceToken({
+      userId: 'u1',
+      householdId: 'h1',
+      platform: 'ios',
+      token: 'tok-a',
+      createdAt: '2026-09-01T00:00:00Z',
+    });
+
+    const commands = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((call) => call[0] as unknown as { kind: string; input: Record<string, any> });
+    expect(commands[0].kind).toBe('Query');
+    expect(commands[0].input.IndexName).toBe('GSI1');
+    const deletes = commands.filter((command) => command.kind === 'Delete');
+    expect(deletes.map((command) => command.input.Key)).toEqual([
+      { PK: 'USER#previous', SK: 'DEVICE#x' },
+    ]);
+    // The takeover happens BEFORE this user's row is written.
+    expect(commands.findIndex((command) => command.kind === 'Delete')).toBeLessThan(
+      commands.findIndex((command) => command.kind === 'Put')
+    );
+  });
+});
+
+describe('native device-token release and household scope', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('sign-out removes every account row for the device token', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          { PK: 'USER#a', SK: 'DEVICE#x' },
+          { PK: 'USER#b', SK: 'DEVICE#x' },
+        ],
+      } as never)
+      .mockResolvedValue({} as never);
+
+    const { releaseDeviceToken } = await import('../../../src/services/deviceTokens.js');
+    await expect(releaseDeviceToken('tok-a')).resolves.toBe(2);
+
+    const deletes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((call) => call[0] as unknown as { kind: string; input: Record<string, any> })
+      .filter((command) => command.kind === 'Delete');
+    expect(deletes).toHaveLength(2);
+  });
+
+  it('leaving a household removes only the devices registered under it', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          { PK: 'USER#u1', SK: 'DEVICE#a', householdId: 'left' },
+          { PK: 'USER#u1', SK: 'DEVICE#b', householdId: 'kept' },
+        ],
+      } as never)
+      .mockResolvedValue({} as never);
+
+    const { deleteDeviceTokensForHousehold } =
+      await import('../../../src/services/deviceTokens.js');
+    await expect(deleteDeviceTokensForHousehold('u1', 'left')).resolves.toBe(1);
+
+    const deletes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((call) => call[0] as unknown as { kind: string; input: Record<string, any> })
+      .filter((command) => command.kind === 'Delete');
+    expect(deletes.map((command) => command.input.Key)).toEqual([
+      { PK: 'USER#u1', SK: 'DEVICE#a' },
+    ]);
   });
 });
 

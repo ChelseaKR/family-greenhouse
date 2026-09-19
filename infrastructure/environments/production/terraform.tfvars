@@ -80,6 +80,16 @@ chat_budget_output_tokens_greenhouse = ""
 # instead of claiming that an undelivered verification code was sent.
 sms_notifications_enabled = ""
 
+# Native push (iOS via APNs, Android via FCM). OFF until the owner setup in
+# docs/native-push-setup.md is done: create both secrets in Secrets Manager,
+# put their NAMES here (names are not secret; the key material never leaves
+# Secrets Manager), deploy, test on a device, and only then set
+# native_push_enabled = true and deploy again.
+native_push_enabled           = false
+fcm_service_account_secret_id = ""
+apns_auth_key_secret_id       = ""
+apns_environment              = "production"
+
 # --- Stripe billing ---
 # Price IDs are NOT secret (they're just `price_…` references), so they live
 # here. Leaving one "" disables that cadence: an empty monthly ID makes the whole
