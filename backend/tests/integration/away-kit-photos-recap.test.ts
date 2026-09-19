@@ -21,6 +21,8 @@ import {
   SITTER_PHOTO_MAX_BYTES,
   __resetSitterPhotoLimiterForTests,
 } from '../../src/services/sitterPhotoPolicy';
+import { TINY_JPEG } from '../unit/services/photoFixtures.js';
+import { jpegOfExactly } from '../unit/services/uploadFixtures.js';
 
 const SEED_EMAIL = 'test@example.com';
 const SEED_PASSWORD = 'password123';
@@ -28,9 +30,8 @@ const SEED_PASSWORD = 'password123';
 /** A real 1×1 transparent PNG. */
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-const JPEG_B64 = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60)]).toString(
-  'base64'
-);
+/** A real 8×8 JPEG: the server strip parses what it stores. */
+const JPEG_B64 = TINY_JPEG.toString('base64');
 
 async function loginAsSeed(): Promise<string> {
   const res = await request(app)
@@ -265,11 +266,8 @@ describe('sitter photo-back (public, token-authorised)', () => {
     });
     expect([400, 413]).toContain(oversize.status);
 
-    // Exactly at the cap is accepted.
-    const atCap = Buffer.concat([
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-      Buffer.alloc(SITTER_PHOTO_MAX_BYTES - 8),
-    ]);
+    // Exactly at the cap is accepted: a real JPEG of exactly that many bytes.
+    const atCap = jpegOfExactly(SITTER_PHOTO_MAX_BYTES);
     const ok = await upload(link.token, { taskId: seedTaskId, image: atCap.toString('base64') });
     expect(ok.status).toBe(201);
 

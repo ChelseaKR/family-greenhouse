@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import { TINY_JPEG, TINY_PNG } from '../services/photoFixtures.js';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: vi.fn(function (input) {
@@ -56,14 +57,9 @@ const TOKEN = 'a'.repeat(64);
 const FUTURE = '2999-01-01T00:00:00.000Z';
 const PAST = '2000-01-01T00:00:00.000Z';
 
-/** A 64-byte JPEG-magic payload, base64. */
-const JPEG_B64 = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60)]).toString(
-  'base64'
-);
-const PNG_B64 = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.alloc(56),
-]).toString('base64');
+/** Real tiny images, base64: the server strip parses what it stores. */
+const JPEG_B64 = TINY_JPEG.toString('base64');
+const PNG_B64 = TINY_PNG.toString('base64');
 
 function linkRow(overrides: Record<string, unknown> = {}) {
   return {

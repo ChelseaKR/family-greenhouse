@@ -27,6 +27,7 @@
  */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { cleanPhoto, REFUSED_MESSAGES } from './photoClean.js';
 
 export const SITTER_PHOTO_MAX_PER_LINK = 60;
 export const SITTER_PHOTO_MAX_BYTES = 300 * 1024; // 307,200 bytes decoded
@@ -143,7 +144,20 @@ export function admitSitterPhoto(image: string): SitterPhotoRejection {
   if (!contentType) {
     return { ok: false, status: 400, message: 'Photo is not a JPEG, PNG, or WebP image' };
   }
-  return { ok: true, bytes, contentType };
+  // The server's own strip, after the device's (#849): what is stored is the
+  // photo without its EXIF/XMP/IPTC, GPS included (services/photoIntake.ts).
+  const clean = cleanPhoto(bytes, contentType);
+  if (!clean.ok) {
+    return {
+      ok: false,
+      status: 400,
+      message:
+        clean.reason === 'unreadable'
+          ? REFUSED_MESSAGES.unreadable
+          : 'Photo is not a JPEG, PNG, or WebP image',
+    };
+  }
+  return { ok: true, bytes: Buffer.from(clean.bytes), contentType };
 }
 
 export const sitterPhotoUploadSchema = z.object({

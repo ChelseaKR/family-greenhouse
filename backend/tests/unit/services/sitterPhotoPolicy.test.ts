@@ -16,6 +16,9 @@ import {
   sniffImageContentType,
   takeSitterPhotoToken,
 } from '../../../src/services/sitterPhotoPolicy.js';
+import { carriesLocation, inspectPhotoMetadata } from '../../../src/services/photoMetadata.js';
+import { contains, latitudeBytes, phoneJpeg, TINY_JPEG } from './photoFixtures.js';
+import { iphoneHeicWithGps, jpegOfExactly } from './uploadFixtures.js';
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_MAGIC = [0xff, 0xd8, 0xff, 0xe0];
@@ -76,12 +79,38 @@ describe('decodeImagePayload', () => {
 
 describe('admitSitterPhoto', () => {
   it('admits an in-spec image with its sniffed content type', () => {
-    const result = admitSitterPhoto(bytesWith(JPEG_MAGIC).toString('base64'));
+    const result = admitSitterPhoto(TINY_JPEG.toString('base64'));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.contentType).toBe('image/jpeg');
-      expect(result.bytes.length).toBe(64);
+      // Already clean, so admitted byte for byte.
+      expect(result.bytes.equals(TINY_JPEG)).toBe(true);
     }
+  });
+
+  it('admits a phone photo WITHOUT its location: the bytes it returns are what gets stored', () => {
+    const input = phoneJpeg();
+    expect(carriesLocation(inspectPhotoMetadata(input))).toBe(true);
+    const result = admitSitterPhoto(Buffer.from(input).toString('base64'));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(carriesLocation(inspectPhotoMetadata(result.bytes))).toBe(false);
+    expect(contains(result.bytes, latitudeBytes())).toBe(false);
+    expect(inspectPhotoMetadata(result.bytes).orientation).toBe(6);
+  });
+
+  it('refuses an iPhone HEIC, GPS and all', () => {
+    expect(admitSitterPhoto(Buffer.from(iphoneHeicWithGps()).toString('base64'))).toEqual({
+      ok: false,
+      status: 400,
+      message: 'Photo is not a JPEG, PNG, or WebP image',
+    });
+  });
+
+  it('refuses JPEG magic it cannot parse, rather than storing it as it came', () => {
+    const result = admitSitterPhoto(bytesWith(JPEG_MAGIC).toString('base64'));
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) expect(result.message).toMatch(/location details/);
   });
 
   it('refuses undecodable or empty payloads with a 400', () => {
@@ -96,8 +125,9 @@ describe('admitSitterPhoto', () => {
     const tooBig = bytesWith(PNG_MAGIC, SITTER_PHOTO_MAX_BYTES + 1);
     const result = admitSitterPhoto(tooBig.toString('base64'));
     expect(result).toEqual({ ok: false, status: 413, message: 'Photo exceeds the 300 KB limit' });
-    // Exactly at the cap is fine.
-    const atCap = bytesWith(PNG_MAGIC, SITTER_PHOTO_MAX_BYTES);
+    // Exactly at the cap is fine: a real JPEG of exactly that many bytes.
+    const atCap = jpegOfExactly(SITTER_PHOTO_MAX_BYTES);
+    expect(atCap.length).toBe(SITTER_PHOTO_MAX_BYTES);
     expect(admitSitterPhoto(atCap.toString('base64')).ok).toBe(true);
   });
 
