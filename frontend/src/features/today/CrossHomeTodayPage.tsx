@@ -315,7 +315,7 @@ function TaskRow({ task, actions }: { task: CrossHomeTodayRow; actions: RowActio
           )}
         </div>
       </div>
-      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto large-text:grid-cols-1">
         <ClaimControls
           task={task}
           onClaim={() => actions.onClaim(task)}

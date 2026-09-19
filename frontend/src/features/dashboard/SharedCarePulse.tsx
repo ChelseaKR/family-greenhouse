@@ -155,7 +155,7 @@ export function SharedCarePulse() {
                 >
                   <span
                     className={clsx(
-                      'relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold shadow-xs transition-colors',
+                      'relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold shadow-xs transition-colors large-text:h-auto large-text:w-auto large-text:min-h-10 large-text:min-w-10 large-text:px-3',
                       milestone.completed
                         ? 'border-primary-700 bg-primary-700 text-white'
                         : isCurrent

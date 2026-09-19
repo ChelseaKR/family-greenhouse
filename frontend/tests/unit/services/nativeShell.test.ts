@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hide = vi.fn(() => Promise.resolve());
 const setStyle = vi.fn((_options: { style: string }) => Promise.resolve());
+const setAccessoryBarVisible = vi.fn((_options: { isVisible: boolean }) => Promise.resolve());
 
 vi.mock('@capacitor/splash-screen', () => ({ SplashScreen: { hide } }));
+vi.mock('@capacitor/keyboard', () => ({ Keyboard: { setAccessoryBarVisible } }));
 vi.mock('@capacitor/core', () => ({
   SystemBars: { setStyle },
   SystemBarsStyle: { Dark: 'DARK', Light: 'LIGHT', Default: 'DEFAULT' },
@@ -15,6 +17,7 @@ import {
   initNativeKeyboardScroll,
   markNativeAppReady,
   resetNativeShellForTests,
+  restoreKeyboardAccessoryBar,
   setNativeStatusBarOverDarkSurface,
 } from '@/services/nativeShell';
 
@@ -213,5 +216,32 @@ describe('keyboard', () => {
     height = 874;
     window.dispatchEvent(new Event('resize'));
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe('keyboard accessory bar', () => {
+  beforeEach(() => setAccessoryBarVisible.mockClear());
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it('turns the iOS Prev / Next / Done bar back on, which the keyboard plugin hides on load', async () => {
+    enterNativeShell();
+    restoreKeyboardAccessoryBar();
+    await vi.waitFor(() =>
+      expect(setAccessoryBarVisible).toHaveBeenCalledWith({ isVisible: true })
+    );
+  });
+
+  it('never touches the plugin on Android or on the website', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+    };
+    restoreKeyboardAccessoryBar();
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    restoreKeyboardAccessoryBar();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(setAccessoryBarVisible).not.toHaveBeenCalled();
   });
 });

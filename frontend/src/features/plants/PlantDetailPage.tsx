@@ -305,8 +305,8 @@ export function PlantDetailPage() {
         <div className="flex-1">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
+              <div className="flex items-center gap-2 large-text:flex-wrap">
+                <h1 className="min-w-0 font-serif text-3xl text-ink leading-tight tracking-tight">
                   {plant.name}
                 </h1>
                 {(plant.status ?? 'active') !== 'active' && (
@@ -322,7 +322,7 @@ export function PlantDetailPage() {
                 <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
               )}
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end large-text:grid-cols-1">
               {(plant.status ?? 'active') === 'active' && (
                 <>
                   <Button
@@ -409,7 +409,7 @@ export function PlantDetailPage() {
             </div>
           </div>
 
-          <dl className="mt-4 grid grid-cols-2 gap-4">
+          <dl className="mt-4 grid grid-cols-2 gap-4 large-text:grid-cols-1">
             {(plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>
@@ -449,7 +449,7 @@ export function PlantDetailPage() {
             {/* House rule first: it is the one line the next person must read.
                 Rendered only when set — no "add a rule" placeholder. */}
             {careRuleFor(plant) && (
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <dt className="text-sm font-medium text-gray-500">{t('plants.careRule.label')}</dt>
                 <dd className="mt-1 font-serif text-lg leading-snug text-ink">
                   {careRuleFor(plant)}
@@ -459,7 +459,7 @@ export function PlantDetailPage() {
             {/* Notes lives inside the <dl> — a <dt>/<dd> pair outside a <dl>
                 fails axe's `dlitem` rule. */}
             {plant.notes && (
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <dt className="text-sm font-medium text-gray-500">Notes</dt>
                 <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{plant.notes}</dd>
               </div>
@@ -803,7 +803,7 @@ function TaskRow({
           </div>
         </div>
         {!isReadOnly && (
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center large-text:grid-cols-1">
             <SnoozeMenu
               isSnoozing={isSnoozing}
               onPick={(days) => {
@@ -862,7 +862,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
         <ClockIcon className="h-4 w-4" aria-hidden="true" />
         Snooze
       </summary>
-      <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-paper shadow-lg ring-1 ring-primary-100/80 py-1">
+      <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-paper shadow-lg ring-1 ring-primary-100/80 py-1 large-text:static large-text:w-full large-text:max-w-none">
         {SNOOZE_OPTIONS.map((opt) => (
           <li key={opt.label}>
             <button

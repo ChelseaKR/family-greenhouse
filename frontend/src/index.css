@@ -8,6 +8,39 @@
 @source '../src/**/*.{js,ts,jsx,tsx}';
 
 /* ---------------------------------------------------------------------
+   The iOS accessibility text sizes (AX1–AX5, about 165–312%).
+
+   useNativeTextSize applies whatever size iOS reports, with no cap (owner
+   decision, 2026-09-18), and marks <html data-text-size="large"> from AX1 up.
+   Text-size-adjust grows text only — a fixed-height or fixed-width box stays
+   the same — so at those sizes the layout gets its own arrangement, the way
+   a narrow screen gets its breakpoint: nothing is cut off with an ellipsis,
+   nothing refuses to wrap, and `large-text:` stacks what sat side by side.
+   Held by tests/e2e/largest-text.spec.ts at 312%. At every other size, and
+   on the website, none of this applies.
+   --------------------------------------------------------------------- */
+@custom-variant large-text (&:where(html[data-text-size='large'] *));
+
+/* A word wider than its box at 312% breaks rather than running off the
+   edge. `break-word`, not `anywhere`, here and in the two rules below:
+   `anywhere` also shrinks every flex item's minimum width to one letter, so
+   a neighbor (a dismiss button, the other button in a row) squeezed text
+   into a word-fragment per line. Truncated and no-wrap text inherits this. */
+html[data-text-size='large'] body {
+  overflow-wrap: break-word;
+}
+
+html[data-text-size='large'] .truncate {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+html[data-text-size='large'] .whitespace-nowrap {
+  white-space: normal;
+}
+
+/* ---------------------------------------------------------------------
    Theme — ported from the former tailwind.config.js `theme.extend`.
    v4 is CSS-first: every key below becomes a real CSS custom property and
    generates the matching utilities (`bg-primary-600`, `shadow-journal`,

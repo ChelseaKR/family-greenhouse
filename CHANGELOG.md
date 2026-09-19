@@ -31,6 +31,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `POST /households` says when the create began the trial. The privacy page
   describes the four events.
 
+### Changed
+
+- **The iPhone app follows every text size, and the keyboard's Prev / Next /
+  Done bar is back.** The iOS app stopped growing text at 200% (#845), below
+  the accessibility sizes someone may have chosen in Settings; it now applies
+  the size iOS reports all the way to the largest (AX5, about 312%). At the
+  accessibility sizes, rows of side-by-side buttons, the task view switch and
+  the plant facts stack instead of squeezing words into pieces, text that was
+  cut off with an ellipsis wraps, and the top bar scrolls away with the page
+  rather than covering about a quarter of the screen. Sign-in, the plant
+  list, a plant, tasks and settings are held readable at 312%, in English and
+  Spanish, by a new end-to-end check (`tests/e2e/largest-text.spec.ts`), and
+  were checked in the iOS Simulator at AX5. The keyboard plugin hid the
+  Prev / Next / Done row above the iOS keyboard on launch; it is turned back
+  on, so moving between fields and closing the keyboard on a notes field work
+  the way they do in every other app.
+
 ### Security
 
 - **Plant photos are served only through short-lived signed URLs.** Every

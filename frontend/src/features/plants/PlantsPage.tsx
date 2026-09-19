@@ -121,7 +121,7 @@ export function PlantsPage() {
         title="Plants"
         description="Manage your household plants."
         action={
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto large-text:grid-cols-1">
             <Button
               variant="secondary"
               onClick={() => setMoveOpen(true)}

@@ -359,7 +359,7 @@ export function TasksPage() {
       )}
 
       <div
-        className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1"
+        className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1 large-text:grid large-text:w-full large-text:grid-cols-1"
         role="group"
         aria-label={t('careRounds.displayMode')}
       >
@@ -680,7 +680,7 @@ function TaskSection({
                   )}
                 </div>
               </div>
-              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center [&>button]:w-full sm:[&>button]:w-auto large-text:grid-cols-1">
                 <ClaimControls
                   task={task}
                   onClaim={extras.onClaim}
