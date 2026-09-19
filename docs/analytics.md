@@ -524,10 +524,15 @@ one change: two Sentry projects and the `PRODUCTION_FRONTEND_SENTRY_DSN` /
 `PRODUCTION_BACKEND_SENTRY_DSN` secrets (repository scope, same reason as the
 PostHog key); the privacy page's Sentry paragraph rewritten from "switched off
 today" to what a crash report carries (stack traces and browsing breadcrumbs);
-the DPIA's processor table; and the iOS privacy manifest gaining
-`NSPrivacyCollectedDataTypeCrashData` (not linked, not tracking, purpose
-AppFunctionality). It would also need an opt-out that works in the iOS shell,
-where DNT never fires — the in-app switch above governs product analytics only.
+the DPIA's processor table; and the iOS privacy manifest's
+`NSPrivacyCollectedDataTypeCrashData` entry and the App Store Crash Data answer
+revisited. That entry already exists (not linked, not tracking, purpose
+AppFunctionality) because the first-party error rail in
+`frontendTelemetry.ts` sends sanitized error summaries from the shells; its
+comment and `docs/APP-STORE.md` describe that rail only, and Sentry's stack
+traces, breadcrumbs and third-party processor would have to be added to both.
+It would also need an opt-out that works in the iOS shell, where DNT never
+fires — the in-app switch above governs product analytics only.
 
 ## Adding a new event
 

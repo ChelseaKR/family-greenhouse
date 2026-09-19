@@ -11,21 +11,19 @@
       `LockedFeature` is not, so `/chat` shows a Seedling household a
       subscription price and an upgrade call to action inside the app. See
       `docs/mobile.md`, "Store payment rules".
-- [ ] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send. It
-      lists 7 data types, all App Functionality, with `NSPrivacyTracking`
-      false. The shells run the same web bundle with none of it
-      `isNativeApp()`-gated, so they also post `/telemetry/product` (keyed to
-      the Cognito sub and the household id) and `/telemetry/frontend` (error
-      summaries and web vitals, keyed to a session id): Product Interaction,
-      Performance Data and Crash Data, none of them declared. A product
-      analytics rail is being turned on, which adds the Analytics purpose to
-      those types and to `UserID`. If any of it is linked to a person for
-      advertising, ad measurement or a data broker, `NSPrivacyTracking` is
-      true, the domains go in `NSPrivacyTrackingDomains`, and App Tracking
-      Transparency applies (a native prompt the WebView cannot show).
-      `validate-store-release.mjs` asserts only the 7 present types, so the
-      manifest is checked by hand against what that rail ships, before any
-      TestFlight build.
+- [x] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send: 11
+      data types, with `NSPrivacyTracking` false. The shells run the same web
+      bundle, so they post `/telemetry/product` (Product Interaction, keyed to
+      the Cognito sub and the household id) and `/telemetry/frontend` (web
+      vitals as Performance Data, and sanitized error summaries as Crash Data,
+      both keyed only to a random session id and not linked). Crash Data was
+      the last one missing; it is declared from 0.37.1. `docs/APP-STORE.md` §2
+      is the table to answer App Privacy from, and
+      `validate-store-release.mjs` fails a build whose manifest drops any of
+      the 11. If any of it is ever linked to a person for advertising, ad
+      measurement or a data broker, `NSPrivacyTracking` is true, the domains
+      go in `NSPrivacyTrackingDomains`, and App Tracking Transparency applies
+      (a native prompt the WebView cannot show).
 - [x] Store icons, Play feature graphic, metadata, and review-safe screenshots validate.
 - [x] Screenshots are re-captured from a seeded store-demo household
       (`backend/src/local-server-store-demo.ts`, `SEED_STORE_DEMO=1`): the

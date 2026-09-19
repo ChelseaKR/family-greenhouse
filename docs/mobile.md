@@ -35,6 +35,16 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:end -->
 
+One more plugin lives in the iOS app target rather than npm, so the table
+above (npm packages only) does not list it: **`Print`**
+(`frontend/ios/App/App/PrintPlugin.swift`, registered by
+`MainViewController.swift`, which `Main.storyboard` names as the bridge view
+controller). WKWebView drops `window.print()`, so the print buttons on the
+plant passport, plant tags, sitter brief and caretaker report call
+`frontend/src/services/nativePrint.ts`, which opens the iOS print sheet
+through it: AirPrint, or Share to save or send a PDF. Android has no
+counterpart yet, and its WebView drops `window.print()` too.
+
 Everything else the apps do is the same web code running in a WebView. One
 thing looks native and is not, because it has been written into review notes
 before:
@@ -457,9 +467,11 @@ Step 8 of the setup doc is that check, and it comes before
       device before upload, and camera and photo-library access happen only
       when the user taps to add a photo, so there is no Precise or Coarse
       Location collected from photos), and the analytics rails as they actually ship — product
-      interaction keyed to the account id, crash and performance data — under
-      the Analytics purpose, matching `ios/App/App/PrivacyInfo.xcprivacy`
-      entry for entry. Sentry only if a DSN is configured for the store build.
+      interaction keyed to the account id and performance data under the
+      Analytics purpose, and crash data (sanitized error summaries from
+      `frontendTelemetry.ts`, not linked) under App Functionality — matching
+      `ios/App/App/PrivacyInfo.xcprivacy` entry for entry (`docs/APP-STORE.md`
+      §2 has the full table). Sentry only if a DSN is configured for the store build.
       See the privacy manifest item in `docs/mobile-release-checklist.md`.
 - [ ] **Account deletion** is reachable at `/account` even before household
       setup; point reviewers at Account & data → Delete my account.

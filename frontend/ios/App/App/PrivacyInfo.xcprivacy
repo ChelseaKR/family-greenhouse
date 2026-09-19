@@ -89,6 +89,36 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string></array>
 		</dict>
+		<!--
+		  Crash Data: the first-party error rail (frontend/src/services/
+		  frontendTelemetry.ts) posts a report to our own API's
+		  /telemetry/frontend whenever the app hits an uncaught JavaScript error,
+		  an unhandled promise rejection or a screen that fails to render. It
+		  runs in the shells as well as on the website. A report holds the error
+		  class (TypeError and so on, or "Network request failed"), the screen's
+		  route with ids and tokens replaced by placeholders, a hash of those
+		  two, the build's commit id when the build has one, and a random id
+		  made fresh for each app session. After an outage it also sends a count
+		  of the reports it could not deliver. There is no stack trace, no error
+		  message text and nothing typed into the app. It carries no account,
+		  household or device id and no auth header, and the session id is
+		  shared only with the Performance Data reports above, which are not
+		  linked either, so it is not linked to the person. As for every
+		  request, API Gateway's access log keeps the connection's IP address
+		  for 30 days; the report is never joined to it. It is used to find and
+		  fix crashes: App Functionality. Sentry would send more (a stack trace
+		  and breadcrumbs), but the store build template
+		  (.env.mobile.production.example) sets no VITE_SENTRY_DSN; re-check
+		  this entry if a store build ever does.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+		</dict>
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>

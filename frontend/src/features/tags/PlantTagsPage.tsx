@@ -19,6 +19,7 @@ import {
   type PrintableTag,
 } from '@/services/plantTagService';
 import { getErrorMessage } from '@/services/api';
+import { printPage } from '@/services/nativePrint';
 import { QrCode } from './QrCode';
 
 /**
@@ -120,7 +121,7 @@ export function PlantTagsPage() {
             printable.length > 0 ? (
               <Button
                 variant="primary"
-                onClick={() => window.print()}
+                onClick={(event) => void printPage(event.currentTarget)}
                 leftIcon={<PrinterIcon className="h-4 w-4" aria-hidden="true" />}
               >
                 {t('plantTags.print')}

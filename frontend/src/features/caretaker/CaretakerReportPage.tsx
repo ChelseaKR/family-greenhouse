@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { getErrorMessage } from '@/services/api';
+import { printPage } from '@/services/nativePrint';
 import { formatDate, formatTime } from '@/i18n/format';
 
 /**
@@ -79,7 +80,7 @@ export function CaretakerReportPage() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => window.print()}
+            onClick={(event) => void printPage(event.currentTarget)}
             leftIcon={<PrinterIcon className="h-4 w-4" aria-hidden="true" />}
           >
             {t('caretaker.report.print')}
