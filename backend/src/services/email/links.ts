@@ -17,24 +17,16 @@
  *      carries `?task=` as a forward hook the plant page can honour later
  *      without any email changing.
  *
- *   2. **Our own origins only.** `safeLinkUrl` rejects anything that is not
- *      http(s)/mailto, and `isOwnAssetUrl` rejects any image that is not
- *      served from our own asset origin. Remote images in email are a
- *      tracking and spoofing surface; ADR 0021 commits to loading none.
+ *   2. **Links only.** `safeLinkUrl` rejects anything that is not
+ *      http(s)/mailto. An email loads no images at all: remote images are a
+ *      tracking and spoofing surface (ADR 0021), and a plant photo is served
+ *      only through a URL too short-lived to sit in an inbox (ADR 0033).
  */
 
 /** Base URL of the web app, no trailing slash. Mirrors the FRONTEND_URL
  *  policy already used by the invite, share, checkout and reminder builders. */
 export function appBaseUrl(): string {
   const raw = process.env.FRONTEND_URL?.trim() || 'http://localhost:3000';
-  return raw.replace(/\/+$/, '');
-}
-
-/** Base URL plant photos are served under (CloudFront `/plants/*` behaviour).
- *  Falls back to the app origin, which is the same host in every deployed
- *  environment today. */
-export function assetBaseUrl(): string {
-  const raw = process.env.ASSETS_BASE_URL?.trim() || appBaseUrl();
   return raw.replace(/\/+$/, '');
 }
 
@@ -116,30 +108,4 @@ export function safeLinkUrl(url: string | null | undefined): string | null {
     // Not a parseable absolute URL — not a failed read, just not a link.
     return null;
   }
-}
-
-/**
- * True only when `url` is an image served from our own asset origin.
- *
- * ADR 0021 commits to loading no remote images in email. Plant photos qualify
- * because they are minted by `handlers/plants` under `ASSETS_BASE_URL` and
- * served by our own CloudFront distribution; anything else — a pasted URL, a
- * legacy direct-to-S3 link, an attacker-controlled host — does not, and the
- * renderer silently omits the image rather than fetching it.
- */
-export function isOwnAssetUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  let parsed: URL;
-  let base: URL;
-  try {
-    parsed = new URL(url);
-    base = new URL(assetBaseUrl());
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
-  if (parsed.origin !== base.origin) return false;
-  // The asset base may carry a path prefix; require the URL to sit under it.
-  const prefix = base.pathname.replace(/\/+$/, '');
-  return parsed.pathname.startsWith(`${prefix}/`);
 }

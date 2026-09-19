@@ -254,6 +254,24 @@ describe('buildSitterBrief — a photo expires with the brief (#453)', () => {
     expect((options as { expiresIn: number }).expiresIn).toBe(600);
   });
 
+  it('never outlives the link, even by the minute a floor used to add', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load([plant()], []);
+    const closing = { ...LINK, expiresAt: new Date(NOW.getTime() + 30_000).toISOString() };
+    await buildSitterBrief(closing, NOW);
+    const [, , options] = vi.mocked(presigner.getSignedUrl).mock.calls[0];
+    expect((options as { expiresIn: number }).expiresIn).toBe(30);
+  });
+
+  it('shows no photo, rather than one that outlasts it, for a link in its final second', async () => {
+    const presigner = await import('@aws-sdk/s3-request-presigner');
+    const { buildSitterBrief } = await load([plant()], []);
+    const ending = { ...LINK, expiresAt: new Date(NOW.getTime() + 400).toISOString() };
+    const [entry] = (await buildSitterBrief(ending, NOW)).plants;
+    expect(entry.photoUrl).toBeNull();
+    expect(presigner.getSignedUrl).not.toHaveBeenCalled();
+  });
+
   it('signs the key from the URL path, so an older asset origin still resolves', async () => {
     const presigner = await import('@aws-sdk/s3-request-presigner');
     const { buildSitterBrief } = await load(

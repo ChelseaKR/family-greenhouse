@@ -167,8 +167,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
   }
 
   # Household trash (#670). A trashed plant's photos are MOVED to
-  # `trash/plants/...` (CloudFront serves only `/plants/*`, so they stop
-  # resolving) and moved back on restore. The daily purge deletes them at 30
+  # `trash/plants/...` (no response signs a URL under that prefix) and moved
+  # back on restore. The daily purge deletes them at 30
   # days; this rule is the backstop that stops a purge job that has stopped
   # running from keeping them forever. 37 days = the purge window plus the
   # same 7-day slack the rows' DynamoDB `ttl` carries
@@ -264,11 +264,12 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
-  origin {
-    domain_name              = aws_s3_bucket.images.bucket_regional_domain_name
-    origin_id                = "S3-images"
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
-  }
+  # No origin for the images bucket, deliberately (ADR 0033). Plant photos
+  # are served only through short-lived S3 presigned URLs that the API mints
+  # per response, so nothing on this distribution may reach that bucket. The
+  # path a stored photo reference names (`/plants/{household}/{plant}/{file}`)
+  # now falls through to the default behavior like any other file request:
+  # the frontend bucket has no such object, and the viewer gets a 404.
 
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
@@ -283,44 +284,23 @@ resource "aws_cloudfront_distribution" "frontend" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
     # Resolve /pricing -> /pricing/index.html so the prerendered marketing
-    # pages are actually served. Only on the default behavior: the /plants/*
-    # behavior targets the images bucket and must not be rewritten.
+    # pages are actually served, and the app's routes (including
+    # /plants/{plantId}) to the app shell by name.
     function_association {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.spa_router.arn
     }
   }
 
-  # Cache behavior for plant photos. S3 keys in the images bucket are
-  # `plants/{householdId}/{plantId}/...` (see backend image upload), so the
-  # path pattern MUST be /plants/* — a /images/* pattern matches nothing and
-  # silently falls through to the frontend-bucket default behavior. The
-  # backend mints photo URLs as ${ASSETS_BASE_URL}/plants/... (env var wired
-  # in modules/api), which lands here.
-  ordered_cache_behavior {
-    path_pattern           = "/plants/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "S3-images"
-    viewer_protocol_policy = "redirect-to-https"
-    compress               = true
-
-    cache_policy_id          = aws_cloudfront_cache_policy.images.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3.id
-  }
-
   # The LAST-RESORT SPA fallback, and deliberately no longer the primary one.
   #
-  # It covers exactly one live case now: an app route under the /plants/*
-  # behavior above. `/plants/{plantId}` is a route in the React app, and
-  # `/plants/{householdId}/{plantId}/...` is a photo key in the images bucket,
-  # so the same prefix serves both. Ordered cache behaviors take precedence over
-  # the default one, which means `/plants/abc-123` is sent to the images origin,
-  # misses, and gets 403 — and a viewer-request function cannot redirect it,
-  # because rewriting a URI does not change the cache behavior or the origin the
-  # request goes to. Only this rescue can serve it. Everything else — the
-  # dashboard, /login, /register, an unknown URL — is now resolved to
-  # /app-shell.html by functions/spa-router.js BEFORE it reaches an origin.
+  # Every app route — the dashboard, /login, /register, /plants/{plantId} — is
+  # resolved to /app-shell.html by functions/spa-router.js BEFORE it reaches an
+  # origin, and the frontend bucket answers a miss with 404, not 403. So no
+  # request this distribution serves is expected to produce a 403 today. (Until
+  # ADR 0033 an app route under /plants/ could, through the ordered behavior
+  # that prefix had then.) The rule stays as the backstop for an origin that
+  # ever answers 403 again.
   #
   # This MUST be app-shell.html, not index.html. Now that the marketing routes
   # are prerendered, index.html is the rendered HOMEPAGE — serving it here would
@@ -338,7 +318,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   #
   #   /assets/index-<hash>.js  missing  -> S3 404 -> not rescued -> 404 to viewer
   #   /brand/missing.png       missing  -> S3 404 -> not rescued -> 404 to viewer
-  #   /plants/abc-123          missing  -> S3 403 -> rescued     -> app shell, 200
+  #   /plants/abc-123          app route -> spa-router -> app shell, 200
   #
   # Before this, the first two lines read "-> 200 with the app shell", which is
   # the CDN rendering absence as a value: a total loss of the JS bundle would
@@ -372,7 +352,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   #
   #   /care/no-such-plant   no object -> S3 404 -> 404.html, 404 to viewer
   #   /assets/missing.js    no object -> S3 404 -> 404.html, 404 to viewer
-  #   /plants/abc-123       images    -> S3 403 -> app shell, 200 (rule above)
+  #   /plants/h/p/photo.jpg no object -> S3 404 -> 404.html, 404 to viewer
   #
   # `observability:check` accepts a 404 rule only in exactly this shape: a
   # response code of 404 and a page that is not the app shell.
@@ -613,27 +593,6 @@ resource "aws_cloudfront_cache_policy" "frontend" {
   }
 }
 
-resource "aws_cloudfront_cache_policy" "images" {
-  name        = "${var.project_name}-images-${var.environment}"
-  min_ttl     = 86400    # 1 day
-  default_ttl = 604800   # 1 week
-  max_ttl     = 31536000 # 1 year
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-    enable_accept_encoding_brotli = true
-    enable_accept_encoding_gzip   = true
-  }
-}
-
 data "aws_cloudfront_origin_request_policy" "cors_s3" {
   name = "Managed-CORS-S3Origin"
 }
@@ -753,18 +712,17 @@ resource "aws_s3_bucket_policy" "frontend" {
   })
 }
 
-# NOT granted `s3:ListBucket`, unlike the frontend bucket above, and that
-# asymmetry is deliberate. `/plants/{plantId}` is a React route served from this
-# origin by path-pattern accident (see the /plants/* cache behavior), and it
-# reaches the app only because a miss here is a 403 that the distribution's one
-# remaining `custom_error_response` rescues into the shell. Granting ListBucket
-# would turn that miss into a 404, which nothing rescues, and every plant detail
-# page opened by URL would break.
+# The images bucket grants NOTHING to CloudFront, or to anyone else (ADR 0033).
 #
-# The cost of the asymmetry is that a missing plant PHOTO still answers 200 with
-# the HTML shell instead of 404 — the same defect #615 fixed for /assets/, still
-# live for this one prefix. Fixing it properly means separating the image prefix
-# from the route prefix, which is a URL change with stored data behind it.
+# Plant photos are read only by the API's own role, which holds `s3:GetObject`
+# on this bucket through its identity policy (modules/api), and by whoever
+# holds a presigned GET that role minted: a URL that carries its own
+# signature and expiry. With every public access block above set and no Allow
+# here, a request without a valid signature is refused by S3 itself, and one
+# whose signature has expired is refused the same way.
+#
+# What is left is a TLS-only rule: the SDK and presigned URLs use HTTPS, and
+# nothing should reach photos over plain HTTP.
 resource "aws_s3_bucket_policy" "images" {
   bucket = aws_s3_bucket.images.id
 
@@ -772,16 +730,17 @@ resource "aws_s3_bucket_policy" "images" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontServicePrincipal"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.images.arn}/*"
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.images.arn,
+          "${aws_s3_bucket.images.arn}/*"
+        ]
         Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
+          Bool = {
+            "aws:SecureTransport" = "false"
           }
         }
       }

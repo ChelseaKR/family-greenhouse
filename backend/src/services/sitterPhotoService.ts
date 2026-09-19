@@ -138,9 +138,9 @@ export async function storeSitterPhoto(input: {
       Body: input.bytes,
       ContentType: input.contentType,
       ContentLength: input.bytes.length,
-      // Served same-origin via CloudFront — never let a browser sniff it
-      // into something other than the image type we verified.
-      CacheControl: 'public, max-age=31536000, immutable',
+      // Served only through short-lived signed URLs (ADR 0033), which also
+      // set this per response; a copy is the viewer's own, and brief.
+      CacheControl: 'private, max-age=3600',
       Metadata: { 'via-sitter': 'true', 'sitter-link-id': input.linkId },
     })
   );

@@ -17,9 +17,10 @@ backend "production live" rather than "production-ready in code".
       email identity for confirmation messages. Pool ID and Client ID exposed
       to Lambdas as `COGNITO_USER_POOL_ID` and `COGNITO_CLIENT_ID`.
 - [ ] **S3 image bucket apply** — `infrastructure/modules/frontend` keeps the
-      bucket private, serves `plants/*` through CloudFront OAC, and limits
+      bucket private, grants no read to CloudFront or anyone else (photos are
+      served only through presigned URLs the API mints, ADR 0033), and limits
       upload CORS to the configured frontend aliases. Verify those resources
-      in the target account; do not add public-read.
+      in the target account; do not add public-read or a CDN origin.
 - [ ] **API Gateway** — REST API mapped onto the handlers in
       `backend/src/handlers/`, Cognito authorizer wired up so claims arrive on
       the request context (this is what `authMiddleware` reads).

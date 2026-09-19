@@ -21,21 +21,17 @@
  *   3. **A photo in the brief expires with the brief.** Every other sitter
  *      capability is re-checked on every call — `getActiveLink` re-reads
  *      `status` and `expiresAt`, and a revoke takes effect on the very next
- *      read. The photographs were the one thing that escaped that boundary:
- *      `plant.imageUrl` is a CloudFront URL on a behavior with no viewer
- *      authorization, cached at the edge for a year, so a sitter who saved the
- *      page (or just the image URLs) kept fetching photographs of the inside of
- *      someone's home indefinitely after the link was revoked, and so did
- *      anyone they forwarded them to. The brief now hands out a short-lived
- *      signed URL instead, re-signed on every request and never outliving the
- *      link. See #453.
+ *      read. The brief hands out a short-lived signed URL for each photo,
+ *      re-signed on every request and never outliving the link (#453). Since
+ *      ADR 0033 that is the only way any photo is served: the stored
+ *      `plant.imageUrl` is a reference, and nothing serves it unsigned.
  */
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import * as taskService from './taskService.js';
 import { type PetToxicityMatch } from '../models/petToxicity.js';
 import { resolveCareNote, resolvePetSafety } from '../models/sitterBriefFields.js';
-import { plantImageKeyForHousehold, signedImageUrl } from '../utils/s3.js';
+import { signPhotoKey, storedPhotoKey } from './photoAccess.js';
 import { logger } from '../utils/logger.js';
 
 // Re-exported from models/ so this module stays the one import for brief
@@ -94,21 +90,14 @@ export interface SitterBrief {
  * the page gets a fresh signature every time, so the URL only has to outlive
  * the page view — and the shorter it is, the less a saved copy is worth.
  *
- * It is a ceiling, not the value: the TTL is also clamped to what is left of
- * the link, so a signature can never outlive the window it was issued for.
- * (It could not have been "expiresAt" anyway — SigV4 caps a presigned URL at 7
- * days, and one signed with Lambda's temporary credentials expires with the
- * role session, while a paid sitter link runs to 90.)
+ * It is a ceiling, not the value: the URL is also clamped to the link's own
+ * expiry, so a signature can never outlive the window it was issued for — not
+ * even by a minute; a link in its last second gets no photo rather than one
+ * that outlasts it. (It could not have been "expiresAt" anyway — SigV4 caps a
+ * presigned URL at 7 days, and one signed with Lambda's temporary credentials
+ * expires with the role session, while a paid sitter link runs to 90.)
  */
 const PHOTO_URL_MAX_TTL_SECONDS = 60 * 60;
-/** Floor, so a link in its last seconds still renders rather than 400-ing. */
-const PHOTO_URL_MIN_TTL_SECONDS = 60;
-
-function photoTtlSeconds(expiresAt: string, now: Date): number {
-  const remaining = Math.floor((Date.parse(expiresAt) - now.getTime()) / 1000);
-  if (!Number.isFinite(remaining)) return PHOTO_URL_MIN_TTL_SECONDS;
-  return Math.max(PHOTO_URL_MIN_TTL_SECONDS, Math.min(PHOTO_URL_MAX_TTL_SECONDS, remaining));
-}
 
 /**
  * Turn a stored plant photo URL into a signed one that dies with the link.
@@ -122,16 +111,24 @@ function photoTtlSeconds(expiresAt: string, now: Date): number {
 async function briefPhotoUrl(
   imageUrl: string | null | undefined,
   householdId: string,
-  expiresIn: number
+  linkExpiresAt: string,
+  now: Date
 ): Promise<string | null> {
   if (!imageUrl) return null;
-  const key = plantImageKeyForHousehold(imageUrl, householdId);
-  if (!key) {
+  const stored = storedPhotoKey(imageUrl);
+  if (!stored || stored.householdId !== householdId) {
     logger.warn({ householdId }, 'sitter_brief.photo_url_not_signable');
     return null;
   }
   try {
-    return await signedImageUrl(key, expiresIn);
+    // A fresh signature per request (no reuse window), capped at an hour and
+    // at the link's own end.
+    return await signPhotoKey(stored.key, {
+      now,
+      ttlSeconds: PHOTO_URL_MAX_TTL_SECONDS,
+      windowSeconds: 0,
+      notAfter: linkExpiresAt,
+    });
   } catch (err) {
     logger.warn({ err, householdId }, 'sitter_brief.photo_sign_failed');
     return null;
@@ -178,7 +175,6 @@ export async function buildSitterBrief(
 
   // Signing is local crypto, not I/O, but it is per-plant and async, so the
   // whole page is built in one pass rather than serially per plant.
-  const photoTtl = photoTtlSeconds(link.expiresAt, now);
   const entries: SitterBriefPlant[] = await Promise.all(
     plants.map(async (plant) => ({
       plantId: plant.id,
@@ -188,7 +184,7 @@ export async function buildSitterBrief(
         : (plant.location ?? null),
       placementNote: plant.placementNote?.trim() || null,
       ...resolveCareNote(plant),
-      photoUrl: await briefPhotoUrl(plant.imageUrl, link.householdId, photoTtl),
+      photoUrl: await briefPhotoUrl(plant.imageUrl, link.householdId, link.expiresAt, now),
       petSafety: resolvePetSafety(plant),
       tasks: tasksByPlant.get(plant.id) ?? [],
     }))

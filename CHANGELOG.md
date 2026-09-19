@@ -31,6 +31,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `POST /households` says when the create began the trial. The privacy page
   describes the four events.
 
+### Security
+
+- **Plant photos are served only through short-lived signed URLs.** Every
+  response that shows a photo now carries a link signed for that request,
+  which expires on its own: after an hour or so in the app, and never after
+  the sitter brief, shared cutting link or caretaker seat that carried it
+  ends. The site's CDN no longer serves the images bucket, and the address
+  stored on a plant is a reference that loads nothing. Photos already stored
+  keep working with no migration, and a page asks for fresh links when one
+  runs out. **Emails no longer show plant photos** (the weekly digest's
+  thumbnails), because an email outlives any short-lived link. ADR 0033.
+  Deploy note: a release applies Terraform before it deploys the backend, so
+  photos in the app do not load for the few minutes between the two.
+
 ## [0.37.0] - 2026-09-18
 
 **A privacy fix comes first:** photos no longer carry the phone's location off

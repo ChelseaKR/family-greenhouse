@@ -3,6 +3,7 @@ import createHttpError from 'http-errors';
 import { createHandler } from '../../middleware/handler.js';
 import { authMiddleware, AuthenticatedEvent } from '../../middleware/auth.js';
 import * as householdService from '../../services/householdService.js';
+import { scopePhotoUrls } from '../../services/photoAccess.js';
 import { buildCrossHomeToday, resolveEntitlement } from '../../services/crossHomeToday.js';
 import {
   CROSS_HOME_TODAY_LOCKED_MESSAGE,
@@ -45,6 +46,9 @@ export const myToday = createHandler(
     }
 
     const today = await buildCrossHomeToday(memberships, cutoff);
+    // Several homes in one response: any photo it carries may be signed for
+    // each of them, not just the active one (ADR 0033).
+    scopePhotoUrls(event, { householdIds: memberships.map((m) => m.householdId) });
     return {
       statusCode: 200,
       headers: {

@@ -19,9 +19,11 @@
  *     of which are media queries and therefore inline-impossible.
  *   - **No external CSS and no web fonts.** A font that must be fetched is a
  *     remote load; the stack is system fonts only.
- *   - **No remote images.** The only `<img>` we emit is a plant photo from
- *     our own asset origin, checked by `isOwnAssetUrl`. Anything else is
- *     dropped rather than fetched (ADR 0021).
+ *   - **No images.** Nothing here emits an `<img>`. Plant photos used to
+ *     appear as row thumbnails; since ADR 0033 a photo is served only through
+ *     a URL that expires within the hour or so, and an email is opened days
+ *     later, forwarded and archived, so no photo URL can belong in one. Rows
+ *     are text and a deep link to the plant, where the photo shows signed in.
  *   - **600px cap, fluid below it.** `width="600"` for Outlook (which ignores
  *     `max-width`) plus `max-width:100%` and a `<620px` media query for
  *     phones.
@@ -47,7 +49,7 @@
  * module that accepts raw HTML.
  */
 import type { EmailLocale } from './catalog.js';
-import { isOwnAssetUrl, safeLinkUrl } from './links.js';
+import { safeLinkUrl } from './links.js';
 
 /** A block of email body content. Deliberately small: a heading, prose, a
  *  linked row, a button, an honest "could not load" notice, a rule. */
@@ -61,8 +63,6 @@ export type EmailBlock =
       href?: string | null;
       /** Supporting lines under the title, most important first. */
       lines: string[];
-      /** Plant photo. Dropped unless it is on our own asset origin. */
-      imageUrl?: string | null;
       /** Short label rendered before the title, e.g. "Up for grabs". */
       badge?: string | null;
     }
@@ -126,7 +126,6 @@ const STYLE_BLOCK = `
   @media only screen and (max-width: 620px) {
     .fg-card { width: 100% !important; }
     .fg-pad { padding-left: 18px !important; padding-right: 18px !important; }
-    .fg-thumb { display: none !important; }
   }
 `.trim();
 
@@ -230,19 +229,10 @@ function row(block: Extract<EmailBlock, { kind: 'row' }>): string {
     `${badge}<div class="fg-text" style="font-family:${FONT};font-size:16px;` +
     `line-height:23px;color:${LIGHT.text};">${title}</div>${lines}`;
 
-  // Photo is opt-in AND origin-checked: an image we do not serve is dropped,
-  // never fetched (ADR 0021). `alt` stays empty because the plant name is
-  // already the row's title — a duplicate alt reads twice in a screen reader.
-  const thumb = isOwnAssetUrl(block.imageUrl)
-    ? `<td class="fg-thumb" width="64" valign="top" style="padding-right:14px;">` +
-      `<img src="${escapeHtml(block.imageUrl as string)}" width="64" height="64" alt="" ` +
-      `style="display:block;width:64px;height:64px;border-radius:8px;` +
-      `object-fit:cover;border:0;" /></td>`
-    : '';
-
+  // No photo thumbnail: see "No images" in the header (ADR 0033).
   const inner =
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">` +
-    `<tr>${thumb}<td valign="top">${body}</td></tr></table>`;
+    `<tr><td valign="top">${body}</td></tr></table>`;
 
   return `<tr>${td('padding:0 32px 16px;', inner, 'fg-pad')}</tr>`;
 }

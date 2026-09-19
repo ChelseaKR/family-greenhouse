@@ -33,10 +33,10 @@ export const IMAGE_CONTENT_TYPES: Record<string, string> = {
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
- * Public base URL for a stored image key. When ASSETS_BASE_URL is set
- * (production: the site origin, served via the CloudFront /plants/* behavior)
- * we mint `${ASSETS_BASE_URL}/plants/...`; otherwise (local dev) we fall back
- * to the raw S3 URL form.
+ * The stored reference for an image key: `${ASSETS_BASE_URL}/plants/...` when
+ * ASSETS_BASE_URL is set (production: the site origin), otherwise (local dev)
+ * the raw S3 URL form. It names the object and serves nothing; a photo is
+ * shown only through a signed URL minted per response (ADR 0033).
  */
 export function publicImageUrl(key: string): string {
   const base = process.env.ASSETS_BASE_URL?.replace(/\/+$/, '');

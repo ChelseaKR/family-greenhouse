@@ -15,6 +15,7 @@ import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
 import { toast } from '@/store/toastStore';
 import { track } from '@/services/analytics';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
@@ -56,6 +57,7 @@ export function SharedPlantPage() {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const householdId = useActiveHouseholdId();
+  const refreshSignedPhotos = useRefreshSignedPhotos();
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const {
@@ -156,6 +158,7 @@ export function SharedPlantPage() {
                 loading="lazy"
                 decoding="async"
                 className="h-full w-full object-cover"
+                onError={refreshSignedPhotos}
               />
             ) : (
               <PlantPlaceholder />

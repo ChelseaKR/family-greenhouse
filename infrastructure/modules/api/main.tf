@@ -186,9 +186,8 @@ resource "aws_iam_role_policy" "lambda" {
         # Plant/account deletion enumerates every image below the plant prefix.
         # ListBucket is a bucket-level action and cannot share the object ARN
         # above; keep it constrained to the prefixes the API manages:
-        # `plants/` (served by CloudFront) and `trash/` (the household trash,
-        # #670 — deliberately NOT served, which is what makes a trashed photo
-        # stop resolving).
+        # `plants/` (live photos, served only through URLs this role signs,
+        # ADR 0033) and `trash/` (the household trash, #670 — never signed).
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
@@ -489,13 +488,12 @@ locals {
     # separate var so a future split (e.g. checkout-success URL on a
     # different subdomain) is a tfvars change, not a code change.
     FRONTEND_URL = var.allowed_origin
-    # ASSETS_BASE_URL: public base under which CloudFront serves the images
-    # bucket. The plants handler mints photo URLs as
-    # `${ASSETS_BASE_URL}/plants/{householdId}/{plantId}/...`, which the
-    # /plants/* ordered cache behavior (modules/frontend/main.tf) routes to
-    # the S3-images origin. Same value as the site origin today; separate
-    # var-shaped contract so a future dedicated assets domain is a wiring
-    # change only.
+    # ASSETS_BASE_URL: the base of the photo REFERENCE stored on a plant,
+    # `${ASSETS_BASE_URL}/plants/{householdId}/{plantId}/...`. It names the
+    # object and serves nothing: no CloudFront behavior reaches the images
+    # bucket, and every response swaps the reference for a short-lived signed
+    # URL (ADR 0033). Kept, and kept equal to the site origin, because stored
+    # rows carry it and the upload confirm step matches against it.
     ASSETS_BASE_URL = var.allowed_origin
     # PUBLIC_API_URL: this API's externally reachable base, stage path
     # included. Email capability links (RFC 8058 one-click unsubscribe) must

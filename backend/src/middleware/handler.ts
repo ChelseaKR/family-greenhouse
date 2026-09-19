@@ -8,6 +8,8 @@
  *   3. httpCors            — add CORS headers; refuses to start in prod without ALLOWED_ORIGIN
  *   4. loggingMiddleware   — pino child logger keyed to request-id + user-id
  *   5. jsonErrorHandler    — convert thrown errors → JSON {message, details?}
+ *   6. photoUrlSigner      — swap stored photo references for signed URLs
+ *                            (last, so its `after` sees the handler's own body)
  *
  * Resource-specific middleware (auth, validation) layer on top via `.use()`.
  */
@@ -23,6 +25,7 @@ import {
   resolveCorsOrigins,
 } from './cors.js';
 import { loggingMiddleware } from './logging.js';
+import { photoUrlSigner } from './photoUrls.js';
 import { securityHeaders } from './securityHeaders.js';
 
 /**
@@ -88,21 +91,31 @@ function corsOptions() {
   };
 }
 
+export interface CreateHandlerOptions {
+  maxBodyBytes?: number;
+  /**
+   * `false` ONLY where a response's `imageUrl` is meant as the stored
+   * reference itself: the upload presigns, whose `imageUrl` is what the
+   * confirm call sends back, and the data export, which names photos without
+   * carrying them. Everything else is signed (ADR 0033).
+   */
+  signPhotoUrls?: boolean;
+}
+
 export function createHandler<TEvent, TResult>(
   handler: Handler<TEvent, TResult>,
-  opts?: { maxBodyBytes?: number }
+  opts?: CreateHandlerOptions
 ) {
-  return (
-    middy(handler)
-      // First in the chain so its after/onError run last and stamp the final
-      // response (see securityHeaders.ts).
-      .use(securityHeaders())
-      .use(bodySizeGuard(opts?.maxBodyBytes))
-      .use(httpJsonBodyParser({ disableContentTypeError: true }))
-      .use(httpCors(corsOptions()))
-      .use(loggingMiddleware())
-      .use(jsonErrorHandler())
-  );
+  const chain = middy(handler)
+    // First in the chain so its after/onError run last and stamp the final
+    // response (see securityHeaders.ts).
+    .use(securityHeaders())
+    .use(bodySizeGuard(opts?.maxBodyBytes))
+    .use(httpJsonBodyParser({ disableContentTypeError: true }))
+    .use(httpCors(corsOptions()))
+    .use(loggingMiddleware())
+    .use(jsonErrorHandler());
+  return opts?.signPhotoUrls === false ? chain : chain.use(photoUrlSigner());
 }
 
 /**

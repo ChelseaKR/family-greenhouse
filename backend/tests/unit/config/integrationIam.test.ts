@@ -14,7 +14,7 @@ describe('production integration IAM invariants', () => {
     );
   });
 
-  it('lists exactly the two managed prefixes: served plant images and the unserved trash (#670)', () => {
+  it('lists exactly the two managed prefixes: live plant images and the trash (#670)', () => {
     const prefixes = apiModule.match(/"s3:prefix"\s*=\s*\[([^\]]*)\]/);
     expect(prefixes?.[1].split(',').map((p) => p.trim())).toEqual(['"plants/*"', '"trash/*"']);
   });
