@@ -273,7 +273,9 @@ export async function createHousehold(
         ],
       })
     );
-    return household;
+    // The trial committed with the household, so say so: the client counts a
+    // trial start from this field and nothing else (ADR 0027).
+    return { ...household, noCardTrialEndsAt };
   } catch (err) {
     // Item [2] is the trial claim; item [3] (if present) is the referral
     // claim. Either conflicting routes to the plain write below, which

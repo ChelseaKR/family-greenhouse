@@ -16,6 +16,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Conversion events in Google Analytics 4, so ads and search can be judged
+  on sales.** On the website only, and under the same opt-outs as page views,
+  GA4 now also receives `landing_cta_click` (the home page's sign-up buttons
+  and its "See how it works" link), `sign_up` (the API accepted a
+  registration), `start_trial` (a new household began its no-card Garden
+  trial, on the server's word) and `purchase` (a plan checkout settled, with
+  the plan, cadence and catalog price, named by a hash of the subscription id).
+  Every parameter is rebuilt from a closed list or a checked shape, so no
+  email, name, household name, plant note or Stripe id can reach Google. The
+  plan checkout's return address now names the plan and cadence bought, and
+  `POST /households` says when the create began the trial. The privacy page
+  describes the four events.
+
 ## [0.37.0] - 2026-09-18
 
 **A privacy fix comes first:** photos no longer carry the phone's location off

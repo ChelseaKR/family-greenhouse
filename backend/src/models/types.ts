@@ -45,6 +45,15 @@ export interface Household {
   timezone?: string;
   createdAt: string;
   createdBy: string;
+  /**
+   * End of the no-card Garden trial (ADR 0027), ISO 8601. Present on the
+   * `POST /households` response ONLY when that create started the account's
+   * trial, so the client can count a trial start (GA4 `start_trial`) on the
+   * server's word rather than guess it. Absent when the account had already
+   * claimed its trial. Entitlement never reads it from here: it reads the
+   * household row through `noCardTrialState`.
+   */
+  noCardTrialEndsAt?: string;
 }
 
 export interface HouseholdMember {

@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
@@ -121,6 +122,9 @@ function RegistrationForm({
       // account. The visitor has no identity yet, so this is held in memory
       // and replayed at first sign-in (services/analytics.ts).
       track('signup_started');
+      // The same step as a GA4 `sign_up`, so ads and search can be judged on
+      // accounts rather than visits. It carries no field from the form.
+      trackGoogleConversion({ name: 'sign_up' });
       setPendingConfirmation({ email: data.email, redirect });
       navigate('/confirm-email', { state: { email: data.email, redirect } });
     } catch (err) {

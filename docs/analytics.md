@@ -226,7 +226,8 @@ event-data retention 14 months, Google signals disabled on the property.
 Implementation: `frontend/src/services/googleAnalytics.ts` (loader, consent,
 scrubbing) and `frontend/src/components/GoogleAnalyticsPageViews.tsx` (one page
 view per route). PostHog is untouched and unrelated: GA never sees an account
-id, a household id or any product event.
+id, a household id or any PostHog product event. It does get four conversion
+events of its own, described under "Conversion events in GA4" below.
 
 **Where the ID lives.** One line, in the production web build's environment:
 `VITE_GA_MEASUREMENT_ID: G-L2JN3PQ75P` in `.github/workflows/cd-production.yml`
@@ -252,7 +253,7 @@ before. Test fixtures are excluded by the smoke's GPC declaration (above).
   it (the served script embeds it), so no extra lookup is made.
 - `allow_google_signals: false`, `allow_ad_personalization_signals: false`,
   `ads_data_redaction: true`, `send_page_view: false`.
-- No `user_id`, no custom events. Only `page_view`.
+- No `user_id`. `page_view`, plus the four conversion events below.
 
 **Page views are explicit, and scrubbed.** Every route change sends one
 `page_view` after a `set` of `page_location`, `page_title` and
@@ -308,8 +309,48 @@ property:
    off the data-sharing settings (Google products & services; modeling
    contributions & business insights). The privacy page says Google processes
    the data on our behalf; that is only true on those terms.
-4. Confirm the property has no Google Ads link (Admin → Product links) and
-   that Google signals stays off.
+4. Confirm Google signals stays off. A Google Ads link (Admin → Product
+   links → Google Ads links) is expected since 2026-09-18, so the `purchase`
+   key event can be imported as the Ads conversion; leave "Enable
+   personalized advertising" unticked on the link.
+
+### Conversion events in GA4
+
+**Decision, 2026-09-18:** judge ads and search on purchases, not taps. GA
+gets four events besides `page_view`, all sent through
+`trackGoogleConversion` in `googleAnalytics.ts`, which rebuilds every
+parameter from a closed list or a checked shape. The table puts the step first
+because these are GA4 events, not rows of the PostHog vocabulary above (which
+`scripts/check-doc-figures.mjs` holds to the code). Nothing a caller adds
+passes through, so no email, name, household name, plant note or Stripe id can reach
+Google. Every one is subject to the same loader conditions and opt-outs as a
+page view, and carries the same scrubbed `page_location`.
+
+| Step          | GA4 event (not PostHog) | Fired by                                                                                                                                                                             | Parameters                                                                                                                                                                                               |
+| ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Landing click | `landing_cta_click`     | the home page's header sign-up button, hero sign-up button, and hero "See how it works" link (`LandingPage.tsx`)                                                                     | `cta`: `nav_signup`, `hero_signup` or `hero_how_it_works`                                                                                                                                                |
+| Sign-up       | `sign_up`               | the register form, once the API accepted the account (`RegisterPage.tsx`, beside PostHog's `signup_started`)                                                                         | `method: 'email'`                                                                                                                                                                                        |
+| Trial         | `start_trial`           | the onboarding screen, when `POST /households` answers with `noCardTrialEndsAt`, which the server includes only when that create began the account's no-card Garden trial (ADR 0027) | `trial_plan: 'garden'`, `trial_days: 14`                                                                                                                                                                 |
+| Paid          | `purchase`              | Settings → Billing on Stripe's return from a plan checkout, once the purchase has settled (`features/billing/reportPlanPurchase.ts`)                                                 | `transaction_id`; and `currency: 'USD'`, `value`, `items: [{item_id: '<plan>_<interval>', price, quantity: 1}]` when the return address names the plan and cadence and the settled state shows that plan |
+
+- **`transaction_id`** is the first 32 hex characters of the SHA-256 of the
+  Stripe subscription id, or of `lifetime:<household id>:<tier>` for a
+  lifetime purchase (`gaTransactionId`). The id itself is never sent. The
+  same purchase always hashes to the same value, so GA counts a reloaded
+  return page once; the owner can match a GA purchase to Stripe by hashing
+  the subscription id.
+- **Plan and cadence** come from the return address:
+  `POST /billing/checkout` now sets Stripe's `success_url` to
+  `/settings/billing?status=success&plan=<planId>&interval=<interval>`, the
+  two validated enums of that checkout. Nothing is stored on the device for
+  this. GA never sees that query string (`gaQuery` keeps only `utm_*`).
+- **`value`** is the catalog price for that plan and cadence. On a
+  first subscription Stripe starts a 14-day card trial, so the first charge
+  comes after the trial: `value` is the price the buyer committed to, not money
+  taken that day. Renewals are not reported.
+- **Key events:** `purchase`, `sign_up` and `start_trial` are marked as key
+  events on the property (Admin API, 2026-09-18). `landing_cta_click` is not a
+  key event; it is the arrival signal the funnel report reads.
 
 **CSP.** Both policies admit `https://www.googletagmanager.com` in
 `script-src` and `https://*.google-analytics.com` +

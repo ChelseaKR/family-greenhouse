@@ -30,6 +30,7 @@ import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isPaymentFailing, paymentFailedBodyKey } from '@/features/billing/paymentFailing';
+import { useReportPlanPurchase } from '@/features/billing/reportPlanPurchase';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
 // resolved and giftSubscriptions is on the offer, so it costs nothing on
@@ -182,6 +183,19 @@ export function BillingSettings() {
       window.location.assign(url);
     },
     onError: (error) => setPurchaseErrorKey(purchaseErrorKey(error)),
+  });
+
+  // GA4 `purchase`, once the plan this checkout bought has settled (see
+  // reportPlanPurchase.ts). Called before the loading return below, as a hook
+  // must be; it waits for both queries on its own.
+  useReportPlanPurchase({
+    returned: returnedFromPlanCheckout,
+    native,
+    householdId,
+    subscription: subQuery.data,
+    plans: plansQuery.data?.plans,
+    plan: searchParams.get('plan'),
+    interval: searchParams.get('interval'),
   });
 
   const portalMutation = useMutation({

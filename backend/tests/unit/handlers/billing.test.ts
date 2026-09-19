@@ -515,6 +515,36 @@ describe('billing handler', () => {
       );
     });
 
+    it('names the plan and cadence bought in the return address, and nothing else', async () => {
+      // The return page reports a GA4 `purchase` with the plan's price; it can
+      // only price what the address names. Only the two validated enums ride
+      // along: no household, no email, no Stripe id.
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.createCheckoutSession).mockResolvedValueOnce({
+        url: 'https://checkout.stripe.test/session_monthly',
+      });
+
+      await checkout(
+        buildEvent({
+          body: JSON.stringify({ planId: 'greenhouse', interval: 'month' }),
+          headers: { 'content-type': 'application/json' },
+        }),
+        ctx,
+        () => {}
+      );
+
+      const [[args]] = vi.mocked(billing.createCheckoutSession).mock.calls.slice(-1);
+      const successUrl = new URL(args.successUrl);
+      expect(successUrl.pathname).toBe('/settings/billing');
+      expect(Object.fromEntries(successUrl.searchParams)).toEqual({
+        status: 'success',
+        plan: 'greenhouse',
+        interval: 'month',
+      });
+      expect(args.successUrl).not.toMatch(/hh-1|test@example\.com|cs_|sub_|cus_/);
+    });
+
     it('still sells the monthly cadence on both paid tiers', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { checkout } = await import('../../../src/handlers/billing/handler.js');

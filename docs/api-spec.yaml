@@ -4526,6 +4526,10 @@ components:
         createdBy:
           type: string
           format: uuid
+        noCardTrialEndsAt:
+          type: string
+          format: date-time
+          description: End of the no-card Garden trial (ADR 0027). Present only on the POST /households response, and only when that create began the account's trial; the client counts a trial start from it.
 
     HouseholdWithMembers:
       allOf:

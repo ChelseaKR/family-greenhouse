@@ -117,6 +117,8 @@ describe('createHousehold with a referral grant', () => {
       GRANT
     );
     expect(result).toMatchObject({ name: 'New Household' });
+    // No trial began, so the response must not say one did.
+    expect(result.noCardTrialEndsAt).toBeUndefined();
 
     const calls = vi.mocked(dynamodb.send).mock.calls;
     expect(calls).toHaveLength(2); // the failed attempt, then the fallback
