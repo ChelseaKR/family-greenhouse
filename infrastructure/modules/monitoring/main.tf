@@ -388,9 +388,16 @@ resource "aws_cloudwatch_log_metric_filter" "frontend_reports_undelivered" {
   pattern        = "{ $.msg = \"frontend_telemetry\" && $.kind = \"delivery\" && $.source = \"browser\" }"
 
   metric_transformation {
-    # One point per SESSION that lost reports, not per report lost. A single
-    # visitor on a bad train connection produces one point no matter how many
-    # reports they lost, so the alarm threshold counts distinct browsers.
+    # One point per LOG LINE, not per session and not per report lost. Every
+    # `kind: "delivery"` line from a browser adds 1, so a single browser that
+    # sends several delivery reports adds several points. Single automated
+    # browsers sent bursts of 14 and 15 lines and tripped the alarm with no
+    # outage (2026-09-08, 2026-09-18, 2026-09-19). Since the frontend rate limit
+    # (#862), an up-to-date browser sends at most one line per 10 minutes, but a
+    # browser still running an older bundle can send more, and a client that
+    # forges delivery bodies can add points at will. So this metric counts
+    # lines. It does not count distinct sessions; check the sessionId
+    # distribution before treating a firing alarm as an outage.
     name          = "FrontendReportsUndelivered"
     namespace     = "FamilyGreenhouse/Frontend/${var.environment}"
     value         = "1"
@@ -1088,9 +1095,12 @@ resource "aws_cloudwatch_metric_alarm" "frontend_errors" {
   treat_missing_data = "notBreaching"
 }
 
-# One point here is one browser SESSION that lost reports, so this reads
-# "three different browsers could not reach us in five minutes" — not "one
-# visitor has bad wifi", which is the noise this threshold sits above.
+# One point here is one browser delivery-report LOG LINE, not one session. A
+# firing alarm means "three or more delivery lines arrived in five minutes",
+# which is what an outage looks like and is also what a single noisy or forged
+# client looks like. The threshold sits above one visitor with bad wifi, but it
+# cannot tell many browsers from one, so the alarm description points at the
+# sessionId distribution as the first thing to check.
 #
 # notBreaching, and for once that is not the defect: no such report simply
 # means no browser has told us it lost anything. The absence that MATTERS —
@@ -1107,7 +1117,7 @@ resource "aws_cloudwatch_metric_alarm" "frontend_reports_undelivered" {
   period              = 300
   statistic           = "Sum"
   threshold           = 2
-  alarm_description   = "Three or more browser sessions reported that earlier error reports never reached this API. Those reports are gone; only their count survived. Check CORS on POST /telemetry/frontend, the API's reachability from the public internet, and the rate limiter before assuming the browsers were at fault."
+  alarm_description   = "Three or more browser delivery-report log lines arrived within five minutes. Each line says a browser's earlier error reports never reached this API; those reports are gone and only their count survived. This counts log lines, not distinct browser sessions: one browser can send several lines. Since the frontend rate limit, an up-to-date browser sends at most one line per 10 minutes, but older cached clients can still send more and a client that forges delivery bodies can add lines. Before treating this as an outage, check the sessionId distribution of the kind=delivery lines in the Lambda log, and the source ip and status of POST /telemetry/frontend in the API Gateway access log. One sessionId across all lines means one client, not an outage. If the lines come from many different sessions, check CORS on POST /telemetry/frontend, the API's reachability from the public internet, and the rate limiter before assuming the browsers were at fault."
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
