@@ -31,7 +31,14 @@ export interface ArchiveNotRestored {
 
 export interface ArchiveImportPreview {
   digest: string;
-  source: { householdId: string; name: string; exportedAt: string | null; version: number };
+  source: {
+    householdId: string;
+    name: string;
+    exportedAt: string | null;
+    version: number;
+    /** `verified` against the file's own manifest; `absent` for a version 1 file, which has none. */
+    manifest: 'verified' | 'absent';
+  };
   counts: ArchiveImportCounts;
   notRestored: ArchiveNotRestored;
   planLimit: {

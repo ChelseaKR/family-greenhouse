@@ -43,11 +43,16 @@ describe('readArchiveFile', () => {
     expect(result.file.exportedAt).toBe('2026-09-01T00:00:00.000Z');
   });
 
+  it('reads every version up to the newest, so a file the released app wrote still restores', () => {
+    expect(read(exportDoc({ version: 1 }))).toMatchObject({ ok: true, file: { version: 1 } });
+    expect(read(exportDoc({ version: 2 }))).toMatchObject({ ok: true, file: { version: 2 } });
+  });
+
   it('names a newer version, and refuses other files before any upload', () => {
-    expect(read(exportDoc({ version: 2 }))).toEqual({
+    expect(read(exportDoc({ version: 3 }))).toEqual({
       ok: false,
       error: 'newerVersion',
-      version: 2,
+      version: 3,
     });
     expect(read(exportDoc({ version: 0 }))).toMatchObject({
       ok: false,

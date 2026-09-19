@@ -1226,7 +1226,13 @@ paths:
             member of could not be cancelled. Nothing was deleted; retry.
   /me/export:
     get:
-      summary: GDPR data-portability export (profile, prefs, memberships, plants, tasks)
+      summary: >-
+        GDPR data-portability export (profile, prefs, memberships, plants, tasks). Format
+        `family-greenhouse-export`, version 2 (#669): version 1 plus a `manifest` in each household
+        section — `counts` of plants and tasks and one sorted SHA-256 `plantDigests` /
+        `taskDigests` entry per row, computed over the row as the restore's schema reads it
+        (`sha256("plant:" + canonicalJson(row))`, keys sorted, undefined dropped). Digests only; no
+        row content. A check on the file, not a signature.
       tags: [Me]
       responses:
         '200':
@@ -2597,8 +2603,10 @@ paths:
     post:
       summary: >-
         Restore a household from the app's own export (#669) — the JSON `GET /me/export` writes,
-        format `family-greenhouse-export`, version 1. Admin only, into an EMPTY household only (no
-        plants, tasks or spaces; version 1 never merges). `mode: preview` validates the archive and
+        format `family-greenhouse-export`, version 1 or 2 (version 2 carries a manifest, which is
+        checked before anything is written; a version 1 file has none and restores exactly as it
+        always did). Admin only, into an EMPTY household only (no plants, tasks or spaces; neither
+        version merges). `mode: preview` validates the archive and
         answers with counts, what will not be restored and the plan-cap verdict, writing nothing;
         `mode: commit` writes the same plan and requires the preview's `confirmDigest`. The body
         is capped at 5 MiB and treated as untrusted: unknown or newer versions are refused, keys
@@ -2636,8 +2644,8 @@ paths:
       responses:
         '200':
           description: >-
-            Preview (`digest`, `source`, `counts`, `notRestored`, `planLimit`, `target.state`,
-            `canImport`), or the commit result (`status: complete | already_imported`, `imported`,
+            Preview (`digest`, `source` — with `version` and `manifest`, `verified` or `absent` —
+            `counts`, `notRestored`, `planLimit`, `target.state`, `canImport`), or the commit result (`status: complete | already_imported`, `imported`,
             `counts`, `notRestored`).
           content:
             application/json:
@@ -2645,7 +2653,9 @@ paths:
         '400':
           description: >-
             Not an export, an unknown or newer version, an unsafe or edited file, or a household
-            the file does not hold. `details.code` names which.
+            the file does not hold. `details.code` names which; `manifest_mismatch` means a
+            version 2 file does not hold what its manifest lists (`details` gives plant and task
+            counts only).
         '402':
           description: >-
             More active plants than the plan allows (`over_plan_limit`, nothing written), or the

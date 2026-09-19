@@ -642,7 +642,8 @@ describe('me handler', () => {
       const body = JSON.parse(res.body);
       expect(body).toMatchObject({
         format: 'family-greenhouse-export',
-        version: 1,
+        // Version 2 (#669): version 1 plus a per-household manifest.
+        version: 2,
         user: { id: 'user-1', email: 'test@example.com', name: 'Test User' },
         households: [
           expect.objectContaining({
@@ -651,6 +652,7 @@ describe('me handler', () => {
             role: 'admin',
             plants: [],
             tasks: [],
+            manifest: { counts: { plants: 0, tasks: 0 }, plantDigests: [], taskDigests: [] },
           }),
         ],
       });
