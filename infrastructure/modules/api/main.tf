@@ -608,6 +608,11 @@ locals {
     PAYMENTS_ENABLED                = var.payments_enabled
   }
 
+  # Plant passport import (#676): the variable exists only when the switch is
+  # on, so with it off the plants Lambda's environment - and the plan - is
+  # unchanged, the same shape passkeys use for the auth Lambda.
+  passport_import_environment = var.passport_import_enabled ? { PASSPORT_IMPORT_ENABLED = "1" } : {}
+
   weather_environment = {
     OPENWEATHER_API_KEY      = var.openweather_api_key
     OPENWEATHER_DAILY_BUDGET = var.openweather_daily_budget
@@ -651,7 +656,7 @@ locals {
     # Passkeys (#671): the variable is added only when on, so with it off the
     # auth Lambda's environment — and the plan — is unchanged.
     auth   = var.passkeys_enabled ? { PASSKEYS_ENABLED = "1" } : {}
-    plants = merge(local.plant_integration_environment, local.perenual_environment, local.identify_top_up_offer_environment)
+    plants = merge(local.plant_integration_environment, local.perenual_environment, local.identify_top_up_offer_environment, local.passport_import_environment)
     tasks  = {}
     # Email for the welcome mail + member upgrade requests; VAPID so the
     # upgrade request can also reach admins as a browser/native push.
@@ -1121,6 +1126,15 @@ locals {
     "POST /plants/{id}/share"           = { group = "plants", auth = "jwt" }
     "GET /plants/shared/{code}"         = { group = "plants", auth = "none" }
     "POST /plants/shared/{code}/accept" = { group = "plants", auth = "jwt" }
+    # Plant passport (#676): a cutting link that also carries the plant's care
+    # summary. Inert until passport_import_enabled: every handler answers 404
+    # PASSPORT_IMPORT_DISABLED without PASSPORT_IMPORT_ENABLED=1 on the plants
+    # Lambda. The preview is public like the cutting preview (a frozen summary
+    # and no other household data); the import takes no body and writes only to
+    # the caller's own household under the normal plan cap.
+    "POST /plants/{id}/passport-share"           = { group = "plants", auth = "jwt" }
+    "GET /plants/shared/{code}/passport"         = { group = "plants", auth = "none" }
+    "POST /plants/shared/{code}/passport/import" = { group = "plants", auth = "jwt" }
 
     # Caretaker photo upload (auth=none, token-scoped). Served by the plants
     # group because it owns the presign/confirm S3 pipeline; the key is minted

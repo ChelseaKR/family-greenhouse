@@ -216,6 +216,7 @@ module "api" {
   apns_auth_key_secret_id         = var.apns_auth_key_secret_id
   apns_environment                = var.apns_environment
   native_push_enabled             = var.native_push_enabled
+  passport_import_enabled         = var.passport_import_enabled
   identify_metering_enabled       = var.identify_metering_enabled
   sms_notifications_enabled       = var.sms_notifications_enabled
   git_sha                         = var.git_sha
