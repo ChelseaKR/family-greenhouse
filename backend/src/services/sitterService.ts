@@ -38,6 +38,7 @@
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { randomBytes } from 'node:crypto';
 import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
+import { upgradeLegacyRow } from './tokenHashBackfill.js';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -235,6 +236,7 @@ export async function getActiveLink(
     token,
     pk: (suffix) => `SITTER#${suffix}`,
     read: readLinkRow,
+    upgrade: upgradeLegacyRow('sitterLink', token),
   });
   if (!item) return null;
 

@@ -3,6 +3,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import createHttpError from 'http-errors';
 import type { AuthenticatedEvent } from './auth.js';
 import { audit } from '../utils/auditLog.js';
+import { redactCredentialPath } from '../utils/credentialPath.js';
 
 /**
  * Lightweight in-memory rate limiter, scoped to the source IP. Designed as a
@@ -116,7 +117,14 @@ function routePath(event: APIGatewayProxyEvent): string {
   if (typeof routed.resource === 'string' && routed.resource !== '/') {
     return `${routed.httpMethod ?? 'GET'} ${routed.resource}`;
   }
-  return (event as MaybeV2Event).rawPath ?? event.path ?? '/';
+  // The literal path is a fallback for events with no route template, and a
+  // capability URL's path IS its credential — this key is written to the audit
+  // log when the limit trips, so it goes through the same redaction the
+  // request log does.
+  return redactCredentialPath(
+    (event as MaybeV2Event).rawPath ?? event.path ?? '/',
+    event.pathParameters
+  );
 }
 
 export function rateLimit(opts: {

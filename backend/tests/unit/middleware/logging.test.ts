@@ -152,6 +152,80 @@ describe('request-scoped logger wiring', () => {
   });
 });
 
+describe('capability URLs never reach the request log (#450)', () => {
+  const TOKEN = 'ab12cd34'.repeat(8);
+  const CODE = '9f8e7d6c'.repeat(4);
+
+  it.each([
+    ['/sitter/{token}', `/sitter/${TOKEN}`, { token: TOKEN }, '/sitter/{token}'],
+    ['/kiosk/{token}', `/kiosk/${TOKEN}`, { token: TOKEN }, '/kiosk/{token}'],
+    ['/tag/{token}', `/tag/${TOKEN}`, { token: TOKEN }, '/tag/{token}'],
+    [
+      '/tag/{token}/tasks/{taskId}/complete',
+      `/tag/${TOKEN}/tasks/t-1/complete`,
+      { token: TOKEN, taskId: 't-1' },
+      '/tag/{token}/tasks/t-1/complete',
+    ],
+    ['/caretaker/{token}', `/caretaker/${TOKEN}`, { token: TOKEN }, '/caretaker/{token}'],
+    [
+      '/calendar/{token}/…',
+      `/calendar/${TOKEN}/family-greenhouse.ics`,
+      { token: TOKEN },
+      '/calendar/{token}/family-greenhouse.ics',
+    ],
+    ['/plants/shared/{code}', `/plants/shared/${CODE}`, { code: CODE }, '/plants/shared/{code}'],
+    [
+      '/plants/shared/{code}/accept',
+      `/plants/shared/${CODE}/accept`,
+      { code: CODE },
+      '/plants/shared/{code}/accept',
+    ],
+  ])(
+    '%s: the request record carries the placeholder, not the credential',
+    async (_route, path, pathParameters, expected) => {
+      const request = buildRequest(buildEvent({ path, pathParameters }));
+      await runHook(loggingMiddleware().before, request);
+
+      const line = JSON.stringify(recorded.logs);
+      expect(recorded.logs[0].fields.path).toBe(expected);
+      expect(line).not.toContain(TOKEN);
+      expect(line).not.toContain(CODE);
+    }
+  );
+
+  it('scrubs the HTTP API v2 shape (rawPath / requestContext.http.path) the same way', async () => {
+    const request = buildRequest(
+      buildEvent({
+        path: undefined as unknown as string,
+        pathParameters: { token: TOKEN },
+        requestContext: {
+          requestId: 'rid-v2',
+          http: { method: 'GET', path: `/sitter/${TOKEN}/brief` },
+        } as unknown as APIGatewayProxyEvent['requestContext'],
+      })
+    );
+    await runHook(loggingMiddleware().before, request);
+    expect(recorded.logs[0].fields.path).toBe('/sitter/{token}/brief');
+
+    recorded.logs.length = 0;
+    const raw = buildRequest({
+      ...buildEvent({ pathParameters: { token: TOKEN } }),
+      path: undefined as unknown as string,
+      rawPath: `/tag/${TOKEN}`,
+    } as unknown as APIGatewayProxyEvent);
+    await runHook(loggingMiddleware().before, raw);
+    expect(recorded.logs[0].fields.path).toBe('/tag/{token}');
+  });
+
+  it('does not rewrite the path of a route with no credential in it', async () => {
+    const request = buildRequest(
+      buildEvent({ path: '/plants/p-1234567890/tag', pathParameters: { plantId: 'p-1234567890' } })
+    );
+    await runHook(loggingMiddleware().before, request);
+    expect(recorded.logs[0].fields.path).toBe('/plants/p-1234567890/tag');
+  });
+});
+
 describe('response and error records', () => {
   it('resolves userId/householdId lazily — auth runs after before(), so identity must come from the after() hook', async () => {
     const mw = loggingMiddleware();

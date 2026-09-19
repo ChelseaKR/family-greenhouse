@@ -1,7 +1,21 @@
 import { z } from 'zod';
 
+/**
+ * A whole path segment this long, of URL-safe characters, is a credential, not
+ * a route (the same test, character for character, the browser applies): every
+ * capability URL in the app (`/tag/`, `/sit/`, `/kiosk/`, `/caretaker/`,
+ * `/shared/`) puts a 128- or 256-bit token in a path segment. The browser
+ * replaces such a run with `:token` before it sends anything
+ * (`normalizeTelemetryRoute` in the frontend); this is the same rule applied
+ * again where the value is about to be written to a 30-day log, so a client
+ * that does not scrub — an old build, a fork, a script — is refused instead of
+ * logged (#450).
+ */
+const TOKEN_SHAPED_RUN = /\/[A-Za-z0-9_-]{24,}(?=\/|$)/u;
+
 function isTelemetryRoute(value: string): boolean {
   if (!value.startsWith('/')) return false;
+  if (TOKEN_SHAPED_RUN.test(value)) return false;
 
   let previousWasSlash = true;
   for (let index = 1; index < value.length; index += 1) {

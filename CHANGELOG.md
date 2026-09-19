@@ -132,6 +132,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Security
 
+- **A credential written before hashing is moved to its hashed key the first
+  time it is used, and no log or telemetry line carries a token (issue #450).**
+  Until now a plant tag, kiosk link, sitter link, caretaker seat or cutting
+  share minted before its surface was hashed stayed in plaintext in the table
+  until an operator ran the backfill (and a plant tag or kiosk link never
+  expires, so it would have stayed indefinitely). The first request that
+  resolves one now moves it, in the same atomic transaction the backfill uses,
+  and the person keeps the same link, label or display. A scan that races a
+  revocation, another scan or the backfill cannot leave two live rows or bring a
+  revoked label back, and a failed move costs the upgrade, never the request.
+  The operator script also takes `--limit N` to run in batches. The audit found
+  and closed four more places a credential could be written down: the request
+  log scrubbed only a path parameter called `token`, so a cutting share's
+  `/plants/shared/{code}` was logged in full; the rate limiter's audited
+  bucket key fell back to the literal path when an event had no route
+  template; the logger's backstop redaction did not know a credential row's
+  `keyToken` (the plaintext token on a legacy row) or a share `code`; and the
+  telemetry endpoint accepted a route made of a token. The legacy-row check now
+  compares in constant time. `tests/integration/credential-leaks.test.ts` drives
+  every credential through the real handlers and fails if its token is in the
+  table, in any response but the creation response, or in any log line.
+
 - **Plant photos are served only through short-lived signed URLs.** Every
   response that shows a photo now carries a link signed for that request,
   which expires on its own: after an hour or so in the app, and never after

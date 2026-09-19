@@ -576,6 +576,46 @@ describe('public API v1 handler', () => {
       expect(rawMessage.statusCode).toBe(400);
     });
 
+    // #450: a capability URL's token must not reach the telemetry log even from
+    // a client that does not scrub its own route.
+    it('refuses a route that carries a credential, and accepts the placeholder the browser sends', async () => {
+      const { frontendTelemetry } = await import('../../../src/handlers/api/handler.js');
+      const post = (route: string) =>
+        invoke(
+          frontendTelemetry,
+          buildEvent({
+            httpMethod: 'POST',
+            path: '/telemetry/frontend',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              kind: 'error',
+              sessionId: '123e4567-e89b-42d3-a456-426614174000',
+              route,
+              name: 'ChunkLoadError',
+              message: 'Application update or chunk load failed',
+              fingerprint: 'deadbeef',
+            }),
+          })
+        );
+
+      const token = 'a1b2c3d4'.repeat(8);
+      for (const route of [
+        `/tag/${token}`,
+        `/sit/${token}/brief`,
+        `/shared/${'9f8e7d6c'.repeat(4)}`,
+      ]) {
+        expect((await post(route)).statusCode).toBe(400);
+      }
+      for (const route of [
+        '/tag/:token',
+        '/sit/:token/brief',
+        '/plants/:id',
+        '/settings/billing',
+      ]) {
+        expect((await post(route)).statusCode).toBe(204);
+      }
+    });
+
     // Issue #576. These lines are what let CloudWatch tell "no browser errors"
     // apart from "no browser could deliver one" — the browser's own count of
     // what it lost, and the synthetic heartbeat whose absence is alarmable.
