@@ -30,6 +30,15 @@
  *
  *   # one surface at a time, plant tags first if you want to watch them:
  *   ... -- --surface plantTag --confirm
+ *
+ *   # a batch at a time: re-key at most 25 rows per surface, then re-run for
+ *   # the next 25 (a moved row is no longer legacy, so each run is new work):
+ *   ... -- --limit 25 --confirm
+ *
+ * A credential that is still being USED is moved by the request that uses it
+ * (`upgradeLegacyRow`), so by the time this runs it mostly finds the rows nobody
+ * has touched. Both use the same transaction; if they meet on one row, one wins
+ * and this reports the other as `raced`.
  */
 import { parseArgs } from 'node:util';
 import {
@@ -43,6 +52,8 @@ import {
 export interface CliArgs {
   surfaces: BackfillSurfaceName[];
   confirm: boolean;
+  /** Batch size per surface, or null for every legacy row. */
+  limit: number | null;
 }
 
 function isSurfaceName(value: string): value is BackfillSurfaceName {
@@ -56,6 +67,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     options: {
       surface: { type: 'string', multiple: true },
       confirm: { type: 'boolean', default: false },
+      limit: { type: 'string' },
     },
     strict: true,
     allowPositionals: false,
@@ -75,18 +87,30 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     }
     if (!surfaces.includes(name)) surfaces.push(name);
   }
+  let limit: number | null = null;
+  if (values.limit !== undefined) {
+    if (!/^[1-9]\d*$/.test(values.limit)) {
+      throw new Error(`--limit must be a positive whole number, got "${values.limit}".`);
+    }
+    limit = Number(values.limit);
+  }
   return {
     surfaces: surfaces.length > 0 ? surfaces : [...BACKFILL_SURFACE_NAMES],
     confirm: values.confirm ?? false,
+    limit,
   };
 }
 
 /** One surface's result, as the operator reads it. */
 export function formatReport(report: SurfaceReport, confirm: boolean): string {
+  const batch =
+    report.limit === null
+      ? ''
+      : ` Batch size ${report.limit}: ${report.deferred} left for the next run.`;
   const lines = [
     confirm
-      ? `${report.surface}: ${report.legacy} legacy row(s); ${report.rekeyed} re-keyed, ${report.raced} raced (re-run to pick up).`
-      : `${report.surface}: ${report.legacy} legacy row(s) would be re-keyed.`,
+      ? `${report.surface}: ${report.legacy} legacy row(s); ${report.rekeyed} re-keyed, ${report.raced} raced (re-run to pick up).${batch}`
+      : `${report.surface}: ${report.legacy} legacy row(s) would be re-keyed.${batch}`,
   ];
   for (const skipped of report.skipped) {
     lines.push(`  skipped ${skipped.ref}: ${skipped.reason}`);
@@ -106,7 +130,10 @@ export async function main(argv: readonly string[]): Promise<number> {
 
   let raced = 0;
   for (const name of args.surfaces) {
-    const report = await backfillSurface(LEGACY_SURFACES[name], { apply: args.confirm });
+    const report = await backfillSurface(LEGACY_SURFACES[name], {
+      apply: args.confirm,
+      ...(args.limit !== null ? { limit: args.limit } : {}),
+    });
     raced += report.raced;
     console.info(formatReport(report, args.confirm));
   }

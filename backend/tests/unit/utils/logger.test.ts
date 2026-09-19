@@ -182,6 +182,26 @@ describe('PII redaction', () => {
     expect(line).not.toContain('AQICAHh');
   });
 
+  it('censors a credential row’s key suffix and a share code, but not an error class (#450)', () => {
+    const { log, lines } = captureLogger();
+    // `keyToken` is a hashed row's digest — but on a pre-#450 row it IS the
+    // plaintext token, so it is never logged under either name.
+    log.warn(
+      { keyToken: 'a'.repeat(64), tag: { keyToken: 'b'.repeat(64) }, code: 'c'.repeat(32) },
+      'anything'
+    );
+    log.warn({ err: Object.assign(new Error('boom'), { code: 'ECONNRESET' }) }, 'anything');
+    const record = JSON.parse(lines[0]);
+    expect(record.keyToken).toBe('[redacted]');
+    expect(record.tag.keyToken).toBe('[redacted]');
+    expect(record.code).toBe('[redacted]');
+    expect(lines[0]).not.toContain('a'.repeat(64));
+    expect(lines[0]).not.toContain('b'.repeat(64));
+    expect(lines[0]).not.toContain('c'.repeat(32));
+    // The diagnostic survives: an error's own `code` is a class, not a secret.
+    expect(JSON.parse(lines[1]).err.code).toBe('ECONNRESET');
+  });
+
   it('does NOT censor actorEmail — the audit trail keeps its actor, deliberately', () => {
     const { log, lines } = captureLogger();
     log.info({ audit: true, event: 'planttag.issued', actorEmail: 'a@b.com' }, 'planttag.issued');

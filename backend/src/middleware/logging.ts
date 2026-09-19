@@ -2,6 +2,7 @@ import middy from '@middy/core';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { logger, Logger, withRequest, currentTraceId } from '../utils/logger.js';
 import { AuthenticatedEvent } from './auth.js';
+import { redactCredentialPath } from '../utils/credentialPath.js';
 
 export interface LoggedEvent extends APIGatewayProxyEvent {
   log: Logger;
@@ -22,12 +23,13 @@ function identityOf(event: APIGatewayProxyEvent): { userId?: string; householdId
 
 /**
  * The request path as it may be logged. Capability-URL routes
- * (`/sitter/{token}`, `/calendar/{token}/…`) carry their ONLY credential in
- * the path, and a request log that echoed it would turn CloudWatch retention
- * into a plaintext token store — defeating the point of hashing them at
- * rest. API Gateway has already bound the secret segment to the `token`
- * path parameter, so substitute the template placeholder for its value.
- * Every other route logs its concrete path unchanged.
+ * (`/sitter/{token}`, `/calendar/{token}/…`, `/plants/shared/{code}`) carry
+ * their ONLY credential in the path, and a request log that echoed it would
+ * turn CloudWatch retention into a plaintext token store — defeating the point
+ * of hashing them at rest. API Gateway has already bound the secret segment to
+ * a path parameter, so substitute the template placeholder for its value
+ * (`utils/credentialPath.ts` names the parameters). Every other route logs its
+ * concrete path unchanged.
  */
 function loggablePath(event: APIGatewayProxyEvent): string | undefined {
   // Method/path live at the top level in REST/HTTP-v1 events and under
@@ -35,9 +37,7 @@ function loggablePath(event: APIGatewayProxyEvent): string | undefined {
   // behind either API type.
   const httpCtx = (event.requestContext as { http?: { path?: string } } | undefined)?.http;
   const raw = event.path ?? (event as { rawPath?: string }).rawPath ?? httpCtx?.path;
-  const token = event.pathParameters?.token;
-  if (raw && token) return raw.split(token).join('{token}');
-  return raw;
+  return raw === undefined ? undefined : redactCredentialPath(raw, event.pathParameters);
 }
 
 /**
