@@ -16,6 +16,7 @@ import { initPwaRegistration } from './services/pwaRegistration';
 import { initNativeDeepLinks } from './services/nativeDeepLinks';
 import { initNativeBackButton } from './services/nativeBackButton';
 import { initGoogleAnalytics } from './services/googleAnalytics';
+import { setupOfflineSync } from './services/offlineSync';
 import './i18n';
 import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
@@ -67,6 +68,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Set up offline sync: replay queued mutations when connectivity returns.
+setupOfflineSync(queryClient);
 
 const rootElement = document.getElementById('root')!;
 
