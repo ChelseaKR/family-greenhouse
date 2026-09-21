@@ -70,6 +70,7 @@ import { getAwayRecap } from './awayRecap.js';
 import * as trash from './trash.js';
 import * as importArchive from './importArchive.js';
 import * as chatChannel from './channelNotifier.js';
+import * as webhooks from '../webhooks/handler.js';
 
 async function sendFirstHouseholdWelcome(
   userId: string,
@@ -1562,6 +1563,13 @@ export const handler = createRouter({
   'PUT /households/{id}/channel': chatChannel.saveHouseholdChannel,
   'POST /households/{id}/channel/test': chatChannel.testHouseholdChannel,
   'DELETE /households/{id}/channel': chatChannel.deleteHouseholdChannel,
+  // Outbound webhooks (#871) — handlers/webhooks/handler.ts.
+  'GET /households/{id}/webhooks': webhooks.listWebhooksHandler,
+  'POST /households/{id}/webhooks': webhooks.createWebhookHandler,
+  'GET /households/{id}/webhooks/{webhookId}': webhooks.getWebhookHandler,
+  'PUT /households/{id}/webhooks/{webhookId}': webhooks.updateWebhookHandler,
+  'DELETE /households/{id}/webhooks/{webhookId}': webhooks.deleteWebhookHandler,
+  'POST /households/{id}/webhooks/{webhookId}/test': webhooks.testWebhookHandler,
   // Caretaker seats (handlers/caretakers/management.ts) — same posture as
   // sitter links: create/list/revoke are admin-gated, the report is not.
   'POST /households/{id}/caretakers': caretakers.createCaretaker,

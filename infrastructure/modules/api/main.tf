@@ -1217,6 +1217,14 @@ locals {
     "PUT /households/{id}/channel"       = { group = "households", auth = "jwt" }
     "POST /households/{id}/channel/test" = { group = "households", auth = "jwt" }
     "DELETE /households/{id}/channel"    = { group = "households", auth = "jwt" }
+    # Outbound webhooks (#871, handlers/webhooks/handler.ts):
+    # admin-only. Subscriptions for real-time event notifications.
+    "GET /households/{id}/webhooks"                    = { group = "households", auth = "jwt" }
+    "POST /households/{id}/webhooks"                   = { group = "households", auth = "jwt" }
+    "GET /households/{id}/webhooks/{webhookId}"        = { group = "households", auth = "jwt" }
+    "PUT /households/{id}/webhooks/{webhookId}"        = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/webhooks/{webhookId}"     = { group = "households", auth = "jwt" }
+    "POST /households/{id}/webhooks/{webhookId}/test"  = { group = "households", auth = "jwt" }
     # Household trash (#670, handlers/households/trash.ts): any member may
     # list, restore, or delete-now. DELETE /plants/{id} and DELETE /tasks/{id}
     # move items in; the daily purge rides the digests function (below).

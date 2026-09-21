@@ -718,6 +718,8 @@ export const db = {
   // address at all — only what production's summary exposes — because it
   // never posts anywhere.
   householdChannels: new Map<string, any>(),
+  // Outbound webhook subscriptions (#871), keyed by webhook id.
+  webhooks: new Map<string, any>(),
   // Member → admin upgrade asks, keyed `${householdId}|${feature}|${userId}`
   // (mirrors the UPGRADE_REQUEST#{feature}#{userId} marker + its 7-day window).
   upgradeRequests: new Map<string, { requestedAt: string }>(),
@@ -790,6 +792,7 @@ export function resetDb(): void {
   db.caretakerOpenVisits.clear();
   db.kioskLinks.clear();
   db.householdChannels.clear();
+  db.webhooks.clear();
   db.upgradeRequests.clear();
   db.helpAsks.clear();
   db.mockUploadGrants.clear();
@@ -3301,6 +3304,154 @@ app.delete(
     res.status(204).end();
   }
 );
+
+// --- Outbound webhooks (#871) ------------------------------------------------
+// Mirrors handlers/webhooks/handler.ts: admin-only CRUD + test for webhook
+// subscriptions. The mock stores subscriptions in-memory, generates a signing
+// secret, and simulates delivery (no actual HTTPS call).
+
+function requireWebhookHousehold(req: express.Request, res: express.Response): string | null {
+  const user = (req as any).user;
+  if (user.householdId !== req.params.id) {
+    res.status(403).json({ message: 'Access denied' });
+    return null;
+  }
+  return req.params.id;
+}
+
+// GET /households/:id/webhooks
+app.get('/households/:id/webhooks', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
+  const householdId = requireWebhookHousehold(req, res);
+  if (!householdId) return;
+  const webhooks = [...db.webhooks.values()].filter((w) => w.householdId === householdId);
+  res.json({ webhooks });
+});
+
+// POST /households/:id/webhooks
+app.post('/households/:id/webhooks', authMiddleware, requireHousehold, requireAdmin, (req, res) => {
+  const householdId = requireWebhookHousehold(req, res);
+  if (!householdId) return;
+  const { url, events } = req.body;
+  if (!url || !events || !Array.isArray(events) || events.length === 0) {
+    return res.status(400).json({ message: 'url and events are required' });
+  }
+  const parsed = parseWebhookUrlForMock(url);
+  if (!parsed.ok) {
+    return res.status(400).json({ message: parsed.problem, details: { code: parsed.code } });
+  }
+  const id = uuidv4();
+  const secret = generateSecretForMock();
+  const now = new Date().toISOString();
+  const webhook = {
+    id,
+    householdId,
+    url: `${parsed.host}/…${parsed.last4}`,
+    events,
+    status: 'active',
+    disabledReason: null,
+    consecutiveFailures: 0,
+    lastFailure: null,
+    lastDeliveredAt: null,
+    createdAt: now,
+  };
+  db.webhooks.set(id, webhook);
+  res.status(201).json({ webhook, secret });
+});
+
+// GET /households/:id/webhooks/:webhookId
+app.get(
+  '/households/:id/webhooks/:webhookId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireWebhookHousehold(req, res);
+    if (!householdId) return;
+    const webhook = db.webhooks.get(req.params.webhookId);
+    if (!webhook || webhook.householdId !== householdId) {
+      return res.status(404).json({ message: 'Webhook not found' });
+    }
+    res.json({ webhook });
+  }
+);
+
+// PUT /households/:id/webhooks/:webhookId
+app.put(
+  '/households/:id/webhooks/:webhookId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireWebhookHousehold(req, res);
+    if (!householdId) return;
+    const webhook = db.webhooks.get(req.params.webhookId);
+    if (!webhook || webhook.householdId !== householdId) {
+      return res.status(404).json({ message: 'Webhook not found' });
+    }
+    const { events } = req.body;
+    if (!events || !Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ message: 'events is required' });
+    }
+    webhook.events = events;
+    res.json({ webhook });
+  }
+);
+
+// DELETE /households/:id/webhooks/:webhookId
+app.delete(
+  '/households/:id/webhooks/:webhookId',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireWebhookHousehold(req, res);
+    if (!householdId) return;
+    const webhook = db.webhooks.get(req.params.webhookId);
+    if (!webhook || webhook.householdId !== householdId) {
+      return res.status(404).json({ message: 'Webhook not found' });
+    }
+    db.webhooks.delete(req.params.webhookId);
+    res.status(204).end();
+  }
+);
+
+// POST /households/:id/webhooks/:webhookId/test
+app.post(
+  '/households/:id/webhooks/:webhookId/test',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const householdId = requireWebhookHousehold(req, res);
+    if (!householdId) return;
+    const webhook = db.webhooks.get(req.params.webhookId);
+    if (!webhook || webhook.householdId !== householdId) {
+      return res.status(404).json({ message: 'Webhook not found' });
+    }
+    console.log(`[mock] webhook_test_dry_run webhookId=${webhook.id}`);
+    res.json({ outcome: 'delivered', httpStatus: 200, simulated: true });
+  }
+);
+
+// Mock helpers for webhook routes
+function parseWebhookUrlForMock(
+  url: string
+): { ok: true; host: string; last4: string } | { ok: false; problem: string; code: string } {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:')
+      return { ok: false, problem: 'Only HTTPS URLs are accepted.', code: 'not_https' };
+    const host = parsed.hostname;
+    const last4 = parsed.pathname.slice(-4) || '****';
+    return { ok: true, host, last4 };
+  } catch {
+    return { ok: false, problem: 'Invalid URL.', code: 'invalid_url' };
+  }
+}
+
+function generateSecretForMock(): string {
+  return randomBytes(32).toString('base64url');
+}
 
 /** Token → link only if active. Long-lived by design: no window check, only
  *  revocation. Mirrors kioskService.getActiveKioskLink. */
