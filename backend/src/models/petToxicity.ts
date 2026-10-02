@@ -66,6 +66,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'pothos',
     commonName: 'Pothos',
     scientificName: 'Epipremnum aureum',
+    aspcaListing: {
+      title: 'Golden Pothos',
+      scientificName: 'Epipremnum aureum',
+      path: '/toxic-and-non-toxic-plants/golden-pothos',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['devil’s ivy', 'devils ivy', 'golden pothos', 'money plant', 'epipremnum'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -75,6 +81,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'monstera',
     commonName: 'Monstera',
     scientificName: 'Monstera deliciosa',
+    aspcaListing: {
+      title: 'Swiss Cheese Plant',
+      scientificName: 'Monstera deliciosa',
+      path: '/toxic-and-non-toxic-plants/swiss-cheese-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['swiss cheese plant', 'split-leaf philodendron', 'split leaf philodendron'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -84,15 +96,27 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'snake-plant',
     commonName: 'Snake plant',
     scientificName: 'Dracaena trifasciata',
+    aspcaListing: {
+      title: 'Snake Plant',
+      scientificName: 'Sansevieria trifasciata',
+      path: '/toxic-and-non-toxic-plants/snake-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['mother-in-law’s tongue', 'mother in laws tongue', 'sansevieria', 'dracaena'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Contains saponins, which cause drooling, vomiting and the odd bout of diarrhoea if eaten. Mildly toxic rather than dangerous — most pets feel rotten for a while and recover.',
+    note: 'Contains saponins, which cause nausea, vomiting and diarrhea if eaten. Mildly toxic rather than dangerous — most pets feel rotten for a while and recover.',
   },
   {
     slug: 'spider-plant',
     commonName: 'Spider plant',
     scientificName: 'Chlorophytum comosum',
+    aspcaListing: {
+      title: 'Spider Plant',
+      scientificName: 'Chlorophytum comosum',
+      path: '/toxic-and-non-toxic-plants/spider-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['airplane plant', 'ribbon plant', 'chlorophytum'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -102,6 +126,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'peace-lily',
     commonName: 'Peace lily',
     scientificName: 'Spathiphyllum',
+    aspcaListing: {
+      title: 'Peace Lily',
+      scientificName: 'Spathiphyllum',
+      path: '/toxic-and-non-toxic-plants/peace-lily',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['spathiphyllum', 'closet plant'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -111,24 +141,42 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'aloe-vera',
     commonName: 'Aloe vera',
     scientificName: 'Aloe vera',
+    aspcaListing: {
+      title: 'Aloe',
+      scientificName: 'Aloe vera',
+      path: '/toxic-and-non-toxic-plants/aloe',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['aloe', 'medicine plant', 'burn plant'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The gel inside is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy and diarrhoea if eaten. Keep the plant out of reach even though aloe gel is a human first-aid staple.',
+    note: 'The gel inside is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy and diarrhea if eaten. Keep the plant out of reach even though aloe gel is a human first-aid staple.',
   },
   {
     slug: 'jade-plant',
     commonName: 'Jade plant',
     scientificName: 'Crassula ovata',
+    aspcaListing: {
+      title: 'Jade Plant',
+      scientificName: 'Crassula argentea',
+      path: '/toxic-and-non-toxic-plants/jade-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['lucky plant', 'crassula', 'friendship tree'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to both, though exactly why isn’t fully understood — eating it causes vomiting, a wobbly unsteady gait and a slowed heart rate. Worth a vet call if a pet has had a real mouthful.',
+    note: 'Toxic to both, though exactly why isn’t fully understood — eating it causes vomiting, depression (lethargy) and incoordination. Worth a vet call if a pet has had a real mouthful.',
   },
   {
     slug: 'philodendron',
     commonName: 'Philodendron',
     scientificName: 'Philodendron',
+    aspcaListing: {
+      title: 'Heartleaf Philodendron',
+      scientificName: 'Philodendron hederaceum',
+      path: '/toxic-and-non-toxic-plants/heartleaf-philodendron',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['heartleaf philodendron', 'philodendron hederaceum'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -147,33 +195,57 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'fiddle-leaf-fig',
     commonName: 'Fiddle-leaf fig',
     scientificName: 'Ficus lyrata',
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['fiddle leaf fig', 'ficus', 'fig'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The sap contains crystals that irritate the mouth and skin, causing drooling and vomiting if leaves are eaten. More of a nuisance than a danger, but the milky sap can also cause a skin rash.',
+    note: 'The ASPCA lists the Ficus genus as toxic: the milky sap carries ficin and ficusin, which irritate the stomach and the skin. Expect vomiting or drooling if leaves are eaten, and a possible rash where sap touches skin.',
   },
   {
     slug: 'rubber-plant',
     commonName: 'Rubber plant',
     scientificName: 'Ficus elastica',
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['rubber tree', 'rubber fig', 'ficus elastica'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The milky sap irritates the mouth and gut and can cause drooling, vomiting and a skin reaction. Mildly toxic — keep curious chewers away and wipe up any sap from broken leaves.',
+    note: 'A Ficus, which the ASPCA lists as toxic: the milky sap carries ficin and ficusin, which irritate the gut and the skin. Keep curious chewers away and wipe up any sap from broken leaves.',
   },
   {
     slug: 'dieffenbachia',
     commonName: 'Dieffenbachia',
     scientificName: 'Dieffenbachia',
+    aspcaListing: {
+      title: 'Dieffenbachia',
+      scientificName: 'Dieffenbachia',
+      path: '/toxic-and-non-toxic-plants/dieffenbachia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['dumb cane', 'dumbcane', 'leopard lily'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Among the harsher of the calcium-oxalate plants — chewing causes intense oral pain, drooling and, in bad cases, enough swelling to make breathing difficult. One to keep firmly out of reach of pets and children.',
+    note: 'Among the harsher of the calcium-oxalate plants — chewing causes intense burning of the mouth, tongue and lips, drooling, vomiting and difficulty swallowing. One to keep firmly out of reach.',
   },
   {
     slug: 'calathea',
     commonName: 'Calathea',
     scientificName: 'Calathea',
+    aspcaListing: {
+      title: 'Calathea',
+      scientificName: 'Calathea spp.',
+      path: '/toxic-and-non-toxic-plants/calathea',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['prayer plant', 'goeppertia', 'maranta', 'rattlesnake plant'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -183,6 +255,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'boston-fern',
     commonName: 'Boston fern',
     scientificName: 'Nephrolepis exaltata',
+    aspcaListing: {
+      title: 'Boston Fern',
+      scientificName: 'Nephrolepis exalta bostoniensis',
+      path: '/toxic-and-non-toxic-plants/boston-fern',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     // Deliberately NO bare 'fern' alias — the mirror of the note on
     // asparagus-fern below. A bare 'fern' here put this NON-TOXIC row in the
     // exact-match tier for the query "fern", which outranks every later tier
@@ -222,6 +300,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'orchid',
     commonName: 'Orchid (Phalaenopsis)',
     scientificName: 'Phalaenopsis',
+    aspcaListing: {
+      title: 'Phalaenopsis Orchid',
+      scientificName: 'Phalaenopsis sp.',
+      path: '/toxic-and-non-toxic-plants/phalaenopsis-orchid',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['phalaenopsis', 'moth orchid', 'orchids'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -266,8 +350,13 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
   // Added to cover the /care/<plant> guides shipped in #384. Every verdict
   // below was read off that plant's own ASPCA entry page (recorded per entry
   // as `aspcaListing`), not inferred from the slug or from the care guide's
-  // prose. The entries above this line carry no per-plant listing, so no
-  // `/pet-safe/<slug>` page is generated for them.
+  // prose. The entries above this line had no per-plant listing until
+  // 2026-10-02, when the fourteen that have a /care guide were read off their
+  // own live ASPCA pages too (fiddle-leaf fig and rubber plant cite ASPCA's
+  // genus-level Ficus listing, "Weeping Fig", Ficus sp.). The rest above this
+  // line still carry none, so no `/pet-safe/<slug>` page is generated for
+  // them: ZZ plant has no ASPCA listing at all, and the remaining five have no
+  // care guide and were not re-verified in that pass.
   // ---------------------------------------------------------------------
   {
     slug: 'bird-of-paradise',
@@ -364,7 +453,7 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     ],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the triterpenoid saponins cause vomiting, drooling, belly pain and diarrhoea. The leaves are more dangerous than the berries, and it is a trailing vine a cat will happily bat at, so hang it well out of reach.',
+    note: 'Toxic to cats and dogs per the ASPCA — the triterpenoid saponins cause vomiting, drooling, belly pain and diarrhea. The leaves are more dangerous than the berries, and it is a trailing vine a cat will happily bat at, so hang it well out of reach.',
   },
   {
     slug: 'money-tree',

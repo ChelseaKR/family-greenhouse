@@ -125,6 +125,22 @@ describe('per-plant ASPCA listings', () => {
         'money-tree',
         'nerve-plant',
         'parlor-palm',
+        // Read off the live ASPCA pages on 2026-10-02 so the /care guides for
+        // these plants can cite their verdicts (see CareGuidePage).
+        'aloe-vera',
+        'boston-fern',
+        'calathea',
+        'dieffenbachia',
+        'fiddle-leaf-fig',
+        'jade-plant',
+        'monstera',
+        'orchid',
+        'peace-lily',
+        'philodendron',
+        'pothos',
+        'rubber-plant',
+        'snake-plant',
+        'spider-plant',
       ].sort()
     );
   });
@@ -150,9 +166,25 @@ describe('per-plant ASPCA listings', () => {
     }
   });
 
-  it('no listing path is shared by two entries', () => {
-    const paths = listed.map((e) => e.aspcaListing!.path);
-    expect(new Set(paths).size).toBe(paths.length);
+  it('no listing path is shared by two entries, except a genus-level listing within its genus', () => {
+    // ASPCA lists Ficus once, at genus level ("Weeping Fig", Ficus sp.), and
+    // two care guides (fiddle-leaf fig, rubber plant) are Ficus species. That
+    // is the only sharing allowed: the listing must name a genus ("<Genus>
+    // sp." or "spp.") and every entry citing it must be in that genus. Any
+    // other repeat is a copy-paste of the wrong plant's source.
+    const byPath = new Map<string, typeof listed>();
+    for (const e of listed) {
+      const path = e.aspcaListing!.path;
+      byPath.set(path, [...(byPath.get(path) ?? []), e]);
+    }
+    for (const [path, entries] of byPath) {
+      if (entries.length === 1) continue;
+      const genusLevel = /^([A-Z][a-z]+) spp?\.$/.exec(entries[0]!.aspcaListing!.scientificName);
+      expect(genusLevel, `${path} is shared but is not a genus-level listing`).not.toBeNull();
+      for (const e of entries) {
+        expect(e.scientificName.split(' ')[0], `${e.slug} cites ${path}`).toBe(genusLevel![1]);
+      }
+    }
   });
 });
 

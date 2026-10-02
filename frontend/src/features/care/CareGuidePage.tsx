@@ -13,7 +13,8 @@ import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
-import { CARE_GUIDES, findCareGuide, type CareGuide } from './careGuides';
+import { findCareGuide, type CareGuide } from './careGuides';
+import { careToxicity, nameInSentence, sentenceName, type CareToxicity } from './careToxicity';
 
 const SITE = SITE_URL;
 
@@ -61,6 +62,82 @@ function plainText(text: string): string {
   return text.replace(INLINE_LINK, '$1');
 }
 
+const VERDICT_LABEL = {
+  toxic: 'Toxic',
+  'non-toxic': 'Non-toxic',
+  'not-assessed': 'Unknown',
+} as const;
+
+/** US Poison Help line (America's Poison Centers), for people, not pets. */
+const POISON_HELP_TEL = 'tel:+18002221222';
+
+/**
+ * Pets and people, answered only from the cited table. Each animal's line is
+ * a verdict with its ASPCA listing beside it, or "Unknown" with the reason;
+ * there is no third, uncited state. People get no verdict at all, because the
+ * source does not cover them.
+ */
+function ToxicitySection({ guide, toxicity }: { guide: CareGuide; toxicity: CareToxicity }) {
+  return (
+    <section aria-labelledby="pets-and-children" data-testid="care-toxicity">
+      <h2 id="pets-and-children">
+        Is {nameInSentence(guide.commonName)} safe for pets and children?
+      </h2>
+      <dl>
+        {(['cats', 'dogs'] as const).map((animal) => {
+          const claim = toxicity.claims[animal];
+          return (
+            <div key={animal} className="mt-3">
+              <dt className="font-semibold capitalize text-gray-900">{animal}</dt>
+              <dd className="mt-1 text-gray-700" data-claim={animal} data-state={claim.state}>
+                <strong>{VERDICT_LABEL[claim.state]}.</strong>{' '}
+                {claim.state === 'not-assessed' ? (
+                  <>
+                    The ASPCA plant list, the source this site uses, has no verdict for this plant,
+                    so we don’t give one. Keep it out of reach of pets that chew.
+                  </>
+                ) : (
+                  <>
+                    Source:{' '}
+                    <a
+                      href={claim.source.url}
+                      className="text-primary-700 underline hover:no-underline"
+                      rel="noopener"
+                    >
+                      ASPCA, {claim.source.title} ({claim.source.scientificName})
+                    </a>
+                    .
+                  </>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+        <div className="mt-3">
+          <dt className="font-semibold text-gray-900">People, including children</dt>
+          <dd className="mt-1 text-gray-700" data-claim="people" data-state="not-assessed">
+            <strong>Not covered by our source.</strong> The ASPCA assesses animals only, so this
+            page makes no claim about people. If a child eats part of any houseplant, call Poison
+            Help at{' '}
+            <a href={POISON_HELP_TEL} className="text-primary-700 underline hover:no-underline">
+              1-800-222-1222
+            </a>{' '}
+            (US).
+          </dd>
+        </div>
+      </dl>
+      {toxicity.note && <p>{toxicity.note}</p>}
+      {toxicity.petSafePath && (
+        <p>
+          <Link to={toxicity.petSafePath} className="text-primary-700 underline hover:no-underline">
+            The {sentenceName(guide.commonName)} pet-safety page, with the ASPCA listing
+          </Link>
+        </p>
+      )}
+    </section>
+  );
+}
+
 function Paragraphs({ items }: { items: string[] }) {
   return (
     <>
@@ -74,14 +151,23 @@ function Paragraphs({ items }: { items: string[] }) {
 /**
  * One template renders every species care page (`/care/:slug`). The content
  * is data (`careGuides.ts`), so the SEO surface scales by adding entries, not
- * components. Emits Article + FAQPage JSON-LD so pages are eligible for
- * Google's article and FAQ rich results — the FAQ markup is the highest-ROI
- * schema for these queries because "how often to water X" is a voice/quick
- * answer pattern.
+ * components. Emits Article, FAQPage and BreadcrumbList JSON-LD.
+ *
+ * FAQPage carries only questions whose answers are printed on the page, and
+ * the pet-toxicity question only when every animal's verdict is cited (see
+ * careToxicity.ts). Since 2023 Google shows FAQ rich results only for
+ * well-known government and health sites, so the markup describes the page
+ * rather than buying a rich result; URL Inspection on 2026-10-02 detected
+ * only Breadcrumbs on these pages.
  */
 export function CareGuidePage() {
   const { slug } = useParams<{ slug: string }>();
   const guide = slug ? findCareGuide(slug) : undefined;
+  const toxicity = guide ? careToxicity(guide) : undefined;
+  // Every FAQ shown on the page, in order: the guide's care questions, then
+  // the generated pet question. Only the sourced ones go into FAQPage.
+  const faqs = guide && toxicity ? [...guide.faqs, toxicity.faq] : [];
+  const markedUpFaqs = guide && toxicity ? (toxicity.sourced ? faqs : guide.faqs) : [];
 
   useMetaTags(
     guide
@@ -142,7 +228,9 @@ export function CareGuidePage() {
               },
               {
                 '@type': 'FAQPage',
-                mainEntity: guide.faqs.map((f) => ({
+                // An unsourced pet answer is shown to readers but never
+                // published as structured data (see careToxicity.ts).
+                mainEntity: markedUpFaqs.map((f) => ({
                   '@type': 'Question',
                   name: f.q,
                   acceptedAnswer: { '@type': 'Answer', text: plainText(f.a) },
@@ -162,27 +250,16 @@ export function CareGuidePage() {
       : {}
   );
 
-  if (!guide) {
+  if (!guide || !toxicity) {
     return <Navigate to="/care" replace />;
   }
 
-  // Rotate from this guide's own position rather than slicing the front of
-  // the array. `.slice(0, 3)` took the first three entries every time, so all
-  // 24 guides linked to pothos / snake-plant / monstera — those three
-  // collected 23 sibling links each and the other 20 collected none, leaving
-  // them with a single inbound link site-wide (the /care index). Rotation
-  // spreads the same 72 links three-per-guide with no manual curation.
-  //
-  // It buys distribution, not topical relevance: the real win is a curated
-  // `relatedSlugs` on CareGuide (pothos <-> heartleaf-philodendron, the two
-  // people constantly confuse; snake-plant <-> zz-plant, the unkillable
-  // pair). That is content work; this is the mechanical half.
-  const relatedCount = Math.min(3, CARE_GUIDES.length - 1);
-  const guideIndex = CARE_GUIDES.findIndex((g) => g.slug === guide.slug);
-  const related = Array.from(
-    { length: relatedCount },
-    (_, i) => CARE_GUIDES[(guideIndex + 1 + i) % CARE_GUIDES.length]
-  ).filter((g) => g !== undefined);
+  // Curated per guide (`related` in careGuides.ts): the plant people confuse
+  // it with, or the one that suits the same spot. This replaced a rotation
+  // through the array, which spread links evenly but paired plants at random.
+  const related = guide.related
+    .map((relatedSlug) => findCareGuide(relatedSlug))
+    .filter((g): g is CareGuide => g !== undefined);
 
   return (
     <PublicShell width="article">
@@ -233,7 +310,13 @@ export function CareGuidePage() {
                 ['Light', guide.quickFacts.light, SunGlowIcon],
                 ['Difficulty', guide.quickFacts.difficulty, GrowthRingsIcon],
                 ['Humidity', guide.quickFacts.humidity, MistLeafIcon],
-                ['Toxic to pets?', guide.quickFacts.toxicity, PawLeafIcon],
+                [
+                  'Toxic to pets?',
+                  toxicity.sourced
+                    ? `${guide.quickFacts.toxicity} (source: ASPCA)`
+                    : guide.quickFacts.toxicity,
+                  PawLeafIcon,
+                ],
               ] as Array<[string, string, React.ComponentType<{ className?: string }>]>
             ).map(([label, value, Icon]) => (
               <div key={label} className="flex gap-4 py-3">
@@ -251,24 +334,37 @@ export function CareGuidePage() {
       </aside>
 
       <article className="prose-fg mt-12">
-        <h2>How often to water a {guide.commonName.toLowerCase()}</h2>
+        <h2>How often to water {nameInSentence(guide.commonName)}</h2>
         <Paragraphs items={guide.sections.watering} />
 
-        <h2>Light</h2>
+        <h2>Light and humidity</h2>
         <Paragraphs items={guide.sections.light} />
+        <p>
+          <strong>Humidity:</strong> {guide.quickFacts.humidity}.
+        </p>
 
-        <h2>Why is my {guide.commonName.toLowerCase()} dying?</h2>
+        <h2>Why is my {sentenceName(guide.commonName)} dying?</h2>
         <Paragraphs items={guide.sections.problems} />
+
+        <h2>How to propagate {nameInSentence(guide.commonName)}</h2>
+        <Paragraphs items={guide.sections.propagation} />
+
+        <ToxicitySection guide={guide} toxicity={toxicity} />
 
         <h2>Keeping it alive when you share a home</h2>
         <Paragraphs items={guide.sections.sharedCare} />
+        <p>
+          {withLinks(
+            'If you use Family Greenhouse for this, [sharing plants with a household](/help/households) explains who sees what and who gets reminded.'
+          )}
+        </p>
 
         <h2>The honest bit</h2>
         <Paragraphs items={guide.sections.honestBit} />
 
         <h2>{guide.commonName} FAQ</h2>
         <dl>
-          {guide.faqs.map((f) => (
+          {faqs.map((f) => (
             <div key={f.q} className="mt-4">
               <dt className="font-semibold text-gray-900">{f.q}</dt>
               <dd className="mt-1 text-gray-700">{withLinks(f.a)}</dd>
@@ -298,13 +394,13 @@ export function CareGuidePage() {
         <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
           <p className="font-serif text-xl text-ink">Stop guessing when you watered it</p>
           <p className="mt-2 text-sm text-gray-600">
-            Family Greenhouse tracks your {guide.commonName.toLowerCase()}’s schedule and reminds
+            Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
             the right person — so “I thought you watered it” stops being a thing. Free for up to 20
             plants, no card.
           </p>
           <div className="mt-4">
             <Link to="/register" className={buttonStyles()}>
-              Add your {guide.commonName.toLowerCase()}
+              Add your {sentenceName(guide.commonName)}
             </Link>
           </div>
         </aside>
@@ -312,7 +408,7 @@ export function CareGuidePage() {
 
       {related.length > 0 && (
         <section className="mt-16">
-          <h2 className="font-serif text-2xl tracking-tight text-ink">More care guides</h2>
+          <h2 className="font-serif text-2xl tracking-tight text-ink">Related plants</h2>
           <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {related.map((g) => (
               <li key={g.slug}>
