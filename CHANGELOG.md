@@ -16,6 +16,30 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-10-02
+
+**0.38.0 never deployed. This release ships everything listed under 0.38.0
+below, unchanged, plus one infrastructure fix that lets it apply.** On
+2026-10-02 the 0.38.0 Terraform apply stopped with CloudFront's 409
+`CachePolicyInUse`. #855 removed the images cache policy in the same change
+that detached it from the distribution, and Terraform deleted the policy
+before updating the distribution that still used it. The apply had already
+added the four new API routes, widened the Lambda role's secrets statement
+and changed one alarm description; it never changed the distribution or the
+images bucket policy. The backend and frontend deploys did not run and the
+automatic rollback finished, so production kept serving 0.37.0 with photos
+working.
+
+### Fixed
+
+- **The release that removes the CDN photo route can now apply.** The images
+  cache policy stays in the Terraform configuration, unchanged and unused, for
+  this release, so the plan updates the distribution in place and deletes
+  nothing. A later release removes the policy once production's distribution
+  no longer names it. The pinned Terraform (1.5.7) has no `removed` block, so
+  keeping the resource is the only way to put the two steps in order. The
+  Terms of Service did not change, so their effective date stays 0.38.0's.
+
 ## [0.38.0] - 2026-10-02
 
 **Billing behavior changes in this release, and payments are live.** A
