@@ -20,7 +20,7 @@ A chat companion inside Family Greenhouse that answers plant care questions with
 ```
                                     ┌────────────────────────┐
                                     │  Bedrock                │
-                                    │  - Claude Sonnet 4.6    │
+                                    │  - Claude Haiku 4.5     │
                                     │  - Titan Embeddings v2  │
                                     └──────────┬──────────────┘
                                                │ InvokeModel
@@ -112,7 +112,7 @@ V2 streaming options to evaluate (in order of preference):
 
 ## Bedrock model + region
 
-- **Original model plan:** Sonnet-family Bedrock model. **Implemented source of truth:** `BEDROCK_CHAT_MODEL_ID`, whose documented/default deployment is Haiku 4.5; see `model-card.md`. Model changes are frozen during the dated evaluation waiver unless the starter eval and baseline are rerun.
+- **Model:** Claude Haiku 4.5, the intended choice as of 2026-10-01 (the original 2026-05-31 plan named Sonnet 4.6; see `model-card.md`, "Model identity"). **Source of truth:** `BEDROCK_CHAT_MODEL_ID`, default `us.anthropic.claude-haiku-4-5-20251001-v1:0`. Model changes are frozen during the dated evaluation waiver unless the starter eval and baseline are rerun.
 - **Region:** us-east-1 (same as the rest of the stack — keeps inter-service latency low and avoids cross-region data movement).
 - **Model access:** has to be requested in the Bedrock console once per account. Free; usually granted instantly for Claude models. **User must do this before the first invocation succeeds.**
 
