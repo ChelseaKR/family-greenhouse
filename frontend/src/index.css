@@ -244,6 +244,73 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* ---------------------------------------------------------------------
+   Inside the native shells. `<html data-native="ios">` (or "android") is
+   set by lib/platform.ts `markNativePlatform`, before the first paint, and
+   only there: on the website no rule below can match, so it renders exactly
+   as before.
+   --------------------------------------------------------------------- */
+@layer base {
+  /* Body text in the system font (SF on iOS), as native apps use; headings
+     keep the brand faces (owner decision 2026-10-02). Bitter headings carry
+     `font-serif`, a utility, which outranks this base layer; every other
+     heading is held on the brand sans here. */
+  html[data-native] {
+    --font-sans:
+      -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    /* No gray flash over whatever was tapped: buttons and links show their
+       own pressed and focus states. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-native] :where(h1, h2, h3, h4, h5, h6) {
+    font-family:
+      'Instrument Sans Variable',
+      Inter,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+  }
+
+  /* A long press on a link, a button or a picture inside one raises
+     WebKit's link preview and "Open / Copy link" menu, a browser's menu
+     inside an app. A picture on its own (a plant's photo) keeps it, so it
+     can still be saved. */
+  html[data-native] :where(a, button, [role='button'], summary),
+  html[data-native] :where(a, button, [role='button']) :where(img, svg) {
+    -webkit-touch-callout: none;
+  }
+
+  /* The app's chrome does not select like a document: a long press on a
+     tab, a button or the navigation does not start a text selection.
+     Content, notes, names and every form field stay selectable (below). */
+  html[data-native]
+    :where(
+      nav,
+      header,
+      button,
+      [role='button'],
+      [role='tab'],
+      [role='tablist'],
+      [role='menuitem'],
+      summary,
+      label
+    ) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  html[data-native]
+    :where(input, textarea, select, [contenteditable]:not([contenteditable='false'])) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
 @layer components {
   /* v4 note: `@apply` only accepts real utilities now, so the variants can
      no longer `@apply btn` the way they did under v3. The shared base is

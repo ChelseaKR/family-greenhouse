@@ -30,3 +30,14 @@ export function getNativePlatform(): 'ios' | 'android' | 'web' {
   const platform = capacitorGlobal()?.getPlatform?.();
   return platform === 'ios' || platform === 'android' ? platform : 'web';
 }
+
+/**
+ * Marks `<html data-native="ios">` (or `"android"`) inside the shells, once,
+ * before the first paint, so native-only CSS can key on it (index.css, "Inside
+ * the native shells"). On the website it does nothing: no attribute, so not
+ * one of those rules can match and the website renders exactly as before.
+ */
+export function markNativePlatform(): void {
+  if (!isNativeApp() || typeof document === 'undefined') return;
+  document.documentElement.dataset.native = getNativePlatform();
+}
