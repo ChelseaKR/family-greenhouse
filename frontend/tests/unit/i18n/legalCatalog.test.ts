@@ -54,7 +54,7 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 127 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 128 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
@@ -68,8 +68,9 @@ describe('deferred legal catalog', () => {
     // website (the 2026-09-17 decision): what it collects, and Google as a
     // named third party, +1 for the household audit log's collection bullet
     // (#675), +1 for the failed-payment retry window in the renewal section
-    // (#593).
-    expect(en).toHaveLength(127);
+    // (#593), +1 for the shell line a legal page shows before the release that
+    // ships its text names a day (#593).
+    expect(en).toHaveLength(128);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

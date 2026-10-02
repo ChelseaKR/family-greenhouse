@@ -3,6 +3,7 @@
     "shell": {
       "eyebrow": "The fine print",
       "effective": "Effective {{date}}.",
+      "effectivePending": "Takes effect with the next release; the date is set when it ships.",
       "translationDraft": "This translation is a draft: it has not yet been reviewed by a native speaker or by legal counsel.",
       "translationGoverning": "It is provided for convenience. If it differs from the English version, the English version governs."
     },

@@ -3,6 +3,7 @@
     "shell": {
       "eyebrow": "La letra pequeña",
       "effective": "Vigente desde el {{date}}.",
+      "effectivePending": "Entra en vigor con la próxima versión; la fecha se fija cuando se publique.",
       "translationDraft": "Esta traducción es un borrador: todavía no ha sido revisada por una persona hispanohablante nativa ni por asesoría legal.",
       "translationGoverning": "Se ofrece para tu comodidad. Si difiere de la versión en inglés, prevalece la versión en inglés."
     },

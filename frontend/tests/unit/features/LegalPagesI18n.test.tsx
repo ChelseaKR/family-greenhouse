@@ -44,8 +44,10 @@ const PAGES = [
     Page: TermsPage,
     en: 'Terms of Service',
     es: 'Términos del servicio',
-    effectiveEn: 'Effective September 17, 2026.',
-    effectiveEs: 'Vigente desde el 17 de septiembre de 2026.',
+    // The Terms changed after the last release (#593): no day is named until
+    // the release that ships them fills it (scripts/check-terms-effective-date.mjs).
+    effectiveEn: 'Takes effect with the next release; the date is set when it ships.',
+    effectiveEs: 'Entra en vigor con la próxima versión; la fecha se fija cuando se publique.',
   },
   {
     name: 'support',

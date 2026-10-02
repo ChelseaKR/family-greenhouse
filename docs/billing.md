@@ -104,10 +104,16 @@ retries fail" setting, and **that setting is load-bearing**:
 | Mark the subscription unpaid    | `customer.subscription.updated` → `unpaid`: free. Safe, but not the decision.      |
 | Leave the subscription past-due | stays `past_due` **indefinitely: paid access with no payment** — do not use        |
 
-**Owner checklist: set this in Stripe before this ships.** Nothing in this
-repository can read or set it, and the app's copy (the banner, Settings → Plan
-status, the Terms, the payment-failed email) now says "canceled" as a fact. Do
-it in live mode, and do it in test mode first to see it work.
+**Owner checklist.** Nothing in this repository can read or set these, and
+the app's copy (the banner, Settings → Plan status, the Terms, the
+payment-failed email) says "canceled" as a fact.
+
+| Setting (live mode)    | State                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| After all retries fail | **Done:** Cancel the subscription. Confirmed by the owner on 2026-10-01.      |
+| Retry schedule         | **Done:** Stripe's Smart Retries default (about 2 weeks), the owner's choice. |
+
+The steps below are how they were set, and what to check if they change.
 
 1. **Retries.** Stripe Dashboard → **Billing** → **Revenue recovery** →
    **Retries** (`dashboard.stripe.com/revenue_recovery/retries`). Turn retries
@@ -116,6 +122,7 @@ it in live mode, and do it in test mode first to see it work.
    number of days after the previous one. Whichever you pick sets how long a
    household keeps paid access after a declined card, so pick the length you
    are willing to give. Nothing in the code or the copy depends on the number.
+   **Chosen: the Smart Retries default.**
 2. **What happens after the last retry.** The **failed payment settings**
    ("Manage failed payments"), which Stripe's docs place at **Settings** →
    **Billing** → **Subscriptions and emails**
@@ -123,6 +130,7 @@ it in live mode, and do it in test mode first to see it work.
    some Stripe pages link the same section under the Revenue recovery
    settings). Choose **Cancel the subscription**. Not "Mark the subscription as
    unpaid", and never "Leave the subscription past-due".
+   **Set to Cancel the subscription (confirmed 2026-10-01).**
 3. **The webhook keeps the app in step.** The endpoint must be subscribed to
    `customer.subscription.updated`, `customer.subscription.deleted` and (for
    the email) `invoice.payment_failed`; see `docs/external-services-setup.md`.

@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
 import { LegalShell } from './LegalShell';
+import termsEffective from './termsEffective.json' with { type: 'json' };
 import { HELLO_EMAIL, HELLO_MAILTO, SUPPORT_EMAIL, SUPPORT_MAILTO } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
@@ -29,6 +30,11 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * at all (see the comment beside it), and the caps that bite after a
  * downgrade are enforced on create/import/invite only, never on read or edit.
  * Change the behaviour and this text has to change with it.
+ *
+ * The effective date is not typed here. It lives in termsEffective.json and is
+ * the date of the release that ships the text: `UNRELEASED` until then, filled
+ * by the release PR (scripts/check-terms-effective-date.mjs, which also refuses
+ * a release whose Terms date is unset or is not that release's date).
  */
 export function TermsPage() {
   const { t } = useTranslation();
@@ -38,7 +44,7 @@ export function TermsPage() {
   });
 
   return (
-    <LegalShell title={t('legal.terms.title')} effectiveDate="2026-09-17">
+    <LegalShell title={t('legal.terms.title')} effectiveDate={termsEffective.effectiveDate}>
       <p className="lead">
         <Trans
           i18nKey="legal.terms.lead"

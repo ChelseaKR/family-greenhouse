@@ -33,8 +33,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   owner:** this depends on two Stripe Dashboard settings that nothing in this
   repository can read, the retry schedule and "Cancel the subscription" as what
   happens after the last retry (never "leave the subscription past-due", which
-  would keep paid access with no payment). Set them before this ships: the
-  checklist is in `docs/billing.md`. (#593)
+  would keep paid access with no payment). Both are set: cancel after the last
+  retry (confirmed 2026-10-01) and Stripe's Smart Retries default schedule; the
+  checklist is in `docs/billing.md`. The Terms' effective date is now the date
+  of the release that ships them: it reads "takes effect with the next
+  release" until the release PR fills it, and a release with the date unset or
+  not its own refuses to deploy. (#593)
 
 ### Added
 
