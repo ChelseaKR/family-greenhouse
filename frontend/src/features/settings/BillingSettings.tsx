@@ -348,7 +348,9 @@ export function BillingSettings() {
                 means "this environment cannot take payments right now", and
                 the hold's own message no longer describes that. */}
             <p className="mt-1 text-sm">
-              {COMMERCIAL_HOLD_ACTIVE
+              {/* The hold message says paid plans are available on the web,
+                  which the apps must not say (Guideline 3.1.1). */}
+              {COMMERCIAL_HOLD_ACTIVE && !native
                 ? t('commercialHold.message')
                 : t('commercialHold.unavailableMessage')}
             </p>
@@ -441,7 +443,10 @@ export function BillingSettings() {
                   : t('settings.billing.adminOnlyBilling')}
               </p>
             )}
-            {native && <p className="mt-2">{t('settings.billing.paymentFailedActionNative')}</p>}
+            {/* Nothing for the apps: "update the card in a web browser" is an
+                instruction to pay outside In-App Purchase (Guideline 3.1.1),
+                cut by owner decision 2026-10-02. The read-only notice below
+                still says plan changes aren't available in the app. */}
           </Alert>
         )}
         {/* Suppressed once a failed payment has LAPSED: the caps really are

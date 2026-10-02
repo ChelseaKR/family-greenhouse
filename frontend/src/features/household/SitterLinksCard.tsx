@@ -279,13 +279,19 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
           </Button>
           {limits?.planId === 'seedling' && (
             <p className="text-xs text-gray-600">
-              {t('household.sitterLinks.seedlingHint')}{' '}
-              <Link
-                to="/settings/billing"
-                className="text-primary-700 underline hover:text-primary-800"
-              >
-                {t('household.sitterLinks.seePlans')}
-              </Link>
+              {t('household.sitterLinks.seedlingHint')}
+              {/* No "see plans" link in the apps (Guideline 3.1.1). */}
+              {!native && (
+                <>
+                  {' '}
+                  <Link
+                    to="/settings/billing"
+                    className="text-primary-700 underline hover:text-primary-800"
+                  >
+                    {t('household.sitterLinks.seePlans')}
+                  </Link>
+                </>
+              )}
             </p>
           )}
         </form>

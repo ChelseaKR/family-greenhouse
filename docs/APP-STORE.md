@@ -100,7 +100,8 @@ ceiling exceeds what those cadences earn per month). Existing subscribers on
 them keep renewing; only monthly is currently offered to a new household.
 None of this is sold in the app: `BillingSettings.tsx` gates on
 `isNativeApp()` and shows a neutral "Plan changes aren't available in the
-app," with no link, and the native `/pricing` route is informational only.
+app," with no link, and in the app `/pricing` and `/gift` open Settings →
+Plan status rather than any plans page.
 This is Apple's Guideline 3.1.1 rule for a "digital goods" subscription, not
 a choice made for this listing — see `docs/mobile.md`, "Store payment
 rules," for the two-store policy this follows and the one surface that

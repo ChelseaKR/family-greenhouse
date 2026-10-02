@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { GiftIcon } from '@heroicons/react/24/outline';
@@ -86,13 +86,11 @@ export function GiftLandingPage() {
     canonical: siteUrl('/gift'),
   });
 
+  // Gifting is a purchase, so the apps have no gift page: /gift opens
+  // Settings → Plan status, like /pricing (Guideline 3.1.1; see "Store
+  // payment rules" in docs/mobile.md).
   if (native) {
-    return (
-      <PublicShell>
-        <PageIntro eyebrow={t('giftLanding.eyebrow')} title={t('giftLanding.title')} />
-        <p className="mt-6 text-sm leading-6 text-gray-700">{t('giftLanding.nativeNotice')}</p>
-      </PublicShell>
-    );
+    return <Navigate to="/settings/billing" replace />;
   }
 
   return (

@@ -6,6 +6,7 @@ import { Footer } from './Footer';
 import { TitleUnderline } from './brand/TitleUnderline';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -35,6 +36,9 @@ interface PublicShellProps {
 
 export function PublicShell({ width = 'prose', plainHeader = false, children }: PublicShellProps) {
   const { t } = useTranslation();
+  // The apps have no plans page (it opens Settings → Plan status), so the
+  // header does not offer one: see WEB_ONLY_LINKS in Footer.tsx.
+  const showPricing = !isNativeApp();
 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
@@ -68,12 +72,14 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
               >
                 {t('publicShell.blog')}
               </Link>
-              <Link
-                to="/pricing"
-                className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
-              >
-                {t('publicShell.pricing')}
-              </Link>
+              {showPricing && (
+                <Link
+                  to="/pricing"
+                  className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
+                >
+                  {t('publicShell.pricing')}
+                </Link>
+              )}
               <details className="group relative md:hidden">
                 <summary className="flex min-h-touch min-w-touch cursor-pointer list-none items-center justify-center rounded-lg border border-dew bg-paper text-ink transition-colors hover:bg-glass/50 [&::-webkit-details-marker]:hidden">
                   <span className="sr-only">{t('publicShell.openMenu')}</span>
@@ -93,7 +99,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
                   {[
                     [t('publicShell.careGuides'), '/care'],
                     [t('publicShell.blog'), '/blog'],
-                    [t('publicShell.pricing'), '/pricing'],
+                    ...(showPricing ? [[t('publicShell.pricing'), '/pricing']] : []),
                   ].map(([label, to]) => (
                     <Link
                       key={to}

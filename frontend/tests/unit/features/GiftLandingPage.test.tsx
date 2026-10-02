@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { GiftLandingPage } from '@/features/gift/GiftLandingPage';
 import { useAuthStore } from '@/store/authStore';
 import type { GiftPurchase, Plan, PlanCatalog } from '@/services/billingService';
@@ -180,13 +180,22 @@ describe('GiftLandingPage', () => {
       isNativePlatform: () => true,
       getPlatform: () => 'ios',
     };
-    renderPage();
+    // Owner decision 2026-10-02: no gift page and no "on the web" pointer in
+    // the apps; /gift opens Settings → Plan status.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/gift']}>
+          <Routes>
+            <Route path="/gift" element={<GiftLandingPage />} />
+            <Route path="/settings/billing" element={<p>Plan status</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
 
-    expect(
-      await screen.findByText(
-        "Gifting isn't available in the app. Open familygreenhouse.net on the web to send a gift."
-      )
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Plan status')).toBeInTheDocument();
+    expect(screen.queryByText(/on the web|familygreenhouse\.net/)).not.toBeInTheDocument();
     expect(billingService.listPlans).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@
 import { useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
+import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { ArrowTopRightOnSquareIcon, CheckIcon, HomeModernIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -155,6 +156,17 @@ export function CrossHomeTodayPage() {
 /** The tier explanation, on this URL, in place of the queue. */
 function LockedCard() {
   const { t } = useTranslation();
+  // In the iOS and Android apps this says what Greenhouse is and that plans
+  // don't change here, with no call to upgrade (Guideline 3.1.1): the same
+  // neutral line as LockedFeature and Settings → Plan status.
+  if (isNativeApp()) {
+    return (
+      <Card>
+        <CardHeader title={t('today.lockedTitle')} description={t('today.lockedDescription')} />
+        <Alert variant="info">{t('settings.billing.nativeUnavailable')}</Alert>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader title={t('today.lockedTitle')} description={t('today.lockedDescription')} />

@@ -1357,7 +1357,8 @@
       "help": "Help",
       "plantTags": "Plant tags",
       "refer": "Refer a friend",
-      "security": "Security"
+      "security": "Security",
+      "about": "About"
     },
     "preferences": {
       "title": "Preferences",
@@ -1418,7 +1419,6 @@
       "paymentFailedTitle": "We couldn’t take your last payment",
       "paymentFailedBody": "Until it is settled, your household gets the free Seedling plan’s limits rather than your plan’s. Everything you already have keeps working — you can still view, edit and remove it, and nothing is deleted — but new plants and members are capped at the free plan’s numbers.",
       "paymentFailedActionAdmin": "Update the card under “Manage subscription” below.",
-      "paymentFailedActionNative": "Open Family Greenhouse in a web browser to update the card.",
       "paymentFailedBodyOwned": "Until it is settled, your household gets the limits of the plan it already owns outright or was given, rather than your subscription’s. Everything you already have keeps working — you can still view, edit and remove it, and nothing is deleted — but new plants and members are capped at that plan’s numbers.",
       "paymentFailedBanner": {
         "actionAdmin": "Update the card in Settings → Plan status",
@@ -1677,9 +1677,7 @@
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",
     "openAccount": "Open account settings",
-    "backToSetup": "Back to setup",
-    "planAvailableTitle": "What stays available",
-    "planAvailableBody": "Signing in gives you access to the plants, tasks, household sharing, and care features included with your existing account. No payment is collected in this app."
+    "backToSetup": "Back to setup"
   },
   "connection": {
     "offlineTitle": "You're offline",
@@ -2156,7 +2154,6 @@
     "signInBody": "Buying a gift charges your own card, so we need an account to send the receipt and code to. It does not need a household of your own — this is the only place gifting works without one.",
     "signInCta": "Sign in",
     "registerCta": "Create a free account",
-    "nativeNotice": "Gifting isn't available in the app. Open familygreenhouse.net on the web to send a gift.",
     "navLink": "Gift a subscription"
   },
   "caretaker": {
@@ -2515,11 +2512,6 @@
       "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.",
       "heldOpen": "Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.",
       "heldClosed": "New account registration, paid plans, purchases, and plan changes are currently paused."
-    },
-    "native": {
-      "eyebrow": "Plan information",
-      "title": "Your Family Greenhouse plan",
-      "lede": "The mobile app does not offer purchases or plan changes. Existing account holders can see current plan status and usage in Settings → Billing, and can change plans on the web."
     },
     "meta": {
       "title": {

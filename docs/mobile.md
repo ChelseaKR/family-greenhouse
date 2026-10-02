@@ -353,7 +353,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 
 | Area               | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only, and since #804 so is every other purchase surface: `LockedFeature` shows what a paid feature is with no price and no ask, and `AskToUpgrade` renders only inside the web-only plan grid. One sentence on the billing screen still points outside the app — see "Store payment rules" below, and do not add purchase links without reading it.                                                                                                                                                                                                                                                                                                    |
+| Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only, and since #804 so is every other purchase surface: `LockedFeature` shows what a paid feature is with no price and no ask, and `AskToUpgrade` renders only inside the web-only plan grid. Since 2026-10-02 `/pricing` and `/gift` open Settings → Plan status, and no screen links to them — see "Store payment rules" below, and do not add purchase links without reading it.                                                                                                                                                                                                                                                                   |
 | Haptics            | Completing a task plays the system success pattern and snoozing one a light tick, fired from the mutation's `onSuccess`, so the tap means the server accepted it. The OS decides whether to play them (System Haptics on iOS).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Share sheet        | Every link the app hands out (household invite, plant-sitter link, caretaker seat, cutting share, referral link) opens the system share sheet instead of copying, and the button reads "Share link". Copy is one of the sheet's actions. Closing the sheet does not copy behind the person's back. The website keeps its copy buttons.                                                                                                                                                                                                                                                                                                                                                                                               |
 | Push notifications | Web push does not exist in the WebViews. Native push (APNs for iOS, FCM for Android) is built and OFF: the opt-in and the Settings row appear only when the build sets `VITE_NATIVE_PUSH_ENABLED` and the deployment sets `native_push_enabled`. See "Push notifications" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -417,8 +417,19 @@ Options if in-app purchasing is ever wanted: implement StoreKit/Play Billing
 keep the current free companion model where the app honors an existing account
 entitlement without directing users to a purchase flow.
 
-The native `/pricing` route is purchase-free plan information; web prices and
-billing help are not rendered inside the shells.
+**There is no plans page in the apps (owner decision 2026-10-02).** Inside
+the shells `/pricing` and `/gift` redirect to Settings → Plan status
+(`PricingPage.tsx`, `GiftLandingPage.tsx`), which shows the household's plan
+and its limits and nothing else: no prices, no "on the web" wording, no gift
+link, no purchase path. The public footer and header drop their Plans and
+Gift links there (`Footer.tsx`, `PublicShell.tsx`), and the in-app "See plans"
+links on locked features (plant tags, auto-handoff, double-care, sitter
+links) and the Today page's "Upgrade … to Greenhouse" give way to the same
+neutral "Plan changes aren't available in the app." Web prices and billing
+help are not rendered inside the shells.
+`frontend/tests/unit/features/NativeReviewHygiene.test.tsx` and
+`frontend/tests/e2e/native-review-hygiene.spec.ts` hold each of these from
+both sides: absent in the app, unchanged on the website.
 
 **The locked-feature card is gated too (#804).** `LockedFeature`
 (`frontend/src/components/LockedFeature.tsx`) renders on `/chat`
@@ -433,13 +444,13 @@ price and no ask; the web keeps the full card.
 `frontend/tests/unit/components/LockedFeature.test.tsx` ("inside the native
 (Capacitor) shells") holds it.
 
-**One sentence still points outside the app.** A household whose payment is
-failing sees, on the read-only billing screen, "Open Family Greenhouse in a
-web browser to update the card." (`settings.billing.paymentFailedActionNative`,
-#767). It carries no URL and no button, and a reviewer's fresh account never
-reaches it, but it is an instruction to pay somewhere other than In-App
-Purchase. Keep it or cut it deliberately; do not copy its pattern onto a
-surface a reviewer can reach.
+**Nothing points outside the app any more.** A household whose payment is
+failing used to see, on the read-only billing screen, "Open Family Greenhouse
+in a web browser to update the card." (#767). It was an instruction to pay
+somewhere other than In-App Purchase, and it was cut on 2026-10-02 (owner
+decision): the apps now show the payment-failed notice and the neutral
+"Plan changes aren't available in the app." Do not bring that pattern back
+onto any surface.
 
 ## Push notifications
 
