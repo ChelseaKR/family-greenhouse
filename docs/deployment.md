@@ -302,6 +302,46 @@ policy. It does not generically reverse other Terraform changes, so inspect the
 plan before approval and use a targeted follow-up plan if infrastructure—not
 application code—must be reverted.
 
+## Superseded frontend assets
+
+The asset sync never uses `--delete`, so a tab left open across a release can
+still load the previous build's lazy chunks. The `prune-frontend-assets` job
+in `cd-production.yml` removes them later, with
+`scripts/prune-frontend-assets.mjs`. It deletes a key only when it is a
+content-hashed `assets/<name>-<hash>.<ext>` file, absent from the build just
+deployed, and last modified more than seven days ago.
+
+The job runs only after the post-deploy smoke has passed, and nothing that can
+roll production back reads it. Before 0.38.2 the prune was a step inside
+`deploy-frontend`. On v0.38.1 it refused a correct backlog of 1,202 assets
+(the seven builds v0.31.0 to v0.37.0, all at least 13 days old), which failed
+the frontend deploy and rolled back a release that was fine.
+
+### Asset prune refused
+
+A refusal deletes nothing, fails the `prune-frontend-assets` job and `notify`,
+and leaves the release live. It refuses when the build is empty, when any of
+the build's hashed assets is missing from the bucket (the wrong bucket, the
+wrong prefix, or an incomplete listing), or when the prune would remove more
+than 20 builds' worth of assets.
+
+To investigate, run the same plan read-only against the live bucket, using
+the `frontend-dist-<tag>` artifact of the deploy run:
+
+```bash
+gh run download <run-id> -R ChelseaKR/family-greenhouse -n frontend-dist-<tag> -D /tmp/fg-dist
+aws s3api list-objects-v2 --bucket <frontend-bucket> \
+  --query 'Contents[].[Key,LastModified]' --output text > /tmp/fg-objects.tsv
+node scripts/prune-frontend-assets.mjs --dist /tmp/fg-dist --listing /tmp/fg-objects.tsv
+```
+
+The output names every key it would delete, or every reason it refused. If
+the list is right, the owner can delete it with
+`--bucket <frontend-bucket> --apply` in place of `--listing`, or wait for the
+next release, which runs the same plan. A refusal that says the build's assets
+are missing from the bucket is never safe to override: find out which build
+production is serving first.
+
 ## Health checks
 
 After every deploy, run the smoke test:

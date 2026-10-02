@@ -2,6 +2,11 @@
  * The production prune step must not count the bucket with a JMESPath
  * aggregate.
  *
+ * (Since 0.38.2 the prune is its own post-smoke job running
+ * scripts/prune-frontend-assets.mjs, and its half-of-bucket guard is gone; see
+ * that script. The history below is why the pagination rule still applies to
+ * the script's listing.)
+ *
  * ## What went wrong
  *
  * `cd-production.yml`'s "Prune superseded assets past the grace period" step
@@ -91,16 +96,25 @@ describe('the production prune step counts the bucket safely', () => {
     expect(aggregateQueries(stepBody(workflow, PRUNE_STEP) as string)).toEqual([]);
   });
 
-  it('derives the total from the listing it already fetched', () => {
+  // Since 0.38.2 the step runs scripts/prune-frontend-assets.mjs in its own
+  // post-smoke job, and the listing and the guard live in that script. The
+  // pagination rule follows them there: the script's own `--query` must be a
+  // projection, and it must refuse an empty listing rather than plan against it.
+  const SCRIPT = readFileSync(new URL('scripts/prune-frontend-assets.mjs', ROOT), 'utf8');
+
+  it('runs the prune script, which lists with a projection, not an aggregate', () => {
     const body = stepBody(workflow, PRUNE_STEP) as string;
-    // A line count is one integer however many pages the listing took.
-    expect(body).toMatch(/total=\$\(wc -l < \/tmp\/objects\.tsv[^)]*\)/u);
-    expect(body).toMatch(/aws s3api list-objects-v2[\s\S]*?--output text > \/tmp\/objects\.tsv/u);
+    expect(body).toMatch(/node scripts\/prune-frontend-assets\.mjs/u);
+    expect(SCRIPT).toMatch(/'Contents\[\]\.\[Key,LastModified\]'/u);
+    const queries = SCRIPT.split('\n').filter((l) => /--query/u.test(l));
+    expect(queries.length).toBeGreaterThan(0);
+    expect(queries.filter((l) => /\b(length|sum|avg|max|min|max_by|min_by)\s*\(/u.test(l))).toEqual(
+      []
+    );
   });
 
-  it('refuses a listing that came back empty instead of dividing by it', () => {
-    const body = stepBody(workflow, PRUNE_STEP) as string;
-    expect(body).toMatch(/if \[ "\$total" -eq 0 \]/u);
+  it('refuses a listing that came back empty instead of planning against it', () => {
+    expect(SCRIPT).toMatch(/objects\.length === 0[\s\S]{0,120}listing is empty/u);
   });
 
   it('is not vacuous: the rule rejects the text this replaced', () => {
