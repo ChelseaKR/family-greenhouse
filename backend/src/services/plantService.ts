@@ -29,6 +29,7 @@ import { resolveCareNote } from '../models/sitterBriefFields.js';
 import { CreatePlantInput, MovePlantsInput, UpdatePlantInput } from '../models/schemas.js';
 import { optionalEnv } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
+import { upgradeLegacyRow } from './tokenHashBackfill.js';
 
 /**
  * Raised when a write would exceed the household's plan cap. Handlers map
@@ -1364,6 +1365,7 @@ export async function getPlantShare(code: string): Promise<PlantShare | null> {
       return (result?.Item as Record<string, unknown> | undefined) ?? null;
     },
     plaintextAttribute: 'code',
+    upgrade: upgradeLegacyRow('plantShare', code),
   });
   if (!item) return null;
 

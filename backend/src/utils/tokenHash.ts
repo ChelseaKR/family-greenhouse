@@ -32,7 +32,7 @@
  * printed plant tags in pots. `tests/unit/utils/tokenHash.test.ts` pins a
  * digest per salt for exactly that reason.
  */
-import { scryptSync } from 'node:crypto';
+import { scryptSync, timingSafeEqual } from 'node:crypto';
 
 /**
  * One salt per credential surface. The `-vN` suffix is part of the salt, not
@@ -66,6 +66,28 @@ export function hashCapabilityToken(surface: TokenHashSurface, token: string): s
 }
 
 /**
+ * Constant-time equality for two credential strings. `!==` returns at the
+ * first differing byte; this does not, so the time to refuse a near-miss says
+ * nothing about how near it was. Unequal lengths are refused up front (a token
+ * of the wrong length never reaches here through a shape gate, and the length
+ * of a credential is not a secret).
+ */
+export function tokensMatch(stored: unknown, presented: string): boolean {
+  if (typeof stored !== 'string') return false;
+  const a = Buffer.from(stored);
+  const b = Buffer.from(presented);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * What an `upgrade` hook reports for a legacy row it tried to move to its
+ * hashed key: the hashed row it wrote (`Record`), `'raced'` when a live request
+ * changed or removed the row first, or `null` when the move could not be
+ * attempted at all (a write error; the request still has to be served).
+ */
+export type LegacyUpgradeResult = Record<string, unknown> | 'raced' | null;
+
+/**
  * Resolve a presented token to its row across both generations of a surface
  * that used to key rows by the plaintext token: the hashed key first, then ONE
  * point read on the legacy plaintext key, so a credential minted before the
@@ -81,10 +103,24 @@ export function hashCapabilityToken(surface: TokenHashSurface, token: string): s
  * to its live row, and the dump yields working credentials again. Every
  * legacy row wrote its token as an attribute (the records were spread onto the
  * item), and no hashed row carries one, so the check separates the two
- * generations exactly.
+ * generations exactly. The comparison is constant-time.
  *
- * Both reads are `GetItem` on the partition key: no enumeration surface, and
- * nothing here writes a plaintext row back.
+ * A legacy hit is UPGRADED when the caller supplies `upgrade`: the row is
+ * moved to its hashed key in one atomic write (see `upgradeLegacyRow` in
+ * `services/tokenHashBackfill.ts`), so a credential that is still being used
+ * stops sitting in plaintext at rest the first time it is used, instead of
+ * waiting for an operator to run the backfill. The token the person holds does
+ * not change. What this returns is the row the CALLER should keep using:
+ *   - moved: the hashed row, because every later write in the same request
+ *     addresses the row by its own key, and the legacy key no longer exists;
+ *   - raced (a revocation, a wrong-PIN count, the backfill or another scan got
+ *     there first): whatever the table holds NOW — the hashed row if it is
+ *     there, otherwise the legacy row as it stands, otherwise null;
+ *   - could not move: the legacy row exactly as before, so a write failure
+ *     costs the upgrade and never the request.
+ *
+ * All reads are `GetItem` on the partition key: no enumeration surface. The
+ * only write is the upgrade, and it can only ever REMOVE a plaintext row.
  */
 export async function readTokenRow(options: {
   surface: TokenHashSurface;
@@ -94,11 +130,25 @@ export async function readTokenRow(options: {
   read: (pk: string) => Promise<Record<string, unknown> | null>;
   /** The attribute a legacy row stored its plaintext in. */
   plaintextAttribute?: string;
+  /** Moves a legacy row to its hashed key. Omit to leave legacy rows alone. */
+  upgrade?: (legacy: Record<string, unknown>) => Promise<LegacyUpgradeResult>;
 }): Promise<Record<string, unknown> | null> {
-  const { surface, token, pk, read, plaintextAttribute = 'token' } = options;
-  const hashed = await read(pk(hashCapabilityToken(surface, token)));
+  const { surface, token, pk, read, plaintextAttribute = 'token', upgrade } = options;
+  const hashedKey = pk(hashCapabilityToken(surface, token));
+  const hashed = await read(hashedKey);
   if (hashed) return hashed;
-  const legacy = await read(pk(token));
-  if (!legacy || legacy[plaintextAttribute] !== token) return null;
-  return legacy;
+
+  const legacyKey = pk(token);
+  const legacy = await read(legacyKey);
+  if (!legacy || !tokensMatch(legacy[plaintextAttribute], token)) return null;
+  if (!upgrade) return legacy;
+
+  const outcome = await upgrade(legacy);
+  if (outcome === null) return legacy;
+  if (outcome !== 'raced') return outcome;
+
+  const nowHashed = await read(hashedKey);
+  if (nowHashed) return nowHashed;
+  const stillLegacy = await read(legacyKey);
+  return stillLegacy && tokensMatch(stillLegacy[plaintextAttribute], token) ? stillLegacy : null;
 }

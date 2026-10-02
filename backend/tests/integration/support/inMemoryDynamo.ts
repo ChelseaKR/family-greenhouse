@@ -22,9 +22,10 @@
  *       | AND SK <= :v | AND SK BETWEEN :a AND :b]`, and the same against the
  *       GSI hash/range attributes via IndexName.
  *   - FilterExpression: `attr = :v` (single equality — used by the household scan).
- *   - ConditionExpression: attribute_exists / attribute_not_exists, `#a = :v`,
+ *   - ConditionExpression: attribute_exists / attribute_not_exists,
+ *       attribute_type(x, :NULL) (only the NULL type), `#a = :v`,
  *       numeric `<` / `>`, and OR/AND combinations of those.
- *   - UpdateExpression: `SET ... [REMOVE ...]` with `if_not_exists(attr, :base)`
+ *   - UpdateExpression: `SET ... [REMOVE ...]` and `ADD attr :n` with `if_not_exists(attr, :base)`
  *       and `+`/`-` arithmetic; references to other live attributes (`= #other`).
  *
  * Anything outside that dialect throws a loud `UnsupportedExpressionError`
@@ -94,7 +95,7 @@ export function createInMemoryDynamo(): InMemoryDynamo {
 
   // --- ConditionExpression evaluation ---------------------------------------
   // Supports the small grammar the services use: attribute_exists(X),
-  // attribute_not_exists(X), `#a = :v`, `#a < :v`, `#a > :v`, parenthesized
+  // attribute_not_exists(X), attribute_type(X, :NULL), `#a = :v`, `#a < :v`, `#a > :v`, parenthesized
   // groups, and AND / OR between them. Returns true when the condition holds.
   function evalCondition(
     expr: string,
@@ -130,6 +131,18 @@ export function createInMemoryDynamo(): InMemoryDynamo {
     if (m) {
       const attr = resolveName(m[1], names);
       return item === undefined || item[attr] === undefined;
+    }
+    // `attribute_type(x, :t)` with :t = 'NULL' — the backfill / upgrade-on-use
+    // condition for an attribute that was an explicit null when read (DynamoDB's
+    // `=` never matches NULL). Any other type is refused rather than guessed at.
+    m = atom.match(/^attribute_type\(\s*([#\w]+)\s*,\s*(:\w+)\s*\)$/);
+    if (m) {
+      const attr = resolveName(m[1], names);
+      const wanted = values?.[m[2]];
+      if (wanted !== 'NULL') {
+        throw new UnsupportedExpressionError(`attribute_type "${String(wanted)}"`);
+      }
+      return item !== undefined && item[attr] === null;
     }
     m = atom.match(/^([#\w]+)\s*(<=|>=|<|>|=)\s*(:[\w]+)$/);
     if (m) {
@@ -243,6 +256,24 @@ export function createInMemoryDynamo(): InMemoryDynamo {
         const attr = resolveName(attrRaw.trim(), names);
         delete item[attr];
       }
+    }
+    // `ADD attr :n` — a numeric increment (the wrong-PIN counter). Before this
+    // was supported an ADD-only expression matched neither clause above and was
+    // silently a no-op, which is exactly the false pass this file promises not to give.
+    const addMatch = updateExpr.match(/(?:^|\s)ADD\s+(.+?)(?=\s+(?:SET|REMOVE)\s+|$)/i);
+    if (addMatch) {
+      for (const partRaw of addMatch[1].split(',')) {
+        const [nameToken, valueToken] = partRaw.trim().split(/\s+/);
+        const attr = resolveName(nameToken, names);
+        const delta = values?.[valueToken];
+        if (typeof delta !== 'number') {
+          throw new UnsupportedExpressionError(`ADD value ${valueToken}`);
+        }
+        const current = item[attr];
+        item[attr] = (typeof current === 'number' ? current : 0) + delta;
+      }
+    } else if (!setMatch && !removeMatch) {
+      throw new UnsupportedExpressionError(`update expression "${updateExpr}"`);
     }
     return item;
   }

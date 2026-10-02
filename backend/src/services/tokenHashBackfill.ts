@@ -13,6 +13,12 @@
  * shares carry a TTL and would age out on their own; the backfill just stops
  * waiting for that.)
  *
+ * A legacy row is also moved the first time it is USED (`upgradeLegacyRow`,
+ * called from `readTokenRow`), by this same transaction. So the backfill's job
+ * is the rows nobody has touched since, and a credential in daily use does not
+ * wait for an operator. The two can run at the same time: whichever writes
+ * first wins, and the other counts `raced` and leaves the row alone.
+ *
  * WHY THE SAME TOKEN KEEPS WORKING. Re-keying computes the digest of the token
  * the row already holds and moves the row to `{PREFIX}#{digest}`, which is
  * exactly the key `getActiveTag` (and its siblings) read FIRST. The credential
@@ -44,7 +50,12 @@
  */
 import { ScanCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
-import { hashCapabilityToken, type TokenHashSurface } from '../utils/tokenHash.js';
+import { logger } from '../utils/logger.js';
+import {
+  hashCapabilityToken,
+  type LegacyUpgradeResult,
+  type TokenHashSurface,
+} from '../utils/tokenHash.js';
 
 export type BackfillSurfaceName =
   'plantTag' | 'kioskLink' | 'sitterLink' | 'caretakerSeat' | 'plantShare';
@@ -241,6 +252,10 @@ export interface SurfaceReport {
   raced: number;
   /** Rows under the prefix this backfill will not touch, with the reason. */
   skipped: Array<{ ref: string; reason: string }>;
+  /** The batch size this run was given, or null when it was unbounded. */
+  limit: number | null;
+  /** Legacy rows left for a later run because the batch size was reached. */
+  deferred: number;
 }
 
 function isTransactionCancelled(err: unknown): boolean {
@@ -271,16 +286,16 @@ async function scanCandidates(surface: LegacySurface): Promise<Record<string, un
 }
 
 /**
- * Re-key one row, atomically. Resolves to `rekeyed` or `raced`; anything
- * other than a cancelled condition propagates, because "we could not write"
- * must not be reported as "there was nothing to do".
+ * Write the hashed copy and delete the legacy row, atomically. Resolves to
+ * `rekeyed` or `raced`; anything other than a cancelled condition propagates,
+ * because "we could not write" must not be reported as "there was nothing to
+ * do".
  */
-export async function rekeyRow(
+async function moveRow(
   surface: LegacySurface,
   item: Record<string, unknown>,
-  token: string
+  replacement: Record<string, unknown>
 ): Promise<'rekeyed' | 'raced'> {
-  const replacement = rekeyedItem(surface, item, token);
   try {
     await dynamodb.send(
       new TransactWriteCommand({
@@ -310,20 +325,92 @@ export async function rekeyRow(
 }
 
 /**
+ * Re-key one row, atomically. Resolves to `rekeyed` or `raced`; anything
+ * other than a cancelled condition propagates, because "we could not write"
+ * must not be reported as "there was nothing to do".
+ */
+export async function rekeyRow(
+  surface: LegacySurface,
+  item: Record<string, unknown>,
+  token: string
+): Promise<'rekeyed' | 'raced'> {
+  return moveRow(surface, item, rekeyedItem(surface, item, token));
+}
+
+/**
+ * The upgrade-on-use hook for `readTokenRow`: the same move the backfill makes,
+ * for the one row a request has just resolved by its plaintext key. A
+ * credential that is still in use therefore leaves plaintext at rest the first
+ * time it is used, and the backfill only has to sweep what nobody has touched.
+ *
+ * It is the backfill's transaction, not a second implementation, and that is
+ * what makes it safe on an anonymous route: the hashed copy is written only if
+ * that key does not exist, and the legacy row is deleted only if every
+ * attribute a live request can change still holds the value this request read.
+ * So two scans of the same label, a scan and a revocation, or a scan and the
+ * operator's backfill cannot leave two live rows or resurrect a revoked one:
+ * exactly one wins, and the loser reports `raced` and re-reads.
+ *
+ * `classifyRow` is asked first and must agree the row is a legacy row of this
+ * surface holding THIS token. Any doubt returns null and the request is served
+ * from the legacy row as before.
+ *
+ * It never throws. A failed write is logged by surface and error class only —
+ * never a token, a key or a row — and costs the upgrade, not the request.
+ */
+export function upgradeLegacyRow(
+  name: BackfillSurfaceName,
+  token: string
+): (legacy: Record<string, unknown>) => Promise<LegacyUpgradeResult> {
+  return async (legacy) => {
+    const surface = LEGACY_SURFACES[name];
+    const verdict = classifyRow(surface, legacy);
+    if (verdict.kind !== 'legacy' || verdict.token !== token) return null;
+    const replacement = rekeyedItem(surface, legacy, token);
+    try {
+      const outcome = await moveRow(surface, legacy, replacement);
+      logger.info({ surface: name, outcome }, 'credential.lazy_upgrade');
+      return outcome === 'rekeyed' ? replacement : 'raced';
+    } catch (err) {
+      logger.warn(
+        { surface: name, errorName: err instanceof Error ? err.name : 'unknown' },
+        'credential.lazy_upgrade_failed'
+      );
+      return null;
+    }
+  };
+}
+
+/**
  * Backfill one surface. `apply: false` (the default everywhere) reads and
  * reports only.
+ *
+ * `limit` is the batch size: at most that many legacy rows are moved (or, in a
+ * dry run, reported as would-move) in this run, and the rest are counted as
+ * `deferred` for the next one. Every run is idempotent — a moved row is no
+ * longer a legacy row, so the next run's first `limit` rows are new ones — so
+ * running it repeatedly with a small limit is how an operator watches a change
+ * land a batch at a time. It does not make the scan cheaper: the scan reads the
+ * table once per surface either way.
  */
 export async function backfillSurface(
   surface: LegacySurface,
-  options: { apply: boolean }
+  options: { apply: boolean; limit?: number }
 ): Promise<SurfaceReport> {
+  const limit = options.limit ?? null;
+  if (limit !== null && (!Number.isInteger(limit) || limit < 1)) {
+    throw new Error(`limit must be a positive integer, got ${String(options.limit)}`);
+  }
   const report: SurfaceReport = {
     surface: surface.name,
     legacy: 0,
     rekeyed: 0,
     raced: 0,
     skipped: [],
+    limit,
+    deferred: 0,
   };
+  let selected = 0;
   for (const item of await scanCandidates(surface)) {
     const verdict = classifyRow(surface, item);
     if (verdict.kind === 'skip') {
@@ -331,6 +418,11 @@ export async function backfillSurface(
       continue;
     }
     report.legacy += 1;
+    if (limit !== null && selected >= limit) {
+      report.deferred += 1;
+      continue;
+    }
+    selected += 1;
     if (!options.apply) continue;
     const outcome = await rekeyRow(surface, item, verdict.token);
     report[outcome] += 1;

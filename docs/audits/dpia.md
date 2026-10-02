@@ -68,11 +68,15 @@ public-access block (`infrastructure/modules/frontend/main.tf` lines 85–170).
   plaintext row until it is re-keyed or ages out. Sitter, caretaker and share
   rows carry a TTL and clear themselves (≤60 days, ≤180 days and 14 days
   respectively); kiosk and plant-tag rows carry none by design, so they stay
-  until `backend/src/scripts/backfillTokenHashes.ts` re-keys them — same
-  token, so no label is reprinted and no display re-paired — or the household
-  re-issues. That script has not been run yet. Since 2026-09-17 a hashed
-  row's digest is also not usable as a credential: the legacy-read fallback
-  accepts a row only if it carries the token presented.
+  until the first request that uses one moves it to its hashed key (one atomic
+  transaction; same token, so no label is reprinted and no display re-paired),
+  or `backend/src/scripts/backfillTokenHashes.ts` re-keys the ones nobody has
+  used, or the household re-issues. That script has not been run yet. Since
+  2026-09-17 a hashed row's digest is also not usable as a credential: the
+  legacy-read fallback accepts a row only if it carries the token presented.
+  No request or audit log line carries a credential either: the request log
+  writes `/tag/{token}` and `/plants/shared/{code}`, not the value, and the
+  logger censors a credential row's key suffix as a backstop.
 - No sitter identity — sitters never create an account; the link label is enforced non-PII.
 - No caretaker account either. A caretaker seat DOES store one piece of personal data a sitter link does not: a **name**, typed by the household, which is the point of the feature — an unattributed visit record proves nothing. It is a household-supplied display name (a first name is what the UI asks for), never an email, phone number or address, and the caretaker never registers, authenticates, or is contactable through the product.
 - No HTML email (plain text only — `backend/src/services/emailNotifier.ts`), so no tracking pixels.

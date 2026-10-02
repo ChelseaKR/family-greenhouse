@@ -10,12 +10,22 @@
  *   2. the legacy-fallback guard, against the exact attack it exists for.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { timingSafeEqual } from 'node:crypto';
 import {
   TOKEN_HASH_SALTS,
   hashCapabilityToken,
   readTokenRow,
+  tokensMatch,
+  type LegacyUpgradeResult,
   type TokenHashSurface,
 } from '../../../src/utils/tokenHash.js';
+
+// A pass-through spy on the one primitive `tokensMatch` must use, so a revert to
+// `===` / `!==` is caught as a failure rather than passing every value test.
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return { ...actual, timingSafeEqual: vi.fn(actual.timingSafeEqual) };
+});
 
 const INPUT = '0123456789abcdef'.repeat(4);
 
@@ -177,5 +187,144 @@ describe('readTokenRow', () => {
     expect(
       await readTokenRow({ surface: 'plantShare', token: code, pk: sharePk, read })
     ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tokensMatch — the constant-time comparison on the legacy half
+// ---------------------------------------------------------------------------
+
+describe('tokensMatch', () => {
+  it('is true only for the identical string', () => {
+    expect(tokensMatch(TOKEN, TOKEN)).toBe(true);
+    expect(tokensMatch(TOKEN, 'b'.repeat(64))).toBe(false);
+    // Same length, differs only in the LAST byte — the case an early-exit
+    // comparison answers fastest and a constant-time one answers like any other.
+    expect(tokensMatch(TOKEN, `${TOKEN.slice(0, 63)}b`)).toBe(false);
+    // Same length, differs only in the FIRST byte.
+    expect(tokensMatch(TOKEN, `b${TOKEN.slice(1)}`)).toBe(false);
+  });
+
+  it('compares with crypto.timingSafeEqual, not with an early-exit operator', () => {
+    vi.mocked(timingSafeEqual).mockClear();
+    tokensMatch(TOKEN, TOKEN);
+    tokensMatch(TOKEN, `${TOKEN.slice(0, 63)}b`);
+    expect(timingSafeEqual).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a different length and anything that is not a string, without throwing', () => {
+    // `timingSafeEqual` THROWS on unequal lengths; the guard is what keeps a
+    // wrong-length presented value a plain "no" rather than a 500.
+    expect(tokensMatch(TOKEN, TOKEN.slice(1))).toBe(false);
+    expect(tokensMatch(TOKEN, `${TOKEN}a`)).toBe(false);
+    expect(tokensMatch(undefined, TOKEN)).toBe(false);
+    expect(tokensMatch(null, TOKEN)).toBe(false);
+    expect(tokensMatch(12345, TOKEN)).toBe(false);
+    expect(tokensMatch('', '')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readTokenRow — upgrade on use
+// ---------------------------------------------------------------------------
+
+describe('readTokenRow with an upgrade hook', () => {
+  /** What the real hook returns after a successful move: the hashed row. */
+  const movedRow = { PK: pk(DIGEST), SK: 'METADATA', tokenHash: DIGEST, id: 'tag-legacy' };
+
+  function withUpgrade(result: LegacyUpgradeResult) {
+    return vi.fn(async (_legacy: Record<string, unknown>) => result);
+  }
+
+  it('hands the legacy row to the hook and returns the HASHED row it produced', async () => {
+    const { read } = table({ [pk(TOKEN)]: legacyRow });
+    const upgrade = withUpgrade(movedRow);
+    const row = await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read, upgrade });
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(upgrade).toHaveBeenCalledWith(legacyRow);
+    // The caller must keep using the row that EXISTS: its later writes address
+    // the row by its own key, and the legacy key is gone.
+    expect(row).toBe(movedRow);
+  });
+
+  it('never calls the hook for a hashed hit, a miss, or a digest presented as a token', async () => {
+    const upgrade = withUpgrade(movedRow);
+
+    const hashedHit = table({ [pk(DIGEST)]: hashedRow });
+    await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read: hashedHit.read, upgrade });
+
+    const miss = table({});
+    await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read: miss.read, upgrade });
+
+    const dump = table({ [pk(DIGEST)]: hashedRow });
+    await readTokenRow({ surface: 'plantTag', token: DIGEST, pk, read: dump.read, upgrade });
+
+    const forged = table({ [pk(TOKEN)]: { ...legacyRow, token: 'b'.repeat(64) } });
+    await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read: forged.read, upgrade });
+
+    expect(upgrade).not.toHaveBeenCalled();
+  });
+
+  it('a hook that could not move the row costs the upgrade, not the request', async () => {
+    const { read } = table({ [pk(TOKEN)]: legacyRow });
+    const row = await readTokenRow({
+      surface: 'plantTag',
+      token: TOKEN,
+      pk,
+      read,
+      upgrade: withUpgrade(null),
+    });
+    expect(row).toBe(legacyRow);
+  });
+
+  it('without a hook the legacy row is returned as it always was, and nothing is written', async () => {
+    const { read, reads } = table({ [pk(TOKEN)]: legacyRow });
+    const row = await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read });
+    expect(row).toBe(legacyRow);
+    expect(reads).toEqual([pk(DIGEST), pk(TOKEN)]);
+  });
+
+  describe('when the move lost a race', () => {
+    it('serves the hashed row a concurrent move left behind', async () => {
+      // Another scan (or the backfill) moved it first: the legacy key is gone
+      // and the hashed key exists. Serving the STALE legacy row would send this
+      // request's later writes to a key that no longer exists.
+      const rows: Record<string, Record<string, unknown>> = { [pk(TOKEN)]: legacyRow };
+      const read = vi.fn(async (key: string) => rows[key] ?? null);
+      const upgrade = vi.fn(async () => {
+        delete rows[pk(TOKEN)];
+        rows[pk(DIGEST)] = hashedRow;
+        return 'raced' as const;
+      });
+      const row = await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read, upgrade });
+      expect(row).toBe(hashedRow);
+    });
+
+    it('serves the legacy row as it now stands when a live request changed it', async () => {
+      // A revocation landed between the read and the write: the move was
+      // cancelled, the row is still legacy and now revoked. The caller sees the
+      // CURRENT state, so a revoked label reads as revoked.
+      const revoked = { ...legacyRow, status: 'revoked' };
+      const rows: Record<string, Record<string, unknown>> = { [pk(TOKEN)]: legacyRow };
+      const read = vi.fn(async (key: string) => rows[key] ?? null);
+      const upgrade = vi.fn(async () => {
+        rows[pk(TOKEN)] = revoked;
+        return 'raced' as const;
+      });
+      const row = await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read, upgrade });
+      expect(row).toBe(revoked);
+    });
+
+    it('answers null when the row is gone altogether', async () => {
+      const rows: Record<string, Record<string, unknown>> = { [pk(TOKEN)]: legacyRow };
+      const read = vi.fn(async (key: string) => rows[key] ?? null);
+      const upgrade = vi.fn(async () => {
+        delete rows[pk(TOKEN)];
+        return 'raced' as const;
+      });
+      expect(
+        await readTokenRow({ surface: 'plantTag', token: TOKEN, pk, read, upgrade })
+      ).toBeNull();
+    });
   });
 });
