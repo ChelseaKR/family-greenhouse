@@ -748,7 +748,7 @@ if (unenforcedFlags.length > 0) {
 
 if (addedLenient.length > 0) {
   console.error(
-    'A new site grants a household mid-dunning the plan it is not paying for.\n' +
+    'A new site grants a lapsed household the plan it is not paying for.\n' +
       '`getEntitledPlanForIssuedGrant` is a deliberate exception, not a default: it\n' +
       'exists because the person holding an already-issued grant is usually not the\n' +
       'buyer and cannot fix the card. Every use is a product decision (#476).\n'

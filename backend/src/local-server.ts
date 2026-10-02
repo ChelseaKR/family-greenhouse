@@ -2432,7 +2432,7 @@ app.post(
     // Plan gate — mirrors the handler: window length + live-link count.
     // ENTITLEMENT (#476): this is the ISSUING half of the sitter-link
     // decision and the piece that makes the other half safe. A household
-    // mid-dunning cannot mint a new link or a longer window, while a link it
+    // that has lapsed cannot mint a new link or a longer window, while a link it
     // already handed out keeps working to its expiry (see GET /sitter/:token
     // and the photo routes below).
     const plan = entitledPlan(req.params.id);

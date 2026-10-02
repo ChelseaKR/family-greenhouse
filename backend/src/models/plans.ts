@@ -688,8 +688,10 @@ export function getEntitledPlan(sub: EntitlementSubscription, now: Date = new Da
  *
  * The distinction this pair draws is *starting* something new versus
  * *continuing* something already handed out. `getEntitledPlan` above answers
- * the first: a household mid-dunning may not mint a sitter link, print a
- * plant tag, mount a kiosk, add a caretaker seat, or fire a new Move Day. This
+ * the first: a lapsed household (past the retry window: unpaid, canceled)
+ * may not mint a sitter link, print a plant tag, mount a kiosk, add a
+ * caretaker seat, or fire a new Move Day. A `past_due` household is still in
+ * the retry window and may (#593). This
  * one answers the second, and deliberately does NOT consult the subscription
  * status.
  *

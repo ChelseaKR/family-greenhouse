@@ -69,7 +69,7 @@ async function resolvePlanBestEffort(householdId: string): Promise<Plan | null> 
     // household acting on their own account — the double-care detector on
     // completion and the two drift endpoints — so this is the STARTING
     // question: nothing here was issued to a third party who cannot fix the
-    // card. A household mid-dunning gets the free tier's behaviour, exactly
+    // card. A lapsed household gets the free tier's behaviour, exactly
     // as a downgrade already gives it. It also picks up the lifetime floor,
     // so an outright purchase survives a later subscription being cancelled.
     return getEntitledPlan(await billing.getHouseholdSubscription(householdId));

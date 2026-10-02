@@ -605,6 +605,28 @@ describe('getEntitledPlan — caps follow payment status, not just planId', () =
     ).toBe(PLANS.greenhouse);
   });
 
+  it.each([
+    'active',
+    'trialing',
+    'past_due',
+    'unpaid',
+    'canceled',
+    'incomplete',
+    'incomplete_expired',
+    'paused',
+  ])('holds the lifetime floor when a subscription on top of it is %s (#593)', (status) => {
+    // Admitting past_due into the entitled set must not have moved the floor
+    // for any other status: whatever Stripe reports for a subscription taken
+    // on top of a lifetime purchase, the household keeps at least what it
+    // bought outright — on either plan row a webhook can leave behind.
+    for (const planId of ['seedling', 'garden', 'greenhouse']) {
+      const plan = getEntitledPlan({ planId, status, lifetimePlanId: 'garden' });
+      expect(planRank(plan.id), `${planId}/${status}`).toBeGreaterThanOrEqual(
+        planRank(PLANS.garden.id)
+      );
+    }
+  });
+
   it('never resolves an unknown planId above the free tier', () => {
     expect(getEntitledPlan({ planId: 'enterprise', status: 'active' })).toBe(PLANS.seedling);
     expect(getEntitledPlan({ planId: 'toString', status: 'active' })).toBe(PLANS.seedling);

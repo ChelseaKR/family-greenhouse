@@ -39,7 +39,7 @@ async function requireGreenhousePlan(householdId: string) {
   // USING a key on getEntitledPlan, so minting one on `planId` alone was the
   // inconsistent half: an unpaid household could issue a key that its own
   // next request would then be refused with. Issuing is a new grant, and a
-  // household mid-dunning is not entitled to new grants.
+  // household that has lapsed is not entitled to new grants.
   // And the FLAG, not the id (#592). #476 fixed WHICH plan this asks about;
   // it still asked by naming a tier. `features.apiKeys` is authored per tier
   // in plans.ts, so a tier added above Garden gets whatever its own row says

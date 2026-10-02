@@ -575,13 +575,12 @@ through 0.36.0.
   Deploy note: one new route in `local.routes`, applied by this release's tag.
 
 - **A failed payment is now stated on every screen, not only in Settings.**
-  Until now the only place in the app that said a payment had failed was
-  Settings → Plan status — so most households found out from a refused "add
-  plant". A banner in the app frame now says the payment failed, what it means
-  right now (the plan is kept while the card is retried; if the last retry
-  fails, the subscription is canceled and the free plan's limits apply), and
-  links to Settings → Plan status to fix it. It disappears as soon as Stripe
-  reports the subscription paid again,
+  When Stripe reports a household's subscription as unpaid, the household's
+  caps drop at once (there is no grace period), and until now the only place
+  in the app that said so was Settings → Plan status — so most households
+  found out from a refused "add plant". A banner in the app frame now says the
+  payment failed, what changed, and links to Settings → Plan status to fix
+  it. It disappears as soon as Stripe reports the subscription paid again,
   stays off the Plan status page that already carries the full notice and off
   the full-height chat screen, and inside the native apps points only at that
   in-app page, never at a payment step. (#593)
