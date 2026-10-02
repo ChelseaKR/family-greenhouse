@@ -110,6 +110,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The AI-evaluation waiver is re-issued, dated, to 2027-01-05, and the chat
+  model question is closed.** The 2026-07-05 waiver expired 2026-10-05 and its
+  own terms required a dated decision; it is re-issued (option c) with the same
+  scope, because no live Bedrock scoring exists yet. Claude Haiku 4.5 is
+  endorsed as the intended chat model; `model-card.md` and
+  `docs/chat-rag-design.md` now say so. No code or configuration changes.
+
 - **The iPhone app follows every text size, and the keyboard's Prev / Next /
   Done bar is back.** The iOS app stopped growing text at 200% (#845), below
   the accessibility sizes someone may have chosen in Settings; it now applies
