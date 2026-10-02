@@ -502,6 +502,33 @@ export function s3ObjectTargetFromPresignedUrl(rawUrl: string): SmokeS3ObjectTar
   return assertSafeS3Target(bucket, decodedPath);
 }
 
+/**
+ * True when `rawUrl` is a SigV4-signed S3 GET for exactly `target` (ADR 0033).
+ *
+ * Since #855 the API never hands a browser the stored photo reference to
+ * render: every response swaps it for a short-lived presigned S3 URL. So the
+ * image the smoke must see load is a signed URL for the same bucket and key it
+ * uploaded to, not the reference the presign returned. Returns false, never
+ * throws, so it can sit inside a `waitForResponse` predicate, and it never
+ * echoes the URL, whose query string carries temporary credentials.
+ */
+export function isSignedS3GetFor(rawUrl: string, target: SmokeS3ObjectTarget): boolean {
+  let candidate: SmokeS3ObjectTarget;
+  let params: URLSearchParams;
+  try {
+    candidate = s3ObjectTargetFromPresignedUrl(rawUrl);
+    params = new URL(rawUrl).searchParams;
+  } catch {
+    return false;
+  }
+  return (
+    candidate.bucket === target.bucket &&
+    candidate.key === target.key &&
+    params.get('X-Amz-Algorithm') === 'AWS4-HMAC-SHA256' &&
+    (params.get('X-Amz-Signature') ?? '') !== ''
+  );
+}
+
 export interface SmokeS3VersionIdentifier {
   key: string;
   versionId: string;
