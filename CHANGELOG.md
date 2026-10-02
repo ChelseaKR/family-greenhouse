@@ -16,6 +16,41 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-10-02
+
+**0.38.1 deployed only partly. This release ships its frontend, and fixes the
+step that stopped it.** On 2026-10-02 the 0.38.1 deploy applied its Terraform
+(the CDN photo route is gone, as intended) and deployed the 0.38.1 backend.
+The frontend deploy then failed at its asset prune, after the new frontend had
+been uploaded, and the automatic rollback restored the 0.37.0 frontend and
+backend. The 18 production Lambda functions were then restored to the 0.38.1
+code by hand, because photos now load only through the signed links that
+backend issues. Since then production has run the 0.38.1 infrastructure and
+backend with the 0.37.0 frontend. 0.38.2 is 0.38.1's code plus the fix below,
+so the 0.38.0 and 0.38.1 entries describe what it ships.
+
+### Fixed
+
+- **A refused asset prune can no longer roll back a release.** The prune that
+  deletes old frontend files ran inside the frontend deploy and refused to
+  delete more than half of the bucket. On 0.38.1 it wanted 1,202 of 1,617
+  objects, and the diff was right: all 1,202 were content-hashed files from
+  the seven builds 0.31.0 to 0.37.0, at least 13 days old and absent from the
+  new build. After a quiet spell the bucket is mostly superseded builds, so
+  the ratio refused a correct prune, the frontend deploy failed, and the
+  rollback reverted a release that was fine. The prune now runs in its own
+  job, only after the post-deploy smoke has passed, and the rollback never
+  reads it. A refusal fails that job and the run's notification, deletes
+  nothing, and keeps the release. The guard now checks that the bucket really
+  holds the build it is comparing against: it refuses when the build is
+  empty, when any of the build's own assets is missing from the bucket, or
+  when the prune would remove more than 20 builds' worth of files. It only
+  ever deletes hashed `assets/` files. A dry run of the same plan is
+  documented in `docs/deployment.md` under "Asset prune refused".
+- **The Terms of Service effective date is this release's date.** Their text
+  is unchanged since 0.38.0, but neither 0.38.0 nor 0.38.1 reached customers
+  with its frontend, so the date is the date of the release that does.
+
 ## [0.38.1] - 2026-10-02
 
 **0.38.0 never deployed. This release ships everything listed under 0.38.0
