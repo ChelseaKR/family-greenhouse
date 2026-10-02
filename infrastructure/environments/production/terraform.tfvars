@@ -90,6 +90,13 @@ fcm_service_account_secret_id = ""
 apns_auth_key_secret_id       = ""
 apns_environment              = "production"
 
+# Plant passport import (#676). OFF: the three passport routes answer 404 and the
+# apps show nothing new. The routes are wired by the tag that carries this file
+# either way; setting passport_import_enabled = true is the switch. Read the
+# plan first: it must show only aws_lambda_function.handlers["plants"] changing
+# in place (its environment gains PASSPORT_IMPORT_ENABLED = "1").
+passport_import_enabled = false
+
 # --- Stripe billing ---
 # Price IDs are NOT secret (they're just `price_…` references), so they live
 # here. Leaving one "" disables that cadence: an empty monthly ID makes the whole

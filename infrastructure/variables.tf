@@ -275,6 +275,17 @@ variable "native_push_enabled" {
   default     = false
 }
 
+# The plant passport import switch (#676). OFF: the three passport routes
+# answer 404 PASSPORT_IMPORT_DISABLED, no passport link can be made, and the
+# recipient page shows the plain cutting card it always has. Turning it on adds
+# one Lambda environment variable and nothing else; the routes themselves are
+# wired regardless (an API Gateway route that answers 404 is inert).
+variable "passport_import_enabled" {
+  description = "Turn the plant passport import on (#676). False keeps it off end to end: the routes answer 404 PASSPORT_IMPORT_DISABLED and the apps show nothing new. The plan for flipping it must show only aws_lambda_function.handlers[\"plants\"] updating in place (its environment)."
+  type        = bool
+  default     = false
+}
+
 # Plant.id identify monthly meter. "1" ENFORCES the per-household monthly cap;
 # blank only tracks usage (beta default). Production sets "1" so the real
 # per-call Plant.id credit can't be cost-amplified by concurrency.

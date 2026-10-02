@@ -82,6 +82,18 @@ backend "production live" rather than "production-ready in code".
       (web_authn_configuration + sign_in_policy), the client gains
       `ALLOW_USER_AUTH`, and the auth Lambda gains `PASSKEYS_ENABLED=1`. A
       replace (`-/+`) on the pool means stop. No tier or price change (PLUS).
+- [ ] **Plant passport import (#676) — off until decided.**
+      `passport_import_enabled` is `false` in every committed tfvars. The tag
+      that carries the change wires three routes on the existing plants Lambda
+      whatever the switch says (`/plants/{id}/passport-share`, the public
+      `/plants/shared/{code}/passport` and
+      `/plants/shared/{code}/passport/import`), and they answer 404
+      `PASSPORT_IMPORT_DISABLED` until it is on. Read the plan for that tag:
+      three new `aws_apigatewayv2_route` resources and no other change. To turn
+      on: set it `true` in production, run the plan, and confirm the only
+      change is `aws_lambda_function.handlers["plants"]` updating in place (its
+      environment gains `PASSPORT_IMPORT_ENABLED=1`). No new Lambda, permission,
+      table, index or secret.
 - [ ] **API Gateway throttling apply check** — the HTTP API stage is configured
       at 100 burst / 50 requests per second; `/auth/*` also has the tighter
       application per-IP limiter. Verify the stage values after apply.

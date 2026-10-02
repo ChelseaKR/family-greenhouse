@@ -38,6 +38,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the export, and merging into a household that already has data. Deploy note:
   no new route and no infrastructure change.
 
+- **Plant passport hand-off: whoever receives a passport can add the plant to
+  their own greenhouse with its care summary — built, switched off.** Three
+  routes on the plants Lambda. `POST /plants/{id}/passport-share` makes an
+  ordinary 14-day cutting-share link that also carries a frozen summary the
+  server derives from the household's own records: the house rule, each
+  task's interval (seasonal ones named by season), how many care entries were
+  logged in the last 90 days and when, and the parent plant and cuttings taken.
+  It has no field for the plant's private notes, a completion's or task's
+  notes, who did the care, where the plant sits, an id or a token, and it says
+  so when a house rule, a schedule or any care is missing rather than leaving
+  the section out. `GET /plants/shared/{code}/passport` serves that summary to
+  the recipient without an account. `POST /plants/shared/{code}/passport/import`
+  adds one plant to the caller's own household with the summary as its first
+  note (in English or Spanish, following the recipient's saved language). It
+  takes no body and refuses any field in one, never reads or writes another
+  household's data, goes through the same plan-capped create as adding a plant
+  by hand (402 at the cap), and lets a household import a given link once (409
+  on a repeat, naming its copy). No photo and no task comes with it, and the
+  cutting-share routes are unchanged. Off until the owner turns on Terraform
+  `passport_import_enabled` (default `false`, and `false` in production): the
+  routes are wired either way and answer 404 `PASSPORT_IMPORT_DISABLED` until
+  then. The screens for it follow in a separate change.
+
 - **Conversion events in Google Analytics 4, so ads and search can be judged
   on sales.** On the website only, and under the same opt-outs as page views,
   GA4 now also receives `landing_cta_click` (the home page's sign-up buttons

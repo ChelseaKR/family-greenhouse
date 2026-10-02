@@ -134,6 +134,18 @@ import {
 // call requireEnv('TABLE_NAME') at import time — which took this dev server
 // down before it could answer /health.
 import { resolveCareNote, resolvePetSafety } from './models/sitterBriefFields.js';
+import {
+  PASSPORT_ALREADY_IMPORTED,
+  PASSPORT_COMPLETIONS_READ,
+  PASSPORT_IMPORT_DISABLED,
+  PASSPORT_IMPORT_MAX_BODY_BYTES,
+  buildPassportSummary,
+  composePassportNote,
+  parsePassportSummary,
+  passportImportBodySchema,
+  passportImportEnabled,
+  type PassportSummary,
+} from './models/plantPassport.js';
 import { frontendTelemetrySchema, productTelemetrySchema } from './models/telemetry.js';
 // From models/, NOT services/householdAudit.js, for the same reason as the
 // kiosk import above: the service reaches utils/dynamodb.ts.
@@ -368,6 +380,9 @@ interface PlantShare {
     imageUrl: string | null;
     tags: string[];
   };
+  /** The passport summary (#676), only on a link made by
+   *  POST /plants/:id/passport-share. Mirrors plantService.PlantShare.passport. */
+  passport?: PassportSummary | null;
   createdBy: string;
   createdAt: string;
   expiresAt: string;
@@ -672,6 +687,10 @@ export const db = {
   plants: new Map<string, Plant>(),
   spaces: new Map<string, PlantSpace>(),
   shares: new Map<string, PlantShare>(),
+  // Plant passport imports (#676): `${householdId}|${code}` -> the imported
+  // plant's id (null while in flight). Mirrors services/plantPassport.ts's
+  // once-per-household marker.
+  passportImports: new Map<string, string | null>(),
   // Household trash (#670), keyed `${householdId}|${kind}|${id}` — mirrors
   // services/trashService.ts. Rows that went into the trash are held here,
   // out of every other map, so every mock read excludes them the way the
@@ -763,6 +782,7 @@ export function resetDb(): void {
   db.plants.clear();
   db.spaces.clear();
   db.shares.clear();
+  db.passportImports.clear();
   db.trash.clear();
   db.archiveImports.clear();
   db.tasks.clear();
@@ -4868,6 +4888,191 @@ app.get('/plants/shared/:code', (req, res) => {
     expiresAt: share.expiresAt,
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plant passport (#676) — mirrors handlers/plants/passport.ts. All three answer
+// 404 PASSPORT_IMPORT_DISABLED unless PASSPORT_IMPORT_ENABLED=1, read per
+// request so a test can flip it.
+// ---------------------------------------------------------------------------
+const passportEnabledGuard: express.RequestHandler = (_req, res, next) => {
+  if (!passportImportEnabled()) {
+    return res.status(404).json({
+      message: 'Plant passports are not available yet.',
+      details: { code: PASSPORT_IMPORT_DISABLED },
+    });
+  }
+  next();
+};
+
+// POST /plants/:id/passport-share — a cutting share that also freezes the
+// summary. Derived here from the household's own rows, never from the request.
+app.post(
+  '/plants/:id/passport-share',
+  passportEnabledGuard,
+  authMiddleware,
+  requireHousehold,
+  (req, res) => {
+    const user = (req as any).user;
+    const plant = db.plants.get(req.params.id);
+    if (!plant || plant.householdId !== user.householdId) {
+      return res.status(404).json({ message: 'Plant not found' });
+    }
+
+    const now = new Date();
+    const tasks = [...db.tasks.values()].filter(
+      (t) => t.plantId === plant.id && t.householdId === user.householdId
+    );
+    const completions = [...db.completions.values()]
+      .filter((c) => c.plantId === plant.id && c.householdId === user.householdId)
+      .sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1))
+      .slice(0, PASSPORT_COMPLETIONS_READ);
+    const parent = plant.parentPlantId ? db.plants.get(plant.parentPlantId) : undefined;
+    const passport = buildPassportSummary({
+      plant: { createdAt: plant.createdAt, speciesSource: plant.speciesSource ?? null },
+      tasks,
+      completions,
+      completionsReadLimit: PASSPORT_COMPLETIONS_READ,
+      lineage: {
+        parentName: parent && parent.householdId === user.householdId ? parent.name : null,
+        cuttingsTaken: [...db.plants.values()].filter(
+          (p) => p.householdId === user.householdId && p.parentPlantId === plant.id
+        ).length,
+      },
+      now,
+    });
+
+    const code = uuidv4().replace(/-/g, '');
+    const expiresAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    db.shares.set(code, {
+      code,
+      plantId: plant.id,
+      householdId: plant.householdId,
+      plantSnapshot: {
+        name: plant.name,
+        species: plant.species,
+        careRule: resolveCareNote(plant).careNote,
+        imageUrl: plant.imageUrl,
+        tags: [...plant.tags],
+      },
+      passport,
+      createdBy: user.userId,
+      createdAt: now.toISOString(),
+      expiresAt,
+    });
+
+    const baseUrl =
+      process.env.FRONTEND_URL ||
+      process.env.ALLOWED_ORIGIN ||
+      `http://localhost:${process.env.FRONTEND_PORT || 3000}`;
+    res.status(201).json({ code, expiresAt, url: `${baseUrl}/shared/${code}` });
+  }
+);
+
+// GET /plants/shared/:code/passport — PUBLIC. The frozen summary only; 404 for
+// an unknown/expired code and for a link that carries no passport.
+app.get('/plants/shared/:code/passport', passportEnabledGuard, (req, res) => {
+  const share = getValidShare(req.params.code);
+  const passport = parsePassportSummary(share?.passport);
+  if (!share || !passport) {
+    return res.status(404).json({ message: 'This share link is invalid or has expired' });
+  }
+  res.json({ passport, expiresAt: share.expiresAt });
+});
+
+// POST /plants/shared/:code/passport/import — the caller's household only, no
+// body, plan cap applies, once per household per link.
+app.post(
+  '/plants/shared/:code/passport/import',
+  passportEnabledGuard,
+  authMiddleware,
+  requireHousehold,
+  (req, res) => {
+    const user = (req as any).user;
+    if (
+      Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8') > PASSPORT_IMPORT_MAX_BODY_BYTES
+    ) {
+      return res.status(413).json({ message: 'Payload too large' });
+    }
+    const body = passportImportBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return res.status(400).json({ message: 'Validation failed' });
+    }
+
+    const share = getValidShare(req.params.code);
+    const passport = parsePassportSummary(share?.passport);
+    if (!share || !passport) {
+      return res.status(404).json({ message: 'This share link is invalid or has expired' });
+    }
+
+    const markerKey = `${user.householdId}|${share.code}`;
+    if (db.passportImports.has(markerKey)) {
+      const existingId = db.passportImports.get(markerKey) ?? null;
+      if (existingId === null || db.plants.has(existingId)) {
+        return res.status(409).json({
+          message: 'This plant passport is already in your greenhouse.',
+          details: { code: PASSPORT_ALREADY_IMPORTED, plantId: existingId },
+        });
+      }
+    }
+
+    const plan = entitledPlan(user.householdId);
+    const existing = [...db.plants.values()].filter(
+      (p) => p.householdId === user.householdId && (p.status ?? 'active') === 'active'
+    );
+    if (atCap(existing.length, limitOf(plan, 'plants'))) {
+      return res.status(402).json({
+        message: `Your ${plan.name} plan is limited to ${limitOf(plan, 'plants')} plants. Remove or archive a plant before adding more.`,
+      });
+    }
+
+    const fromName = db.households.get(share.householdId)?.name ?? 'another household';
+    const notes = composePassportNote({
+      summary: passport,
+      careRule: share.plantSnapshot.careRule,
+      species: share.plantSnapshot.species,
+      householdName: fromName,
+      sharedOn: share.createdAt.slice(0, 10),
+      locale: 'en',
+    });
+
+    const plantId = uuidv4();
+    const now = new Date().toISOString();
+    const plant: Plant = {
+      id: plantId,
+      householdId: user.householdId,
+      name: share.plantSnapshot.name,
+      species: share.plantSnapshot.species,
+      location: null,
+      spaceId: null,
+      placementNote: null,
+      summerSpaceId: null,
+      winterSpaceId: null,
+      imageUrl: null,
+      notes,
+      careRule: share.plantSnapshot.careRule,
+      status: 'active',
+      statusChangedAt: null,
+      tags: [...share.plantSnapshot.tags],
+      perenualSpeciesId: null,
+      parentPlantId: null,
+      createdAt: now,
+      createdBy: user.userId,
+      updatedAt: now,
+    };
+    db.plants.set(plantId, plant);
+    db.passportImports.set(markerKey, plantId);
+
+    recordActivity({
+      type: 'plant.shared_accepted',
+      householdId: user.householdId,
+      actorId: user.userId,
+      actorName: db.users.get(user.userId)?.name ?? user.email.split('@')[0],
+      payload: { plantId, plantName: plant.name, fromHouseholdName: fromName },
+    });
+
+    res.status(201).json(plant);
+  }
+);
 
 // --- Plant-sitter PUBLIC endpoints (no auth) ------------------------------
 // Mirrors handlers/tasks/handler.ts: getSitterView / completeSitterTask. The

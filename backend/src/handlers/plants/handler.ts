@@ -1116,6 +1116,7 @@ export const acceptSharedPlant = createHandler(
 import { identify } from './identify.js';
 import { importPlants } from './import.js';
 import { checkPlantHealth } from './health.js';
+import { getSharedPassport, importSharedPassport, sharePlantPassport } from './passport.js';
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -1133,6 +1134,12 @@ export const handler = createRouter({
   'GET /plants/shared/{code}': getSharedPlant,
   'POST /plants/shared/{code}/accept': acceptSharedPlant,
   'POST /plants/{id}/share': sharePlant,
+  // Plant passport (#676, handlers/plants/passport.ts): a cutting link that
+  // also carries the plant's care summary. All three answer 404 until
+  // Terraform's passport_import_enabled turns the feature on.
+  'POST /plants/{id}/passport-share': sharePlantPassport,
+  'GET /plants/shared/{code}/passport': getSharedPassport,
+  'POST /plants/shared/{code}/passport/import': importSharedPassport,
   'GET /plants/{id}': getPlant,
   'PUT /plants/{id}': updatePlant,
   'DELETE /plants/{id}': deletePlant,

@@ -3401,6 +3401,69 @@ paths:
         - { name: code, in: path, required: true, schema: { type: string } }
       responses:
         '201': { $ref: '#/components/responses/Ok' }
+  /plants/{id}/passport-share:
+    post:
+      summary: Mint a 14-day plant-passport link (a cutting share that also freezes the care summary)
+      description: >
+        Plant passport (#676). The summary is derived on the server from the
+        household's own records and never from the request; it carries the house
+        rule, task intervals, a count and date for recent care and lineage names,
+        and never plant notes, completion or task notes, who did the care, ids or
+        tokens. Answers 404 with `details.code` PASSPORT_IMPORT_DISABLED until the
+        deployment turns the feature on (Terraform `passport_import_enabled`).
+      tags: [Plants]
+      parameters: [{ $ref: '#/components/parameters/PlantId' }]
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '404':
+          description: Plant not found, or the feature is not enabled (PASSPORT_IMPORT_DISABLED)
+  /plants/shared/{code}/passport:
+    get:
+      summary: Public plant-passport summary for a shared link
+      description: >
+        The frozen summary only; the plant card comes from `GET /plants/shared/{code}`.
+        404 for an unknown or expired code, for a link that carries no passport, and
+        (`details.code` PASSPORT_IMPORT_DISABLED) while the feature is off.
+      tags: [Plants]
+      security: []
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404':
+          description: Unknown or expired link, no passport on it, or the feature is not enabled
+  /plants/shared/{code}/passport/import:
+    post:
+      summary: Add a passported plant to the caller's household with its summary as the first note
+      description: >
+        Takes no body (`{}` or nothing; any key is a 400) and writes only into the
+        caller's own household, through the normal plan-capped create (402). A
+        household can import a given link once: a repeat is a 409 with
+        `details.code` PASSPORT_ALREADY_IMPORTED and the existing plant's id. No
+        photo and no tasks are copied.
+      tags: [Plants]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              maxProperties: 0
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400':
+          description: The body carried a field
+        '402':
+          description: The plan's plant limit is reached
+        '404':
+          description: Unknown or expired link, no passport on it, or the feature is not enabled
+        '409':
+          description: This household already imported this passport (PASSPORT_ALREADY_IMPORTED)
+        '413':
+          description: Body too large
   /plants/{id}/health-check:
     post:
       summary: Leaf-health assessment of an uploaded photo (Bedrock vision)
