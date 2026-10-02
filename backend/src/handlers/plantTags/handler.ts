@@ -244,7 +244,7 @@ export const listPlantTags = createHandler(
     ]);
     // ENTITLEMENT, not the plan row (#476): the read side has to report the
     // allowance the WRITE side will actually enforce, or the print sheet
-    // offers a household mid-dunning a cap that `issuePlantTag` above will
+    // offers a lapsed household a cap that `issuePlantTag` above will
     // then refuse — the same mint-vs-use disagreement #540 fixed for API
     // keys. `tags` is unaffected and still lists every ACTIVE tag, so labels
     // already issued can still be managed and turned off; only the allowance

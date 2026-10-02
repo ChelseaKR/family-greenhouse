@@ -350,6 +350,16 @@ jobs:
         # check (CICD-27).
         run: npm run citation:check
 
+      - name: The Terms effective date is a release date (#593)
+        # The Terms page carried a hand-typed date: the #593 failed-payment
+        # terms were dated the day they were written, weeks before a release
+        # could ship them. A Terms text change now resets the date to
+        # UNRELEASED, and a set date must be a CHANGELOG release date.
+        # cd-production.yml runs the same script with --release, which also
+        # refuses UNRELEASED. Lives in the required `Lint` job;
+        # scripts/check-no-silenced-gates.mjs asserts it stays here.
+        run: npm run terms-date:check
+
       - name: package-lock.json records the same version as package.json (#728)
         # The last version declaration in this repository that nothing compared.
         # package-lock.json states the version in FOUR places (top-level,

@@ -251,7 +251,7 @@ describe('double-care detection on POST /tasks/{id}/complete', () => {
     expect(vi.mocked(taskService.completeTask).mock.calls[0]).toHaveLength(6);
   });
 
-  it.each(['past_due', 'unpaid', 'paused'])(
+  it.each(['unpaid', 'paused'])(
     'skips the detector while the card has failed (%s), like a downgrade (#476)',
     async (status) => {
       // `resolvePlanBestEffort` resolves ENTITLEMENT now. Every caller of it
@@ -381,7 +381,7 @@ describe('GET /plants/{plantId}/schedule-drift', () => {
   });
 
   it('is explicitly not_in_plan while the card has failed (#476)', async () => {
-    await setPlan('garden', { status: 'past_due' });
+    await setPlan('garden', { status: 'unpaid' });
     const doubleCare = await import('../../../src/services/doubleCare.js');
     const { getPlantScheduleDrift } = await import('../../../src/handlers/tasks/handler.js');
 

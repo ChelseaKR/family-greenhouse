@@ -374,8 +374,15 @@ function paymentFailed(
       body.push('  - No sabemos si habrá otro intento automático. Tu página de');
       body.push('    facturación muestra el estado real de la factura.');
     }
-    body.push('  - Si la factura no llega a pagarse, Stripe dejará de reintentarlo y tu');
-    body.push('    suscripción no continuará.');
+    if (notice.nextAttempt.state === 'none') {
+      body.push('  - Como no queda ningún reintento, Stripe cancelará la suscripción y tu');
+      body.push('    hogar pasará a los límites del plan gratuito, salvo que la factura');
+      body.push('    se pague antes.');
+    } else {
+      body.push('  - Tu hogar conserva su plan mientras se siga reintentando el cobro.');
+      body.push('  - Cuando los reintentos terminen sin un pago, Stripe cancelará la');
+      body.push('    suscripción y tu hogar pasará a los límites del plan gratuito.');
+    }
     body.push('  - No se borra nada: tus plantas, tareas, fotos e historial siguen ahí,');
     body.push('    sea cual sea el plan en el que acabes.');
     body.push('');
@@ -402,8 +409,16 @@ function paymentFailed(
       body.push("  - We don't know whether another automatic attempt is scheduled. Your");
       body.push('    billing page shows the invoice’s real status.');
     }
-    body.push('  - If the invoice is never paid, Stripe stops retrying and your');
-    body.push('    subscription will not continue.');
+    if (notice.nextAttempt.state === 'none') {
+      body.push('  - With no retry left, Stripe cancels the subscription and your');
+      body.push("    household moves to the free plan's limits unless the invoice is");
+      body.push('    paid first.');
+    } else {
+      body.push('  - Your household keeps its plan for as long as the card is being');
+      body.push('    retried.');
+      body.push('  - When the retries end without a payment, Stripe cancels the');
+      body.push("    subscription and your household moves to the free plan's limits.");
+    }
     body.push('  - Nothing is deleted either way: your plants, tasks, photos and care');
     body.push('    history stay, whatever plan you end up on.');
     body.push('');

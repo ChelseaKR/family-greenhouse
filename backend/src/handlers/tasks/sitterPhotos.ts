@@ -77,7 +77,7 @@ const INACTIVE_LINK_MESSAGE = 'This sitter link is invalid or has expired.';
  * issued while entitled. The sitter is not the buyer, cannot fix a failed
  * card, and is standing in the kitchen right now — so photo-back stays on for
  * the life of the link. Issuing a NEW link is gated on entitlement in
- * handlers/households/handler.ts, which is where a household mid-dunning is
+ * handlers/households/handler.ts, which is where a lapsed household is
  * actually stopped.
  */
 async function awayKitEnabledFor(householdId: string): Promise<boolean> {

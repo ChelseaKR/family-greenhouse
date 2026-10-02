@@ -76,6 +76,7 @@
     "well-known:check": "node scripts/check-well-known.mjs",
     "commercial:check": "node scripts/check-commercial-status.mjs",
     "citation:check": "node scripts/check-citation-version.mjs",
+    "terms-date:check": "node scripts/check-terms-effective-date.mjs",
     "lockfile:check": "node scripts/check-lockfile-version.mjs",
     "mobile:release": "frontend/scripts/build-mobile-release.sh",
     "verify": "node scripts/run-gate.mjs"

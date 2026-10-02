@@ -16,6 +16,30 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **A failed payment no longer costs a household its plan while the card is
+  being retried, and it ends in cancellation.** Until now the first declined
+  charge dropped the household to the free Seedling plan's limits at once, even
+  though Stripe keeps retrying the card for some time afterwards. The household
+  now keeps its plan and every paid feature while those automatic retries run.
+  If the last retry fails, Stripe cancels the subscription and the household
+  moves to the free plan's limits; nothing is deleted. Paying — or updating the
+  card so a retry succeeds — restores everything at once. Plans bought
+  outright and running gifts are unaffected either way. The banner, Settings →
+  Plan status, the Terms of Service ("Automatic renewal") and the payment-failed
+  email all say this plainly, in English and Spanish. No number of days is
+  stated: the window is the retry schedule set in Stripe. **Deploy note, for the
+  owner:** this depends on two Stripe Dashboard settings that nothing in this
+  repository can read, the retry schedule and "Cancel the subscription" as what
+  happens after the last retry (never "leave the subscription past-due", which
+  would keep paid access with no payment). Both are set: cancel after the last
+  retry (confirmed 2026-10-01) and Stripe's Smart Retries default schedule; the
+  checklist is in `docs/billing.md`. The Terms' effective date is now the date
+  of the release that ships them: it reads "takes effect with the next
+  release" until the release PR fills it, and a release with the date unset or
+  not its own refuses to deploy. (#593)
+
 ### Added
 
 - **The data export now lists what it holds, so a restore can tell a whole file

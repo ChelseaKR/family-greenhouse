@@ -55,7 +55,7 @@ function requirePathHousehold(
 /**
  * ENTITLEMENT, not the plan row (#476). One caller, `createCaretaker` — the
  * gate is on CREATE only (see the file header), so this is purely the
- * STARTING question and a household mid-dunning may not mint a new seat. Every
+ * STARTING question and a lapsed household may not mint a new seat. Every
  * seat it already handed out keeps working, and list/revoke/report stay open
  * on every tier, so nothing already issued is trapped behind the gate.
  *

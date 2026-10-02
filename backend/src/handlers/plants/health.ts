@@ -61,10 +61,10 @@ export const checkPlantHealth = createHandler(
     // resolve is not one we spend against — same 503 as a failed reservation.
     //
     // ENTITLEMENT, not the plan row (#476). Every scan is a real Bedrock
-    // invocation, and Stripe does not cancel on a failed charge — it retries
-    // for weeks. Resolving the cap from `planId` alone let a past_due
-    // household keep spending against a paid allowance for the whole dunning
-    // window; `getEntitledPlan` drops it to the free tier's allowance, which
+    // invocation. Resolving the cap from `planId` alone let an unpaid
+    // household keep spending against a paid allowance until Stripe finally
+    // reset planId; `getEntitledPlan` drops it to the free tier's allowance
+    // (a past_due household keeps its plan while Stripe retries, #593), which
     // is the same treatment a downgrade already gets (identify.ts does this).
     let cap: number;
     try {

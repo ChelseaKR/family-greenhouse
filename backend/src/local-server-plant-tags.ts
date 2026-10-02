@@ -367,7 +367,7 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
     }
     // ENTITLEMENT, not the plan row (#476): the read side has to report the
     // allowance the WRITE side will actually enforce, or the print sheet
-    // offers a household mid-dunning a cap that the issue route above would
+    // offers a lapsed household a cap that the issue route above would
     // then refuse. `tags` is unaffected and still lists every ACTIVE tag, so
     // labels already issued can still be managed; only the allowance to issue
     // MORE narrows.

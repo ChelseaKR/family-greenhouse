@@ -115,6 +115,14 @@ jobs:
           fi
           echo "CHANGELOG.md has an entry for ${expected}."
 
+      - name: The Terms effective date is this release's date, or an earlier unchanged one (#593)
+        # Blocking. A release whose Terms text changed must run
+        # `node scripts/check-terms-effective-date.mjs --fill` in the release
+        # PR, which copies this version's CHANGELOG date in. UNRELEASED here
+        # means the Terms would ship with no effective date; a date that is
+        # not a CHANGELOG release date means it was typed.
+        run: node scripts/check-terms-effective-date.mjs --release
+
       - name: Tag signature (REL-08, advisory for now)
         # Release tags are SSH-signed (v0.23.1 onward carries an ssh-ed25519
         # signature). The maintainer's signing key — the one GitHub's API

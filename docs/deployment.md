@@ -246,6 +246,13 @@ npm --workspace frontend run build
 
 ## Promotion
 
+**If the Terms of Service changed since the last release,** run
+`node scripts/check-terms-effective-date.mjs --fill` in the release PR after
+writing its `## [x.y.z] - YYYY-MM-DD` CHANGELOG heading. It sets the Terms
+effective date to that release date. `cd-production.yml` runs the same script
+with `--release` and refuses a tag whose Terms date is unset (`UNRELEASED`) or
+is not a CHANGELOG release date (#593).
+
 Staging → production uses an approval gate in `cd-production.yml`. Tag a release:
 
 ```bash
