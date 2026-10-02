@@ -22,6 +22,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { planLimitHitContext, track } from '@/services/analytics';
+import i18n from '@/i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -214,9 +215,18 @@ export interface ApiError {
  * but we still tolerate plain-string bodies (legacy text/plain responses,
  * proxies, or JSON the client failed to parse). Falls back to the JS Error
  * message, then a generic string. Never throws.
+ *
+ * A request that got no answer at all (offline, the API unreachable, a
+ * timeout) has nothing from the server to show, and axios's own text for it
+ * is the English "Network Error" or "timeout of 15000ms exceeded". That used
+ * to be shown as is, in every language, on the website and in the apps; it is
+ * now the translated `connection.requestUnreachable`.
  */
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    if (isNoResponseError(error)) {
+      return i18n.t('connection.requestUnreachable');
+    }
     const data: unknown = error.response?.data;
     // Standard contract: JSON body with a string `message`.
     if (
@@ -253,4 +263,15 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
   return 'An unexpected error occurred';
+}
+
+/** No response came back: offline, unreachable, or timed out (not cancelled). */
+function isNoResponseError(error: AxiosError): boolean {
+  if (error.response) return false;
+  return (
+    error.code === AxiosError.ERR_NETWORK ||
+    error.code === AxiosError.ECONNABORTED ||
+    error.code === AxiosError.ETIMEDOUT ||
+    error.message === 'Network Error'
+  );
 }

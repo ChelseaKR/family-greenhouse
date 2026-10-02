@@ -1726,7 +1726,8 @@
     "offlineChanges": "Los cambios que hagas ahora se enviarán cuando vuelvas a tener conexión, siempre que la app siga abierta.",
     "unreachableChanges": "Los cambios que hagas ahora no se guardarán hasta que se pueda conectar de nuevo.",
     "refreshing": "Actualizando",
-    "refreshed": "Actualizado"
+    "refreshed": "Actualizado",
+    "requestUnreachable": "No se puede conectar con Family Greenhouse. Revisa tu conexión e inténtalo de nuevo."
   },
   "validation": {
     "nameRequired": "El nombre es obligatorio",

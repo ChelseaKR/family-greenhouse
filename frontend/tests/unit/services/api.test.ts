@@ -217,6 +217,56 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage('string')).toBe('An unexpected error occurred');
   });
 
+  describe('a request that got no answer', () => {
+    // Axios's own text for these is English, and it used to reach the screen
+    // as is ("Network Error" on the dashboard, in every language, on the
+    // website and in the apps).
+    const unreachable = "Can't reach Family Greenhouse. Check your connection and try again.";
+
+    it.each([
+      ['offline or unreachable', new AxiosError('Network Error', AxiosError.ERR_NETWORK)],
+      ['timed out', new AxiosError('timeout of 15000ms exceeded', AxiosError.ECONNABORTED)],
+      ['timed out (transitional)', new AxiosError('timeout exceeded', AxiosError.ETIMEDOUT)],
+      ['a bare "Network Error" with no code', new AxiosError('Network Error')],
+    ])('%s: says so in words, never the raw axios text', (_label, err) => {
+      expect(getErrorMessage(err)).toBe(unreachable);
+      expect(getErrorMessage(err)).not.toMatch(/Network Error|timeout/);
+    });
+
+    it('is translated, not English under every language', async () => {
+      const { default: i18n } = await import('@/i18n');
+      const { ensureLanguageCatalog } = await import('@/i18n');
+      await ensureLanguageCatalog('es');
+      await i18n.changeLanguage('es');
+      try {
+        expect(getErrorMessage(new AxiosError('Network Error', AxiosError.ERR_NETWORK))).toBe(
+          'No se puede conectar con Family Greenhouse. Revisa tu conexión e inténtalo de nuevo.'
+        );
+      } finally {
+        await i18n.changeLanguage('en');
+      }
+    });
+
+    it('still shows what the server said when it did answer', () => {
+      const err = new AxiosError(
+        'Request failed with status code 503',
+        AxiosError.ERR_BAD_RESPONSE
+      );
+      err.response = {
+        data: { message: 'Down for maintenance' },
+        status: 503,
+        statusText: '',
+        headers: {},
+        config: {},
+      } as never;
+      expect(getErrorMessage(err)).toBe('Down for maintenance');
+    });
+
+    it('leaves a cancelled request alone (nobody is waiting on it)', () => {
+      expect(getErrorMessage(new AxiosError('canceled', AxiosError.ERR_CANCELED))).toBe('canceled');
+    });
+  });
+
   describe('standardized error-body contract', () => {
     function axiosErrorWithBody(data: unknown): AxiosError {
       const err = new AxiosError('Request failed with status code 500');

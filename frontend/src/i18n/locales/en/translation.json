@@ -1690,7 +1690,8 @@
     "offlineChanges": "Changes you make now are sent once you're back online, as long as the app stays open.",
     "unreachableChanges": "Changes you make now won't save until Family Greenhouse can be reached again.",
     "refreshing": "Refreshing",
-    "refreshed": "Updated"
+    "refreshed": "Updated",
+    "requestUnreachable": "Can't reach Family Greenhouse. Check your connection and try again."
   },
   "validation": {
     "nameRequired": "Name is required",
