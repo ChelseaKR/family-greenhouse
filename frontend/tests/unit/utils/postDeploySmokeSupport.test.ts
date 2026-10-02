@@ -8,6 +8,7 @@ import {
   householdIdFromMembershipItem,
   isAmazonS3Hostname,
   isProductTelemetryRequest,
+  isSignedS3GetFor,
   isVendorAnalyticsHostname,
   purgeExactSmokeS3Object,
   purgeSmokeOwnedPartitions,
@@ -245,6 +246,66 @@ describe('post-deploy smoke support', () => {
           expect((error as Error).message).not.toMatch(/signature|do-not-log/i);
         }
       }
+    });
+
+    describe('isSignedS3GetFor (the photo the page renders, ADR 0033)', () => {
+      const target = {
+        bucket: 'family-greenhouse-images-production-12345678',
+        key: 'plants/household/plant/photo.webp',
+      };
+      const signed = (base: string) =>
+        `${base}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=secret&X-Amz-Expires=3600&X-Amz-Signature=abc123&X-Amz-SignedHeaders=host`;
+
+      it('accepts a signed GET for the uploaded bucket and key, in either S3 URL shape', () => {
+        expect(
+          isSignedS3GetFor(
+            signed(
+              'https://family-greenhouse-images-production-12345678.s3.us-east-1.amazonaws.com/plants/household/plant/photo.webp'
+            ),
+            target
+          )
+        ).toBe(true);
+        expect(
+          isSignedS3GetFor(
+            signed(
+              'https://s3.us-east-1.amazonaws.com/family-greenhouse-images-production-12345678/plants/household/plant/photo.webp'
+            ),
+            target
+          )
+        ).toBe(true);
+      });
+
+      it('rejects the stored reference the presign returns, which loads nothing since #855', () => {
+        expect(
+          isSignedS3GetFor('https://familygreenhouse.net/plants/household/plant/photo.webp', target)
+        ).toBe(false);
+      });
+
+      it('rejects an unsigned S3 URL, another key, another bucket and garbage, without throwing', () => {
+        expect(
+          isSignedS3GetFor(
+            'https://family-greenhouse-images-production-12345678.s3.us-east-1.amazonaws.com/plants/household/plant/photo.webp',
+            target
+          )
+        ).toBe(false);
+        expect(
+          isSignedS3GetFor(
+            signed(
+              'https://family-greenhouse-images-production-12345678.s3.us-east-1.amazonaws.com/plants/household/plant/other.webp'
+            ),
+            target
+          )
+        ).toBe(false);
+        expect(
+          isSignedS3GetFor(
+            signed(
+              'https://someone-else-images.s3.us-east-1.amazonaws.com/plants/household/plant/photo.webp'
+            ),
+            target
+          )
+        ).toBe(false);
+        expect(isSignedS3GetFor('not-a-url', target)).toBe(false);
+      });
     });
 
     it('paginates Versions and DeleteMarkers, deletes only the exact key, and verifies empty', async () => {
