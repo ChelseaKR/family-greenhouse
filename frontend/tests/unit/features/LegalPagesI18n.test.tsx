@@ -10,6 +10,7 @@ import { AccountDeletionPage } from '@/features/legal/AccountDeletionPage';
 import { PrivacyPage } from '@/features/legal/PrivacyPage';
 import { SupportPage } from '@/features/legal/SupportPage';
 import { TermsPage } from '@/features/legal/TermsPage';
+import termsEffective from '@/features/legal/termsEffective.json';
 
 /**
  * The legal pages render entirely from `legal.*` catalog keys. These tests
@@ -30,6 +31,50 @@ import { TermsPage } from '@/features/legal/TermsPage';
  * trial, price changes, one-time purchases) landed after the others, and
  * moved again when the refund section was published (#426).
  */
+const MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const MONTHS_ES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+/** The effective-date line both locales should show for a Terms record. */
+function termsEffectiveText(effectiveDate: string): { effectiveEn: string; effectiveEs: string } {
+  if (effectiveDate === 'UNRELEASED') {
+    return {
+      effectiveEn: 'Takes effect with the next release; the date is set when it ships.',
+      effectiveEs: 'Entra en vigor con la próxima versión; la fecha se fija cuando se publique.',
+    };
+  }
+  const [year, month, day] = effectiveDate.split('-').map(Number);
+  return {
+    effectiveEn: `Effective ${MONTHS_EN[month - 1]} ${day}, ${year}.`,
+    effectiveEs: `Vigente desde el ${day} de ${MONTHS_ES[month - 1]} de ${year}.`,
+  };
+}
+
 const PAGES = [
   {
     name: 'privacy',
@@ -44,10 +89,11 @@ const PAGES = [
     Page: TermsPage,
     en: 'Terms of Service',
     es: 'Términos del servicio',
-    // The Terms changed after the last release (#593): no day is named until
-    // the release that ships them fills it (scripts/check-terms-effective-date.mjs).
-    effectiveEn: 'Takes effect with the next release; the date is set when it ships.',
-    effectiveEs: 'Entra en vigor con la próxima versión; la fecha se fija cuando se publique.',
+    // The Terms date is the date of the release that ships them (#593):
+    // UNRELEASED between a Terms change and that release, then the date the
+    // release PR's `--fill` copied in. Read from the record, so the release PR
+    // (and a re-date of it) does not have to edit this test as well.
+    ...termsEffectiveText(termsEffective.effectiveDate),
   },
   {
     name: 'support',
