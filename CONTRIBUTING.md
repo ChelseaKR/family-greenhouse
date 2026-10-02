@@ -49,7 +49,7 @@ Those steps run **concurrently**, not as a chain — `scripts/run-gate.mjs` sche
 - To go narrower still on a busy machine: `GATE_JOBS=2 git push`, or `npm run verify -- --jobs 2` — a ceiling the census can lower but never raise. `--jobs 1` is close to the old serial behaviour. To go the other way and take the whole machine regardless of who else is on it, `GATE_PEERS=1`.
 - Adding a workspace, or renaming a script a gate step runs, fails the gate with an explanation rather than silently dropping the check. Add the step to `scripts/gate-steps.mjs`.
 
-This repo is onboarded to the portfolio's `docs/standards/` (vendored, pinned `v1.0.1`) — see the README `## Standards conformance` table for per-standard state and [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md) for the detail. A change that touches AI/chat, adds a new external API, or changes what PII the app collects should update the relevant declaration in the same PR.
+This repo is onboarded to the portfolio's `docs/standards/` (vendored, pinned `v3.0.1`) — see the README `## Standards conformance` table for per-standard state and [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md) for the detail. A change that touches AI/chat, adds a new external API, or changes what PII the app collects should update the relevant declaration in the same PR.
 
 ## Commit messages — conventional commits (enforced by commitlint)
 

@@ -113,7 +113,7 @@ Types we use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore
 
 ## Standards conformance
 
-This repo is onboarded to the portfolio's `STANDARDS/` (vendored at `docs/standards/`, pinned `v2.0.0`). State is honest, not aspirational: completed controls name their evidence and residual gaps stay explicit. Full detail (per-control findings, ASVS level, AI-eval waiver, RTF §A–F) lives in [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md); this table is the required top-level declaration (DOC-11/12/13).
+This repo is onboarded to the portfolio's `STANDARDS/` (vendored at `docs/standards/`, pinned `v3.0.1`). State is honest, not aspirational: completed controls name their evidence and residual gaps stay explicit. Full detail (per-control findings, ASVS level, AI-eval waiver, RTF §A–F) lives in [`docs/RESPONSIBLE-TECH-AUDITS.md`](docs/RESPONSIBLE-TECH-AUDITS.md); this table is the required top-level declaration (DOC-11/12/13).
 
 | Standard                   | Applies?                                                                        | State                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
