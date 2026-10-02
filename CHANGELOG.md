@@ -16,6 +16,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-10-02
+
+**Billing behavior changes in this release, and payments are live.** A
+household whose card fails now keeps its paid plan while Stripe retries the
+card, and drops to the free plan only when Stripe cancels after the last retry
+(#818, under Changed below). The Terms of Service gain a paragraph saying so,
+and their effective date is this release's date.
+
+- **Included, but switched off:** native push notifications for the apps
+  (#851), off until `native_push_enabled` is `true` and the store build sets
+  `VITE_NATIVE_PUSH_ENABLED` (both `false`); plant passport import (#865), off
+  until `passport_import_enabled` is `true` (it is `false`; its three routes
+  answer 404 `PASSPORT_IMPORT_DISABLED`); and Android App Links (#848), which
+  write no `assetlinks.json` until the two Play signing fingerprints are
+  pasted in.
+- **Photos load only through signed links from this release on (#855).** The
+  release's Terraform removes the CDN route to the images bucket before the
+  backend that signs links is deployed, so photos in the app do not load for
+  the few minutes between the two. Stored photos need no migration.
+- **Legacy plaintext credentials move to their hashed keys on first use
+  (#866).** No table migration runs at deploy; each pre-hashing plant tag,
+  kiosk, sitter, caretaker or share row is moved the first time it resolves.
+  The code in 0.37.0 already reads both forms. The operator backfill for rows
+  nobody uses stays a separate, manual step (`docs/runbooks.md`).
+- **The apps get their app-only changes from store builds.** The iOS print,
+  iPad photo button, text size and privacy manifest fixes (#858, #861) and the
+  Android App Links declaration (#848) reach people through the 0.38.0 store
+  builds (build 3800), not through this tag's web deploy.
+
 ### Changed
 
 - **A failed payment no longer costs a household its plan while the card is
@@ -134,6 +163,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The undelivered-reports alarm says what it counts (#863).** The
+  `FrontendReportsUndelivered` alarm's description and the metric's comments
+  said one point was one browser session; it is one log line, and every past
+  firing came from a single client. The description now says so and names the
+  first two things to check. This is an in-place update to one CloudWatch
+  alarm at this release's Terraform apply; no threshold changes.
+
 - **The AI-evaluation waiver is re-issued, dated, to 2027-01-05, and the chat
   model question is closed.** The 2026-07-05 waiver expired 2026-10-05 and its
   own terms required a dated decision; it is re-issued (option c) with the same
@@ -157,6 +193,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the way they do in every other app.
 
 ### Fixed
+
+- **A browser sends at most one "reports were lost" note per 10 minutes
+  (#862).** A browser that could not deliver its error reports said so again
+  on every page load, so one automated visitor walking 15 pages tripped the
+  undelivered-reports alarm with no outage (2026-09-08, 2026-09-18,
+  2026-09-19). The count it holds is deferred to the next window, never
+  dropped.
 
 - **Print works in the iPhone and iPad app.** "Print passport", the plant
   tags' "Print the sheet", and the Print buttons on the sitter brief and the
@@ -185,6 +228,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   that drops it. The App Store privacy answers in `docs/APP-STORE.md` list it.
 
 ### Security
+
+- **axios is 1.20.0 (#888).** 1.19.0 was affected by GHSA-542g-h47m-68v8
+  (CVE-2026-101901), a denial of service during HTTP/2 session setup. Internal
+  dependency change; no user-facing change.
 
 - **A credential written before hashing is moved to its hashed key the first
   time it is used, and no log or telemetry line carries a token (issue #450).**
