@@ -134,6 +134,16 @@ struct SearchEcho {
     }
 }
 
+/// When the bar's search field hides. It must show at launch every time and
+/// hide once the list scrolls. Installed with hide-on-scroll on, UIKit started
+/// it hidden whenever the page's tools arrived after the screen appeared, and
+/// turning hide-on-scroll on after one layout still caught it mid-collapse on
+/// some launches (3 of 10). So it stays visible until the person first drags
+/// the list, and only then hides on scroll.
+enum NativeSearchVisibility {
+    static func hides(afterUserScrolled: Bool) -> Bool { afterUserScrolled }
+}
+
 // MARK: - UIKit
 
 extension BarMenu {

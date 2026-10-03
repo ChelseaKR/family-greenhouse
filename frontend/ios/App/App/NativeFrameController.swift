@@ -140,9 +140,36 @@ final class WebScreenController: UIViewController {
         controller.searchBar.tintColor = FrameColors.tint
         searchRelay = relay
         navigationItem.searchController = controller
-        // Hidden once the list scrolls, and revealed by pulling it down
-        // (the standard iOS behavior), so the plants come first.
-        navigationItem.hidesSearchBarWhenScrolling = true
+        // Showing at launch, hidden once the list scrolls, and revealed by
+        // pulling it down: the standard iOS behavior. The page's tools can
+        // arrive after this screen has appeared, and UIKit then starts a
+        // search bar that hides on scroll already hidden (or half hidden), so
+        // whether it showed at launch depended on timing. It is installed
+        // always-visible and starts hiding on scroll from the first time the
+        // person drags the list (`userBeganScrolling`), so it shows at launch
+        // every time. NativeSearchVisibility holds the rule.
+        navigationItem.hidesSearchBarWhenScrolling = NativeSearchVisibility.hides(afterUserScrolled: false)
+        // Arriving after the screen appeared, the field can also leave the
+        // large title collapsed (about 1 launch in 10). On a list nobody has
+        // touched yet, settle it at its top, large title and field showing.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, !self.userHasScrolled else { return }
+            self.frame?.settleAtTop(self)
+        }
+    }
+
+    /// Whether the person has dragged this screen's list yet.
+    private(set) var userHasScrolled = false
+
+    /// The person started dragging this screen's list: from now on the search
+    /// field hides when the list scrolls, and a pull down reveals it.
+    func userBeganScrolling() {
+        userHasScrolled = true
+        guard navigationItem.searchController != nil else { return }
+        let hides = NativeSearchVisibility.hides(afterUserScrolled: true)
+        if navigationItem.hidesSearchBarWhenScrolling != hides {
+            navigationItem.hidesSearchBarWhenScrolling = hides
+        }
     }
 
     /// Redraws only when this screen's tools changed.
@@ -322,8 +349,10 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
 
         // The page decides where its own scrolling ends; remember where it
         // settled so a screen left behind keeps an up-to-date picture.
-        scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
+        scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
             self?.scheduleSettledSnapshot(after: 0.35)
+            // Only a finger on the list counts, not the page's own scrolling.
+            if scrollView.isTracking { self?.liveScreen?.userBeganScrolling() }
         }
 
         // A confirmation left up when the app goes to the background is
@@ -682,6 +711,13 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
     /// past its top, and this web view's scroll view never bounces (the
     /// page's pull to refresh owns that gesture). So the page is put past its
     /// top once; UIKit expands the bar and settles the offset itself.
+    /// Puts `screen`'s list at its top, large title expanded, if it is the
+    /// screen showing (see WebScreenController's `applySearch`).
+    func settleAtTop(_ screen: WebScreenController) {
+        guard screen === liveScreen else { return }
+        scrollToTop(animated: false)
+    }
+
     private func scrollToTop(animated: Bool) {
         let scrollView = webView.scrollView
         liveScreen?.view.layoutIfNeeded()
