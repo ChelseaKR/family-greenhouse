@@ -42,6 +42,8 @@ describe('careToxicityFrom', () => {
     expect(view.claims.dogs.state).toBe('non-toxic');
     expect(view.sourced).toBe(true);
     expect(view.note).toBe('A fixture note.');
+    // Fully cited: no caution line anywhere.
+    expect(view.caution).toBeNull();
     expect(view.faq.q).toBe('Is a fixture plant toxic to cats and dogs?');
     expect(view.faq.a).toBe(
       'No. The ASPCA lists Fixture Plant (Fixtura plantae) as non-toxic to cats and dogs. A fixture note.'
@@ -75,7 +77,10 @@ describe('careToxicityFrom', () => {
     expect(view.sourced).toBe(false);
     expect(view.note).toBeNull();
     expect(view.petSafePath).toBeNull();
-    expect(view.faq.a).toMatch(/^We don’t know, and we won’t guess\./);
+    expect(view.caution).toBe(
+      'Fixture plant isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
+    expect(view.faq.a).toBe(view.caution);
     expect(view.faq.a).not.toMatch(/non-toxic|pet-safe|\bsafe\b/i);
   });
 
@@ -88,8 +93,11 @@ describe('careToxicityFrom', () => {
     expect(view.sourced).toBe(false);
     // The table note speaks for both animals, so it waits until both are cited.
     expect(view.note).toBeNull();
+    expect(view.caution).toBe(
+      'The ASPCA’s list gives no verdict on fixture plant for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
     expect(view.faq.a).toBe(
-      'The ASPCA lists Fixture Plant (Fixtura plantae) as non-toxic to cats. For dogs, our source gives no verdict.'
+      `The ASPCA lists Fixture Plant (Fixtura plantae) as non-toxic to cats. For dogs, our source gives no verdict. ${view.caution}`
     );
   });
 });
@@ -126,5 +134,36 @@ describe('names in sentences', () => {
     expect(nameInSentence('English Ivy')).toBe('an English ivy');
     expect(sentenceName('Christmas Cactus')).toBe('Christmas cactus');
     expect(sentenceName('Bird of Paradise')).toBe('bird of paradise');
+  });
+});
+
+describe('the caution line', () => {
+  it('is the owner-approved wording for the ZZ plant', () => {
+    expect(careToxicity(findCareGuide('zz-plant')!).caution).toBe(
+      'ZZ plant isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
+  });
+
+  it('appears exactly for the guides with an unknown animal, and never reads as safe', () => {
+    for (const g of CARE_GUIDES) {
+      const view = careToxicity(g);
+      const unknown =
+        view.claims.cats.state === 'not-assessed' || view.claims.dogs.state === 'not-assessed';
+      expect(view.caution !== null, g.slug).toBe(unknown);
+      if (view.caution) {
+        expect(view.caution, g.slug).not.toMatch(/non-toxic|pet-safe|\bsafe\b|harmless|fine/i);
+        expect(view.caution, g.slug).toContain('(888-426-4435)');
+      }
+    }
+  });
+
+  it('negative control: a cited guide gains the caution when its listing is broken', () => {
+    // Same plant both ways, so the only variable is the citation.
+    const pothos = findCareGuide('pothos')!;
+    const row = { ...CITED, slug: 'pothos', commonName: 'Pothos' };
+    expect(careToxicityFrom(pothos, [row]).caution).toBeNull();
+    const broken = careToxicityFrom(pothos, [{ ...row, aspcaListing: undefined }]);
+    expect(broken.claims.cats.state).toBe('not-assessed');
+    expect(broken.caution).toMatch(/^Pothos isn’t on the ASPCA’s list/);
   });
 });

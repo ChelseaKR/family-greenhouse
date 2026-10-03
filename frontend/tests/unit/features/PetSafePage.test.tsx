@@ -242,3 +242,16 @@ describe('PetSafePage static species list', () => {
     ]);
   });
 });
+
+describe('PetSafePage directory caution', () => {
+  it('shows the caution under every unknown species and nowhere else', () => {
+    const { container } = renderPage();
+    const cautions = [...container.querySelectorAll('[data-testid="species-caution"]')];
+    const expected = PET_SAFE_SPECIES.filter((s) => s.caution !== null);
+    expect(expected.map((s) => s.slug)).toEqual(['zz-plant']);
+    expect(cautions.map((c) => c.textContent)).toEqual(expected.map((s) => s.caution));
+    const card = cautions[0]!.closest('a')!;
+    expect(card.getAttribute('href')).toBe('/care/zz-plant');
+    expect(card.textContent).not.toMatch(/non-toxic|pet-safe/i);
+  });
+});

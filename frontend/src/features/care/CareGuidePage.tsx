@@ -14,7 +14,13 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { findCareGuide, type CareGuide } from './careGuides';
-import { careToxicity, nameInSentence, sentenceName, type CareToxicity } from './careToxicity';
+import {
+  ASPCA_POISON_CONTROL_PHONE,
+  careToxicity,
+  nameInSentence,
+  sentenceName,
+  type CareToxicity,
+} from './careToxicity';
 
 const SITE = SITE_URL;
 
@@ -71,6 +77,9 @@ const VERDICT_LABEL = {
 /** US Poison Help line (America's Poison Centers), for people, not pets. */
 const POISON_HELP_TEL = 'tel:+18002221222';
 
+/** ASPCA Animal Poison Control Center, as a dialable link. */
+const ASPCA_POISON_CONTROL_TEL = `tel:+1${ASPCA_POISON_CONTROL_PHONE.replace(/-/g, '')}`;
+
 /**
  * Pets and people, answered only from the cited table. Each animal's line is
  * a verdict with its ASPCA listing beside it, or "Unknown" with the reason;
@@ -92,10 +101,7 @@ function ToxicitySection({ guide, toxicity }: { guide: CareGuide; toxicity: Care
               <dd className="mt-1 text-gray-700" data-claim={animal} data-state={claim.state}>
                 <strong>{VERDICT_LABEL[claim.state]}.</strong>{' '}
                 {claim.state === 'not-assessed' ? (
-                  <>
-                    The ASPCA plant list, the source this site uses, has no verdict for this plant,
-                    so we don’t give one. Keep it out of reach of pets that chew.
-                  </>
+                  <>Not on the ASPCA’s list for {animal}, so we can’t give a verdict.</>
                 ) : (
                   <>
                     Source:{' '}
@@ -126,6 +132,20 @@ function ToxicitySection({ guide, toxicity }: { guide: CareGuide; toxicity: Care
           </dd>
         </div>
       </dl>
+      {toxicity.caution && (
+        <p
+          data-testid="toxicity-caution"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-gray-900"
+        >
+          {toxicity.caution}{' '}
+          <a
+            href={ASPCA_POISON_CONTROL_TEL}
+            className="text-primary-700 underline hover:no-underline"
+          >
+            Call {ASPCA_POISON_CONTROL_PHONE}
+          </a>
+        </p>
+      )}
       {toxicity.note && <p>{toxicity.note}</p>}
       {toxicity.petSafePath && (
         <p>

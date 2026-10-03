@@ -145,6 +145,7 @@ describe('CareGuidePage pet toxicity', () => {
     const cats = section(container).querySelector('[data-claim="cats"]')!;
     expect(cats.getAttribute('data-state')).toBe('toxic');
     expect(cats.textContent).toMatch(/^Toxic\./);
+    expect(section(container).querySelector('[data-testid="toxicity-caution"]')).toBeNull();
     const source = cats.querySelector('a')!;
     expect(source.getAttribute('href')).toBe(
       'https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants/golden-pothos'
@@ -174,6 +175,12 @@ describe('CareGuidePage pet toxicity', () => {
       'Is a ZZ plant toxic to cats and dogs?'
     );
     expect(section(container).textContent).not.toMatch(/non-toxic|pet-safe|\bsafe\b to/i);
+    // The plain caution, with a dialable poison-control link.
+    const caution = section(container).querySelector('[data-testid="toxicity-caution"]')!;
+    expect(caution.textContent).toMatch(
+      /^ZZ plant isn’t on the ASPCA’s list, so we can’t give a verdict\. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center \(888-426-4435\)\./
+    );
+    expect(caution.querySelector('a')!.getAttribute('href')).toBe('tel:+18884264435');
   });
 
   it('never states a verdict for people', () => {
@@ -195,6 +202,9 @@ describe('CareGuidePage pet toxicity', () => {
       const cats = section(container).querySelector('[data-claim="cats"]')!;
       expect(cats.getAttribute('data-state')).toBe('not-assessed');
       expect(cats.textContent).toMatch(/^Unknown\./);
+      expect(
+        section(container).querySelector('[data-testid="toxicity-caution"]')!.textContent
+      ).toMatch(/^Pothos isn’t on the ASPCA’s list/);
       // The hand-written quick fact still says "Toxic", but the page must not
       // promote it to a cited verdict or into the structured data.
       expect(faqNames(container).map((q) => q.name)).not.toContain(

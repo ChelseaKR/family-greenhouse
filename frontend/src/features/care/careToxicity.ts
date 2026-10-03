@@ -52,6 +52,12 @@ export interface CareToxicity {
   note: string | null;
   /** `/pet-safe/<slug>` when that page is published, else null. */
   petSafePath: string | null;
+  /**
+   * The plain caution shown wherever an animal resolves to "Unknown": on the
+   * care page and in the /pet-safe directory. Null when every animal is
+   * cited. It never states or implies a verdict, only what to do.
+   */
+  caution: string | null;
   /** The generated FAQ: always shown on the page. */
   faq: { q: string; a: string };
 }
@@ -98,8 +104,32 @@ function citedAnswer(claims: Record<Animal, AnimalClaim>, note: string | null): 
   return parts.join(' ');
 }
 
-const UNKNOWN_ANSWER =
-  'We don’t know, and we won’t guess. The ASPCA plant list, the source this site uses for pet toxicity, has no entry for this plant. Keep it out of reach of pets that chew, and if one eats some, call your vet or the ASPCA Animal Poison Control Center.';
+/**
+ * ASPCA Animal Poison Control Center, as printed on
+ * https://www.aspca.org/pet-care/animal-poison-control (checked 2026-10-02:
+ * "(888) 426-4435"). A consultation fee may apply; that is ASPCA's to state.
+ */
+export const ASPCA_POISON_CONTROL_PHONE = '888-426-4435';
+
+const ACTION = `Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (${ASPCA_POISON_CONTROL_PHONE}).`;
+
+function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * The caution for a plant with at least one "Unknown" animal. Owner-approved
+ * wording (2026-10-02) for a plant with no cited verdict at all; the
+ * one-animal variant names the animal the source is silent on.
+ */
+export function cautionFor(commonName: string, unknownAnimals: readonly Animal[]): string | null {
+  if (unknownAnimals.length === 0) return null;
+  const name = capitalized(sentenceName(commonName));
+  if (unknownAnimals.length === ANIMALS.length) {
+    return `${name} isn’t on the ASPCA’s list, so we can’t give a verdict. ${ACTION}`;
+  }
+  return `The ASPCA’s list gives no verdict on ${sentenceName(commonName)} for ${unknownAnimals.join(' or ')}, so we can’t give one. ${ACTION}`;
+}
 
 /**
  * The toxicity view of a guide, from a given table. `table` is injectable so
@@ -121,15 +151,25 @@ export function careToxicityFrom(
   const rawNote = entry?.note;
   const note = sourced && typeof rawNote === 'string' && rawNote.trim() ? rawNote : null;
   const page = anyCited ? findPlantSafetyPage(tableSlug) : undefined;
+  const caution = cautionFor(
+    guide.commonName,
+    ANIMALS.filter((animal) => claims[animal].state === 'not-assessed')
+  );
 
   return {
     claims,
     sourced,
     note,
     petSafePath: page ? `/pet-safe/${page.slug}` : null,
+    caution,
     faq: {
       q: `Is ${nameInSentence(guide.commonName)} toxic to cats and dogs?`,
-      a: anyCited ? citedAnswer(claims, note) : UNKNOWN_ANSWER,
+      // `caution` is non-null whenever any animal is unknown.
+      a: anyCited
+        ? caution
+          ? `${citedAnswer(claims, note)} ${caution}`
+          : citedAnswer(claims, note)
+        : caution!,
     },
   };
 }

@@ -1,4 +1,5 @@
 import { CARE_GUIDES } from '@/features/care/careGuides';
+import { careToxicity } from '@/features/care/careToxicity';
 
 /**
  * The static half of `/pet-safe`: every species we publish a care guide for,
@@ -34,6 +35,12 @@ export interface PetSafeSpecies {
   /** `quickFacts.toxicity` from the species' care guide, verbatim. */
   verdict: string;
   level: PetSafetyLevel;
+  /**
+   * The care page's caution line (careToxicity.ts) when any animal resolves
+   * to "Unknown", else null. Shown under the verdict so a plant with no cited
+   * answer is never listed without telling the reader what to do.
+   */
+  caution: string | null;
 }
 
 /**
@@ -62,6 +69,7 @@ const SPECIES: PetSafeSpecies[] = CARE_GUIDES.map((guide) => ({
   scientificName: guide.scientificName,
   verdict: guide.quickFacts.toxicity,
   level: petSafetyLevel(guide.quickFacts.toxicity),
+  caution: careToxicity(guide).caution,
 }));
 
 export type PetSafeGroupId = 'safe' | 'unsafe' | 'unclear';
