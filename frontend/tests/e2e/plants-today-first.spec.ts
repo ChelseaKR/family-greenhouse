@@ -128,3 +128,99 @@ test.describe('iOS app (native frame stub)', () => {
     await expect(page.getByRole('link', { name: /^add plant$/i })).toBeHidden();
   });
 });
+
+test.describe('iOS app with bar tools (native frame stub)', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'the shell under test is WebKit');
+  test.use({ viewport: { width: 402, height: 874 } });
+
+  test('hands search and both menus to the native bar, and follows its picks', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>;
+      const calls: Array<{ method: string; options: unknown }> = [];
+      const listeners: Record<string, Array<(data: unknown) => void>> = {};
+      w.__frame = { calls, listeners };
+      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+        PluginHeaders: [
+          {
+            name: 'NativeChrome',
+            methods: [
+              { name: 'addListener' },
+              { name: 'removeListener' },
+              { name: 'removeAllListeners', rtype: 'promise' },
+              { name: 'configure', rtype: 'promise' },
+              { name: 'update', rtype: 'promise' },
+              { name: 'setBarTools', rtype: 'promise' },
+            ],
+          },
+        ],
+        nativePromise: (plugin: string, method: string, options: unknown) => {
+          if (plugin === 'NativeChrome') calls.push({ method, options });
+          return Promise.resolve();
+        },
+        nativeCallback: (
+          plugin: string,
+          method: string,
+          options: { eventName?: string },
+          callback: (data: unknown) => void
+        ) => {
+          if (plugin === 'NativeChrome' && method === 'addListener' && options.eventName) {
+            (listeners[options.eventName] ??= []).push(callback);
+          }
+          return 'callback';
+        },
+      };
+    });
+    await openPlants(page);
+    await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
+    await expect(page.getByRole('heading', { level: 2, name: 'Needs care' })).toBeVisible();
+
+    // The web row is gone; the bar got the menus and the search field.
+    await expect(page.getByLabel('Search plants')).toHaveCount(0);
+    await expect(page.getByLabel('Filter plants', { exact: true })).toHaveCount(0);
+    const sent = await page.waitForFunction(() => {
+      const f = (
+        window as unknown as {
+          __frame: {
+            calls: Array<{
+              method: string;
+              options: { menus: Array<{ id: string }>; search: unknown };
+            }>;
+          };
+        }
+      ).__frame;
+      const last = f.calls.filter((c) => c.method === 'setBarTools').pop();
+      return last && last.options.menus.length === 2 ? last.options : null;
+    });
+    const tools = (await sent.jsonValue()) as {
+      path: string;
+      menus: Array<{ id: string }>;
+      search: { placeholder: string };
+    };
+    expect(tools.path).toBe('/plants');
+    expect(tools.menus.map((m) => m.id)).toEqual(['filter', 'more']);
+    expect(tools.search.placeholder).toBe('Search plants');
+
+    // A pick on the native menu and a search typed in the bar reach the page.
+    const fire = (name: string, data: unknown) =>
+      page.evaluate(
+        ([n, d]) => {
+          const f = (
+            window as unknown as {
+              __frame: { listeners: Record<string, Array<(x: unknown) => void>> };
+            }
+          ).__frame;
+          for (const l of f.listeners[n] ?? []) l(d);
+        },
+        [name, data] as const
+      );
+    await fire('barMenuSelect', { path: '/plants', id: 'space:outside' });
+    await expect(page.getByText('No plants found')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Remove filter: Outside' })).toBeVisible();
+    await fire('barMenuSelect', { path: '/plants', id: 'space:all' });
+    await fire('barSearch', { path: '/plants', text: 'fern' });
+    await expect(page.getByText(/1 plant matches “fern”/)).toBeVisible();
+  });
+});

@@ -72,9 +72,21 @@ final class WebScreenController: UIViewController {
         view.backgroundColor = FrameColors.paper
     }
 
+    /// The tools last drawn, so an identical set does not rebuild the bar.
+    private var drawnTools: BarTools?
+    private var searchRelay: BarSearchRelay?
+
     func applyEntry() {
         title = entry.title
         navigationItem.largeTitleDisplayMode = entry.largeTitle ? .always : .never
+        applyBarItems()
+    }
+
+    /// The trailing bar: the "+" first (rightmost), then the screen's own
+    /// menus (NativeBarTools.swift), and its search field, if it has one.
+    func applyBarItems() {
+        let tools = frame?.barTools(for: entry.path)
+        var items: [UIBarButtonItem] = []
         if let button = entry.rightButton {
             let item = UIBarButtonItem(
                 image: UIImage(systemName: button.symbol),
@@ -83,10 +95,60 @@ final class WebScreenController: UIViewController {
                 }
             )
             item.accessibilityLabel = button.label
-            navigationItem.rightBarButtonItem = item
-        } else {
-            navigationItem.rightBarButtonItem = nil
+            items.append(item)
         }
+        let path = entry.path
+        for menu in tools?.menus ?? [] {
+            let item = UIBarButtonItem(
+                image: UIImage(systemName: menu.symbol),
+                menu: menu.uiMenu { [weak self] id in
+                    self?.frame?.barMenuPicked(path: path, id: id)
+                }
+            )
+            item.accessibilityLabel = menu.label
+            item.accessibilityIdentifier = "barMenu.\(menu.id)"
+            items.append(item)
+        }
+        navigationItem.rightBarButtonItems = items
+        applySearch(tools?.search)
+        drawnTools = tools
+    }
+
+    private func applySearch(_ search: BarSearch?) {
+        guard let search = search else {
+            navigationItem.searchController = nil
+            searchRelay = nil
+            return
+        }
+        if let controller = navigationItem.searchController, let relay = searchRelay {
+            controller.searchBar.placeholder = search.placeholder
+            // The web's value, put back only when it differs (a filter reset
+            // the query); never while someone is typing in it.
+            if !controller.searchBar.isFirstResponder, controller.searchBar.text != search.text {
+                relay.webSet(search.text)
+                controller.searchBar.text = search.text
+            }
+            return
+        }
+        let relay = BarSearchRelay(path: entry.path, frame: frame, initial: search.text)
+        let controller = UISearchController(searchResultsController: nil)
+        controller.obscuresBackgroundDuringPresentation = false
+        controller.searchResultsUpdater = relay
+        controller.searchBar.delegate = relay
+        controller.searchBar.placeholder = search.placeholder
+        controller.searchBar.text = search.text
+        controller.searchBar.tintColor = FrameColors.tint
+        searchRelay = relay
+        navigationItem.searchController = controller
+        // Hidden at rest and revealed by pulling the list down, as in Mail
+        // and Reminders, so the plants are the first thing on screen.
+        navigationItem.hidesSearchBarWhenScrolling = true
+    }
+
+    /// Redraws only when this screen's tools changed.
+    func barToolsChanged() {
+        let tools = frame?.barTools(for: entry.path)
+        if tools != drawnTools { applyBarItems() }
     }
 
     /// Show a picture over (or instead of) the live page.
@@ -200,6 +262,9 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
     private var scrollObservation: NSKeyValueObservation?
 
     private var launchBackground: UIColor?
+
+    /// Each route's own bar menus and search (NativeChrome `setBarTools`).
+    private var barToolsStore = BarToolsStore()
 
     /// The alert or action sheet the web asked for, while it shows. Weak:
     /// when UIKit lets go of the alert, its outcome answers on its own.
@@ -735,6 +800,39 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
 
     func rightButtonTapped(_ id: String) {
         plugin?.sendRightButton(id: id)
+    }
+
+    // MARK: - A screen's bar tools (NativeChrome `setBarTools`)
+
+    func barTools(for path: String) -> BarTools? { barToolsStore.tools(for: path) }
+
+    func setBarTools(_ tools: BarTools) {
+        guard barToolsStore.set(tools) else { return }
+        for navigator in navigators.values {
+            for case let screen as WebScreenController in navigator.viewControllers
+            where screen.entry.path == tools.path {
+                screen.barToolsChanged()
+            }
+        }
+    }
+
+    func barMenuPicked(path: String, id: String) {
+        // Only an id the web offered for this route goes back to it.
+        guard let tools = barToolsStore.tools(for: path), tools.offers(id) else { return }
+        plugin?.sendBarMenuSelect(path: path, id: id)
+        if tools.reshapesList(id), liveScreen?.entry.path == path {
+            // A filter or grouping reshapes the list: back to its top, large
+            // title and search field showing, once the page has re-rendered
+            // (a shorter page would otherwise clamp the scroll again).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self = self, self.liveScreen?.entry.path == path else { return }
+                self.scrollToTop(animated: !self.reduceMotion)
+            }
+        }
+    }
+
+    func barSearchChanged(path: String, text: String) {
+        plugin?.sendBarSearch(path: path, text: text)
     }
 
     // MARK: - Alerts and action sheets (NativeChrome `present`)

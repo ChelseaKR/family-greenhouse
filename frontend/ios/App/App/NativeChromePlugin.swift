@@ -28,6 +28,12 @@ import Capacitor
 /// - `updatePresented({ token, title?, message? })`: new words for the one
 ///   showing (a count that arrived after it opened).
 /// - `dismissPresented({ token })`: the web closed it; it answers no choice.
+///
+/// A screen's own bar tools (web -> native, NativeBarTools.swift):
+/// - `setBarTools({ path, menus, search })`: pull-down menus beside the "+"
+///   and a search field, for the screens showing `path`.
+/// - Events: `barMenuSelect { path, id }` for a picked item (only ids the web
+///   sent), and `barSearch { path, text }` as the search text changes.
 @objc(NativeChromePlugin)
 public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeChromePlugin"
@@ -37,7 +43,8 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "present", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updatePresented", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "dismissPresented", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "dismissPresented", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setBarTools", returnType: CAPPluginReturnPromise)
     ]
 
     /// Set by MainViewController once the frame is built.
@@ -171,7 +178,31 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // Events for the web. Names and payloads as in config/nativeFrame.ts.
+    @objc func setBarTools(_ call: CAPPluginCall) {
+        guard let tools = BarTools.parse(
+            path: call.getString("path"),
+            menus: call.getArray("menus") as? [[String: Any]],
+            search: call.getObject("search")
+        ) else {
+            call.reject("setBarTools needs a path", "INVALID")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.frame?.setBarTools(tools)
+            call.resolve()
+        }
+    }
+
+    // Events for the web. Names and payloads as in config/nativeFrame.ts
+    // and config/nativeBarTools.ts.
+
+    func sendBarMenuSelect(path: String, id: String) {
+        notifyListeners("barMenuSelect", data: ["path": path, "id": id])
+    }
+
+    func sendBarSearch(path: String, text: String) {
+        notifyListeners("barSearch", data: ["path": path, "text": text])
+    }
 
     func sendTabSelect(tab: String, path: String?, reselect: Bool) {
         notifyListeners("tabSelect", data: ["tab": tab, "path": path ?? NSNull(), "reselect": reselect])

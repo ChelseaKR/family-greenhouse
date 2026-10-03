@@ -20,6 +20,7 @@ import {
   type NativeChromeEvents,
   type NativeChromeUpdate,
 } from '@/config/nativeFrame';
+import type { NativeBarToolsEvents } from '@/config/nativeBarTools';
 import { hasNativeFrame, markNativeFrame, nativeSwitchRole } from '@/lib/platform';
 import {
   NATIVE_SETTINGS_SECTIONS,
@@ -258,10 +259,12 @@ describe('the Swift side reads the same messages', () => {
     expect(plugin).toMatch(/jsName = "NativeChrome"/);
     const methods = [...plugin.matchAll(/CAPPluginMethod\(name: "([^"]+)"/g)].map((m) => m[1]);
     // present, updatePresented and dismissPresented: nativePresent.test.ts.
+    // setBarTools: nativeBarTools.test.ts.
     expect(methods.sort()).toEqual([
       'configure',
       'dismissPresented',
       'present',
+      'setBarTools',
       'update',
       'updatePresented',
     ]);
@@ -303,11 +306,13 @@ describe('the Swift side reads the same messages', () => {
 
   it('sends exactly the events the web listens for, with the same fields', () => {
     const sent = [...plugin.matchAll(/notifyListeners\("([^"]+)", data: ([^\n]+)/g)];
-    const events: Record<keyof NativeChromeEvents, string[]> = {
+    const events: Record<keyof (NativeChromeEvents & NativeBarToolsEvents), string[]> = {
       tabSelect: ['tab', 'path', 'reselect'],
       back: ['path'],
       moreSelect: [],
       rightButton: ['id'],
+      barMenuSelect: ['path', 'id'],
+      barSearch: ['path', 'text'],
     };
     expect(sent.map((m) => m[1]).sort()).toEqual(Object.keys(events).sort());
     for (const [name, fields] of Object.entries(events)) {
