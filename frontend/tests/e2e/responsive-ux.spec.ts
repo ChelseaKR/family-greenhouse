@@ -1,6 +1,12 @@
 import { expect, test, type Page, type Response } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { navigateTo, provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
+import {
+  navigateTo,
+  provisionAccount,
+  uiLogin,
+  type ProvisionedAccount,
+  choosePlantAction,
+} from './helpers';
 
 const ENFORCED_A11Y_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -369,7 +375,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'edit task dialog');
     await editTaskDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /^edit$/i }).click();
+    await choosePlantAction(page, /^edit$/i);
     const editPlantDialog = page.getByRole('dialog', { name: /edit plant/i });
     await expect(editPlantDialog.getByRole('heading', { name: /edit plant/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'edit plant dialog');
@@ -377,7 +383,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'edit plant dialog');
     await editPlantDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /share cutting/i }).click();
+    await choosePlantAction(page, /share cutting/i);
     const shareDialog = page.getByRole('dialog', { name: /share this cutting/i });
     await expect(shareDialog.getByRole('heading', { name: /share this cutting/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'share cutting dialog');
@@ -385,7 +391,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'share cutting dialog');
     await shareDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /check leaf health/i }).click();
+    await choosePlantAction(page, /check leaf health/i);
     const leafDialog = page.getByRole('dialog', { name: /leaf health check/i });
     await expect(leafDialog.getByRole('heading', { name: /leaf health check/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'leaf health dialog');
@@ -393,7 +399,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'leaf health dialog');
     await leafDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /^remove$/i }).click();
+    await choosePlantAction(page, /^remove/i);
     const removeDialog = page.getByRole('dialog', {
       name: /move Audit Monstera out of active care/i,
     });

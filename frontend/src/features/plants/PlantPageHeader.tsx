@@ -65,11 +65,11 @@ export function PlantPageHeader({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 large-text:flex-wrap">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-parchment ring-1 ring-primary-100/60 large-text:h-16 large-text:w-16">
           <PlantImage plant={plant} width={96} height={96} />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 large-text:order-last large-text:basis-full">
           <div className="flex items-center gap-2 large-text:flex-wrap">
             <h1 className="min-w-0 font-serif text-2xl leading-tight text-ink">{plant.name}</h1>
             {!active && <PlantStatusBadge status={plant.status!} />}
