@@ -122,7 +122,7 @@ import { giftSubscriptionSummary } from './models/giftSubscriptions.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
 // Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
 import { computeCoverage } from './services/coverageMath.js';
-import { lookupToxicity } from './models/petToxicity.js';
+import { lookupToxicity, verdictModeFromQuery, type VerdictMode } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
@@ -5135,7 +5135,7 @@ app.get('/sitter/:token', (req, res) => {
  *  task, with the household's own care words, the VERIFIED pet-toxicity entry
  *  (never generated, null when the curated table has no match), the latest
  *  photo, and the tasks due inside the window. */
-function sitterBriefFor(link: SitterLink) {
+function sitterBriefFor(link: SitterLink, verdictMode: VerdictMode) {
   const now = new Date();
   const nowIso = now.toISOString();
   const cutoffIso = link.expiresAt > nowIso ? link.expiresAt : nowIso;
@@ -5171,7 +5171,7 @@ function sitterBriefFor(link: SitterLink) {
     placementNote: plant.placementNote?.trim() || null,
     ...resolveCareNote(plant),
     photoUrl: plant.imageUrl ?? null,
-    petSafety: resolvePetSafety(plant),
+    petSafety: resolvePetSafety(plant, verdictMode),
     tasks: tasksByPlant.get(plant.id) ?? [],
   }));
   entries.sort((a, b) => {
@@ -5205,7 +5205,7 @@ app.get('/sitter/:token/brief', (req, res) => {
   if (!sitterBriefIncluded(plan)) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
-  res.json(sitterBriefFor(link));
+  res.json(sitterBriefFor(link, verdictModeFromQuery(req.query as Record<string, string>)));
 });
 
 const sitterCompleteTaskSchema = z
@@ -6744,7 +6744,8 @@ app.get('/species/search', authMiddleware, (req, res) => {
 // segment first (API Gateway does this automatically in production).
 app.get('/species/toxicity', (req, res) => {
   const q = (typeof req.query.q === 'string' ? req.query.q : '').trim();
-  const results = q.length >= 2 ? lookupToxicity(q.slice(0, 80)) : [];
+  const mode = verdictModeFromQuery(req.query as Record<string, string>);
+  const results = q.length >= 2 ? lookupToxicity(q.slice(0, 80), 5, mode) : [];
   res.set('Cache-Control', 'public, max-age=3600');
   res.json({ query: q, results });
 });

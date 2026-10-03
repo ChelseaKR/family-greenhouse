@@ -310,6 +310,32 @@ describe('GET /sitter/{token}/brief (public)', () => {
     expect(res.body).not.toContain('createdBy');
   });
 
+  it.each([
+    [{ unknown: '1' }, 'cited'],
+    [null, 'legacy'],
+    [{ unknown: 'yes' }, 'legacy'],
+  ] as const)(
+    'builds the brief in the mode the client asked for (%j -> %s)',
+    async (query, mode) => {
+      const { getActiveLink } = await import('../../../src/services/sitterService.js');
+      const { buildSitterBrief } = await import('../../../src/services/sitterBrief.js');
+      vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+      vi.mocked(buildSitterBrief).mockResolvedValueOnce(briefFixture as never);
+
+      const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
+      await getSitterBrief(
+        anonEvent({
+          path: `/sitter/${TOKEN}/brief`,
+          pathParameters: { token: TOKEN },
+          queryStringParameters: query,
+        }),
+        ctx,
+        () => {}
+      );
+      expect(vi.mocked(buildSitterBrief).mock.lastCall?.[2]).toBe(mode);
+    }
+  );
+
   it('404s (the SAME generic message) on a plan without the brief, and does not build it', async () => {
     const { getActiveLink } = await import('../../../src/services/sitterService.js');
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');

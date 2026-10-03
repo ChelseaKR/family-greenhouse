@@ -450,6 +450,11 @@ paths:
       security: []
       parameters:
         - { name: token, in: path, required: true, schema: { type: string } }
+        - name: unknown
+          in: query
+          required: false
+          description: "Send `1` if the client renders an `unknown` verdict safely. With it, each animal is the verdict the plant's own ASPCA listing states, or `unknown`, and `note` is null unless both are cited. Without it (older bundles, including native app builds that cannot be updated), the response is legacy: never `unknown`, an uncited animal recorded toxic stays `toxic`, and a row with an uncited animal recorded non-toxic is omitted. See VerdictMode in backend/src/models/petToxicity.ts."
+          schema: { type: string, enum: ['1'] }
       responses:
         '200':
           description: The handoff brief (PII-free projection)
@@ -484,9 +489,24 @@ paths:
                             slug: { type: string }
                             commonName: { type: string }
                             scientificName: { type: string }
-                            cats: { type: string, enum: [toxic, non-toxic] }
-                            dogs: { type: string, enum: [toxic, non-toxic] }
-                            note: { type: string }
+                            cats:
+                              {
+                                type: string,
+                                enum: [toxic, non-toxic, unknown],
+                                description: '`unknown` only when the client sent unknown=1.',
+                              }
+                            dogs:
+                              {
+                                type: string,
+                                enum: [toxic, non-toxic, unknown],
+                                description: '`unknown` only when the client sent unknown=1.',
+                              }
+                            note:
+                              {
+                                type: string,
+                                nullable: true,
+                                description: 'Null (with unknown=1) when any animal is unknown.',
+                              }
                             matchedOn: { type: string }
                         tasks:
                           type: array
@@ -3199,6 +3219,11 @@ paths:
           in: query
           required: true
           schema: { type: string, minLength: 2 }
+        - name: unknown
+          in: query
+          required: false
+          description: "Send `1` if the client renders an `unknown` verdict safely. With it, each animal is the verdict the plant's own ASPCA listing states, or `unknown`, and `note` is null unless both are cited. Without it (older bundles, including native app builds that cannot be updated), the response is legacy: never `unknown`, an uncited animal recorded toxic stays `toxic`, and a row with an uncited animal recorded non-toxic is omitted. See VerdictMode in backend/src/models/petToxicity.ts."
+          schema: { type: string, enum: ['1'] }
       responses:
         '200': { $ref: '#/components/responses/Ok' }
   /species/{id}:

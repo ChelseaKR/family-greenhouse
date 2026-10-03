@@ -53,9 +53,29 @@
       "content": "sha256-b2d80f12ab0bd9160eaa76ebe09c842497357bb9b35234b205423af91da90588",
       "lastmod": "2026-10-02"
     },
+    "asparagus-fern": {
+      "content": "sha256-14ee3a8767d479c24c321f47a338a8eed7bd25ddfb59089cdf71b03943ddb2f8",
+      "lastmod": "2026-10-03"
+    },
+    "african-violet": {
+      "content": "sha256-d8b26dfd3f90642476a5918e4f35d67131f2c648fc9fa05d7800f23b14521696",
+      "lastmod": "2026-10-03"
+    },
     "orchid": {
       "content": "sha256-1a415f40aa460643441d3246eaffe2fe2a8f6b33ede94ec84339725e279d881a",
       "lastmod": "2026-10-02"
+    },
+    "lily": {
+      "content": "sha256-ead955f83223b5f3babe67770ad6d09f7a001ccd52a8246e7c1cdd6bc27eff20",
+      "lastmod": "2026-10-03"
+    },
+    "sago-palm": {
+      "content": "sha256-7e7f349b0b8cace62ac37eab516a692212734e6beacf883b5aa6d02473839a49",
+      "lastmod": "2026-10-03"
+    },
+    "poinsettia": {
+      "content": "sha256-1937c52af3ec0b43d672c5e718df5c189e49daf593934dd917a2d753ae1cf4a5",
+      "lastmod": "2026-10-03"
     },
     "bird-of-paradise": {
       "content": "sha256-3cc1639f712a402ff186258faf30e56c5487981c0f16af8a67974f15372cf270",

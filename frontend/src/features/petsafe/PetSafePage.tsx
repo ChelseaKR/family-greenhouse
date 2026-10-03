@@ -6,6 +6,14 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl, SITE_URL } from '@/config/site';
 import { useDebounce } from '@/hooks/useDebounce';
 import { petToxicityService, type ToxicityMatch } from '@/services/petToxicityService';
+import { ASPCA_POISON_CONTROL_PHONE } from '@/features/care/plantNames';
+import {
+  ASPCA_POISON_CONTROL_TEL,
+  assertNever,
+  petCaution,
+  petOutcome,
+  verdictLabelKey,
+} from './petVerdict';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
@@ -418,28 +426,60 @@ function SpeciesDirectory() {
   );
 }
 
+/**
+ * One checker result. Every word about safety goes through petVerdict.ts:
+ * "pet-safe" only when BOTH animals are the literal `non-toxic`, and an
+ * unknown animal gets "Unknown" plus the poison-control caution. This used to
+ * render `cats === 'toxic' ? 'Toxic' : 'Non-toxic'`, which would have shown
+ * any other value as an all-clear.
+ */
 function ToxicityCard({ match }: { match: ToxicityMatch }) {
-  const safeForBoth = match.cats === 'non-toxic' && match.dogs === 'non-toxic';
-  const variant = safeForBoth ? 'success' : 'warning';
-  const title = safeForBoth
-    ? `${match.commonName} is pet-safe`
-    : `${match.commonName} can be harmful to pets`;
+  const { t } = useTranslation();
+  const outcome = petOutcome(match.cats, match.dogs);
+  let variant: 'success' | 'warning';
+  let title: string;
+  switch (outcome) {
+    case 'safe':
+      variant = 'success';
+      title = t('petSafety.cardSafe', { name: match.commonName });
+      break;
+    case 'harmful':
+      variant = 'warning';
+      title = t('petSafety.cardHarmful', { name: match.commonName });
+      break;
+    case 'unknown':
+      variant = 'warning';
+      title = t('petSafety.cardUnknown', { name: match.commonName });
+      break;
+    default:
+      variant = 'warning';
+      title = assertNever(outcome, t('petSafety.cardUnknown', { name: match.commonName }));
+  }
+  const caution = petCaution(t, match.commonName, match.cats, match.dogs);
 
   // `live="off"`: PetSafePage renders these inside its own polite region.
   return (
     <Alert variant={variant} title={title} live="off">
       <p className="italic">{match.scientificName}</p>
       <ul className="mt-2 space-y-1">
-        <li>
-          <span className="font-medium">Cats:</span>{' '}
-          {match.cats === 'toxic' ? 'Toxic' : 'Non-toxic'}
+        <li data-verdict-animal="cats" data-verdict={match.cats}>
+          <span className="font-medium">{t('petSafety.cats')}</span>{' '}
+          {t(verdictLabelKey(match.cats))}
         </li>
-        <li>
-          <span className="font-medium">Dogs:</span>{' '}
-          {match.dogs === 'toxic' ? 'Toxic' : 'Non-toxic'}
+        <li data-verdict-animal="dogs" data-verdict={match.dogs}>
+          <span className="font-medium">{t('petSafety.dogs')}</span>{' '}
+          {t(verdictLabelKey(match.dogs))}
         </li>
       </ul>
-      <p className="mt-2">{match.note}</p>
+      {match.note && <p className="mt-2">{match.note}</p>}
+      {caution && (
+        <p className="mt-2 font-medium" data-testid="checker-caution">
+          {caution}{' '}
+          <a href={ASPCA_POISON_CONTROL_TEL} className="underline">
+            {t('petSafety.callPoisonControl', { phone: ASPCA_POISON_CONTROL_PHONE })}
+          </a>
+        </p>
+      )}
     </Alert>
   );
 }

@@ -1236,7 +1236,8 @@
     "petSource": "De nuestra lista verificada de seguridad para mascotas, coincidencia con {{matched}} ({{scientific}}), basada en la base de datos de la ASPCA.",
     "verdict": {
       "toxic": "tóxica",
-      "non-toxic": "no tóxica"
+      "non-toxic": "no tóxica",
+      "unknown": "sin veredicto"
     },
     "task": {
       "water": "Riega",
@@ -1247,7 +1248,8 @@
     "unavailableTitle": "Esta guía de cuidados no está disponible",
     "unavailableBody": "Puede que el enlace haya caducado, se haya desactivado o que el plan de este hogar no incluya la guía. Puede que la lista diaria de tareas siga funcionando: prueba el enlace que te enviaron.",
     "errorTitle": "Algo salió mal",
-    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento."
+    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento.",
+    "petUnknown": "Sin veredicto citado de seguridad para mascotas: gatos: {{cats}}, perros: {{dogs}}."
   },
   "kiosk": {
     "title": "Cuidado de plantas de hoy",
@@ -2669,6 +2671,24 @@
       "members": "Los miembros (vuelve a invitarlos)",
       "billing": "La facturación: no se traslada ningún plan, suscripción ni periodo de prueba",
       "links": "Los enlaces de cuidador, pantalla de pared, etiquetas, compartir, calendario y API (crea enlaces nuevos)"
+    }
+  },
+  "petSafety": {
+    "cats": "Gatos:",
+    "dogs": "Perros:",
+    "verdict": {
+      "toxic": "Tóxica",
+      "nonToxic": "No tóxica",
+      "unknown": "Sin veredicto"
+    },
+    "cardSafe": "{{name}} es segura para mascotas",
+    "cardHarmful": "{{name}} puede ser dañina para las mascotas",
+    "cardUnknown": "Sin veredicto citado para {{name}}",
+    "callPoisonControl": "Llamar al {{phone}}",
+    "caution": {
+      "both": "{{name}} no figura en la lista de la ASPCA, así que no podemos dar un veredicto. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
+      "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
+      "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
     }
   }
 }

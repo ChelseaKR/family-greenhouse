@@ -77,7 +77,8 @@
 import type { SproutCoverage } from '../sprout.js';
 
 export type PetSpecies = 'cats' | 'dogs';
-export type PetSafetyVerdict = 'toxic' | 'non-toxic';
+/** `unknown`: the table cannot cite a verdict for that animal (petToxicity.ts). */
+export type PetSafetyVerdict = 'toxic' | 'non-toxic' | 'unknown';
 
 /**
  * One curated-table entry carried on a `check_pet_toxicity` span. This is the
@@ -514,8 +515,28 @@ function evidenceNamedIn(
   return best?.entry;
 }
 
+/**
+ * Only an explicit, cited `non-toxic` supports a safety claim. Exhaustive on
+ * purpose: a verdict added to the type later fails to compile here instead of
+ * silently falling into either branch.
+ */
+function verdictSupportsSafety(verdict: PetSafetyVerdict): boolean {
+  switch (verdict) {
+    case 'non-toxic':
+      return true;
+    case 'toxic':
+    case 'unknown':
+      return false;
+    default: {
+      const unexpected: never = verdict;
+      void unexpected;
+      return false;
+    }
+  }
+}
+
 function supportsSafety(entry: PetSafetyEvidence, species: PetSpecies[]): boolean {
-  return species.every((s) => entry[s] === 'non-toxic');
+  return species.every((s) => verdictSupportsSafety(entry[s]));
 }
 
 /**

@@ -172,9 +172,8 @@ describe('a slug with no published page', () => {
     );
   }
 
-  // Table rows with no per-plant listing: ZZ plant (ASPCA has none) and
-  // African violet (recorded non-toxic, but not yet re-verified per plant).
-  it.each(['no-such-plant', 'zz-plant', 'african-violet'])(
+  // ZZ plant is the one table row with no per-plant listing (ASPCA has none).
+  it.each(['no-such-plant', 'zz-plant'])(
     '%s says nothing about the plant and is noindex',
     (slug) => {
       const { container } = renderRoute(slug);

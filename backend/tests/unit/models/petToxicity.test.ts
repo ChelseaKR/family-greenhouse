@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   PET_TOXICITY,
+  citedVerdict,
+  verdictModeFromQuery,
   normalizeName,
   lookupToxicity,
   type PetToxicityEntry,
@@ -141,6 +143,13 @@ describe('per-plant ASPCA listings', () => {
         'rubber-plant',
         'snake-plant',
         'spider-plant',
+        // Read off the live ASPCA pages on 2026-10-02 when the checker began
+        // answering "unknown" for uncited rows.
+        'african-violet',
+        'asparagus-fern',
+        'lily',
+        'poinsettia',
+        'sago-palm',
       ].sort()
     );
   });
@@ -309,15 +318,17 @@ describe('care-guide coverage (#384)', () => {
     expect(hit?.slug, `"${query}" did not resolve to a toxicity row`).toBe(expectedSlug);
   });
 
-  it('every care-guide plant returns a usable verdict, never an empty result', () => {
-    for (const [query] of GUIDE_QUERIES) {
+  it('every care-guide plant returns a row, with a cited verdict except the ZZ plant', () => {
+    for (const [query, slug] of GUIDE_QUERIES) {
       const results = lookupToxicity(query);
       expect(
         results.length,
         `"${query}": /pet-safe would say "not in our checker"`
       ).toBeGreaterThan(0);
-      expect(VERDICTS, `"${query}": cats`).toContain(results[0].cats);
-      expect(VERDICTS, `"${query}": dogs`).toContain(results[0].dogs);
+      // ZZ plant has no ASPCA listing, so the cited answer is "unknown".
+      const expected = slug === 'zz-plant' ? ['unknown'] : VERDICTS;
+      expect(expected, `"${query}": cats`).toContain(results[0].cats);
+      expect(expected, `"${query}": dogs`).toContain(results[0].dogs);
     }
   });
 });
@@ -557,3 +568,110 @@ describe('toxic-first ordering never widens the result set', () => {
 // Type-only guard: keeps the exported entry type exercised by the suite.
 const _typeCheck: PetToxicityEntry | undefined = PET_TOXICITY[0];
 void _typeCheck;
+
+/**
+ * The citation rule behind GET /species/toxicity, the sitter brief and the
+ * assistant's tool, and the legacy mode that keeps old clients (whose bundles
+ * render anything but 'toxic' as "Non-toxic") from ever seeing an uncited
+ * all-clear.
+ */
+describe('citedVerdict', () => {
+  const LISTING = {
+    title: 'Fixture',
+    scientificName: 'Fixtura plantae',
+    path: '/toxic-and-non-toxic-plants/fixture',
+    listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+  };
+  const ROW = { cats: 'non-toxic', dogs: 'non-toxic', aspcaListing: LISTING };
+
+  it('reports a verdict its own listing states', () => {
+    expect(citedVerdict(ROW, 'cats')).toBe('non-toxic');
+    expect(citedVerdict(ROW, 'dogs')).toBe('non-toxic');
+  });
+
+  it.each([
+    ['no listing', { ...ROW, aspcaListing: undefined }],
+    [
+      'a listing that disagrees',
+      { ...ROW, aspcaListing: { ...LISTING, listed: { cats: 'toxic', dogs: 'toxic' } } },
+    ],
+    ['a silent listing', { ...ROW, aspcaListing: { ...LISTING, listed: {} } }],
+    ['a blank verdict', { ...ROW, cats: '', dogs: '' }],
+    ['an unexpected verdict', { ...ROW, cats: 'safe', dogs: 'Non-toxic' }],
+    ['a non-ASPCA path', { ...ROW, aspcaListing: { ...LISTING, path: 'https://example.com/x' } }],
+    ['a blank listing title', { ...ROW, aspcaListing: { ...LISTING, title: ' ' } }],
+  ] as const)('%s is unknown, never non-toxic', (_label, row) => {
+    expect(citedVerdict(row as never, 'cats')).toBe('unknown');
+    expect(citedVerdict(row as never, 'dogs')).toBe('unknown');
+  });
+
+  it('leaves exactly one row in the table uncited: the ZZ plant', () => {
+    const uncited = PET_TOXICITY.filter(
+      (e) => citedVerdict(e, 'cats') === 'unknown' || citedVerdict(e, 'dogs') === 'unknown'
+    );
+    expect(uncited.map((e) => e.slug)).toEqual(['zz-plant']);
+  });
+});
+
+describe('verdict modes', () => {
+  it('opts in to cited verdicts only with unknown=1', () => {
+    expect(verdictModeFromQuery({ unknown: '1' })).toBe('cited');
+    expect(verdictModeFromQuery({ unknown: 'true' })).toBe('legacy');
+    expect(verdictModeFromQuery({ q: 'zz' })).toBe('legacy');
+    expect(verdictModeFromQuery(null)).toBe('legacy');
+  });
+
+  it('cited: the ZZ plant is unknown for both animals, with no note', () => {
+    const [zz] = lookupToxicity('zz plant', 5, 'cited');
+    expect(zz).toMatchObject({ slug: 'zz-plant', cats: 'unknown', dogs: 'unknown', note: null });
+  });
+
+  it('legacy: the ZZ plant keeps the toxic answer old clients have always had', () => {
+    const [zz] = lookupToxicity('zz plant', 5, 'legacy');
+    expect(zz).toMatchObject({ slug: 'zz-plant', cats: 'toxic', dogs: 'toxic' });
+    expect(zz!.note).toEqual(expect.any(String));
+  });
+
+  it('legacy never sends unknown, and never an uncited non-toxic, for any row', () => {
+    for (const entry of PET_TOXICITY) {
+      for (const match of lookupToxicity(entry.commonName, 5, 'legacy')) {
+        const row = PET_TOXICITY.find((e) => e.slug === match.slug)!;
+        for (const animal of ['cats', 'dogs'] as const) {
+          expect(['toxic', 'non-toxic'], `${match.slug} ${animal}`).toContain(match[animal]);
+          if (match[animal] === 'non-toxic') {
+            expect(citedVerdict(row, animal), `${match.slug} ${animal}`).toBe('non-toxic');
+          }
+        }
+      }
+    }
+  });
+
+  it('negative control: an uncited non-toxic row is dropped for legacy and unknown for cited', () => {
+    const fake = {
+      slug: 'fixture-uncited',
+      commonName: 'Fixturewort',
+      scientificName: 'Fixtura uncitata',
+      aliases: [],
+      cats: 'non-toxic' as const,
+      dogs: 'non-toxic' as const,
+      note: 'A fixture note that nothing cites.',
+    };
+    PET_TOXICITY.push(fake);
+    try {
+      // Prove the sabotage landed before reading anything.
+      expect(PET_TOXICITY.at(-1)).toBe(fake);
+      expect(lookupToxicity('fixturewort', 5, 'legacy')).toEqual([]);
+      expect(lookupToxicity('fixturewort', 5, 'cited')).toEqual([
+        expect.objectContaining({ cats: 'unknown', dogs: 'unknown', note: null }),
+      ]);
+    } finally {
+      PET_TOXICITY.pop();
+    }
+    expect(PET_TOXICITY.some((e) => e.slug === 'fixture-uncited')).toBe(false);
+  });
+
+  it('cited: true lily is toxic to cats and, per its listing, non-toxic to dogs', () => {
+    const [lily] = lookupToxicity('true lily', 5, 'cited');
+    expect(lily).toMatchObject({ slug: 'lily', cats: 'toxic', dogs: 'non-toxic' });
+  });
+});

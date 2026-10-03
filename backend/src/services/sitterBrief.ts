@@ -29,7 +29,7 @@
 import * as plantService from './plantService.js';
 import * as spaceService from './spaceService.js';
 import * as taskService from './taskService.js';
-import { type PetToxicityMatch } from '../models/petToxicity.js';
+import { type PetToxicityMatch, type VerdictMode } from '../models/petToxicity.js';
 import { resolveCareNote, resolvePetSafety } from '../models/sitterBriefFields.js';
 import { signPhotoKey, storedPhotoKey } from './photoAccess.js';
 import { logger } from '../utils/logger.js';
@@ -145,7 +145,9 @@ async function briefPhotoUrl(
  */
 export async function buildSitterBrief(
   link: { label: string | null; householdId: string; startsAt: string; expiresAt: string },
-  now: Date = new Date()
+  now: Date = new Date(),
+  // Legacy unless the client opted in with `?unknown=1` (VerdictMode).
+  verdictMode: VerdictMode = 'legacy'
 ): Promise<SitterBrief> {
   const cutoffIso = taskService.sitterWindowCutoff(link.expiresAt, now);
   const nowIso = now.toISOString();
@@ -185,7 +187,7 @@ export async function buildSitterBrief(
       placementNote: plant.placementNote?.trim() || null,
       ...resolveCareNote(plant),
       photoUrl: await briefPhotoUrl(plant.imageUrl, link.householdId, link.expiresAt, now),
-      petSafety: resolvePetSafety(plant),
+      petSafety: resolvePetSafety(plant, verdictMode),
       tasks: tasksByPlant.get(plant.id) ?? [],
     }))
   );

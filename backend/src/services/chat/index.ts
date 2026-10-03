@@ -344,7 +344,8 @@ function spanFromPetToxicityResult(value: unknown): RetrievedSpan {
       source: `tool:${PET_TOXICITY_TOOL_NAME}`,
       text: result.matches
         .map(
-          (m) => `${m.commonName} (${m.scientificName}): cats ${m.cats}; dogs ${m.dogs}. ${m.note}`
+          (m) =>
+            `${m.commonName} (${m.scientificName}): cats ${m.cats}; dogs ${m.dogs}.${m.note ? ` ${m.note}` : ''}`
         )
         .join('\n'),
       petSafety,
