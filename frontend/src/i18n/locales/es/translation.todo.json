@@ -27,6 +27,7 @@
     "spaces.seasonalMoveSummary",
     "householdChannel.platform.discord",
     "householdChannel.platform.slack",
-    "householdChannel.platform.matrix"
+    "householdChannel.platform.matrix",
+    "plants.detail.doAria"
   ]
 }

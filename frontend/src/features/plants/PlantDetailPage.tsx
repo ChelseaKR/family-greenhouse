@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,7 @@ import {
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService, type ScheduleDrift } from '@/services/taskService';
 import { ScheduleDriftHint } from './ScheduleDriftHint';
-import { useCompleteTaskMutation } from '@/features/tasks/taskMutations';
+import { useClaimTaskMutation, useCompleteTaskMutation } from '@/features/tasks/taskMutations';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
 import { buttonStyles } from '@/components/buttonStyles';
@@ -36,7 +36,12 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { AddTaskModal } from './AddTaskModal';
 import { EditPlantModal } from './EditPlantModal';
 import { EditTaskModal } from './EditTaskModal';
-import { PlantImageUpload } from './PlantImageUpload';
+import { PlantImageUpload, type PhotoPicker } from './PlantImageUpload';
+import { PlantPageHeader } from './PlantPageHeader';
+import type { MenuGroupModel } from './ToolbarMenu';
+import { useNativeBarTools } from './useNativeBarTools';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useAuthStore } from '@/store/authStore';
 import { PhotoTimeline } from './PhotoTimeline';
 import { CareGuidanceCard } from './CareGuidanceCard';
 import { CareGuideCard } from './CareGuideCard';
@@ -63,7 +68,7 @@ import { seasonalHomeSuggestion } from './seasonalHomes';
 import { SeasonalCadenceBadge } from '@/features/tasks/taskRowExtras';
 import { hemisphereForLatitude, resolveCadence } from '@/features/tasks/seasonalCadence';
 import { PlacementFitCard } from './PlacementFitCard';
-import { hasNativePresent } from '@/lib/platform';
+import { hasNativeBarTools, hasNativeFrame, hasNativePresent } from '@/lib/platform';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -235,6 +240,84 @@ export function PlantDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  // On a phone (the website under 640px, and the iOS app at every width)
+  // the top of the page is one header with the thing to do now, and every
+  // other action moves into a "…" menu: in the navigation bar in the app,
+  // beside the name on the website. Desktop keeps its button grid.
+  const isMobile = useIsMobile();
+  const compact = isMobile || hasNativeFrame();
+  const nativeBar = compact && hasNativeBarTools();
+  const myUserId = useAuthStore((s) => s.user?.id);
+  const photoPicker = useRef<PhotoPicker>(null);
+  const claimMutation = useClaimTaskMutation(householdId);
+  const plantActive = (plant?.status ?? 'active') === 'active';
+  const pageMenu: MenuGroupModel[] = [
+    {
+      items: [
+        { id: 'photo:camera', label: t('plants.photoPicker.take') },
+        { id: 'photo:library', label: t('plants.photoPicker.choose') },
+        { id: 'act:leaf', label: t('plants.leafHealth.action') },
+      ],
+    },
+    {
+      items: [
+        ...(plantActive
+          ? [
+              { id: 'act:move', label: t('spaces.quickMoveAction') },
+              { id: 'act:propagate', label: t('plants.propagate.action') },
+              { id: 'act:share', label: t('plants.share.action') },
+            ]
+          : []),
+        { id: 'act:passport', label: t('plants.passport.action') },
+        { id: 'act:edit', label: t('common.edit') },
+      ],
+    },
+    {
+      items: [
+        plantActive
+          ? { id: 'act:remove', label: t('plants.detail.remove') }
+          : { id: 'act:restore', label: t('plants.detail.restore') },
+      ],
+    },
+  ];
+  const onPageMenu = (id: string) => {
+    if (!plant) return;
+    if (id === 'photo:camera') photoPicker.current?.pick('camera');
+    else if (id === 'photo:library') photoPicker.current?.pick('library');
+    else if (id === 'act:leaf') setShowLeafHealth(true);
+    else if (id === 'act:move') setShowMove(true);
+    else if (id === 'act:propagate')
+      navigate('/plants/new', {
+        state: { parentPlantId: plant.id, parentName: plant.name, species: plant.species },
+      });
+    else if (id === 'act:share') setShowShare(true);
+    else if (id === 'act:passport') navigate(`/plants/${plant.id}/passport`);
+    else if (id === 'act:edit') setShowEditPlant(true);
+    // Remove opens the same choice as the button did: in the app, Apple's
+    // action sheet (Archive, Gave it away, Died, then Delete in red), which
+    // asks again before anything is deleted.
+    else if (id === 'act:remove') setShowRemove(true);
+    else if (id === 'act:restore') statusMutation.mutate('active');
+  };
+  useNativeBarTools(
+    nativeBar && plant
+      ? {
+          path: `/plants/${plant.id}`,
+          menus: [
+            {
+              id: 'more',
+              label: t('plants.detail.more'),
+              symbol: 'ellipsis.circle',
+              groups: pageMenu,
+            },
+          ],
+          search: null,
+        }
+      : null,
+    onPageMenu,
+    () => undefined
+  );
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -277,143 +360,196 @@ export function PlantDetailPage() {
         </Alert>
       )}
 
-      {/* Plant header */}
-      <div className="flex flex-col sm:flex-row gap-6">
-        <div className="w-full sm:w-48 shrink-0 space-y-3">
-          <div className="h-48 rounded-lg bg-parchment overflow-hidden">
-            <PlantImage plant={plant} width={192} height={192} />
-          </div>
+      {compact && (
+        <>
+          <PlantPageHeader
+            plant={plant}
+            location={plantLocationLabel(
+              plant,
+              spacesById,
+              spacesUnavailable ? t('spaces.locationUnknown') : t('spaces.unplaced')
+            )}
+            myUserId={myUserId}
+            menu={nativeBar ? null : pageMenu}
+            onMenu={onPageMenu}
+            onDone={(task) => careRuleGate.request(task)}
+            onClaim={(task) =>
+              claimMutation.mutate(task.id, {
+                onSettled: () =>
+                  queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] }),
+              })
+            }
+            onAddTask={() => setShowAddTask(true)}
+            isCompleting={completeTaskMutation.isPending}
+            snooze={(task) => (
+              <SnoozeMenu
+                isSnoozing={snoozeTaskMutation.isPending}
+                onPick={(days) =>
+                  snoozeTaskMutation.mutate({
+                    taskId: task.id,
+                    days: days === 0 ? task.frequency : days,
+                    expectedNextDue: task.nextDue,
+                  })
+                }
+              />
+            )}
+          />
+          {/* The photo controls live in the "…" menu; this keeps the upload's
+              progress, errors and Try again on the page. */}
           <PlantImageUpload
             plantId={plant.id}
+            buttonsHidden
+            picker={photoPicker}
             onUploadSuccess={() => {
               if (photoUploadNeedsRetry) {
                 navigate(location.pathname, { replace: true, state: null });
               }
             }}
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full"
-            onClick={() => setShowLeafHealth(true)}
-            leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
-          >
-            {t('plants.leafHealth.action')}
-          </Button>
-          <PhotoTimeline plantId={plant.id} />
-        </div>
+        </>
+      )}
+
+      {/* Plant header */}
+      <div className="flex flex-col sm:flex-row gap-6">
+        {!compact && (
+          <div className="w-full sm:w-48 shrink-0 space-y-3">
+            <div className="h-48 rounded-lg bg-parchment overflow-hidden">
+              <PlantImage plant={plant} width={192} height={192} />
+            </div>
+            <PlantImageUpload
+              plantId={plant.id}
+              onUploadSuccess={() => {
+                if (photoUploadNeedsRetry) {
+                  navigate(location.pathname, { replace: true, state: null });
+                }
+              }}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowLeafHealth(true)}
+              leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
+            >
+              {t('plants.leafHealth.action')}
+            </Button>
+            <PhotoTimeline plantId={plant.id} />
+          </div>
+        )}
 
         <div className="flex-1">
           {/* Stacked at the iOS accessibility text sizes, like PageHeader: side by
               side, the no-wrap action buttons widened the page past an iPad's
               screen at AX5. */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between large-text:flex-col">
-            <div>
-              <div className="flex items-center gap-2 large-text:flex-wrap">
-                <h1 className="min-w-0 font-serif text-3xl text-ink leading-tight tracking-tight">
-                  {plant.name}
-                </h1>
-                {(plant.status ?? 'active') !== 'active' && (
-                  <PlantStatusBadge status={plant.status!} />
-                )}
-              </div>
-              <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
-              {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
-              {/* Provenance, only when the server actually recorded one. A
+          {!compact && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between large-text:flex-col">
+              <div>
+                <div className="flex items-center gap-2 large-text:flex-wrap">
+                  <h1 className="min-w-0 font-serif text-3xl text-ink leading-tight tracking-tight">
+                    {plant.name}
+                  </h1>
+                  {(plant.status ?? 'active') !== 'active' && (
+                    <PlantStatusBadge status={plant.status!} />
+                  )}
+                </div>
+                <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
+                {plant.species && <p className="text-lg text-gray-500 italic">{plant.species}</p>}
+                {/* Provenance, only when the server actually recorded one. A
                   plant with no `speciesSource` (every row predating the field)
                   says nothing rather than claiming a person typed it. */}
-              {plant.species && plant.speciesSource === 'identified' && (
-                <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
-              )}
-            </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end large-text:grid large-text:w-full large-text:grid-cols-1">
-              {(plant.status ?? 'active') === 'active' && (
-                <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => setShowMove(true)}
-                    leftIcon={<ArrowsRightLeftIcon className="h-4 w-4" aria-hidden="true" />}
-                  >
-                    {t('spaces.quickMoveAction')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() =>
-                      // Prefill the add form and link the new plant back here.
-                      navigate('/plants/new', {
-                        state: {
-                          parentPlantId: plant.id,
-                          parentName: plant.name,
-                          species: plant.species,
-                        },
-                      })
-                    }
-                    leftIcon={<ScissorsIcon className="h-4 w-4" aria-hidden="true" />}
-                  >
-                    {t('plants.propagate.action')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => setShowShare(true)}
-                    leftIcon={<ShareIcon className="h-4 w-4" aria-hidden="true" />}
-                  >
-                    {t('plants.share.action')}
-                  </Button>
-                </>
-              )}
-              {/* Every status, not only active: a plant given away is the
+                {plant.species && plant.speciesSource === 'identified' && (
+                  <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
+                )}
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end large-text:grid large-text:w-full large-text:grid-cols-1">
+                {(plant.status ?? 'active') === 'active' && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setShowMove(true)}
+                      leftIcon={<ArrowsRightLeftIcon className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      {t('spaces.quickMoveAction')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() =>
+                        // Prefill the add form and link the new plant back here.
+                        navigate('/plants/new', {
+                          state: {
+                            parentPlantId: plant.id,
+                            parentName: plant.name,
+                            species: plant.species,
+                          },
+                        })
+                      }
+                      leftIcon={<ScissorsIcon className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      {t('plants.propagate.action')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setShowShare(true)}
+                      leftIcon={<ShareIcon className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      {t('plants.share.action')}
+                    </Button>
+                  </>
+                )}
+                {/* Every status, not only active: a plant given away is the
                   moment a passport is for (#676). */}
-              <Link
-                to={`/plants/${plant.id}/passport`}
-                className={buttonStyles({
-                  variant: 'secondary',
-                  size: 'sm',
-                  className: 'w-full sm:w-auto',
-                })}
-              >
-                <IdentificationIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-                {t('plants.passport.action')}
-              </Link>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full sm:w-auto"
-                onClick={() => setShowEditPlant(true)}
-                leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
-              >
-                Edit
-              </Button>
-              {(plant.status ?? 'active') === 'active' ? (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={() => setShowRemove(true)}
-                  leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
+                <Link
+                  to={`/plants/${plant.id}/passport`}
+                  className={buttonStyles({
+                    variant: 'secondary',
+                    size: 'sm',
+                    className: 'w-full sm:w-auto',
+                  })}
                 >
-                  Remove
-                </Button>
-              ) : (
+                  <IdentificationIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {t('plants.passport.action')}
+                </Link>
                 <Button
                   variant="secondary"
                   size="sm"
                   className="w-full sm:w-auto"
-                  onClick={() => statusMutation.mutate('active')}
-                  isLoading={statusMutation.isPending}
+                  onClick={() => setShowEditPlant(true)}
+                  leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
                 >
-                  Restore
+                  Edit
                 </Button>
-              )}
+                {(plant.status ?? 'active') === 'active' ? (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => setShowRemove(true)}
+                    leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    Remove
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => statusMutation.mutate('active')}
+                    isLoading={statusMutation.isPending}
+                  >
+                    Restore
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          <dl className="mt-4 grid grid-cols-2 gap-4 large-text:grid-cols-1">
+          <dl className={clsx('grid grid-cols-2 gap-4 large-text:grid-cols-1', !compact && 'mt-4')}>
             {(plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>

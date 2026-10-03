@@ -792,6 +792,16 @@
       "assigned": "Asignada",
       "careUnavailable": "No se pudo cargar el estado de cuidado, así que no se muestra. Tus plantas aparecen abajo.",
       "careLoading": "Cargando el estado de cuidado…"
+    },
+    "detail": {
+      "more": "Más acciones de la planta",
+      "statusLabel": "Lo que necesita esta planta ahora",
+      "lastBy": "la última vez, {{name}}, {{when}}",
+      "watered": "Regada",
+      "remove": "Quitar…",
+      "restore": "Volver al cuidado activo",
+      "doAria": "{{task}} {{plant}}",
+      "claim": "Me encargo yo"
     }
   },
   "importPlants": {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { PhotoIcon } from '@heroicons/react/24/outline';
@@ -7,7 +7,12 @@ import { plantService } from '@/services/plantService';
 import { getErrorMessage } from '@/services/api';
 import { prepareImageForUpload } from '@/utils/image';
 import { ImageMetadataError } from '@/utils/imageMetadata';
-import { canUseNativeCamera } from '@/services/nativeCamera';
+import {
+  canUseNativeCamera,
+  nativePhotoErrorMessage,
+  pickNativePhoto,
+  type PhotoSource,
+} from '@/services/nativeCamera';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
@@ -16,12 +21,26 @@ import { NativePhotoButtons } from '@/components/NativePhotoButtons';
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MiB
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+/** Opens the camera or the photo library from elsewhere (a menu item). */
+export interface PhotoPicker {
+  pick: (source: PhotoSource) => void;
+}
+
 interface PlantImageUploadProps {
   plantId: string;
   onUploadSuccess?: () => void;
+  /** Hide the pick buttons (the page offers them in a menu, through
+   *  `picker`); progress, errors and Try again still show here. */
+  buttonsHidden?: boolean;
+  picker?: Ref<PhotoPicker>;
 }
 
-export function PlantImageUpload({ plantId, onUploadSuccess }: PlantImageUploadProps) {
+export function PlantImageUpload({
+  plantId,
+  onUploadSuccess,
+  buttonsHidden = false,
+  picker,
+}: PlantImageUploadProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
@@ -113,14 +132,47 @@ export function PlantImageUpload({ plantId, onUploadSuccess }: PlantImageUploadP
     start(file);
   }
 
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(picker, () => ({
+    pick: (source) => {
+      if (upload.isPending) return;
+      if (native) {
+        setError(null);
+        pickNativePhoto(source)
+          .then((file) => file && onNativePick(file))
+          .catch((err: unknown) => setError(nativePhotoErrorMessage(err, t)));
+        return;
+      }
+      const input = inputRef.current;
+      if (!input) return;
+      // "Take photo" asks a phone browser for the camera; "Choose photo" for
+      // the library. Desktop browsers ignore `capture`.
+      if (source === 'camera') input.setAttribute('capture', 'environment');
+      else input.removeAttribute('capture');
+      input.click();
+    },
+  }));
+
   return (
     <div className="space-y-3">
       {error && <Alert variant="error">{error}</Alert>}
-      {native ? (
+      {buttonsHidden && !native ? (
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_TYPES.join(',')}
+          onChange={onPick}
+          disabled={upload.isPending}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      ) : buttonsHidden ? null : native ? (
         <NativePhotoButtons onPick={onNativePick} onError={setError} disabled={upload.isPending} />
       ) : (
         <div>
           <input
+            ref={inputRef}
             id={inputId}
             type="file"
             accept={ACCEPTED_TYPES.join(',')}

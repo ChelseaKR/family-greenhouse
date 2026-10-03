@@ -774,6 +774,16 @@
       "assigned": "Assigned",
       "careUnavailable": "Care status couldn’t be loaded, so it isn’t shown. Your plants are listed below.",
       "careLoading": "Loading care status…"
+    },
+    "detail": {
+      "more": "More plant actions",
+      "statusLabel": "What this plant needs now",
+      "lastBy": "last by {{name}}, {{when}}",
+      "watered": "Watered",
+      "remove": "Remove…",
+      "restore": "Restore to active care",
+      "doAria": "{{task}} {{plant}}",
+      "claim": "I’ll do it"
     }
   },
   "importPlants": {

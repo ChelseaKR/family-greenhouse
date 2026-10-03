@@ -303,7 +303,10 @@ function renderPlant() {
 }
 
 async function openRemove(count: number) {
-  await userEvent.click(await screen.findByRole('button', { name: /^remove$/i }));
+  // In the app the plant page's actions are in its "…" menu (the web menu
+  // here, since this fake app has no bar tools); Remove… is one of them.
+  await userEvent.click(await screen.findByLabelText('More plant actions'));
+  await userEvent.click(await screen.findByRole('button', { name: 'Remove…' }));
   return presented(count);
 }
 
