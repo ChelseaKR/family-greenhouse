@@ -314,12 +314,13 @@ test.describe('Mobile-first UX correctness', () => {
     await navigateTo(page, /^plants$/i, /\/plants$/);
     const plantsHeading = page.getByRole('heading', { name: 'Plants', exact: true });
     await expect(plantsHeading).toBeVisible();
-    const header = plantsHeading.locator('xpath=ancestor::header');
-    await expect(header.getByRole('button', { name: /apply template/i })).toBeVisible();
-    await expect(header.getByRole('button', { name: /add plant/i })).toBeVisible();
+    // On a phone the page leads with the list: Add stays a button beside the
+    // title and the bulk actions live in the "…" menu.
+    await expect(page.getByRole('button', { name: /add plant/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'plants header');
 
-    await header.getByRole('button', { name: /apply template/i }).click();
+    await page.getByLabel('More plant actions').click();
+    await page.getByRole('button', { name: /apply template/i }).click();
     const templateDialog = page.getByRole('dialog', { name: /apply care template/i });
     await expect(
       templateDialog.getByRole('heading', { name: /apply care template/i })
