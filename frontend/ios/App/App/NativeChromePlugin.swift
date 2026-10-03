@@ -7,8 +7,9 @@ import Capacitor
 /// nativeFrame.test.ts holds this file to them.
 ///
 /// Web -> native:
-/// - `configure({ tabs, moreTitle, moreSections, signOutConfirm })`: the tab
-///   labels and SF Symbols, and the More list, in the app's language.
+/// - `configure({ tabs, moreTitle, moreSections, signOutConfirm, settings })`:
+///   the tab labels and SF Symbols, the More list, and Settings' list of
+///   sections, in the app's language.
 /// - `update({ path, key, title, tab, canGoBack, largeTitle, chrome,
 ///   navigation, rightButton? })`: on every route change, and when the
 ///   page's title changes.
@@ -53,7 +54,29 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 return (id, (raw["symbol"] as? String ?? "circle", raw["selectedSymbol"] as? String ?? "circle.fill"))
             }
         )
-        let sections: [MoreSection] = (call.getArray("moreSections") as? [[String: Any]] ?? []).map { raw in
+        let sections = NativeChromePlugin.sections(call.getArray("moreSections"))
+        let settings = call.getObject("settings") ?? [:]
+        let confirm = call.getObject("signOutConfirm") ?? [:]
+        let configuration = FrameConfiguration(
+            tabs: tabs,
+            symbols: symbols,
+            moreTitle: call.getString("moreTitle") ?? "",
+            moreSections: sections,
+            signOutTitle: confirm["title"] as? String ?? "",
+            signOutConfirm: confirm["confirm"] as? String ?? "",
+            signOutCancel: confirm["cancel"] as? String ?? "",
+            settingsTitle: settings["title"] as? String ?? "",
+            settingsSections: NativeChromePlugin.sections(settings["sections"] as? [Any])
+        )
+        DispatchQueue.main.async { [weak self] in
+            self?.frame?.configure(configuration)
+            call.resolve()
+        }
+    }
+
+    /// More's sections and Settings' sections have the same shape.
+    private static func sections(_ raw: [Any]?) -> [MoreSection] {
+        (raw as? [[String: Any]] ?? []).map { raw in
             MoreSection(
                 title: raw["title"] as? String,
                 items: (raw["items"] as? [[String: Any]] ?? []).compactMap { item in
@@ -68,20 +91,6 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
                     )
                 }
             )
-        }
-        let confirm = call.getObject("signOutConfirm") ?? [:]
-        let configuration = FrameConfiguration(
-            tabs: tabs,
-            symbols: symbols,
-            moreTitle: call.getString("moreTitle") ?? "",
-            moreSections: sections,
-            signOutTitle: confirm["title"] as? String ?? "",
-            signOutConfirm: confirm["confirm"] as? String ?? "",
-            signOutCancel: confirm["cancel"] as? String ?? ""
-        )
-        DispatchQueue.main.async { [weak self] in
-            self?.frame?.configure(configuration)
-            call.resolve()
         }
     }
 

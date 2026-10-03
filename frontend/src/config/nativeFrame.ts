@@ -1,3 +1,10 @@
+import {
+  NATIVE_SETTINGS_SECTIONS,
+  SETTINGS_SECTION_LABEL,
+  settingsSectionPath,
+  type SettingsSection,
+} from '@/features/settings/settingsSections';
+
 /**
  * The iOS app's native frame: which tab each route belongs to, and the
  * messages the web and Swift send each other through the NativeChrome plugin.
@@ -239,6 +246,11 @@ export interface NativeChromeConfiguration {
   moreSections: NativeMoreSection[];
   /** The sign-out action sheet. */
   signOutConfirm: { title: string; confirm: string; cancel: string };
+  /**
+   * Settings as a native list, pushed on More by its Settings row (whose
+   * path is SETTINGS_LIST_PATH). Each row opens that section's web page.
+   */
+  settings: { title: string; sections: NativeMoreSection[] };
 }
 
 /** Native -> web events, by name. */
@@ -264,7 +276,8 @@ export const MORE_DESTINATIONS: ReadonlyArray<{
   { id: 'today', path: '/today', labelKey: 'nav.today', symbol: 'sun.max' },
   { id: 'chat', path: '/chat', labelKey: 'nav.chat', symbol: 'bubble.left.and.bubble.right' },
   { id: 'analytics', path: '/analytics', labelKey: 'nav.analytics', symbol: 'chart.bar' },
-  { id: 'settings', path: '/settings', labelKey: 'nav.settings', symbol: 'gearshape' },
+  // Opens the native Settings list (below), not a web page.
+  { id: 'settings', path: 'native:settings', labelKey: 'nav.settings', symbol: 'gearshape' },
 ];
 
 export const MORE_SUPPORT: ReadonlyArray<{
@@ -278,6 +291,51 @@ export const MORE_SUPPORT: ReadonlyArray<{
   // 2026-10-02); the section is `?section=about`.
   { id: 'about', path: '/settings?section=about', labelKey: 'nav.about', symbol: 'info.circle' },
 ];
+
+/** A More row with this path opens Settings' native list (NativeFrameController.settingsListPath). */
+export const SETTINGS_LIST_PATH = 'native:settings';
+
+/**
+ * Settings' native list: every section the app's Settings page has, grouped
+ * as in iOS's own Settings, each with an SF Symbol. Plan status shows the
+ * plan only (no prices, no purchase path; guideline 3.1.1), as #903 built it.
+ */
+export const SETTINGS_LIST_GROUPS: ReadonlyArray<
+  ReadonlyArray<{ section: SettingsSection; symbol: string }>
+> = [
+  [
+    { section: 'preferences', symbol: 'slider.horizontal.3' },
+    { section: 'notifications', symbol: 'bell' },
+  ],
+  [
+    { section: 'billing', symbol: 'leaf' },
+    { section: 'refer', symbol: 'person.badge.plus' },
+    { section: 'plant-tags', symbol: 'tag' },
+    { section: 'kiosk', symbol: 'display' },
+    { section: 'api-keys', symbol: 'key' },
+  ],
+  [
+    { section: 'trash', symbol: 'trash' },
+    { section: 'security', symbol: 'lock' },
+    { section: 'account', symbol: 'person.crop.circle' },
+  ],
+  [{ section: 'about', symbol: 'info.circle' }],
+];
+
+export const SETTINGS_ROW_PREFIX = 'settings:';
+
+export function buildSettingsSections(t: Translate): NativeMoreSection[] {
+  return SETTINGS_LIST_GROUPS.map((group) => ({
+    items: group
+      .filter(({ section }) => NATIVE_SETTINGS_SECTIONS.includes(section))
+      .map(({ section, symbol }) => ({
+        id: `${SETTINGS_ROW_PREFIX}${section}`,
+        title: t(SETTINGS_SECTION_LABEL[section]),
+        symbol,
+        path: settingsSectionPath(section),
+      })),
+  }));
+}
 
 export const SIGN_OUT_ID = 'signOut';
 export const ADD_HOUSEHOLD_ID = 'addHousehold';
@@ -341,6 +399,7 @@ export function buildConfiguration(
       confirm: t('nav.signOut'),
       cancel: t('common.cancel'),
     },
+    settings: { title: t('nav.settings'), sections: buildSettingsSections(t) },
   };
 }
 

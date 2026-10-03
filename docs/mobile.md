@@ -393,17 +393,17 @@ Who owns what:
 
 The plugin's API, in full:
 
-| Direction     | Name               | Payload                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| web -> native | `configure`        | `{ tabs: [{ id, title, symbol, selectedSymbol, root }], moreTitle, moreSections: [{ title?, items: [{ id, title, symbol?, path?, checked?, destructive? }] }], signOutConfirm: { title, confirm, cancel } }`                                                              |
-| web -> native | `update`           | `{ path, key, title, tab, canGoBack, largeTitle, chrome: 'tabs' or 'none', navigation: 'push', 'replace' or 'pop', rightButton?: { id, symbol, label } }`                                                                                                                 |
-| native -> web | `tabSelect`        | `{ tab, path, reselect }`: show `path` (null for More's native list)                                                                                                                                                                                                      |
-| native -> web | `back`             | `{ path }`: the back chevron or the edge swipe popped a screen; show `path`                                                                                                                                                                                               |
-| native -> web | `moreSelect`       | `{ id, path? }`: a More row (open `path`; or sign out, or switch household)                                                                                                                                                                                               |
-| native -> web | `rightButton`      | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                                                                              |
-| web -> native | `present`          | `{ token, kind: 'alert' or 'actionSheet', title?, message?, actions: [{ id, title, style: 'default', 'destructive' or 'cancel' }], anchor?: { x, y, width, height } }`, answered `{ id }`: the tapped action, or null for no choice. See "Alerts and action sheets (iOS)" |
-| web -> native | `updatePresented`  | `{ token, title?, message? }`: new words for the alert showing                                                                                                                                                                                                            |
-| web -> native | `dismissPresented` | `{ token }`: the web closed it; it answers no choice                                                                                                                                                                                                                      |
+| Direction     | Name               | Payload                                                                                                                                                                                                                                                                                           |
+| ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| web -> native | `configure`        | `{ tabs: [{ id, title, symbol, selectedSymbol, root }], moreTitle, moreSections: [{ title?, items: [{ id, title, symbol?, path?, checked?, destructive? }] }], signOutConfirm: { title, confirm, cancel }, settings: { title, sections } }` (`settings.sections` has the shape of `moreSections`) |
+| web -> native | `update`           | `{ path, key, title, tab, canGoBack, largeTitle, chrome: 'tabs' or 'none', navigation: 'push', 'replace' or 'pop', rightButton?: { id, symbol, label } }`                                                                                                                                         |
+| native -> web | `tabSelect`        | `{ tab, path, reselect }`: show `path` (null for More's native list)                                                                                                                                                                                                                              |
+| native -> web | `back`             | `{ path }`: the back chevron or the edge swipe popped a screen; show `path`                                                                                                                                                                                                                       |
+| native -> web | `moreSelect`       | `{ id, path? }`: a More row (open `path`; or sign out, or switch household)                                                                                                                                                                                                                       |
+| native -> web | `rightButton`      | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                                                                                                      |
+| web -> native | `present`          | `{ token, kind: 'alert' or 'actionSheet', title?, message?, actions: [{ id, title, style: 'default', 'destructive' or 'cancel' }], anchor?: { x, y, width, height } }`, answered `{ id }`: the tapped action, or null for no choice. See "Alerts and action sheets (iOS)"                         |
+| web -> native | `updatePresented`  | `{ token, title?, message? }`: new words for the alert showing                                                                                                                                                                                                                                    |
+| web -> native | `dismissPresented` | `{ token }`: the web closed it; it answers no choice                                                                                                                                                                                                                                              |
 
 Rules worth knowing before changing it:
 
@@ -432,6 +432,21 @@ Rules worth knowing before changing it:
 - **Deep links** arrive through `nativeDeepLinks.ts` with React Router's key
   `"default"` every time, so the model treats a report as the same screen only
   when its key and path both match.
+- **Settings is a native list** on the More stack: More's Settings row has the
+  path `native:settings`, which Swift opens itself (`TabHistory.pushNativeList`,
+  without telling the web), as an inset-grouped list of every section
+  (`buildSettingsSections`, from `features/settings/settingsSections.ts`, the
+  same list the web page uses). Each row opens that section's web page, titled
+  with the section; inside the frame the page draws no section picker or tabs.
+  A native list is never replaced by a web report, and back to it sends the
+  web nothing.
+- **Switches.** The checkbox of a true on/off setting (email, the digests,
+  SMS, pest alerts, product analytics) gets `role="switch"` from
+  `nativeSwitchRole()` inside the frame, and `index.css` draws it as an iOS
+  switch. It is the same checkbox with the same `onChange`, so it writes what
+  it wrote before (`NativeSettingsSwitches.test.tsx` compares the app and the
+  website). Choices in a form that saves later (a channel's events, an API
+  key's scopes) stay checkboxes.
 - An iOS build without the plugin (or Android) gets the web header and drawer,
   as before.
 

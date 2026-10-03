@@ -360,6 +360,53 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* In the frame, a true on/off setting's checkbox (`role="switch"`, from
+   `nativeSwitchRole()` in lib/platform.ts) is drawn as an iOS switch: 51 by
+   31 points, the knob sliding right and the track turning the app's green
+   when on. Only the drawing changes; it is the same checkbox. In utilities,
+   so it outranks the h-5 / w-5 / accent-* utilities on the same input. */
+@layer utilities {
+  html[data-native-frame] input[type='checkbox'][role='switch'] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    width: 51px;
+    height: 31px;
+    margin: 0;
+    border: 0;
+    border-radius: 9999px;
+    background-color: #e9e9eb;
+    background-image: radial-gradient(
+      circle,
+      #fff 0 12.5px,
+      rgb(0 0 0 / 0.12) 13px,
+      transparent 14px
+    );
+    background-size: 31px 31px;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    transition:
+      background-color 0.2s ease,
+      background-position 0.2s ease;
+    cursor: pointer;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:checked {
+    background-color: var(--color-primary-700);
+    background-position: 20px 0;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+  }
+}
+
 @layer components {
   /* v4 note: `@apply` only accepts real utilities now, so the variants can
      no longer `@apply btn` the way they did under v3. The shared base is

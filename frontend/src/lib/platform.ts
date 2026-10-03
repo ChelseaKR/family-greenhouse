@@ -87,3 +87,15 @@ export function hasNativePresent(): boolean {
   const chrome = headers?.find((h) => h?.name === NATIVE_CHROME_PLUGIN);
   return Array.isArray(chrome?.methods) && chrome.methods.some((m) => m?.name === 'present');
 }
+
+/**
+ * For the checkbox of a true on/off setting (one that saves the moment it
+ * changes): inside the iOS app's native frame it becomes `role="switch"`,
+ * which index.css draws as an iOS switch and VoiceOver reads as "switch, on".
+ * It stays the same `<input type="checkbox">`, with the same `checked` and
+ * `onChange`, so it writes exactly what it wrote before. On the website it
+ * adds nothing.
+ */
+export function nativeSwitchRole(): { role?: 'switch' } {
+  return hasNativeFrame() ? { role: 'switch' } : {};
+}
