@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_GUIDES, findCareGuide } from '@/features/care/careGuides';
+import { careToxicity } from '@/features/care/careToxicity';
+import { petSafetyLevel } from '@/features/petsafe/petSafeSpecies';
 
 /**
  * Shape + integrity test for the programmatic species care pages
@@ -60,12 +62,93 @@ describe('CARE_GUIDES registry', () => {
     }
   });
 
-  it('every guide surfaces a pet-toxicity verdict in its quick facts', () => {
-    // The toxicity quick-fact is the line a pet owner trusts — it must
-    // always state cats/dogs safety, never be left blank or generic.
+  it('every guide’s pet line opens with the verdict its cited source gives', () => {
+    // The toxicity quick-fact is the line a pet owner trusts, and the
+    // /pet-safe directory badges it by its opening words. It must say what
+    // the ASPCA listing says, or "Unknown" when there is no cited verdict:
+    // never a verdict nobody can trace.
     for (const g of CARE_GUIDES) {
-      expect(g.quickFacts.toxicity.toLowerCase()).toMatch(/toxic|non-toxic|pet-safe|safe/);
+      const { claims } = careToxicity(g);
+      const level = petSafetyLevel(g.quickFacts.toxicity);
+      const states = new Set([claims.cats.state, claims.dogs.state]);
+      if (states.has('not-assessed')) {
+        expect(g.quickFacts.toxicity, g.slug).toMatch(/^Unknown\b/);
+        expect(level, g.slug).toBe('unclear');
+      } else if (states.size === 1 && states.has('toxic')) {
+        expect(['toxic', 'caution'], g.slug).toContain(level);
+      } else if (states.size === 1 && states.has('non-toxic')) {
+        expect(level, g.slug).toBe('safe');
+      } else {
+        // Mixed verdicts have no single opening word; none exist today.
+        expect(level, g.slug).toBe('unclear');
+      }
     }
+  });
+
+  it('has no hand-written pet-toxicity FAQ (the page generates the cited one)', () => {
+    for (const g of CARE_GUIDES) {
+      for (const faq of g.faqs) {
+        expect(faq.q, `${g.slug}: ${faq.q}`).not.toMatch(/toxic|poison|safe for|pet-safe/i);
+      }
+    }
+  });
+
+  it('makes no pet verdict in the prose of a guide with no cited verdict', () => {
+    // ZZ plant has no ASPCA listing. Its prose used to call it toxic from
+    // general knowledge; the page now says "Unknown" and the prose must not
+    // contradict that in either direction. Link anchors are stripped first,
+    // so "[free pet-safe checker](/pet-safe)" is not read as a verdict.
+    const unknown = CARE_GUIDES.filter((g) => !careToxicity(g).sourced);
+    expect(unknown.map((g) => g.slug)).toEqual(['zz-plant']);
+    for (const g of unknown) {
+      const prose = [
+        g.summary,
+        g.metaTitle,
+        g.metaDescription,
+        ...Object.values(g.sections).flat(),
+        ...g.faqs.flatMap((f) => [f.q, f.a]),
+      ].map((t) => t.replace(/\[[^\]]*\]\([^)]*\)/g, ''));
+      for (const text of prose) {
+        expect(text, g.slug).not.toMatch(
+          /\b(non-toxic|toxic|poisonous|pet-safe|calcium oxalate|safe for (cats|dogs|pets))\b/i
+        );
+      }
+    }
+  });
+
+  it('lists three related guides that exist, excluding itself', () => {
+    for (const g of CARE_GUIDES) {
+      expect(g.related, g.slug).toHaveLength(3);
+      expect(new Set(g.related).size, g.slug).toBe(3);
+      expect(g.related, g.slug).not.toContain(g.slug);
+      for (const slug of g.related) {
+        expect(findCareGuide(slug), `${g.slug} -> ${slug}`).toBeDefined();
+      }
+    }
+  });
+
+  it('every related guide is linked from at least one other guide', () => {
+    // The rotation this replaced guaranteed every guide an inbound sibling
+    // link; curation must not quietly orphan one.
+    const linked = new Set(CARE_GUIDES.flatMap((g) => g.related));
+    for (const g of CARE_GUIDES) {
+      expect(linked.has(g.slug), `${g.slug} has no inbound related link`).toBe(true);
+    }
+  });
+
+  it('keeps titles and descriptions within what search results display', () => {
+    for (const g of CARE_GUIDES) {
+      expect(g.metaTitle.length, g.slug).toBeLessThanOrEqual(60);
+      expect(g.metaDescription.length, g.slug).toBeGreaterThanOrEqual(70);
+      expect(g.metaDescription.length, g.slug).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it('is written in American English', () => {
+    const text = JSON.stringify(CARE_GUIDES);
+    expect(text).not.toMatch(
+      /\b(colour\w*|ageing|draughts?|draughty|diarrhoea|humour|fertiliser|behaviour|centre|metre|realise)\b/i
+    );
   });
 });
 

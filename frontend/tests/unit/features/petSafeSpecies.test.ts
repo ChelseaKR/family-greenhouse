@@ -84,3 +84,21 @@ describe('PET_SAFETY_POSTS', () => {
     }
   });
 });
+
+describe('the directory caution line', () => {
+  it('carries the care page caution for every unknown species, and only those', () => {
+    for (const species of PET_SAFE_SPECIES) {
+      expect(species.caution !== null, species.slug).toBe(species.level === 'unclear');
+    }
+    const zz = PET_SAFE_SPECIES.find((s) => s.slug === 'zz-plant')!;
+    expect(zz.level).toBe('unclear');
+    expect(zz.caution).toBe(
+      'ZZ plant isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
+  });
+
+  it('never files an unknown species under the safe heading', () => {
+    const safe = PET_SAFE_GROUPS.find((g) => g.id === 'safe')?.species ?? [];
+    for (const species of safe) expect(species.caution, species.slug).toBeNull();
+  });
+});

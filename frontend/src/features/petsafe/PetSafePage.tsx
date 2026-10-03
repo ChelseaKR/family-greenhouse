@@ -334,6 +334,14 @@ function SpeciesDirectory() {
                       {species.scientificName}
                     </span>
                     <span className="mt-2 block text-sm text-gray-700">{species.verdict}</span>
+                    {species.caution && (
+                      <span
+                        data-testid="species-caution"
+                        className="mt-2 block text-sm font-medium text-gray-900"
+                      >
+                        {species.caution}
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}
