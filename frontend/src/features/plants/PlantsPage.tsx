@@ -397,8 +397,13 @@ export function PlantsPage() {
     ].filter((x): x is { label: string; clear: () => void } => Boolean(x));
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3 large-text:flex-col large-text:items-start">
+      // In the iOS app the bar holds the title, the count's place, the "+",
+      // the search and the menus, so the list starts right under the bar:
+      // the empty header row takes no room (`contents`: its h1 stays for
+      // VoiceOver and the launch screen, visually hidden by index.css) and
+      // the page's top padding shrinks from 24pt to 8pt.
+      <div className="space-y-3 native-frame:-mt-4">
+        <div className="flex items-center justify-between gap-3 large-text:flex-col large-text:items-start native-frame:contents">
           <div className="min-w-0">
             <h1 className="font-serif text-3xl leading-tight text-ink">{t('plants.title')}</h1>
             {settled && (plants?.length ?? 0) > 0 && (

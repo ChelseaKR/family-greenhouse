@@ -140,8 +140,8 @@ final class WebScreenController: UIViewController {
         controller.searchBar.tintColor = FrameColors.tint
         searchRelay = relay
         navigationItem.searchController = controller
-        // Hidden at rest and revealed by pulling the list down, as in Mail
-        // and Reminders, so the plants are the first thing on screen.
+        // Hidden once the list scrolls, and revealed by pulling it down
+        // (the standard iOS behavior), so the plants come first.
         navigationItem.hidesSearchBarWhenScrolling = true
     }
 

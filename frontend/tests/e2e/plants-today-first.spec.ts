@@ -33,6 +33,14 @@ test.describe('phone website (390px)', () => {
     const row = page.getByRole('link', { name: /^Today Fern, Water today, Sunroom/ });
     await expect(row).toBeVisible();
 
+    // On the website the page keeps its own title row above the list.
+    const webGap = await page.evaluate(() => {
+      const main = document.getElementById('main-content')!.getBoundingClientRect().top;
+      const h2 = document.querySelector('#main-content h2')!.getBoundingClientRect().top;
+      return h2 - main;
+    });
+    expect(webGap).toBeGreaterThan(60);
+
     // The first plant row is on the first screen: nothing but the title and
     // one toolbar row sits above the list.
     const box = await row.boundingBox();
@@ -176,6 +184,16 @@ test.describe('iOS app with bar tools (native frame stub)', () => {
     await openPlants(page);
     await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
     await expect(page.getByRole('heading', { level: 2, name: 'Needs care' })).toBeVisible();
+
+    // The list starts right under the bar: nothing of the page's own header
+    // takes room (the h1 is visually hidden for the bar's title), and the top
+    // padding is 8pt, not 24pt plus a 12pt gap after an empty header row.
+    const gap = await page.evaluate(() => {
+      const main = document.getElementById('main-content')!.getBoundingClientRect().top;
+      const h2 = document.querySelector('#main-content h2')!.getBoundingClientRect().top;
+      return h2 - main;
+    });
+    expect(gap).toBeLessThanOrEqual(10);
 
     // The web row is gone; the bar got the menus and the search field.
     await expect(page.getByLabel('Search plants')).toHaveCount(0);
