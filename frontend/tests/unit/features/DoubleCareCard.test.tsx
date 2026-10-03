@@ -55,6 +55,21 @@ describe('DoubleCareCard', () => {
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute('href', '/pricing');
   });
 
+  it('inside the iOS app, says plans do not change here and links to no plans page', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      renderCard({ loading: false, daily: daily({ status: 'not_in_plan' }) });
+      expect(screen.getByText(/part of the Garden household toolkit/)).toBeInTheDocument();
+      expect(screen.getByText(/Plan changes aren't available in the app\./)).toBeInTheDocument();
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('shows a spinner, not a number, while loading', () => {
     renderCard({ loading: true, daily: undefined });
     expect(screen.queryByText(/confirmed duplicate|couldn’t check/)).not.toBeInTheDocument();

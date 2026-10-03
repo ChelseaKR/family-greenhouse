@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { isNativeApp } from '@/lib/platform';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { billingService, effectivePlanId } from '@/services/billingService';
@@ -83,12 +84,17 @@ export function AutoHandoffCard({ householdId, household }: AutoHandoffCardProps
       ) : !available ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-700">{t('household.autoHandoff.locked')}</p>
-          <Link
-            to="/pricing"
-            className="inline-flex min-h-touch items-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
-          >
-            {t('household.autoHandoff.lockedAction')}
-          </Link>
+          {/* No "see plans" button in the apps (Guideline 3.1.1). */}
+          {isNativeApp() ? (
+            <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+          ) : (
+            <Link
+              to="/pricing"
+              className="inline-flex min-h-touch items-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
+              {t('household.autoHandoff.lockedAction')}
+            </Link>
+          )}
         </div>
       ) : (
         <form

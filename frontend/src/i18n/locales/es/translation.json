@@ -1393,7 +1393,8 @@
       "help": "Ayuda",
       "plantTags": "Etiquetas",
       "refer": "Recomendar a un amigo",
-      "security": "Seguridad"
+      "security": "Seguridad",
+      "about": "Acerca de"
     },
     "preferences": {
       "title": "Preferencias",
@@ -1454,7 +1455,6 @@
       "paymentFailedTitle": "No hemos podido cobrar tu último pago",
       "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Plántula en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
       "paymentFailedActionAdmin": "Actualiza la tarjeta en “Gestionar suscripción”, más abajo.",
-      "paymentFailedActionNative": "Abre Family Greenhouse en un navegador web para actualizar la tarjeta.",
       "paymentFailedBodyOwned": "Hasta que se resuelva, tu hogar tiene los límites del plan que ya compró de por vida o que recibió como regalo, en lugar de los de tu suscripción. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras de ese plan.",
       "paymentFailedBanner": {
         "actionAdmin": "Actualiza la tarjeta en Ajustes → Estado del plan",
@@ -1713,9 +1713,7 @@
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
     "openAccount": "Abrir ajustes de la cuenta",
-    "backToSetup": "Volver a la configuración",
-    "planAvailableTitle": "Qué sigue disponible",
-    "planAvailableBody": "Al iniciar sesión tienes acceso a las plantas, tareas, funciones compartidas del hogar y cuidados incluidos en tu cuenta actual. Esta aplicación no cobra pagos."
+    "backToSetup": "Volver a la configuración"
   },
   "connection": {
     "offlineTitle": "Estás sin conexión",
@@ -2207,7 +2205,6 @@
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
     "registerCta": "Crear una cuenta gratuita",
-    "nativeNotice": "Regalar no está disponible en la aplicación. Abre familygreenhouse.net en la web para enviar un regalo.",
     "navLink": "Regalar una suscripción"
   },
   "caretaker": {
@@ -2566,11 +2563,6 @@
       "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
       "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
       "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
-    },
-    "native": {
-      "eyebrow": "Información del plan",
-      "title": "Tu plan de Family Greenhouse",
-      "lede": "La app móvil no ofrece compras ni cambios de plan. Si ya tienes cuenta, puedes ver el estado de tu plan y tu uso en Ajustes → Facturación, y cambiar de plan en la web."
     },
     "meta": {
       "title": {

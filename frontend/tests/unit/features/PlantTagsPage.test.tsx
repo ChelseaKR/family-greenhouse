@@ -207,6 +207,34 @@ describe('PlantTagsPage', () => {
     expect(screen.queryByRole('button', { name: /Print the sheet/ })).not.toBeInTheDocument();
   });
 
+  it('inside the iOS app, shows the locked plan with no link to the plans', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      server.use(
+        http.get(`${API}/households/hh-1/plant-tags`, () =>
+          HttpResponse.json(
+            tagsResponse({
+              tags: [],
+              allowance: { enabled: false, max: 0, used: 0 },
+              planId: 'seedling',
+            })
+          )
+        )
+      );
+      renderPage();
+
+      expect(await screen.findByText('Plant tags come with the Garden plan')).toBeInTheDocument();
+      expect(screen.getByText("Plan changes aren't available in the app.")).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See the plans' })).not.toBeInTheDocument();
+      expect(document.querySelector('a[href="/pricing"]')).toBeNull();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('offers a label for each untagged plant and issues one on click', async () => {
     const issued = vi.fn();
     server.use(

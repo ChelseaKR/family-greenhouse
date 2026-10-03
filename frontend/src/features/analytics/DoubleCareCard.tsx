@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
+import { isNativeApp } from '@/lib/platform';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import type { DailyAnalytics } from '@/services/householdService';
@@ -52,9 +53,14 @@ export function DoubleCareCard({ loading, daily }: DoubleCareCardProps) {
       ) : state === 'not_in_plan' ? (
         <p className="text-sm text-gray-600">
           {t('doubleCare.analytics.locked')}{' '}
-          <Link to="/pricing" className="font-medium text-primary-700 underline">
-            {t('doubleCare.analytics.seePlans')}
-          </Link>
+          {/* No "see plans" link in the apps (Guideline 3.1.1). */}
+          {isNativeApp() ? (
+            t('settings.billing.nativeUnavailable')
+          ) : (
+            <Link to="/pricing" className="font-medium text-primary-700 underline">
+              {t('doubleCare.analytics.seePlans')}
+            </Link>
+          )}
         </p>
       ) : (
         <p className="text-sm text-gray-600">{t('doubleCare.analytics.unavailable')}</p>

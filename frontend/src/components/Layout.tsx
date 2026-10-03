@@ -29,6 +29,7 @@ import { ConnectionNotice } from './ConnectionNotice';
 import { PullToRefresh } from './PullToRefresh';
 import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
 import { setNativeStatusBarOverDarkSurface } from '@/services/nativeShell';
+import { isNativeApp } from '@/lib/platform';
 import clsx from 'clsx';
 
 /**
@@ -101,6 +102,7 @@ export function Layout() {
   const chatPlanId = effectivePlanId(subscription);
   const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
   const isChatRoute = location.pathname === '/chat' && chatAvailable;
+  const native = isNativeApp();
   // Settings → Plan status renders the full payment-failed notice itself, at
   // the top of the card it explains; the banner there would say it twice. The
   // chat route is a full-height composer with no page padding to sit in.
@@ -243,8 +245,10 @@ export function Layout() {
 
         {/* Memorial closing line, flanked by mirrored botanical sprigs. The
             text itself is unchanged from the original; only the decoration
-            around it is new. Sprigs are aria-hidden as decoration. */}
-        {!isChatRoute && (
+            around it is new. Sprigs are aria-hidden as decoration. In the
+            iOS and Android apps it lives on Settings → About instead, and
+            nowhere else (owner decision 2026-10-02). */}
+        {!isChatRoute && !native && (
           <footer className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-4">
               <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block" />
