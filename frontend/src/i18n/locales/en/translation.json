@@ -286,7 +286,12 @@
     "household": "Household",
     "settings": "Settings",
     "signOut": "Sign out",
-    "today": "Today, across your homes"
+    "today": "Today, across your homes",
+    "home": "Home",
+    "more": "More",
+    "about": "About",
+    "households": "Households",
+    "signOutConfirm": "Sign out of Family Greenhouse?"
   },
   "publicShell": {
     "careGuides": "Care guides",

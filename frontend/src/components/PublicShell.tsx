@@ -47,7 +47,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
           The safe-area padding carries its background under the status bar
           in the native shells (help, legal and pricing pages are reachable
           there); env() is 0 in a browser tab. */}
-      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-xs print:hidden">
+      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-xs print:hidden native-frame:hidden!">
         <nav
           className={clsx(
             'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',
@@ -126,7 +126,11 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
         {children}
       </main>
 
-      <Footer />
+      {/* `contents`: no box of its own, so the website lays out exactly as
+          before; inside the iOS app's native frame the site footer goes. */}
+      <div className="contents native-frame:hidden!">
+        <Footer />
+      </div>
     </div>
   );
 }

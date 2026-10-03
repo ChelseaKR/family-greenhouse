@@ -46,7 +46,10 @@ export function PageHeader({
               blends it into the paper background and drops small-text
               contrast below WCAG AA (4.5:1). */}
           {eyebrow && (
-            <p className="text-xs uppercase tracking-[0.18em] text-primary-700 font-semibold mb-2">
+            <p
+              className="text-xs uppercase tracking-[0.18em] text-primary-700 font-semibold mb-2"
+              data-title-decor=""
+            >
               {eyebrow}
             </p>
           )}

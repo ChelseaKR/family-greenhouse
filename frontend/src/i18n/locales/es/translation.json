@@ -298,7 +298,12 @@
     "household": "Hogar",
     "settings": "Ajustes",
     "signOut": "Cerrar sesión",
-    "today": "Hoy, en todos tus hogares"
+    "today": "Hoy, en todos tus hogares",
+    "home": "Inicio",
+    "more": "Más",
+    "about": "Acerca de",
+    "households": "Hogares",
+    "signOutConfirm": "¿Cerrar sesión en Family Greenhouse?"
   },
   "publicShell": {
     "careGuides": "Guías de cuidado",

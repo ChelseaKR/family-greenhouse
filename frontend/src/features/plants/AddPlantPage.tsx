@@ -430,7 +430,7 @@ export function AddPlantPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <Link
         to="/plants"
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
         Back to plants
