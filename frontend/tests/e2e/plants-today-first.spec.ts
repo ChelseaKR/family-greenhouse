@@ -1,0 +1,130 @@
+import { test, expect, type Page } from '@playwright/test';
+import { provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
+
+/**
+ * The Plants list on a phone ("Today first"): the website under 640px and
+ * the iOS app. The desktop website keeps its own layout (grid, list and
+ * spaces views, the button row and the chips), which is checked here too, so
+ * a change to one can never silently become a change to the other.
+ */
+
+let account: ProvisionedAccount;
+
+test.beforeAll(async () => {
+  account = await provisionAccount({
+    emailPrefix: 'today-first',
+    space: { name: 'Sunroom', environment: 'inside' },
+    plant: { name: 'Today Fern', species: 'Nephrolepis exaltata' },
+    waterTask: { frequency: 7 },
+  });
+});
+
+async function openPlants(page: Page) {
+  await uiLogin(page, account.email, account.password);
+  await page.goto('/plants');
+}
+
+test.describe('phone website (390px)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('leads with the plant and what it needs, with the toolbar collapsed', async ({ page }) => {
+    await openPlants(page);
+    await expect(page.getByRole('heading', { level: 2, name: 'Needs care' })).toBeVisible();
+    const row = page.getByRole('link', { name: /^Today Fern, Water today, Sunroom/ });
+    await expect(row).toBeVisible();
+
+    // The first plant row is on the first screen: nothing but the title and
+    // one toolbar row sits above the list.
+    const box = await row.boundingBox();
+    expect(box!.y + box!.height).toBeLessThan(844 / 2);
+
+    // The old desktop controls are not on the phone.
+    await expect(page.getByRole('group', { name: 'View mode' })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: /filter plants by space/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /apply template/i })).toBeHidden();
+
+    // Apply template is one tap into the "…" menu and still opens its dialog.
+    await page.getByLabel('More plant actions').click();
+    await page.getByRole('button', { name: /apply template/i }).click();
+    const dialog = page.getByRole('dialog', { name: /apply care template/i });
+    await expect(dialog.getByRole('heading', { name: /apply care template/i })).toBeVisible();
+  });
+
+  test('the filter menu groups by space and the token clears a filter', async ({ page }) => {
+    await openPlants(page);
+    await page.getByLabel('Filter plants').click();
+    await page.getByRole('button', { name: 'Space', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Sunroom' })).toBeVisible();
+
+    await page.getByLabel('Filter plants').click();
+    await page.getByRole('button', { name: 'Outside', exact: true }).click();
+    await expect(page.getByText('No plants found')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove filter: Outside' }).click();
+    await expect(page.getByRole('link', { name: /^Today Fern/ })).toBeVisible();
+  });
+
+  test('the menus close on Escape and on a tap outside', async ({ page }) => {
+    await openPlants(page);
+    const more = page.locator('details', { has: page.getByLabel('More plant actions') });
+    await page.getByLabel('More plant actions').click();
+    await expect(more).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(more).not.toHaveAttribute('open', '');
+    await page.getByLabel('More plant actions').click();
+    await page.getByRole('heading', { level: 1, name: 'Plants' }).click();
+    await expect(more).not.toHaveAttribute('open', '');
+  });
+});
+
+test.describe('desktop website (1280px)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('keeps the desktop layout', async ({ page }) => {
+    await openPlants(page);
+    await expect(page.getByRole('group', { name: 'View mode' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Plant collection' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /apply template/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Today Fern/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Needs care' })).toHaveCount(0);
+    await expect(page.getByLabel('Filter plants', { exact: true })).toHaveCount(0);
+  });
+});
+
+test.describe('iOS app (native frame stub)', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'the shell under test is WebKit');
+  test.use({ viewport: { width: 834, height: 1194 } });
+
+  test('uses the phone list at any width, with the bar "+" instead of a web Add', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>;
+      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+        PluginHeaders: [
+          {
+            name: 'NativeChrome',
+            methods: [
+              { name: 'addListener' },
+              { name: 'removeListener' },
+              { name: 'removeAllListeners', rtype: 'promise' },
+              { name: 'configure', rtype: 'promise' },
+              { name: 'update', rtype: 'promise' },
+            ],
+          },
+        ],
+        nativePromise: () => Promise.resolve(),
+        nativeCallback: () => 'callback',
+      };
+    });
+    await openPlants(page);
+    // The pretense took: otherwise this would be testing the website.
+    await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
+    // An iPad-wide window still gets the phone list inside the app.
+    await expect(page.getByRole('heading', { level: 2, name: 'Needs care' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Today Fern, Water today/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^add plant$/i })).toBeHidden();
+  });
+});
