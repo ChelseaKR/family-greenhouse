@@ -318,6 +318,29 @@ describe('Plants on a phone: today first', () => {
     expect(screen.queryByLabelText('Filter plants')).not.toBeInTheDocument();
   });
 
+  it('an empty active list still reaches the past plants (a household whose plants all died)', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get(`${API}/plants`, ({ request }) =>
+        new URL(request.url).search.includes('past')
+          ? HttpResponse.json([{ ...plant('x', 'Old Fern'), status: 'died' }])
+          : HttpResponse.json([])
+      )
+    );
+    renderPlants();
+    await screen.findByText(/let's add your first plant/i);
+    // Only the "…" menu, with just these two: nothing to search or filter.
+    await user.click(screen.getByLabelText('More plant actions'));
+    const menu = screen.getByLabelText('More plant actions').closest('details')!;
+    expect(
+      within(menu)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['Past plants', 'Import a list of plants']);
+    await user.click(within(menu).getByRole('button', { name: 'Past plants' }));
+    expect(await screen.findByRole('link', { name: /Old Fern/ })).toBeInTheDocument();
+  });
+
   it('search still announces how many plants matched', async () => {
     const user = userEvent.setup();
     renderPlants();
