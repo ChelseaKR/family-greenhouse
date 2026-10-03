@@ -35,6 +35,7 @@
     "mobile:sync": "npm run build && cap sync",
     "test:e2e": "playwright test",
     "store:screenshots": "playwright test --config tests/e2e/playwright.store.config.ts",
+    "store:screenshots:ios": "node scripts/store-shots/capture-ios.mjs",
     "test:e2e:ui": "playwright test --ui",
     "lighthouse": "lhci autorun --config=lighthouserc.cjs",
     "lighthouse:desktop": "lhci autorun --config=lighthouserc.cjs",

@@ -212,28 +212,54 @@ What each row actually is, for whoever fills out the questionnaire:
 
 ## 3. Screenshots
 
-`store-assets/app-store/` already holds real, rendered PNGs — this is not
-an empty folder structure. Confirmed present:
+`store-assets/app-store/` holds real, rendered PNGs:
 
 - `app-icon-1024.png`
-- `ipad-13/01-dashboard.png` … `04-tasks.png` (4 frames)
-- `iphone-6.9/01-dashboard.png` … `04-tasks.png` (4 frames)
+- `iphone-6.9/01-plants.png` … `08-notifications.png` (8 frames, 1320 x 2868):
+  **the iOS app itself**, with the native tab bar and navigation bar
+- `ipad-13/01-dashboard.png` … `04-tasks.png` (4 frames, 2064 x 2752): the
+  website in Playwright, with the web layout and menu drawer
 
-All eight were captured by `npm run store:screenshots --workspace
-frontend` against the seeded **store-demo household** — "The Fernwood
-House" (`backend/src/local-server-store-demo.ts`, started with
-`SEED_STORE_DEMO=1`), not a live user's data. What's actually in each
-frame:
+Both sets show the seeded **store-demo household**, "The Fernwood House"
+(`backend/src/local-server-store-demo.ts`, started with `SEED_STORE_DEMO=1`):
+invented people with `@example.com` addresses, not a live user's data. The
+demo household is on the free Seedling plan, so no frame shows a price, a
+plan to buy or an upgrade prompt.
 
-| #   | Frame        | Real content                                                                                                                                                                                                                                       |
-| --- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01  | Dashboard    | The Fernwood House dashboard, greeting member Dana Whitfield, showing household-wide task status: one overdue job nobody has claimed ("up for grabs") and four due today, across all three members (Dana Whitfield, Marisol Reyes, Theo Nakamura). |
-| 02  | Plants       | The shared plant list: 8 plants (Monstera, Fiddle Leaf Fig, Golden Pothos, Aloe, Snake Plant, Peace Lily, ZZ Plant, Jade Plant) across 5 rooms (Living Room, Kitchen, Bedroom, Back Study, Back Porch).                                            |
-| 03  | Plant detail | A single plant's detail page — room, schedule, and care history. Renders the brand placeholder image, not a photo (see gap below).                                                                                                                 |
-| 04  | Tasks        | The household task list, including the claim/up-for-grabs interaction on the unclaimed overdue job.                                                                                                                                                |
+### Regenerating the iPhone frames
 
-Google Play's `store-assets/google-play/phone/` has the same four frames
-plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
+Run `npm run store:screenshots:ios --workspace frontend` on a Mac with Xcode
+and the iOS 26 simulator runtime, then look at every frame before
+committing it. The script (`frontend/scripts/store-shots/capture-ios.mjs`)
+starts the mock API with `SEED_STORE_DEMO=1` if port 4000 is free, runs
+`npm run build` and `cap sync ios`, builds a Debug simulator app, installs it
+fresh on the one iPhone 17 Pro Max simulator (or `--udid <id>`) with light
+appearance and a 9:41 status bar, and walks the shot list in
+`frontend/scripts/store-shots/shots.mjs`. The in-app driver, `tour.js`, goes
+into that simulator build only and is removed from the synced web folder
+right after Xcode copies it; it is never in `src/`, `dist/` or a release
+build. It signs in through the real form and opens each route; the native
+bars follow the route as they do for a tap. `store-assets/README.md` has the
+details. Re-run it for each release whose UI changed, so the frames match
+the binary under review. `npm run mobile:validate` checks that all eight
+exist at 1320 x 2868.
+
+The iPad frames come from `npm run store:screenshots --workspace frontend`
+(Playwright), as before.
+
+| #   | iPhone frame  | Real content                                                                                                                                                                                                               |
+| --- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01  | Plants        | The Plants tab with its large title, the "+" button and the native tab bar, in the list view: Monstera and Fiddle Leaf Fig, each with its species and room.                                                                |
+| 02  | Home          | Dana's Home tab: 8 plants, 4 due today, 1 overdue; "To do now" with the overdue Peace Lily up for grabs and today's Monstera held by Dana Whitfield.                                                                       |
+| 03  | Plant detail  | The Monstera, opened from Plants (back chevron, title in the navigation bar): the brand placeholder image, Take photo and Choose photo, plant actions, its room, and the household's house rule ("Bottom-water this one"). |
+| 04  | Plant care    | The same page further down: the curated care tips for _Monstera deliciosa_ (light, water, humidity, notes) and its weekly watering task with its streak.                                                                   |
+| 05  | Tasks         | The Tasks tab: the overdue Peace Lily marked "Up for grabs", with Claim, Ask family and Done.                                                                                                                              |
+| 06  | Household     | The Household tab: "Who's carrying the care", with each member's care in the last 30 days and jobs held now, and 4 jobs up for grabs.                                                                                      |
+| 07  | Plant sitter  | The page Dana's "Long weekend" sitter link opens, in the app: what needs doing, in which room, with Done buttons, no account needed, and the date the link stops working. The capture creates the link.                    |
+| 08  | Notifications | Settings, Notifications: the email reminder, the weekly digest and the household emails, as switches. No push setting: this release sends reminders by email.                                                              |
+
+Google Play's `store-assets/google-play/phone/` has the same four web frames
+as the iPad set, plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
 
 Known gaps in this set, carried over from `store-assets/README.md` and
 still true — worth fixing before they're needed, not hidden:
@@ -248,9 +274,9 @@ still true — worth fixing before they're needed, not hidden:
 - **No Android tablet screenshots**, despite the iPad frames proving the
   app runs on a tablet — Play down-ranks large-screen surfacing without
   7"/10" frames.
-- **Four frames each.** Apple allows up to 10, Play up to 8 — there's room
-  to add more before submission (a household-invite or sitter-link screen
-  would show a real differentiator the current four don't touch).
+- **Four iPad and four Play frames.** Apple allows up to 10, Play up to 8.
+  The iPhone set has 8, including the sitter page. The iPad and Play frames
+  still show the website's layout with the menu drawer.
 - **English-only**, despite the app itself shipping a complete, gate-enforced
   Spanish catalog (`frontend/src/i18n/locales/es`). Both stores localize the
   listing independently of the binary; this needs a native-Spanish reviewer,

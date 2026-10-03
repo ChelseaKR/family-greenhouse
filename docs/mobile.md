@@ -576,7 +576,9 @@ Step 8 of the setup doc is that check, and it comes before
 - [x] Google Play 1024×500 feature graphic and both store icons in
       `store-assets/`.
 - [x] Review-safe screenshots for 6.9" iPhone, 13" iPad, and Android phone.
-      Regenerate with `npm run store:screenshots --workspace frontend`.
+      Regenerate the iPhone set from the iOS app itself with
+      `npm run store:screenshots:ios --workspace frontend`, and the iPad and
+      Android sets with `npm run store:screenshots --workspace frontend`.
 
 ### Every submission
 

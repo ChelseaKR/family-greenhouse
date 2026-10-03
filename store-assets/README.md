@@ -8,18 +8,65 @@ Screenshots must come from the final synchronized build and must not include
 real user data. Reviewer credentials and signing material are intentionally
 not stored here.
 
-`npm run store:screenshots --workspace frontend` regenerates all twelve
-frames. It captures the **store-demo household** — three named members, eight
-plants across five rooms, one overdue job nobody has claimed, four due today — three held by
-three different people and one still up for grabs, and a month of care history — not the mock backend's
-default one-plant `test@example.com` fixture. That household lives in
+There are two capture scripts, and both use the **store-demo household**:
+three named members, eight plants across five rooms, one overdue job nobody
+has claimed, four due today (three held by three different people and one
+still up for grabs), and a month of care history. That household lives in
 `backend/src/local-server-store-demo.ts` and is seeded only when the API
-starts with `SEED_STORE_DEMO=1`, which `tests/e2e/playwright.store.config.ts`
-does; the spec probes for the demo account before capturing, so a dev server
-already holding port 4000 without the flag fails the run instead of quietly
-reproducing the old frames. Every name, address and plant in it is invented,
-and the addresses are `@example.com` — permanently unregistrable, so no frame
-can ever show a real person's account.
+starts with `SEED_STORE_DEMO=1`. Every name, address and plant in it is
+invented, and the addresses are `@example.com`, which can never be
+registered, so no frame can show a real person's account. Both scripts sign
+in as the demo account before capturing and fail, naming the flag, if a
+server already on port 4000 doesn't have it.
+
+- **iPhone 6.9-inch (`app-store/iphone-6.9/`, 8 frames): the iOS app
+  itself.** `npm run store:screenshots:ios --workspace frontend` builds this
+  checkout for the iOS Simulator, installs it fresh on an iPhone 17 Pro Max
+  (1320 x 2868) with light appearance and Apple's 9:41 status bar, and
+  captures the real app, native tab bar and navigation bar included. See
+  "Regenerating the iPhone frames" below.
+- **iPad 13-inch and Google Play phone (4 frames each): the website.**
+  `npm run store:screenshots --workspace frontend` captures the web app in
+  Playwright at each store's size (`tests/e2e/playwright.store.config.ts`).
+  These still show the web layout with the menu drawer, which is what the
+  iPad and Android apps show today.
+
+### Regenerating the iPhone frames
+
+On a Mac with Xcode and the iOS 26 simulator runtime:
+
+1. Stop anything on port 4000 that wasn't started with `SEED_STORE_DEMO=1`.
+   The script starts the mock API itself when the port is free, and stops it
+   when it's done.
+2. Run `npm run store:screenshots:ios --workspace frontend`. It runs
+   `npm run build` and `cap sync ios`, builds a Debug simulator app with
+   `xcodebuild`, boots the simulator if it's off (and shuts it down again
+   afterward), and writes the PNGs here. Pass `--udid <id>` if you have more
+   than one iPhone 17 Pro Max simulator, or a different 6.9-inch iPhone.
+3. Look at every frame before committing it.
+
+How it drives the app: `frontend/scripts/store-shots/tour.js` is copied into
+the synced web folder of that one simulator build (`ios/App/App/public`,
+which git ignores and every `cap sync` rewrites) and removed again as soon as
+Xcode has copied it. It is never in `src/`, `dist/` or a release build. In
+the app, it types the demo sign-in into the real form, then opens each route
+in `frontend/scripts/store-shots/shots.mjs` (the shot list, in listing
+order) and waits for it to settle. The native bars follow the route as they
+do for a tap. Before the frames are taken, the script also creates one
+plant-sitter link ("Long weekend") through the same API the app calls,
+because frame 07 shows the page that link opens. Each PNG is checked for
+size and saved without an alpha channel.
+
+| Frame              | What it shows                                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-plants`        | The Plants tab with its large title and the tab bar, in the list view.                                                                       |
+| `02-home`          | Home: the day's counts, and "To do now" with the overdue Peace Lily up for grabs and today's jobs held by named members.                     |
+| `03-plant-detail`  | The Monstera, opened from the list: back chevron, the brand placeholder image (no photo, see below), plant actions, its room and house rule. |
+| `04-plant-care`    | Further down the same page: the curated care tips for _Monstera deliciosa_ and its watering task.                                            |
+| `05-tasks`         | Tasks, with the overdue job marked "Up for grabs" and the Claim, Ask family and Done actions.                                                |
+| `06-household`     | Household: who did the care in the last 30 days, who holds what now, and the four jobs nobody holds.                                         |
+| `07-sitter`        | The page a plant-sitter link opens: what needs doing and in which room, with Done buttons and no account, until the link expires.            |
+| `08-notifications` | Settings, Notifications: the email reminder, weekly digest and household email settings as switches.                                         |
 
 `npm run mobile:validate` runs in CI (the `Lint` job) and checks every size,
 every character limit, native/`package.json` version parity, and secrets
@@ -78,10 +125,13 @@ The artwork validates, but validating is not the same as selling:
   seed's `imageUrl` and `db.photos` are the two places to put them.
 - **No caption overlays.** These are raw device frames. Both stores allow
   captioned marketing frames and nearly every competitor uses them.
+- **The iPad and Play frames still show the web layout with the menu
+  drawer.** Only the iPhone set comes from the native app.
 - **No Android tablet screenshots.** iPad frames exist, so the app runs on a
   tablet. Play surfaces a large-screen quality warning and down-ranks tablet
   and Chromebook surfacing without 7"/10" frames.
-- **Four frames each.** Apple allows 10, Play allows 8.
+- **Four iPad and four Play frames.** Apple allows 10 per size and Play
+  allows 8. The iPhone set has 8.
 - **English-only listing for a bilingual app.** `frontend/src/i18n/locales/es`
   is a complete catalog at key parity with English, enforced by the i18n
   gates, but this directory only has `en-US.json`. Both stores localize
