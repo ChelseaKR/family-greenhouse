@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
+import { hasNativeFrame } from '@/lib/platform';
 
 /** How far the finger has to travel, after resistance, to refresh. */
 export const PULL_THRESHOLD_PX = 64;
@@ -96,7 +97,12 @@ export default function PullToRefreshGesture() {
           visible ? 'opacity-100' : 'opacity-0'
         )}
         style={{
-          top: `calc(env(safe-area-inset-top) + 4rem + ${offset - 40}px)`,
+          // Under the web header (4rem below the status bar), or, inside the
+          // iOS app's native frame, just under the navigation bar: there
+          // position: fixed already starts below the bar.
+          top: hasNativeFrame()
+            ? `${offset - 32}px`
+            : `calc(env(safe-area-inset-top) + 4rem + ${offset - 40}px)`,
         }}
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full border border-dew bg-paper shadow-card">

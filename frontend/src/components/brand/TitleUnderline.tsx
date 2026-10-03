@@ -16,6 +16,7 @@ export function TitleUnderline({ className }: TitleUnderlineProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      data-title-decor=""
     >
       <path d="M 5 9 Q 76 5 148 8 Q 196 10 235 7" strokeWidth="2.7" opacity="0.9" />
       <path

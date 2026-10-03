@@ -191,8 +191,10 @@ export function Layout() {
         </Dialog>
       </Transition.Root>
 
-      {/* Desktop sidebar — no drawer to close, so navigation is a no-op. */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
+      {/* Desktop sidebar — no drawer to close, so navigation is a no-op.
+          Inside the iOS app's native frame (an iPad is wide enough for it)
+          the system tab bar is the navigation instead. */}
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col native-frame:hidden!">
         <SidebarContent
           user={user}
           chatAvailable={chatAvailable}
@@ -202,7 +204,7 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-72">
+      <div className="lg:pl-72 native-frame:pl-0!">
         {/* Mobile header. Solid bg-paper (no /opacity + blur): a translucent
             sticky bar lets page text show through at reduced contrast while
             scrolling, which both fails WCAG AA for the underlying text and
@@ -214,7 +216,10 @@ export function Layout() {
         {/* At the iOS accessibility text sizes the wordmark wraps and the bar
             grows to about a quarter of the screen, so there it scrolls away
             with the page instead of covering that much of every screen. */}
-        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden large-text:static">
+        {/* Inside the iOS app's native frame the system navigation bar and
+            tab bar replace this header and the drawer it opens
+            (html[data-native-frame], set before the first paint). */}
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden large-text:static native-frame:hidden!">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"

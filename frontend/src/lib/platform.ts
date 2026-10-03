@@ -41,3 +41,32 @@ export function markNativePlatform(): void {
   if (!isNativeApp() || typeof document === 'undefined') return;
   document.documentElement.dataset.native = getNativePlatform();
 }
+
+/** The name the iOS app's native frame registers its plugin under. */
+export const NATIVE_CHROME_PLUGIN = 'NativeChrome';
+
+/**
+ * True inside the iOS app when its native frame is there: Apple's own tab bar
+ * and navigation bar around the web content (ios/App/App/NativeFrame*.swift).
+ * The app registers the NativeChrome plugin before the page loads, and the
+ * bridge lists every registered plugin in `Capacitor.PluginHeaders` at
+ * document start, so this is answered synchronously, before the first paint.
+ * Never true on the website or on Android.
+ */
+export function hasNativeFrame(): boolean {
+  if (getNativePlatform() !== 'ios') return false;
+  const headers = (capacitorGlobal() as { PluginHeaders?: Array<{ name?: string }> } | undefined)
+    ?.PluginHeaders;
+  return Array.isArray(headers) && headers.some((h) => h?.name === NATIVE_CHROME_PLUGIN);
+}
+
+/**
+ * Marks `<html data-native-frame>` when the native frame is there, once,
+ * before the first paint, so the web's own chrome (header, drawer, back
+ * links) is never drawn under the native bars, not even for a frame. On the
+ * website it does nothing.
+ */
+export function markNativeFrame(): void {
+  if (!hasNativeFrame() || typeof document === 'undefined') return;
+  document.documentElement.dataset.nativeFrame = '';
+}

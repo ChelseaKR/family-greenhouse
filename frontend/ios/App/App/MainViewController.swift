@@ -8,10 +8,31 @@ import Capacitor
 class MainViewController: CAPBridgeViewController {
     /// Kept for the life of the controller: dropping them stops the updates.
     private var backSwipeObservations: [NSKeyValueObservation] = []
+    private let nativeChrome = NativeChromePlugin()
+    /// Apple's tab bar and navigation bar around the web view
+    /// (NativeFrameController.swift). Built in viewDidLoad.
+    private var nativeFrame: NativeFrameController?
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(PrintPlugin())
+        // Registered before the page loads, so the page knows at its first
+        // paint that the native bars are there (lib/platform.ts
+        // hasNativeFrame) and never draws its own header.
+        bridge?.registerPluginInstance(nativeChrome)
         observeBackSwipe()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        guard let webView = webView else { return }
+        let frame = NativeFrameController(host: self, webView: webView, plugin: nativeChrome)
+        frame.install()
+        frame.onChromeVisibilityChange = { [weak self] in self?.updateBackSwipe() }
+        nativeChrome.frame = frame
+        nativeFrame = frame
+        // The launch screen is put up asynchronously when its plugin loads,
+        // inside the web view; this runs after it and lifts it over the bars.
+        DispatchQueue.main.async { frame.liftLaunchScreen() }
     }
 
     /// The iOS edge swipe back (and forward), over the app's own history.
@@ -43,7 +64,8 @@ class MainViewController: CAPBridgeViewController {
         guard let webView = webView else { return }
         webView.allowsBackForwardNavigationGestures = BackSwipePolicy.allows(
             from: webView.url,
-            to: webView.backForwardList.backItem?.url
+            to: webView.backForwardList.backItem?.url,
+            nativeBarsShown: nativeFrame?.chromeVisible ?? false
         )
     }
 }
@@ -56,6 +78,9 @@ class MainViewController: CAPBridgeViewController {
 ///   no swipe. The shell never leaves it today; this makes sure a swipe never
 ///   can.
 /// - `/`, which only ever redirects (to sign-in or the dashboard): no swipe.
+/// - The native frame's bars showing: no web swipe. The navigation
+///   controller's own edge swipe goes back instead, and only within the
+///   tab's stack, which never holds sign-in, setup or `/`.
 /// - Sign-in and first-run setup on one side, the signed-in app on the other:
 ///   no swipe. After signing in, the page behind is a sign-in or setup screen
 ///   that would redirect straight back (or show sign-in to someone who is
@@ -76,7 +101,10 @@ enum BackSwipePolicy {
         "/welcome",
     ]
 
-    static func allows(from current: URL?, to back: URL?) -> Bool {
+    static func allows(from current: URL?, to back: URL?, nativeBarsShown: Bool = false) -> Bool {
+        // With the native bars showing, the swipe belongs to the tab's
+        // navigation controller, which goes back within the tab only.
+        if nativeBarsShown { return false }
         guard let current = current, let back = back else { return false }
         guard back.scheme == current.scheme, back.host == current.host else { return false }
         let backPath = normalized(back.path)

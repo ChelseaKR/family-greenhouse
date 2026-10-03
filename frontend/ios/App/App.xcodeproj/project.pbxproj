@@ -18,6 +18,9 @@
 		A11E00010000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A11E00020000000000000002 /* PrivacyInfo.xcprivacy */; };
 		A11E00040000000000000004 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00050000000000000005 /* MainViewController.swift */; };
 		A11E00060000000000000006 /* PrintPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00070000000000000007 /* PrintPlugin.swift */; };
+		A11E00080000000000000008 /* NativeFrameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00090000000000000009 /* NativeFrameModel.swift */; };
+		A11E000A000000000000000A /* NativeFrameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000B000000000000000B /* NativeFrameController.swift */; };
+		A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000D000000000000000D /* NativeChromePlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +38,9 @@
 		A11E00030000000000000003 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		A11E00050000000000000005 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A11E00070000000000000007 /* PrintPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPlugin.swift; sourceTree = "<group>"; };
+		A11E00090000000000000009 /* NativeFrameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFrameModel.swift; sourceTree = "<group>"; };
+		A11E000B000000000000000B /* NativeFrameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFrameController.swift; sourceTree = "<group>"; };
+		A11E000D000000000000000D /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,6 +79,9 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				A11E00050000000000000005 /* MainViewController.swift */,
 				A11E00070000000000000007 /* PrintPlugin.swift */,
+				A11E00090000000000000009 /* NativeFrameModel.swift */,
+				A11E000B000000000000000B /* NativeFrameController.swift */,
+				A11E000D000000000000000D /* NativeChromePlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -170,6 +179,9 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				A11E00040000000000000004 /* MainViewController.swift in Sources */,
 				A11E00060000000000000006 /* PrintPlugin.swift in Sources */,
+				A11E00080000000000000008 /* NativeFrameModel.swift in Sources */,
+				A11E000A000000000000000A /* NativeFrameController.swift in Sources */,
+				A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

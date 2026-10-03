@@ -107,7 +107,7 @@ export function PlantPassportPage() {
 
   return (
     <div className="min-h-screen bg-paper print:min-h-0 print:bg-white">
-      <header className="border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] print:hidden">
+      <header className="border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] print:hidden native-frame:hidden!">
         <div className="mx-auto flex max-w-3xl items-center px-4 py-3 sm:px-6">
           <Link
             to={backTo}

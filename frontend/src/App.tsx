@@ -10,6 +10,7 @@ import { Toaster } from '@/components/Toaster';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
 import { NativeLaunchReady } from '@/components/NativeLaunchReady';
+import { NativeFrame } from '@/components/NativeFrame';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useNativeTextSize } from '@/hooks/useNativeTextSize';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
@@ -345,6 +346,9 @@ function App() {
       </RouteErrorBoundary>
       {/* After the routed content, so its effect reads the new page's title. */}
       <GoogleAnalyticsPageViews />
+      {/* iOS app only: keeps the native tab and navigation bars in step with
+          the route. Nothing on the website. */}
+      <NativeFrame />
     </>
   );
 }

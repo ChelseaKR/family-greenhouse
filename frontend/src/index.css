@@ -21,6 +21,14 @@
    --------------------------------------------------------------------- */
 @custom-variant large-text (&:where(html[data-text-size='large'] *));
 
+/* Inside the iOS app's native frame: Apple's tab bar and navigation bar,
+   drawn by Swift around the web content (ios/App/App/NativeFrame*.swift).
+   `<html data-native-frame>` is set by lib/platform.ts `markNativeFrame`
+   before the first paint, only there, so `native-frame:` utilities (used
+   with `!`, to outrank the responsive display utilities beside them) hide
+   the web's own header, drawer and back links in the app and nowhere else. */
+@custom-variant native-frame (&:where(html[data-native-frame] *));
+
 /* A word wider than its box at 312% breaks rather than running off the
    edge. `break-word`, not `anywhere`, here and in the two rules below:
    `anywhere` also shrinks every flex item's minimum width to one letter, so
@@ -311,6 +319,47 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* ---------------------------------------------------------------------
+   Inside the iOS app's native frame (`html[data-native-frame]`). The
+   navigation bar shows the screen's title. When it shows the same words as
+   the page's h1, NativeFrameBridge marks that h1 `data-native-title="bar"`:
+   it is then hidden from sight but stays in the page, so VoiceOver still
+   reads it and the launch screen still finds `#main-content h1`. Its eyebrow
+   and hand-drawn underline (`data-title-decor`) go with it.
+   --------------------------------------------------------------------- */
+@layer base {
+  /* Measured in the simulator: with the bars there, WebKit reports
+     env(safe-area-inset-top) and -bottom as the full bar heights (116px and
+     83px on an iPhone 17 Pro) while the scroll view already insets the page
+     by exactly that much, and position: fixed already lays out between the
+     bars. So inside the frame nothing pads by env() top or bottom again. The
+     page behind the glass bars is paper, not the launch screen's forest. */
+  html[data-native-frame] {
+    background-color: var(--color-paper);
+  }
+
+  html[data-native-frame] body {
+    padding-bottom: 0;
+  }
+
+  html[data-native-frame] h1[data-native-title='bar'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  html[data-native-frame] :has(> h1[data-native-title='bar']) > [data-title-decor],
+  html[data-native-frame] :has(> * > h1[data-native-title='bar']) > [data-title-decor] {
+    display: none;
+  }
+}
+
 @layer components {
   /* v4 note: `@apply` only accepts real utilities now, so the variants can
      no longer `@apply btn` the way they did under v3. The shared base is
@@ -438,5 +487,15 @@ html[data-text-size='large'] .whitespace-nowrap {
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.82),
       0 18px 50px -36px rgb(23 52 4 / 0.42);
+  }
+}
+
+/* Inside the iOS app's native frame, the dialogs' safe-area padding would
+   pad a second time (see "Inside the iOS app's native frame" above). In the
+   utilities layer, so it outranks the utility it undoes. */
+@layer utilities {
+  html[data-native-frame] .safe-area-y {
+    padding-top: 0;
+    padding-bottom: 0;
   }
 }

@@ -247,7 +247,7 @@ export function PlantDetailPage() {
       <div className="space-y-6">
         <Link
           to="/plants"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
         >
           <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
           Back to plants
@@ -264,7 +264,7 @@ export function PlantDetailPage() {
     <div className="space-y-6">
       <Link
         to="/plants"
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
         Back to plants
