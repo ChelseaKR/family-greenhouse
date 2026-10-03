@@ -303,7 +303,10 @@ export function PlantDetailPage() {
         </div>
 
         <div className="flex-1">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          {/* Stacked at the iOS accessibility text sizes, like PageHeader: side by
+              side, the no-wrap action buttons widened the page past an iPad's
+              screen at AX5. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between large-text:flex-col">
             <div>
               <div className="flex items-center gap-2 large-text:flex-wrap">
                 <h1 className="min-w-0 font-serif text-3xl text-ink leading-tight tracking-tight">
@@ -322,7 +325,7 @@ export function PlantDetailPage() {
                 <p className="text-xs text-gray-500">{t('plants.identify.fromPhoto')}</p>
               )}
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end large-text:grid-cols-1">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end large-text:grid large-text:w-full large-text:grid-cols-1">
               {(plant.status ?? 'active') === 'active' && (
                 <>
                   <Button

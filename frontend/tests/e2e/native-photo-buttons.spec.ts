@@ -61,6 +61,25 @@ async function applyLargestTextSize(page: Page) {
   }, percent);
 }
 
+/**
+ * The page is no wider than the screen. At AX5 on an iPad, the Plants and
+ * plant page headers once kept their no-wrap action buttons in one row beside
+ * the title, 1007px wide on a 744px iPad mini. A mobile engine then grows the
+ * layout viewport to fit, and the bottom of the page falls outside what can be
+ * scrolled into view: the last plant card could not be tapped. It went unseen
+ * while a memorial footer sat below the last card; with that footer moved to
+ * Settings → About in the apps, the click on the card timed out.
+ */
+async function expectNoSidewaysOverflow(page: Page, where: string) {
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.scrollingElement!.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(scrollWidth, `${where}: the page is wider than the screen`).toBeLessThanOrEqual(
+    clientWidth
+  );
+}
+
 interface Findings {
   /** Rendered size of a 16px probe over 16: proves the text size applied. */
   applied: number;
@@ -182,8 +201,10 @@ for (const device of DEVICES) {
         await page.goto('/plants');
         const monstera = page.getByRole('link', { name: /monstera/i }).first();
         await monstera.waitFor({ state: 'visible', timeout: 15000 });
+        await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, Plants`);
         await monstera.click();
         await expect(page).toHaveURL(/\/plants\/[^/]+$/);
+        await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page`);
 
         const screens = [
           { screen: 'plant page', go: () => Promise.resolve() },
