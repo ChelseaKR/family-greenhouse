@@ -351,10 +351,6 @@ export const CARE_GUIDES: CareGuide[] = [
         q: 'Why are my spider plant’s leaf tips turning brown?',
         a: 'Usually fluoride and chlorine in tap water, or very dry air. Switch to distilled, filtered, or rain water and new growth comes in clean. Snip existing brown tips off at an angle; they don’t recover.',
       },
-      {
-        q: 'How do I propagate spider plant babies (spiderettes)?',
-        a: 'Snip a plantlet off the runner and sit its base in a glass of water; roots show within a week or two. Or pin it into a pot of soil while still attached and cut the runner once it takes. Either way works almost every time.',
-      },
     ],
   },
   {
