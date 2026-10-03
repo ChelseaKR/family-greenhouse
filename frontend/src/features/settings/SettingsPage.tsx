@@ -15,57 +15,22 @@ import { TrashSettings } from './TrashSettings';
 import { HouseholdChannelSettings } from './HouseholdChannelSettings';
 import { SecuritySettings } from './SecuritySettings';
 import { AboutSettings } from './AboutSettings';
-import { isNativeApp } from '@/lib/platform';
+import { hasNativeFrame, isNativeApp } from '@/lib/platform';
+import {
+  NATIVE_SETTINGS_SECTIONS,
+  SETTINGS_SECTIONS,
+  SETTINGS_SECTION_LABEL,
+  settingsSectionPath,
+  type SettingsSection,
+} from './settingsSections';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
-type Tab =
-  | 'preferences'
-  | 'notifications'
-  | 'plant-tags'
-  | 'billing'
-  | 'refer'
-  | 'kiosk'
-  | 'api-keys'
-  | 'trash'
-  | 'security'
-  | 'account'
-  | 'about';
+type Tab = SettingsSection;
 
-const TABS: Tab[] = [
-  'preferences',
-  'notifications',
-  'plant-tags',
-  'billing',
-  'refer',
-  'kiosk',
-  'api-keys',
-  'trash',
-  // Security sits before Account so Account stays the last tab (End key).
-  'security',
-  'account',
-];
-
-/**
- * The apps add About, last: it holds the memorial line, which in the apps
- * lives there and nowhere else (owner decision 2026-10-02). The website has
- * no About section; its pages close with the line instead.
- */
-const NATIVE_TABS: Tab[] = [...TABS, 'about'];
-
-const TAB_LABEL: Record<Tab, string> = {
-  preferences: 'settings.tabs.preferences',
-  notifications: 'settings.tabs.notifications',
-  'plant-tags': 'settings.tabs.plantTags',
-  billing: 'settings.tabs.billing',
-  refer: 'settings.tabs.refer',
-  kiosk: 'settings.tabs.kiosk',
-  'api-keys': 'settings.tabs.apiKeys',
-  trash: 'settings.tabs.trash',
-  account: 'settings.tabs.account',
-  security: 'settings.tabs.security',
-  about: 'settings.tabs.about',
-};
+const TABS = SETTINGS_SECTIONS;
+const NATIVE_TABS = NATIVE_SETTINGS_SECTIONS;
+const TAB_LABEL = SETTINGS_SECTION_LABEL;
 
 export function SettingsPage() {
   useDocumentTitle('Settings');
@@ -88,11 +53,7 @@ export function SettingsPage() {
   }, [tab]);
 
   function selectTab(nextTab: Tab) {
-    if (nextTab === 'billing') {
-      navigate('/settings/billing');
-      return;
-    }
-    navigate(nextTab === 'preferences' ? '/settings' : `/settings?section=${nextTab}`);
+    navigate(settingsSectionPath(nextTab));
   }
 
   function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, currentTab: Tab) {
@@ -109,15 +70,25 @@ export function SettingsPage() {
     requestAnimationFrame(() => document.getElementById(`settings-tab-${nextTab}`)?.focus());
   }
 
+  // In the iOS app, Settings is a native list of these sections (More ->
+  // Settings), and each section is its own screen named in the navigation
+  // bar: the page is titled with the section, and the web's section picker
+  // and tabs are not drawn.
+  const framed = hasNativeFrame();
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Your account"
-        title={t('settings.title')}
-        description={t('settings.description')}
-      />
+      {framed ? (
+        <PageHeader title={t(TAB_LABEL[tab])} />
+      ) : (
+        <PageHeader
+          eyebrow="Your account"
+          title={t('settings.title')}
+          description={t('settings.description')}
+        />
+      )}
 
-      <label className="block sm:hidden">
+      <label className="block sm:hidden native-frame:hidden">
         <span className="label">Settings section</span>
         <select
           className="input"
@@ -132,7 +103,7 @@ export function SettingsPage() {
         </select>
       </label>
 
-      <div className="hidden border-b border-primary-100/80 sm:block">
+      <div className="hidden border-b border-primary-100/80 sm:block native-frame:hidden">
         <nav aria-label="Settings sections">
           <div
             className="-mb-px flex gap-3 overflow-x-auto sm:gap-6"

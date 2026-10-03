@@ -19,7 +19,8 @@ struct FrameBarButton: Equatable {
 
 /// One screen in a tab's back stack.
 struct FrameEntry: Equatable {
-    /// pathname + search. Empty for More's first screen, which is native.
+    /// pathname + search. Empty for More's first screen, which is native;
+    /// `native:<id>` for another native list pushed on a tab (Settings).
     var path: String
     /// React Router's location key, or "" for a screen the web never showed
     /// yet (a tab's root placed under a deep link).
@@ -28,8 +29,11 @@ struct FrameEntry: Equatable {
     var largeTitle: Bool
     var rightButton: FrameBarButton?
 
-    /// More's first screen: the native list.
-    var isNativeList: Bool { path.isEmpty }
+    /// A native list (More's first screen, or Settings), not a web page.
+    /// The web never shows these paths, so no web report ever matches one.
+    var isNativeList: Bool { path.isEmpty || path.hasPrefix(FrameEntry.nativeListPrefix) }
+
+    static let nativeListPrefix = "native:"
 
     static func nativeList(title: String) -> FrameEntry {
         FrameEntry(path: "", key: "", title: title, largeTitle: true, rightButton: nil)
@@ -227,9 +231,10 @@ struct TabHistory {
         }
 
         // A replaced screen takes the top's place, unless the top is the
-        // tab's root: a tab's root is never replaced away.
+        // tab's root or a native list: neither is ever replaced away.
         let topIsRoot = stack.count == 1
-        if report.navigation != .push && !topIsRoot {
+        let topIsNative = stack[stack.count - 1].isNativeList
+        if report.navigation != .push && !topIsRoot && !topIsNative {
             stack[stack.count - 1] = entry
             stacks[tab] = stack
             return .replaceTop
@@ -261,6 +266,18 @@ struct TabHistory {
         }
         guard let top = stacks[tab]?.last else { return (.showTab(tab), nil, false) }
         return (.showTab(tab), top.isNativeList ? nil : top.path, false)
+    }
+
+    /// A native list (`native:<id>`) pushed on the current tab from a row of
+    /// the list showing (More -> Settings). The web is not told: its page
+    /// does not change until a row of the new list opens one.
+    mutating func pushNativeList(path: String, title: String) -> FrameChange {
+        guard path.hasPrefix(FrameEntry.nativeListPrefix), let tab = selected,
+              var stack = stacks[tab], !stack.isEmpty else { return .none }
+        if stack.last?.path == path { return .none }
+        stack.append(FrameEntry(path: path, key: "", title: title, largeTitle: false, rightButton: nil))
+        stacks[tab] = stack
+        return .push
     }
 
     /// The navigation bar's back button or the edge swipe left `depth`

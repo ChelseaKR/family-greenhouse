@@ -6,6 +6,9 @@ import {
   MORE_SUPPORT,
   NATIVE_TABS,
   SIGN_IN_AND_SETUP_PATHS,
+  SETTINGS_LIST_GROUPS,
+  SETTINGS_LIST_PATH,
+  SETTINGS_ROW_PREFIX,
   SIGN_OUT_ID,
   UNMAPPED_PREFIXES,
   buildConfiguration,
@@ -17,7 +20,11 @@ import {
   type NativeChromeEvents,
   type NativeChromeUpdate,
 } from '@/config/nativeFrame';
-import { hasNativeFrame, markNativeFrame } from '@/lib/platform';
+import { hasNativeFrame, markNativeFrame, nativeSwitchRole } from '@/lib/platform';
+import {
+  NATIVE_SETTINGS_SECTIONS,
+  settingsSectionPath,
+} from '@/features/settings/settingsSections';
 
 /**
  * The iOS app's native frame, from the web's side: the route -> tab map, and
@@ -33,6 +40,8 @@ const app = read('src/App.tsx');
 const layout = read('src/components/Layout.tsx');
 const plugin = read('ios/App/App/NativeChromePlugin.swift');
 const main = read('ios/App/App/MainViewController.swift');
+const controller = read('ios/App/App/NativeFrameController.swift');
+const model = read('ios/App/App/NativeFrameModel.swift');
 const t = (key: string) => key;
 
 const routes = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
@@ -121,7 +130,13 @@ describe('More keeps every drawer destination', () => {
   it('has a tab or a More row for every link in the web drawer, and Sign out', () => {
     const drawer = [...layout.matchAll(/href: '([^']+)'/g)].map((m) => m[1]);
     expect(drawer.length).toBeGreaterThanOrEqual(9);
-    const more = [...MORE_DESTINATIONS, ...MORE_SUPPORT].map((d) => d.path);
+    // Settings is reached through its native list, whose rows open the pages.
+    const more = [
+      ...[...MORE_DESTINATIONS, ...MORE_SUPPORT].map((d) => d.path),
+      ...buildConfiguration(t, [], null).settings.sections.flatMap((s) =>
+        s.items.map((i) => i.path)
+      ),
+    ];
     for (const href of drawer) {
       const covered = NATIVE_TABS.some((tab) => tab.root === href) || more.includes(href);
       expect(covered, `drawer link ${href}`).toBe(true);
@@ -334,5 +349,74 @@ describe('hasNativeFrame / markNativeFrame', () => {
     shell('ios', ['Print']);
     markNativeFrame();
     expect(document.documentElement.hasAttribute('data-native-frame')).toBe(false);
+  });
+});
+
+describe('Settings as a native list on More', () => {
+  const config = buildConfiguration(t, [], null);
+  const rows = config.settings.sections.flatMap((s) => s.items);
+
+  it("More's Settings row opens the native list, by the path Swift knows", () => {
+    const row = config.moreSections.flatMap((s) => s.items).find((i) => i.id === 'settings');
+    expect(row?.path).toBe(SETTINGS_LIST_PATH);
+    expect(controller).toContain(
+      'static let settingsListPath = "\\(FrameEntry.nativeListPrefix)settings"'
+    );
+    expect(model).toContain('static let nativeListPrefix = "native:"');
+    expect(SETTINGS_LIST_PATH).toBe('native:settings');
+  });
+
+  it('lists every section the app has, once, each opening its own page', () => {
+    expect(config.settings.title).toBe('nav.settings');
+    const listed = SETTINGS_LIST_GROUPS.flat().map((r) => r.section);
+    expect([...listed].sort()).toEqual([...NATIVE_SETTINGS_SECTIONS].sort());
+    for (const section of NATIVE_SETTINGS_SECTIONS) {
+      const row = rows.find((r) => r.id === `${SETTINGS_ROW_PREFIX}${section}`);
+      expect(row, section).toBeDefined();
+      expect(row!.path).toBe(settingsSectionPath(section));
+      expect(row!.path!.startsWith('/settings')).toBe(true);
+      expect(row!.symbol, section).toMatch(/\S/);
+      expect(row!.destructive ?? false).toBe(false);
+    }
+    // Plan status keeps its own route; About is last, as #903 built it.
+    expect(settingsSectionPath('billing')).toBe('/settings/billing');
+    expect(SETTINGS_LIST_GROUPS.at(-1)!.map((r) => r.section)).toEqual(['about']);
+  });
+
+  it('Swift reads the settings list by the same names', () => {
+    const body = plugin.slice(
+      plugin.indexOf('@objc func configure'),
+      plugin.indexOf('@objc func update(')
+    );
+    expect(body).toContain('call.getObject("settings")');
+    for (const key of Object.keys(config.settings)) expect(body).toContain(`settings["${key}"]`);
+  });
+});
+
+describe('nativeSwitchRole', () => {
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it('is a switch inside the frame, and nothing on the website, on Android or without the frame', () => {
+    expect(nativeSwitchRole()).toEqual({});
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      PluginHeaders: [{ name: 'NativeChrome', methods: [] }],
+    };
+    expect(nativeSwitchRole()).toEqual({});
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      PluginHeaders: [],
+    };
+    expect(nativeSwitchRole()).toEqual({});
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      PluginHeaders: [{ name: 'NativeChrome', methods: [] }],
+    };
+    expect(nativeSwitchRole()).toEqual({ role: 'switch' });
   });
 });

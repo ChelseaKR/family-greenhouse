@@ -32,6 +32,10 @@ struct FrameConfiguration {
     let signOutTitle: String
     let signOutConfirm: String
     let signOutCancel: String
+    /// Settings as a native list, pushed on More from its Settings row
+    /// (`native:settings`); each row opens that section's web page.
+    let settingsTitle: String
+    let settingsSections: [MoreSection]
 }
 
 enum FrameColors {
@@ -113,16 +117,17 @@ final class WebScreenController: UIViewController {
 }
 
 /// More's first screen: everything the web drawer held that is not a tab.
+/// Also Settings' list of sections, pushed on More (inline title).
 final class MoreListController: UITableViewController {
     weak var frame: NativeFrameController?
     var sections: [MoreSection] = [] {
         didSet { if isViewLoaded { tableView.reloadData() } }
     }
 
-    init(frame: NativeFrameController?) {
+    init(frame: NativeFrameController?, largeTitle: Bool = true) {
         self.frame = frame
         super.init(style: .insetGrouped)
-        navigationItem.largeTitleDisplayMode = .always
+        navigationItem.largeTitleDisplayMode = largeTitle ? .always : .never
     }
 
     @available(*, unavailable)
@@ -179,6 +184,9 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
     let tabBarController = UITabBarController()
     private var navigators: [String: UINavigationController] = [:]
     private(set) var moreList: MoreListController?
+    /// Settings' sections (`native:settings`), made the first time it opens.
+    private(set) var settingsList: MoreListController?
+    static let settingsListPath = "\(FrameEntry.nativeListPrefix)settings"
     private var history = TabHistory(tabs: [])
     private var configuration: FrameConfiguration?
     private var waiting: [FrameReport] = []
@@ -295,6 +303,8 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         }
         moreList?.title = configuration.moreTitle
         moreList?.sections = configuration.moreSections
+        settingsList?.title = configuration.settingsTitle
+        settingsList?.sections = configuration.settingsSections
 
         let queued = waiting
         waiting = []
@@ -353,8 +363,8 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         let current = navigator.viewControllers
         var next: [UIViewController] = []
         for (index, entry) in model.enumerated() {
-            if entry.isNativeList, let list = moreList {
-                next.append(list)
+            if entry.isNativeList {
+                if let list = nativeList(for: entry) { next.append(list) }
                 continue
             }
             if index < current.count, let screen = current[index] as? WebScreenController,
@@ -370,6 +380,21 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         if next.map(ObjectIdentifier.init) != current.map(ObjectIdentifier.init) {
             navigator.setViewControllers(next, animated: false)
         }
+    }
+
+    /// The controller for a native list entry: More's first screen, or Settings.
+    private func nativeList(for entry: FrameEntry) -> MoreListController? {
+        if entry.path.isEmpty { return moreList }
+        guard entry.path == NativeFrameController.settingsListPath, let configuration = configuration else {
+            return nil
+        }
+        if settingsList == nil {
+            let list = MoreListController(frame: self, largeTitle: false)
+            list.title = configuration.settingsTitle
+            list.sections = configuration.settingsSections
+            settingsList = list
+        }
+        return settingsList
     }
 
     var selectedNavigator: UINavigationController? {
@@ -409,6 +434,15 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
             }
         case .push:
             guard let navigator = selectedNavigator, let entry = history.top else { return }
+            if entry.isNativeList {
+                // A native list from a row of the list showing: the page
+                // has not changed, and the web view stays where it is.
+                leaveLiveScreen(pageAlreadyChanged: false)
+                if let list = nativeList(for: entry), navigator.topViewController !== list {
+                    navigator.pushViewController(list, animated: !reduceMotion)
+                }
+                return
+            }
             leaveLiveScreen(pageAlreadyChanged: true)
             let screen = WebScreenController(entry: entry, frame: self)
             navigator.pushViewController(screen, animated: !reduceMotion)
@@ -690,6 +724,10 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
                 popover.sourceRect = cell.bounds
             }
             host?.present(sheet, animated: !reduceMotion)
+            return
+        }
+        if let path = item.path, path.hasPrefix(FrameEntry.nativeListPrefix) {
+            render(history.pushNativeList(path: path, title: item.title))
             return
         }
         plugin?.sendMoreSelect(id: item.id, path: item.path)

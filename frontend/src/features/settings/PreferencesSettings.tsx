@@ -7,6 +7,7 @@ import { ensureLanguageCatalog, isRTL, SUPPORTED_LANGS } from '@/i18n';
 import { analyticsOptOutStored } from '@/services/analytics';
 import { setAnalyticsPreference } from '@/services/googleAnalytics';
 import clsx from 'clsx';
+import { nativeSwitchRole } from '@/lib/platform';
 
 const DENSITY_OPTIONS: Density[] = ['cozy', 'compact'];
 const LANGUAGE_LABELS: Record<LangCode, string> = {
@@ -149,6 +150,7 @@ export function PreferencesSettings() {
               </p>
             </div>
             <input
+              {...nativeSwitchRole()}
               id="analytics-shared"
               type="checkbox"
               className="mt-1 h-7 w-7 shrink-0 accent-primary-700"

@@ -20,7 +20,7 @@ import {
   type PreferencesUpdate,
 } from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, nativeSwitchRole } from '@/lib/platform';
 import { useNativePush } from '@/hooks/useNativePush';
 import { resolveBrowserTimeZone } from '@/utils/timeZone';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -572,6 +572,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">Email notifications</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.email}
@@ -621,6 +622,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.weeklyDigestTitle')}</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={(prefs.weeklyDigest ?? true) && prefs.email}
@@ -654,6 +656,7 @@ export function NotificationSettings() {
                 <label className="inline-flex items-center cursor-pointer">
                   <span className="sr-only">{t(`notifications.${toggle.titleKey}`)}</span>
                   <input
+                    {...nativeSwitchRole()}
                     type="checkbox"
                     className="h-5 w-5 accent-primary-700"
                     checked={(prefs[toggle.key] ?? true) && prefs.email}
@@ -681,6 +684,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.yearRecapTitle')}</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={(prefs.yearRecap ?? true) && prefs.email}
@@ -728,6 +732,7 @@ export function NotificationSettings() {
             <label className="inline-flex items-center cursor-pointer">
               <span className="sr-only">SMS notifications</span>
               <input
+                {...nativeSwitchRole()}
                 type="checkbox"
                 className="h-5 w-5 accent-primary-700"
                 checked={prefs.sms}
@@ -821,6 +826,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">Pest alerts</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.pestAlerts ?? false}
