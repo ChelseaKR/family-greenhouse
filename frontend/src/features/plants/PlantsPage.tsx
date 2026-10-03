@@ -40,6 +40,7 @@ import { SpaceBrowseView } from './SpaceBrowseView';
 import { SpaceManagerPanel } from './SpaceManagerPanel';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { PlantCareList } from './PlantCareList';
+import { usePlantRowActions } from './usePlantRowActions';
 import { ToolbarMenu, type MenuGroupModel } from './ToolbarMenu';
 import { useNativeBarTools } from './useNativeBarTools';
 import { careWho, groupPlantCare, plantCare, type GroupBy } from './plantCare';
@@ -82,6 +83,7 @@ export function PlantsPage() {
   // so existing invalidations + the add-flow's cache read keep working.
   const [view, setView] = useState<'active' | 'past'>('active');
   const householdId = useActiveHouseholdId();
+  const rowActions = usePlantRowActions(householdId, myUserId);
 
   const {
     data: plants,
@@ -438,6 +440,7 @@ export function PlantsPage() {
           </Link>
         </div>
         {dialogs}
+        {rowActions.elements}
 
         {emptyHousehold && !nativeBar && (
           <div className="flex justify-end">
@@ -540,6 +543,7 @@ export function PlantsPage() {
             past={view === 'past'}
             myUserId={myUserId}
             withCuttings={plantsWithCuttings}
+            actions={rowActions}
           />
         )}
       </div>

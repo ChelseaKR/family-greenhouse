@@ -51,4 +51,24 @@ describe('Toaster actions', () => {
     vi.advanceTimersByTime(6_000);
     expect(useToastStore.getState().toasts).toEqual([]);
   });
+
+  it('ends a toast when its own duration says, and answers its id for dismiss', () => {
+    vi.useFakeTimers();
+    try {
+      const id = toast.success('Done: Water, Fern', {
+        durationMs: 5000,
+        action: { label: 'Undo', onAction: () => undefined },
+      });
+      expect(useToastStore.getState().toasts.map((t) => t.id)).toEqual([id]);
+      vi.advanceTimersByTime(4999);
+      expect(useToastStore.getState().toasts).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(useToastStore.getState().toasts).toHaveLength(0);
+      const second = toast.info('Snoozed');
+      useToastStore.getState().dismiss(second);
+      expect(useToastStore.getState().toasts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -28,6 +28,7 @@
     "householdChannel.platform.discord",
     "householdChannel.platform.slack",
     "householdChannel.platform.matrix",
-    "plants.detail.doAria"
+    "plants.detail.doAria",
+    "plants.list.doAria"
   ]
 }

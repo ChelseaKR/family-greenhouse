@@ -269,3 +269,56 @@ test.describe('an empty phone list with past plants', () => {
     await expect(page.getByRole('link', { name: /Gone Fern/ })).toBeVisible();
   });
 });
+
+test.describe('Done with Undo on the phone website', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  async function freshAccount() {
+    return provisionAccount({
+      emailPrefix: 'today-first-undo',
+      plant: { name: 'Undo Fern' },
+      waterTask: { frequency: 7 },
+    });
+  }
+
+  test('an undone water sends no completion, and the plant is still due', async ({ page }) => {
+    const acct = await freshAccount();
+    const completions: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+        completions.push(req.url());
+      }
+    });
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto('/plants');
+    await page.getByRole('button', { name: 'Water Undo Fern' }).click();
+    await page.getByRole('button', { name: 'Undo: Water Undo Fern' }).click();
+    await page.waitForTimeout(6500);
+    expect(completions).toEqual([]);
+    await page.reload();
+    await expect(page.getByRole('link', { name: /^Undo Fern, Water today/ })).toBeVisible();
+  });
+
+  test('a water left alone is sent once, after the window, and the plant moves on', async ({
+    page,
+  }) => {
+    const acct = await freshAccount();
+    const completions: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+        completions.push(req.url());
+      }
+    });
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto('/plants');
+    await page.getByRole('button', { name: 'Water Undo Fern' }).click();
+    await expect(page.getByText('Done: Water, Undo Fern')).toBeVisible();
+    await page.waitForTimeout(3000);
+    expect(completions).toEqual([]);
+    await expect.poll(() => completions.length, { timeout: 6000 }).toBe(1);
+    await page.waitForTimeout(2000);
+    expect(completions).toHaveLength(1);
+    await page.reload();
+    await expect(page.getByRole('link', { name: /^Undo Fern, Water in 7 days/ })).toBeVisible();
+  });
+});
