@@ -8,6 +8,7 @@ import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
 import * as sitterService from '../../services/sitterService.js';
 import { buildSitterBrief } from '../../services/sitterBrief.js';
+import { verdictModeFromQuery } from '../../models/petToxicity.js';
 import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
 import { sitterPhotoRoutes } from './sitterPhotos.js';
 import * as caretakerPublic from '../caretakers/public.js';
@@ -1043,7 +1044,9 @@ export const getSitterBrief = createHandler(
     if (!sitterBriefIncluded(plan)) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    return successResponse(await buildSitterBrief(link));
+    return successResponse(
+      await buildSitterBrief(link, new Date(), verdictModeFromQuery(event.queryStringParameters))
+    );
   }
   // Anonymous, like the task view. The brief is a heavier read (plants +
   // spaces + tasks), so the per-IP allowance is tighter than the 60/min list.

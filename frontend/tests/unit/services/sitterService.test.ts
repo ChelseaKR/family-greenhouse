@@ -124,3 +124,45 @@ describe('sitterService.completeTask', () => {
     );
   });
 });
+
+describe('sitterService.getBrief pet verdicts', () => {
+  it('opts in to unknown verdicts and normalizes what comes back', async () => {
+    let requested = '';
+    server.use(
+      http.get(`${API}/sitter/:token/brief`, ({ request }) => {
+        requested = request.url;
+        return HttpResponse.json({
+          label: null,
+          startsAt: '',
+          expiresAt: '',
+          plants: [
+            {
+              plantId: 'p1',
+              name: 'Zed',
+              petSafety: {
+                slug: 'zz-plant',
+                commonName: 'ZZ plant',
+                scientificName: 'Zamioculcas zamiifolia',
+                cats: 'safe',
+                dogs: 'unknown',
+                note: 'uncited prose',
+                matchedOn: 'Zed',
+              },
+              tasks: [],
+            },
+          ],
+        });
+      })
+    );
+    const brief = await sitterService.getBrief('tok');
+    expect(new URL(requested).searchParams.get('unknown')).toBe('1');
+    // 'safe' is no verdict this bundle knows: it arrives as unknown, and the
+    // uncited note is dropped.
+    expect(brief.plants[0]!.petSafety).toMatchObject({
+      cats: 'unknown',
+      dogs: 'unknown',
+      note: null,
+      matchedOn: 'Zed',
+    });
+  });
+});

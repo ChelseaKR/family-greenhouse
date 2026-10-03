@@ -8,6 +8,11 @@ import {
   type LooseEntry,
 } from '@/features/petsafe/plantSafetyPages';
 import type { CareGuide } from './careGuides';
+import i18n from '@/i18n';
+import { petCaution, type PetVerdict } from '@/features/petsafe/petVerdict';
+import { ASPCA_POISON_CONTROL_PHONE, nameInSentence, sentenceName } from './plantNames';
+
+export { ASPCA_POISON_CONTROL_PHONE, nameInSentence, sentenceName };
 
 /**
  * What a care guide may say about pet toxicity, and where it says it.
@@ -64,25 +69,6 @@ export interface CareToxicity {
 
 const UNKNOWN: AnimalClaim = { state: 'not-assessed' };
 
-/**
- * A common name as it reads mid-sentence: "pothos", "ZZ plant", "English
- * ivy". `toLowerCase()` alone gave headings like "how often to water a zz
- * plant" and "a english ivy".
- */
-export function sentenceName(commonName: string): string {
-  const KEEP_CASE = new Set(['English', 'Chinese', 'Boston', 'Christmas']);
-  return commonName
-    .split(' ')
-    .map((w) => (KEEP_CASE.has(w) || /^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase()))
-    .join(' ');
-}
-
-/** "a pothos", "an aloe vera", "a ZZ plant", "an English ivy". */
-export function nameInSentence(commonName: string): string {
-  const name = sentenceName(commonName);
-  return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
-}
-
 const VERDICT_WORD = { toxic: 'toxic', 'non-toxic': 'non-toxic' } as const;
 
 function citedAnswer(claims: Record<Animal, AnimalClaim>, note: string | null): string {
@@ -105,30 +91,20 @@ function citedAnswer(claims: Record<Animal, AnimalClaim>, note: string | null): 
 }
 
 /**
- * ASPCA Animal Poison Control Center, as printed on
- * https://www.aspca.org/pet-care/animal-poison-control (checked 2026-10-02:
- * "(888) 426-4435"). A consultation fee may apply; that is ASPCA's to state.
+ * The caution for a plant with at least one "Unknown" animal, in English (the
+ * care pages are English-only). The words live once, in the en catalog
+ * (`petSafety.caution.*`), and `petCaution` is the one function that phrases
+ * them, so the care pages, the /pet-safe directory, the checker, the sitter
+ * brief and the passport cannot drift apart. Owner-approved wording
+ * (2026-10-02); careToxicity.test pins the exact ZZ plant sentence.
  */
-export const ASPCA_POISON_CONTROL_PHONE = '888-426-4435';
+const englishT = (key: string, options?: Record<string, string>) =>
+  i18n.getFixedT('en')(key, options);
 
-const ACTION = `Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (${ASPCA_POISON_CONTROL_PHONE}).`;
-
-function capitalized(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/**
- * The caution for a plant with at least one "Unknown" animal. Owner-approved
- * wording (2026-10-02) for a plant with no cited verdict at all; the
- * one-animal variant names the animal the source is silent on.
- */
 export function cautionFor(commonName: string, unknownAnimals: readonly Animal[]): string | null {
-  if (unknownAnimals.length === 0) return null;
-  const name = capitalized(sentenceName(commonName));
-  if (unknownAnimals.length === ANIMALS.length) {
-    return `${name} isn’t on the ASPCA’s list, so we can’t give a verdict. ${ACTION}`;
-  }
-  return `The ASPCA’s list gives no verdict on ${sentenceName(commonName)} for ${unknownAnimals.join(' or ')}, so we can’t give one. ${ACTION}`;
+  const verdict = (animal: Animal): PetVerdict =>
+    unknownAnimals.includes(animal) ? 'unknown' : 'toxic';
+  return petCaution(englishT, commonName, verdict('cats'), verdict('dogs'));
 }
 
 /**

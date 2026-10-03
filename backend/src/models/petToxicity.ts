@@ -277,6 +277,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'asparagus-fern',
     commonName: 'Asparagus fern',
     scientificName: 'Asparagus densiflorus',
+    aspcaListing: {
+      title: 'Emerald Feather',
+      scientificName: 'Asparagus densiflorus',
+      path: '/toxic-and-non-toxic-plants/emerald-feather',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     // Despite the name, this is NOT a true fern (it's in the asparagus/lily
     // family) — critically, it does NOT belong in the "true ferns are safe"
     // group above. Deliberately no bare "fern" alias: that would collide
@@ -285,12 +291,18 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     aliases: ['sprenger fern', 'emerald fern', 'foxtail fern', 'asparagus densiflorus'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the berries carry sapogenins that cause vomiting, diarrhea and abdominal pain, and repeated skin contact with the sap can cause allergic dermatitis. Keep it well out of reach.',
+    note: 'Toxic to cats and dogs per the ASPCA — eating the berries can cause vomiting, abdominal pain or diarrhea, and repeated skin contact can cause allergic dermatitis. Keep it well out of reach.',
   },
   {
     slug: 'african-violet',
     commonName: 'African violet',
     scientificName: 'Saintpaulia',
+    aspcaListing: {
+      title: 'African Violet',
+      scientificName: 'Saintpaulia spp.',
+      path: '/toxic-and-non-toxic-plants/african-violet',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['saintpaulia', 'violet'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -315,6 +327,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'lily',
     commonName: 'True lily',
     scientificName: 'Lilium',
+    aspcaListing: {
+      title: 'Lily',
+      scientificName: 'Lilium species',
+      path: '/toxic-and-non-toxic-plants/lily',
+      listed: { cats: 'toxic', dogs: 'non-toxic' },
+    },
     aliases: [
       'lilium',
       'easter lily',
@@ -325,13 +343,19 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       'hemerocallis',
     ],
     cats: 'toxic',
-    dogs: 'toxic',
-    note: 'This is the dangerous one. True lilies (Lilium) and daylilies (Hemerocallis) cause sudden kidney failure in cats — even pollen, vase water or a single leaf can be fatal. If a cat has had ANY contact, treat it as an emergency and call a vet immediately. Less severe in dogs, but still keep them away.',
+    dogs: 'non-toxic',
+    note: 'This is the dangerous one. True lilies (Lilium) and daylilies (Hemerocallis) cause sudden kidney failure in cats — even pollen, vase water or a single leaf can be fatal. If a cat has had ANY contact, treat it as an emergency and call a vet immediately. The ASPCA lists true lilies as non-toxic to dogs; the danger is to cats.',
   },
   {
     slug: 'sago-palm',
     commonName: 'Sago palm',
     scientificName: 'Cycas revoluta',
+    aspcaListing: {
+      title: 'Sago Palm',
+      scientificName: 'Cycas revoluta, zamia species',
+      path: '/toxic-and-non-toxic-plants/sago-palm',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['cycad', 'cycas', 'king sago'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -341,6 +365,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'poinsettia',
     commonName: 'Poinsettia',
     scientificName: 'Euphorbia pulcherrima',
+    aspcaListing: {
+      title: 'Poinsettia',
+      scientificName: 'Euphorbia pulcherrima',
+      path: '/toxic-and-non-toxic-plants/poinsettia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['euphorbia', 'christmas flower', 'christmas star'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -355,8 +385,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
   // own live ASPCA pages too (fiddle-leaf fig and rubber plant cite ASPCA's
   // genus-level Ficus listing, "Weeping Fig", Ficus sp.). The rest above this
   // line still carry none, so no `/pet-safe/<slug>` page is generated for
-  // them: ZZ plant has no ASPCA listing at all, and the remaining five have no
-  // care guide and were not re-verified in that pass.
+  // them. The remaining five (African violet, asparagus fern, true lily, sago
+  // palm, poinsettia) were read off their live ASPCA pages the same day, when
+  // the checker started answering "unknown" for uncited rows. True lily was
+  // corrected to non-toxic for dogs, as its listing states; asparagus fern
+  // cites ASPCA's species-level "Emerald Feather" listing. ZZ plant has no
+  // ASPCA listing at all and is the one row left uncited.
   // ---------------------------------------------------------------------
   {
     slug: 'bird-of-paradise',
@@ -577,24 +611,107 @@ export function normalizeName(raw: string): string {
     .trim();
 }
 
+/**
+ * What the product may tell a person about one animal. `unknown` means the
+ * table cannot cite a verdict for it: there is no per-plant ASPCA listing, or
+ * the listing is silent or disagrees with the recorded verdict.
+ */
+export type ReportedVerdict = ToxicityVerdict | 'unknown';
+
+export const PET_ANIMALS = ['cats', 'dogs'] as const;
+export type PetAnimal = (typeof PET_ANIMALS)[number];
+
+const LISTING_PATH = /^\/toxic-and-non-toxic-plants\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isText = (value: unknown): boolean => typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * The citation rule, the same one the /care and /pet-safe pages apply
+ * (`claimFor` in frontend/src/features/petsafe/plantSafetyPages.ts; a
+ * frontend test holds the two to the same answer for every row). A verdict is
+ * reported only when the entry records exactly `toxic` or `non-toxic` AND
+ * its own ASPCA listing states that same verdict for the animal. Anything
+ * else, including a blank or unexpected field, is `unknown`, never safe.
+ * Written against loose input because it is the last line between a data
+ * mistake and a pet owner.
+ */
+export function citedVerdict(
+  entry: { [K in keyof PetToxicityEntry]?: unknown },
+  animal: PetAnimal
+): ReportedVerdict {
+  const recorded = entry[animal];
+  if (recorded !== 'toxic' && recorded !== 'non-toxic') return 'unknown';
+  const listing = entry.aspcaListing as Partial<AspcaListing> | undefined | null;
+  if (!listing || typeof listing !== 'object') return 'unknown';
+  if (!isText(listing.title) || !isText(listing.scientificName)) return 'unknown';
+  if (typeof listing.path !== 'string' || !LISTING_PATH.test(listing.path)) return 'unknown';
+  const listed: unknown = listing.listed;
+  if (!listed || typeof listed !== 'object') return 'unknown';
+  if ((listed as Record<string, unknown>)[animal] !== recorded) return 'unknown';
+  return recorded;
+}
+
+/**
+ * How a lookup reports verdicts.
+ *
+ * - `cited`: each animal is `citedVerdict`, so an uncited row says `unknown`,
+ *   and the row's note is withheld unless both animals are cited (the note is
+ *   the table's own prose, and on an uncited row nothing sources it).
+ * - `legacy`: for clients that predate `unknown`. Their bundles, including
+ *   native app builds that web deploys cannot update, render anything other
+ *   than `toxic` as "Non-toxic", so they must never receive `unknown` or an
+ *   uncited `non-toxic`. A cited verdict passes through; an uncited animal
+ *   recorded `toxic` stays `toxic` (what these clients have always been
+ *   told); and a row with an uncited animal recorded `non-toxic` is left out
+ *   of the results entirely, because the only words those clients have for it
+ *   are "Non-toxic" (unsupported) or "Toxic" (false).
+ *
+ * New clients opt in to `cited` with `?unknown=1` (see the species and
+ * sitter-brief handlers). The assistant's tool always uses `cited`.
+ */
+export type VerdictMode = 'cited' | 'legacy';
+
+/**
+ * The opt-in a client sends to receive `cited` verdicts: `?unknown=1`. A
+ * query parameter rather than a header so it needs no CORS change and is part
+ * of the URL every HTTP cache keys on: a cached `cited` answer can never be
+ * served to a client that did not ask for it.
+ */
+export function verdictModeFromQuery(
+  params: Record<string, string | undefined> | null | undefined
+): VerdictMode {
+  return params?.unknown === '1' ? 'cited' : 'legacy';
+}
+
 export interface PetToxicityMatch {
   slug: string;
   commonName: string;
   scientificName: string;
-  cats: ToxicityVerdict;
-  dogs: ToxicityVerdict;
-  note: string;
+  cats: ReportedVerdict;
+  dogs: ReportedVerdict;
+  /** The table's note; null in `cited` mode when any animal is unknown. */
+  note: string | null;
 }
 
-function toMatch(entry: PetToxicityEntry): PetToxicityMatch {
-  return {
+function toMatch(entry: PetToxicityEntry, mode: VerdictMode): PetToxicityMatch | null {
+  const base = {
     slug: entry.slug,
     commonName: entry.commonName,
     scientificName: entry.scientificName,
-    cats: entry.cats,
-    dogs: entry.dogs,
-    note: entry.note,
   };
+  const cats = citedVerdict(entry, 'cats');
+  const dogs = citedVerdict(entry, 'dogs');
+  if (mode === 'cited') {
+    const bothCited = cats !== 'unknown' && dogs !== 'unknown';
+    return { ...base, cats, dogs, note: bothCited ? entry.note : null };
+  }
+  const legacy = (animal: PetAnimal, cited: ReportedVerdict): ToxicityVerdict | null => {
+    if (cited !== 'unknown') return cited;
+    return entry[animal] === 'toxic' ? 'toxic' : null;
+  };
+  const legacyCats = legacy('cats', cats);
+  const legacyDogs = legacy('dogs', dogs);
+  if (legacyCats === null || legacyDogs === null) return null;
+  return { ...base, cats: legacyCats, dogs: legacyDogs, note: entry.note };
 }
 
 /** True when an entry is toxic to either species. */
@@ -637,7 +754,11 @@ function toxicFirst(bucket: PetToxicityEntry[]): PetToxicityEntry[] {
  *      hand back an unrelated species' (possibly wrong) toxicity verdict.
  * Ties inside a tier are broken toxic-first — see `toxicFirst`.
  */
-export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
+export function lookupToxicity(
+  query: string,
+  limit = 5,
+  mode: VerdictMode = 'cited'
+): PetToxicityMatch[] {
   const q = normalizeName(query);
   if (q.length < 2) return [];
 
@@ -670,5 +791,10 @@ export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
       if (!ordered.includes(e)) ordered.push(e);
     }
   }
-  return ordered.slice(0, limit).map(toMatch);
+  // Map before slicing: legacy mode can drop a row, and the caller still
+  // asked for up to `limit` answers.
+  return ordered
+    .map((entry) => toMatch(entry, mode))
+    .filter((match): match is PetToxicityMatch => match !== null)
+    .slice(0, limit);
 }

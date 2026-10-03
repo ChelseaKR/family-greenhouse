@@ -15,6 +15,7 @@ import {
 import { formatDate } from '@/i18n/format';
 import { printPage } from '@/services/nativePrint';
 import { MapPinIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { petCaution, petOutcome, petSummaryLine } from '@/features/petsafe/petVerdict';
 
 /**
  * The handoff brief: the household plant by plant, for the person covering
@@ -91,22 +92,33 @@ function PlantCard({ plant }: { plant: SitterBriefPlant }) {
           no verdict is honest, a made-up all-clear is not. */}
       {plant.petSafety && (
         <div
+          data-testid="sitter-pet-safety"
+          data-outcome={petOutcome(plant.petSafety.cats, plant.petSafety.dogs)}
           className={
             'mt-4 rounded-lg p-3 text-sm ' +
-            (plant.petSafety.cats === 'toxic' || plant.petSafety.dogs === 'toxic'
-              ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
-              : 'bg-primary-50 text-primary-900 ring-1 ring-primary-100')
+            // Green only for an explicit, cited non-toxic for both animals.
+            (petOutcome(plant.petSafety.cats, plant.petSafety.dogs) === 'safe'
+              ? 'bg-primary-50 text-primary-900 ring-1 ring-primary-100'
+              : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200')
           }
         >
           <p className="font-medium">
-            {plant.petSafety.cats === 'toxic' || plant.petSafety.dogs === 'toxic'
-              ? t('sitterBrief.petToxic', {
-                  cats: t(`sitterBrief.verdict.${plant.petSafety.cats}`),
-                  dogs: t(`sitterBrief.verdict.${plant.petSafety.dogs}`),
-                })
-              : t('sitterBrief.petSafe')}
+            {petSummaryLine(t, plant.petSafety.cats, plant.petSafety.dogs)}
           </p>
-          <p className="mt-1">{plant.petSafety.note}</p>
+          {plant.petSafety.note && <p className="mt-1">{plant.petSafety.note}</p>}
+          {(() => {
+            const caution = petCaution(
+              t,
+              plant.petSafety.commonName,
+              plant.petSafety.cats,
+              plant.petSafety.dogs
+            );
+            return caution ? (
+              <p className="mt-1 font-medium" data-testid="pet-caution">
+                {caution}
+              </p>
+            ) : null;
+          })()}
           <p className="mt-1 text-xs">
             {t('sitterBrief.petSource', {
               matched: plant.petSafety.commonName,

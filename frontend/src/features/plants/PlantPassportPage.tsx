@@ -30,6 +30,7 @@ import {
   passportSchedule,
   type PassportHistory,
 } from './plantPassport';
+import { petCaution, petOutcome, petSummaryLine } from '@/features/petsafe/petVerdict';
 
 const KNOWN_TASK_TYPES = ['water', 'fertilize', 'prune', 'repot'] as const;
 
@@ -518,23 +519,24 @@ function PetSafetyBlock({ pet }: { pet: PassportSheetProps['pet'] }) {
     );
   }
   const { match } = pet.data;
-  const toxic = match.cats === 'toxic' || match.dogs === 'toxic';
+  const outcome = petOutcome(match.cats, match.dogs);
+  // The warning icon for anything that is not an explicit, cited all-clear.
+  const toxic = outcome !== 'safe';
+  const caution = petCaution(t, match.commonName, match.cats, match.dogs);
   return (
     <div className="space-y-1 text-sm" data-testid="passport-pet-safety">
       <p className="flex items-start gap-1.5 font-medium">
         {toxic && (
           <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         )}
-        <span>
-          {toxic
-            ? t('sitterBrief.petToxic', {
-                cats: t(`sitterBrief.verdict.${match.cats}`),
-                dogs: t(`sitterBrief.verdict.${match.dogs}`),
-              })
-            : t('sitterBrief.petSafe')}
-        </span>
+        <span data-outcome={outcome}>{petSummaryLine(t, match.cats, match.dogs)}</span>
       </p>
-      <p>{match.note}</p>
+      {match.note && <p>{match.note}</p>}
+      {caution && (
+        <p className="font-medium" data-testid="pet-caution">
+          {caution}
+        </p>
+      )}
       <p className="text-xs text-gray-700 print:text-black">
         {t('sitterBrief.petSource', {
           matched: match.commonName,

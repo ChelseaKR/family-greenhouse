@@ -255,3 +255,73 @@ describe('PetSafePage directory caution', () => {
     expect(card.textContent).not.toMatch(/non-toxic|pet-safe/i);
   });
 });
+
+/**
+ * The checker card is the surface that used to render
+ * `cats === 'toxic' ? 'Toxic' : 'Non-toxic'`. The service is mocked here, so
+ * these values reach the card exactly as written, with no normalization in
+ * between: the card itself must hold the line.
+ */
+describe('PetSafePage checker card verdicts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function searchAndGetCard(match: Record<string, unknown>) {
+    lookup.mockResolvedValue([match as unknown as ToxicityMatch]);
+    const user = userEvent.setup();
+    const { container } = renderPage();
+    await user.type(screen.getByLabelText(/plant or species name/i), 'zz');
+    const region = container.querySelector('[aria-live="polite"]') as HTMLElement;
+    await within(region).findByText(/Cats:/);
+    return region;
+  }
+
+  const ZZ = {
+    slug: 'zz-plant',
+    commonName: 'ZZ plant',
+    scientificName: 'Zamioculcas zamiifolia',
+    note: null,
+  };
+
+  it.each([
+    ['unknown', 'unknown', 'unknown'],
+    ['an unexpected value', 'safe', 'Non-toxic'],
+    ['a missing value', undefined, undefined],
+  ])('shows %s as Unknown plus the caution, never Non-toxic', async (_label, cats, dogs) => {
+    const card = await searchAndGetCard({ ...ZZ, cats, dogs });
+    expect(within(card).getByText('No cited verdict for ZZ plant')).toBeInTheDocument();
+    for (const animal of ['cats', 'dogs']) {
+      const line = card.querySelector(`[data-verdict-animal="${animal}"]`)!;
+      expect(line.textContent).toMatch(/Unknown$/);
+    }
+    const caution = within(card).getByTestId('checker-caution');
+    expect(caution).toHaveTextContent(
+      'ZZ plant isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
+    expect(within(caution).getByRole('link')).toHaveAttribute('href', 'tel:+18884264435');
+    expect(card.textContent).not.toMatch(/Non-toxic|pet-safe/);
+  });
+
+  it('names the one unknown animal and keeps the cited one', async () => {
+    const card = await searchAndGetCard({ ...ZZ, cats: 'non-toxic', dogs: 'unknown' });
+    expect(within(card).getByText('No cited verdict for ZZ plant')).toBeInTheDocument();
+    expect(card.querySelector('[data-verdict-animal="cats"]')!.textContent).toMatch(/Non-toxic$/);
+    expect(card.querySelector('[data-verdict-animal="dogs"]')!.textContent).toMatch(/Unknown$/);
+    expect(within(card).getByTestId('checker-caution')).toHaveTextContent(
+      'The ASPCA’s list gives no verdict on ZZ plant for dogs'
+    );
+  });
+
+  it('shows pet-safe, with no caution, only for two cited non-toxics', async () => {
+    const card = await searchAndGetCard({
+      ...ZZ,
+      commonName: 'Spider plant',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+      note: 'Fine.',
+    });
+    expect(within(card).getByText('Spider plant is pet-safe')).toBeInTheDocument();
+    expect(within(card).queryByTestId('checker-caution')).toBeNull();
+  });
+});

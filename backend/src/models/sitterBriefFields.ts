@@ -15,7 +15,7 @@
  * and the curated table, with no data access of their own.
  * `services/sitterBrief.ts` re-exports them, so its own callers are unchanged.
  */
-import { lookupToxicity, type PetToxicityMatch } from './petToxicity.js';
+import { lookupToxicity, type PetToxicityMatch, type VerdictMode } from './petToxicity.js';
 
 /**
  * The one field of a plant's care words a sitter link may carry: `careRule`,
@@ -53,13 +53,19 @@ export function resolveCareNote(plant: { careRule?: string | null }): {
  * matched — a reader can see for themselves whether the match is right,
  * instead of trusting a verdict attached to a nickname.
  */
-export function resolvePetSafety(plant: {
-  name: string;
-  species?: string | null;
-}): (PetToxicityMatch & { matchedOn: string }) | null {
+export function resolvePetSafety(
+  plant: {
+    name: string;
+    species?: string | null;
+  },
+  // Required, not defaulted: the sitter brief opens in old native builds
+  // (universal link /sit/*/brief), so every caller must say which answer its
+  // client can render. See VerdictMode in petToxicity.ts.
+  mode: VerdictMode
+): (PetToxicityMatch & { matchedOn: string }) | null {
   for (const query of [plant.species, plant.name]) {
     if (!query) continue;
-    const [match] = lookupToxicity(query, 1);
+    const [match] = lookupToxicity(query, 1, mode);
     if (match) return { ...match, matchedOn: query };
   }
   return null;

@@ -1200,7 +1200,8 @@
     "petSource": "From our verified pet-safety list, matched to {{matched}} ({{scientific}}), grounded in the ASPCA database.",
     "verdict": {
       "toxic": "toxic",
-      "non-toxic": "non-toxic"
+      "non-toxic": "non-toxic",
+      "unknown": "unknown"
     },
     "task": {
       "water": "Water",
@@ -1211,7 +1212,8 @@
     "unavailableTitle": "This care brief isn’t available",
     "unavailableBody": "The link may have expired, been turned off, or this household’s plan may not include the brief. The day-to-day task list may still work — try the link they sent you.",
     "errorTitle": "Something went wrong",
-    "errorBody": "We couldn’t load the care brief just now. Please refresh and try again in a moment."
+    "errorBody": "We couldn’t load the care brief just now. Please refresh and try again in a moment.",
+    "petUnknown": "No cited pet-safety verdict — cats: {{cats}}, dogs: {{dogs}}."
   },
   "kiosk": {
     "title": "Plant care today",
@@ -2618,6 +2620,24 @@
       "members": "Members (invite them again)",
       "billing": "Billing: no plan, subscription or trial carries over",
       "links": "Sitter, wall display, tag, share, calendar and API links (issue new ones)"
+    }
+  },
+  "petSafety": {
+    "cats": "Cats:",
+    "dogs": "Dogs:",
+    "verdict": {
+      "toxic": "Toxic",
+      "nonToxic": "Non-toxic",
+      "unknown": "Unknown"
+    },
+    "cardSafe": "{{name}} is pet-safe",
+    "cardHarmful": "{{name}} can be harmful to pets",
+    "cardUnknown": "No cited verdict for {{name}}",
+    "callPoisonControl": "Call {{phone}}",
+    "caution": {
+      "both": "{{name}} isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
+      "cats": "The ASPCA’s list gives no verdict on {{name}} for cats, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
+      "dogs": "The ASPCA’s list gives no verdict on {{name}} for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}})."
     }
   }
 }
