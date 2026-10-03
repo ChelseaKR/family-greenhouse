@@ -5,6 +5,8 @@ import { Dialog, Transition } from '@headlessui/react';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/Button';
+import { NativeDialog } from '@/components/NativeDialog';
+import { hasNativePresent } from '@/lib/platform';
 
 interface RemovePlantDialogProps {
   isOpen: boolean;
@@ -42,6 +44,25 @@ export function RemovePlantDialog({
   onDelete,
 }: RemovePlantDialogProps) {
   const { t } = useTranslation();
+
+  // In the iOS app: an action sheet with the same choices, Delete in red,
+  // and Cancel apart. Dismissing it chooses nothing.
+  if (hasNativePresent()) {
+    return (
+      <NativeDialog
+        kind="removePlant"
+        isOpen={isOpen}
+        plantName={plantName}
+        isLoading={isLoading}
+        onClose={onClose}
+        onArchive={onArchive}
+        onDied={onDied}
+        onGaveAway={onGaveAway}
+        passportTo={passportTo}
+        onDelete={onDelete}
+      />
+    );
+  }
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>

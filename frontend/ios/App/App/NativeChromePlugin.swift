@@ -18,13 +18,25 @@ import Capacitor
 ///   the web shows `path`.
 /// - `moreSelect { id, path? }`: a More row.
 /// - `rightButton { id }`: the navigation bar's trailing button.
+///
+/// Alerts and action sheets (web -> native, answered):
+/// - `present({ token, kind, title?, message?, actions, anchor? })` shows a
+///   UIAlertController and resolves `{ id }` with the tapped action's id, or
+///   `{ id: null }` for no choice (Cancel, a tap outside, the app going to the
+///   background, the web closing it). NativePresentModel.swift decides.
+/// - `updatePresented({ token, title?, message? })`: new words for the one
+///   showing (a count that arrived after it opened).
+/// - `dismissPresented({ token })`: the web closed it; it answers no choice.
 @objc(NativeChromePlugin)
 public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeChromePlugin"
     public let jsName = "NativeChrome"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "present", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updatePresented", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "dismissPresented", returnType: CAPPluginReturnPromise)
     ]
 
     /// Set by MainViewController once the frame is built.
@@ -96,6 +108,56 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         )
         DispatchQueue.main.async { [weak self] in
             self?.frame?.apply(report)
+            call.resolve()
+        }
+    }
+
+    @objc func present(_ call: CAPPluginCall) {
+        guard let token = call.getString("token"), !token.isEmpty else {
+            call.reject("present needs a token", "INVALID")
+            return
+        }
+        let parsed = PresentRequest.parse(
+            kind: call.getString("kind"),
+            title: call.getString("title"),
+            message: call.getString("message"),
+            actions: call.getArray("actions") as? [[String: Any]]
+        )
+        guard let request = parsed.request else {
+            call.reject(parsed.error ?? "invalid request", "INVALID")
+            return
+        }
+        var anchor: CGRect?
+        if let raw = call.getObject("anchor"),
+           let x = raw["x"] as? Double, let y = raw["y"] as? Double,
+           let width = raw["width"] as? Double, let height = raw["height"] as? Double {
+            anchor = CGRect(x: x, y: y, width: width, height: height)
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let frame = self?.frame else {
+                call.resolve(["id": NSNull()])
+                return
+            }
+            frame.present(request, token: token, anchor: anchor) { id in
+                call.resolve(["id": id ?? NSNull()])
+            }
+        }
+    }
+
+    @objc func updatePresented(_ call: CAPPluginCall) {
+        let token = call.getString("token") ?? ""
+        let title = call.getString("title")
+        let message = call.getString("message")
+        DispatchQueue.main.async { [weak self] in
+            self?.frame?.updatePresented(token: token, title: title, message: message)
+            call.resolve()
+        }
+    }
+
+    @objc func dismissPresented(_ call: CAPPluginCall) {
+        let token = call.getString("token") ?? ""
+        DispatchQueue.main.async { [weak self] in
+            self?.frame?.dismissPresented(token: token)
             call.resolve()
         }
     }

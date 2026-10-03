@@ -239,10 +239,17 @@ describe('update messages', () => {
 });
 
 describe('the Swift side reads the same messages', () => {
-  it('registers as NativeChrome with exactly configure and update', () => {
+  it('registers as NativeChrome with the frame calls and the alert calls', () => {
     expect(plugin).toMatch(/jsName = "NativeChrome"/);
     const methods = [...plugin.matchAll(/CAPPluginMethod\(name: "([^"]+)"/g)].map((m) => m[1]);
-    expect(methods.sort()).toEqual(['configure', 'update']);
+    // present, updatePresented and dismissPresented: nativePresent.test.ts.
+    expect(methods.sort()).toEqual([
+      'configure',
+      'dismissPresented',
+      'present',
+      'update',
+      'updatePresented',
+    ]);
     expect(main).toMatch(/registerPluginInstance\(nativeChrome\)/);
   });
 
@@ -257,8 +264,8 @@ describe('the Swift side reads the same messages', () => {
       t,
     });
     const body = plugin.slice(
-      plugin.indexOf('@objc func update'),
-      plugin.indexOf('// Events for the web')
+      plugin.indexOf('@objc func update('),
+      plugin.indexOf('@objc func present(')
     );
     const read = new Set([...body.matchAll(/call\.get\w+\("([^"]+)"\)/g)].map((m) => m[1]));
     expect([...read].sort()).toEqual(Object.keys(update).sort());
@@ -269,7 +276,7 @@ describe('the Swift side reads the same messages', () => {
     const config = buildConfiguration(t, [{ householdId: 'a', name: 'A' }], 'a');
     const body = plugin.slice(
       plugin.indexOf('@objc func configure'),
-      plugin.indexOf('@objc func update')
+      plugin.indexOf('@objc func update(')
     );
     for (const key of Object.keys(config)) expect(body, `configure.${key}`).toContain(`"${key}"`);
     for (const key of Object.keys(config.tabs[0]))

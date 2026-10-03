@@ -193,6 +193,21 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
 
     private var launchBackground: UIColor?
 
+    /// The alert or action sheet the web asked for, while it shows. Weak:
+    /// when UIKit lets go of the alert, its outcome answers on its own.
+    private final class Presented {
+        let token: String
+        weak var alert: UIAlertController?
+        weak var outcome: PresentOutcome?
+        init(token: String, alert: UIAlertController, outcome: PresentOutcome) {
+            self.token = token
+            self.alert = alert
+            self.outcome = outcome
+        }
+    }
+    private var presented: Presented?
+    private var backgroundObserver: NSObjectProtocol?
+
     /// True while the tab bar and navigation bar are showing.
     private(set) var chromeVisible = false
 
@@ -236,6 +251,15 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         // settled so a screen left behind keeps an up-to-date picture.
         scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
             self?.scheduleSettledSnapshot(after: 0.35)
+        }
+
+        // A confirmation left up when the app goes to the background is
+        // closed as no choice: back in the app, the resume refresh may have
+        // changed what it was asking about.
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.dismissPresented(token: nil)
         }
     }
 
@@ -673,5 +697,111 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
 
     func rightButtonTapped(_ id: String) {
         plugin?.sendRightButton(id: id)
+    }
+
+    // MARK: - Alerts and action sheets (NativeChrome `present`)
+
+    /// Shows a UIAlertController for the web and calls `completion` once:
+    /// with the tapped action's id, or nil for no choice. Only a tap on a
+    /// button that is not the cancel button is a choice (PresentOutcome).
+    func present(_ request: PresentRequest, token: String, anchor: CGRect?,
+                 retried: Bool = false, completion: @escaping (String?) -> Void) {
+        // One at a time: whatever is showing ends as no choice first.
+        dismissPresented(token: nil)
+
+        guard let presenter = topPresenter() else {
+            completion(nil)
+            return
+        }
+        // An alert that is still sliding away (one answered a moment ago)
+        // blocks a new one; try once more when it has gone.
+        if presenter.presentedViewController?.isBeingDismissed == true {
+            guard !retried else {
+                completion(nil)
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self = self else { return completion(nil) }
+                self.present(request, token: token, anchor: anchor, retried: true, completion: completion)
+            }
+            return
+        }
+
+        let outcome = PresentOutcome(completion: completion)
+        let alert = UIAlertController(
+            title: request.title,
+            message: request.message,
+            preferredStyle: request.kind == .actionSheet ? .actionSheet : .alert
+        )
+        for action in request.actions {
+            // The handlers hold the outcome; the alert holds the handlers.
+            // UIKit runs a handler only for a tap on that button.
+            alert.addAction(UIAlertAction(title: action.title, style: action.style.alertStyle) { _ in
+                outcome.chose(action)
+            })
+        }
+        alert.view.tintColor = FrameColors.tint
+        if let popover = alert.popoverPresentationController {
+            // iPad: an action sheet is a popover at the button that opened it.
+            popover.sourceView = webView
+            if let anchor = anchor {
+                popover.sourceRect = webRect(anchor)
+            } else {
+                popover.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+        }
+        presented = Presented(token: token, alert: alert, outcome: outcome)
+        presenter.present(alert, animated: !reduceMotion)
+    }
+
+    /// New words for the alert showing, if it is still the one with `token`.
+    func updatePresented(token: String, title: String?, message: String?) {
+        guard let current = presented, current.token == token,
+              let alert = current.alert, current.outcome?.answered == false else { return }
+        if let title = title { alert.title = title }
+        if let message = message { alert.message = message }
+    }
+
+    /// Closes the alert showing (the one with `token`, or any when nil) as no
+    /// choice.
+    func dismissPresented(token: String?) {
+        guard let current = presented else { return }
+        if let token = token, token != current.token { return }
+        presented = nil
+        // Answer first, so nothing that happens while it slides away can.
+        current.outcome?.cancel()
+        if let alert = current.alert, alert.presentingViewController != nil, !alert.isBeingDismissed {
+            alert.dismiss(animated: !reduceMotion)
+        }
+    }
+
+    /// The controller to present from: the host, or whatever it is already
+    /// presenting (a share sheet, the print sheet).
+    private func topPresenter() -> UIViewController? {
+        guard var top = host else { return nil }
+        while let next = top.presentedViewController, !next.isBeingDismissed {
+            top = next
+        }
+        return top
+    }
+
+    /// A rectangle in the page's viewport (CSS pixels from getBoundingClientRect)
+    /// in the web view's own coordinates. Measured in the simulator, under the
+    /// navigation bar and with the large title both open and collapsed: they
+    /// are the same, so no inset is added (adding the bar's height put the
+    /// popover's arrow 116 points below the button).
+    private func webRect(_ rect: CGRect) -> CGRect {
+        rect
+    }
+}
+
+extension PresentActionStyle {
+    var alertStyle: UIAlertAction.Style {
+        switch self {
+        case .default: return .default
+        case .destructive: return .destructive
+        case .cancel: return .cancel
+        }
     }
 }

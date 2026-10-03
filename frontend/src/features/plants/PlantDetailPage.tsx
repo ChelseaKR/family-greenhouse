@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -63,6 +63,7 @@ import { seasonalHomeSuggestion } from './seasonalHomes';
 import { SeasonalCadenceBadge } from '@/features/tasks/taskRowExtras';
 import { hemisphereForLatitude, resolveCadence } from '@/features/tasks/seasonalCadence';
 import { PlacementFitCard } from './PlacementFitCard';
+import { hasNativePresent } from '@/lib/platform';
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return 'Never';
@@ -851,9 +852,29 @@ interface SnoozeMenuProps {
  * collapses on outside click via the browser's own `toggle` event handling.
  */
 function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
+  const { t } = useTranslation();
+  // In the iOS app the durations open as an action sheet (a popover at the
+  // button on iPad); closing it any way but a duration snoozes nothing.
+  const openNatively = (event: MouseEvent<HTMLElement>) => {
+    if (!hasNativePresent()) return;
+    event.preventDefault();
+    if (isSnoozing) return;
+    const from = event.currentTarget;
+    const options = SNOOZE_OPTIONS.map((opt) => ({ id: `snooze-${opt.days}`, title: opt.label }));
+    void import('@/services/nativePresent')
+      .then(({ chooseFromMenu }) =>
+        chooseFromMenu({ title: t('tasks.snooze'), options, cancel: t('common.cancel'), from })
+      )
+      .then((id) => {
+        const chosen = SNOOZE_OPTIONS.find((opt) => `snooze-${opt.days}` === id);
+        if (chosen) onPick(chosen.days);
+      })
+      .catch(() => undefined);
+  };
   return (
     <details className="relative min-w-0">
       <summary
+        onClick={openNatively}
         className={clsx(
           'list-none inline-flex w-full items-center justify-center gap-1 px-3 py-2 text-sm font-medium rounded-md min-h-touch min-w-touch cursor-pointer sm:w-auto',
           'bg-paper text-gray-700 border border-primary-200/70 hover:bg-primary-50',

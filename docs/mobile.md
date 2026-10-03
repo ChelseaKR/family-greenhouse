@@ -361,6 +361,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Back (iOS)         | With the native frame showing, the back chevron and the edge swipe are the tab's navigation controller's, within the tab only (see "Navigation (iOS)"). On sign-in and setup, where there are no bars, the edge swipe from the left goes back through the app's own history, with WebKit's page-peel animation (`allowsBackForwardNavigationGestures`, set in `MainViewController.swift`). It is on only while `BackSwipePolicy` allows the page behind: never on the first screen, never onto `/` (which only redirects), another origin or nothing, and never across the line between sign-in or setup and the signed-in app, so it cannot go back into sign-in after signing in. `frontend/tests/unit/config/nativeBackSwipe.test.ts` keeps its route names in step with `App.tsx`. |
 | Look and touch     | `<html data-native>` (set at boot by `markNativePlatform`, before the first paint) switches on native-only CSS in `index.css`: body text in the system font (SF on iOS) with headings on the brand faces, no gray tap highlight, no link-preview callout on links and buttons, and no text selection on chrome (navigation, buttons, tabs, labels). Content and every form field stay selectable. The website never gets the attribute, so none of it applies there (`tests/e2e/native-shell-polish.spec.ts`).                                                                                                                                                                                                                                                                         |
 | Navigation (iOS)   | Apple's own tab bar (Home, Plants, Tasks, Household, More) and navigation bar, drawn in Swift around the one web view: large titles on each tab's first screen that collapse on scroll, the system back chevron and edge swipe within a tab, and More as a native list. The web's header, drawer, sidebar, site footer and "Back to …" links are hidden there by `native-frame:` utilities, keyed on `<html data-native-frame>`, which `markNativeFrame` sets before the first paint only when the app registered the NativeChrome plugin. See "The native frame (iOS)" below.                                                                                                                                                                                                         |
+| Dialogs (iOS)      | Confirmations and choices open as Apple's own alerts and action sheets over the native bars, and only a tap on a non-cancel button confirms anything. Forms stay web dialogs. See "Alerts and action sheets (iOS)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Networking         | `CapacitorHttp` patches `fetch`/`XMLHttpRequest` to use native networking. This lets iOS call the API and lets both shells PUT to presigned S3 image URLs without relying on WebView CORS. Keep API Gateway managed CORS enabled for the website: it makes gateway-generated JWT 401s readable so the web client can refresh tokens. `native_app_origins` remains an exact application-layer allowlist, not a reason to remove managed web CORS.                                                                                                                                                                                                                                                                                                                                       |
 | Safe areas         | `viewport-fit=cover` + `env(safe-area-inset-*)` keep content clear of the notch, status bar and home indicator: `body` (index.css), the sticky headers (Layout.tsx, PublicShell.tsx), the navigation drawer, the `safe-area-y` utility on every scrolling dialog overlay, and the toasts. Android WebViews older than 140 report 0 here; Capacitor pads them inside the system bars instead.                                                                                                                                                                                                                                                                                                                                                                                           |
 | Launch             | The launch screen stays up until the first page's heading renders, then fades (`SplashScreen.launchAutoHide: false`, released by `nativeShell.ts`; a 5 s fallback armed in `nativeLaunchBoot.ts` means a startup error cannot leave it up). The WebView background is the launch screen's forest green, not white.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -392,14 +393,17 @@ Who owns what:
 
 The plugin's API, in full:
 
-| Direction     | Name          | Payload                                                                                                                                                                                                      |
-| ------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| web -> native | `configure`   | `{ tabs: [{ id, title, symbol, selectedSymbol, root }], moreTitle, moreSections: [{ title?, items: [{ id, title, symbol?, path?, checked?, destructive? }] }], signOutConfirm: { title, confirm, cancel } }` |
-| web -> native | `update`      | `{ path, key, title, tab, canGoBack, largeTitle, chrome: 'tabs' or 'none', navigation: 'push', 'replace' or 'pop', rightButton?: { id, symbol, label } }`                                                    |
-| native -> web | `tabSelect`   | `{ tab, path, reselect }`: show `path` (null for More's native list)                                                                                                                                         |
-| native -> web | `back`        | `{ path }`: the back chevron or the edge swipe popped a screen; show `path`                                                                                                                                  |
-| native -> web | `moreSelect`  | `{ id, path? }`: a More row (open `path`; or sign out, or switch household)                                                                                                                                  |
-| native -> web | `rightButton` | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                 |
+| Direction     | Name               | Payload                                                                                                                                                                                                                                                                   |
+| ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| web -> native | `configure`        | `{ tabs: [{ id, title, symbol, selectedSymbol, root }], moreTitle, moreSections: [{ title?, items: [{ id, title, symbol?, path?, checked?, destructive? }] }], signOutConfirm: { title, confirm, cancel } }`                                                              |
+| web -> native | `update`           | `{ path, key, title, tab, canGoBack, largeTitle, chrome: 'tabs' or 'none', navigation: 'push', 'replace' or 'pop', rightButton?: { id, symbol, label } }`                                                                                                                 |
+| native -> web | `tabSelect`        | `{ tab, path, reselect }`: show `path` (null for More's native list)                                                                                                                                                                                                      |
+| native -> web | `back`             | `{ path }`: the back chevron or the edge swipe popped a screen; show `path`                                                                                                                                                                                               |
+| native -> web | `moreSelect`       | `{ id, path? }`: a More row (open `path`; or sign out, or switch household)                                                                                                                                                                                               |
+| native -> web | `rightButton`      | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                                                                              |
+| web -> native | `present`          | `{ token, kind: 'alert' or 'actionSheet', title?, message?, actions: [{ id, title, style: 'default', 'destructive' or 'cancel' }], anchor?: { x, y, width, height } }`, answered `{ id }`: the tapped action, or null for no choice. See "Alerts and action sheets (iOS)" |
+| web -> native | `updatePresented`  | `{ token, title?, message? }`: new words for the alert showing                                                                                                                                                                                                            |
+| web -> native | `dismissPresented` | `{ token }`: the web closed it; it answers no choice                                                                                                                                                                                                                      |
 
 Rules worth knowing before changing it:
 
@@ -430,6 +434,41 @@ Rules worth knowing before changing it:
   when its key and path both match.
 - An iOS build without the plugin (or Android) gets the web header and drawer,
   as before.
+
+### Alerts and action sheets (iOS)
+
+Inside the frame, a web dialog would open between the native bars with the
+tab bar still live under its scrim. So the app's confirmations and choices
+are Apple's own `UIAlertController`, presented over everything, through
+NativeChrome's `present`:
+
+- **Alerts** for every `ConfirmDialog` (twelve, in nine files): remove a
+  member, leave a household and its billing follow-up, delete the account,
+  remove a passkey, revoke an API key, a plant tag or the calendar feed,
+  regenerate the calendar feed, purge from the trash, move a plant to the
+  trash, and "already done, log it anyway?". The confirm button is
+  `.destructive` (red) when the dialog is a danger one.
+- **Action sheets** for choices: Remove plant (Archive, I gave it away, the
+  passport, It died, then Delete in red, which asks again in a red alert) and
+  the snooze durations on a plant's task. On iPad they are popovers at the
+  button that opened them.
+
+The rule both sides keep: **only a tap on a button that is not the cancel
+button is a choice.** Swift answers `{ id: null }` for Cancel, a tap outside,
+a swipe, the app going to the background (an alert left up is closed then:
+the resume refresh may change what it asked about), the web closing it, or
+another one replacing it (`NativePresentModel.swift`, which also refuses a
+request without exactly one cancel action). The web accepts an id only if it
+names a non-cancel action of the request it sent (`chosenAction` in
+`frontend/src/config/nativePresent.ts`), and anything else calls the dialog's
+`onClose`, as the web dialog's Cancel, Escape and scrim do.
+
+The dialogs keep their props, so their callers do not change; `ConfirmDialog`
+and `RemovePlantDialog` render `NativeDialog` (a lazy chunk the website never
+downloads) when `hasNativePresent()` is true, which needs the iOS app with the
+NativeChrome plugin listing `present`. Everywhere else, the web dialogs render
+exactly as before. Forms (Add care task, Edit plant, Move plants and the rest)
+are still web dialogs in the app.
 
 ### Fresh data, offline and unreachable
 
