@@ -2,11 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { useAuthStore } from '@/store/authStore';
 import { listMyHouseholds } from '@/services/householdService';
 import { useSwitchHousehold } from '@/hooks/useSwitchHousehold';
-import { NATIVE_CHROME_PLUGIN } from '@/lib/platform';
+import { NativeChrome } from '@/services/nativeChrome';
 import {
   HOUSEHOLD_ID_PREFIX,
   RIGHT_BUTTON_PATHS,
@@ -14,25 +13,7 @@ import {
   buildConfiguration,
   buildUpdate,
   sameTitle,
-  type NativeChromeConfiguration,
-  type NativeChromeEvents,
-  type NativeChromeUpdate,
 } from '@/config/nativeFrame';
-
-/**
- * The NativeChrome plugin (ios/App/App/NativeChromePlugin.swift). Two calls
- * and four events; the shapes are in config/nativeFrame.ts.
- */
-interface NativeChromePlugin {
-  configure(options: NativeChromeConfiguration): Promise<void>;
-  update(options: NativeChromeUpdate): Promise<void>;
-  addListener<E extends keyof NativeChromeEvents>(
-    eventName: E,
-    listener: (event: NativeChromeEvents[E]) => void
-  ): Promise<PluginListenerHandle>;
-}
-
-const NativeChrome = registerPlugin<NativeChromePlugin>(NATIVE_CHROME_PLUGIN);
 
 /**
  * Keeps the iOS app's native tab bar and navigation bar in step with the web

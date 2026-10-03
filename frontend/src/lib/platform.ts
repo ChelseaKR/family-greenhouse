@@ -70,3 +70,20 @@ export function markNativeFrame(): void {
   if (!hasNativeFrame() || typeof document === 'undefined') return;
   document.documentElement.dataset.nativeFrame = '';
 }
+
+/**
+ * True inside the iOS app when its native frame can show Apple's own alerts
+ * and action sheets for the web (NativeChrome's `present`): confirmations
+ * and choices then open as UIAlertController, over the native bars, instead
+ * of a web dialog between them. Read from the plugin's own method list, so
+ * it is answered before the first paint. Never true on the website.
+ */
+export function hasNativePresent(): boolean {
+  if (!hasNativeFrame()) return false;
+  const headers = (
+    capacitorGlobal() as
+      { PluginHeaders?: Array<{ name?: string; methods?: Array<{ name?: string }> }> } | undefined
+  )?.PluginHeaders;
+  const chrome = headers?.find((h) => h?.name === NATIVE_CHROME_PLUGIN);
+  return Array.isArray(chrome?.methods) && chrome.methods.some((m) => m?.name === 'present');
+}
