@@ -5,6 +5,7 @@ import type {
   NativeChromeEvents,
   NativeChromeUpdate,
 } from '@/config/nativeFrame';
+import type { NativeBarTools, NativeBarToolsEvents } from '@/config/nativeBarTools';
 import type {
   NativePresentRequest,
   NativePresentResult,
@@ -19,6 +20,8 @@ import type {
  * - The frame: `configure`, `update`, and four events (config/nativeFrame.ts).
  * - Alerts and action sheets: `present`, `updatePresented`,
  *   `dismissPresented` (config/nativePresent.ts).
+ * - A screen's menus and search in the bar: `setBarTools`, and the
+ *   `barMenuSelect` / `barSearch` events (config/nativeBarTools.ts).
  */
 export interface NativeChromePlugin {
   configure(options: NativeChromeConfiguration): Promise<void>;
@@ -26,9 +29,10 @@ export interface NativeChromePlugin {
   present(options: NativePresentRequest): Promise<NativePresentResult>;
   updatePresented(options: NativePresentUpdate): Promise<void>;
   dismissPresented(options: { token: string }): Promise<void>;
-  addListener<E extends keyof NativeChromeEvents>(
+  setBarTools(options: NativeBarTools): Promise<void>;
+  addListener<E extends keyof (NativeChromeEvents & NativeBarToolsEvents)>(
     eventName: E,
-    listener: (event: NativeChromeEvents[E]) => void
+    listener: (event: (NativeChromeEvents & NativeBarToolsEvents)[E]) => void
   ): Promise<PluginListenerHandle>;
 }
 

@@ -233,6 +233,8 @@ describe('Plants on a phone: today first', () => {
       expect.stringContaining('Basil'),
     ]);
     expect(await screen.findByText('1 plant in this view.')).toBeInTheDocument();
+    // On the website the page goes back to its top, where the token is.
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
 
     await user.click(screen.getByRole('button', { name: 'Remove filter: Only mine' }));
     expect(screen.getByRole('link', { name: /Peace Lily/ })).toBeInTheDocument();

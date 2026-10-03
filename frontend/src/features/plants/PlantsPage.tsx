@@ -29,7 +29,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useSpaces } from '@/hooks/useSpaces';
-import { hasNativeFrame } from '@/lib/platform';
+import { hasNativeBarTools, hasNativeFrame } from '@/lib/platform';
 import { useAuthStore } from '@/store/authStore';
 import { BulkApplyTemplateDialog } from './BulkApplyTemplateDialog';
 import { PlantImage } from '@/components/PlantImage';
@@ -41,6 +41,7 @@ import { SpaceManagerPanel } from './SpaceManagerPanel';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { PlantCareList } from './PlantCareList';
 import { ToolbarMenu, type MenuGroupModel } from './ToolbarMenu';
+import { useNativeBarTools } from './useNativeBarTools';
 import { careWho, groupPlantCare, plantCare, type GroupBy } from './plantCare';
 import { matchesSpaceFilter, plantLocationLabel, type SpaceFilter } from '@/utils/spaces';
 
@@ -249,97 +250,136 @@ export function PlantsPage() {
     )
   ) : null;
 
+  const emptyHousehold =
+    settled && view === 'active' && (plants?.length ?? 0) === 0 && !searchQuery && !filtering;
+  const filterGroups: MenuGroupModel[] = [
+    {
+      title: t('plants.list.groupBy'),
+      items: (['care', 'room', 'name'] as const).map((g) => ({
+        id: `group:${g}`,
+        label: t(
+          g === 'care'
+            ? 'plants.list.groupCare'
+            : g === 'room'
+              ? 'plants.list.groupRoom'
+              : 'plants.list.groupName'
+        ),
+        checked: groupBy === g,
+      })),
+    },
+    ...(view === 'active'
+      ? [
+          {
+            title: t('plants.list.show'),
+            items: (['all', 'mine', 'open'] as const).map((w) => ({
+              id: `who:${w}`,
+              label: t(
+                w === 'all'
+                  ? 'plants.list.everyone'
+                  : w === 'mine'
+                    ? 'plants.list.mine'
+                    : 'tasks.upForGrabs'
+              ),
+              checked: whoFilter === w,
+            })),
+          },
+        ]
+      : []),
+    {
+      title: t('plants.list.spaces'),
+      items: (['all', 'inside', 'outside', 'unplaced'] as const).map((f) => ({
+        id: `space:${f}`,
+        label: t(`spaces.${f}`),
+        checked: spaceFilter === f,
+      })),
+    },
+    ...(allTags.length > 0
+      ? [
+          {
+            title: t('plants.list.tags'),
+            items: [
+              { id: 'tag:', label: t('plants.list.allTags'), checked: !activeTag },
+              ...allTags.map((tag) => ({
+                id: `tag:${tag}`,
+                label: tag,
+                checked: activeTag === tag,
+              })),
+            ],
+          },
+        ]
+      : []),
+  ];
+  const moreGroups: MenuGroupModel[] = [
+    {
+      items: [
+        { id: 'act:move', label: t('spaces.bulkMoveAction') },
+        { id: 'act:template', label: t('plants.list.applyTemplate') },
+        { id: 'act:spaces', label: t('plants.list.manageSpaces') },
+      ],
+    },
+    {
+      items: [
+        view === 'active'
+          ? { id: 'act:past', label: t('plants.list.past') }
+          : { id: 'act:active', label: t('plants.list.active') },
+        { id: 'act:import', label: t('plants.list.importPlants') },
+      ],
+    },
+  ];
+  const onMenu = (id: string) => {
+    const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
+    if (kind === 'group') setGroupBy(value as GroupBy);
+    else if (kind === 'who') setWhoFilter(value as WhoFilter);
+    else if (kind === 'space') setSpaceFilter(value as SpaceFilter);
+    else if (kind === 'tag') setTagFilter(value || null);
+    else if (value === 'move') setMoveOpen(true);
+    else if (value === 'template') setBulkOpen(true);
+    else if (value === 'spaces') setSpaceManagerOpen(true);
+    else if (value === 'past' || value === 'active') setView(value);
+    else if (value === 'import') navigate('/plants/import');
+    // A new filter, grouping or collection reshapes the list: start at its
+    // top, where the token that explains it sits, not somewhere mid-list. In
+    // the iOS app the bar does this itself (its top at rest is above zero by
+    // the bars' height, so a scrollTo(0, 0) here would undo it).
+    if (!hasNativeBarTools() && (kind !== 'act' || value === 'past' || value === 'active'))
+      window.scrollTo(0, 0);
+  };
+  // In the iOS app the bar carries the search field and both menus, and the
+  // page drops its own row of controls. An app built before the bar could
+  // (no `setBarTools`) keeps the web row.
+  const nativeBar = compact && hasNativeBarTools();
+  useNativeBarTools(
+    nativeBar
+      ? {
+          path: '/plants',
+          menus: emptyHousehold
+            ? []
+            : [
+                {
+                  id: 'filter',
+                  label: t('plants.list.filter'),
+                  symbol: 'line.3.horizontal.decrease.circle',
+                  groups: filterGroups,
+                },
+                {
+                  id: 'more',
+                  label: t('plants.list.more'),
+                  symbol: 'ellipsis.circle',
+                  groups: moreGroups,
+                },
+              ],
+          search: emptyHousehold
+            ? null
+            : { placeholder: t('plants.list.searchLabel'), text: searchQuery },
+        }
+      : null,
+    onMenu,
+    setSearchQuery
+  );
+
   if (compact) {
     // Nothing to search, filter or bulk-move in an empty household: the only
     // control left is the one that fixes that.
-    const emptyHousehold =
-      settled && view === 'active' && (plants?.length ?? 0) === 0 && !searchQuery && !filtering;
-    const filterGroups: MenuGroupModel[] = [
-      {
-        title: t('plants.list.groupBy'),
-        items: (['care', 'room', 'name'] as const).map((g) => ({
-          id: `group:${g}`,
-          label: t(
-            g === 'care'
-              ? 'plants.list.groupCare'
-              : g === 'room'
-                ? 'plants.list.groupRoom'
-                : 'plants.list.groupName'
-          ),
-          checked: groupBy === g,
-        })),
-      },
-      ...(view === 'active'
-        ? [
-            {
-              title: t('plants.list.show'),
-              items: (['all', 'mine', 'open'] as const).map((w) => ({
-                id: `who:${w}`,
-                label: t(
-                  w === 'all'
-                    ? 'plants.list.everyone'
-                    : w === 'mine'
-                      ? 'plants.list.mine'
-                      : 'tasks.upForGrabs'
-                ),
-                checked: whoFilter === w,
-              })),
-            },
-          ]
-        : []),
-      {
-        title: t('plants.list.spaces'),
-        items: (['all', 'inside', 'outside', 'unplaced'] as const).map((f) => ({
-          id: `space:${f}`,
-          label: t(`spaces.${f}`),
-          checked: spaceFilter === f,
-        })),
-      },
-      ...(allTags.length > 0
-        ? [
-            {
-              title: t('plants.list.tags'),
-              items: [
-                { id: 'tag:', label: t('plants.list.allTags'), checked: !activeTag },
-                ...allTags.map((tag) => ({
-                  id: `tag:${tag}`,
-                  label: tag,
-                  checked: activeTag === tag,
-                })),
-              ],
-            },
-          ]
-        : []),
-    ];
-    const moreGroups: MenuGroupModel[] = [
-      {
-        items: [
-          { id: 'act:move', label: t('spaces.bulkMoveAction') },
-          { id: 'act:template', label: t('plants.list.applyTemplate') },
-          { id: 'act:spaces', label: t('plants.list.manageSpaces') },
-        ],
-      },
-      {
-        items: [
-          view === 'active'
-            ? { id: 'act:past', label: t('plants.list.past') }
-            : { id: 'act:active', label: t('plants.list.active') },
-          { id: 'act:import', label: t('plants.list.importPlants') },
-        ],
-      },
-    ];
-    const onMenu = (id: string) => {
-      const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
-      if (kind === 'group') setGroupBy(value as GroupBy);
-      else if (kind === 'who') setWhoFilter(value as WhoFilter);
-      else if (kind === 'space') setSpaceFilter(value as SpaceFilter);
-      else if (kind === 'tag') setTagFilter(value || null);
-      else if (value === 'move') setMoveOpen(true);
-      else if (value === 'template') setBulkOpen(true);
-      else if (value === 'spaces') setSpaceManagerOpen(true);
-      else if (value === 'past' || value === 'active') setView(value);
-      else if (value === 'import') navigate('/plants/import');
-    };
     // One removable token per filter in force, so the list never shrinks
     // without saying why.
     const tokens = [
@@ -357,8 +397,13 @@ export function PlantsPage() {
     ].filter((x): x is { label: string; clear: () => void } => Boolean(x));
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3 large-text:flex-col large-text:items-start">
+      // In the iOS app the bar holds the title, the count's place, the "+",
+      // the search and the menus, so the list starts right under the bar:
+      // the empty header row takes no room (`contents`: its h1 stays for
+      // VoiceOver and the launch screen, visually hidden by index.css) and
+      // the page's top padding shrinks from 24pt to 8pt.
+      <div className="space-y-3 native-frame:-mt-4">
+        <div className="flex items-center justify-between gap-3 large-text:flex-col large-text:items-start native-frame:contents">
           <div className="min-w-0">
             <h1 className="font-serif text-3xl leading-tight text-ink">{t('plants.title')}</h1>
             {settled && (plants?.length ?? 0) > 0 && (
@@ -376,7 +421,7 @@ export function PlantsPage() {
         </div>
         {dialogs}
 
-        {!emptyHousehold && (
+        {!emptyHousehold && !nativeBar && (
           <div className="flex items-center gap-2 large-text:flex-wrap">
             <div className="relative min-w-0 flex-1 large-text:basis-full">
               <MagnifyingGlassIcon

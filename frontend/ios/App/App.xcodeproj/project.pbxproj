@@ -20,6 +20,7 @@
 		A11E00060000000000000006 /* PrintPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00070000000000000007 /* PrintPlugin.swift */; };
 		A11E00080000000000000008 /* NativeFrameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00090000000000000009 /* NativeFrameModel.swift */; };
 		A11E000E000000000000000E /* NativePresentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000F000000000000000F /* NativePresentModel.swift */; };
+		A11E0010000000000000001A /* NativeBarTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E0011000000000000001B /* NativeBarTools.swift */; };
 		A11E000A000000000000000A /* NativeFrameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000B000000000000000B /* NativeFrameController.swift */; };
 		A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000D000000000000000D /* NativeChromePlugin.swift */; };
 /* End PBXBuildFile section */
@@ -41,6 +42,7 @@
 		A11E00070000000000000007 /* PrintPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintPlugin.swift; sourceTree = "<group>"; };
 		A11E00090000000000000009 /* NativeFrameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFrameModel.swift; sourceTree = "<group>"; };
 		A11E000F000000000000000F /* NativePresentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePresentModel.swift; sourceTree = "<group>"; };
+		A11E0011000000000000001B /* NativeBarTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBarTools.swift; sourceTree = "<group>"; };
 		A11E000B000000000000000B /* NativeFrameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFrameController.swift; sourceTree = "<group>"; };
 		A11E000D000000000000000D /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -83,6 +85,7 @@
 				A11E00070000000000000007 /* PrintPlugin.swift */,
 				A11E00090000000000000009 /* NativeFrameModel.swift */,
 				A11E000F000000000000000F /* NativePresentModel.swift */,
+				A11E0011000000000000001B /* NativeBarTools.swift */,
 				A11E000B000000000000000B /* NativeFrameController.swift */,
 				A11E000D000000000000000D /* NativeChromePlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -184,6 +187,7 @@
 				A11E00060000000000000006 /* PrintPlugin.swift in Sources */,
 				A11E00080000000000000008 /* NativeFrameModel.swift in Sources */,
 				A11E000E000000000000000E /* NativePresentModel.swift in Sources */,
+				A11E0010000000000000001A /* NativeBarTools.swift in Sources */,
 				A11E000A000000000000000A /* NativeFrameController.swift in Sources */,
 				A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */,
 			);

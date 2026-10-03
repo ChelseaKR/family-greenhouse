@@ -79,13 +79,29 @@ export function markNativeFrame(): void {
  * it is answered before the first paint. Never true on the website.
  */
 export function hasNativePresent(): boolean {
+  return hasNativeChromeMethod('present');
+}
+
+/**
+ * True inside the iOS app when the navigation bar can carry a screen's own
+ * menus and search field (NativeChrome's `setBarTools`): the Plants list
+ * then puts its Filter and More menus and its search in the native bar
+ * instead of a row of web controls. An app built before the method existed
+ * answers false and keeps the web row. Never true on the website.
+ */
+export function hasNativeBarTools(): boolean {
+  return hasNativeChromeMethod('setBarTools');
+}
+
+/** Whether the app's NativeChrome plugin lists `method`, from its header. */
+function hasNativeChromeMethod(method: string): boolean {
   if (!hasNativeFrame()) return false;
   const headers = (
     capacitorGlobal() as
       { PluginHeaders?: Array<{ name?: string; methods?: Array<{ name?: string }> }> } | undefined
   )?.PluginHeaders;
   const chrome = headers?.find((h) => h?.name === NATIVE_CHROME_PLUGIN);
-  return Array.isArray(chrome?.methods) && chrome.methods.some((m) => m?.name === 'present');
+  return Array.isArray(chrome?.methods) && chrome.methods.some((m) => m?.name === method);
 }
 
 /**
