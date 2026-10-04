@@ -23,6 +23,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { planLimitHitContext, track } from '@/services/analytics';
 import i18n from '@/i18n';
+import { isNativeApp } from '@/lib/platform';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -223,6 +224,33 @@ export interface ApiError {
  * now the translated `connection.requestUnreachable`.
  */
 export function getErrorMessage(error: unknown): string {
+  const message = serverErrorMessage(error);
+  // A 402 is the plan refusing something, and its message usually ends by
+  // telling a web reader to upgrade or buy. Inside the apps, which cannot sell
+  // a plan (Guideline 3.1.1), those sentences are dropped and the rest — what
+  // the plan allows, what to remove first — is kept.
+  if (isNativeApp() && axios.isAxiosError(error) && error.response?.status === 402) {
+    return withoutPurchaseCalls(message);
+  }
+  return message;
+}
+
+/**
+ * `message` without the calls to action the backend's plan refusals carry:
+ * a sentence that starts with "Upgrade", "Buy" or "Choose a paid plan", and a
+ * trailing ", or upgrade …" clause. When nothing else is left, the app's
+ * neutral "Plan changes aren't available in the app."
+ */
+export function withoutPurchaseCalls(message: string): string {
+  const kept = message
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/^(upgrade|buy|choose a paid plan)\b/i.test(sentence.trim()))
+    .map((sentence) => sentence.replace(/,\s*or (upgrade|choose a paid plan)\b[^.!?]*/i, ''));
+  const text = kept.join(' ').trim();
+  return text || i18n.t('settings.billing.nativeUnavailable');
+}
+
+function serverErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     if (isNoResponseError(error)) {
       return i18n.t('connection.requestUnreachable');

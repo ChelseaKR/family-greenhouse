@@ -38,15 +38,46 @@ that it contradicts.
 | Legal and support URLs                   | `/legal/privacy`, `/support`, `/account-deletion` answer 200                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `curl`                                                                                                                                               |
 | Store screenshots                        | Being re-captured by the store-screenshots lane for the new native frame; §3 describes the previous set                                                                                                                                                                                                                                                                                                                                                                                                        | not re-checked here                                                                                                                                  |
 
-**One listing sentence for Chelsea to decide on.** The description's chat
-bullet says "Plans are bought on the web, not in the app." Guideline 3.1.1
-covers an app's metadata as well as the app: it may not carry "calls to
-action that direct customers to purchasing mechanisms other than in-app
-purchase." That sentence states a fact rather than linking anywhere, but a
-reviewer could read it as one. Removing it loses nothing the listing needs
-(the "ACCOUNTS AND PRICING" paragraph already says the app sells nothing).
-This PR does not change the listing copy: it lives in
-`store-assets/metadata/en-US.json`, which is the listing's reviewed source.
+### Availability and the payment position (owner decision, 2026-10-04)
+
+- **Availability: the United States storefront only.** In App Store
+  Connect → Pricing and Availability, select the United States and nothing
+  else. Every other storefront brings back the rule that the app and its
+  metadata may not carry "buttons, external links, or other calls to
+  action that direct customers to purchasing mechanisms other than in-app
+  purchase" (Guideline 3.1.1(a)); the United States storefront is exempt
+  from it. Widening availability later means re-reading this section first.
+- **Ship as built.** The app stays a free download with no In-App Purchase.
+  Garden and Greenhouse are sold only on familygreenhouse.net (Stripe), and a
+  plan bought there applies in the app. The app shows the household's plan
+  read-only, with no price, no purchase path, and no link or wording that
+  points to one (see `docs/mobile.md`, "Store payment rules").
+- **The position, if App Review asks:** Guideline 3.1.3(f), "Free
+  Stand-alone Apps": "Free apps acting as a stand-alone companion to a paid
+  web based tool ... do not need to use in-app purchase, provided there is
+  no purchasing inside the app, or calls to action for purchase outside of
+  the app." This is an argument, not a safe harbor. Its examples are
+  business tools (VoIP, cloud storage, email, web hosting), and 3.1.1 says
+  that unlocking "features or functionality within your app" needs In-App
+  Purchase. 3.1.3(b) Multiplatform Services allows features bought on the
+  web only "provided those items are also available as in-app purchases
+  within the app," which this build does not do.
+- **If App Review rejects under 3.1.1:** add In-App Purchase for the plans
+  (StoreKit auto-renewing subscriptions alongside Stripe), which is what
+  3.1.3(b) asks for. It is a larger project (a subscription group, App Store
+  Server Notifications, merging Apple and Stripe entitlements per household,
+  restore, Terms and privacy-label updates) and is not started until a
+  rejection says it is needed.
+- **The listing** no longer says where plans are bought: "Plans are bought on
+  the web, not in the app." was removed from the description (owner
+  decision, 2026-10-04).
+
+Sources, read on 2026-10-04: Apple's App Review Guidelines
+(<https://developer.apple.com/app-store/review/guidelines/>, "Last Updated:
+June 8, 2026"), sections 3.1.1, 3.1.1(a), 3.1.3, 3.1.3(a), 3.1.3(b) and
+3.1.3(f); and Apple's note on the United States change, "Updated guidelines
+now available," May 1, 2025
+(<https://developer.apple.com/news/?id=9txfddzf>).
 
 ### App Review notes (draft, paste at submission)
 
@@ -126,9 +157,10 @@ true of an app with a six-figure review count.
 ### Price and payment model
 
 The app itself is free to download; there is no paid tier of the app and no
-in-app purchase. The listing must say this because it's the reason
-Guideline 3.1.1 doesn't apply here in the way it might look like it should:
-subscriptions exist, but only on the web, never through the app.
+in-app purchase. Subscriptions exist, but only on the web, never through the
+app. Whether that satisfies Guideline 3.1.1 is a judgment, not a given: see
+"Availability and the payment position" in §0 for the position taken and
+the plan if App Review disagrees.
 
 Actual current subscription pricing (`backend/src/models/plans.ts`, the
 source of truth — verify there before a submission if pricing may have
@@ -150,8 +182,7 @@ app," with no link, and in the app `/pricing` and `/gift` open Settings →
 Plan status rather than any plans page.
 This is Apple's Guideline 3.1.1 rule for a "digital goods" subscription, not
 a choice made for this listing — see `docs/mobile.md`, "Store payment
-rules," for the two-store policy this follows and the one surface that
-still slips a price into the app (§4 below covers it).
+rules," for the two-store policy this follows.
 
 ## 2. Privacy nutrition label (App Privacy questionnaire)
 
@@ -408,22 +439,19 @@ each item it raised, re-verified today:
    after `docs/native-push-setup.md` is done, and after step 8 there
    (a reminder received on a device running that build).
 
-4. **One more, not from #469: a locked feature can show a price with no way
-   to pay.** `LockedFeature` (gating `/chat`, the trip-sitter offer, and API
-   key settings) checks the household's plan, not `isNativeApp()`. On a free
-   Seedling household inside the native shell, it will show "Included with
-   Garden — $4.99 a month for the whole household" and, for an admin, a
-   **Change plan** button — a subscription price and a call to action inside
-   an app that cannot sell one. The button's destination is native-gated and
-   says plan changes aren't available, so it never reaches a purchase
-   mechanism, but a reviewer who reads "a plant care assistant answers
-   questions about your plants" in the description, taps Chat, and lands on
-   a priced upgrade prompt is a real Guideline 2.3.1 (accurate metadata) /
-   3.1.1 (in-app purchase) risk on the same screen. `docs/mobile.md`, "Store
-   payment rules," documents this as not yet fixed. If a reviewer flags it,
-   the honest answer is: known, tracked, not yet gated on native — fixing it
-   is a product decision about what paying members see in the app, not a
-   quick patch.
+4. **One more, not from #469: a locked feature used to show a price with no
+   way to pay. Fixed.** `LockedFeature` (gating `/chat`, the trip-sitter
+   offer, and API key settings) showed "Included with Garden — $4.99 a month
+   for the whole household" and a **Change plan** button inside the shells.
+   Since #804 and #903 it checks `isNativeApp()` and shows only what the
+   feature is and "Plan changes aren't available in the app." The 2026-10-04
+   sweep closed the rest: the changelog's billing entries, the analytics
+   "See plans" link, the trial notice's checkout line, the archive restore's
+   "upgrade" wording, and the "Upgrade …" sentences in the server's plan
+   refusals no longer appear in the app (`docs/mobile.md`, "Store payment
+   rules"). One wording is left on purpose: the Terms page (a legal text)
+   says paid plans "are available on the web" and are "not sold inside the
+   mobile apps".
 
 ## Sources checked while writing this
 

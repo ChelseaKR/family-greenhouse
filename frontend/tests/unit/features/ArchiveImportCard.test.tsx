@@ -256,6 +256,35 @@ describe('ArchiveImportCard', () => {
     expect(screen.queryByRole('button', { name: 'Restore into this household' })).toBeNull();
   });
 
+  it('in the app: says the plan-cap refusal without telling the reader to upgrade', async () => {
+    // The global the Capacitor bridge injects (lib/platform.ts reads it).
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      answer(() =>
+        HttpResponse.json({
+          ...PREVIEW,
+          counts: { ...PREVIEW.counts, activePlants: 23 },
+          planLimit: { planName: 'Seedling', limit: 20, currentActivePlants: 0, fits: false },
+          canImport: false,
+        })
+      );
+      renderCard();
+      await chooseFile(exportFile());
+      await userEvent.click(await screen.findByRole('button', { name: 'Check this export' }));
+      expect(
+        await screen.findByText(
+          'This export has 23 active plants and the Seedling plan allows 20, so nothing will be restored into this household.'
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/upgrade/i)).toBeNull();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('reports exactly how far an interrupted restore got, and offers to finish it', async () => {
     answer((body) =>
       body.mode === 'preview'

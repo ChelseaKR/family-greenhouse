@@ -14,6 +14,7 @@ import { calendarDaysBetween, isOverdue } from '@/utils/date';
 import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
 import { CoverageCard } from './CoverageCard';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * Care analytics — KPI tiles + four views over the same data feed:
@@ -167,10 +168,17 @@ export function AnalyticsPage() {
       {windowDays !== null && (
         <Alert variant="info">
           <p>
-            {t('analytics.historyWindow.note', { days: windowDays })}{' '}
-            <Link to="/settings/billing" className="font-medium underline">
-              {t('analytics.historyWindow.upgrade')}
-            </Link>
+            {t('analytics.historyWindow.note', { days: windowDays })}
+            {/* No "See plans" link in the apps (Guideline 3.1.1): the note
+                still says what the window is and that nothing is deleted. */}
+            {!isNativeApp() && (
+              <>
+                {' '}
+                <Link to="/settings/billing" className="font-medium underline">
+                  {t('analytics.historyWindow.upgrade')}
+                </Link>
+              </>
+            )}
           </p>
         </Alert>
       )}

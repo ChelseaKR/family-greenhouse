@@ -2731,7 +2731,9 @@
       "otherArchive": "Este hogar se restauró desde otra exportación. Restaura en un hogar nuevo.",
       "changed": "Algo cambió desde que la revisaste. Vuelve a revisarla.",
       "overLimit": "Esta exportación tiene {{active}} plantas activas y el plan {{plan}} permite {{limit}}. No se restaurará nada hasta que mejores el plan.",
+      "overLimitInApp": "Esta exportación tiene {{active}} plantas activas y el plan {{plan}} permite {{limit}}, así que no se restaurará nada en este hogar.",
       "stoppedAtLimit": "Se detuvo en el límite del plan. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Mejora el plan y vuelve a restaurar.",
+      "stoppedAtLimitInApp": "Se detuvo en el límite del plan. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Si vuelves a restaurar el mismo archivo más tarde, solo se añadirá lo que falta.",
       "interrupted": "Se detuvo a medias. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Vuelve a restaurar para terminar; no se añade nada dos veces."
     },
     "preview": {
