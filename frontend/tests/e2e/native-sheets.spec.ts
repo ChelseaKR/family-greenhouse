@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
+import { provisionAccount, uiLogin, type ProvisionedAccount, choosePlantAction } from './helpers';
 
 /**
  * Confirmations and choices as Apple's own alerts and action sheets in the
@@ -109,7 +109,7 @@ test('in the iOS app, Remove opens a native action sheet; dismissing it changes 
   await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
   await openPlant(page);
 
-  await page.getByRole('button', { name: /^remove$/i }).click();
+  await choosePlantAction(page, /^remove/i);
   await expect.poll(async () => (await presents(page)).length).toBe(1);
   const [sheet] = await presents(page);
   expect(sheet.kind).toBe('actionSheet');
@@ -128,14 +128,15 @@ test('in the iOS app, Remove opens a native action sheet; dismissing it changes 
   // Swiped away / tapped outside / backgrounded: Swift answers no choice.
   await answer(page, 0, null);
   // Cancel.
-  await page.getByRole('button', { name: /^remove$/i }).click();
+  await choosePlantAction(page, /^remove/i);
   await expect.poll(async () => (await presents(page)).length).toBe(2);
   await answer(page, 1, 'cancel');
 
   // Still on the plant, still active after a fresh read from the server.
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Sheet Fern' })).toBeAttached();
-  await expect(page.getByRole('button', { name: /^remove$/i })).toBeVisible();
+  // Active: in the app that is the status card, which a past plant has not.
+  await expect(page.getByRole('region', { name: 'What this plant needs now' })).toBeVisible();
 });
 
 test('in the iOS app, Delete asks again in a red alert, and only its red button deletes', async ({
@@ -146,7 +147,7 @@ test('in the iOS app, Delete asks again in a red alert, and only its red button 
   await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
   await openPlant(page);
 
-  await page.getByRole('button', { name: /^remove$/i }).click();
+  await choosePlantAction(page, /^remove/i);
   await expect.poll(async () => (await presents(page)).length).toBe(1);
   await answer(page, 0, 'delete');
   await expect.poll(async () => (await presents(page)).length).toBe(2);
@@ -163,7 +164,7 @@ test('on the website: the web dialog, and nothing asks for a native sheet', asyn
   await uiLogin(page, account.email, account.password);
   await expect(page.locator('html')).not.toHaveAttribute('data-native-frame', /.*/);
   await openPlant(page);
-  await page.getByRole('button', { name: /^remove$/i }).click();
+  await choosePlantAction(page, /^remove/i);
   await expect(
     page.getByRole('dialog', { name: /Move Sheet Fern out of active care/ })
   ).toHaveCount(1);
@@ -179,7 +180,7 @@ test('an iOS frame that cannot present keeps the web dialog', async ({ page }) =
   await uiLogin(page, account.email, account.password);
   await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
   await openPlant(page);
-  await page.getByRole('button', { name: /^remove$/i }).click();
+  await choosePlantAction(page, /^remove/i);
   await expect(
     page.getByRole('dialog', { name: /Move Sheet Fern out of active care/ })
   ).toHaveCount(1);

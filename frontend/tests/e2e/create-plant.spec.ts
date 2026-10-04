@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { navigateTo, provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
+import {
+  navigateTo,
+  provisionAccount,
+  uiLogin,
+  ProvisionedAccount,
+  pickPlantPagePhoto,
+} from './helpers';
 
 const VALID_PNG = readFileSync(new URL('../../public/brand/favicon-32x32.png', import.meta.url));
 
@@ -149,7 +155,7 @@ test.describe('Create plant flow', () => {
 
     // Retrying is now an image-only operation on PlantDetailPage; it cannot
     // POST another plant.
-    await page.getByLabel(/upload photo/i).setInputFiles(photo);
+    await pickPlantPagePhoto(page, photo);
     const putResponse = await realPut;
     const confirmResponse = await confirm;
     const imageResponse = await displayedBytes;

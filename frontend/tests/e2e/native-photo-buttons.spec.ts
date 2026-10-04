@@ -206,8 +206,27 @@ for (const device of DEVICES) {
         await expect(page).toHaveURL(/\/plants\/[^/]+$/);
         await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page`);
 
+        // On the plant page the two photo actions are in its "…" menu now,
+        // with the rest of the plant's actions; the buttons themselves are
+        // checked on Add plant, the one screen that still shows them.
+        // On a phone-width plant page (and in the app's frame) the photo
+        // actions are in the "…" menu with the rest of the plant's actions;
+        // a wide page without the frame still shows the buttons.
+        const more = page.getByLabel('More plant actions', { exact: true });
+        // Phone widths get the compact plant page (this stub has no native
+        // frame, so a tablet keeps the wide one).
+        const inMenu = (page.viewportSize()?.width ?? 1024) < 640;
+        if (inMenu) {
+          await more.click();
+          const menu = page.locator('details[open]');
+          await expect(menu.getByRole('button', { name: 'Take photo' })).toBeVisible();
+          await expect(menu.getByRole('button', { name: 'Choose photo' })).toBeVisible();
+          await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page menu`);
+          await page.keyboard.press('Escape');
+        }
+
         const screens = [
-          { screen: 'plant page', go: () => Promise.resolve() },
+          ...(inMenu ? [] : [{ screen: 'plant page', go: () => Promise.resolve() }]),
           { screen: 'Add plant', go: () => page.goto('/plants/new') },
         ];
         for (const { screen, go } of screens) {
@@ -227,14 +246,6 @@ for (const device of DEVICES) {
             expect(findings.applied, `${where}: default text size`).toBeCloseTo(1, 1);
           }
           expect(findings.problems, `${where}: photo buttons overlap or spill`).toEqual([]);
-        }
-
-        // The phone's full-width plant page still has room for both on one
-        // row, as it did before; stacking everywhere would be a regression.
-        if (device.name === 'iPhone 17 Pro' && textSize === 'default') {
-          await page.goBack();
-          const findings = await inspectPhotoButtons(page);
-          expect(findings.rows, 'iPhone plant page: the buttons share one row').toBe(1);
         }
       });
     });

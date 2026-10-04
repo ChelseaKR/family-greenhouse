@@ -1,3 +1,4 @@
+import { choosePlantAction } from './helpers';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -103,7 +104,7 @@ test.describe('A11y — authenticated routes', () => {
     const monstera = page.getByRole('link', { name: /Monstera/i }).first();
     await monstera.waitFor({ state: 'visible', timeout: 15000 });
     await monstera.click();
-    await page.getByRole('link', { name: 'Passport' }).click();
+    await choosePlantAction(page, /^passport$/i);
     await page.waitForURL(/\/plants\/[^/]+\/passport$/, { timeout: 15000 });
     const print = page.getByRole('button', { name: 'Print passport' });
     await expect(print).toBeEnabled({ timeout: 15000 });

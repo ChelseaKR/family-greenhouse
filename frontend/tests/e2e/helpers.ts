@@ -189,3 +189,70 @@ export async function navigateTo(page: Page, linkName: RegExp, urlPattern: RegEx
     await page.getByRole('button', { name: /close sidebar/i }).waitFor({ state: 'hidden' });
   }
 }
+
+/**
+ * Runs one of the plant page's actions (Edit, Remove, Passport, Share
+ * cutting…). On a phone and in the iOS app they live in the page's "…" menu;
+ * on desktop they are buttons (Passport is a link). `name` should match both
+ * spellings, e.g. /^remove/i for "Remove" and "Remove…".
+ */
+export async function choosePlantAction(page: Page, name: RegExp) {
+  const more = page.getByLabel('More plant actions', { exact: true });
+  const direct = page.getByRole('button', { name }).or(page.getByRole('link', { name }));
+  // Whichever form this layout has: decide only once one of them is visible
+  // (both render with the page, but not necessarily in the same frame).
+  const deadline = Date.now() + 15000;
+  for (;;) {
+    if (await more.isVisible()) {
+      await more.click();
+      await page.locator('details[open]').getByRole('button', { name }).click();
+      return;
+    }
+    const shown = direct.filter({ visible: true }).first();
+    if (await shown.isVisible()) {
+      await shown.click();
+      return;
+    }
+    if (Date.now() > deadline) throw new Error(`No plant action matching ${String(name)}`);
+    await page.waitForTimeout(200);
+  }
+}
+
+/**
+ * Shows the past plants. The desktop list has an "Active / Past plants"
+ * switch; the phone list keeps it in its "…" menu.
+ */
+export async function openPastPlants(page: Page) {
+  const more = page.getByLabel('More plant actions', { exact: true });
+  const toggle = page.getByRole('button', { name: /^past plants$/i });
+  await more
+    .or(toggle.filter({ visible: true }))
+    .first()
+    .waitFor({ timeout: 15000 });
+  if (await more.isVisible()) {
+    await more.click();
+    await page
+      .locator('details[open]')
+      .getByRole('button', { name: /^past plants$/i })
+      .click();
+    return;
+  }
+  await toggle.filter({ visible: true }).first().click();
+}
+
+/**
+ * Picks a photo on the plant page: the visible "Upload photo" field on
+ * desktop, or the page's file input when the photo actions are in the "…"
+ * menu (a phone width).
+ */
+export async function pickPlantPagePhoto(
+  page: Page,
+  file: Parameters<ReturnType<Page['locator']>['setInputFiles']>[0]
+) {
+  const labelled = page.getByLabel(/upload photo/i);
+  if (await labelled.isVisible().catch(() => false)) {
+    await labelled.setInputFiles(file);
+    return;
+  }
+  await page.locator('input[type="file"]').first().setInputFiles(file);
+}

@@ -1,5 +1,12 @@
 import { test, expect, Page } from '@playwright/test';
-import { navigateTo, provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
+import {
+  navigateTo,
+  provisionAccount,
+  uiLogin,
+  ProvisionedAccount,
+  choosePlantAction,
+  openPastPlants,
+} from './helpers';
 
 /**
  * Plant create / edit / delete round-trip.
@@ -73,7 +80,7 @@ test.describe('Plant CRUD', () => {
     await expect(page.getByRole('heading', { name: originalName })).toBeVisible({ timeout: 15000 });
 
     // Open the Edit plant modal from the detail page header.
-    await page.getByRole('button', { name: /^edit$/i }).click();
+    await choosePlantAction(page, /^edit$/i);
     await expect(page.getByRole('heading', { name: /edit plant/i })).toBeVisible();
 
     const newName = `${originalName} (renamed)`;
@@ -97,19 +104,19 @@ test.describe('Plant CRUD', () => {
     await page.getByRole('button', { name: /add plant/i }).click();
     await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
 
-    await page.getByRole('button', { name: /^remove$/i }).click();
+    await choosePlantAction(page, /^remove/i);
     await page.getByRole('button', { name: /archive for later/i }).click();
 
     await expect(page).toHaveURL(/\/plants$/);
     // Toggle button, not a tab — see #445.
-    await page.getByRole('button', { name: /past plants/i }).click();
+    await openPastPlants(page);
     const archivedPlant = page.getByRole('link', { name: new RegExp(plantName, 'i') });
     await expect(archivedPlant).toBeVisible();
     await expect(archivedPlant.getByText('Archived')).toBeVisible();
 
     await archivedPlant.click();
     await expect(page.getByText('Archived', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: /^restore$/i }).click();
+    await choosePlantAction(page, /^restore/i);
     await expect(page.getByText('Archived', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Plant restored')).toBeVisible();
   });
@@ -129,7 +136,7 @@ test.describe('Plant CRUD', () => {
     // "Remove" flow: Remove → outcome dialog → "Delete — it stays in the
     // trash" → explicit ConfirmDialog. Deleting moves the plant into the
     // household trash (#670), restorable for 30 days.
-    await page.getByRole('button', { name: /^remove$/i }).click();
+    await choosePlantAction(page, /^remove/i);
     await expect(
       page.getByRole('heading', { name: /move .* out of active care\?/i })
     ).toBeVisible();
