@@ -86,6 +86,9 @@ export function PlantRow({ item, label, children, actions }: PlantRowProps) {
   };
 
   const onPointerDown = (event: React.PointerEvent) => {
+    // A new gesture: a click it produces is its own, never one to swallow
+    // for an earlier long press.
+    suppressClick.current = false;
     if (!actions || event.pointerType !== 'touch') return;
     const g = {
       id: event.pointerId,
@@ -135,6 +138,16 @@ export function PlantRow({ item, label, children, actions }: PlantRowProps) {
     clearPress();
     gesture.current = null;
     if (!g || g.id !== event.pointerId) return;
+    if (g.pressed) {
+      // iOS sends no click after a long press. Forget the swallow once the
+      // click that might follow has had its chance, or the next activation
+      // (a keyboard Enter, a VoiceOver double-tap, which bring no pointer
+      // down) would be eaten.
+      setTimeout(() => {
+        suppressClick.current = false;
+      }, 400);
+      return;
+    }
     if (!g.horizontal) return;
     suppressClick.current = true;
     setDragging(false);
