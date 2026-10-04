@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { HandRaisedIcon } from '@heroicons/react/24/outline';
-import { useAuthStore } from '@/store/authStore';
 import { PlantImage } from '@/components/PlantImage';
 import { PlantStatusBadge } from './PlantLineageCard';
 import type { CareSection, PlantCare } from './plantCare';
@@ -46,7 +45,6 @@ export function PlantCareList({
   actions,
 }: PlantCareListProps) {
   const { t } = useTranslation();
-  const myName = useAuthStore((s) => s.user?.name);
   return (
     <div className="space-y-5">
       {sections.map((section) => (
@@ -145,7 +143,9 @@ export function PlantCareList({
                       aria-hidden="true"
                       title={who.text}
                       className={clsx(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold large-text:hidden',
+                        'flex h-7 shrink-0 items-center justify-center rounded-full text-xs font-bold large-text:hidden',
+                        // Your own work says "You"; others are an initial.
+                        who.you && !who.open ? 'px-2' : 'w-7',
                         who.open
                           ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
                           : 'bg-primary-100 text-primary-800'
@@ -153,8 +153,10 @@ export function PlantCareList({
                     >
                       {who.open ? (
                         <HandRaisedIcon className="h-4 w-4" />
+                      ) : who.you ? (
+                        t('plants.list.you')
                       ) : (
-                        initialOf(who.you ? (myName ?? who.text) : who.text)
+                        initialOf(who.text)
                       )}
                     </span>
                   )}

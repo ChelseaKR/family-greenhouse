@@ -326,37 +326,55 @@ test.describe('Done with Undo on the phone website', () => {
 test.describe('the status beside the Done button (402pt)', () => {
   test.use({ viewport: { width: 402, height: 874 } });
 
-  test('the longest status is never clipped; the space name gives way', async ({ page }) => {
-    const due = new Date();
-    due.setDate(due.getDate() - 3);
-    const acct = await provisionAccount({
-      emailPrefix: 'today-first-status',
-      space: { name: 'Sunroom by the big bay window', environment: 'inside' },
-      plant: { name: 'Bird of Paradise' },
-      waterTask: { frequency: 7, nextDue: due.toISOString() },
-    });
-    await uiLogin(page, acct.email, acct.password);
-    await page.goto('/plants');
-    const row = page.getByRole('link', { name: /^Bird of Paradise, Water · 3 days overdue/ });
-    await expect(row).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Water Bird of Paradise' })).toBeVisible();
+  for (const mine of [false, true]) {
+    test(`the longest status is never clipped; the space name gives way${mine ? ' (your own work: "You")' : ''}`, async ({
+      page,
+      request,
+    }) => {
+      const due = new Date();
+      due.setDate(due.getDate() - 3);
+      const acct = await provisionAccount({
+        emailPrefix: 'today-first-status',
+        space: { name: 'Sunroom by the big bay window', environment: 'inside' },
+        plant: { name: 'Bird of Paradise' },
+        waterTask: { frequency: 7, nextDue: due.toISOString() },
+      });
+      if (mine) {
+        const login = await request.post('http://localhost:4000/auth/login', {
+          data: { email: acct.email, password: acct.password },
+        });
+        const { idToken } = (await login.json()) as { idToken: string };
+        const claimed = await request.post(`http://localhost:4000/tasks/${acct.taskId}/claim`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        expect(claimed.ok()).toBeTruthy();
+      }
+      await uiLogin(page, acct.email, acct.password);
+      await page.goto('/plants');
+      const row = page.getByRole('link', { name: /^Bird of Paradise, Water · 3 days overdue/ });
+      if (mine) await expect(row.getByTitle('You')).toHaveText('You');
+      await expect(row).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Water Bird of Paradise' })).toBeVisible();
 
-    const status = row.getByTestId('row-status');
-    await expect(status).toHaveText('Water · 3 days overdue');
-    const fit = await status.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      const line = el.parentElement!.getBoundingClientRect();
-      return {
-        clipped: el.scrollWidth > el.clientWidth + 1,
-        insideLine: r.right <= line.right + 1,
-        width: r.width,
-      };
+      const status = row.getByTestId('row-status');
+      await expect(status).toHaveText('Water · 3 days overdue');
+      const fit = await status.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const line = el.parentElement!.getBoundingClientRect();
+        return {
+          clipped: el.scrollWidth > el.clientWidth + 1,
+          insideLine: r.right <= line.right + 1,
+          width: r.width,
+        };
+      });
+      expect(fit.clipped, 'the status text is clipped').toBe(false);
+      expect(fit.insideLine, 'the status runs past its line').toBe(true);
+      // And it ends before the Done button starts.
+      const button = await page
+        .getByRole('button', { name: 'Water Bird of Paradise' })
+        .boundingBox();
+      const statusBox = await status.boundingBox();
+      expect(statusBox!.x + statusBox!.width).toBeLessThanOrEqual(button!.x);
     });
-    expect(fit.clipped, 'the status text is clipped').toBe(false);
-    expect(fit.insideLine, 'the status runs past its line').toBe(true);
-    // And it ends before the Done button starts.
-    const button = await page.getByRole('button', { name: 'Water Bird of Paradise' }).boundingBox();
-    const statusBox = await status.boundingBox();
-    expect(statusBox!.x + statusBox!.width).toBeLessThanOrEqual(button!.x);
-  });
+  }
 });

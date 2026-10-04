@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantsPage } from '@/features/plants/PlantsPage';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
+import i18n from '@/i18n';
+import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
 
 /**
  * The phone layout ("Today first"): the website under 640px and the iOS app.
@@ -161,6 +163,30 @@ describe('Plants on a phone: today first', () => {
       name: /Peace Lily, Water today, Bedroom, Theo Nakamura/,
     });
     expect(within(row).getByTitle('Theo')).toHaveTextContent('T');
+  });
+
+  it('beside the Done button your own work says You (Tú in Spanish), others an initial', async () => {
+    renderPlants();
+    await screen.findByRole('heading', { level: 2, name: 'Needs care' });
+    const mine = screen.getByRole('link', { name: /^Basil/ });
+    expect(within(mine).getByTitle('You')).toHaveTextContent(/^You$/);
+    const theirs = screen.getByRole('link', { name: /^Monstera/ });
+    expect(within(theirs).getByTitle('Theo, covering')).toHaveTextContent(/^T$/);
+    // VoiceOver's label is unchanged.
+    expect(mine).toHaveAttribute('aria-label', 'Basil, Water today, Kitchen, You');
+
+    await act(async () => {
+      await ensureLocaleCatalog(i18n, 'es');
+      await i18n.changeLanguage('es');
+    });
+    try {
+      const mio = await screen.findByRole('link', { name: /^Basil, Regar: hoy/ });
+      expect(within(mio).getByTitle('Tú')).toHaveTextContent(/^Tú$/);
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('en');
+      });
+    }
   });
 
   it('a due row shows the status in full and only a compact chip beside the Done button', async () => {
