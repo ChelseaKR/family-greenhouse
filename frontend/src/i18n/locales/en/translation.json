@@ -983,7 +983,31 @@
       "nextUp": "Next up: {{plant}}, {{when}}.",
       "upcomingEmpty": "Nothing is scheduled after today.",
       "emptyTitle": "No care scheduled yet",
-      "emptyBody": "Add a plant, and its watering and the rest of its care show up here."
+      "emptyBody": "Add a plant, and its watering and the rest of its care show up here.",
+      "filteredEmpty": "No tasks match these filters.",
+      "clearFilters": "Clear filters"
+    },
+    "page": {
+      "eyebrow": "Today’s work",
+      "description": "Manage your plant care tasks.",
+      "filtersLabel": "Task filters",
+      "filterAll": "All",
+      "filterMine": "My tasks",
+      "filterToday": "Today",
+      "filterWeek": "This week",
+      "filterOverdue": "Overdue",
+      "overdueUnknown": "Overdue count unknown",
+      "emptyTitle": "No tasks found",
+      "emptyAll": "Add care tasks to your plants to see them here.",
+      "emptyFiltered": "No tasks match the current filter.",
+      "clearFilter": "Clear filter",
+      "viewPlants": "View plants",
+      "shown_one": "{{count}} task shown.",
+      "shown_other": "{{count}} tasks shown.",
+      "daysOverdue_one": "{{count}} day overdue",
+      "daysOverdue_other": "{{count}} days overdue",
+      "assignedTo": "Assigned to {{name}}",
+      "assignedToYou": "Assigned to you"
     }
   },
   "today": {

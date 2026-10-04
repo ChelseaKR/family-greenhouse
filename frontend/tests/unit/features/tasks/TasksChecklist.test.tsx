@@ -11,6 +11,7 @@ import { useAuthStore, type User } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
 import i18n from '@/i18n';
 import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
+import { sameTitle } from '@/config/nativeFrame';
 import { server } from '../../../msw/server';
 
 /**
@@ -243,6 +244,11 @@ describe('Tasks on a phone ("Checklist")', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderTasks();
     expect(await screen.findByRole('heading', { level: 2, name: 'Atrasadas' })).toBeVisible();
+    // The page title matches the app bar's own ("Tareas"), so the app hides
+    // the page's copy (sameTitle) instead of showing the title twice.
+    const h1 = screen.getByRole('heading', { level: 1 }).textContent!;
+    expect(h1).toBe('Tareas');
+    expect(sameTitle(h1, i18n.t('nav.tasks'))).toBe(true);
     expect(screen.getByRole('link', { name: /^Boston Fern/ })).toHaveAccessibleName(
       'Boston Fern, Regar: 3 días de retraso, Kitchen, Tú'
     );
@@ -450,6 +456,32 @@ describe('Tasks on a phone ("Checklist")', () => {
     await vi.waitFor(() => expect(writes.at(-1)).toBe('POST /tasks/t-fern/unclaim'));
   });
 
+  it('only one row is open at a time: opening or touching another closes it', async () => {
+    renderTasks();
+    const rowOf = async (name: RegExp) =>
+      (await screen.findByRole('link', { name })).parentElement!;
+    const swipe = (row: HTMLElement, from: number, to: number) => {
+      touch('pointerDown', row, from);
+      touch('pointerMove', row, from + Math.sign(to - from) * 40);
+      touch('pointerMove', row, to);
+      touch('pointerUp', row, to);
+    };
+    const bird = await rowOf(/^Bird of Paradise/);
+    const aloe = await rowOf(/^Aloe/);
+    swipe(bird, 300, 100);
+    expect(bird.style.transform).toBe('translateX(-228px)');
+    // Opening another row closes the first.
+    swipe(aloe, 20, 110);
+    await vi.waitFor(() => expect(bird.style.transform).toBe(''));
+    expect(aloe.style.transform).toBe('translateX(88px)');
+    // Just touching a third row closes the open one too, as in Mail.
+    const rubber = await rowOf(/^Rubber Plant/);
+    touch('pointerDown', rubber, 50);
+    touch('pointerUp', rubber, 50);
+    await vi.waitFor(() => expect(aloe.style.transform).toBe(''));
+    expect(writes).toEqual([]);
+  });
+
   it('Snooze from the menu, and Cancel on how long writes nothing', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderTasks();
@@ -469,6 +501,16 @@ describe('Tasks on a phone ("Checklist")', () => {
     const sheet = await sheetFor('Boston Fern');
     expect(within(sheet).getByRole('button', { name: 'Unclaim' })).toBeInTheDocument();
     expect(within(sheet).queryByRole('button', { name: 'I’ll do it' })).toBeNull();
+  });
+
+  it('a filter that hides everything says so and clears in one tap', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    serve(SEED.filter((s) => s.who !== 'me'));
+    renderTasks('/tasks?filter=mine');
+    expect(await screen.findByText('No tasks match these filters.')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'All done for today' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(rowNames('Overdue')).toEqual(['Bird of Paradise']);
   });
 
   it('a household with no tasks: one sentence and Add plant, no segments', async () => {
@@ -498,6 +540,29 @@ describe('Tasks on a phone ("Checklist")', () => {
     expect(screen.queryByRole('link', { name: 'Hoya' })).toBeNull();
     expect(screen.getByText('Tasks remaining: 5 · Spaces to visit: 2')).toBeVisible();
     expect(screen.getByText('Due later: 2. Switch to By date to see them.')).toBeVisible();
+  });
+
+  it('on the desktop, your own task says “Assigned to you”, others their name', async () => {
+    phone(false);
+    renderTasks();
+    expect((await screen.findAllByText(/Assigned to you/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Assigned to Theo Nakamura/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Assigned to Marisol Reyes/)).toBeNull();
+  });
+
+  it('the desktop page is Spanish too: chips, sections, due text and the task type', async () => {
+    phone(false);
+    await ensureLocaleCatalog(i18n, 'es');
+    await i18n.changeLanguage('es');
+    renderTasks();
+    expect(await screen.findByRole('group', { name: 'Filtros de tareas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mis tareas' })).toBeInTheDocument();
+    expect(screen.getByText('El trabajo de hoy')).toBeInTheDocument();
+    expect(screen.getByText('7 tareas mostradas.')).toBeInTheDocument();
+    expect(screen.getAllByText('Regar').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('3 días de retraso').length).toBe(1);
+    expect(screen.queryByText('Water')).toBeNull();
+    expect(screen.queryByText(/Assigned to|overdue|Today/)).toBeNull();
   });
 
   it('the desktop website keeps its own layout', async () => {

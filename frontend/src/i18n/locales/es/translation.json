@@ -1013,7 +1013,33 @@
       "nextUp": "Lo próximo: {{plant}}, {{when}}.",
       "upcomingEmpty": "No hay nada programado después de hoy.",
       "emptyTitle": "Todavía no hay cuidados programados",
-      "emptyBody": "Añade una planta y aquí aparecerán su riego y el resto de sus cuidados."
+      "emptyBody": "Añade una planta y aquí aparecerán su riego y el resto de sus cuidados.",
+      "filteredEmpty": "Ninguna tarea coincide con estos filtros.",
+      "clearFilters": "Quitar filtros"
+    },
+    "page": {
+      "eyebrow": "El trabajo de hoy",
+      "description": "Gestiona las tareas de cuidado de tus plantas.",
+      "filtersLabel": "Filtros de tareas",
+      "filterAll": "Todas",
+      "filterMine": "Mis tareas",
+      "filterToday": "Hoy",
+      "filterWeek": "Esta semana",
+      "filterOverdue": "Atrasadas",
+      "overdueUnknown": "Número de atrasadas desconocido",
+      "emptyTitle": "No hay tareas",
+      "emptyAll": "Añade tareas de cuidado a tus plantas para verlas aquí.",
+      "emptyFiltered": "Ninguna tarea coincide con el filtro actual.",
+      "clearFilter": "Quitar filtro",
+      "viewPlants": "Ver plantas",
+      "shown_one": "{{count}} tarea mostrada.",
+      "shown_other": "{{count}} tareas mostradas.",
+      "shown_many": "{{count}} tareas mostradas.",
+      "daysOverdue_one": "{{count}} día de retraso",
+      "daysOverdue_other": "{{count}} días de retraso",
+      "daysOverdue_many": "{{count}} días de retraso",
+      "assignedTo": "Asignada a {{name}}",
+      "assignedToYou": "Asignada a ti"
     }
   },
   "today": {
