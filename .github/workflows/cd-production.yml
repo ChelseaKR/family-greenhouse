@@ -649,8 +649,10 @@ jobs:
           trap 'rm -rf "$rollback_dir"' EXIT
           versions=""
           # Keep this list in sync with the deploy loop below (and with
-          # esbuild's dist/*.js bundles + the terraform function names).
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream; do
+          # esbuild's dist/*.js bundles + the terraform function names);
+          # backend/tests/unit/config/deployHandlerLists.test.ts fails when
+          # it drifts from terraform's lambda_handlers.
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api plantTags reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             # get-function without a qualifier reports Version "$LATEST",
             # which broke rollback (it looked for "<handler>-v\$LATEST.zip"
@@ -764,7 +766,11 @@ jobs:
           # `emailEvents` is SNS-invoked (SES bounce/complaint feedback) and
           # `emailReplies` SES-invoked (reply-to-act, #667); like `reminders`
           # neither has an API route, and both are deployed the same way.
-          for handler in auth plants tasks households me notifications billing species climate apiKeys api reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream; do
+          # `plantTags` (#424) was missing from both lists until 0.39.0, so
+          # its function ran terraform's placeholder and every plant-tag
+          # route answered 500; deployHandlerLists.test.ts now pins the lists
+          # to terraform's lambda_handlers.
+          for handler in auth plants tasks households me notifications billing species climate apiKeys api plantTags reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream; do
             FUNCTION_NAME="family-greenhouse-${handler}-production"
             SRC="dist/${handler}.js"
             test -f "$SRC" || { echo "Missing bundle: $SRC"; exit 1; }
