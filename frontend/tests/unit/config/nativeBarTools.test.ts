@@ -63,4 +63,30 @@ describe('setBarTools, web and Swift', () => {
     expect(pbx).toContain('NativeBarTools.swift in Sources */,');
     expect(pbx).toContain('path = NativeBarTools.swift;');
   });
+
+  it('shows the search field at launch every time, and hides it on scroll only after a drag', () => {
+    const frame = read('ios/App/App/NativeFrameController.swift');
+    const apply = frame.slice(
+      frame.indexOf('private func applySearch('),
+      frame.indexOf('func userBeganScrolling(')
+    );
+    // Installed always-visible: with hide-on-scroll on at install, UIKit
+    // started it hidden whenever the page's tools arrived after the screen
+    // appeared (measured: 1 to 3 launches in 10).
+    expect(apply).toContain(
+      'navigationItem.hidesSearchBarWhenScrolling = NativeSearchVisibility.hides(afterUserScrolled: false)'
+    );
+    expect(apply).not.toMatch(/hidesSearchBarWhenScrolling = true/);
+    // An untouched list is settled at its top so the large title shows too.
+    expect(apply).toMatch(/!self\.userHasScrolled[\s\S]*settleAtTop\(self\)/);
+    // Hide-on-scroll turns on from the person's first drag, and only then.
+    const began = frame.slice(frame.indexOf('func userBeganScrolling('));
+    expect(began).toContain('NativeSearchVisibility.hides(afterUserScrolled: true)');
+    expect(frame).toMatch(
+      /if scrollView\.isTracking \{ self\?\.liveScreen\?\.userBeganScrolling\(\) \}/
+    );
+    expect(model).toMatch(
+      /static func hides\(afterUserScrolled: Bool\) -> Bool \{ afterUserScrolled \}/
+    );
+  });
 });
