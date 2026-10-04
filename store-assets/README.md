@@ -43,7 +43,11 @@ On a Mac with Xcode and the iOS 26 simulator runtime:
    `xcodebuild`, boots the simulator if it's off (and shuts it down again
    afterward), and writes the PNGs here. Pass `--udid <id>` if you have more
    than one iPhone 17 Pro Max simulator, or a different 6.9-inch iPhone.
-3. Look at every frame before committing it.
+3. Look at every frame before committing it, and commit only the frames whose
+   UI changed. The demo's due dates are relative to the day, but the time of
+   day still shows: a capture on 2026-10-04 at about 2 p.m. Pacific showed
+   today's jobs on the sitter page (07) as "Overdue", while one at 4 a.m. showed
+   them as "Due today". Take 07 in the morning.
 
 How it drives the app: `frontend/scripts/store-shots/tour.js` is copied into
 the synced web folder of that one simulator build (`ios/App/App/public`,
@@ -63,7 +67,7 @@ size and saved without an alpha channel.
 | `02-home`          | Home: the large title, the day's counts, and "To do now" with the overdue Peace Lily up for grabs and today's jobs held by named members.                                                        |
 | `03-plant-detail`  | The Monstera, opened from the list: back chevron and ⋯ menu, the status card ("Water today", held by you, last done by Marisol Reyes, Watered and Snooze), its house rule and note.              |
 | `04-plant-care`    | Further down the same page: the curated care tips for _Monstera deliciosa_ and its weekly watering task with its streak.                                                                         |
-| `05-tasks`         | Tasks, with the overdue job marked "Up for grabs" and the Claim, Ask family and Done actions.                                                                                                    |
+| `05-tasks`         | The Tasks checklist: the filter button in the native bar, Today and Upcoming (5 each), the overdue Peace Lily first, then today's four, each with a check circle and who holds it.               |
 | `06-household`     | Household: who did the care in the last 30 days, who holds what now, and the four jobs nobody holds.                                                                                             |
 | `07-sitter`        | The page a plant-sitter link opens: what needs doing and in which room, with Done buttons and no account, until the link expires.                                                                |
 | `08-notifications` | Settings, Notifications: the email reminder, weekly digest and household email settings as switches.                                                                                             |

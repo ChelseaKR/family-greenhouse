@@ -45,9 +45,9 @@ export const SHOTS = [
     step: { scrollTo: { text: 'Caring for' }, scrollTop: false },
   },
   {
-    // Overdue work nobody has claimed, marked "Up for grabs".
+    // The Tasks checklist: Today first, overdue at the top, and who holds each.
     name: '05-tasks',
-    step: { go: '/tasks', path: '^/tasks$', waitText: 'Up for grabs' },
+    step: { go: '/tasks', path: '^/tasks$', waitText: 'Peace Lily' },
   },
   {
     // Who did the care in the last 30 days and who holds what now.
