@@ -18,20 +18,21 @@ export function careWhoText(
   item: PlantCare,
   myUserId: string | undefined,
   t: TFunction
-): { text: string; aria: string; open: boolean } | null {
+): { text: string; aria: string; open: boolean; you: boolean } | null {
   // Only work that is due soon says who has it: "Theo" beside a plant due in
   // three weeks is noise, and the plant page always has the full answer.
   if (!item.task || item.days === undefined || item.days > 1) return null;
   const who = careWho(item.task, myUserId);
   if (who.kind === 'open') {
     const text = t('tasks.upForGrabs');
-    return { text, aria: text, open: true };
+    return { text, aria: text, open: true, you: false };
   }
   const name = who.kind === 'you' ? t('plants.list.you') : (who.name ?? t('plants.list.assigned'));
   // The chip shows a first name ("Theo"), as a household says it; a screen
   // reader still hears the full name.
   const short = who.kind === 'member' && who.name ? who.name.split(/\s+/)[0] : name;
-  if (!who.coveringFor) return { text: short, aria: name, open: false };
+  const you = who.kind === 'you';
+  if (!who.coveringFor) return { text: short, aria: name, open: false, you };
   return {
     text:
       who.kind === 'you'
@@ -39,5 +40,6 @@ export function careWhoText(
         : t('plants.list.covering', { name: short }),
     aria: t('plants.list.coveringAria', { name, away: who.coveringFor }),
     open: false,
+    you,
   };
 }

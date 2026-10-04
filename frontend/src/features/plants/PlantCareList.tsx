@@ -1,10 +1,11 @@
-import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
+import { HandRaisedIcon } from '@heroicons/react/24/outline';
 import { PlantImage } from '@/components/PlantImage';
 import { PlantStatusBadge } from './PlantLineageCard';
 import type { CareSection, PlantCare } from './plantCare';
 import { careStatusText, careWhoText } from './plantCareText';
+import { PlantRow, type RowActions } from './PlantRow';
 
 const TONE: Record<string, string> = {
   overdue: 'text-red-700 font-semibold',
@@ -24,6 +25,8 @@ interface PlantCareListProps {
   past: boolean;
   myUserId: string | undefined;
   withCuttings: ReadonlySet<string>;
+  /** Done, Undo, Snooze and the row menu; absent while care is not known. */
+  actions?: RowActions;
 }
 
 /**
@@ -39,6 +42,7 @@ export function PlantCareList({
   past,
   myUserId,
   withCuttings,
+  actions,
 }: PlantCareListProps) {
   const { t } = useTranslation();
   return (
@@ -55,11 +59,27 @@ export function PlantCareList({
           </div>
           <ul className="overflow-hidden rounded-2xl border border-primary-100/70 bg-paper divide-y divide-primary-100/60">
             {section.items.map((item) => {
-              const status = showCare && !past ? careStatusText(item, t) : null;
+              const marked = Boolean(item.task && actions?.pending.has(item.task.id));
+              const status =
+                showCare && !past
+                  ? marked
+                    ? t('plants.list.marked', { task: actions!.taskName(item.task!) })
+                    : careStatusText(item, t)
+                  : null;
               const who = showCare && !past ? careWhoText(item, myUserId, t) : null;
               const room = roomLabel(item);
-              const tone =
-                item.days === undefined
+              // The Done button shows on due work (PlantRow): the chip shrinks.
+              const compact = Boolean(
+                actions &&
+                showCare &&
+                !past &&
+                item.task &&
+                item.days !== undefined &&
+                item.days <= 0
+              );
+              const tone = marked
+                ? 'text-primary-700 font-semibold'
+                : item.days === undefined
                   ? TONE.later
                   : item.days < 0
                     ? TONE.overdue
@@ -68,45 +88,92 @@ export function PlantCareList({
                       : TONE.later;
               const aria = [item.plant.name, status, room, who?.aria].filter(Boolean).join(', ');
               return (
-                <li key={item.plant.id}>
-                  <Link
-                    to={`/plants/${item.plant.id}`}
-                    aria-label={aria}
-                    className="flex min-h-16 items-center gap-3 px-3 py-2 hover:bg-parchment/60 focus-visible:bg-parchment large-text:flex-wrap"
-                  >
-                    <span className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-parchment ring-1 ring-primary-100/60">
-                      <PlantImage plant={item.plant} width={44} height={44} />
+                <PlantRow
+                  key={item.plant.id}
+                  item={item}
+                  label={aria}
+                  actions={showCare && !past ? actions : undefined}
+                >
+                  <span className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-parchment ring-1 ring-primary-100/60">
+                    <PlantImage plant={item.plant} width={44} height={44} />
+                  </span>
+                  <span className="min-w-0 flex-1 large-text:min-w-[calc(100%-3.5rem)]">
+                    <span className="block truncate font-semibold text-ink large-text:whitespace-normal">
+                      {item.plant.name}
+                      {withCuttings.has(item.plant.id) && (
+                        <span className="ml-1" aria-hidden="true">
+                          🌱
+                        </span>
+                      )}
                     </span>
-                    <span className="min-w-0 flex-1 large-text:min-w-[calc(100%-3.5rem)]">
-                      <span className="block truncate font-semibold text-ink large-text:whitespace-normal">
-                        {item.plant.name}
-                        {withCuttings.has(item.plant.id) && (
-                          <span className="ml-1" aria-hidden="true">
-                            🌱
-                          </span>
-                        )}
-                      </span>
-                      <span className="block truncate text-sm large-text:whitespace-normal">
-                        {status && <span className={tone}>{status}</span>}
-                        {status && room && <span className="text-gray-600"> · </span>}
-                        <span className="text-gray-600">{room}</span>
-                      </span>
+                    {/* The status is the row's most important words: it never
+                        truncates. The space name gives way first (truncated,
+                        then gone); at the accessibility sizes both wrap. */}
+                    <span
+                      className="flex min-w-0 items-baseline text-sm large-text:block"
+                      data-testid="row-status-line"
+                    >
+                      {status && (
+                        <span
+                          className={clsx(
+                            tone,
+                            'shrink-0 whitespace-nowrap large-text:whitespace-normal'
+                          )}
+                          data-testid="row-status"
+                        >
+                          {status}
+                        </span>
+                      )}
+                      {room && (
+                        <span className="min-w-0 truncate text-gray-600 large-text:whitespace-normal">
+                          {status && '\u00a0· '}
+                          {room}
+                        </span>
+                      )}
                     </span>
-                    {past && <PlantStatusBadge status={item.plant.status ?? 'active'} />}
-                    {who && (
-                      <span
-                        className={clsx(
-                          'shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold large-text:ml-14',
-                          who.open
-                            ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
-                            : 'bg-primary-50 text-primary-800'
-                        )}
-                      >
-                        {who.text}
-                      </span>
-                    )}
-                  </Link>
-                </li>
+                  </span>
+                  {past && <PlantStatusBadge status={item.plant.status ?? 'active'} />}
+                  {who && compact && (
+                    // Beside the Done button there is room for the status or
+                    // the words, not both: an initial (or a raised hand for
+                    // "up for grabs"). The row's label carries the words for
+                    // VoiceOver; `title` shows them on hover. At the
+                    // accessibility sizes the row wraps, so the words return.
+                    <span
+                      aria-hidden="true"
+                      title={who.text}
+                      className={clsx(
+                        'flex h-7 shrink-0 items-center justify-center rounded-full text-xs font-bold large-text:hidden',
+                        // Your own work says "You"; others are an initial.
+                        who.you && !who.open ? 'px-2' : 'w-7',
+                        who.open
+                          ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
+                          : 'bg-primary-100 text-primary-800'
+                      )}
+                    >
+                      {who.open ? (
+                        <HandRaisedIcon className="h-4 w-4" />
+                      ) : who.you ? (
+                        t('plants.list.you')
+                      ) : (
+                        initialOf(who.text)
+                      )}
+                    </span>
+                  )}
+                  {who && (
+                    <span
+                      className={clsx(
+                        'shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold large-text:ml-14',
+                        compact && 'hidden large-text:inline-flex',
+                        who.open
+                          ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
+                          : 'bg-primary-50 text-primary-800'
+                      )}
+                    >
+                      {who.text}
+                    </span>
+                  )}
+                </PlantRow>
               );
             })}
           </ul>
@@ -114,4 +181,9 @@ export function PlantCareList({
       ))}
     </div>
   );
+}
+
+/** The first letter of a name, for the compact who chip. */
+function initialOf(name: string): string {
+  return name.trim().charAt(0).toUpperCase();
 }

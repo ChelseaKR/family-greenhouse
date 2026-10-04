@@ -269,3 +269,112 @@ test.describe('an empty phone list with past plants', () => {
     await expect(page.getByRole('link', { name: /Gone Fern/ })).toBeVisible();
   });
 });
+
+test.describe('Done with Undo on the phone website', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  async function freshAccount() {
+    return provisionAccount({
+      emailPrefix: 'today-first-undo',
+      plant: { name: 'Undo Fern' },
+      waterTask: { frequency: 7 },
+    });
+  }
+
+  test('an undone water sends no completion, and the plant is still due', async ({ page }) => {
+    const acct = await freshAccount();
+    const completions: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+        completions.push(req.url());
+      }
+    });
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto('/plants');
+    await page.getByRole('button', { name: 'Water Undo Fern' }).click();
+    await page.getByRole('button', { name: 'Undo: Water Undo Fern' }).click();
+    await page.waitForTimeout(6500);
+    expect(completions).toEqual([]);
+    await page.reload();
+    await expect(page.getByRole('link', { name: /^Undo Fern, Water today/ })).toBeVisible();
+  });
+
+  test('a water left alone is sent once, after the window, and the plant moves on', async ({
+    page,
+  }) => {
+    const acct = await freshAccount();
+    const completions: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+        completions.push(req.url());
+      }
+    });
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto('/plants');
+    await page.getByRole('button', { name: 'Water Undo Fern' }).click();
+    await expect(page.getByText('Done: Water, Undo Fern')).toBeVisible();
+    await page.waitForTimeout(3000);
+    expect(completions).toEqual([]);
+    await expect.poll(() => completions.length, { timeout: 6000 }).toBe(1);
+    await page.waitForTimeout(2000);
+    expect(completions).toHaveLength(1);
+    await page.reload();
+    await expect(page.getByRole('link', { name: /^Undo Fern, Water in 7 days/ })).toBeVisible();
+  });
+});
+
+test.describe('the status beside the Done button (402pt)', () => {
+  test.use({ viewport: { width: 402, height: 874 } });
+
+  for (const mine of [false, true]) {
+    test(`the longest status is never clipped; the space name gives way${mine ? ' (your own work: "You")' : ''}`, async ({
+      page,
+      request,
+    }) => {
+      const due = new Date();
+      due.setDate(due.getDate() - 3);
+      const acct = await provisionAccount({
+        emailPrefix: 'today-first-status',
+        space: { name: 'Sunroom by the big bay window', environment: 'inside' },
+        plant: { name: 'Bird of Paradise' },
+        waterTask: { frequency: 7, nextDue: due.toISOString() },
+      });
+      if (mine) {
+        const login = await request.post('http://localhost:4000/auth/login', {
+          data: { email: acct.email, password: acct.password },
+        });
+        const { idToken } = (await login.json()) as { idToken: string };
+        const claimed = await request.post(`http://localhost:4000/tasks/${acct.taskId}/claim`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        expect(claimed.ok()).toBeTruthy();
+      }
+      await uiLogin(page, acct.email, acct.password);
+      await page.goto('/plants');
+      const row = page.getByRole('link', { name: /^Bird of Paradise, Water · 3 days overdue/ });
+      if (mine) await expect(row.getByTitle('You')).toHaveText('You');
+      await expect(row).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Water Bird of Paradise' })).toBeVisible();
+
+      const status = row.getByTestId('row-status');
+      await expect(status).toHaveText('Water · 3 days overdue');
+      const fit = await status.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const line = el.parentElement!.getBoundingClientRect();
+        return {
+          clipped: el.scrollWidth > el.clientWidth + 1,
+          insideLine: r.right <= line.right + 1,
+          width: r.width,
+        };
+      });
+      expect(fit.clipped, 'the status text is clipped').toBe(false);
+      expect(fit.insideLine, 'the status runs past its line').toBe(true);
+      // And it ends before the Done button starts.
+      const button = await page
+        .getByRole('button', { name: 'Water Bird of Paradise' })
+        .boundingBox();
+      const statusBox = await status.boundingBox();
+      expect(statusBox!.x + statusBox!.width).toBeLessThanOrEqual(button!.x);
+    });
+  }
+});

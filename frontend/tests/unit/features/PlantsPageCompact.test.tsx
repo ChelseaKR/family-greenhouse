@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantsPage } from '@/features/plants/PlantsPage';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
+import i18n from '@/i18n';
+import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
 
 /**
  * The phone layout ("Today first"): the website under 640px and the iOS app.
@@ -141,9 +143,11 @@ describe('Plants on a phone: today first', () => {
       'Basil, Water today, Kitchen, You',
       'Monstera, Water today, Living Room, Theo, covering for Dana',
     ]);
-    // The covering member is named, not the assignee who is away.
-    expect(within(rows[2]).getByText('Theo, covering')).toBeInTheDocument();
-    expect(within(rows[2]).queryByText('Dana')).not.toBeInTheDocument();
+    // The covering member is named, not the assignee who is away. Beside the
+    // Done button the chip is an initial, with the words as its title.
+    const chip = within(rows[2]).getByTitle('Theo, covering');
+    expect(chip).toHaveTextContent('T');
+    expect(within(rows[2]).queryByTitle(/Dana/)).not.toBeInTheDocument();
   });
 
   it('shows a first name in the chip and the full name to a screen reader', async () => {
@@ -158,7 +162,45 @@ describe('Plants on a phone: today first', () => {
     const row = await screen.findByRole('link', {
       name: /Peace Lily, Water today, Bedroom, Theo Nakamura/,
     });
-    expect(within(row).getByText('Theo')).toBeInTheDocument();
+    expect(within(row).getByTitle('Theo')).toHaveTextContent('T');
+  });
+
+  it('beside the Done button your own work says You (Tú in Spanish), others an initial', async () => {
+    renderPlants();
+    await screen.findByRole('heading', { level: 2, name: 'Needs care' });
+    const mine = screen.getByRole('link', { name: /^Basil/ });
+    expect(within(mine).getByTitle('You')).toHaveTextContent(/^You$/);
+    const theirs = screen.getByRole('link', { name: /^Monstera/ });
+    expect(within(theirs).getByTitle('Theo, covering')).toHaveTextContent(/^T$/);
+    // VoiceOver's label is unchanged.
+    expect(mine).toHaveAttribute('aria-label', 'Basil, Water today, Kitchen, You');
+
+    await act(async () => {
+      await ensureLocaleCatalog(i18n, 'es');
+      await i18n.changeLanguage('es');
+    });
+    try {
+      const mio = await screen.findByRole('link', { name: /^Basil, Regar: hoy/ });
+      expect(within(mio).getByTitle('Tú')).toHaveTextContent(/^Tú$/);
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('en');
+      });
+    }
+  });
+
+  it('a due row shows the status in full and only a compact chip beside the Done button', async () => {
+    renderPlants();
+    await screen.findByRole('heading', { level: 2, name: 'Needs care' });
+    const row = screen.getByRole('link', { name: /^Peace Lily/ });
+    // The status is its own element, never inside the truncating room span.
+    const status = within(row).getByTestId('row-status');
+    expect(status).toHaveTextContent('Water · 1 day overdue');
+    expect(status.className).toContain('whitespace-nowrap');
+    expect(status.className).not.toContain('truncate');
+    // Up for grabs is a hand icon with the words as its title, not a word chip.
+    const chip = within(row).getByTitle('Up for grabs');
+    expect(chip).not.toHaveTextContent('Up for grabs');
   });
 
   it('puts a plant with no care task in its own group, never under "All good"', async () => {
