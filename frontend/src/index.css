@@ -177,6 +177,28 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* A select is never shorter than a tap target. Safari draws a styled select
+   as a native pop-up button at its own height: it ignores padding AND
+   min-height there, so a select styled like the text fields (`.input`, py-2
+   text-sm) came out 23px tall, and the email-language select 18px, under the
+   24px minimum target size. Drawing the select ourselves (no native
+   appearance, a chevron as its background) makes padding and min-height
+   count in every browser; 40px matches the text fields beside it. The end
+   padding is reserved for the chevron, so long option text never runs
+   under it, whatever padding utility the select carries. */
+@layer base {
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1.25rem 1.25rem;
+    padding-inline-end: 2.25rem !important;
+  }
+}
+
 /* Scrolling dialog overlays (`fixed inset-0 overflow-y-auto`): keep the
    panel's title and close button out from under the status bar and its
    buttons above the home indicator when a tall dialog is scrolled to either
