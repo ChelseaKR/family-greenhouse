@@ -10,7 +10,7 @@ export default function YellowLeaves() {
     <article className="prose-fg">
       <p className="lead">
         Yellow leaves are a symptom, not a diagnosis. Roughly everything that can go wrong with a
-        houseplant &mdash; too much water, too little, wrong light, cold draught, exhausted soil,
+        houseplant &mdash; too much water, too little, wrong light, cold draft, exhausted soil,
         pests, or simply age &mdash; can produce a yellow leaf. So the useful question isn&rsquo;t
         &ldquo;what causes yellow leaves,&rdquo; it&rsquo;s &ldquo;which leaves, in what pattern,
         and what else is true.&rdquo;
@@ -21,7 +21,7 @@ export default function YellowLeaves() {
         Plants shed their oldest leaves. It is completely normal, it happens on healthy plants, and
         it accounts for a large share of the yellow leaves people panic about.
       </p>
-      <p>It&rsquo;s ordinary ageing if all of the following are true:</p>
+      <p>It&rsquo;s ordinary aging if all of the following are true:</p>
       <ul>
         <li>It&rsquo;s the lowest leaf, or one of the lowest, and one of the oldest.</li>
         <li>It&rsquo;s one leaf, or one every few weeks &mdash; not several at once.</li>
@@ -70,11 +70,11 @@ export default function YellowLeaves() {
       <p>
         Possibly nutrient depletion &mdash; a plant that hasn&rsquo;t been fed or repotted in a long
         time eventually runs the pot down, and it withdraws what it can from old leaves to supply
-        new growth. Repotting into fresh mix is the more reliable fix than fertiliser, and it lets
+        new growth. Repotting into fresh mix is the more reliable fix than fertilizer, and it lets
         you look at the roots while you&rsquo;re there.
       </p>
       <p>
-        A caution, because this is where people do damage: don&rsquo;t reach for fertiliser as a
+        A caution, because this is where people do damage: don&rsquo;t reach for fertilizer as a
         general response to a sad plant. If the problem is roots, feeding makes it worse. Only feed
         a plant that is otherwise healthy and actively growing.
       </p>
@@ -84,14 +84,14 @@ export default function YellowLeaves() {
         Pests. Turn the leaf over and look at the underside and where the leaf meets the stem
         &mdash; that&rsquo;s where they live. Spider mites give a fine pale stippling and sometimes
         webbing in leaf joints; sticky residue points at scale or aphids. Isolate the plant from its
-        neighbours the same day.
+        neighbors the same day.
       </p>
 
       <h3>Sudden yellowing after something changed</h3>
       <p>
-        A move, a repot, a cold night by a draughty window, a radiator turned on for the season, a
-        trip to a new home. Plants respond to change with a bit of leaf loss and then stabilise. If
-        you can name a change in the last fortnight, the most useful thing you can do is nothing:
+        A move, a repot, a cold night by a drafty window, a radiator turned on for the season, a
+        trip to a new home. Plants respond to change with a bit of leaf loss and then stabilize. If
+        you can name a change in the last two weeks, the most useful thing you can do is nothing:
         hold the conditions steady and wait.
       </p>
 
@@ -113,7 +113,20 @@ export default function YellowLeaves() {
         Sometimes you check everything and none of it fits. That happens, and the honest advice is
         that a plant with a couple of yellow leaves and otherwise normal growth usually
         doesn&rsquo;t need an intervention. Keep the watering consistent, leave it where it is, and
-        look again in a fortnight. Most of the time it resolves.
+        look again in two weeks. Most of the time it resolves.
+      </p>
+
+      <h2>If you know which plant it is</h2>
+      <p>
+        The pattern matters more than the species, but the species narrows it down. Each of our care
+        guides gives that plant&rsquo;s watering rhythm and light needs, and these ones cover what
+        its yellow leaves usually mean: <a href="/care/pothos">pothos</a>,
+        <a href="/care/snake-plant">snake plant</a>, <a href="/care/monstera">monstera</a>,
+        <a href="/care/spider-plant">spider plant</a>, <a href="/care/zz-plant">ZZ plant</a>,
+        <a href="/care/heartleaf-philodendron">heartleaf philodendron</a>,{' '}
+        <a href="/care/calathea">calathea</a> and
+        <a href="/care/rubber-plant">rubber plant</a>. The <a href="/care">care guide index</a>{' '}
+        lists every plant we cover.
       </p>
 
       <h2>The reason it&rsquo;s hard to diagnose in a shared house</h2>

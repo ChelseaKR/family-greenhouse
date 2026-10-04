@@ -38,6 +38,7 @@ import {
   type PlantSafetyPage,
 } from '@/features/petsafe/plantSafetyPages';
 import esCatalog from '@/i18n/locales/es/translation.json';
+import { CARE_GUIDE_SLUGS } from '@/features/care/careGuideSlugs';
 import {
   ASPCA_ANIMAL_POISON_CONTROL_URL,
   PET_TOXICITY,
@@ -227,5 +228,49 @@ describe('/pet-safe links every published plant page', () => {
       a.getAttribute('href')
     );
     expect(hrefs).toEqual(PLANT_SAFETY_PAGES.map((page) => `/pet-safe/${page.slug}`));
+  });
+});
+
+describe('a plant page links its own care guide when one exists', () => {
+  const careLinks = (page: PlantSafetyPage) => {
+    const { container } = render(
+      <MemoryRouter>
+        <PlantSafetyArticle page={page} />
+      </MemoryRouter>
+    );
+    const hrefs = [...container.querySelectorAll('a[href^="/care/"]')].map((a) =>
+      a.getAttribute('href')
+    );
+    cleanup();
+    return hrefs;
+  };
+
+  it.each(PLANT_SAFETY_PAGES.map((page) => [page.slug, page] as const))('%s', (slug, page) => {
+    expect(careLinks(page)).toEqual(CARE_GUIDE_SLUGS.has(slug) ? [`/care/${slug}`] : []);
+  });
+
+  it('links most pages, and never invents a guide for a plant without one', () => {
+    const linked = PLANT_SAFETY_PAGES.filter((page) => careLinks(page).length > 0);
+    // 22 of the 28 published pages had a guide with the same slug when this landed.
+    expect(linked.length).toBeGreaterThanOrEqual(20);
+    expect(careLinks(findPlantSafetyPage('lily')!)).toEqual([]);
+  });
+
+  it('names the plant in the link text, from the catalog', () => {
+    render(
+      <MemoryRouter>
+        <PlantSafetyArticle page={findPlantSafetyPage('pothos')!} />
+      </MemoryRouter>
+    );
+    expect(
+      screen.getByRole('link', { name: 'Pothos care guide: watering, light and common problems' })
+    ).toHaveAttribute('href', '/care/pothos');
+  });
+
+  it('fails the build gate when the link points at a guide that does not exist', () => {
+    const page = findPlantSafetyPage('pothos')!;
+    const html = documentFor(page).replace('href="/care/pothos"', 'href="/care/not-a-guide"');
+    expect(html).toContain('href="/care/not-a-guide"');
+    expect(gate(html, entryFor('pothos')).join('\n')).toMatch(/not a published page/);
   });
 });
