@@ -326,6 +326,17 @@ export function PlantsPage() {
       ],
     },
   ];
+  // An empty active list still has somewhere to go: the plants that died or
+  // were given away, and an import. Without these the past plants of a
+  // household with no living ones could not be reached on a phone at all.
+  const emptyMoreGroups: MenuGroupModel[] = [
+    {
+      items: [
+        { id: 'act:past', label: t('plants.list.past') },
+        { id: 'act:import', label: t('plants.list.importPlants') },
+      ],
+    },
+  ];
   const onMenu = (id: string) => {
     const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
     if (kind === 'group') setGroupBy(value as GroupBy);
@@ -353,7 +364,14 @@ export function PlantsPage() {
       ? {
           path: '/plants',
           menus: emptyHousehold
-            ? []
+            ? [
+                {
+                  id: 'more',
+                  label: t('plants.list.more'),
+                  symbol: 'ellipsis.circle',
+                  groups: emptyMoreGroups,
+                },
+              ]
             : [
                 {
                   id: 'filter',
@@ -420,6 +438,17 @@ export function PlantsPage() {
           </Link>
         </div>
         {dialogs}
+
+        {emptyHousehold && !nativeBar && (
+          <div className="flex justify-end">
+            <ToolbarMenu
+              label={t('plants.list.more')}
+              icon={<EllipsisHorizontalIcon className="h-6 w-6" aria-hidden="true" />}
+              groups={emptyMoreGroups}
+              onSelect={onMenu}
+            />
+          </div>
+        )}
 
         {!emptyHousehold && !nativeBar && (
           <div className="flex items-center gap-2 large-text:flex-wrap">

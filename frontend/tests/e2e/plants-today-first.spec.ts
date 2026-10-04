@@ -242,3 +242,30 @@ test.describe('iOS app with bar tools (native frame stub)', () => {
     await expect(page.getByText(/1 plant matches “fern”/)).toBeVisible();
   });
 });
+
+test.describe('an empty phone list with past plants', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('still reaches the past plants through the "…" menu', async ({ page, request }) => {
+    const acct = await provisionAccount({
+      emailPrefix: 'today-first-past',
+      plant: { name: 'Gone Fern' },
+    });
+    const login = await request.post('http://localhost:4000/auth/login', {
+      data: { email: acct.email, password: acct.password },
+    });
+    const { idToken } = (await login.json()) as { idToken: string };
+    const archived = await request.put(`http://localhost:4000/plants/${acct.plantId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+      data: { status: 'died' },
+    });
+    expect(archived.ok()).toBeTruthy();
+
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto('/plants');
+    await expect(page.getByText(/let's add your first plant/i)).toBeVisible();
+    await page.getByLabel('More plant actions', { exact: true }).click();
+    await page.getByRole('button', { name: 'Past plants' }).click();
+    await expect(page.getByRole('link', { name: /Gone Fern/ })).toBeVisible();
+  });
+});

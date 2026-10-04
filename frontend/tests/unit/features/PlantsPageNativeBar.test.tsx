@@ -212,11 +212,16 @@ describe('Plants in the iOS app with bar tools', () => {
     expect(await screen.findByText('Import Page')).toBeInTheDocument();
   });
 
-  it('an empty household sends no menus and no search', async () => {
+  it('an empty household sends no search and only the way to past plants and import', async () => {
     server.use(http.get(`${API}/plants`, () => HttpResponse.json([])));
     renderPlants();
     await screen.findByText(/let's add your first plant/i);
-    await waitFor(() => expect(lastSent()).toEqual({ path: '/plants', menus: [], search: null }));
+    await waitFor(() => expect(lastSent().search).toBeNull());
+    expect(lastSent().menus.map((m) => m.id)).toEqual(['more']);
+    expect(lastSent().menus[0].groups.flatMap((g) => g.items.map((i) => i.id))).toEqual([
+      'act:past',
+      'act:import',
+    ]);
   });
 });
 
