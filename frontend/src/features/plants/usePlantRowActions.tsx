@@ -1,16 +1,15 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Plant } from '@/services/plantService';
 import { taskService, type TaskWithCoverage } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
-import { hasNativePresent } from '@/lib/platform';
 import { playHaptic } from '@/services/nativeHaptics';
 import { toast } from '@/store/toastStore';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { useClaimTaskMutation } from '@/features/tasks/taskMutations';
-import { ActionSheet, type ActionSheetRequest } from './ActionSheet';
+import { useActionChooser } from './useActionChooser';
 import { MovePlantsDialog } from './MovePlantsDialog';
 import { useDeferredCompletion } from './useDeferredCompletion';
 import type { PlantCare } from './plantCare';
@@ -44,23 +43,7 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
     onError: (err) => toast.error(getErrorMessage(err)),
   });
   const [movePlant, setMovePlant] = useState<Plant | null>(null);
-  const [sheet, setSheet] = useState<ActionSheetRequest | null>(null);
-  const answer = useRef<((id: string | null) => void) | null>(null);
-
-  /** One question with a few answers: Apple's action sheet in the app, the
-   *  web sheet elsewhere. Resolves the chosen id, or null for no choice. */
-  const choose = (request: ActionSheetRequest, from?: Element | null): Promise<string | null> => {
-    if (hasNativePresent()) {
-      return import('@/services/nativePresent')
-        .then(({ chooseFromMenu }) => chooseFromMenu({ ...request, from }))
-        .catch(() => null);
-    }
-    answer.current?.(null);
-    return new Promise((resolve) => {
-      answer.current = resolve;
-      setSheet(request);
-    });
-  };
+  const { choose, element: chooserElement } = useActionChooser();
 
   const scheduleDone = (task: GateTask) => {
     schedule(task, task.plant.name);
@@ -114,15 +97,7 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   const elements = (
     <>
       {gate.dialog}
-      <ActionSheet
-        request={sheet}
-        onChoose={(id) => {
-          setSheet(null);
-          const resolve = answer.current;
-          answer.current = null;
-          resolve?.(id);
-        }}
-      />
+      {chooserElement}
       {movePlant && (
         <MovePlantsDialog isOpen plant={movePlant} onClose={() => setMovePlant(null)} />
       )}

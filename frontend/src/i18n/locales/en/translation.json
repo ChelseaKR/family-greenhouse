@@ -963,6 +963,26 @@
       "field": "{{season}} interval (days)",
       "placeholder": "Base frequency",
       "noLocationHelp": "Add a household location and these seasons start applying."
+    },
+    "list": {
+      "segments": "Show tasks for",
+      "today": "Today",
+      "upcoming": "Upcoming",
+      "overdue": "Overdue",
+      "tomorrow": "Tomorrow",
+      "count_one": "{{count}} task",
+      "count_other": "{{count}} tasks",
+      "inView_one": "{{count}} task in this view.",
+      "inView_other": "{{count}} tasks in this view.",
+      "filter": "Filter tasks",
+      "everyone": "Everyone’s tasks",
+      "groupDate": "Date",
+      "actions": "Actions for {{plant}}",
+      "allDoneTitle": "All done for today",
+      "nextUp": "Next up: {{plant}}, {{when}}.",
+      "upcomingEmpty": "Nothing is scheduled after today.",
+      "emptyTitle": "No care scheduled yet",
+      "emptyBody": "Add a plant, and its watering and the rest of its care show up here."
     }
   },
   "today": {
