@@ -36,8 +36,7 @@ interface TaskRowProps {
  * does). Tapping the row opens the plant.
  *
  * The row's other actions open from a long press or a right click, and from
- * an "Actions" button that is invisible until it has keyboard or VoiceOver
- * focus, so none of them depends on a gesture.
+ * the who chip, which is a button, so none of them depends on a gesture.
  */
 export function TaskRow({
   item,
@@ -184,15 +183,38 @@ export function TaskRow({
               )}
             </span>
           </span>
-          {/* You, an initial, or a raised hand. The row's label carries the
-              words for VoiceOver; `title` shows them on hover. At the
-              accessibility sizes the words replace the chip. */}
+          {/* At the accessibility sizes the row wraps, and the words of who
+              has the task get their own line under the status (the chip
+              beside the row stays the actions button). */}
           <span
             aria-hidden="true"
-            title={who.text}
+            className={clsx(
+              'hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold large-text:inline-flex',
+              who.open
+                ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
+                : 'bg-primary-50 text-primary-800'
+            )}
+          >
+            {who.text}
+          </span>
+        </Link>
+        {/* Who has the task, and the way to the row's actions: You, an
+            initial, or a raised hand when nobody has it, as a 44pt button
+            (Claim, Ask family, Skip, Open plant). The row's link already
+            says who in words for VoiceOver; `title` shows them on hover. */}
+        <button
+          type="button"
+          aria-label={menuLabel}
+          title={who.text}
+          // Anchored on the row: the sheet points at the task, not the chip.
+          onClick={() => onMenu(rowRef.current)}
+          className="mr-1.5 flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full large-text:self-start large-text:mt-2"
+        >
+          <span
+            aria-hidden="true"
             data-testid="task-row-who"
             className={clsx(
-              'flex h-7 shrink-0 items-center justify-center rounded-full text-xs font-bold large-text:hidden',
+              'flex h-7 items-center justify-center rounded-full text-xs font-bold',
               who.you && !who.open ? 'px-2' : 'w-7',
               who.open
                 ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
@@ -207,26 +229,6 @@ export function TaskRow({
               who.text.trim().charAt(0).toUpperCase()
             )}
           </span>
-          <span
-            aria-hidden="true"
-            className={clsx(
-              'hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold large-text:ml-0 large-text:inline-flex',
-              who.open
-                ? 'bg-accent-50 text-accent-800 ring-1 ring-accent-200'
-                : 'bg-primary-50 text-primary-800'
-            )}
-          >
-            {who.text}
-          </span>
-        </Link>
-        <button
-          type="button"
-          // Anchored on the row, not on this button: hidden, it is a 1px box
-          // at the row's edge, and Apple's sheet would point at that.
-          onClick={() => onMenu(rowRef.current)}
-          className="sr-only focus:not-sr-only focus:mr-2 focus:rounded-full focus:bg-primary-100 focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-800"
-        >
-          {menuLabel}
         </button>
       </div>
       {extra && <div className="flex flex-wrap items-center gap-1.5 pb-2 pl-14 pr-3">{extra}</div>}

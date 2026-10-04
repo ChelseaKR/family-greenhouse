@@ -213,10 +213,10 @@ describe('Tasks on a phone ("Checklist")', () => {
     renderTasks();
     const fern = await screen.findByRole('link', { name: /^Boston Fern/ });
     expect(fern).toHaveAccessibleName('Boston Fern, Water · 3 days overdue, Kitchen, You');
-    expect(within(fern).getByTestId('task-row-who')).toHaveTextContent('You');
+    expect(within(fern.parentElement!).getByTestId('task-row-who')).toHaveTextContent('You');
     const rubber = screen.getByRole('link', { name: /^Rubber Plant/ });
     expect(rubber).toHaveAccessibleName('Rubber Plant, Water, Living Room, Theo Nakamura');
-    expect(within(rubber).getByTestId('task-row-who')).toHaveTextContent(/^T$/);
+    expect(within(rubber.parentElement!).getByTestId('task-row-who')).toHaveTextContent(/^T$/);
     const aloe = screen.getByRole('link', { name: /^Aloe/ });
     expect(aloe).toHaveAccessibleName(/Up for grabs$/);
     expect(screen.queryByText(/Assigned to/)).toBeNull();
