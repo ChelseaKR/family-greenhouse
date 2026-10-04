@@ -313,6 +313,20 @@ if (!/<key>NSPrivacyTracking<\/key>\s*<false\/>/.test(privacyManifest)) {
       'with third-party data for advertising, and declaring tracking would require an ATT prompt'
   );
 }
+// IONCameraLib (linked by @capacitor/camera) reads file creation dates and its
+// own manifest is not bundled into the app (its Package.swift does not list it
+// as a resource), so the app's manifest has to declare FileTimestamp for it, or
+// App Store Connect rejects the upload with ITMS-91053.
+if (
+  packages.frontend.dependencies?.['@capacitor/camera'] &&
+  !/NSPrivacyAccessedAPICategoryFileTimestamp<\/string>[\s\S]*?C617\.1/.test(privacyManifest)
+) {
+  fail(
+    'iOS privacy manifest must declare NSPrivacyAccessedAPICategoryFileTimestamp (C617.1, 3B52.1) ' +
+      'while @capacitor/camera is installed: IONCameraLib reads file creation dates and its own ' +
+      'manifest is not bundled'
+  );
+}
 if (/NSPrivacyAccessedAPITypes<\/key>\s*<array\s*\/>/.test(privacyManifest)) {
   fail(
     'iOS privacy manifest must omit NSPrivacyAccessedAPITypes instead of declaring an empty array'

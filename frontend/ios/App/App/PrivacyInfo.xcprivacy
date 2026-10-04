@@ -128,5 +128,30 @@
 			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
 		</dict>
 	</array>
+	<!--
+	  Required-reason APIs (ITMS-91053). Our own Swift calls none of them, and
+	  Capacitor ships its own manifest. But @capacitor/camera links
+	  IONCameraLib, which reads a picked or captured file's creation date
+	  (URL.resourceValues(forKeys: [.creationDateKey]) in
+	  URL+Transformations.swift) and declares FileTimestamp with C617.1 and
+	  3B52.1 in a PrivacyInfo.xcprivacy that its Package.swift never lists as a
+	  resource, so that manifest is not inside the built app (checked: only
+	  Capacitor's and Cordova's are). It is declared here, with the same two
+	  reasons: the files are in the app's own container (C617.1) or are the
+	  photo the person picked (3B52.1). scripts/validate-store-release.mjs
+	  requires this entry while @capacitor/camera is installed.
+	-->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+				<string>3B52.1</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
