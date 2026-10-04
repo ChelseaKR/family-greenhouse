@@ -344,15 +344,12 @@ describe('TasksPage completion keeps the keyboard where it was', () => {
   // the local dev server before the fix. The in-flight state has to be
   // expressed with aria-disabled, which AT reads identically and browsers do
   // not blur.
-  it('marks the in-flight Done button aria-disabled rather than disabled', async () => {
+  it('keeps focus on the Done button, which becomes Undo, never disabled', async () => {
     signIn();
     server.use(
       http.get(`${API}/tasks`, () => HttpResponse.json([dueTask])),
       climate,
-      http.get(`${API}/plants`, () => HttpResponse.json([])),
-      // Never settles: the button stays in its in-flight state for the
-      // assertions below.
-      http.post(`${API}/tasks/${dueTask.id}/complete`, () => new Promise<never>(() => {}))
+      http.get(`${API}/plants`, () => HttpResponse.json([]))
     );
     renderTasksPage();
 
@@ -360,8 +357,12 @@ describe('TasksPage completion keeps the keyboard where it was', () => {
     done.focus();
     fireEvent.click(done);
 
-    await waitFor(() => expect(done).toHaveAttribute('aria-disabled', 'true'));
+    // Inside the Undo window the same element is Undo: still enabled and
+    // still focused, so a keyboard user is never thrown out of the row.
+    await waitFor(() => expect(done).toHaveAccessibleName(/^Undo: /));
     expect(done).not.toBeDisabled();
     expect(document.activeElement).toBe(done);
+    fireEvent.click(done);
+    await waitFor(() => expect(done).toHaveAccessibleName(/^Done$/));
   });
 });

@@ -411,3 +411,38 @@ test.describe('the plant page uses the same Undo (phone website)', () => {
     expect(completions).toHaveLength(1);
   });
 });
+
+for (const [where, path] of [
+  ['the Tasks tab', '/tasks'],
+  ['the Home dashboard', '/dashboard'],
+] as const) {
+  test.describe(`${where} uses the same Undo`, () => {
+    test('Done then Undo sends no completion; Done left alone sends one', async ({ page }) => {
+      const acct = await provisionAccount({
+        emailPrefix: 'undo-tasks-home',
+        plant: { name: 'Undo Calathea' },
+        waterTask: { frequency: 7 },
+      });
+      const completions: string[] = [];
+      page.on('request', (req) => {
+        if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+          completions.push(req.url());
+        }
+      });
+      await uiLogin(page, acct.email, acct.password);
+      await page.goto(path);
+      const row = page.locator('li', { has: page.getByRole('link', { name: /undo calathea/i }) });
+      await row.getByRole('button', { name: /^done$/i }).click();
+      await row.getByRole('button', { name: /^undo: /i }).click();
+      await page.waitForTimeout(6500);
+      expect(completions).toEqual([]);
+
+      await row.getByRole('button', { name: /^done$/i }).click();
+      await page.waitForTimeout(3000);
+      expect(completions).toEqual([]);
+      await expect.poll(() => completions.length, { timeout: 6000 }).toBe(1);
+      await page.waitForTimeout(2000);
+      expect(completions).toHaveLength(1);
+    });
+  });
+}

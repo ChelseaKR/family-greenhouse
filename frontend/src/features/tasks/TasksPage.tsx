@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { CalendarDaysIcon, CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowUturnLeftIcon,
+  CalendarDaysIcon,
+  CheckIcon,
+  MapPinIcon,
+} from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
@@ -20,11 +25,11 @@ import { AskFamilyDialog } from './AskFamilyDialog';
 import {
   useAskFamilyMutation,
   useClaimTaskMutation,
-  useCompleteTaskMutation,
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from './taskMutations';
 import { careRuleFor, useCareRuleGate } from './useCareRuleGate';
+import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -205,16 +210,22 @@ export function TasksPage() {
     at: number;
   } | null>(null);
 
-  const completeTaskMutation = useCompleteTaskMutation(householdId);
-  // House rule gate: a plant with a care rule shows it before the completion
-  // goes through; with no rule the click completes exactly as before.
+  // Done waits out the same 5-second Undo window as the Plants list and the
+  // plant page (useDeferredCompletion, one shared queue): nothing is written
+  // until it passes, and Undo inside it writes nothing. House rule gate
+  // first: a plant with a care rule shows it before anything starts.
+  const deferred = useDeferredCompletion(householdId);
   const careRuleGate = useCareRuleGate<TaskWithCoverage>(
     (task) => careRuleFor(plantsById.get(task.plantId)),
     (task) => {
-      setFocusAfterComplete({ taskId: task.id, at: Date.now() });
-      completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue });
+      deferred.schedule(task, plantsById.get(task.plantId)?.name ?? task.plantName, (id) =>
+        // The row re-buckets when the completion lands: put focus back then.
+        setFocusAfterComplete({ taskId: id, at: Date.now() })
+      );
     }
   );
+  const doneOrUndo = (task: TaskWithCoverage) =>
+    deferred.pending.has(task.id) ? deferred.undo(task.id) : careRuleGate.request(task);
 
   useEffect(() => {
     if (!focusAfterComplete) return;
@@ -491,12 +502,8 @@ export function TasksPage() {
               key={group.id}
               title={`${t(`spaces.${group.environment}`)} · ${group.name}`}
               tasks={group.tasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           ))}
@@ -507,12 +514,8 @@ export function TasksPage() {
             <TaskSection
               title="Overdue"
               tasks={overdueTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               variant="danger"
               extras={rowExtras}
             />
@@ -522,12 +525,8 @@ export function TasksPage() {
             <TaskSection
               title="Today"
               tasks={todayTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           )}
@@ -536,12 +535,8 @@ export function TasksPage() {
             <TaskSection
               title="Upcoming"
               tasks={upcomingTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           )}
@@ -588,8 +583,9 @@ interface TaskRowExtras {
 interface TaskSectionProps {
   title: string;
   tasks: TaskWithCoverage[];
+  /** Done, or Undo while the task is inside its Undo window. */
   onComplete: (task: TaskWithCoverage) => void;
-  completingTaskId: string | null;
+  pendingTaskIds: ReadonlySet<string>;
   variant?: 'default' | 'danger';
   extras: TaskRowExtras;
 }
@@ -598,10 +594,11 @@ function TaskSection({
   title,
   tasks,
   onComplete,
-  completingTaskId,
+  pendingTaskIds,
   variant = 'default',
   extras,
 }: TaskSectionProps) {
+  const { t } = useTranslation();
   return (
     <Card variant="paper" padding="none">
       <div
@@ -694,27 +691,32 @@ function TaskSection({
                   isPending={extras.claimPending}
                 />
                 <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
-                {/* `aria-disabled` while the completion is in flight, never
-                    `disabled`. A browser blurs a focused element the moment it
-                    becomes disabled, so the keyboard user who had just pressed
-                    Done was thrown out of the row to the top of the document
-                    (measured in Chromium: document.activeElement === body) and
-                    had to Tab back through the whole page to reach the next
-                    task. The button stays focusable and still announces itself
-                    as unavailable; the handler is what refuses a second press. */}
+                {/* Inside its Undo window the same button is Undo, so a
+                    keyboard user's focus stays put and a second press undoes
+                    rather than completing twice (one shared queue refuses a
+                    second completion anyway). */}
                 <Button
                   ref={(node) => extras.registerDone(task.id, node)}
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    if (completingTaskId === task.id) return;
-                    onComplete(task);
-                  }}
-                  aria-disabled={completingTaskId === task.id}
-                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                  leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+                  onClick={() => onComplete(task)}
+                  aria-label={
+                    pendingTaskIds.has(task.id)
+                      ? t('plants.list.undoAria', {
+                          task: task.customType || taskTypeLabels[task.type],
+                          plant: task.plantName,
+                        })
+                      : undefined
+                  }
+                  leftIcon={
+                    pendingTaskIds.has(task.id) ? (
+                      <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                    )
+                  }
                 >
-                  Done
+                  {pendingTaskIds.has(task.id) ? t('plants.list.undo') : t('tasks.complete')}
                 </Button>
               </div>
             </li>

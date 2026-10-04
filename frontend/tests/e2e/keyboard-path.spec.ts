@@ -131,17 +131,22 @@ test.describe('Keyboard-only paths', () => {
     // Tab to the row's "Done" button and check the focus indicator is
     // visible (WCAG 2.4.7): the global :focus-visible rule paints a
     // ring via box-shadow, so the computed value must not be 'none'.
-    const doneButton = taskRow.getByRole('button', { name: /done/i });
+    // The row's last button: Done, which becomes Undo during its window.
+    const doneButton = taskRow.getByRole('button').last();
     await tabTo(page, doneButton, key);
     const boxShadow = await doneButton.evaluate((el) => getComputedStyle(el).boxShadow);
     expect(boxShadow, 'keyboard focus must paint a visible ring').not.toBe('none');
 
     await page.keyboard.press('Enter');
 
-    // Completion pushes nextDue out by the 7-day frequency — the row
+    // Inside the 5-second Undo window the same focused button is Undo.
+    await expect(doneButton).toHaveAccessibleName(/^undo: /i);
+    await expect(doneButton).toBeFocused();
+
+    // Completion then pushes nextDue out by the 7-day frequency — the row
     // leaves the "Today" bucket (same contract task-completion.spec.ts
     // asserts for the pointer path).
-    await expect(taskRow.getByText(/^today$/i)).toHaveCount(0);
+    await expect(taskRow.getByText(/^today$/i)).toHaveCount(0, { timeout: 12000 });
 
     // And the keyboard is still on the button it was pressed on. The
     // in-flight state used to set `disabled`, which browsers respond to by
