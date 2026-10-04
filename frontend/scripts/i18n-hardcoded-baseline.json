@@ -12,7 +12,7 @@
     "features/auth/ResetPasswordPage.tsx": 6,
     "features/chat/ChatPage.tsx": 8,
     "features/dashboard/ClimateCard.tsx": 4,
-    "features/dashboard/DashboardPage.tsx": 15,
+    "features/dashboard/DashboardPage.tsx": 14,
     "features/dashboard/YearInReviewCard.tsx": 1,
     "features/household/HouseholdPage.tsx": 8,
     "features/household/JoinHouseholdPage.tsx": 12,
@@ -37,7 +37,7 @@
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 9,
     "features/status/StatusPage.tsx": 16,
-    "features/tasks/TasksPage.tsx": 3
+    "features/tasks/TasksPage.tsx": 2
   },
   "attributes": {
     "components/CommandPalette.tsx": 1,

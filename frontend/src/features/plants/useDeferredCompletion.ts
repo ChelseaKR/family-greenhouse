@@ -42,11 +42,17 @@ export function useDeferredCompletion(householdId: string | null) {
   };
 
   /** Starts the window; false when this task is already pending. */
-  const schedule = (task: DoneTask, plantName: string): boolean => {
+  const schedule = (
+    task: DoneTask,
+    plantName: string,
+    /** Runs as the completion is written (not if it was undone). */
+    onCommit?: (taskId: string) => void
+  ): boolean => {
     const accepted = queue.schedule(
       { taskId: task.id, plantId: task.plantId, expectedNextDue: task.nextDue },
       (item) => {
         dismissToast(item.taskId);
+        onCommit?.(item.taskId);
         completeMutation.mutate({ taskId: item.taskId, expectedNextDue: item.expectedNextDue });
       }
     );
