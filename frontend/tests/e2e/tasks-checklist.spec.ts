@@ -124,3 +124,93 @@ test.describe('iOS app (native frame stub)', () => {
     await expect(page.getByRole('group', { name: 'Task filters' })).toHaveCount(0);
   });
 });
+
+test.describe('iOS app with bar tools (native frame stub)', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'the shell under test is WebKit');
+  test.use({ viewport: { width: 402, height: 874 } });
+
+  test('hands the filter menu to the bar, follows its picks, and keeps no back button', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>;
+      const calls: Array<{ method: string; options: unknown }> = [];
+      const listeners: Record<string, Array<(data: unknown) => void>> = {};
+      w.__frame = { calls, listeners };
+      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+        PluginHeaders: [
+          {
+            name: 'NativeChrome',
+            methods: [
+              { name: 'addListener' },
+              { name: 'removeListener' },
+              { name: 'removeAllListeners', rtype: 'promise' },
+              { name: 'configure', rtype: 'promise' },
+              { name: 'update', rtype: 'promise' },
+              { name: 'setBarTools', rtype: 'promise' },
+            ],
+          },
+        ],
+        nativePromise: (plugin: string, method: string, options: unknown) => {
+          if (plugin === 'NativeChrome') calls.push({ method, options });
+          return Promise.resolve();
+        },
+        nativeCallback: (
+          plugin: string,
+          method: string,
+          options: { eventName?: string },
+          callback: (data: unknown) => void
+        ) => {
+          if (plugin === 'NativeChrome' && method === 'addListener' && options.eventName) {
+            (listeners[options.eventName] ??= []).push(callback);
+          }
+          return 'callback';
+        },
+      };
+    });
+    await uiLogin(page, account.email, account.password);
+    await page.goto('/tasks?filter=today');
+    await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
+    await expect(fernRow(page)).toBeVisible();
+    await expect(page.getByLabel('Filter tasks')).toHaveCount(0);
+
+    type Call = { method: string; options: Record<string, unknown> };
+    const calls = () =>
+      page.evaluate(() => (window as unknown as { __frame: { calls: Call[] } }).__frame.calls);
+    // The tab's first screen, query and all: no back button, a large title.
+    await expect
+      .poll(async () =>
+        (await calls())
+          .filter((c) => c.method === 'update')
+          .map((c) => c.options)
+          .filter((o) => o.path === '/tasks?filter=today')
+          .map((o) => [o.canGoBack, o.largeTitle])
+          .pop()
+      )
+      .toEqual([false, true]);
+    // The filter menu, filed under the same path.
+    await expect
+      .poll(async () => {
+        const tools = (await calls()).filter((c) => c.method === 'setBarTools').pop()?.options;
+        return tools ? [tools.path, (tools.menus as Array<{ id: string }>).map((m) => m.id)] : null;
+      })
+      .toEqual(['/tasks?filter=today', ['filter']]);
+
+    await page.evaluate(() => {
+      const f = (
+        window as unknown as {
+          __frame: { listeners: Record<string, Array<(x: unknown) => void>> };
+        }
+      ).__frame;
+      for (const l of f.listeners.barMenuSelect ?? [])
+        l({ path: '/tasks?filter=today', id: 'who:mine' });
+    });
+    await expect(page.getByRole('heading', { name: 'All done for today' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Remove filter: Only mine' })).toBeVisible();
+    // The pick changed the page, not the URL: still the same screen.
+    expect(new URL(page.url()).search).toBe('?filter=today');
+  });
+});

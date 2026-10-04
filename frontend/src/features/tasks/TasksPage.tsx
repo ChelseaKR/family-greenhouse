@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   AdjustmentsHorizontalIcon,
@@ -37,12 +37,15 @@ import { ToolbarMenu, type MenuGroupModel } from '@/features/plants/ToolbarMenu'
 import { taskWhoText } from '@/features/plants/plantCareText';
 import { ListSkeleton } from '@/components/Skeleton';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { hasNativeFrame } from '@/lib/platform';
+import { hasNativeBarTools, hasNativeFrame } from '@/lib/platform';
+import { useNativeBarTools } from '@/features/plants/useNativeBarTools';
+import { screenPath } from '@/config/nativeFrame';
 import {
   byDueThenName,
   checklistItems,
   dateSections,
   inSegment,
+  roomSections,
   segmentCounts,
   type ChecklistItem,
   type ChecklistSection,
@@ -65,7 +68,7 @@ import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween, isOverdue, isToday } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useSpaces } from '@/hooks/useSpaces';
-import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
+import { buildCareRoundGroups, filterTasksForSpace, mostOverdueFirst } from './careRounds';
 import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel } from '@/utils/spaces';
 
@@ -126,8 +129,15 @@ export function TasksPage() {
   const isMobile = useIsMobile();
   const compact = isMobile || hasNativeFrame();
   const navigate = useNavigate();
+  const location = useLocation();
   const [segment, setSegment] = useState<Segment>('today');
-  const [onlyMine, setOnlyMine] = useState(requestedTaskFilter === 'mine');
+  // The phone's filters live in the page, never in the URL: in the iOS app a
+  // new query on the tab's first screen would be a new screen in its stack.
+  // A link that arrives with `?filter=mine` or `?space=` still opens on it.
+  const [who, setWho] = useState<'all' | 'mine' | 'open'>(
+    requestedTaskFilter === 'mine' ? 'mine' : 'all'
+  );
+  const [spaceChoice, setSpaceChoice] = useState<string | null>(requestedSpaceFilter);
   const [groupBy, setGroupBy] = useState<'date' | 'room'>('date');
   const chooser = useActionChooser();
 
@@ -354,8 +364,17 @@ export function TasksPage() {
   // the rooms (or the plants) unread, every task collapses into one group,
   // and calling that group "Unplaced" states a placement for the whole
   // household that nothing computed.
+  // A care round is today's walk: only what is due now (overdue and today),
+  // starting in the room with the most overdue plant. It used to take every
+  // task in the filter, so the walk began with plants due next week and the
+  // overdue one waited in the third room.
+  const dueNowTasks = sortedTasks.filter(
+    (task) => isOverdue(task.nextDue) || isToday(task.nextDue)
+  );
   const careRoundGroups = useMemo(
-    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, unplacedGroupName),
+    () =>
+      mostOverdueFirst(buildCareRoundGroups(dueNowTasks, plants ?? [], spaces, unplacedGroupName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dueNowTasks derives from sortedTasks
     [plants, sortedTasks, spaces, unplacedGroupName]
   );
 
@@ -392,42 +411,50 @@ export function TasksPage() {
   );
 
   // ---- The phone layout ("Checklist") ----
+  const phoneSpace =
+    spaceChoice === 'unplaced' || (spaceChoice !== null && spacesById.has(spaceChoice))
+      ? spaceChoice
+      : null;
+  const phoneSpaceName =
+    phoneSpace === 'unplaced'
+      ? t('spaces.unplaced')
+      : phoneSpace
+        ? (spacesById.get(phoneSpace)?.name ?? null)
+        : null;
   const isMine = (task: TaskWithCoverage) =>
     task.assignedTo === user?.id || task.effectiveAssignee === user?.id;
+  const isOpen = (task: TaskWithCoverage) => !task.assignedTo && !task.effectiveAssignee;
   const checklist = useMemo(
     () =>
       compact
         ? checklistItems(
-            spaceScopedTasks.filter((task) => !onlyMine || isMine(task)),
+            filterTasksForSpace(tasks ?? [], plants ?? [], spaces, phoneSpace).filter(
+              (task) => who === 'all' || (who === 'mine' ? isMine(task) : isOpen(task))
+            ),
             (task) => plantsById.get(task.plantId)?.name ?? task.plantName
           )
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isMine reads user?.id only
-    [compact, spaceScopedTasks, onlyMine, user?.id, plantsById]
+    [compact, tasks, plants, spaces, phoneSpace, who, user?.id, plantsById]
   );
   const segmentItems = checklist.filter((item) => inSegment(item, segment));
-  // Grouped by room, the round covers only the segment's tasks: on Today,
-  // what is due now, never next week's plants.
-  const roomGroups =
-    compact && groupBy === 'room'
-      ? buildCareRoundGroups(
-          segmentItems.map((item) => item.task),
-          plants ?? [],
-          spaces,
-          unplacedGroupName
-        )
-      : [];
+  // The care round: the segment's tasks only (on Today, what is due now, never
+  // next week's plants), the room with the most overdue task first.
+  const roomKeyOf = (item: ChecklistItem) => {
+    const spaceId = plantsById.get(item.task.plantId)?.spaceId;
+    return spaceId && spacesById.has(spaceId) ? spaceId : 'unplaced';
+  };
   const checklistSections: ChecklistSection[] =
     groupBy === 'room'
-      ? roomGroups.map((group) => {
-          const ids = new Set(group.tasks.map((task) => task.id));
-          return {
-            id: group.id,
-            kind: 'room' as const,
-            items: segmentItems.filter((item) => ids.has(item.task.id)).sort(byDueThenName),
-          };
-        })
+      ? roomSections(
+          checklist,
+          segment,
+          roomKeyOf,
+          spaces.map((space) => space.id)
+        )
       : dateSections(checklist, segment);
+  const roomTitle = (id: string) =>
+    id === 'unplaced' ? unplacedGroupName : (spacesById.get(id)?.name ?? unplacedGroupName);
   const nextUp = checklist.filter((item) => item.days > 0).sort(byDueThenName)[0] ?? null;
 
   const openTaskMenu = async (item: ChecklistItem, from: Element | null) => {
@@ -477,8 +504,9 @@ export function TasksPage() {
     {
       title: t('plants.list.show'),
       items: [
-        { id: 'who:all', label: t('tasks.list.everyone'), checked: !onlyMine },
-        { id: 'who:mine', label: t('plants.list.mine'), checked: onlyMine },
+        { id: 'who:all', label: t('tasks.list.everyone'), checked: who === 'all' },
+        { id: 'who:mine', label: t('plants.list.mine'), checked: who === 'mine' },
+        { id: 'who:open', label: t('tasks.upForGrabs'), checked: who === 'open' },
       ],
     },
     {
@@ -488,12 +516,69 @@ export function TasksPage() {
         { id: 'group:room', label: t('plants.list.groupRoom'), checked: groupBy === 'room' },
       ],
     },
+    ...(spaces.length > 0
+      ? [
+          {
+            title: t('plants.list.spaces'),
+            items: [
+              { id: 'space:', label: t('spaces.all'), checked: phoneSpace === null },
+              ...spaces.map((space) => ({
+                id: `space:${space.id}`,
+                label: space.name,
+                checked: phoneSpace === space.id,
+              })),
+              {
+                id: 'space:unplaced',
+                label: t('spaces.unplaced'),
+                checked: phoneSpace === 'unplaced',
+              },
+            ],
+          },
+        ]
+      : []),
   ];
   const onFilterMenu = (id: string) => {
-    if (id === 'who:all' || id === 'who:mine') setOnlyMine(id === 'who:mine');
-    else if (id === 'group:date' || id === 'group:room')
-      setGroupBy(id === 'group:room' ? 'room' : 'date');
+    const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
+    if (kind === 'who' && (value === 'all' || value === 'mine' || value === 'open')) setWho(value);
+    else if (kind === 'group') setGroupBy(value === 'room' ? 'room' : 'date');
+    else if (kind === 'space') setSpaceChoice(value || null);
+    // A new filter or grouping reshapes the list: start at its top, where
+    // the token that explains it sits. In the iOS app the bar does this.
+    if (!hasNativeBarTools()) window.scrollTo(0, 0);
   };
+  // In the iOS app the filter menu is a bar button. Its tools are filed under
+  // this screen's own path, query and all, as the bar knows the screen.
+  const nativeBar = compact && hasNativeBarTools();
+  useNativeBarTools(
+    nativeBar
+      ? {
+          path: screenPath(location.pathname, location.search),
+          menus:
+            (tasks ?? []).length > 0
+              ? [
+                  {
+                    id: 'filter',
+                    label: t('tasks.list.filter'),
+                    symbol: 'line.3.horizontal.decrease.circle',
+                    groups: filterGroups,
+                  },
+                ]
+              : [],
+          search: null,
+        }
+      : null,
+    onFilterMenu,
+    () => undefined
+  );
+  // One removable token per filter in force, so the list never shrinks
+  // without saying why.
+  const filterTokens = [
+    who !== 'all' && {
+      label: who === 'mine' ? t('plants.list.mine') : t('tasks.upForGrabs'),
+      clear: () => setWho('all'),
+    },
+    phoneSpaceName && { label: phoneSpaceName, clear: () => setSpaceChoice(null) },
+  ].filter((x): x is { label: string; clear: () => void } => Boolean(x));
 
   const dialogs = (
     <>
@@ -523,7 +608,6 @@ export function TasksPage() {
           <h1 className="font-serif text-3xl leading-tight text-ink">{t('tasks.title')}</h1>
         </div>
         <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
-        {spaceCard}
         {isLoading ? (
           <ListSkeleton rows={6} />
         ) : error ? (
@@ -534,30 +618,35 @@ export function TasksPage() {
             onSegment={setSegment}
             counts={segmentCounts(checklist)}
             toolbar={
-              <ToolbarMenu
-                label={t('tasks.list.filter')}
-                icon={<AdjustmentsHorizontalIcon className="h-5 w-5" aria-hidden="true" />}
-                groups={filterGroups}
-                onSelect={onFilterMenu}
-              />
+              nativeBar ? null : (
+                <ToolbarMenu
+                  label={t('tasks.list.filter')}
+                  icon={<AdjustmentsHorizontalIcon className="h-5 w-5" aria-hidden="true" />}
+                  groups={filterGroups}
+                  onSelect={onFilterMenu}
+                />
+              )
             }
             tokens={
-              onlyMine ? (
+              filterTokens.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOnlyMine(false)}
-                    aria-label={t('plants.list.removeFilter', { label: t('plants.list.mine') })}
-                    className="inline-flex min-h-touch items-center gap-1 rounded-full bg-primary-100 px-3 text-sm font-semibold text-primary-800"
-                  >
-                    {t('plants.list.mine')}
-                    <XMarkIcon className="h-4 w-4" aria-hidden="true" />
-                  </button>
+                  {filterTokens.map((token) => (
+                    <button
+                      key={token.label}
+                      type="button"
+                      onClick={token.clear}
+                      aria-label={t('plants.list.removeFilter', { label: token.label })}
+                      className="inline-flex min-h-touch items-center gap-1 rounded-full bg-primary-100 px-3 text-sm font-semibold text-primary-800"
+                    >
+                      {token.label}
+                      <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  ))}
                 </div>
               ) : null
             }
             sections={checklistSections}
-            roomTitle={(id) => roomGroups.find((group) => group.id === id)?.name ?? ''}
+            roomTitle={roomTitle}
             householdEmpty={(tasks ?? []).length === 0}
             nextUp={nextUp}
             taskName={(item) => deferred.taskName(item.task)}
@@ -730,10 +819,15 @@ export function TasksPage() {
                 <h2 className="font-serif text-xl text-ink">{t('careRounds.title')}</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   {t('careRounds.summary', {
-                    tasks: sortedTasks.length,
+                    tasks: dueNowTasks.length,
                     spaces: careRoundGroups.length,
                   })}
                 </p>
+                {sortedTasks.length > dueNowTasks.length && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    {t('careRounds.later', { count: sortedTasks.length - dueNowTasks.length })}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-gray-500">
                   {careRoundGroups.map((group) => group.name).join(' → ')}
                 </p>

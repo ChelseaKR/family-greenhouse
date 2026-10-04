@@ -294,10 +294,38 @@ describe('Tasks on a phone ("Checklist")', () => {
     await screen.findByRole('region', { name: 'Overdue' });
     await user.click(screen.getByLabelText('Filter tasks'));
     await user.click(screen.getByRole('button', { name: 'Space' }));
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Kitchen',
+      'Living Room',
+    ]); // the 3-days-overdue fern leads
     expect(rowNames('Kitchen')).toEqual(['Boston Fern', 'Aloe', 'Golden Pothos']);
     // Hoya (Living Room) is due in 4 days: not part of today's round.
     expect(rowNames('Living Room')).toEqual(['Bird of Paradise', 'Rubber Plant']);
     expect(screen.queryByRole('region', { name: 'Back Porch' })).toBeNull();
+  });
+
+  it('Up for grabs and a space from the web menu, each with a token', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    await screen.findByRole('region', { name: 'Overdue' });
+    await user.click(screen.getByLabelText('Filter tasks'));
+    await user.click(screen.getByRole('button', { name: 'Up for grabs' }));
+    expect(rowNames('Overdue')).toEqual(['Bird of Paradise']);
+    expect(rowNames('Today')).toEqual(['Aloe']);
+    await user.click(screen.getByRole('button', { name: 'Remove filter: Up for grabs' }));
+    await user.click(screen.getByLabelText('Filter tasks'));
+    await user.click(screen.getByRole('button', { name: 'Kitchen' }));
+    expect(rowNames('Overdue')).toEqual(['Boston Fern']);
+    expect(rowNames('Today')).toEqual(['Aloe', 'Golden Pothos']);
+    await user.click(screen.getByRole('button', { name: 'Remove filter: Kitchen' }));
+    expect(rowNames('Today')).toEqual(['Aloe', 'Golden Pothos', 'Rubber Plant']);
+  });
+
+  it('a link to a space opens on that space, as a token, with no page card', async () => {
+    renderTasks('/tasks?space=kitchen');
+    expect(await screen.findByRole('button', { name: 'Remove filter: Kitchen' })).toBeVisible();
+    expect(rowNames('Today')).toEqual(['Aloe', 'Golden Pothos']);
+    expect(screen.queryByRole('button', { name: /show all spaces/i })).toBeNull();
   });
 
   it('the row actions: a long press and the Actions button open them, and Claim claims', async () => {
@@ -375,6 +403,20 @@ describe('Tasks on a phone ("Checklist")', () => {
     renderTasks();
     expect(await screen.findByRole('heading', { name: 'All done for today' })).toBeVisible();
     expect(screen.getByText('Next up: Lemon Tree, tomorrow.')).toBeVisible();
+  });
+
+  it("the desktop Care round is today's walk: due work only, most overdue room first", async () => {
+    phone(false);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    await user.click(await screen.findByRole('button', { name: 'Care round' }));
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(titles).toEqual(['Your care route', 'Inside · Kitchen(3)', 'Inside · Living Room(2)']);
+    // Lemon Tree (tomorrow) and Hoya (in 4 days) are not part of the walk.
+    expect(screen.queryByRole('link', { name: 'Lemon Tree' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Hoya' })).toBeNull();
+    expect(screen.getByText('Tasks remaining: 5 · Spaces to visit: 2')).toBeVisible();
+    expect(screen.getByText('Due later: 2. Switch to By date to see them.')).toBeVisible();
   });
 
   it('the desktop website keeps its own layout', async () => {
