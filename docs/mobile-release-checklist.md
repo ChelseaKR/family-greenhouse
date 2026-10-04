@@ -31,6 +31,9 @@
       eight plants sit in five rooms, and Tasks shows one overdue job up for
       grabs plus four due today. No frame carries a plant photograph — see
       the remaining gap in `store-assets/README.md`.
+- [ ] The iPhone screenshots match this build's UI. If the UI changed since
+      they were taken, run `npm run store:screenshots:ios --workspace frontend`
+      and look at all eight frames (`store-assets/README.md`).
 - [ ] Listing still says reminders are email-only. Native push is not
       implemented and production SMS is off, so this stays true until
       `docs/mobile.md`'s push work ships.
