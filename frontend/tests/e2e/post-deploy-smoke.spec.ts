@@ -929,7 +929,7 @@ test.describe('post-deploy smoke', () => {
     ).toBeGreaterThan(0);
 
     await expect(page).toHaveURL(new RegExp(`/plants/${plantId}$`));
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible();
     const renderedPhoto = page.getByRole('img', { name: `Photo of ${plantName}` });
     await expect(renderedPhoto).toBeVisible();
     await expect

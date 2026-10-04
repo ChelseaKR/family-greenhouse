@@ -3,6 +3,9 @@ import { findCareGuide } from '@/utils/careGuidance';
 
 interface CareGuidanceCardProps {
   species: string | null | undefined;
+  /** The plant's own name, as the household wrote it: the heading says
+   *  "Caring for Peace Lily", not the catalog's "Peace lily". */
+  plantName?: string;
 }
 
 /**
@@ -10,14 +13,14 @@ interface CareGuidanceCardProps {
  * care card (light, water, humidity, notes). Renders nothing when there's
  * no match — we never fabricate guidance.
  */
-export function CareGuidanceCard({ species }: CareGuidanceCardProps) {
+export function CareGuidanceCard({ species, plantName }: CareGuidanceCardProps) {
   const guide = findCareGuide(species);
   if (!guide) return null;
   return (
     <Card padding="none">
       <div className="px-6 py-4 border-b border-primary-100/70">
         <CardHeader
-          title={`Caring for ${guide.common}`}
+          title={`Caring for ${plantName?.trim() || guide.common}`}
           description={`Curated tips for ${guide.scientific}.`}
         />
       </div>

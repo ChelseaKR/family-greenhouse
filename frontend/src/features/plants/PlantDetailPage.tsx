@@ -550,7 +550,8 @@ export function PlantDetailPage() {
           )}
 
           <dl className={clsx('grid grid-cols-2 gap-4 large-text:grid-cols-1', !compact && 'mt-4')}>
-            {(plant.spaceId || plant.location) && (
+            {/* On a phone the header already says where the plant lives. */}
+            {!compact && (plant.spaceId || plant.location) && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">Space</dt>
                 <dd className="text-sm text-gray-900">
@@ -658,7 +659,7 @@ export function PlantDetailPage() {
       )}
 
       {/* Curated care guidance — only renders if plant.species matches a known entry */}
-      <CareGuidanceCard species={plant.species} />
+      <CareGuidanceCard species={plant.species} plantName={plant.name} />
 
       {/* When neither the curated guide nor a Perenual match exists, both the
           care guide and suggested schedule are hidden. Say so honestly rather
