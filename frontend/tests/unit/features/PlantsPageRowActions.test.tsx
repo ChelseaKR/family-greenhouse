@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -258,12 +258,43 @@ describe('the Done (Water) button on a Plants row', () => {
   });
 });
 
+/** jsdom drops `pointerType` and the coordinates from a synthetic pointer
+ *  event's init, so set them on the event itself. */
+function touch(kind: 'pointerDown' | 'pointerUp', el: Element) {
+  const event = createEvent[kind](el);
+  for (const [key, value] of Object.entries({
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 50,
+    clientY: 50,
+  }))
+    Object.defineProperty(event, key, { value });
+  fireEvent(el, event);
+}
+
 describe('the row menu (long press, right click)', () => {
   const openMenu = async (name: RegExp) => {
     const link = await screen.findByRole('link', { name });
     fireEvent.contextMenu(link);
     return screen.findByRole('dialog');
   };
+
+  it('after a long press that brought no click, the next keyboard press still works', async () => {
+    const u = user();
+    renderPlants();
+    const row = (await screen.findByRole('link', { name: /^Peace Lily/ })).parentElement!;
+    touch('pointerDown', row);
+    await pass(600); // the long press opens the menu
+    touch('pointerUp', row); // iOS: no click follows a long press
+    await u.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
+    );
+    await pass(500);
+    // Enter on the Water button: a click with no pointer down before it.
+    screen.getByRole('button', { name: 'Water Peace Lily' }).focus();
+    await u.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Undo: Water Peace Lily' })).toBeInTheDocument();
+  });
 
   it('Water now goes through the same Undo window', async () => {
     const u = user();
