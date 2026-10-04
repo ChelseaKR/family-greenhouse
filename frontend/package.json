@@ -145,7 +145,7 @@
     "jest-axe": "^11.0.0",
     "msw": "^2.15.0",
     "postcss": "^8.5.28",
-    "size-limit": "^13.0.1",
+    "size-limit": "^14.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
