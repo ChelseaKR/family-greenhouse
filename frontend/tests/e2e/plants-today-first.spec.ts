@@ -378,3 +378,36 @@ test.describe('the status beside the Done button (402pt)', () => {
     });
   }
 });
+
+test.describe('the plant page uses the same Undo (phone website)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('Watered then Undo sends no completion; Watered left alone sends one', async ({ page }) => {
+    const acct = await provisionAccount({
+      emailPrefix: 'undo-everywhere',
+      plant: { name: 'Undo Lily' },
+      waterTask: { frequency: 7 },
+    });
+    const completions: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && /\/tasks\/[^/]+\/complete$/.test(req.url())) {
+        completions.push(req.url());
+      }
+    });
+    await uiLogin(page, acct.email, acct.password);
+    await page.goto(`/plants/${acct.plantId}`);
+    await page.getByRole('button', { name: 'Water Undo Lily' }).click();
+    await page.getByRole('button', { name: 'Undo: Water Undo Lily' }).click();
+    await page.waitForTimeout(6500);
+    expect(completions).toEqual([]);
+    await page.reload();
+    await expect(page.getByText('Water today')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Water Undo Lily' }).click();
+    await page.waitForTimeout(3000);
+    expect(completions).toEqual([]);
+    await expect.poll(() => completions.length, { timeout: 6000 }).toBe(1);
+    await page.waitForTimeout(2000);
+    expect(completions).toHaveLength(1);
+  });
+});

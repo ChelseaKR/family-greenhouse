@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
-import { CheckIcon, EllipsisHorizontalIcon, PlusIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowUturnLeftIcon,
+  CheckIcon,
+  EllipsisHorizontalIcon,
+  PlusIcon,
+} from '@heroicons/react/24/outline';
 import type { Plant, Task, TaskCompletion } from '@/services/plantService';
 import { PlantImage } from '@/components/PlantImage';
 import { Button } from '@/components/Button';
@@ -18,10 +23,11 @@ interface PlantPageHeaderProps {
   /** The "…" menu; drawn here on the website, in the bar in the app. */
   menu: MenuGroupModel[] | null;
   onMenu: (id: string) => void;
+  /** Done, or Undo while the task is inside its Undo window. */
   onDone: (task: Task) => void;
+  pendingTaskIds: ReadonlySet<string>;
   onClaim: (task: Task) => void;
   onAddTask: () => void;
-  isCompleting: boolean;
   /** The plant page's own snooze control, for the most urgent task. */
   snooze: (task: Task) => ReactNode;
 }
@@ -40,9 +46,9 @@ export function PlantPageHeader({
   menu,
   onMenu,
   onDone,
+  pendingTaskIds,
   onClaim,
   onAddTask,
-  isCompleting,
   snooze,
 }: PlantPageHeaderProps) {
   const { t } = useTranslation();
@@ -127,15 +133,26 @@ export function PlantPageHeader({
           )}
           {task && due ? (
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                className="grow"
-                onClick={() => onDone(task)}
-                disabled={isCompleting}
-                leftIcon={<CheckIcon className="h-5 w-5" aria-hidden="true" />}
-                aria-label={t('plants.detail.doAria', { task: taskName, plant: plant.name })}
-              >
-                {task.type === 'water' ? t('plants.detail.watered') : t('tasks.complete')}
-              </Button>
+              {pendingTaskIds.has(task.id) ? (
+                <Button
+                  variant="secondary"
+                  className="grow"
+                  onClick={() => onDone(task)}
+                  leftIcon={<ArrowUturnLeftIcon className="h-5 w-5" aria-hidden="true" />}
+                  aria-label={t('plants.list.undoAria', { task: taskName, plant: plant.name })}
+                >
+                  {t('plants.list.undo')}
+                </Button>
+              ) : (
+                <Button
+                  className="grow"
+                  onClick={() => onDone(task)}
+                  leftIcon={<CheckIcon className="h-5 w-5" aria-hidden="true" />}
+                  aria-label={t('plants.detail.doAria', { task: taskName, plant: plant.name })}
+                >
+                  {task.type === 'water' ? t('plants.detail.watered') : t('tasks.complete')}
+                </Button>
+              )}
               {who?.kind === 'open' && myUserId && (
                 <Button variant="secondary" className="grow" onClick={() => onClaim(task)}>
                   {t('plants.detail.claim')}
