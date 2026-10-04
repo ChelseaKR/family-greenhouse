@@ -78,6 +78,37 @@ test.describe('phone website (390px)', () => {
   });
 });
 
+test.describe('snooze from the row (phone website)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('Snooze asks how long, then the task moves to Upcoming', async ({ page }) => {
+    // Its own household: this one writes.
+    const own = await provisionAccount({
+      emailPrefix: 'tasks-snooze',
+      space: { name: 'Hall', environment: 'inside' },
+      plant: { name: 'Snooze Ivy' },
+      waterTask: { frequency: 7 },
+    });
+    await uiLogin(page, own.email, own.password);
+    await page.goto('/tasks');
+    const row = page.getByRole('link', { name: /^Snooze Ivy, Water, Hall/ });
+    await expect(row).toBeVisible();
+    const actions = page.getByRole('button', { name: 'Actions for Snooze Ivy' });
+    await actions.click();
+    await page
+      .getByRole('dialog', { name: 'Snooze Ivy' })
+      .getByRole('button', { name: 'Snooze…' })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Snooze' })
+      .getByRole('button', { name: '3 days' })
+      .click();
+    await expect(page.getByRole('heading', { name: 'All done for today' })).toBeVisible();
+    await page.getByRole('button', { name: /^Upcoming/ }).click();
+    await expect(page.getByRole('link', { name: /^Snooze Ivy, Water, Hall/ })).toBeVisible();
+  });
+});
+
 test.describe('desktop website (1280px)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 

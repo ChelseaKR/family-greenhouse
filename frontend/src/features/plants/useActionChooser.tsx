@@ -31,7 +31,11 @@ export function useActionChooser() {
         setSheet(null);
         const resolve = answer.current;
         answer.current = null;
-        resolve?.(id);
+        // Answer once the tap that chose has finished. A choice can open the
+        // next sheet at once (Snooze… asks how long), and a sheet opened in
+        // the middle of that tap's click was closed again by the rest of it,
+        // as a tap outside, so "Snooze…" on the website showed nothing.
+        setTimeout(() => resolve?.(id), 0);
       }}
     />
   );
