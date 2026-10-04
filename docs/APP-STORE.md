@@ -60,7 +60,7 @@ quickly (deep links, push), the section says how to re-check it.
 > • This version sends reminders by email. Push notifications are not part of this release.
 >
 > ASK ABOUT YOUR PLANTS
-> • A plant care assistant, included with the paid Garden and Greenhouse plans, answers questions using your household's own plants and tasks. Plans are bought on the web, not in the app.
+> • A plant care assistant, included with the paid Garden and Greenhouse plans, answers questions using your household's own plants and tasks.
 > • Any reminder it suggests is shown for your confirmation before anything is scheduled.
 > • Report an answer that looks wrong and we review it.
 >
