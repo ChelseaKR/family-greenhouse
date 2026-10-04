@@ -1,6 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const LONG_PRESS_MS = 500;
+
+/** The one row whose swipe actions are showing, on any list: as in Mail,
+ *  touching another row closes it. */
+let openRow: { close: () => void } | null = null;
 
 interface RowGestureOptions {
   /** No gestures at all (a plain row). */
@@ -20,6 +24,9 @@ interface RowGestureOptions {
  * to reveal the leading action (all the way across does it at once), swipe
  * left to reveal the trailing actions, long press for the row's menu. Touch
  * only; a mouse or a keyboard uses the row's own controls.
+ *
+ * Only one row is open at a time: touching or opening another row closes
+ * it, as in Mail.
  *
  * Returns the offset to translate the row by, and the handlers to put on it.
  */
@@ -51,7 +58,23 @@ export function useRowGestures({
   } | null>(null);
   const suppressClick = useRef(false);
 
-  const close = () => setOffset(0);
+  const self = useRef({ close: () => {} });
+  const close = () => {
+    setOffset(0);
+    if (openRow === self.current) openRow = null;
+  };
+  self.current.close = close;
+  /** Settle open, as the one open row (any other closed on touch). */
+  const settleOpen = (value: number) => {
+    openRow = self.current;
+    setOffset(value);
+  };
+  useEffect(
+    () => () => {
+      if (openRow === self.current) openRow = null;
+    },
+    []
+  );
   const clearPress = () => {
     const g = gesture.current;
     if (g?.pressTimer) clearTimeout(g.pressTimer);
@@ -63,6 +86,8 @@ export function useRowGestures({
     // for an earlier long press.
     suppressClick.current = false;
     if (!enabled || event.pointerType !== 'touch') return;
+    // Touching another row closes the one that is open, as in Mail.
+    if (openRow && openRow !== self.current) openRow.close();
     const g = {
       id: event.pointerId,
       x: event.clientX,
@@ -127,9 +152,9 @@ export function useRowGestures({
       close();
       onFullLeading(); // a swipe right across: the leading action at once
     } else if (leadingWidth > 0 && now > leadingWidth / 2) {
-      setOffset(leadingWidth);
+      settleOpen(leadingWidth);
     } else if (trailingWidth > 0 && now < -Math.min(trailingWidth, 88) / 2) {
-      setOffset(-trailingWidth);
+      settleOpen(-trailingWidth);
     } else {
       close();
     }

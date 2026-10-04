@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   AdjustmentsHorizontalIcon,
   ArrowUturnLeftIcon,
@@ -38,6 +39,7 @@ import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
 import { useActionChooser } from '@/features/plants/useActionChooser';
 import { ToolbarMenu, type MenuGroupModel } from '@/features/plants/ToolbarMenu';
 import { taskWhoText } from '@/features/plants/plantCareText';
+import { formatDate } from '@/i18n/format';
 import { ListSkeleton } from '@/components/Skeleton';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { hasNativeBarTools, hasNativeFrame } from '@/lib/platform';
@@ -97,29 +99,22 @@ function filterFromSearchParam(value: string | null): FilterType {
     : 'all';
 }
 
-function formatDueDate(dateString: string): string {
+function formatDueDate(dateString: string, t: TFunction): string {
   const date = new Date(dateString);
   // calendarDaysBetween is DST-safe (UTC-noon anchored) — local-midnight
   // subtraction + Math.ceil reported "2 days overdue" for yesterday across
   // the fall-back transition.
   const diff = calendarDaysBetween(new Date(), date);
 
-  if (diff < 0) {
-    const daysOverdue = -diff;
-    return `${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue`;
-  }
-  if (diff === 0) {
-    return 'Today';
-  }
-  if (diff === 1) {
-    return 'Tomorrow';
-  }
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  if (diff < 0) return t('tasks.page.daysOverdue', { count: -diff });
+  if (diff === 0) return t('tasks.list.today');
+  if (diff === 1) return t('tasks.list.tomorrow');
+  return formatDate(date, { weekday: 'short', month: 'short', day: 'numeric', year: undefined });
 }
 
 export function TasksPage() {
-  useDocumentTitle('Tasks');
   const { t } = useTranslation();
+  useDocumentTitle(t('tasks.title'));
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -365,7 +360,7 @@ export function TasksPage() {
   const taskCountSummary =
     isLoading || error || tasks === undefined
       ? ''
-      : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
+      : t('tasks.page.shown', { count: sortedTasks.length });
 
   // The round's own fallback group name carries the same distinction: with
   // the rooms (or the plants) unread, every task collapses into one group,
@@ -736,6 +731,11 @@ export function TasksPage() {
             sections={checklistSections}
             roomTitle={roomTitle}
             householdEmpty={(tasks ?? []).length === 0}
+            filtered={who !== 'all' || phoneSpace !== null}
+            onClearFilters={() => {
+              setWho('all');
+              setSpaceChoice(null);
+            }}
             nextUp={nextUp}
             taskName={(item) => deferred.taskName(item.task)}
             roomOf={(item) => rowExtras.locationFor(item.task)}
@@ -784,9 +784,9 @@ export function TasksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Today's work"
-        title="Tasks"
-        description="Manage your plant care tasks."
+        eyebrow={t('tasks.page.eyebrow')}
+        title={t('tasks.title')}
+        description={t('tasks.page.description')}
       />
 
       {/* The native push opt-in, at the moment it is worth something: this
@@ -832,13 +832,13 @@ export function TasksPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Task filters">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t('tasks.page.filtersLabel')}>
         {[
-          { id: 'all', label: 'All' },
-          { id: 'mine', label: 'My tasks' },
-          { id: 'today', label: 'Today' },
-          { id: 'week', label: 'This week' },
-          { id: 'overdue', label: 'Overdue' },
+          { id: 'all', label: t('tasks.page.filterAll') },
+          { id: 'mine', label: t('tasks.page.filterMine') },
+          { id: 'today', label: t('tasks.page.filterToday') },
+          { id: 'week', label: t('tasks.page.filterWeek') },
+          { id: 'overdue', label: t('tasks.page.filterOverdue') },
         ].map((f) => (
           <button
             key={f.id}
@@ -856,7 +856,7 @@ export function TasksPage() {
             {f.id === 'overdue' && (
               <span
                 className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent-100 text-accent-800"
-                {...(overdueCount === null ? { 'aria-label': 'Overdue count unknown' } : {})}
+                {...(overdueCount === null ? { 'aria-label': t('tasks.page.overdueUnknown') } : {})}
               >
                 {overdueCount === null ? '—' : overdueCount}
               </span>
@@ -879,20 +879,16 @@ export function TasksPage() {
       ) : !sortedTasks || sortedTasks.length === 0 ? (
         <EmptyState
           icon={<EmptyTasks className="mx-auto h-40 w-auto" />}
-          title="No tasks found"
-          description={
-            filter === 'all'
-              ? 'Add care tasks to your plants to see them here.'
-              : 'No tasks match the current filter.'
-          }
+          title={t('tasks.page.emptyTitle')}
+          description={filter === 'all' ? t('tasks.page.emptyAll') : t('tasks.page.emptyFiltered')}
           action={
             filter !== 'all' ? (
               <Button variant="secondary" onClick={() => setFilter('all')}>
-                Clear filter
+                {t('tasks.page.clearFilter')}
               </Button>
             ) : (
               <Link to="/plants">
-                <Button>View plants</Button>
+                <Button>{t('tasks.page.viewPlants')}</Button>
               </Link>
             )
           }
@@ -938,7 +934,7 @@ export function TasksPage() {
         <div className="space-y-6">
           {overdueTasks.length > 0 && (
             <TaskSection
-              title="Overdue"
+              title={t('tasks.list.overdue')}
               tasks={overdueTasks}
               onComplete={doneOrUndo}
               pendingTaskIds={deferred.pending}
@@ -949,7 +945,7 @@ export function TasksPage() {
 
           {todayTasks.length > 0 && (
             <TaskSection
-              title="Today"
+              title={t('tasks.list.today')}
               tasks={todayTasks}
               onComplete={doneOrUndo}
               pendingTaskIds={deferred.pending}
@@ -959,7 +955,7 @@ export function TasksPage() {
 
           {upcomingTasks.length > 0 && (
             <TaskSection
-              title="Upcoming"
+              title={t('tasks.list.upcoming')}
               tasks={upcomingTasks}
               onComplete={doneOrUndo}
               pendingTaskIds={deferred.pending}
@@ -1014,6 +1010,7 @@ function TaskSection({
   extras,
 }: TaskSectionProps) {
   const { t } = useTranslation();
+  const myUserId = useAuthStore((state) => state.user?.id);
   return (
     <Card variant="paper" padding="none">
       <div
@@ -1063,15 +1060,21 @@ function TaskSection({
                   </Link>
                   <p className="text-xs text-gray-600">
                     <span className="font-medium">
-                      {task.customType || taskTypeLabels[task.type]}
+                      {task.customType ||
+                        t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type)}
                     </span>
                     {' • '}
                     <span
                       className={clsx(isOverdue(task.nextDue) && 'text-accent-700 font-medium')}
                     >
-                      {formatDueDate(task.nextDue)}
+                      {formatDueDate(task.nextDue, t)}
                     </span>
-                    {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
+                    {task.assignedToName &&
+                      ` • ${
+                        task.assignedTo === myUserId
+                          ? t('tasks.page.assignedToYou')
+                          : t('tasks.page.assignedTo', { name: task.assignedToName })
+                      }`}
                   </p>
                   <TaskLocationOrNothing label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
@@ -1118,7 +1121,9 @@ function TaskSection({
                   aria-label={
                     pendingTaskIds.has(task.id)
                       ? t('plants.list.undoAria', {
-                          task: task.customType || taskTypeLabels[task.type],
+                          task:
+                            task.customType ||
+                            t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type),
                           plant: task.plantName,
                         })
                       : undefined

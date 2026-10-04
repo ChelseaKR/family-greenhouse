@@ -378,6 +378,15 @@ describe('swiping a Plants row', () => {
     expect(writes).toEqual([]);
   });
 
+  it('only one row is open at a time, on Plants too', async () => {
+    renderPlants();
+    const lily = await swipe(/^Peace Lily/, 300, 100);
+    expect(lily.style.transform).toBe('translateX(-176px)');
+    const monstera = await swipe(/^Monstera/, 300, 100);
+    await vi.waitFor(() => expect(lily.style.transform).toBe(''));
+    expect(monstera.style.transform).toBe('translateX(-176px)');
+  });
+
   it('a row with nothing due does not swipe right', async () => {
     renderPlants();
     const row = await swipe(/^Snake Plant/, 20, 340);

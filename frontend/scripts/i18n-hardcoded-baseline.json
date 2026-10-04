@@ -36,8 +36,7 @@
     "features/settings/NotificationSettings.tsx": 13,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 9,
-    "features/status/StatusPage.tsx": 16,
-    "features/tasks/TasksPage.tsx": 2
+    "features/status/StatusPage.tsx": 16
   },
   "attributes": {
     "components/CommandPalette.tsx": 1,
@@ -68,7 +67,6 @@
     "features/settings/NotificationSettings.tsx": 7,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 2,
-    "features/status/StatusPage.tsx": 1,
-    "features/tasks/TasksPage.tsx": 6
+    "features/status/StatusPage.tsx": 1
   }
 }

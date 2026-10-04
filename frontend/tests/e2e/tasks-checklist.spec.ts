@@ -69,7 +69,13 @@ test.describe('phone website (390px)', () => {
 
     await page.getByLabel('Filter tasks').click();
     await page.getByRole('button', { name: 'Only mine', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'All done for today' })).toBeVisible();
+    // A filter that hides everything says so, never "All done for today".
+    await expect(page.getByText('No tasks match these filters.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'All done for today' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(fernRow(page)).toBeVisible();
+    await page.getByLabel('Filter tasks').click();
+    await page.getByRole('button', { name: 'Only mine', exact: true }).click();
     await page.getByRole('button', { name: 'Remove filter: Only mine' }).click();
     await expect(fernRow(page)).toBeVisible();
 
@@ -239,7 +245,7 @@ test.describe('iOS app with bar tools (native frame stub)', () => {
       for (const l of f.listeners.barMenuSelect ?? [])
         l({ path: '/tasks?filter=today', id: 'who:mine' });
     });
-    await expect(page.getByRole('heading', { name: 'All done for today' })).toBeVisible();
+    await expect(page.getByText('No tasks match these filters.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remove filter: Only mine' })).toBeVisible();
     // The pick changed the page, not the URL: still the same screen.
     expect(new URL(page.url()).search).toBe('?filter=today');

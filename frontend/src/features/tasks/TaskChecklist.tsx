@@ -22,6 +22,10 @@ interface TaskChecklistProps {
   roomTitle: (id: string) => string;
   /** The household has no tasks at all (not just none in this view). */
   householdEmpty: boolean;
+  /** A filter (whose, or a space) is in force; with nothing to show, the
+   *  list says so and offers to clear it, never "All done for today". */
+  filtered: boolean;
+  onClearFilters: () => void;
   /** The first task after today, for "Next up" when Today is empty. */
   nextUp: ChecklistItem | null;
   taskName: (item: ChecklistItem) => string;
@@ -50,6 +54,8 @@ export function TaskChecklist({
   sections,
   roomTitle,
   householdEmpty,
+  filtered,
+  onClearFilters,
   nextUp,
   taskName,
   roomOf,
@@ -118,6 +124,15 @@ export function TaskChecklist({
         <Link to="/plants/new" className="mt-5 inline-block">
           <Button>{t('plants.addPlant')}</Button>
         </Link>
+      </div>
+    );
+  } else if (sections.length === 0 && filtered) {
+    body = (
+      <div className="px-6 pt-10 text-center">
+        <p className="text-gray-600">{t('tasks.list.filteredEmpty')}</p>
+        <Button variant="secondary" className="mt-4" onClick={onClearFilters}>
+          {t('tasks.list.clearFilters')}
+        </Button>
       </div>
     );
   } else if (sections.length === 0) {
