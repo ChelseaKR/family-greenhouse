@@ -245,6 +245,41 @@ describe('the plant page on a phone', () => {
   });
 });
 
+describe('plant page polish', () => {
+  it('on a phone the space shows once, in the header', async () => {
+    window.matchMedia = phone(true);
+    renderPlant();
+    await screen.findByRole('region', { name: 'What this plant needs now' });
+    expect(screen.getAllByText('Bedroom')).toHaveLength(1);
+    expect(screen.queryByText('Space', { selector: 'dt' })).toBeNull();
+  });
+
+  it('on desktop the Space row stays', async () => {
+    window.matchMedia = phone(false);
+    renderPlant();
+    await screen.findByRole('heading', { level: 1, name: 'Peace Lily' });
+    expect(screen.getByText('Space', { selector: 'dt' })).toBeInTheDocument();
+  });
+
+  it('the care guide is headed with the plant’s own name', async () => {
+    window.matchMedia = phone(true);
+    renderPlant();
+    expect(await screen.findByText('Caring for Peace Lily')).toBeInTheDocument();
+    expect(screen.queryByText('Caring for Peace lily')).toBeNull();
+  });
+
+  it('a plant with its own name keeps it in the care guide heading', async () => {
+    window.matchMedia = phone(true);
+    server.use(
+      http.get(`${API}/plants/p1`, () =>
+        HttpResponse.json(plantBody({ name: 'Sir Leafsalot', species: 'Monstera deliciosa' }))
+      )
+    );
+    renderPlant();
+    expect(await screen.findByText('Caring for Sir Leafsalot')).toBeInTheDocument();
+  });
+});
+
 describe('the plant page on desktop', () => {
   it('keeps its own layout', async () => {
     window.matchMedia = phone(false);
