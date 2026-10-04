@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { formatContentDate } from '@/utils/contentDate';
+import { isNativeApp } from '@/lib/platform';
 import { groupByMonth } from './groupByMonth';
 
 /**
@@ -21,6 +22,13 @@ interface Entry {
   category: Category;
   title: string;
   body: React.ReactNode;
+  /**
+   * Shown on the website only. Inside the iOS and Android apps an entry that
+   * names a price or says where plans are bought is a call to action toward a
+   * purchase outside the app's own billing (App Review Guideline 3.1.1 /
+   * 3.1.3), so it is left out there. See docs/mobile.md, "Store payment rules".
+   */
+  webOnly?: boolean;
 }
 
 // Category tags stay inside the garden palette (greens, terracotta,
@@ -38,6 +46,7 @@ const ENTRIES: Entry[] = [
     date: '2026-09-02',
     category: 'Feature',
     title: 'Paid plans are open',
+    webOnly: true,
     body: (
       <>
         Garden ($4.99 a month) and Greenhouse ($9.99 a month) can now be bought on the web. A
@@ -52,6 +61,7 @@ const ENTRIES: Entry[] = [
     date: '2026-09-02',
     category: 'Fix',
     title: 'A cancelled plan now says it is cancelled',
+    webOnly: true,
     body: (
       <>
         Cancelling leaves you on the paid plan until the period you already paid for runs out, so
@@ -288,6 +298,11 @@ const ENTRIES: Entry[] = [
   },
 ];
 
+/** The entries this platform shows: all of them on the website, and the app without `webOnly`. */
+function visibleEntries(native: boolean): Entry[] {
+  return native ? ENTRIES.filter((entry) => !entry.webOnly) : ENTRIES;
+}
+
 export function ChangelogPage() {
   useMetaTags({
     title: 'Changelog — Family Greenhouse',
@@ -295,7 +310,7 @@ export function ChangelogPage() {
       "What's new in Family Greenhouse: feature releases, fixes, and reliability improvements, grouped by month, in plain language.",
   });
 
-  const grouped = groupByMonth(ENTRIES);
+  const grouped = groupByMonth(visibleEntries(isNativeApp()));
 
   return (
     <PublicShell>

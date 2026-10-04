@@ -291,3 +291,42 @@ describe('NoCardTrialNotice', () => {
     expect(screen.queryByText('When it ends:')).not.toBeInTheDocument();
   });
 });
+
+describe('NoCardTrialNotice inside the native (Capacitor) shells', () => {
+  // The global the Capacitor bridge injects (lib/platform.ts reads it).
+  beforeEach(() => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+  });
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it('on Plan status: what changes, but no "choosing a paid plan goes through checkout" line', async () => {
+    const sub = trialEndingIn(2 * DAY, 'active');
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
+    renderNotice('billing');
+    const date = formatDate(sub.noCardTrial!.endsAt, { month: 'long' });
+
+    expect(
+      await screen.findByText(`Your household’s Garden trial ends on ${date}`)
+    ).toBeInTheDocument();
+    expect(screen.getByText('When it ends:')).toBeInTheDocument();
+    const notice = screen.getByTestId('no-card-trial-notice');
+    expect(notice).not.toHaveTextContent(/paid plan|checkout|card\./i);
+  });
+
+  it('on the dashboard: the link is named for the read-only Plan status it opens', async () => {
+    const sub = trialEndingIn(11 * DAY, 'active');
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
+    renderNotice('dashboard');
+
+    expect(await screen.findByRole('link', { name: 'View plan status' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+    expect(screen.queryByRole('link', { name: 'Plans and billing' })).not.toBeInTheDocument();
+  });
+});

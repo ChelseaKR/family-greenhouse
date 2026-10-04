@@ -526,8 +526,11 @@ the app through Stripe:
   is why the native billing screen shows a neutral "Plan changes aren't
   available in the app." with **no URL** (one sentence for a household whose
   payment is failing is the exception; see below). Adding a "subscribe on our
-  website" link is a rejection (US storefront external-link entitlements
-  exist but need explicit approval — treat as a separate project).
+  website" link is a rejection in every storefront but the United States.
+  The United States storefront no longer needs an entitlement for links or
+  buttons (App Review Guidelines 3.1.1(a) and 3.1.3, since 2025-05-01), but
+  this app does not use that: see `docs/APP-STORE.md`, "Availability and the
+  payment position".
 - **Google Play (Payments policy):** same principle with Play Billing.
 
 Options if in-app purchasing is ever wanted: implement StoreKit/Play Billing
@@ -569,6 +572,35 @@ somewhere other than In-App Purchase, and it was cut on 2026-10-02 (owner
 decision): the apps now show the payment-failed notice and the neutral
 "Plan changes aren't available in the app." Do not bring that pattern back
 onto any surface.
+
+**The 2026-10-04 sweep (US-only availability, ship as built).** With the
+decision to ship without In-App Purchase on the United States storefront
+(`docs/APP-STORE.md`, "Availability and the payment position"), every other
+route a price or a purchase prompt could take into the app was closed:
+
+- `/changelog` (reachable from Help) leaves out its two billing entries,
+  "Paid plans are open" (prices and "can now be bought on the web", with a
+  link to the plans) and "A cancelled plan now says it is cancelled", via
+  `webOnly` on the entry (`ChangelogPage.tsx`).
+- Analytics drops its "See plans" link under the free plan's history-window
+  note (`AnalyticsPage.tsx`).
+- The no-card trial notice drops "Choosing a paid plan replaces this trial
+  with a subscription, which goes through checkout and needs a card." on
+  Plan status, and its dashboard link reads "View plan status"
+  (`NoCardTrialNotice.tsx`).
+- Archive restore's plan-limit refusals say what happened without "until
+  you upgrade" / "Upgrade, then restore again" (`overLimitInApp`,
+  `stoppedAtLimitInApp` in both catalogs).
+- The server's 402 plan refusals end with "Upgrade to …", "Buy a top-up
+  pack …", "Choose a paid plan …" or ", or upgrade to …". Inside the shells
+  `getErrorMessage` (`services/api.ts`) drops those sentences and clauses and
+  keeps the rest ("Your Seedling plan allows 1 live sitter link at a time.
+  Revoke one to create another."); with nothing left, it shows "Plan changes
+  aren't available in the app."
+
+Each has a test from both sides (in the app: absent; on the website:
+unchanged). Left as is on purpose: the Terms page's "Paid Garden and
+Greenhouse plans are available on the web" (legal text, owner decision).
 
 ## Push notifications
 

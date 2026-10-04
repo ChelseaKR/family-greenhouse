@@ -2676,7 +2676,9 @@
       "otherArchive": "This household was restored from another export. Restore into a new household.",
       "changed": "Something changed since you checked. Check again.",
       "overLimit": "This export has {{active}} active plants and the {{plan}} plan allows {{limit}}. Nothing will be restored until you upgrade.",
+      "overLimitInApp": "This export has {{active}} active plants and the {{plan}} plan allows {{limit}}, so nothing will be restored into this household.",
       "stoppedAtLimit": "Stopped at the plan limit. Plants: {{plants}}/{{totalPlants}}, tasks: {{tasks}}/{{totalTasks}}. Upgrade, then restore again.",
+      "stoppedAtLimitInApp": "Stopped at the plan limit. Plants: {{plants}}/{{totalPlants}}, tasks: {{tasks}}/{{totalTasks}}. Restoring the same archive again later adds only what is missing.",
       "interrupted": "Stopped part-way. Plants: {{plants}}/{{totalPlants}}, tasks: {{tasks}}/{{totalTasks}}. Restore again to finish; nothing is added twice."
     },
     "preview": {

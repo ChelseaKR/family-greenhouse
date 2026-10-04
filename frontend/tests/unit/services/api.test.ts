@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
 import { AxiosError } from 'axios';
-import { api, getErrorMessage } from '@/services/api';
+import { api, getErrorMessage, withoutPurchaseCalls } from '@/services/api';
 import { track } from '@/services/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { server, handlers } from '../../msw/server';
@@ -394,5 +394,70 @@ describe('plan-limit refusals (402)', () => {
     });
 
     expect(track).not.toHaveBeenCalled();
+  });
+});
+
+describe('plan refusals (402) inside the native shells', () => {
+  function refusal(message: string, status = 402): AxiosError {
+    const err = new AxiosError(`Request failed with status code ${status}`);
+    err.response = { data: { message }, status, statusText: '', headers: {}, config: {} } as never;
+    return err;
+  }
+  const HOMES =
+    'Your Seedling plan includes 1 home and you already belong to 1 household. Upgrade to Greenhouse for unlimited homes.';
+  const SITTER =
+    'Your Seedling plan allows 1 live sitter link at a time. Revoke one to create another, or upgrade to Garden for several at once.';
+
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  // The control: on the website the backend's whole message is shown.
+  it('on the website: shows the message as the server wrote it', () => {
+    expect(getErrorMessage(refusal(HOMES))).toBe(HOMES);
+    expect(getErrorMessage(refusal(SITTER))).toBe(SITTER);
+  });
+
+  it('in the app: keeps what the plan allows and drops the call to upgrade or buy', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    expect(getErrorMessage(refusal(HOMES))).toBe(
+      'Your Seedling plan includes 1 home and you already belong to 1 household.'
+    );
+    expect(getErrorMessage(refusal(SITTER))).toBe(
+      'Your Seedling plan allows 1 live sitter link at a time. Revoke one to create another.'
+    );
+    // Not a 402: untouched, even in the app.
+    expect(getErrorMessage(refusal('Upgrade the app to continue.', 400))).toBe(
+      'Upgrade the app to continue.'
+    );
+  });
+
+  it('withoutPurchaseCalls: every refusal shape the backend sends', () => {
+    expect(
+      withoutPurchaseCalls(
+        "Your Seedling plan's 1 plant identifications for this month are used up. Buy a top-up pack of 20 identifications, or upgrade for a higher monthly allowance."
+      )
+    ).toBe("Your Seedling plan's 1 plant identifications for this month are used up.");
+    expect(
+      withoutPurchaseCalls(
+        "During the no-card Garden trial, identifications use the free plan's allowance of 1 a month, and this month's is used up. Choose a paid plan for a higher monthly allowance."
+      )
+    ).toBe(
+      "During the no-card Garden trial, identifications use the free plan's allowance of 1 a month, and this month's is used up."
+    );
+    expect(
+      withoutPurchaseCalls(
+        'Your Seedling plan is limited to 20 plants. Remove or archive a plant before adding more.'
+      )
+    ).toBe(
+      'Your Seedling plan is limited to 20 plants. Remove or archive a plant before adding more.'
+    );
+    // Nothing left: the app's neutral line instead of an empty alert.
+    expect(withoutPurchaseCalls('Upgrade to start chatting.')).toBe(
+      "Plan changes aren't available in the app."
+    );
   });
 });

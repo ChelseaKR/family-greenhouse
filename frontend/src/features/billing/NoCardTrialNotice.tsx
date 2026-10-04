@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { Alert } from '@/components/Alert';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { formatDate } from '@/i18n/format';
+import { isNativeApp } from '@/lib/platform';
 import {
   billingService,
   type Plan,
@@ -81,6 +82,11 @@ export function NoCardTrialNoticeView({
   plans: Plan[] | undefined;
 }) {
   const { t } = useTranslation();
+  // Inside the apps the notice says what the trial is and what changes when it
+  // ends, but not how to buy a plan (Guideline 3.1.1): no "choosing a paid
+  // plan goes through checkout" line, and the dashboard link is named for the
+  // read-only Plan status it opens there.
+  const native = isNativeApp();
   const kind = noCardTrialNoticeKind(subscription, placement);
   const trial = subscription?.noCardTrial;
   if (!kind || !trial) return null;
@@ -146,11 +152,13 @@ export function NoCardTrialNoticeView({
             </ul>
           </>
         )}
-        {placement === 'billing' && kind !== 'ended' && <p>{t(key('subscribeReplaces'))}</p>}
+        {placement === 'billing' && kind !== 'ended' && !native && (
+          <p>{t(key('subscribeReplaces'))}</p>
+        )}
         {placement === 'dashboard' && (
           <p>
             <Link to="/settings/billing" className="font-medium underline">
-              {t(key('billingLink'))}
+              {native ? t('today.viewPlanStatus') : t(key('billingLink'))}
             </Link>
           </p>
         )}
