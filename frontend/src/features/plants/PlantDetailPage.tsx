@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftIcon,
+  ArrowUturnLeftIcon,
   PencilIcon,
   TrashIcon,
   PlusIcon,
@@ -18,7 +19,8 @@ import {
 import { plantService, Task, type PlantStatus } from '@/services/plantService';
 import { taskService, type ScheduleDrift } from '@/services/taskService';
 import { ScheduleDriftHint } from './ScheduleDriftHint';
-import { useClaimTaskMutation, useCompleteTaskMutation } from '@/features/tasks/taskMutations';
+import { useClaimTaskMutation } from '@/features/tasks/taskMutations';
+import { useDeferredCompletion } from './useDeferredCompletion';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
 import { buttonStyles } from '@/components/buttonStyles';
@@ -182,13 +184,19 @@ export function PlantDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const completeTaskMutation = useCompleteTaskMutation(householdId);
-  // House rule gate: the plant is this page's own read, so the rule shown
-  // before a completion is authoritative here (see useCareRuleGate).
+  // Done waits out the same 5-second Undo window as the Plants list
+  // (useDeferredCompletion): nothing is written until it passes, and Undo
+  // inside it writes nothing. House rule gate first: the plant is this
+  // page's own read, so the rule shown is authoritative here.
+  const deferred = useDeferredCompletion(householdId);
   const careRuleGate = useCareRuleGate<Task>(
     () => careRuleFor(plant),
-    (task) => completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue })
+    (task) => {
+      deferred.schedule(task, plant?.name ?? task.plantName);
+    }
   );
+  const doneOrUndo = (task: Task) =>
+    deferred.pending.has(task.id) ? deferred.undo(task.id) : careRuleGate.request(task);
 
   // Schedule drift (household toolkit): one read per plant, a reading per
   // task. On tiers without the toolkit the server answers `available: false`
@@ -372,7 +380,8 @@ export function PlantDetailPage() {
             myUserId={myUserId}
             menu={nativeBar ? null : pageMenu}
             onMenu={onPageMenu}
-            onDone={(task) => careRuleGate.request(task)}
+            onDone={doneOrUndo}
+            pendingTaskIds={deferred.pending}
             onClaim={(task) =>
               claimMutation.mutate(task.id, {
                 onSettled: () =>
@@ -380,7 +389,6 @@ export function PlantDetailPage() {
               })
             }
             onAddTask={() => setShowAddTask(true)}
-            isCompleting={completeTaskMutation.isPending}
             snooze={(task) => (
               <SnoozeMenu
                 isSnoozing={snoozeTaskMutation.isPending}
@@ -708,7 +716,8 @@ export function PlantDetailPage() {
                 key={task.id}
                 task={task}
                 completions={plant.recentCompletions}
-                onComplete={() => careRuleGate.request(task)}
+                onComplete={() => doneOrUndo(task)}
+                isPending={deferred.pending.has(task.id)}
                 onSnooze={(days) =>
                   snoozeTaskMutation.mutate({
                     taskId: task.id,
@@ -718,10 +727,6 @@ export function PlantDetailPage() {
                 }
                 onEdit={() => setEditingTask(task)}
                 latitude={household?.location?.lat}
-                isCompleting={
-                  completeTaskMutation.isPending &&
-                  completeTaskMutation.variables?.taskId === task.id
-                }
                 isSnoozing={snoozeTaskMutation.isPending}
                 isReadOnly={(plant.status ?? 'active') !== 'active'}
                 drift={scheduleDrift?.tasks.find((reading) => reading.taskId === task.id)}
@@ -842,9 +847,10 @@ interface TaskRowProps {
   task: Task;
   completions: import('@/services/plantService').TaskCompletion[];
   onComplete: () => void;
+  /** Inside its Undo window: the Done button is Undo. */
+  isPending: boolean;
   onSnooze: (days: number) => void;
   onEdit: () => void;
-  isCompleting: boolean;
   isSnoozing: boolean;
   isReadOnly: boolean;
   /** Household latitude, for the seasonal-cadence chip. Null/undefined when the
@@ -867,9 +873,9 @@ function TaskRow({
   task,
   completions,
   onComplete,
+  isPending,
   onSnooze,
   onEdit,
-  isCompleting,
   isSnoozing,
   isReadOnly,
   latitude,
@@ -963,12 +969,19 @@ function TaskRow({
             </Button>
             <Button
               size="sm"
+              variant={isPending ? 'secondary' : 'primary'}
               className="w-full sm:w-auto"
               onClick={onComplete}
-              disabled={isCompleting}
-              leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+              aria-label={isPending ? t('plants.list.undo') : undefined}
+              leftIcon={
+                isPending ? (
+                  <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                )
+              }
             >
-              Done
+              {isPending ? t('plants.list.undo') : t('tasks.complete')}
             </Button>
           </div>
         )}

@@ -28,7 +28,7 @@
     "features/plants/EditTaskModal.tsx": 11,
     "features/plants/NoCareDataNotice.tsx": 2,
     "features/plants/PhotoTimeline.tsx": 2,
-    "features/plants/PlantDetailPage.tsx": 18,
+    "features/plants/PlantDetailPage.tsx": 17,
     "features/plants/PlantImageUpload.tsx": 2,
     "features/plants/SuggestedCareCard.tsx": 3,
     "features/settings/AccountSettings.tsx": 11,

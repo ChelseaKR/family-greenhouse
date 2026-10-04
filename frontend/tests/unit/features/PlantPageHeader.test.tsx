@@ -8,6 +8,13 @@ import { PlantDetailPage } from '@/features/plants/PlantDetailPage';
 import type { NativeBarTools } from '@/config/nativeBarTools';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
+import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
+
+async function pass(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
 
 /**
  * The top of the plant page on a phone: the header, the status card with
@@ -123,6 +130,7 @@ const phone = (on: boolean) =>
 
 const realMatchMedia = window.matchMedia;
 beforeEach(() => {
+  resetDeferredCareQueueForTests();
   writes = [];
   native.sent.length = 0;
   for (const key of Object.keys(native.listeners)) delete native.listeners[key];
@@ -185,11 +193,19 @@ describe('the plant page on a phone', () => {
     ]);
   });
 
-  it('Watered completes this occurrence', async () => {
-    const user = userEvent.setup();
-    renderPlant();
-    await user.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
-    await waitFor(() => expect(writes).toEqual(['POST /tasks/t1/complete']));
+  it('Watered completes this occurrence, after the Undo window', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderPlant();
+      await user.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+      await pass(UNDO_WINDOW_MS - 200);
+      expect(writes).toEqual([]);
+      await pass(400);
+      expect(writes).toEqual(['POST /tasks/t1/complete']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('I’ll do it claims an open task', async () => {

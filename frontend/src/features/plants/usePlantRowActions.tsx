@@ -1,4 +1,4 @@
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,13 +7,12 @@ import { taskService, type TaskWithCoverage } from '@/services/taskService';
 import { getErrorMessage } from '@/services/api';
 import { hasNativePresent } from '@/lib/platform';
 import { playHaptic } from '@/services/nativeHaptics';
-import { toast, useToastStore } from '@/store/toastStore';
-import { taskTypeLabels } from '@/utils/taskTypeConfig';
+import { toast } from '@/store/toastStore';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
-import { useClaimTaskMutation, useCompleteTaskMutation } from '@/features/tasks/taskMutations';
+import { useClaimTaskMutation } from '@/features/tasks/taskMutations';
 import { ActionSheet, type ActionSheetRequest } from './ActionSheet';
 import { MovePlantsDialog } from './MovePlantsDialog';
-import { UNDO_WINDOW_MS, deferredCareQueue } from './deferredCare';
+import { useDeferredCompletion } from './useDeferredCompletion';
 import type { PlantCare } from './plantCare';
 
 type GateTask = TaskWithCoverage & { plant: Plant };
@@ -32,9 +31,7 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const queue = deferredCareQueue();
-  const pending = useSyncExternalStore(queue.subscribe, queue.pending, queue.pending);
-  const completeMutation = useCompleteTaskMutation(householdId);
+  const { pending, schedule, undo, taskName } = useDeferredCompletion(householdId);
   const claimMutation = useClaimTaskMutation(householdId);
   const snoozeMutation = useMutation({
     mutationFn: ({ task, days }: { task: TaskWithCoverage; days: number }) =>
@@ -49,10 +46,6 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   const [movePlant, setMovePlant] = useState<Plant | null>(null);
   const [sheet, setSheet] = useState<ActionSheetRequest | null>(null);
   const answer = useRef<((id: string | null) => void) | null>(null);
-  const toastIds = useRef(new Map<string, number>());
-
-  const taskName = (task: TaskWithCoverage) =>
-    task.customType || t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type);
 
   /** One question with a few answers: Apple's action sheet in the app, the
    *  web sheet elsewhere. Resolves the chosen id, or null for no choice. */
@@ -70,26 +63,7 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   };
 
   const scheduleDone = (task: GateTask) => {
-    const accepted = queue.schedule(
-      { taskId: task.id, plantId: task.plantId, expectedNextDue: task.nextDue },
-      (item) => {
-        const id = toastIds.current.get(item.taskId);
-        if (id !== undefined) useToastStore.getState().dismiss(id);
-        toastIds.current.delete(item.taskId);
-        completeMutation.mutate({ taskId: item.taskId, expectedNextDue: item.expectedNextDue });
-      }
-    );
-    // The haptic plays when the completion is actually written (the
-    // mutation's success), not here, so an undone tap never buzzed as done.
-    if (!accepted) return;
-    const id = toast.success(
-      t('plants.list.doneToast', { task: taskName(task), plant: task.plant.name }),
-      {
-        durationMs: UNDO_WINDOW_MS,
-        action: { label: t('plants.list.undo'), onAction: () => undo(task.id) },
-      }
-    );
-    toastIds.current.set(task.id, id);
+    schedule(task, task.plant.name);
   };
 
   const gate = useCareRuleGate<GateTask>((task) => careRuleFor(task.plant), scheduleDone);
@@ -97,13 +71,6 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   const done = (item: PlantCare) => {
     if (!item.task || pending.has(item.task.id)) return;
     gate.request({ ...item.task, plantName: item.plant.name, plant: item.plant });
-  };
-
-  const undo = (taskId: string) => {
-    const id = toastIds.current.get(taskId);
-    if (id !== undefined) useToastStore.getState().dismiss(id);
-    toastIds.current.delete(taskId);
-    if (!queue.undo(taskId)) toast.info(t('plants.list.undoTooLate'));
   };
 
   const snooze = async (item: PlantCare, from?: Element | null) => {
