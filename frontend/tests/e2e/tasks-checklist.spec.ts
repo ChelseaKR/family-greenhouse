@@ -1,0 +1,126 @@
+import { test, expect, type Page } from '@playwright/test';
+import { provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
+
+/**
+ * The Tasks tab on a phone ("Checklist"): the website under 640px and the
+ * iOS app. The desktop website keeps its own layout (the chips and the By
+ * date / Care round toggle), which is checked here too, so a change to one
+ * can never silently become a change to the other.
+ */
+
+let account: ProvisionedAccount;
+
+test.beforeAll(async () => {
+  account = await provisionAccount({
+    emailPrefix: 'tasks-checklist',
+    space: { name: 'Sunroom', environment: 'inside' },
+    plant: { name: 'Checklist Fern', species: 'Nephrolepis exaltata' },
+    waterTask: { frequency: 7 },
+  });
+});
+
+async function openTasks(page: Page) {
+  await uiLogin(page, account.email, account.password);
+  await page.goto('/tasks');
+}
+
+const fernRow = (page: Page) => page.getByRole('link', { name: /^Checklist Fern, Water, Sunroom/ });
+
+test.describe('phone website (390px)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('leads with the task, on the first screen, without the desktop controls', async ({
+    page,
+  }) => {
+    await openTasks(page);
+    await expect(page.getByRole('heading', { level: 2, name: 'Today' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Today 1$/, pressed: true })).toBeVisible();
+    const row = fernRow(page);
+    await expect(row).toBeVisible();
+    // Nobody has it yet: the row says so, and never "Assigned to".
+    await expect(row).toHaveAccessibleName(/Up for grabs$/);
+    const box = await row.boundingBox();
+    expect(box!.y + box!.height).toBeLessThan(844 / 2);
+
+    await expect(page.getByRole('group', { name: 'Task filters' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Care round' })).toHaveCount(0);
+    await expect(page.getByText(/Assigned to/)).toHaveCount(0);
+  });
+
+  test('the check circle marks it done with Undo, and Undo puts it back', async ({ page }) => {
+    await openTasks(page);
+    await page.getByRole('button', { name: 'Water Checklist Fern' }).click();
+    await expect(page.getByRole('button', { name: 'Undo: Water Checklist Fern' })).toBeVisible();
+    await page.getByRole('button', { name: 'Undo: Water Checklist Fern' }).click();
+    await expect(page.getByRole('button', { name: 'Water Checklist Fern' })).toBeVisible();
+  });
+
+  test('the row actions open without a gesture, and the filter menu filters', async ({ page }) => {
+    await openTasks(page);
+    await expect(fernRow(page)).toBeVisible();
+    const actions = page.getByRole('button', { name: 'Actions for Checklist Fern' });
+    await actions.focus();
+    await page.keyboard.press('Enter');
+    const sheet = page.getByRole('dialog', { name: 'Checklist Fern' });
+    await expect(sheet.getByRole('button', { name: 'I’ll do it' })).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Ask family…' })).toBeVisible();
+    await sheet.getByRole('button', { name: 'Cancel' }).click();
+    await expect(sheet).toBeHidden();
+
+    await page.getByLabel('Filter tasks').click();
+    await page.getByRole('button', { name: 'Only mine', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'All done for today' })).toBeVisible();
+    await page.getByRole('button', { name: 'Remove filter: Only mine' }).click();
+    await expect(fernRow(page)).toBeVisible();
+
+    await page.getByRole('button', { name: /^Upcoming/ }).click();
+    await expect(page.getByText('Nothing is scheduled after today.')).toBeVisible();
+  });
+});
+
+test.describe('desktop website (1280px)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('keeps the chips and the By date / Care round toggle', async ({ page }) => {
+    await openTasks(page);
+    await expect(page.getByRole('group', { name: 'Task filters' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Care round' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Show tasks for' })).toHaveCount(0);
+  });
+});
+
+test.describe('iOS app (native frame stub)', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'the shell under test is WebKit');
+  test.use({ viewport: { width: 834, height: 1194 } });
+
+  test('uses the checklist at any width inside the app', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>;
+      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+        PluginHeaders: [
+          {
+            name: 'NativeChrome',
+            methods: [
+              { name: 'addListener' },
+              { name: 'removeListener' },
+              { name: 'removeAllListeners', rtype: 'promise' },
+              { name: 'configure', rtype: 'promise' },
+              { name: 'update', rtype: 'promise' },
+            ],
+          },
+        ],
+        nativePromise: () => Promise.resolve(),
+        nativeCallback: () => 'callback',
+      };
+    });
+    await openTasks(page);
+    // The pretense took: otherwise this would be testing the website.
+    await expect(page.locator('html')).toHaveAttribute('data-native-frame', '');
+    await expect(page.getByRole('group', { name: 'Show tasks for' })).toBeVisible();
+    await expect(fernRow(page)).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Task filters' })).toHaveCount(0);
+  });
+});

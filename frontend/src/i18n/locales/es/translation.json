@@ -991,6 +991,28 @@
       "field": "Intervalo de {{season}} (días)",
       "placeholder": "Frecuencia base",
       "noLocationHelp": "Añade una ubicación del hogar y estas temporadas empezarán a aplicarse."
+    },
+    "list": {
+      "segments": "Mostrar tareas de",
+      "today": "Hoy",
+      "upcoming": "Próximas",
+      "overdue": "Atrasadas",
+      "tomorrow": "Mañana",
+      "count_one": "{{count}} tarea",
+      "count_other": "{{count}} tareas",
+      "count_many": "{{count}} tareas",
+      "inView_one": "{{count}} tarea en esta vista.",
+      "inView_other": "{{count}} tareas en esta vista.",
+      "inView_many": "{{count}} tareas en esta vista.",
+      "filter": "Filtrar tareas",
+      "everyone": "Las tareas de todos",
+      "groupDate": "Fecha",
+      "actions": "Acciones para {{plant}}",
+      "allDoneTitle": "Todo listo por hoy",
+      "nextUp": "Lo próximo: {{plant}}, {{when}}.",
+      "upcomingEmpty": "No hay nada programado después de hoy.",
+      "emptyTitle": "Todavía no hay cuidados programados",
+      "emptyBody": "Añade una planta y aquí aparecerán su riego y el resto de sus cuidados."
     }
   },
   "today": {

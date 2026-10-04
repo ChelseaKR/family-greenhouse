@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
+  AdjustmentsHorizontalIcon,
   ArrowUturnLeftIcon,
   CalendarDaysIcon,
   CheckIcon,
   MapPinIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
@@ -30,6 +32,23 @@ import {
 } from './taskMutations';
 import { careRuleFor, useCareRuleGate } from './useCareRuleGate';
 import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
+import { useActionChooser } from '@/features/plants/useActionChooser';
+import { ToolbarMenu, type MenuGroupModel } from '@/features/plants/ToolbarMenu';
+import { taskWhoText } from '@/features/plants/plantCareText';
+import { ListSkeleton } from '@/components/Skeleton';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { hasNativeFrame } from '@/lib/platform';
+import {
+  byDueThenName,
+  checklistItems,
+  dateSections,
+  inSegment,
+  segmentCounts,
+  type ChecklistItem,
+  type ChecklistSection,
+  type Segment,
+} from './checklistModel';
+import { TaskChecklist } from './TaskChecklist';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -101,6 +120,16 @@ export function TasksPage() {
   const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>(() =>
     requestedSpaceFilter ? 'round' : 'schedule'
   );
+  // Phones get the "Checklist": the website under 640px, and the iOS app at
+  // every width (its native bars replace the page's own header). The desktop
+  // website keeps the layout below.
+  const isMobile = useIsMobile();
+  const compact = isMobile || hasNativeFrame();
+  const navigate = useNavigate();
+  const [segment, setSegment] = useState<Segment>('today');
+  const [onlyMine, setOnlyMine] = useState(requestedTaskFilter === 'mine');
+  const [groupBy, setGroupBy] = useState<'date' | 'room'>('date');
+  const chooser = useActionChooser();
 
   useEffect(() => {
     setFilter(requestedTaskFilter);
@@ -330,6 +359,250 @@ export function TasksPage() {
     [plants, sortedTasks, spaces, unplacedGroupName]
   );
 
+  const spaceCard = activeSpaceName && (
+    <Card
+      variant="paper"
+      padding="sm"
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-800">
+          <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-ink">
+            {t('spaces.taskFilterTitle', { space: activeSpaceName })}
+          </p>
+          <p className="text-xs text-gray-600">{t('spaces.taskFilterDescription')}</p>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete('space');
+          setSearchParams(nextParams, { replace: true });
+        }}
+      >
+        {t('spaces.showAllTaskSpaces')}
+      </Button>
+    </Card>
+  );
+
+  // ---- The phone layout ("Checklist") ----
+  const isMine = (task: TaskWithCoverage) =>
+    task.assignedTo === user?.id || task.effectiveAssignee === user?.id;
+  const checklist = useMemo(
+    () =>
+      compact
+        ? checklistItems(
+            spaceScopedTasks.filter((task) => !onlyMine || isMine(task)),
+            (task) => plantsById.get(task.plantId)?.name ?? task.plantName
+          )
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMine reads user?.id only
+    [compact, spaceScopedTasks, onlyMine, user?.id, plantsById]
+  );
+  const segmentItems = checklist.filter((item) => inSegment(item, segment));
+  // Grouped by room, the round covers only the segment's tasks: on Today,
+  // what is due now, never next week's plants.
+  const roomGroups =
+    compact && groupBy === 'room'
+      ? buildCareRoundGroups(
+          segmentItems.map((item) => item.task),
+          plants ?? [],
+          spaces,
+          unplacedGroupName
+        )
+      : [];
+  const checklistSections: ChecklistSection[] =
+    groupBy === 'room'
+      ? roomGroups.map((group) => {
+          const ids = new Set(group.tasks.map((task) => task.id));
+          return {
+            id: group.id,
+            kind: 'room' as const,
+            items: segmentItems.filter((item) => ids.has(item.task.id)).sort(byDueThenName),
+          };
+        })
+      : dateSections(checklist, segment);
+  const nextUp = checklist.filter((item) => item.days > 0).sort(byDueThenName)[0] ?? null;
+
+  const openTaskMenu = async (item: ChecklistItem, from: Element | null) => {
+    const task = item.task;
+    const name = deferred.taskName(task);
+    const me = user?.id;
+    const options: { id: string; title: string }[] = [
+      deferred.pending.has(task.id)
+        ? { id: 'undo', title: t('plants.list.undo') }
+        : { id: 'done', title: t('plants.list.doNow', { task: name }) },
+    ];
+    // The same rules as the desktop row's buttons (ClaimControls,
+    // AskFamilyButton): claim open work, give back your own, take over work
+    // that came by a space default, Move Day or rotation.
+    if (!task.assignedTo) options.push({ id: 'claim', title: t('plants.list.claim') });
+    else if (task.assignedTo === me) options.push({ id: 'unclaim', title: t('tasks.unclaim') });
+    else if (
+      task.assignmentSource === 'space_default' ||
+      task.assignmentSource === 'move_day' ||
+      task.assignmentSource === 'rotation'
+    )
+      options.push({ id: 'claim', title: t('tasks.takeOver') });
+    const heldByAnother =
+      !!task.assignedTo && task.assignmentSource === null && task.assignedTo !== me;
+    if (!isHelpRequestOpen(task) && !heldByAnother)
+      options.push({ id: 'ask', title: `${t('tasks.askFamily.button')}…` });
+    const reason = skipReasonFor(task);
+    if (reason)
+      options.push({
+        id: 'skip',
+        title: t(reason === 'rain' ? 'tasks.skipRain' : 'tasks.skipFrost'),
+      });
+    options.push({ id: 'open', title: t('plants.list.openPlant') });
+    const id = await chooser.choose(
+      { title: item.plantName, options, cancel: t('common.cancel') },
+      from
+    );
+    if (id === 'done' || id === 'undo') doneOrUndo(task);
+    else if (id === 'claim') claimMutation.mutate(task.id);
+    else if (id === 'unclaim') unclaimMutation.mutate(task.id);
+    else if (id === 'ask') setAskTarget(task);
+    else if (id === 'skip' && reason) skipMutation.mutate({ task, reason });
+    else if (id === 'open') navigate(`/plants/${task.plantId}`);
+  };
+
+  const filterGroups: MenuGroupModel[] = [
+    {
+      title: t('plants.list.show'),
+      items: [
+        { id: 'who:all', label: t('tasks.list.everyone'), checked: !onlyMine },
+        { id: 'who:mine', label: t('plants.list.mine'), checked: onlyMine },
+      ],
+    },
+    {
+      title: t('plants.list.groupBy'),
+      items: [
+        { id: 'group:date', label: t('tasks.list.groupDate'), checked: groupBy === 'date' },
+        { id: 'group:room', label: t('plants.list.groupRoom'), checked: groupBy === 'room' },
+      ],
+    },
+  ];
+  const onFilterMenu = (id: string) => {
+    if (id === 'who:all' || id === 'who:mine') setOnlyMine(id === 'who:mine');
+    else if (id === 'group:date' || id === 'group:room')
+      setGroupBy(id === 'group:room' ? 'room' : 'date');
+  };
+
+  const dialogs = (
+    <>
+      {careRuleGate.dialog}
+      <AskFamilyDialog
+        isOpen={askTarget !== null}
+        plantName={askTarget?.plantName ?? ''}
+        isPending={askMutation.isPending}
+        onClose={() => setAskTarget(null)}
+        onConfirm={(note) => {
+          if (!askTarget) return;
+          askMutation.mutate({ task: askTarget, note });
+          setAskTarget(null);
+        }}
+      />
+    </>
+  );
+
+  if (compact) {
+    const settled = !isLoading && !error && tasks !== undefined;
+    return (
+      // In the iOS app the bar holds the title, so the list starts right
+      // under it: the title row takes no room (`contents`: its h1 stays for
+      // VoiceOver, visually hidden by index.css when it matches the bar).
+      <div className="space-y-3 native-frame:-mt-4">
+        <div className="native-frame:contents">
+          <h1 className="font-serif text-3xl leading-tight text-ink">{t('tasks.title')}</h1>
+        </div>
+        <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
+        {spaceCard}
+        {isLoading ? (
+          <ListSkeleton rows={6} />
+        ) : error ? (
+          <Alert variant="error">{getErrorMessage(error)}</Alert>
+        ) : (
+          <TaskChecklist
+            segment={segment}
+            onSegment={setSegment}
+            counts={segmentCounts(checklist)}
+            toolbar={
+              <ToolbarMenu
+                label={t('tasks.list.filter')}
+                icon={<AdjustmentsHorizontalIcon className="h-5 w-5" aria-hidden="true" />}
+                groups={filterGroups}
+                onSelect={onFilterMenu}
+              />
+            }
+            tokens={
+              onlyMine ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOnlyMine(false)}
+                    aria-label={t('plants.list.removeFilter', { label: t('plants.list.mine') })}
+                    className="inline-flex min-h-touch items-center gap-1 rounded-full bg-primary-100 px-3 text-sm font-semibold text-primary-800"
+                  >
+                    {t('plants.list.mine')}
+                    <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null
+            }
+            sections={checklistSections}
+            roomTitle={(id) => roomGroups.find((group) => group.id === id)?.name ?? ''}
+            householdEmpty={(tasks ?? []).length === 0}
+            nextUp={nextUp}
+            taskName={(item) => deferred.taskName(item.task)}
+            roomOf={(item) => rowExtras.locationFor(item.task)}
+            whoOf={(item) => taskWhoText(item.task, user?.id, t)}
+            pending={deferred.pending}
+            onCheck={(item) => doneOrUndo(item.task)}
+            onMenu={(item, from) => void openTaskMenu(item, from)}
+            registerCheck={rowExtras.registerDone}
+            extraFor={(item) => {
+              const task = item.task;
+              const reason = skipReasonFor(task);
+              const asked = !task.assignedTo && isHelpRequestOpen(task);
+              if (!reason && !asked) return null;
+              return (
+                <>
+                  {asked && (
+                    <AskedForHelpBadge
+                      name={task.helpAskedByName ?? null}
+                      note={task.helpAskedNote}
+                    />
+                  )}
+                  {reason && (
+                    <ClimateSkipChip
+                      reason={reason}
+                      onSkip={() => skipMutation.mutate({ task, reason })}
+                      isPending={skipMutation.isPending}
+                    />
+                  )}
+                </>
+              );
+            }}
+          />
+        )}
+        {/* What a segment, filter or grouping change did to the list, for a
+            screen reader (#447). Empty until the read has settled. */}
+        <p aria-live="polite" className="sr-only">
+          {settled ? t('tasks.list.inView', { count: segmentItems.length }) : ''}
+        </p>
+        {chooser.element}
+        {dialogs}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -343,37 +616,7 @@ export function TasksPage() {
           without push, or while native_push_enabled is off. */}
       <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
 
-      {activeSpaceName && (
-        <Card
-          variant="paper"
-          padding="sm"
-          className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-800">
-              <MapPinIcon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-ink">
-                {t('spaces.taskFilterTitle', { space: activeSpaceName })}
-              </p>
-              <p className="text-xs text-gray-600">{t('spaces.taskFilterDescription')}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              const nextParams = new URLSearchParams(searchParams);
-              nextParams.delete('space');
-              setSearchParams(nextParams, { replace: true });
-            }}
-          >
-            {t('spaces.showAllTaskSpaces')}
-          </Button>
-        </Card>
-      )}
+      {spaceCard}
 
       <div
         className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1 large-text:grid large-text:w-full large-text:grid-cols-1"
@@ -542,18 +785,7 @@ export function TasksPage() {
           )}
         </div>
       )}
-      {careRuleGate.dialog}
-      <AskFamilyDialog
-        isOpen={askTarget !== null}
-        plantName={askTarget?.plantName ?? ''}
-        isPending={askMutation.isPending}
-        onClose={() => setAskTarget(null)}
-        onConfirm={(note) => {
-          if (!askTarget) return;
-          askMutation.mutate({ task: askTarget, note });
-          setAskTarget(null);
-        }}
-      />
+      {dialogs}
     </div>
   );
 }
