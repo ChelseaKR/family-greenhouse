@@ -54,7 +54,10 @@ test.describe('No-care-data notice', () => {
 
     // The plant name renders first; wait for it so we don't assert absence
     // before the detail page has finished loading.
-    await expect(page.getByRole('heading', { name: /front window monstera/i })).toBeVisible({
+    // Level 1: the care guide's heading now carries the plant's name too.
+    await expect(
+      page.getByRole('heading', { level: 1, name: /front window monstera/i })
+    ).toBeVisible({
       timeout: 15000,
     });
     await expect(

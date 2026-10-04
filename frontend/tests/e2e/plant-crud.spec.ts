@@ -64,7 +64,9 @@ test.describe('Plant CRUD', () => {
     // After save we land on /plants/{id} — the detail page renders the
     // plant name as an h1.
     await expect(page).toHaveURL(/\/plants\/[^/]+$/);
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible({
+      timeout: 15000,
+    });
     expect(pageErrors).toEqual([]);
   });
 
@@ -77,7 +79,9 @@ test.describe('Plant CRUD', () => {
     const originalName = `Editable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(originalName);
     await page.getByRole('button', { name: /add plant/i }).click();
-    await expect(page.getByRole('heading', { name: originalName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: originalName })).toBeVisible({
+      timeout: 15000,
+    });
 
     // Open the Edit plant modal from the detail page header.
     await choosePlantAction(page, /^edit$/i);
@@ -91,7 +95,9 @@ test.describe('Plant CRUD', () => {
 
     // Modal closes on success; the detail h1 reflects the new name once
     // the plants query invalidates and refetches.
-    await expect(page.getByRole('heading', { name: newName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: newName })).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test('archive a plant → find it in past plants → restore it', async ({ page }) => {
@@ -102,7 +108,9 @@ test.describe('Plant CRUD', () => {
     const plantName = `Archiveable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
     await page.getByRole('button', { name: /add plant/i }).click();
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible({
+      timeout: 15000,
+    });
 
     await choosePlantAction(page, /^remove/i);
     await page.getByRole('button', { name: /archive for later/i }).click();
@@ -130,7 +138,9 @@ test.describe('Plant CRUD', () => {
     const plantName = `Deletable ${Date.now()}`;
     await page.getByLabel(/plant name/i).fill(plantName);
     await page.getByRole('button', { name: /add plant/i }).click();
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible({
+      timeout: 15000,
+    });
 
     // The lifecycle feature (#37) replaced the bare "Delete" button with a
     // "Remove" flow: Remove → outcome dialog → "Delete — it stays in the
@@ -158,6 +168,8 @@ test.describe('Plant CRUD', () => {
 
     // The toast offers Undo, which restores it and opens it again.
     await page.getByRole('button', { name: /^undo$/i }).click();
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible({
+      timeout: 15000,
+    });
   });
 });
