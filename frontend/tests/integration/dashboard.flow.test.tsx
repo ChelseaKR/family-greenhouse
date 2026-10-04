@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { http, HttpResponse } from 'msw';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../msw/server';
+import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
 
 /**
  * Integration coverage for the dashboard journey end-to-end inside a
@@ -38,6 +39,10 @@ function renderDashboard() {
     </QueryClientProvider>
   );
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   // Sign in a fake user before every test so the dashboard's
@@ -154,7 +159,12 @@ describe('Dashboard integration', () => {
       )
     );
 
-    const user = userEvent.setup();
+    // Done waits out the shared 5-second Undo window before anything is
+    // written (useDeferredCompletion). Step the clock through it explicitly:
+    // waiting with waitFor's own 5-second timeout raced the window and lost.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    resetDeferredCareQueueForTests();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderDashboard();
 
     // Wait for the task row to render — the Done button only mounts
@@ -168,14 +178,17 @@ describe('Dashboard integration', () => {
 
     await user.click(screen.getByRole('button', { name: /done/i }));
 
-    // The completion is recorded — that is the part a user must be able to
-    // trust, and the part that looked broken.
-    await waitFor(
-      () => {
-        expect(completed).toBe(true);
-      },
-      { timeout: 5000 }
-    );
+    // Nothing is written inside the Undo window…
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UNDO_WINDOW_MS - 200);
+    });
+    expect(completed).toBe(false);
+    // …and the completion is recorded once it has passed — that is the part a
+    // user must be able to trust, and the part that looked broken.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    await waitFor(() => expect(completed).toBe(true));
 
     // The row LEAVES this card, because the card lists what can be done now
     // and the task is no longer due today.
