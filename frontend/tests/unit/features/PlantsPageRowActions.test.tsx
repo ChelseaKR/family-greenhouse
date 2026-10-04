@@ -260,12 +260,12 @@ describe('the Done (Water) button on a Plants row', () => {
 
 /** jsdom drops `pointerType` and the coordinates from a synthetic pointer
  *  event's init, so set them on the event itself. */
-function touch(kind: 'pointerDown' | 'pointerUp', el: Element) {
+function touch(kind: 'pointerDown' | 'pointerMove' | 'pointerUp', el: Element, x = 50) {
   const event = createEvent[kind](el);
   for (const [key, value] of Object.entries({
     pointerType: 'touch',
     pointerId: 1,
-    clientX: 50,
+    clientX: x,
     clientY: 50,
   }))
     Object.defineProperty(event, key, { value });
@@ -338,5 +338,50 @@ describe('the row menu (long press, right click)', () => {
     await u.click(within(sheet).getByRole('button', { name: 'I’ll do it' }));
     await pass(50);
     expect(writes.map((w) => w.what)).toEqual(['POST /tasks/t1/claim']);
+  });
+});
+
+describe('swiping a Plants row', () => {
+  const swipe = async (name: RegExp, from: number, to: number) => {
+    const row = (await screen.findByRole('link', { name })).parentElement!;
+    touch('pointerDown', row, from);
+    touch('pointerMove', row, from + Math.sign(to - from) * 40);
+    touch('pointerMove', row, to);
+    touch('pointerUp', row, to);
+    return row;
+  };
+
+  it('all the way right is Water, through the same Undo window', async () => {
+    renderPlants();
+    await swipe(/^Peace Lily/, 20, 340);
+    expect(screen.getByRole('button', { name: 'Undo: Water Peace Lily' })).toBeInTheDocument();
+    expect(writes).toEqual([]);
+    await pass(UNDO_WINDOW_MS + 100);
+    expect(completes()).toHaveLength(1);
+  });
+
+  it('left reveals Snooze and More; a tap on the open row closes it, not opening the plant', async () => {
+    const u = user();
+    renderPlants();
+    const row = await swipe(/^Peace Lily/, 300, 100);
+    expect(row.style.transform).toBe('translateX(-176px)');
+    const li = row.closest('li')!;
+    expect(
+      within(li)
+        .getAllByRole('button')
+        .filter((b) => b.closest('[aria-hidden="false"]'))
+        .map((b) => b.getAttribute('aria-label'))
+    ).toEqual(['Snooze', 'More']);
+    await u.click(within(row).getByRole('link'));
+    expect(row.style.transform).toBe('');
+    expect(screen.queryByText('Plant page')).not.toBeInTheDocument();
+    expect(writes).toEqual([]);
+  });
+
+  it('a row with nothing due does not swipe right', async () => {
+    renderPlants();
+    const row = await swipe(/^Snake Plant/, 20, 340);
+    expect(row.style.transform).toBe('');
+    expect(writes).toEqual([]);
   });
 });

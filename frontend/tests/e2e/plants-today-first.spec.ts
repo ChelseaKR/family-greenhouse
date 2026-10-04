@@ -84,6 +84,26 @@ test.describe('phone website (390px)', () => {
   });
 });
 
+test.describe('a row menu choice that asks again (phone website)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('Snooze… from the row menu opens how long, and Cancel snoozes nothing', async ({ page }) => {
+    await openPlants(page);
+    await page.getByRole('link', { name: /^Today Fern/ }).click({ button: 'right' });
+    await page
+      .getByRole('dialog', { name: 'Today Fern' })
+      .getByRole('button', { name: 'Snooze…' })
+      .click();
+    // The second sheet opens in the same tap's wake; it used to be closed by
+    // the rest of that tap at once.
+    const howLong = page.getByRole('dialog', { name: 'Snooze' });
+    await expect(howLong.getByRole('button', { name: '1 day' })).toBeVisible();
+    await howLong.getByRole('button', { name: 'Cancel' }).click();
+    await expect(howLong).toBeHidden();
+    await expect(page.getByRole('link', { name: /^Today Fern, Water today/ })).toBeVisible();
+  });
+});
+
 test.describe('desktop website (1280px)', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 

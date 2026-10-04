@@ -108,7 +108,9 @@ function serve(seed: Seed[] = SEED) {
     ),
     http.get(`${API}/households/hh-1/climate`, () => HttpResponse.json({ status: 'no_location' })),
     http.post(`${API}/tasks/:id/complete`, () => HttpResponse.json(apiTask(SEED[0]))),
-    http.post(`${API}/tasks/:id/claim`, () => HttpResponse.json(apiTask(SEED[1])))
+    http.post(`${API}/tasks/:id/claim`, () => HttpResponse.json(apiTask(SEED[1]))),
+    http.post(`${API}/tasks/:id/unclaim`, () => HttpResponse.json(apiTask(SEED[0]))),
+    http.post(`${API}/tasks/:id/snooze`, () => HttpResponse.json(apiTask(SEED[1])))
   );
 }
 
@@ -141,12 +143,12 @@ function renderTasks(path = '/tasks') {
 
 /** jsdom drops `pointerType` and the coordinates from a synthetic pointer
  *  event's init, so set them on the event itself. */
-function touch(kind: 'pointerDown' | 'pointerUp', el: Element) {
+function touch(kind: 'pointerDown' | 'pointerMove' | 'pointerUp', el: Element, x = 50) {
   const event = createEvent[kind](el);
   for (const [key, value] of Object.entries({
     pointerType: 'touch',
     pointerId: 1,
-    clientX: 50,
+    clientX: x,
     clientY: 50,
   }))
     Object.defineProperty(event, key, { value });
@@ -344,7 +346,7 @@ describe('Tasks on a phone ("Checklist")', () => {
       within(sheet)
         .getAllByRole('button')
         .map((b) => b.textContent)
-    ).toEqual(['Water now', 'I’ll do it', 'Ask family…', 'Open plant', 'Cancel']);
+    ).toEqual(['Water now', 'I’ll do it', 'Ask family…', 'Snooze…', 'Open plant', 'Cancel']);
     await user.click(within(sheet).getByRole('button', { name: 'Cancel' }));
     expect(writes).toEqual([]);
 
@@ -379,6 +381,85 @@ describe('Tasks on a phone ("Checklist")', () => {
     screen.getByRole('button', { name: 'Water Golden Pothos' }).focus();
     await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'Undo: Water Golden Pothos' })).toBeInTheDocument();
+  });
+
+  it('a swipe right across the row is Done, with the same 5-second Undo', async () => {
+    renderTasks();
+    const row = (await screen.findByRole('link', { name: /^Golden Pothos/ })).parentElement!;
+    touch('pointerDown', row, 20);
+    touch('pointerMove', row, 60);
+    touch('pointerMove', row, 340); // past half of the row (360 in jsdom)
+    touch('pointerUp', row, 340);
+    expect(screen.getByRole('button', { name: 'Undo: Water Golden Pothos' })).toBeInTheDocument();
+    expect(writes).toEqual([]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UNDO_WINDOW_MS + 50);
+    });
+    expect(writes).toEqual(['POST /tasks/t-pothos/complete']);
+  });
+
+  it('a short swipe right only reveals Done; nothing happens until it is tapped', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    const row = (await screen.findByRole('link', { name: /^Golden Pothos/ })).parentElement!;
+    touch('pointerDown', row, 20);
+    touch('pointerMove', row, 60);
+    touch('pointerMove', row, 110);
+    touch('pointerUp', row, 110);
+    expect(row.style.transform).toBe('translateX(88px)');
+    expect(screen.queryByRole('button', { name: 'Undo: Water Golden Pothos' })).toBeNull();
+    const revealed = within(row.closest('li')!).getAllByRole('button', {
+      name: 'Water Golden Pothos',
+    });
+    await user.click(revealed[0]); // the revealed Done, behind the row
+    expect(screen.getByRole('button', { name: 'Undo: Water Golden Pothos' })).toBeInTheDocument();
+  });
+
+  it('a swipe left reveals I’ll do it, Ask family and Snooze, each doing what it says', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    const swipeLeft = async (name: RegExp) => {
+      const row = (await screen.findByRole('link', { name })).parentElement!;
+      touch('pointerDown', row, 300);
+      touch('pointerMove', row, 260);
+      touch('pointerMove', row, 100);
+      touch('pointerUp', row, 100);
+      return row.closest('li')!;
+    };
+    let li = await swipeLeft(/^Bird of Paradise/);
+    expect(
+      within(li)
+        .getAllByRole('button')
+        .filter((b) => b.closest('[aria-hidden="false"]'))
+        .map((b) => b.getAttribute('aria-label'))
+    ).toEqual(['I’ll do it', 'Ask family', 'Snooze']);
+    await user.click(within(li).getByRole('button', { name: 'I’ll do it' }));
+    await vi.waitFor(() => expect(writes).toEqual(['POST /tasks/t-bird/claim']));
+
+    // Snooze asks how long; only a choice snoozes.
+    li = await swipeLeft(/^Aloe/);
+    await user.click(within(li).getByRole('button', { name: 'Snooze' }));
+    await user.click(within(await sheetFor('Snooze')).getByRole('button', { name: '3 days' }));
+    await vi.waitFor(() =>
+      expect(writes).toEqual(['POST /tasks/t-bird/claim', 'POST /tasks/t-aloe/snooze'])
+    );
+
+    // Your own task: the claim action gives it back.
+    li = await swipeLeft(/^Boston Fern/);
+    await user.click(within(li).getByRole('button', { name: 'Unclaim' }));
+    await vi.waitFor(() => expect(writes.at(-1)).toBe('POST /tasks/t-fern/unclaim'));
+  });
+
+  it('Snooze from the menu, and Cancel on how long writes nothing', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    await user.click(await screen.findByRole('button', { name: 'Actions for Aloe' }));
+    await user.click(within(await sheetFor('Aloe')).getByRole('button', { name: 'Snooze…' }));
+    await user.click(within(await sheetFor('Snooze')).getByRole('button', { name: 'Cancel' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(writes).toEqual([]);
   });
 
   it('your own task offers Unclaim, and a household with no tasks gets one next step', async () => {

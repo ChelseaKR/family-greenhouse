@@ -1,11 +1,25 @@
-import { useRef, type ReactNode } from 'react';
+import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { Link } from 'react-router';
 import clsx from 'clsx';
 import { CheckIcon, HandRaisedIcon } from '@heroicons/react/24/outline';
 import type { WhoText } from '@/features/plants/plantCareText';
+import { useRowGestures } from '@/features/plants/useRowGestures';
 import type { ChecklistItem } from './checklistModel';
 
-const LONG_PRESS_MS = 500;
+/** Each action a swipe reveals is this wide (three fit beside a 320pt row's
+ *  check circle). */
+const ACTION_WIDTH = 76;
+
+/** An action revealed by swiping the row to the left. */
+export interface SwipeAction {
+  id: string;
+  label: string;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Tailwind background for the action. */
+  tone: string;
+  /** `from`: the row, for anchoring a sheet. */
+  run: (from: Element | null) => void;
+}
 
 interface TaskRowProps {
   item: ChecklistItem;
@@ -27,6 +41,10 @@ interface TaskRowProps {
   registerCheck: (node: HTMLButtonElement | null) => void;
   /** A help request or a climate suggestion: rare, so it keeps its own line. */
   extra?: ReactNode;
+  /** The task's name, under the Done icon a swipe to the right reveals. */
+  doneText: string;
+  /** Revealed by a swipe to the left (I'll do it, Ask, Snooze). */
+  swipeActions: SwipeAction[];
 }
 
 /**
@@ -35,8 +53,11 @@ interface TaskRowProps {
  * the room, and who has it (You, an initial, or a raised hand when nobody
  * does). Tapping the row opens the plant.
  *
- * The row's other actions open from a long press or a right click, and from
- * the who chip, which is a button, so none of them depends on a gesture.
+ * On a touchscreen the row also swipes, as in Mail: to the right for Done
+ * (all the way across does it at once, with the same Undo), to the left for
+ * I'll do it, Ask and Snooze. A long press or a right click opens the row's
+ * menu. None of it depends on a gesture: the check circle is Done, and the
+ * who chip is a button that opens the same menu, which holds every action.
  */
 export function TaskRow({
   item,
@@ -51,21 +72,17 @@ export function TaskRow({
   menuLabel,
   registerCheck,
   extra,
+  doneText,
+  swipeActions,
 }: TaskRowProps) {
   const { task, days } = item;
-  const rowRef = useRef<HTMLDivElement>(null);
-  const press = useRef<{
-    id: number;
-    x: number;
-    y: number;
-    timer: ReturnType<typeof setTimeout>;
-  } | null>(null);
-  const suppressClick = useRef(false);
-
-  const cancelPress = () => {
-    if (press.current) clearTimeout(press.current.timer);
-    press.current = null;
-  };
+  const { offset, dragging, rowRef, close, handlers } = useRowGestures({
+    enabled: true,
+    leadingWidth: pending ? 0 : 88,
+    trailingWidth: swipeActions.length * ACTION_WIDTH,
+    onFullLeading: onCheck,
+    onLongPress: (row) => onMenu(row),
+  });
 
   const tone = pending
     ? 'border-primary-700 bg-primary-700 text-white'
@@ -84,49 +101,61 @@ export function TaskRow({
   const label = [item.plantName, status, room, who.aria].filter(Boolean).join(', ');
 
   return (
-    <li className="relative">
-      {/* A long press and a right click are shortcuts to the Actions button
-          below, which stays reachable by keyboard and VoiceOver. */}
+    <li className="relative overflow-hidden">
+      {/* Behind the row: Done on the left, the swipe actions on the right.
+          Hidden from assistive tech while closed: the check circle and the
+          who chip's menu are their gesture-free equivalents. */}
+      <div className="absolute inset-y-0 left-0 flex" aria-hidden={offset <= 0}>
+        {!pending && (
+          <button
+            type="button"
+            tabIndex={offset > 0 ? 0 : -1}
+            aria-label={doneLabel}
+            onClick={() => {
+              close();
+              onCheck();
+            }}
+            className="flex flex-col items-center justify-center gap-1 bg-primary-700 text-xs font-semibold text-white"
+            style={{ width: Math.max(88, offset) }}
+          >
+            <CheckIcon className="h-6 w-6" aria-hidden="true" />
+            <span className="large-text:hidden">{doneText}</span>
+          </button>
+        )}
+      </div>
+      <div className="absolute inset-y-0 right-0 flex" aria-hidden={offset >= 0}>
+        {swipeActions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            tabIndex={offset < 0 ? 0 : -1}
+            aria-label={action.label}
+            onClick={() => {
+              close();
+              action.run(rowRef.current);
+            }}
+            className={clsx(
+              'flex flex-col items-center justify-center gap-1 px-1 text-xs font-semibold text-white',
+              action.tone
+            )}
+            style={{ width: ACTION_WIDTH }}
+          >
+            <action.Icon className="h-6 w-6" aria-hidden="true" />
+            <span className="text-center leading-tight large-text:hidden">{action.label}</span>
+          </button>
+        ))}
+      </div>
+      {/* The gestures and the context menu are shortcuts layered over the
+          row's own controls, which stay reachable by keyboard and VoiceOver. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={rowRef}
-        className="flex items-center bg-paper select-none [touch-action:pan-y] [-webkit-touch-callout:none]"
-        onPointerDown={(event) => {
-          // A new gesture: a click it produces is its own, never one to
-          // swallow for an earlier long press.
-          suppressClick.current = false;
-          if (event.pointerType !== 'touch') return;
-          cancelPress();
-          const timer = setTimeout(() => {
-            press.current = null;
-            suppressClick.current = true;
-            onMenu(rowRef.current);
-          }, LONG_PRESS_MS);
-          press.current = { id: event.pointerId, x: event.clientX, y: event.clientY, timer };
-        }}
-        onPointerMove={(event) => {
-          const p = press.current;
-          if (!p || p.id !== event.pointerId) return;
-          if (Math.abs(event.clientX - p.x) > 8 || Math.abs(event.clientY - p.y) > 8) cancelPress();
-        }}
-        onPointerUp={() => {
-          cancelPress();
-          // iOS sends no click after a long press. Forget the swallow once
-          // the click that might follow has had its chance, or the next
-          // activation (a keyboard Enter, a VoiceOver double-tap, which bring
-          // no pointer down) would be eaten.
-          if (suppressClick.current)
-            setTimeout(() => {
-              suppressClick.current = false;
-            }, 400);
-        }}
-        onPointerCancel={cancelPress}
-        onClickCapture={(event) => {
-          if (!suppressClick.current) return;
-          suppressClick.current = false;
-          event.preventDefault();
-          event.stopPropagation();
-        }}
+        className={clsx(
+          'relative flex items-center bg-paper select-none [touch-action:pan-y] [-webkit-touch-callout:none]',
+          !dragging && 'transition-transform duration-200 motion-reduce:transition-none'
+        )}
+        style={offset !== 0 ? { transform: `translateX(${offset}px)` } : undefined}
+        {...handlers}
         onContextMenu={(event) => {
           event.preventDefault();
           onMenu(event.currentTarget);

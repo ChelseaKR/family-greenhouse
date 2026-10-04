@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,7 +7,10 @@ import {
   ArrowUturnLeftIcon,
   CalendarDaysIcon,
   CheckIcon,
+  ClockIcon,
+  HandRaisedIcon,
   MapPinIcon,
+  MegaphoneIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
@@ -52,6 +55,9 @@ import {
   type Segment,
 } from './checklistModel';
 import { TaskChecklist } from './TaskChecklist';
+import type { SwipeAction } from './TaskRow';
+import { playHaptic } from '@/services/nativeHaptics';
+import { toast } from '@/store/toastStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -129,6 +135,7 @@ export function TasksPage() {
   const isMobile = useIsMobile();
   const compact = isMobile || hasNativeFrame();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const [segment, setSegment] = useState<Segment>('today');
   // The phone's filters live in the page, never in the URL: in the iOS app a
@@ -457,30 +464,111 @@ export function TasksPage() {
     id === 'unplaced' ? unplacedGroupName : (spacesById.get(id)?.name ?? unplacedGroupName);
   const nextUp = checklist.filter((item) => item.days > 0).sort(byDueThenName)[0] ?? null;
 
+  // Which claim action a task offers, and whether Ask family does: the same
+  // rules as the desktop row's buttons (ClaimControls, AskFamilyButton).
+  // Claim open work, give back your own, take over work that came by a space
+  // default, Move Day or rotation; never ask over someone's own claim.
+  const claimKindOf = (task: TaskWithCoverage): 'claim' | 'unclaim' | 'takeOver' | null => {
+    if (!task.assignedTo) return 'claim';
+    if (task.assignedTo === user?.id) return 'unclaim';
+    if (
+      task.assignmentSource === 'space_default' ||
+      task.assignmentSource === 'move_day' ||
+      task.assignmentSource === 'rotation'
+    )
+      return 'takeOver';
+    return null;
+  };
+  const canAsk = (task: TaskWithCoverage) =>
+    !isHelpRequestOpen(task) &&
+    !(!!task.assignedTo && task.assignmentSource === null && task.assignedTo !== user?.id);
+  const claimTitle = {
+    claim: 'plants.list.claim',
+    unclaim: 'tasks.unclaim',
+    takeOver: 'tasks.takeOver',
+  };
+  const claimOrUnclaim = (task: TaskWithCoverage) => {
+    if (claimKindOf(task) === 'unclaim') unclaimMutation.mutate(task.id);
+    else claimMutation.mutate(task.id);
+  };
+
+  const snoozeMutation = useMutation({
+    mutationFn: ({ task, days }: { task: TaskWithCoverage; days: number }) =>
+      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      playHaptic('snoozed');
+      toast.info(t('plants.list.snoozedToast'));
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+  /** How long, as the Plants list asks it; nothing happens without a choice. */
+  const snoozeTask = async (task: TaskWithCoverage, from: Element | null) => {
+    const id = await chooser.choose(
+      {
+        title: t('tasks.snooze'),
+        options: [
+          { id: '1', title: t('plants.list.snooze1d') },
+          { id: '3', title: t('plants.list.snooze3d') },
+          { id: '7', title: t('plants.list.snooze1w') },
+          { id: 'cycle', title: t('plants.list.snoozeSkip') },
+        ],
+        cancel: t('common.cancel'),
+      },
+      from
+    );
+    if (!id) return;
+    snoozeMutation.mutate({ task, days: id === 'cycle' ? task.frequency : Number(id) });
+  };
+
+  const swipeActionsFor = (item: ChecklistItem): SwipeAction[] => {
+    const task = item.task;
+    const kind = claimKindOf(task);
+    return [
+      ...(kind
+        ? [
+            {
+              id: 'claim',
+              label: t(claimTitle[kind]),
+              Icon: kind === 'unclaim' ? ArrowUturnLeftIcon : HandRaisedIcon,
+              tone: kind === 'unclaim' ? 'bg-gray-600' : 'bg-accent-600',
+              run: () => claimOrUnclaim(task),
+            },
+          ]
+        : []),
+      ...(canAsk(task)
+        ? [
+            {
+              id: 'ask',
+              label: t('tasks.askFamily.button'),
+              Icon: MegaphoneIcon,
+              tone: 'bg-sky-700',
+              run: () => setAskTarget(task),
+            },
+          ]
+        : []),
+      {
+        id: 'snooze',
+        label: t('tasks.snooze'),
+        Icon: ClockIcon,
+        tone: 'bg-gray-500',
+        run: (from: Element | null) => void snoozeTask(task, from),
+      },
+    ];
+  };
+
   const openTaskMenu = async (item: ChecklistItem, from: Element | null) => {
     const task = item.task;
     const name = deferred.taskName(task);
-    const me = user?.id;
+    const kind = claimKindOf(task);
     const options: { id: string; title: string }[] = [
       deferred.pending.has(task.id)
         ? { id: 'undo', title: t('plants.list.undo') }
         : { id: 'done', title: t('plants.list.doNow', { task: name }) },
     ];
-    // The same rules as the desktop row's buttons (ClaimControls,
-    // AskFamilyButton): claim open work, give back your own, take over work
-    // that came by a space default, Move Day or rotation.
-    if (!task.assignedTo) options.push({ id: 'claim', title: t('plants.list.claim') });
-    else if (task.assignedTo === me) options.push({ id: 'unclaim', title: t('tasks.unclaim') });
-    else if (
-      task.assignmentSource === 'space_default' ||
-      task.assignmentSource === 'move_day' ||
-      task.assignmentSource === 'rotation'
-    )
-      options.push({ id: 'claim', title: t('tasks.takeOver') });
-    const heldByAnother =
-      !!task.assignedTo && task.assignmentSource === null && task.assignedTo !== me;
-    if (!isHelpRequestOpen(task) && !heldByAnother)
-      options.push({ id: 'ask', title: `${t('tasks.askFamily.button')}…` });
+    if (kind) options.push({ id: 'claim', title: t(claimTitle[kind]) });
+    if (canAsk(task)) options.push({ id: 'ask', title: `${t('tasks.askFamily.button')}…` });
+    options.push({ id: 'snooze', title: `${t('tasks.snooze')}…` });
     const reason = skipReasonFor(task);
     if (reason)
       options.push({
@@ -493,9 +581,9 @@ export function TasksPage() {
       from
     );
     if (id === 'done' || id === 'undo') doneOrUndo(task);
-    else if (id === 'claim') claimMutation.mutate(task.id);
-    else if (id === 'unclaim') unclaimMutation.mutate(task.id);
+    else if (id === 'claim') claimOrUnclaim(task);
     else if (id === 'ask') setAskTarget(task);
+    else if (id === 'snooze') await snoozeTask(task, from);
     else if (id === 'skip' && reason) skipMutation.mutate({ task, reason });
     else if (id === 'open') navigate(`/plants/${task.plantId}`);
   };
@@ -656,6 +744,7 @@ export function TasksPage() {
             onCheck={(item) => doneOrUndo(item.task)}
             onMenu={(item, from) => void openTaskMenu(item, from)}
             registerCheck={rowExtras.registerDone}
+            swipeActionsFor={swipeActionsFor}
             extraFor={(item) => {
               const task = item.task;
               const reason = skipReasonFor(task);

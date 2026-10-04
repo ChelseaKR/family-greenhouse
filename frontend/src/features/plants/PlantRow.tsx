@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
@@ -9,6 +9,7 @@ import {
   EllipsisHorizontalIcon,
 } from '@heroicons/react/24/outline';
 import type { PlantCare } from './plantCare';
+import { useRowGestures } from './useRowGestures';
 
 /** What a row can do besides opening the plant (usePlantRowActions). */
 export interface RowActions {
@@ -21,7 +22,6 @@ export interface RowActions {
 }
 
 const OPEN = 88; // how far a swipe stays open: one 88pt action
-const LONG_PRESS_MS = 500;
 
 /** A water drop for watering; a check for every other kind of task. */
 function DoneIcon({ water, className }: { water: boolean; className: string }) {
@@ -57,128 +57,14 @@ export function PlantRow({ item, label, children, actions }: PlantRowProps) {
   const task = item.task;
   const pending = Boolean(task && actions?.pending.has(task.id));
   const canDo = Boolean(actions && task && item.days !== undefined && item.days <= 0);
-  const [offset, setOffsetState] = useState(0);
-  // The offset as of the last event, for the release: a fast swipe can end
-  // before React re-renders, so the state in this render may be stale.
-  const offsetRef = useRef(0);
-  const setOffset = (value: number) => {
-    offsetRef.current = value;
-    setOffsetState(value);
-  };
-  const [dragging, setDragging] = useState(false);
-  const rowRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef<{
-    id: number;
-    x: number;
-    y: number;
-    start: number;
-    horizontal: boolean | null;
-    pressTimer: ReturnType<typeof setTimeout> | null;
-    pressed: boolean;
-  } | null>(null);
-  const suppressClick = useRef(false);
-
-  const close = () => setOffset(0);
-  const clearPress = () => {
-    const g = gesture.current;
-    if (g?.pressTimer) clearTimeout(g.pressTimer);
-    if (g) g.pressTimer = null;
-  };
-
-  const onPointerDown = (event: React.PointerEvent) => {
-    // A new gesture: a click it produces is its own, never one to swallow
-    // for an earlier long press.
-    suppressClick.current = false;
-    if (!actions || event.pointerType !== 'touch') return;
-    const g = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      start: offsetRef.current,
-      horizontal: null as boolean | null,
-      pressTimer: null as ReturnType<typeof setTimeout> | null,
-      pressed: false,
-    };
-    g.pressTimer = setTimeout(() => {
-      g.pressed = true;
-      suppressClick.current = true;
-      actions.openMenu(item, rowRef.current);
-    }, LONG_PRESS_MS);
-    gesture.current = g;
-  };
-
-  const onPointerMove = (event: React.PointerEvent) => {
-    const g = gesture.current;
-    if (!g || g.id !== event.pointerId || g.pressed) return;
-    const dx = event.clientX - g.x;
-    const dy = event.clientY - g.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) clearPress();
-    if (g.horizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-      g.horizontal = Math.abs(dx) > Math.abs(dy);
-      if (g.horizontal) {
-        try {
-          (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
-        } catch {
-          // No such active pointer (a synthetic event): moves still arrive.
-        }
-        setDragging(true);
-      }
-    }
-    if (!g.horizontal) return;
-    const width = rowRef.current?.offsetWidth ?? 360;
-    const next = g.start + dx;
+  const { offset, dragging, rowRef, close, handlers } = useRowGestures({
+    enabled: Boolean(actions),
     // Done only exists for work that is due; Snooze and More need a task.
-    const max = canDo && !pending ? width * 0.8 : 0;
-    const min = task ? -2 * OPEN : 0;
-    setOffset(Math.max(min, Math.min(max, next)));
-  };
-
-  const onPointerUp = (event: React.PointerEvent) => {
-    const g = gesture.current;
-    clearPress();
-    gesture.current = null;
-    if (!g || g.id !== event.pointerId) return;
-    if (g.pressed) {
-      // iOS sends no click after a long press. Forget the swallow once the
-      // click that might follow has had its chance, or the next activation
-      // (a keyboard Enter, a VoiceOver double-tap, which bring no pointer
-      // down) would be eaten.
-      setTimeout(() => {
-        suppressClick.current = false;
-      }, 400);
-      return;
-    }
-    if (!g.horizontal) return;
-    suppressClick.current = true;
-    setDragging(false);
-    const width = rowRef.current?.offsetWidth ?? 360;
-    const offset = offsetRef.current;
-    if (offset > width * 0.5 && canDo) {
-      close();
-      actions?.done(item); // a full swipe across: Done at once (with Undo)
-    } else if (offset > OPEN / 2) {
-      setOffset(OPEN);
-    } else if (offset < -OPEN / 2) {
-      setOffset(-2 * OPEN);
-    } else {
-      close();
-    }
-  };
-
-  const onClickCapture = (event: React.MouseEvent) => {
-    if (suppressClick.current) {
-      suppressClick.current = false;
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-    if (offset !== 0) {
-      // A tap on an open row closes it rather than opening the plant.
-      event.preventDefault();
-      event.stopPropagation();
-      close();
-    }
-  };
+    leadingWidth: canDo && !pending ? OPEN : 0,
+    trailingWidth: task ? 2 * OPEN : 0,
+    onFullLeading: () => actions?.done(item), // with Undo
+    onLongPress: (row) => actions?.openMenu(item, row),
+  });
 
   const swipeOpen = offset !== 0;
   const taskLabel = task && actions ? actions.taskName(task) : '';
@@ -250,11 +136,7 @@ export function PlantRow({ item, label, children, actions }: PlantRowProps) {
           !dragging && 'transition-transform duration-200 motion-reduce:transition-none'
         )}
         style={swipeOpen ? { transform: `translateX(${offset}px)` } : undefined}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClickCapture={onClickCapture}
+        {...handlers}
         onContextMenu={(event) => {
           if (!actions) return;
           event.preventDefault();

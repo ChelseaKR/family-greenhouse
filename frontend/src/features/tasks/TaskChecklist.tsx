@@ -7,7 +7,7 @@ import { Button } from '@/components/Button';
 import { formatDate, formatRelativeDay } from '@/i18n/format';
 import type { WhoText } from '@/features/plants/plantCareText';
 import type { ChecklistItem, ChecklistSection, Segment } from './checklistModel';
-import { TaskRow } from './TaskRow';
+import { TaskRow, type SwipeAction } from './TaskRow';
 
 interface TaskChecklistProps {
   segment: Segment;
@@ -32,6 +32,8 @@ interface TaskChecklistProps {
   onMenu: (item: ChecklistItem, from: Element | null) => void;
   registerCheck: (taskId: string, node: HTMLButtonElement | null) => void;
   extraFor: (item: ChecklistItem) => ReactNode;
+  /** What a swipe to the left reveals on this row. */
+  swipeActionsFor: (item: ChecklistItem) => SwipeAction[];
 }
 
 /**
@@ -57,6 +59,7 @@ export function TaskChecklist({
   onMenu,
   registerCheck,
   extraFor,
+  swipeActionsFor,
 }: TaskChecklistProps) {
   const { t } = useTranslation();
 
@@ -174,6 +177,8 @@ export function TaskChecklist({
                     menuLabel={t('tasks.list.actions', { plant: item.plantName })}
                     registerCheck={(node) => registerCheck(item.task.id, node)}
                     extra={extraFor(item)}
+                    doneText={name}
+                    swipeActions={swipeActionsFor(item)}
                   />
                 );
               })}
