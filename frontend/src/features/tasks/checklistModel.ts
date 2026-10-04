@@ -86,3 +86,35 @@ export function segmentCounts(items: readonly ChecklistItem[]): Record<Segment, 
   for (const item of items) if (item.days <= 0) today += 1;
   return { today, upcoming: items.length - today };
 }
+
+/**
+ * Grouped by space (the care round): one section per room, for the
+ * segment's tasks only, so Today's round never includes next week's plants.
+ * The room with the most overdue task comes first, then the household's own
+ * room order (`roomOrder`, unknown keys last); inside a room, most urgent
+ * first and then by name.
+ */
+export function roomSections(
+  items: readonly ChecklistItem[],
+  segment: Segment,
+  roomOf: (item: ChecklistItem) => string,
+  roomOrder: readonly string[]
+): ChecklistSection[] {
+  const rooms = new Map<string, ChecklistItem[]>();
+  for (const item of items) {
+    if (!inSegment(item, segment)) continue;
+    const key = roomOf(item);
+    rooms.set(key, [...(rooms.get(key) ?? []), item]);
+  }
+  const rank = (key: string) => {
+    const i = roomOrder.indexOf(key);
+    return i === -1 ? roomOrder.length : i;
+  };
+  return [...rooms.entries()]
+    .map(([id, roomItems]) => ({
+      id,
+      kind: 'room' as const,
+      items: roomItems.sort(byDueThenName),
+    }))
+    .sort((a, b) => a.items[0].days - b.items[0].days || rank(a.id) - rank(b.id));
+}

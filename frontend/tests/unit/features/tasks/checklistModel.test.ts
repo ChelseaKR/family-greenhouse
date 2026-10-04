@@ -4,6 +4,7 @@ import {
   byDueThenName,
   checklistItems,
   dateSections,
+  roomSections,
   segmentCounts,
 } from '@/features/tasks/checklistModel';
 
@@ -87,5 +88,44 @@ describe('the phone Tasks checklist model', () => {
     const today = dateSections(items([task('a', 'Fern', due(0))]), 'today');
     expect(today.map((s) => s.id)).toEqual(['today']);
     expect(dateSections(items([]), 'upcoming')).toEqual([]);
+  });
+
+  it('grouped by room: only the segment, the room with the most overdue task first', () => {
+    const room: Record<string, string> = {
+      Aloe: 'kitchen',
+      Basil: 'kitchen',
+      Lily: 'bedroom',
+      Fig: 'living',
+      Hoya: 'living',
+    };
+    const list = items([
+      task('a', 'Aloe', due(0)),
+      task('b', 'Basil', due(-1)),
+      task('c', 'Lily', due(-3)),
+      task('d', 'Fig', due(0)),
+      task('e', 'Hoya', due(4)),
+    ]);
+    const order = ['living', 'kitchen', 'bedroom'];
+    const today = roomSections(list, 'today', (i) => room[i.plantName], order);
+    // Bedroom holds the most overdue (3 days), then Kitchen (1 day), then
+    // Living Room (due today) - not the household's own room order.
+    expect(today.map((s) => [s.id, s.items.map((i) => i.plantName)])).toEqual([
+      ['bedroom', ['Lily']],
+      ['kitchen', ['Basil', 'Aloe']],
+      ['living', ['Fig']],
+    ]);
+    // Hoya is due in 4 days: Upcoming's round, never Today's.
+    expect(roomSections(list, 'upcoming', (i) => room[i.plantName], order)).toEqual([
+      { id: 'living', kind: 'room', items: [expect.objectContaining({ plantName: 'Hoya' })] },
+    ]);
+  });
+
+  it('grouped by room: rooms with equally urgent work keep the household order', () => {
+    const list = items([task('a', 'Aloe', due(0)), task('b', 'Fig', due(0))]);
+    const room = (i: { plantName: string }) => (i.plantName === 'Aloe' ? 'kitchen' : 'living');
+    expect(roomSections(list, 'today', room, ['living', 'kitchen']).map((s) => s.id)).toEqual([
+      'living',
+      'kitchen',
+    ]);
   });
 });

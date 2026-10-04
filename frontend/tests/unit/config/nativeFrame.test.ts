@@ -192,6 +192,29 @@ describe('update messages', () => {
     });
   });
 
+  it('a tab root with a query is still the root: no back button to the same list', () => {
+    for (const search of ['?filter=today', '?space=s1', '?filter=due&space=s1']) {
+      const update = buildUpdate({
+        ...base,
+        pathname: '/tasks',
+        search,
+        pageTitle: 'Tasks',
+        navigationType: 'REPLACE',
+      });
+      expect(update).toMatchObject({
+        path: `/tasks${search}`,
+        title: 'nav.tasks',
+        tab: 'tasks',
+        canGoBack: false,
+        largeTitle: true,
+      });
+    }
+    // A screen that is not a tab's root keeps its back button, query or not.
+    expect(
+      buildUpdate({ ...base, pathname: '/plants/p1', search: '?tab=care', pageTitle: 'Fern' })
+    ).toMatchObject({ canGoBack: true, largeTitle: false });
+  });
+
   it('a detail: the page h1 as title, a way back, no large title', () => {
     const update = buildUpdate({
       ...base,

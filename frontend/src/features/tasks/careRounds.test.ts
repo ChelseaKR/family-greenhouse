@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Plant, PlantSpace, Task } from '@/services/plantService';
-import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
+import { buildCareRoundGroups, filterTasksForSpace, mostOverdueFirst } from './careRounds';
 
 const spaces: PlantSpace[] = [
   {
@@ -65,6 +65,33 @@ describe('buildCareRoundGroups', () => {
       'unplaced:Unplaced',
     ]);
     expect(result[0].tasks.map((item) => item.id)).toEqual(['inside-1', 'inside-2']);
+  });
+});
+
+describe('mostOverdueFirst', () => {
+  const NOW = new Date(2026, 6, 15, 12);
+  const dueOn = (id: string, plantId: string, day: number, hour = 12): Task => ({
+    ...task(id, plantId),
+    nextDue: new Date(2026, 6, day, hour).toISOString(),
+  });
+
+  it('starts the round in the room with the most overdue task, not the first on the route', () => {
+    const groups = buildCareRoundGroups(
+      [dueOn('k', 'p1', 15), dueOn('p', 'p2', 12)],
+      [plant('p1', 'kitchen'), plant('p2', 'patio')],
+      spaces
+    );
+    expect(groups.map((g) => g.name)).toEqual(['Kitchen', 'Patio']); // the route
+    expect(mostOverdueFirst(groups, NOW).map((g) => g.name)).toEqual(['Patio', 'Kitchen']);
+  });
+
+  it('keeps the route order between rooms due the same day, whatever the hour', () => {
+    const groups = buildCareRoundGroups(
+      [dueOn('p', 'p2', 15, 6), dueOn('k', 'p1', 15, 22)],
+      [plant('p1', 'kitchen'), plant('p2', 'patio')],
+      spaces
+    );
+    expect(mostOverdueFirst(groups, NOW).map((g) => g.name)).toEqual(['Kitchen', 'Patio']);
   });
 });
 

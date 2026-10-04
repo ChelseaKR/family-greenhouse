@@ -143,6 +143,13 @@ function normalize(pathname: string): string {
   return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 }
 
+/** A screen's identity in a tab's back stack, as the native bar knows it
+ *  (the `path` of an update, and the key a screen's bar tools are filed
+ *  under): the route and its query. */
+export function screenPath(pathname: string, search: string): string {
+  return `${normalize(pathname)}${search}`;
+}
+
 function under(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
@@ -454,9 +461,14 @@ export function buildUpdate(input: {
   const screenTitle =
     clean(pageTitle) || labelForPath(pathname, t) || clean(input.fallbackHeading ?? '');
   const tab = tabForPath(pathname);
-  const root = isTabRoot(pathname) && !search;
+  // A tab's first screen is its root with or without a query: "/tasks?filter=
+  // today" from Today, or "/tasks?space=…" from a space, is the Tasks list,
+  // filtered, not a screen pushed on top of it. Counting the query as a new
+  // screen put a back button on the tab's own first screen, leading back to
+  // the same list.
+  const root = isTabRoot(pathname);
   const update: NativeChromeUpdate = {
-    path: `${normalize(pathname)}${search}`,
+    path: screenPath(pathname, search),
     key,
     title: root ? titleFor(pathname, pageTitle, t) : screenTitle,
     tab,

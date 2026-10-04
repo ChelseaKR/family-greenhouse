@@ -178,7 +178,8 @@
     "schedule": "By date",
     "round": "Care round",
     "title": "Your care route",
-    "summary": "Tasks remaining: {{tasks}} · Spaces to visit: {{spaces}}"
+    "summary": "Tasks remaining: {{tasks}} · Spaces to visit: {{spaces}}",
+    "later": "Due later: {{count}}. Switch to By date to see them."
   },
   "sharedCarePulse": {
     "eyebrow": "Shared-care setup",

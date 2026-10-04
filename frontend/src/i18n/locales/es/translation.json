@@ -190,7 +190,8 @@
     "schedule": "Por fecha",
     "round": "Ronda de cuidado",
     "title": "Tu ruta de cuidado",
-    "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}"
+    "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}",
+    "later": "Para más adelante: {{count}}. Cambia a Por fecha para verlas."
   },
   "sharedCarePulse": {
     "eyebrow": "Configuración del cuidado compartido",
