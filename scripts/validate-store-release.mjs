@@ -355,8 +355,22 @@ assertPng('store-assets/google-play/feature-graphic-1024x500.png', 1024, 500, {
   opaque: true,
 });
 assertPng('store-assets/app-store/app-icon-1024.png', 1024, 1024, { opaque: true });
-for (const name of ['01-dashboard', '02-plants', '03-plant-detail', '04-tasks']) {
+// The iPhone frames come from the iOS app itself (`npm run
+// store:screenshots:ios`, frontend/scripts/store-shots/shots.mjs); the iPad
+// and Play frames from the website (`npm run store:screenshots`).
+for (const name of [
+  '01-plants',
+  '02-home',
+  '03-plant-detail',
+  '04-plant-care',
+  '05-tasks',
+  '06-household',
+  '07-sitter',
+  '08-notifications',
+]) {
   assertPng(`store-assets/app-store/iphone-6.9/${name}.png`, 1320, 2868);
+}
+for (const name of ['01-dashboard', '02-plants', '03-plant-detail', '04-tasks']) {
   assertPng(`store-assets/app-store/ipad-13/${name}.png`, 2064, 2752);
   assertPng(`store-assets/google-play/phone/${name}.png`, 1080, 2400);
 }
