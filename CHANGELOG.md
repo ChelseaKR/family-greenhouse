@@ -16,6 +16,119 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-10-04
+
+**On a phone, Plants and Tasks now lead with what needs care today, and every
+Done waits five seconds with Undo before anything is saved.** The phone
+website (under 640px wide) and the iOS app get the new Plants list, plant page
+and Tasks checklist; the desktop website keeps its layout. The plant care
+guides answer pet toxicity only from cited ASPCA listings, and the pet-safety
+checker shows "Unknown", never "Non-toxic", when no listing backs a verdict.
+Plant tags, which have failed in production since they were added in 0.24.0,
+work for the first time. Most of the rest is for the iOS app, which is not yet in the App Store: a
+native tab bar, navigation bar, alerts and settings list, and no price or
+purchase prompt anywhere in the app.
+
+- **Nothing changes in the infrastructure, the data or the Terms.** No
+  `infrastructure/` file changed since 0.38.2, no stored data is migrated, and
+  the Terms of Service text is unchanged, so their effective date stays 0.38.2's
+  (October 2, 2026).
+- **Older clients keep their pet-safety answer (#907).** The API returns the
+  new `unknown` verdict only to clients that ask for it with `?unknown=1`, which
+  this release's web app and store builds send. Anything else, including app
+  builds already installed, gets the earlier answer, which never reads as safe
+  without a citation.
+- **The deploy now ships the plant tags function too (#931).** It is the one
+  change to the deploy pipeline: 19 functions get new code instead of 18. If
+  this first deploy rolls back, the plant tags function keeps the new code,
+  because it has no earlier working version to return to.
+- **The app-only changes reach people through store builds** (0.39.0, build
+  3900), not through this tag's web deploy.
+
+### Added
+
+- **A "Today first" Plants list on phones (#911, #913).** Plants are grouped
+  into Needs care, Coming up, All good and No care scheduled, each row saying
+  what is due, when, and who has it ("You", a first name, or "Up for grabs").
+  Search, a Filter menu and a "…" menu replace the row of controls. While the
+  tasks are loading or fail to load, no plant is shown as "All good".
+- **Water from the Plants list (#916).** A round Done button on every row that
+  is due, swipes on a touchscreen, and a long-press menu (Water now, I'll do it,
+  Snooze, Move to, Open plant).
+- **A plant page that leads with what the plant needs now, on phones (#915,
+  #917).** A compact header, a status card with the one thing to do (Watered or
+  Done, I'll do it, Snooze), and the nine other actions in a "…" menu. The care
+  guide is headed with the plant's own name.
+- **A Tasks checklist on phones (#926, #928, #929, #930).** Today and Upcoming segments,
+  overdue first, a check circle on the left of each row, who has each task, and
+  Claim, Ask family, Skip and Open plant in the row's menu. A filter menu
+  (Show, Group by, Spaces) with removable tokens for the filters in force. The
+  care round now covers only what is due, starting with the most overdue plant.
+  Task rows swipe the way Plants rows do, and Snooze is in their menu (#929).
+  Only one row's swipe actions show at a time, on Plants and Tasks alike; a
+  filter that hides every task says so, with Clear filters; and every string
+  left on the Tasks page, desktop included, is in English and Spanish (#930).
+- **Undo for every Done (#916, #919, #920).** Marking care done on the Plants
+  list, the plant page, the Tasks tab or Home waits five seconds with Undo
+  before anything is written, through one shared queue, so a task cannot be
+  completed twice from two screens.
+- **Richer plant care guides (#906).** Every `/care/<plant>` guide gains a
+  propagation section, humidity advice and three related plants, and five new
+  questions answer searches about lifespan and indoor ivy. 19 new `/pet-safe/<plant>` pages; the
+  sitemap grows from 69 to 88 addresses.
+- **iOS app: a native frame (#905, #908, #909, #912, #914).** Apple's own tab
+  bar (Home, Plants, Tasks, Household, More) and navigation bar with large
+  titles around the web content; confirmations and choices as native alerts and
+  action sheets; Settings as a native list with switches; and the Plants search
+  and menus in the navigation bar.
+- **iOS app: edge-swipe back, the system font for body text, and native touch
+  (#904).**
+- **iPhone App Store screenshots taken from the iOS app itself (#921).**
+
+### Changed
+
+- **Pet toxicity is stated only when a plant's own ASPCA listing backs it
+  (#906, #907).** 14 ASPCA listings were added. 15 of the 24 care guides had
+  stated a verdict with no listing on record; anything uncited now reads
+  "Unknown", with a caution line and the ASPCA Animal Poison Control number.
+  The ZZ plant guide no longer calls the plant toxic. The `/pet-safe` checker,
+  the sitter brief, the plant passport and the assistant's pet-toxicity tool
+  all apply the same rule, and none of them can render an unknown or missing
+  verdict as "Non-toxic". The FAQ structured data carries the pet question only
+  when both animals are cited.
+- **No price or purchase prompt anywhere in the iOS app (#903, #924).** In the
+  app, the pricing and gift pages go to Settings, then Plan status, which shows
+  the plan and its limits only; "See plans" links, "on the web" sentences, the
+  changelog's billing entries and upgrade clauses in plan-limit messages are
+  left out. The website is unchanged.
+- **The store description no longer says "Plans are bought on the web, not in
+  the app." (#923).**
+- **The portfolio standards are vendored at v3.0.1 (#902).**
+
+### Fixed
+
+- **Plant tags work in production for the first time (#931).** The deploy
+  pipeline named the Lambda functions it ships in hard-coded lists, and the
+  plant tags function, added in 0.24.0, was never in them. It kept running
+  the empty placeholder it was created with, so tagging a plant, the tags
+  page, the public scan page and completing a task from a scan all failed
+  with a server error. This release deploys its code, and a test now fails
+  whenever a deploy list and the Terraform-defined functions disagree.
+- **"Network Error" is now a translated sentence (#904).** When a request gets
+  no answer, the website and the app say "Can't reach Family Greenhouse. Check
+  your connection and try again." in English or Spanish.
+- **Every dropdown has a full-size target in Safari (#927).** The Settings
+  language select was 23px tall and the notification email-language select
+  18px in Safari; every single-line select is now at least 40px, with the same
+  chevron in every browser.
+- **A long press on a phone Plants row no longer swallows its next tap (#925).**
+- **"Snooze…" in a phone row menu opens the "how long" choice again (#929).**
+  On the website the sheet opened and closed within the same tap, on Plants
+  and Tasks alike, so nothing showed.
+- **iOS app: the privacy manifest declares the camera library's file-timestamp
+  use (#922),** which App Store Connect would otherwise reject as ITMS-91053,
+  and the required device capability is `arm64` instead of a leftover `armv7`.
+
 ## [0.38.2] - 2026-10-02
 
 **0.38.1 deployed only partly. This release ships its frontend, and fixes the
