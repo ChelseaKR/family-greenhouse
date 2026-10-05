@@ -570,8 +570,8 @@ export function seedStoreDemoHousehold(db: StoreDemoDeps): void {
       placementNote: null,
       summerSpaceId: null,
       winterSpaceId: null,
-      // No photograph in the seed. The iPhone store capture uploads a credited
-      // public-domain, CC0 or CC BY photo of each species through the photo
+      // No photograph in the seed. The iPhone store capture uploads a
+      // public-domain or CC0 photo of each species through the photo
       // upload API (frontend/scripts/store-shots/shots.mjs and
       // store-assets/photo-credits.json), so every other caller of this seed
       // keeps the brand placeholder.

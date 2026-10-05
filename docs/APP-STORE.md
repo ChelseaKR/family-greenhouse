@@ -343,7 +343,7 @@ still true — worth fixing before they're needed, not hidden:
 
 - **The plant photos are not the household's own.** The iPhone capture
   gives each demo plant a photograph of its species from Wikimedia Commons
-  (public domain, CC0 or CC BY), uploaded through the app's own photo
+  (public domain or CC0), uploaded through the app's own photo
   upload. Sources, authors and licenses are in
   `store-assets/photo-credits.json` and `store-assets/README.md`. The iPad
   and Google Play frames still show the brand placeholder.

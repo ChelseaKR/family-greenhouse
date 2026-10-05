@@ -88,7 +88,7 @@ upload URL, uploads the bytes, and confirms. A plant that already has a
 photo is skipped.
 
 Every photo is the photographer's own work on Wikimedia Commons, in the
-public domain, CC0, or CC BY. The license was read on the Commons file page
+public domain or CC0. The license was read on the Commons file page
 itself, and the original file's SHA-1 matched the one Commons publishes.
 None shows a person, a brand, a label, a watermark or any text. Each was
 cropped to a square, resized to 800 x 800, re-encoded as JPEG and stripped
@@ -100,7 +100,7 @@ a photo can't change without its credit changing too.
 
 | Plant           | Species                  | Photo                                                                                                                                                  | Author         | License       |
 | --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ------------- |
-| Monstera        | _Monstera deliciosa_     | [Rostlina na chodbě](https://commons.wikimedia.org/wiki/File:Rostlina_na_chodb%C4%9B.jpg)                                                              | Dezidor        | CC BY 3.0     |
+| Monstera        | _Monstera deliciosa_     | [6542Plants of the Philippines 05](https://commons.wikimedia.org/wiki/File:6542Plants_of_the_Philippines_05.jpg)                                       | Judgefloro     | CC0 1.0       |
 | Fiddle Leaf Fig | _Ficus lyrata_           | [Geigenfeige blatt](https://commons.wikimedia.org/wiki/File:Geigenfeige_blatt.jpg)                                                                     | Mantelmoewe    | CC0 1.0       |
 | Golden Pothos   | _Epipremnum aureum_      | [Epipremnum aureum](https://commons.wikimedia.org/wiki/File:Epipremnum_aureum.jpg)                                                                     | Sergei         | Public domain |
 | Aloe            | _Aloe vera_              | [Potted Aloe vera plant](https://commons.wikimedia.org/wiki/File:Potted_Aloe_vera_plant.jpg)                                                           | Arjun01        | Public domain |
@@ -109,13 +109,9 @@ a photo can't change without its credit changing too.
 | ZZ Plant        | _Zamioculcas zamiifolia_ | [Plants in my Home garden 2026 August 15](https://commons.wikimedia.org/wiki/File:Plants_in_my_Home_garden_2026_August_15.jpg)                         | Rajasekhar1961 | CC0 1.0       |
 | Jade Plant      | _Crassula ovata_         | [Crassula Ovata Geldpflanze 32 Jahte alt](https://commons.wikimedia.org/wiki/File:Crassula_Ovata_Geldpflanze_32_Jahte_alt.jpg)                         | NormanSchwarz  | CC0 1.0       |
 
-The Monstera photo is CC BY 3.0, so wherever these screenshots are used it
-needs this credit: "Rostlina na chodbě" by Dezidor,
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via Wikimedia
-Commons, cropped, resized and re-encoded. The app has no screen for
-third-party credits, and a screenshot can't carry a caption. The credit is
-in this file and in `photo-credits.json`. Where else it goes is the owner's
-call. To replace a photo, change its file and its record together.
+None of the photos needs a credit. To replace one, use another public-domain
+or CC0 photo that passes the same checks, and change its file and its record
+together.
 
 ## What each field is doing
 
@@ -158,7 +154,7 @@ health guarantees appear anywhere in the metadata, and none should be added.
 The artwork validates, but validating is not the same as selling:
 
 - **The plant photos are stand-ins, and only the iPhone frames have them.**
-  Each demo plant shows a real photograph of its species, credited above,
+  Each demo plant shows a real photograph of its species, listed above,
   not a photo the invented household took. The Playwright capture (iPad and
   Google Play) uploads none, so those frames still show the brand
   placeholder. With one photo per plant, `PhotoTimeline` (which needs two)

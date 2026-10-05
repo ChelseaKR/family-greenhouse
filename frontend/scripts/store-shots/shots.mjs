@@ -90,8 +90,8 @@ const PHOTO_UPLOADERS = {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 /**
- * The plant photos, from store-assets/photo-credits.json: public-domain, CC0
- * or CC BY photographs from Wikimedia Commons, with the source, author and
+ * The plant photos, from store-assets/photo-credits.json: public-domain or
+ * CC0 photographs from Wikimedia Commons, with the source, author and
  * license of each. Each file must still hash to what that record says, so a
  * photo cannot be swapped without its credit being updated too.
  */
