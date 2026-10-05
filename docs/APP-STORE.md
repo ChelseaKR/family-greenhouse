@@ -326,9 +326,9 @@ The iPad frames come from `npm run store:screenshots --workspace frontend`
 
 | #   | iPhone frame  | Real content                                                                                                                                                                                                                                                                                                                                             |
 | --- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01  | Plants        | The Plants tab: the large title, the ⋯, filter and + buttons in the native navigation bar, the search field, and the list led by "Needs care": 5 plants with what each needs, its room, who holds it ("You", a member's initial, or up for grabs) and a round water button; then "Coming up" with 3 more.                                                |
+| 01  | Plants        | The Plants tab: the large title, the ⋯, filter and + buttons in the native navigation bar, the search field, and the list led by "Needs care": 5 plants with what each needs, its room, who holds it ("You", a member's initial, or up for grabs) and a round water button; then "Coming up" with 3 more. Each plant shows its photo.                    |
 | 02  | Home          | Dana's Home tab with its large title: 8 plants, 4 due today, 1 overdue; "To do now" with the overdue Peace Lily up for grabs and today's Monstera held by Dana Whitfield.                                                                                                                                                                                |
-| 03  | Plant detail  | The Monstera, opened from Plants (back chevron, title and ⋯ menu in the navigation bar): the status card ("Water today", "You · last by Marisol Reyes, 7 days ago", Watered and Snooze), the house rule ("Bottom-water this one") and the household's note. The thumbnail is the brand placeholder image, not a photo.                                   |
+| 03  | Plant detail  | The Monstera, opened from Plants (back chevron, title and ⋯ menu in the navigation bar): the status card ("Water today", "You · last by Marisol Reyes, 7 days ago", Watered and Snooze), the house rule ("Bottom-water this one") and the household's note. The thumbnail is its photo.                                                                  |
 | 04  | Plant care    | The same page further down: the curated care tips for _Monstera deliciosa_ (light, water, humidity, notes) and its weekly watering task with its streak.                                                                                                                                                                                                 |
 | 05  | Tasks         | The Tasks tab as a checklist: the large title, the filter button in the native navigation bar, and Today / Upcoming (5 each). "Overdue" leads with the Peace Lily (water, 1 day overdue, Bedroom, up for grabs), then "Today" with Aloe (up for grabs), Fiddle Leaf Fig ("T"), Golden Pothos ("M") and Monstera ("You"), each with a round check circle. |
 | 06  | Household     | The Household tab: "Who's carrying the care", with each member's care in the last 30 days and jobs held now, and 4 jobs up for grabs.                                                                                                                                                                                                                    |
@@ -341,11 +341,12 @@ as the iPad set, plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
 Known gaps in this set, carried over from `store-assets/README.md` and
 still true — worth fixing before they're needed, not hidden:
 
-- **No plant photographs in any frame.** Every plant in the store-demo
-  household has no `imageUrl`, so the plant-detail hero and card images all
-  render the brand placeholder rather than a photo. Fixing this needs real,
-  consented photographs of real plants added to the seed — not a synthetic
-  or stock image standing in for "this household's plant."
+- **The plant photos are not the household's own.** The iPhone capture
+  gives each demo plant a photograph of its species from Wikimedia Commons
+  (public domain, CC0 or CC BY), uploaded through the app's own photo
+  upload. Sources, authors and licenses are in
+  `store-assets/photo-credits.json` and `store-assets/README.md`. The iPad
+  and Google Play frames still show the brand placeholder.
 - **No caption overlays.** These are raw device frames; both stores support
   captioned marketing frames and most competitors use them.
 - **No Android tablet screenshots**, despite the iPad frames proving the
