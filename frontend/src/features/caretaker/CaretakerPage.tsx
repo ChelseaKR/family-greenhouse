@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { hasNativePresent } from '@/lib/platform';
+import {
+  canUseNativeCamera,
+  nativePhotoErrorMessage,
+  pickNativePhoto,
+} from '@/services/nativeCamera';
+import { chooseFromMenu } from '@/services/nativePresent';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { CameraIcon, MapPinIcon } from '@heroicons/react/24/outline';
@@ -125,8 +132,8 @@ export function CaretakerPage() {
   );
 
   const handlePhotoPicked = useCallback(
-    async (file: File | undefined) => {
-      const task = tasks.find((candidate) => candidate.taskId === photoTaskId);
+    async (file: File | undefined, forTaskId: string | null = photoTaskId) => {
+      const task = tasks.find((candidate) => candidate.taskId === forTaskId);
       setPhotoTaskId(null);
       if (!file || !task) return;
       setActionError(null);
@@ -147,6 +154,34 @@ export function CaretakerPage() {
     },
     [photoTaskId, t, tasks, token]
   );
+
+  /** In the apps: Apple's sheet asks camera or library, then straight there. */
+  const addNativePhoto = async (taskId: string, from: Element) => {
+    const source = await chooseFromMenu({
+      title: t('caretaker.page.addPhoto'),
+      options: [
+        { id: 'camera', title: t('plants.photoPicker.take') },
+        { id: 'library', title: t('plants.photoPicker.choose') },
+      ],
+      cancel: t('common.cancel'),
+      from,
+    });
+    if (source !== 'camera' && source !== 'library') {
+      setPhotoTaskId(null);
+      return;
+    }
+    try {
+      const file = await pickNativePhoto(source);
+      if (!file) {
+        setPhotoTaskId(null);
+        return;
+      }
+      await handlePhotoPicked(file, taskId);
+    } catch (error) {
+      setPhotoTaskId(null);
+      setActionError(nativePhotoErrorMessage(error, t));
+    }
+  };
 
   const handleNote = useCallback(async () => {
     const text = noteText.trim();
@@ -298,9 +333,12 @@ export function CaretakerPage() {
                           size="sm"
                           isLoading={photoBusy && photoTaskId === task.taskId}
                           leftIcon={<CameraIcon className="h-4 w-4" aria-hidden="true" />}
-                          onClick={() => {
+                          onClick={(event) => {
                             setPhotoTaskId(task.taskId);
-                            fileInput.current?.click();
+                            // An app without Apple's sheets keeps the picker.
+                            if (canUseNativeCamera() && hasNativePresent())
+                              void addNativePhoto(task.taskId, event.currentTarget);
+                            else fileInput.current?.click();
                           }}
                           aria-label={t('caretaker.page.addPhotoAria', { plant: task.plantName })}
                         >

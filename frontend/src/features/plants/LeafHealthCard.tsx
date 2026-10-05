@@ -1,4 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
+import { NativePhotoButtons } from '@/components/NativePhotoButtons';
+import { canUseNativeCamera } from '@/services/nativeCamera';
 import { Dialog, Transition } from '@headlessui/react';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -115,6 +117,7 @@ export function LeafHealthResults({ result }: { result: LeafHealthResult }) {
  */
 export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps) {
   const { t } = useTranslation();
+  const native = canUseNativeCamera();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
@@ -123,13 +126,17 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
     mutationFn: (imageBase64: string) => plantService.checkLeafHealth(plantId, imageBase64),
   });
 
-  const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPickError(null);
-    checkMutation.reset();
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     // Allow re-picking the same file.
     e.target.value = '';
-    if (!file) return;
+    if (file) void acceptPhoto(file);
+  };
+
+  /** A photo from the web picker or from the app's camera and library. */
+  const acceptPhoto = async (file: File) => {
+    setPickError(null);
+    checkMutation.reset();
     if (!file.type.startsWith('image/')) {
       setPickError(t('plants.leafHealth.notAnImage'));
       return;
@@ -218,17 +225,28 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
                         />
                       )}
 
+                      {/* In the apps: Take photo and Choose photo, straight to the
+                          camera or the library, as everywhere else in the app. */}
+                      {native && (
+                        <NativePhotoButtons
+                          onPick={(file) => void acceptPhoto(file)}
+                          onError={setPickError}
+                          disabled={checkMutation.isPending}
+                        />
+                      )}
                       <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => fileInputRef.current?.click()}
-                          leftIcon={<PhotoIcon className="h-4 w-4" aria-hidden="true" />}
-                        >
-                          {preview
-                            ? t('plants.leafHealth.retake')
-                            : t('plants.leafHealth.pickPhoto')}
-                        </Button>
+                        {!native && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => fileInputRef.current?.click()}
+                            leftIcon={<PhotoIcon className="h-4 w-4" aria-hidden="true" />}
+                          >
+                            {preview
+                              ? t('plants.leafHealth.retake')
+                              : t('plants.leafHealth.pickPhoto')}
+                          </Button>
+                        )}
                         {preview && (
                           <Button
                             type="button"
