@@ -1,4 +1,5 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import type { NativeFormSheetRequest, NativeFormSheetResult } from '@/config/nativeFormSheet';
 import { NATIVE_CHROME_PLUGIN } from '@/lib/platform';
 import type {
   NativeChromeConfiguration,
@@ -20,6 +21,8 @@ import type {
  * - The frame: `configure`, `update`, and four events (config/nativeFrame.ts).
  * - Alerts and action sheets: `present`, `updatePresented`,
  *   `dismissPresented` (config/nativePresent.ts).
+ * - Form sheets: `presentForm`, closed by `dismissPresented`
+ *   (config/nativeFormSheet.ts).
  * - A screen's menus and search in the bar: `setBarTools`, and the
  *   `barMenuSelect` / `barSearch` events (config/nativeBarTools.ts).
  */
@@ -29,6 +32,7 @@ export interface NativeChromePlugin {
   present(options: NativePresentRequest): Promise<NativePresentResult>;
   updatePresented(options: NativePresentUpdate): Promise<void>;
   dismissPresented(options: { token: string }): Promise<void>;
+  presentForm(options: NativeFormSheetRequest): Promise<NativeFormSheetResult>;
   setBarTools(options: NativeBarTools): Promise<void>;
   addListener<E extends keyof (NativeChromeEvents & NativeBarToolsEvents)>(
     eventName: E,

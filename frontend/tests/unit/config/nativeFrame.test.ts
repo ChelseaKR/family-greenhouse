@@ -282,11 +282,12 @@ describe('the Swift side reads the same messages', () => {
     expect(plugin).toMatch(/jsName = "NativeChrome"/);
     const methods = [...plugin.matchAll(/CAPPluginMethod\(name: "([^"]+)"/g)].map((m) => m[1]);
     // present, updatePresented and dismissPresented: nativePresent.test.ts.
-    // setBarTools: nativeBarTools.test.ts.
+    // setBarTools: nativeBarTools.test.ts. presentForm: nativeFormSheet.test.ts.
     expect(methods.sort()).toEqual([
       'configure',
       'dismissPresented',
       'present',
+      'presentForm',
       'setBarTools',
       'update',
       'updatePresented',

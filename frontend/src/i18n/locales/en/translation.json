@@ -1013,6 +1013,16 @@
     "frequencyStepper": {
       "less": "One day less",
       "more": "One day more"
+    },
+    "formSheet": {
+      "addTitle": "Add care task",
+      "add": "Add",
+      "type": "Task",
+      "customName": "Name of the task",
+      "howOften": "How often",
+      "everyDay": "Every day",
+      "everyNDays": "Every {n} days",
+      "notes": "Notes"
     }
   },
   "today": {

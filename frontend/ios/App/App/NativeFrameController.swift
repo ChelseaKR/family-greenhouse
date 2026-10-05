@@ -306,6 +306,9 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         }
     }
     private var presented: Presented?
+    /// The form sheet the web asked for, while it shows (NativeChrome
+    /// `presentForm`). Weak: when UIKit lets go of it, its outcome answers.
+    private weak var formSheet: FormSheetController?
     private var backgroundObserver: NSObjectProtocol?
 
     /// True while the tab bar and navigation bar are showing.
@@ -947,6 +950,51 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
             alert.dismiss(animated: !reduceMotion)
         }
     }
+
+    // MARK: - Form sheets (NativeChrome `presentForm`)
+
+    /// Shows a web form as a native sheet and calls `completion` once: with
+    /// the values on its submit button, or nil any other way
+    /// (NativeFormSheetModel.swift). Unlike an alert, a form is not closed
+    /// when the app goes to the background: what was typed stays.
+    func presentForm(_ request: FormSheetRequest, token: String, retried: Bool = false,
+                     completion: @escaping ([String: Any]?) -> Void) {
+        // One at a time: an alert or another form showing ends as no answer.
+        dismissPresented(token: nil)
+        dismissForm(token: nil)
+
+        guard let presenter = topPresenter() else {
+            completion(nil)
+            return
+        }
+        if presenter.presentedViewController?.isBeingDismissed == true {
+            guard !retried else {
+                completion(nil)
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self = self else { return completion(nil) }
+                self.presentForm(request, token: token, retried: true, completion: completion)
+            }
+            return
+        }
+        let sheet = FormSheetController(
+            request: request, token: token, outcome: FormSheetOutcome(completion: completion))
+        formSheet = sheet
+        presenter.present(sheet, animated: !reduceMotion)
+    }
+
+    /// Closes the form sheet showing (the one with `token`, or any when nil)
+    /// with no values.
+    func dismissForm(token: String?) {
+        guard let sheet = formSheet else { return }
+        if let token = token, token != sheet.token { return }
+        formSheet = nil
+        sheet.close(animated: !reduceMotion)
+    }
+
+    /// The form sheet showing, for the simulator tour.
+    var visibleFormSheet: FormSheetController? { formSheet }
 
     /// The controller to present from: the host, or whatever it is already
     /// presenting (a share sheet, the print sheet).

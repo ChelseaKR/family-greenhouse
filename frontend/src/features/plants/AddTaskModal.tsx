@@ -1,6 +1,6 @@
-import { Fragment } from 'react';
-import { playHaptic } from '@/services/nativeHaptics';
+import { Fragment, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { playHaptic } from '@/services/nativeHaptics';
 import { NumberStepper } from '@/components/NumberStepper';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
@@ -14,6 +14,8 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Alert } from '@/components/Alert';
+import { hasNativeFormSheet } from '@/lib/platform';
+import { addTaskFormRequest, formSheetValues, type AddTaskValues } from '@/config/nativeFormSheet';
 
 const taskSchema = z.object({
   type: z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']),
@@ -78,6 +80,57 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
     mutation.reset();
     onClose();
   };
+
+  // In the iOS app: the same form as a native sheet (config/nativeFormSheet.ts).
+  // Only the sheet's own Add button returns values; Cancel, a swipe down or
+  // anything else closes this without writing. A save the server refuses
+  // opens the sheet again with what was entered and the reason.
+  const native = hasNativeFormSheet();
+  const latest = useRef({ onClose, mutation, plantId, t });
+  latest.current = { onClose, mutation, plantId, t };
+  useEffect(() => {
+    if (!isOpen || !native) return;
+    let gone = false;
+    let token: string | null = null;
+    const ask = async (values: AddTaskValues, message?: string): Promise<void> => {
+      const { presentFormSheet } = await import('@/services/nativeFormSheet');
+      if (gone) return;
+      const now = latest.current;
+      const answer = await presentFormSheet(addTaskFormRequest(now.t, values, message), (tk) => {
+        token = tk;
+      });
+      token = null;
+      if (gone) return;
+      const chosen = formSheetValues(answer);
+      if (!chosen) {
+        now.onClose();
+        return;
+      }
+      try {
+        await now.mutation.mutateAsync({
+          plantId: now.plantId,
+          type: chosen.type,
+          customType: chosen.type === 'custom' ? chosen.customType : undefined,
+          frequency: chosen.frequency,
+          notes: chosen.notes || undefined,
+        });
+      } catch (err) {
+        if (!gone) await ask(chosen, getErrorMessage(err));
+      }
+    };
+    void ask({ type: 'water', customType: '', frequency: 7, notes: '' });
+    return () => {
+      gone = true;
+      if (token) {
+        const closing = token;
+        void import('@/services/nativeFormSheet').then(({ dismissFormSheet }) =>
+          dismissFormSheet(closing)
+        );
+      }
+    };
+  }, [isOpen, native]);
+
+  if (native) return null;
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>
