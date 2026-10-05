@@ -25,7 +25,7 @@ import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { Button } from '@/components/Button';
 import { buttonStyles } from '@/components/buttonStyles';
 import { Card, CardHeader } from '@/components/Card';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PlantPageSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
@@ -326,13 +326,7 @@ export function PlantDetailPage() {
     () => undefined
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  if (isLoading) return <PlantPageSkeleton />;
 
   if (error || !plant) {
     return (

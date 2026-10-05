@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { playHaptic } from '@/services/nativeHaptics';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -62,7 +63,9 @@ export default function NativeFrameBridge() {
 
   useEffect(() => {
     const handles = [
-      NativeChrome.addListener('tabSelect', ({ path }) => {
+      NativeChrome.addListener('tabSelect', ({ path, reselect }) => {
+        // A new tab: the selection tick (a tap on the current tab is not one).
+        if (!reselect) playHaptic('selection');
         // More's first screen is native: nothing for the web to show.
         if (path) act.current.navigate(path, { replace: true });
       }),

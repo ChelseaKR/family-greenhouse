@@ -65,7 +65,6 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { NativePushPrompt } from '@/components/NativePushPrompt';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyTasks } from '@/components/illustrations/EmptyTasks';
 import { Alert } from '@/components/Alert';
@@ -871,9 +870,7 @@ export function TasksPage() {
 
       {/* Task list */}
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <LoadingSpinner size="lg" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : error ? (
         <Alert variant="error">{getErrorMessage(error)}</Alert>
       ) : !sortedTasks || sortedTasks.length === 0 ? (
