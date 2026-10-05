@@ -1009,6 +1009,10 @@
       "daysOverdue_other": "{{count}} days overdue",
       "assignedTo": "Assigned to {{name}}",
       "assignedToYou": "Assigned to you"
+    },
+    "frequencyStepper": {
+      "less": "One day less",
+      "more": "One day more"
     }
   },
   "today": {

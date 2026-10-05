@@ -1,5 +1,7 @@
 import { Fragment } from 'react';
 import { playHaptic } from '@/services/nativeHaptics';
+import { useTranslation } from 'react-i18next';
+import { NumberStepper } from '@/components/NumberStepper';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
@@ -31,12 +33,14 @@ interface AddTaskModalProps {
 export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
+  const { t } = useTranslation();
 
   const {
     register,
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
@@ -150,15 +154,26 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                     />
                   )}
 
-                  <Input
-                    label="Frequency (days)"
-                    type="number"
+                  <NumberStepper
+                    value={Number(watch('frequency'))}
                     min={1}
                     max={365}
-                    required
-                    error={errors.frequency?.message}
-                    {...register('frequency', { valueAsNumber: true })}
-                  />
+                    onStep={(next) =>
+                      setValue('frequency', next, { shouldDirty: true, shouldValidate: true })
+                    }
+                    decreaseLabel={t('tasks.frequencyStepper.less')}
+                    increaseLabel={t('tasks.frequencyStepper.more')}
+                  >
+                    <Input
+                      label="Frequency (days)"
+                      type="number"
+                      min={1}
+                      max={365}
+                      required
+                      error={errors.frequency?.message}
+                      {...register('frequency', { valueAsNumber: true })}
+                    />
+                  </NumberStepper>
 
                   <div>
                     <label htmlFor="notes" className="label">

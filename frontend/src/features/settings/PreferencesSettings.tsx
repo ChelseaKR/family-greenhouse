@@ -76,22 +76,47 @@ export function PreferencesSettings() {
             it here once components have real dark variants.
             See docs/reviews/frontend-audit-2026-06-12.md, item 6. */}
 
-        {/* Density */}
+        {/* Density: a segmented control, as in iOS Settings. Still a radio
+            group underneath: the selected segment is the one Tab stops on,
+            and the arrow keys move the choice. */}
         <fieldset>
-          <legend className="label">{t('settings.preferences.density')}</legend>
-          <div className="flex flex-wrap gap-2" role="radiogroup">
+          <legend className="label" id="density-label">
+            {t('settings.preferences.density')}
+          </legend>
+          <div
+            className="inline-grid grid-cols-2 gap-0.5 rounded-full bg-gray-500/10 p-0.5 large-text:grid-cols-1 large-text:rounded-3xl"
+            role="radiogroup"
+            aria-labelledby="density-label"
+          >
             {DENSITY_OPTIONS.map((value) => (
               <button
                 key={value}
                 type="button"
                 role="radio"
+                data-density={value}
                 aria-checked={density === value}
+                tabIndex={density === value ? 0 : -1}
+                onKeyDown={(event) => {
+                  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
+                    event.key
+                  ];
+                  if (!step) return;
+                  event.preventDefault();
+                  const at = DENSITY_OPTIONS.indexOf(density);
+                  const next =
+                    DENSITY_OPTIONS[(at + step + DENSITY_OPTIONS.length) % DENSITY_OPTIONS.length];
+                  setDensity(next);
+                  event.currentTarget
+                    .closest('[role="radiogroup"]')
+                    ?.querySelector<HTMLButtonElement>(`[data-density="${next}"]`)
+                    ?.focus();
+                }}
                 onClick={() => setDensity(value)}
                 className={clsx(
-                  'rounded-md border px-4 py-2 text-sm font-medium min-h-touch',
+                  'min-h-touch rounded-full px-5 text-sm font-semibold',
                   density === value
-                    ? 'border-primary-700 bg-primary-50 text-primary-800'
-                    : 'border-primary-200/70 bg-paper text-gray-700 hover:bg-primary-50'
+                    ? 'bg-paper text-ink shadow-sm ring-1 ring-primary-100'
+                    : 'text-gray-700 hover:bg-primary-50'
                 )}
               >
                 {t(`settings.preferences.density${value[0].toUpperCase() + value.slice(1)}`)}
