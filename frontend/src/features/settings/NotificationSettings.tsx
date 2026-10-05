@@ -108,7 +108,13 @@ export function NotificationSettings() {
   const [dndEndDraft, setDndEndDraft] = useState('');
   // Resolved once per mount; null when this browser cannot name its zone.
   const [browserTimeZone] = useState(resolveBrowserTimeZone);
-  const [tzDraft, setTzDraft] = useState(browserTimeZone ?? 'UTC');
+  // A browser that names UTC some other way ("Etc/UTC", "GMT") starts the
+  // field on "UTC", the name the server stores: otherwise the first frame
+  // showed the alias and the stored-prefs effect swapped it a moment later,
+  // a flicker for a person and a race for any test that read the field.
+  const [tzDraft, setTzDraft] = useState(
+    browserTimeZone && !UTC_ALIASES.has(browserTimeZone) ? browserTimeZone : 'UTC'
+  );
   // The background timezone write below runs at most once per mount.
   const timezoneDefaulted = useRef(false);
   const localeDefaulted = useRef(false);

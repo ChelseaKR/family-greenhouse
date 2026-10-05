@@ -6,7 +6,7 @@
  * same refusal to store a credential.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, db, resetDb, seedHouseholdId, seedUserId } from '../../src/local-server';
 
 async function loginAsSeed(): Promise<string> {

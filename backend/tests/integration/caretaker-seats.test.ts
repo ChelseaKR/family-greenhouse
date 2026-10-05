@@ -16,7 +16,7 @@
  *      is the first action's timestamp rather than anything self-declared.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import {
   app,
   db,

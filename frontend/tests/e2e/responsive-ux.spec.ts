@@ -244,6 +244,13 @@ test.describe('Mobile-first UX correctness', () => {
 
       await page.goto(route);
       await page.locator('body').waitFor({ state: 'visible' });
+      // Let the page finish loading its lazy code and data before measuring
+      // it and before leaving it. Measured while chunks were still arriving,
+      // the layout checks saw a page half built; left mid-load, WebKit logs
+      // the cancelled downloads as errors ("Importing a module script
+      // failed", "XMLHttpRequest cannot load … due to access control
+      // checks") on a page nobody is looking at any more.
+      await page.waitForLoadState('networkidle');
 
       if (boundaryResponse) {
         const response = await boundaryResponse;

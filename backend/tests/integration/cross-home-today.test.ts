@@ -9,7 +9,7 @@
  * X-Household-Id for ITS home rather than the caller's default one.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, db, resetDb, seedHouseholdId, seedTaskId, seedUserId } from '../../src/local-server';
 
 const SEED_EMAIL = 'test@example.com';
