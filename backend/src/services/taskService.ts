@@ -266,7 +266,13 @@ export interface SitterTask {
   spaceName: string | null;
   /** Short directions within that space, e.g. "east window, top shelf". */
   placementNote: string | null;
-  /** True when dueDate is in the past — drives the "overdue" badge. */
+  /**
+   * True when the dueDate instant is in the past (the instant rule, ADR 0025).
+   * The web pages do NOT render it: they read the calendar day in the
+   * viewer's zone (`dueDayOffset` in frontend/src/utils/date.ts), as every
+   * signed-in page does, because this flag calls a task due at 09:00
+   * "overdue" from 09:01.
+   */
   overdue: boolean;
 }
 

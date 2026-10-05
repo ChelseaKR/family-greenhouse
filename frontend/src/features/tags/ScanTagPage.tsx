@@ -8,6 +8,7 @@ import { Input } from '@/components/Input';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { formatRelativeDay } from '@/i18n/format';
+import { isOverdue } from '@/utils/date';
 import {
   publicTagService,
   TagInactiveError,
@@ -299,6 +300,10 @@ export function ScanTagPage() {
                 />
                 <ul className="space-y-3">
                   {remaining.map((task) => {
+                    // The app's calendar-day rule, not the API's instant-rule
+                    // `overdue` flag (which says "Overdue" from 09:01 for a
+                    // task due at 09:00); see `dueDayOffset` in utils/date.
+                    const late = isOverdue(task.dueDate);
                     const taskLabel = t(`tasks.types.${task.taskType}`, {
                       defaultValue: task.taskType,
                     });
@@ -316,11 +321,10 @@ export function ScanTagPage() {
                           </p>
                           <p
                             className={
-                              'mt-0.5 text-sm ' +
-                              (task.overdue ? 'text-amber-700' : 'text-gray-600')
+                              'mt-0.5 text-sm ' + (late ? 'text-amber-700' : 'text-gray-600')
                             }
                           >
-                            {task.overdue
+                            {late
                               ? t('plantTags.scan.overdue')
                               : t('plantTags.scan.due', {
                                   when: formatRelativeDay(task.dueDate),

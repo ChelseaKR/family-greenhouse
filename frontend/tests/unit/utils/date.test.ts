@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { formatDate, formatRelativeDate, isOverdue, isToday, overdueAt } from '@/utils/date';
+import {
+  dueDayOffset,
+  formatDate,
+  formatRelativeDate,
+  isOverdue,
+  isToday,
+  overdueAt,
+} from '@/utils/date';
 
 describe('date utils', () => {
   beforeEach(() => {
@@ -111,5 +118,41 @@ describe('date utils', () => {
       expect(isToday('2024-04-14T12:00:00Z')).toBe(false);
       expect(isToday('2024-04-16T12:00:00Z')).toBe(false);
     });
+  });
+});
+
+describe('dueDayOffset', () => {
+  it('reads an unparseable due date as unknown, never as today', () => {
+    expect(dueDayOffset('not a date', new Date(2026, 9, 14, 14))).toBeNull();
+    expect(dueDayOffset('', new Date(2026, 9, 14, 14))).toBeNull();
+  });
+
+  it('agrees with isOverdue and isToday at every quarter hour of a day', () => {
+    // Due dates around one local day, read from every quarter hour of that
+    // day: below zero exactly when isOverdue says so, zero exactly when
+    // isToday does. Built from local wall-clock fields, so this holds in
+    // whatever zone the process runs in.
+    const dues = [
+      new Date(2026, 9, 13, 23, 59),
+      new Date(2026, 9, 14, 0, 0),
+      new Date(2026, 9, 14, 9, 0),
+      new Date(2026, 9, 14, 23, 59, 59, 999),
+      new Date(2026, 9, 15, 0, 0),
+      new Date(2026, 9, 16, 9, 0),
+    ].map((d) => d.toISOString());
+    vi.useFakeTimers();
+    try {
+      for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
+        const now = new Date(2026, 9, 14, 0, minutes);
+        vi.setSystemTime(now);
+        for (const due of dues) {
+          const days = dueDayOffset(due, now);
+          expect(days !== null && days < 0).toBe(isOverdue(due, now));
+          expect(days === 0).toBe(isToday(due));
+        }
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

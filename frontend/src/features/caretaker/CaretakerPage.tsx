@@ -13,6 +13,7 @@ import {
   type CaretakerTask,
 } from '@/services/caretakerVisitService';
 import { formatDate } from '@/i18n/format';
+import { dueDayOffset } from '@/utils/date';
 
 /**
  * The caretaker's page: /caretaker/{token}. No account, no sign-in.
@@ -167,11 +168,14 @@ export function CaretakerPage() {
     }
   }, [noteText, t, token]);
 
-  const now = Date.now();
-  const dueLabel = (task: CaretakerTask): string => {
-    if (task.overdue) return t('caretaker.page.overdue');
-    const days = Math.round((new Date(task.dueDate).getTime() - now) / (24 * 60 * 60 * 1000));
-    if (days <= 0) return t('caretaker.page.dueToday');
+  // The calendar day in this browser's zone, as every signed-in page reads it,
+  // not the API's instant-rule `overdue` flag, which called a task due at 09:00
+  // "Overdue" from 09:01 (see `dueDayOffset`). `null` shows no label.
+  const now = new Date();
+  const dueLabel = (days: number | null): string | null => {
+    if (days === null) return null;
+    if (days < 0) return t('caretaker.page.overdue');
+    if (days === 0) return t('caretaker.page.dueToday');
     if (days === 1) return t('caretaker.page.dueTomorrow');
     return t('caretaker.page.dueInDays', { count: days });
   };
@@ -251,6 +255,8 @@ export function CaretakerPage() {
                 {remaining.map((task) => {
                   const location = [task.spaceName, task.placementNote].filter(Boolean).join(' · ');
                   const instruction = instructionFor(task);
+                  const days = dueDayOffset(task.dueDate, now);
+                  const label = dueLabel(days);
                   return (
                     <li
                       key={task.taskId}
@@ -265,14 +271,16 @@ export function CaretakerPage() {
                               <span>{location}</span>
                             </p>
                           )}
-                          <p
-                            className={
-                              'mt-0.5 text-sm ' +
-                              (task.overdue ? 'text-amber-700' : 'text-gray-600')
-                            }
-                          >
-                            {dueLabel(task)}
-                          </p>
+                          {label && (
+                            <p
+                              className={
+                                'mt-0.5 text-sm ' +
+                                (days !== null && days < 0 ? 'text-amber-700' : 'text-gray-600')
+                              }
+                            >
+                              {label}
+                            </p>
+                          )}
                         </div>
                         <Button
                           variant="primary"

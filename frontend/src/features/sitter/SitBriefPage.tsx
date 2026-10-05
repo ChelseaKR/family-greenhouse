@@ -13,6 +13,7 @@ import {
   type SitterBriefPlant,
 } from '@/services/sitterService';
 import { formatDate } from '@/i18n/format';
+import { isOverdue } from '@/utils/date';
 import { printPage } from '@/services/nativePrint';
 import { MapPinIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { petCaution, petOutcome, petSummaryLine } from '@/features/petsafe/petVerdict';
@@ -136,16 +137,22 @@ function PlantCard({ plant }: { plant: SitterBriefPlant }) {
           <p className="mt-1 text-sm text-gray-600">{t('sitterBrief.nothingDue')}</p>
         ) : (
           <ul className="mt-1 space-y-1">
-            {plant.tasks.map((task) => (
-              <li key={task.taskId} className="text-sm text-ink">
-                {taskLabel(task.taskType)} —{' '}
-                <span className={task.overdue ? 'text-amber-700' : 'text-gray-600'}>
-                  {task.overdue
-                    ? t('sitterBrief.overdueSince', { date: formatDate(task.dueDate) })
-                    : t('sitterBrief.due', { date: formatDate(task.dueDate) })}
-                </span>
-              </li>
-            ))}
+            {plant.tasks.map((task) => {
+              // The app's calendar-day rule, not the API's instant-rule
+              // `overdue` flag (which says "overdue" from 09:01 for a task due
+              // at 09:00); see `dueDayOffset` in utils/date.
+              const late = isOverdue(task.dueDate);
+              return (
+                <li key={task.taskId} className="text-sm text-ink">
+                  {taskLabel(task.taskType)} —{' '}
+                  <span className={late ? 'text-amber-700' : 'text-gray-600'}>
+                    {late
+                      ? t('sitterBrief.overdueSince', { date: formatDate(task.dueDate) })
+                      : t('sitterBrief.due', { date: formatDate(task.dueDate) })}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

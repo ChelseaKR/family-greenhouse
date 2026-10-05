@@ -10,6 +10,7 @@ import {
   type KioskTask,
 } from '@/services/kioskService';
 import { formatTime } from '@/i18n/format';
+import { dueDayOffset } from '@/utils/date';
 
 /**
  * The wall display. A spare tablet in the kitchen, an old monitor in an office
@@ -41,10 +42,17 @@ const MS = 1000;
 
 type Status = 'loading' | 'ready' | 'inactive' | 'error';
 
-function dueLabelKey(task: KioskTask, now: number): string {
-  if (task.overdue) return 'kiosk.due.overdue';
-  const days = Math.round((new Date(task.dueDate).getTime() - now) / (24 * 60 * 60 * 1000));
-  if (days <= 0) return 'kiosk.due.today';
+/**
+ * The calendar day in this display's zone, as every signed-in page reads it,
+ * not the API's instant-rule `overdue` flag, which called a task due at 09:00
+ * "Overdue" from 09:01 (see `dueDayOffset`). The kiosk lists overdue work and
+ * the next day, so everything after today is "tomorrow"; `null` (an
+ * unreadable date) shows no label.
+ */
+function dueLabelKey(days: number | null): string | null {
+  if (days === null) return null;
+  if (days < 0) return 'kiosk.due.overdue';
+  if (days === 0) return 'kiosk.due.today';
   return 'kiosk.due.tomorrow';
 }
 
@@ -192,7 +200,7 @@ export function KioskPage() {
     [token]
   );
 
-  const now = Date.now();
+  const now = new Date();
 
   return (
     <div className="flex min-h-screen flex-col bg-ink text-white">
@@ -243,6 +251,8 @@ export function KioskPage() {
                     const location = [task.spaceName, task.placementNote]
                       .filter(Boolean)
                       .join(' · ');
+                    const days = dueDayOffset(task.dueDate, now);
+                    const labelKey = dueLabelKey(days);
                     return (
                       <li
                         key={task.taskId}
@@ -261,13 +271,16 @@ export function KioskPage() {
                               <span className="truncate">{location}</span>
                             </p>
                           )}
-                          <p
-                            className={
-                              'mt-1 text-xl ' + (task.overdue ? 'text-amber-200' : 'text-white/60')
-                            }
-                          >
-                            {t(dueLabelKey(task, now))}
-                          </p>
+                          {labelKey && (
+                            <p
+                              className={
+                                'mt-1 text-xl ' +
+                                (days !== null && days < 0 ? 'text-amber-200' : 'text-white/60')
+                              }
+                            >
+                              {t(labelKey)}
+                            </p>
+                          )}
                         </div>
                         <button
                           type="button"

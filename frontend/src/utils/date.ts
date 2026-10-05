@@ -110,6 +110,29 @@ export function overdueAt(dateString: string): number {
 }
 
 /**
+ * Calendar days from today to a due date, read in this browser's zone:
+ * negative is overdue, 0 is today, 1 is tomorrow. It is the same reading
+ * `isOverdue`, `isToday` and `formatDueDate` give (`dueDayOffset(d, now) < 0`
+ * exactly when `isOverdue(d, now)`), so a page built on it says what the rest
+ * of the app says.
+ *
+ * It exists for the public token pages (sitter, sitter brief, caretaker,
+ * kiosk, plant tag). Their API rows carry a server-computed `overdue` flag,
+ * and that flag is the INSTANT rule, `nextDue < now` (ADR 0025 keeps it until
+ * the phase 4 cutover): a task due at 09:00 is "overdue" from 09:01, while
+ * every signed-in page calls it today's job until midnight. Those pages showed
+ * the flag, so a sitter saw "Overdue" in the afternoon on work the household
+ * saw as due today. They ask this instead and do not render the flag.
+ *
+ * `null` for a due date that cannot be read, never a guess (ADR 0010).
+ */
+export function dueDayOffset(dateString: string, now: Date = new Date()): number | null {
+  const due = new Date(dateString);
+  if (Number.isNaN(due.getTime())) return null;
+  return calendarDaysBetween(now, due);
+}
+
+/**
  * Short due-date label for task rows: "Overdue" / "Today" / "Tomorrow",
  * else a weekday+date. Calendar-day comparison (local midnight) so it stays
  * consistent with `isOverdue`/`isToday` above.
