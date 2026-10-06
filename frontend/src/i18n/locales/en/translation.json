@@ -459,6 +459,7 @@
     "poisonControlLink": "ASPCA Animal Poison Control",
     "aboutHeading": "How this page is made",
     "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing.",
+    "careGuideLink": "{{name}} care guide: watering, light and common problems",
     "checkAnother": "Look up another plant",
     "breadcrumbHome": "Home",
     "breadcrumbHub": "Pets and plants",

@@ -471,6 +471,7 @@
     "poisonControlLink": "ASPCA Animal Poison Control",
     "aboutHeading": "Cómo se hace esta página",
     "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
+    "careGuideLink": "Guía de cuidados: {{name}} (riego, luz y problemas comunes)",
     "checkAnother": "Buscar otra planta",
     "breadcrumbHome": "Inicio",
     "breadcrumbHub": "Mascotas y plantas",

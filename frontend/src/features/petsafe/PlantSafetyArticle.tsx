@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { buttonStyles } from '@/components/buttonStyles';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { hasCareGuide } from '@/features/care/careGuideSlugs';
 import {
   ANIMALS,
   POISON_CONTROL_URL,
@@ -81,6 +82,18 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
           </p>
           <SourceLine sources={citedSources(page)} />
         </section>
+      )}
+
+      {hasCareGuide(page.slug) && (
+        <p className="mt-8">
+          <Link
+            to={`/care/${page.slug}`}
+            data-chrome="plantSafetyPage.careGuideLink"
+            className={LINK}
+          >
+            {t('plantSafetyPage.careGuideLink', { name: page.commonName })}
+          </Link>
+        </p>
       )}
 
       <aside
