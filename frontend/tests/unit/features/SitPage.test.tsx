@@ -38,7 +38,9 @@ const waterTask: SitterTask = {
   taskId: 't1',
   plantName: 'Monstera',
   taskType: 'water',
-  dueDate: new Date(Date.now() - 1000).toISOString(),
+  // Two days ago: overdue by the calendar day the page reads. A due date a
+  // second ago is today's job, whatever the server's instant-rule flag says.
+  dueDate: new Date(Date.now() - 2 * 86_400_000).toISOString(),
   spaceName: 'Living Room',
   placementNote: 'east window, top shelf',
   overdue: true,
