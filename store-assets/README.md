@@ -56,25 +56,62 @@ Xcode has copied it. It is never in `src/`, `dist/` or a release build. In
 the app, it types the demo sign-in into the real form, then opens each route
 in `frontend/scripts/store-shots/shots.mjs` (the shot list, in listing
 order) and waits for it to settle. The native bars follow the route as they
-do for a tap. Before the frames are taken, the script also creates one
-plant-sitter link ("Long weekend") through the same API the app calls,
+do for a tap. Before the frames are taken, the script sets the household up
+through the same API the app calls. Each plant gets its photo (see "Plant
+photos" below), and Dana creates one plant-sitter link ("Long weekend"),
 because frame 07 shows the page that link opens. Each PNG is checked for
 size and saved without an alpha channel.
 
-| Frame              | What it shows                                                                                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01-plants`        | The Plants tab: large title, the ⋯, filter and + buttons in the native bar, the search field, then "Needs care" (5 plants, each with who holds it and a round water button) and "Coming up" (3). |
-| `02-home`          | Home: the large title, the day's counts, and "To do now" with the overdue Peace Lily up for grabs and today's jobs held by named members.                                                        |
-| `03-plant-detail`  | The Monstera, opened from the list: back chevron and ⋯ menu, the status card ("Water today", held by you, last done by Marisol Reyes, Watered and Snooze), its house rule and note.              |
-| `04-plant-care`    | Further down the same page: the curated care tips for _Monstera deliciosa_ and its weekly watering task with its streak.                                                                         |
-| `05-tasks`         | The Tasks checklist: the filter button in the native bar, Today and Upcoming (5 each), the overdue Peace Lily first, then today's four, each with a check circle and who holds it.               |
-| `06-household`     | Household: who did the care in the last 30 days, who holds what now, and the four jobs nobody holds.                                                                                             |
-| `07-sitter`        | The page a plant-sitter link opens: what needs doing and in which room, with Done buttons and no account, until the link expires.                                                                |
-| `08-notifications` | Settings, Notifications: the email reminder, weekly digest and household email settings as switches.                                                                                             |
+| Frame              | What it shows                                                                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-plants`        | The Plants tab: large title, the ⋯, filter and + buttons in the native bar, the search field, then "Needs care" (5 plants, each with its photo, who holds it and a round water button) and "Coming up" (3). |
+| `02-home`          | Home: the large title, the day's counts, and "To do now" with the overdue Peace Lily up for grabs and today's jobs held by named members.                                                                   |
+| `03-plant-detail`  | The Monstera, opened from the list: back chevron and ⋯ menu, its photo, the status card ("Water today", held by you, last done by Marisol Reyes, Watered and Snooze), its house rule and note.              |
+| `04-plant-care`    | Further down the same page: the curated care tips for _Monstera deliciosa_ and its weekly watering task with its streak.                                                                                    |
+| `05-tasks`         | The Tasks checklist: the filter button in the native bar, Today and Upcoming (5 each), the overdue Peace Lily first, then today's four, each with a check circle and who holds it.                          |
+| `06-household`     | Household: who did the care in the last 30 days, who holds what now, and the four jobs nobody holds.                                                                                                        |
+| `07-sitter`        | The page a plant-sitter link opens: what needs doing and in which room, with Done buttons and no account, until the link expires.                                                                           |
+| `08-notifications` | Settings, Notifications: the email reminder, weekly digest and household email settings as switches.                                                                                                        |
 
 `npm run mobile:validate` runs in CI (the `Lint` job) and checks every size,
 every character limit, native/`package.json` version parity, and secrets
 hygiene. It is the gate; this file is the context it cannot encode.
+
+## Plant photos
+
+The iPhone capture gives each of the eight demo plants a photograph of its
+species. They are in `frontend/scripts/store-shots/photos/`, and only the
+capture reads them: no app build, seed, test or user account includes them.
+`setUpDemoHousehold` in `shots.mjs` signs in as the member who added each
+plant and adds the photo the way the app does: it asks the API for an
+upload URL, uploads the bytes, and confirms. A plant that already has a
+photo is skipped.
+
+Every photo is the photographer's own work on Wikimedia Commons, in the
+public domain or CC0. The license was read on the Commons file page
+itself, and the original file's SHA-1 matched the one Commons publishes.
+None shows a person, a brand, a label, a watermark or any text. Each was
+cropped to a square, resized to 800 x 800, re-encoded as JPEG and stripped
+of metadata. `store-assets/photo-credits.json` records, for each one, the
+source page, the original file's URL and SHA-256, the author, the license
+with the license text quoted, and how the species was identified. The
+capture refuses to upload a file whose SHA-256 doesn't match its record, so
+a photo can't change without its credit changing too.
+
+| Plant           | Species                  | Photo                                                                                                                                                  | Author         | License       |
+| --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ------------- |
+| Monstera        | _Monstera deliciosa_     | [6542Plants of the Philippines 05](https://commons.wikimedia.org/wiki/File:6542Plants_of_the_Philippines_05.jpg)                                       | Judgefloro     | CC0 1.0       |
+| Fiddle Leaf Fig | _Ficus lyrata_           | [Geigenfeige blatt](https://commons.wikimedia.org/wiki/File:Geigenfeige_blatt.jpg)                                                                     | Mantelmoewe    | CC0 1.0       |
+| Golden Pothos   | _Epipremnum aureum_      | [Epipremnum aureum](https://commons.wikimedia.org/wiki/File:Epipremnum_aureum.jpg)                                                                     | Sergei         | Public domain |
+| Aloe            | _Aloe vera_              | [Potted Aloe vera plant](https://commons.wikimedia.org/wiki/File:Potted_Aloe_vera_plant.jpg)                                                           | Arjun01        | Public domain |
+| Snake Plant     | _Dracaena trifasciata_   | [Snake plant … Waoleona Buton Island 02](<https://commons.wikimedia.org/wiki/File:Snake_plant_(Sansevieria_trifasciata)_Waoleona_Buton_Island_02.jpg>) | David E Mead   | CC0 1.0       |
+| Peace Lily      | _Spathiphyllum wallisii_ | [Lepelplant 16](https://commons.wikimedia.org/wiki/File:Lepelplant_16.JPG)                                                                             | TUFOWKTM       | Public domain |
+| ZZ Plant        | _Zamioculcas zamiifolia_ | [Plants in my Home garden 2026 August 15](https://commons.wikimedia.org/wiki/File:Plants_in_my_Home_garden_2026_August_15.jpg)                         | Rajasekhar1961 | CC0 1.0       |
+| Jade Plant      | _Crassula ovata_         | [Crassula Ovata Geldpflanze 32 Jahte alt](https://commons.wikimedia.org/wiki/File:Crassula_Ovata_Geldpflanze_32_Jahte_alt.jpg)                         | NormanSchwarz  | CC0 1.0       |
+
+None of the photos needs a credit. To replace one, use another public-domain
+or CC0 photo that passes the same checks, and change its file and its record
+together.
 
 ## What each field is doing
 
@@ -116,17 +153,12 @@ health guarantees appear anywhere in the metadata, and none should be added.
 
 The artwork validates, but validating is not the same as selling:
 
-- **No plant photographs in any frame.** Every plant in the store-demo
-  household has no `imageUrl`, so all eight cards, the plant-detail hero and
-  the phone plant-detail frame — which is mostly hero image — render the brand
-  placeholder, and `PhotoTimeline` (which needs two photos) never appears. The
-  fixture supports photos: `db.photos` rows pointing at `/mock-images/…`
-  objects would populate the strip. What it cannot supply is a photograph.
-  Inventing one and presenting it as this household's own plant is the thing
-  the no-real-user-data rule exists to prevent, and a synthetic gradient
-  standing in for a photo would read as a placeholder anyway. Real photos of
-  real plants, consented and owned, are what this needs — after which the
-  seed's `imageUrl` and `db.photos` are the two places to put them.
+- **The plant photos are stand-ins, and only the iPhone frames have them.**
+  Each demo plant shows a real photograph of its species, listed above,
+  not a photo the invented household took. The Playwright capture (iPad and
+  Google Play) uploads none, so those frames still show the brand
+  placeholder. With one photo per plant, `PhotoTimeline` (which needs two)
+  never appears.
 - **No caption overlays.** These are raw device frames. Both stores allow
   captioned marketing frames and nearly every competitor uses them.
 - **The iPad and Play frames still show the web layout with the menu
