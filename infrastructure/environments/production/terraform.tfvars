@@ -81,13 +81,26 @@ chat_budget_output_tokens_greenhouse = ""
 sms_notifications_enabled = ""
 
 # Native push (iOS via APNs, Android via FCM). OFF until the owner setup in
-# docs/native-push-setup.md is done: create both secrets in Secrets Manager,
-# put their NAMES here (names are not secret; the key material never leaves
-# Secrets Manager), deploy, test on a device, and only then set
-# native_push_enabled = true and deploy again.
+# docs/native-push-setup.md is done and checked on a device; only then does
+# native_push_enabled become true, in its own PR.
+#
+# iOS first (owner decision 2026-10-05). The APNs secret was created in
+# Secrets Manager on 2026-10-05 and its NAME is set below (names are not
+# secret; the key material never leaves Secrets Manager). Android is deferred,
+# so the FCM id stays blank: the notification Lambdas' grant for it keeps
+# pointing at the nonexistent "fcm-disabled" sentinel (modules/api), the
+# backend reports devicePush.android = false, and no Android device is ever
+# sent to, whatever the switch says.
+#
+# The release that carries this file changes exactly two things: the
+# households, notifications and reminders Lambdas gain
+# APNS_AUTH_KEY_SECRET_ID = "family-greenhouse/production/apns-auth-key" (it
+# was ""), and the one GetSecretValue statement in the shared Lambda role
+# policy names that secret in place of the "apns-disabled" sentinel. Nothing
+# is sent while native_push_enabled is false.
 native_push_enabled           = false
 fcm_service_account_secret_id = ""
-apns_auth_key_secret_id       = ""
+apns_auth_key_secret_id       = "family-greenhouse/production/apns-auth-key"
 apns_environment              = "production"
 
 # Plant passport import (#676). OFF: the three passport routes answer 404 and the
