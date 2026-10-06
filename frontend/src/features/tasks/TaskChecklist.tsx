@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/Button';
 import { formatDate, formatRelativeDay } from '@/i18n/format';
+import { playHaptic } from '@/services/nativeHaptics';
 import type { WhoText } from '@/features/plants/plantCareText';
 import type { ChecklistItem, ChecklistSection, Segment } from './checklistModel';
 import { TaskRow, type SwipeAction } from './TaskRow';
@@ -98,7 +99,11 @@ export function TaskChecklist({
   const segmentButton = (id: Segment, label: string) => (
     <button
       type="button"
-      onClick={() => onSegment(id)}
+      onClick={() => {
+        if (segment === id) return;
+        playHaptic('selection');
+        onSegment(id);
+      }}
       aria-pressed={segment === id}
       className={clsx(
         'inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full px-3 text-sm font-semibold',

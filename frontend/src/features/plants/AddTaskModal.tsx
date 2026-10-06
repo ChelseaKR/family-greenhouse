@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { playHaptic } from '@/services/nativeHaptics';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
@@ -50,6 +51,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const mutation = useMutation({
     mutationFn: taskService.createTask,
     onSuccess: () => {
+      playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       reset();

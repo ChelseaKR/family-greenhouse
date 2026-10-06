@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const notification = vi.fn((_options: { type: string }) => Promise.resolve());
 const impact = vi.fn((_options: { style: string }) => Promise.resolve());
+const calls: string[] = [];
+const selectionStart = vi.fn(() => (calls.push('start'), Promise.resolve()));
+const selectionChanged = vi.fn(() => (calls.push('changed'), Promise.resolve()));
+const selectionEnd = vi.fn(() => (calls.push('end'), Promise.resolve()));
 
 vi.mock('@capacitor/haptics', () => ({
-  Haptics: { notification, impact },
+  Haptics: { notification, impact, selectionStart, selectionChanged, selectionEnd },
   ImpactStyle: { Light: 'LIGHT', Medium: 'MEDIUM', Heavy: 'HEAVY' },
   NotificationType: { Success: 'SUCCESS', Warning: 'WARNING', Error: 'ERROR' },
 }));
@@ -20,6 +24,7 @@ describe('playHaptic', () => {
   beforeEach(() => {
     notification.mockClear();
     impact.mockClear();
+    calls.length = 0;
   });
 
   afterEach(() => {
@@ -54,6 +59,27 @@ describe('playHaptic', () => {
       await settle();
       expect(impact).toHaveBeenCalledWith({ style: 'LIGHT' });
       expect(notification).not.toHaveBeenCalled();
+    });
+
+    it('plays the success pattern when a plant or a task is added', async () => {
+      playHaptic('added');
+      await settle();
+      expect(notification).toHaveBeenCalledWith({ type: 'SUCCESS' });
+    });
+
+    it('plays the warning pattern for a destructive confirmation', async () => {
+      playHaptic('warning');
+      await settle();
+      expect(notification).toHaveBeenCalledWith({ type: 'WARNING' });
+      expect(impact).not.toHaveBeenCalled();
+    });
+
+    it('plays the selection tick as start, changed, end (changed alone plays nothing)', async () => {
+      playHaptic('selection');
+      await settle();
+      expect(calls).toEqual(['start', 'changed', 'end']);
+      expect(notification).not.toHaveBeenCalled();
+      expect(impact).not.toHaveBeenCalled();
     });
 
     it('never throws into the mutation that called it', async () => {

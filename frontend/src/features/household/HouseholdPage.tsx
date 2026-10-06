@@ -20,6 +20,7 @@ import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { HouseholdSkeleton } from '@/components/Skeleton';
 import { Alert } from '@/components/Alert';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { getErrorMessage } from '@/services/api';
@@ -144,13 +145,7 @@ export function HouseholdPage() {
   // Vacation windows (care handoff) — one query for all member rows.
   const { data: vacationWindows } = useVacationWindows(householdId);
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  if (isLoading) return <HouseholdSkeleton />;
 
   if (error || !household) {
     return <Alert variant="error">{error ? getErrorMessage(error) : 'Household not found'}</Alert>;
