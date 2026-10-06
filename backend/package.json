@@ -21,7 +21,7 @@
     "backfill:token-hashes": "tsx src/scripts/backfillTokenHashes.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1116.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1135.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1095.0",
     "@aws-sdk/client-dynamodb": "^3.1121.0",
     "@aws-sdk/client-kms": "^3.1121.0",
@@ -43,7 +43,7 @@
     "aws-xray-sdk-core": "^3.12.0",
     "http-errors": "^2.0.0",
     "pino": "^10.3.1",
-    "stripe": "^22.5.0",
+    "stripe": "^22.6.1",
     "uuid": "^14.0.2",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
