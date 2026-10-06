@@ -2,18 +2,25 @@
 
 Native push notifications for the iOS and Android apps are **built and switched
 off**. They stay off until every step below is done and checked on a device.
-There are two switches, and both default to off:
+**iOS goes first** (owner decision, 2026-10-05): the APNs steps are done and
+the Firebase steps are deferred, so the first push build is iOS-only. There
+are three switches, and all default to off:
 
-| Switch                                   | Where                                                                                                  | Default |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------- |
-| `native_push_enabled` (deployment)       | `infrastructure/environments/production/terraform.tfvars` becomes `NATIVE_PUSH_ENABLED` on the Lambdas | `false` |
-| `VITE_NATIVE_PUSH_ENABLED` (store build) | your local `frontend/.env.mobile.production` (the committed template must say `false`)                 | `false` |
+| Switch                                           | Where                                                                                                  | Default |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------- |
+| `native_push_enabled` (deployment)               | `infrastructure/environments/production/terraform.tfvars` becomes `NATIVE_PUSH_ENABLED` on the Lambdas | `false` |
+| `VITE_NATIVE_PUSH_ENABLED` (store build, iOS)    | your local `frontend/.env.mobile.production` (the committed template must say `false`)                 | `false` |
+| `VITE_NATIVE_PUSH_ANDROID_ENABLED` (store build) | the same local file; Android needs this one as well (the template must say `false`)                    | `false` |
 
 While `native_push_enabled` is false, the backend sends no device push, and the
 notification preferences tell the apps `devicePush: {ios: false, android:
 false}`, so they show no opt-in and no Settings row. That holds whatever
 credentials exist. While `VITE_NATIVE_PUSH_ENABLED` is false, the build never
-loads the push plugin at all.
+loads the push plugin at all. One web bundle goes into both shells, so Android
+has a switch of its own: while `VITE_NATIVE_PUSH_ANDROID_ENABLED` is false, an
+Android shell never loads the plugin either, whatever the first switch says.
+That is what lets an iOS-only push build be made without
+`google-services.json`.
 
 **How delivery works.** iOS goes to APNs directly, with a token-based `.p8`
 key. Android goes through Firebase Cloud Messaging (FCM). They differ because
@@ -107,13 +114,20 @@ In `infrastructure/environments/production/terraform.tfvars`:
 
 ```hcl
 native_push_enabled           = false   # still off
-fcm_service_account_secret_id = "family-greenhouse/production/fcm-service-account"
+fcm_service_account_secret_id = ""      # blank until the Android steps (1 and 2) are done
 apns_auth_key_secret_id       = "family-greenhouse/production/apns-auth-key"
 apns_environment              = "production"
 ```
 
 Merge that as its own PR. It deploys with the next release tag. With the
-switch still off, the only effect is the Lambdas' environment and IAM grant.
+switch still off, the only effect is the Lambdas' environment and IAM grant:
+the `households`, `notifications` and `reminders` Lambdas gain
+`APNS_AUTH_KEY_SECRET_ID`, and the one `GetSecretValue` statement in the
+shared Lambda role policy names the APNs secret instead of the
+`apns-disabled` sentinel. A blank FCM id keeps the Android half exactly as it
+is: the grant stays on the nonexistent `fcm-disabled` sentinel, and
+`devicePush.android` stays false even after step 7. Fill it in when Android
+ships.
 
 **No `gh secret set` is needed for push.** The two values Terraform gets are
 secret **names**, which aren't sensitive, and the key material goes straight
@@ -133,13 +147,22 @@ In your local `frontend/.env.mobile.production` (gitignored), set:
 
 ```bash
 VITE_NATIVE_PUSH_ENABLED=true
+VITE_NATIVE_PUSH_ANDROID_ENABLED=false
 ```
 
-Then run `npm run mobile:release -- frontend/.env.mobile.production`. With
-`VITE_NATIVE_PUSH_ENABLED=true`, the release validator refuses to build unless
-`frontend/android/app/google-services.json` exists and names
-`net.familygreenhouse.app`, and it always requires the iOS `aps-environment`
-entitlement.
+Then run `npm run mobile:release -- frontend/.env.mobile.production`. That is
+an **iOS-only push build**: the iOS app registers with APNs, and the Android
+shell built from the same bundle never loads the push plugin, so it needs no
+`google-services.json`. The release validator requires the committed iOS
+`aps-environment` entitlement, and requires both switches to be `false` in the
+committed template.
+
+Once steps 1 and 2 are done and the FCM id is set in step 4, set
+`VITE_NATIVE_PUSH_ANDROID_ENABLED=true` as well. With that, the validator
+refuses to build unless `frontend/android/app/google-services.json` exists and
+names `net.familygreenhouse.app`. The Android switch does nothing on its own:
+a build with it `true` and `VITE_NATIVE_PUSH_ENABLED` not `true` is refused,
+so the file always says what the build does.
 
 ## 6. Test on staging first (optional but recommended)
 
@@ -160,8 +183,8 @@ This is a PR. It takes effect with the next release tag, which you create.
 
 ## 8. Check on a device
 
-On a TestFlight build and a Play internal-testing build carrying step 5, work
-through each of these:
+On a TestFlight build carrying step 5 (and, once Android ships, a Play
+internal-testing build), work through each of these:
 
 1. Settings → Notifications shows **This device → Turn on**, and the Tasks page
    shows the opt-in card while there's care on the list. Nothing is asked at
