@@ -16,7 +16,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
-## [0.40.0] - 2026-10-05
+## [0.40.0] - 2026-10-06
 
 **The public sitter, caretaker, kiosk and plant tag pages now call work that
 is due today "due today" all day, the way the signed-in app does.** Safari no
