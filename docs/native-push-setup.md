@@ -181,6 +181,13 @@ native_push_enabled = true
 
 This is a PR. It takes effect with the next release tag, which you create.
 
+Done for iOS on 2026-10-05, before the section 8 device checks: no public
+build of the app existed yet (Family Greenhouse was not on the App Store), so
+the only build that could register a device was the owner's TestFlight build,
+and production is the environment those checks run against, with build 4001.
+If a check fails, set the switch back to `false` and deploy (see "Turning it
+off again").
+
 ## 8. Check on a device
 
 On a TestFlight build carrying step 5 (and, once Android ships, a Play
