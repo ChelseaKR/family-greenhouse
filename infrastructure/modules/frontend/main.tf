@@ -593,42 +593,6 @@ resource "aws_cloudfront_cache_policy" "frontend" {
   }
 }
 
-# KEPT ON PURPOSE FOR ONE RELEASE (2026-10-02), although nothing references it.
-#
-# Until ADR 0033 (#855) the distribution's /plants/* behavior used this policy.
-# #855 removed that behavior and this resource in the same change, and the
-# v0.38.0 apply failed: Terraform deleted the policy BEFORE updating the
-# distribution that still used it, and CloudFront refused with 409
-# CachePolicyInUse. A deleted resource is destroyed ahead of the in-place update
-# of whatever used to depend on it, so the two cannot go out together.
-#
-# So the release that detaches it (0.38.1) keeps it, unchanged: the plan updates
-# the distribution in place and leaves this alone. Delete this block in a LATER
-# release, once production's distribution no longer names it; that plan then
-# destroys only this policy, which nothing uses. The pinned Terraform (1.5.7)
-# has no `removed` block, so keeping it is the only way to order the two.
-# Every argument must stay exactly as it was, or the plan modifies it.
-resource "aws_cloudfront_cache_policy" "images" {
-  name        = "${var.project_name}-images-${var.environment}"
-  min_ttl     = 86400    # 1 day
-  default_ttl = 604800   # 1 week
-  max_ttl     = 31536000 # 1 year
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "none"
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-    enable_accept_encoding_brotli = true
-    enable_accept_encoding_gzip   = true
-  }
-}
-
 data "aws_cloudfront_origin_request_policy" "cors_s3" {
   name = "Managed-CORS-S3Origin"
 }
