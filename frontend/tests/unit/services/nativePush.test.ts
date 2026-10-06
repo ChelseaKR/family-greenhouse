@@ -44,6 +44,9 @@ describe('native push registration', () => {
     vi.clearAllMocks();
     nativePlugin.callbacks = {};
     localStorage.clear();
+    // A push build on iOS, unless a test says otherwise: registerNativePush()
+    // no-ops in a build that does not carry push for its platform.
+    vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
     (window as unknown as { Capacitor: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'ios',
@@ -66,6 +69,7 @@ describe('native push registration', () => {
     nativePlugin.removeRegistrationError.mockResolvedValue(undefined);
     vi.mocked(api.post).mockResolvedValue({} as never);
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it('attaches both listeners before registering and removes them after saving the token', async () => {
     nativePlugin.register.mockImplementation(async () => {
@@ -123,6 +127,83 @@ describe('native push registration', () => {
       await syncNativePush();
       expect(nativePlugin.checkPermissions).not.toHaveBeenCalled();
       expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('never calls register() in a build that carries push for iOS only, even when turned on', async () => {
+      vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+      (window as unknown as { Capacitor: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'android',
+      };
+      await expect(registerNativePush()).resolves.toBe(false);
+      expect(nativePlugin.requestPermissions).not.toHaveBeenCalled();
+      expect(nativePlugin.register).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+    });
+  });
+
+  // Android cannot register without google-services.json in the binary, and
+  // one web bundle goes into both shells, so an iOS-only push build must say
+  // nothing to Android. The bundle itself carries that answer: the Android
+  // switch, not the deployment's devicePush, is what keeps the plugin unloaded.
+  describe('Android needs its own build switch', () => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+      (window as unknown as { Capacitor: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'android',
+      };
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('is not offered on Android without VITE_NATIVE_PUSH_ANDROID_ENABLED, whatever the deployment says', () => {
+      expect(nativePushOffered({ ios: true, android: true })).toBe(false);
+
+      vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'true');
+      expect(nativePushOffered({ ios: true, android: true })).toBe(true);
+      expect(nativePushOffered({ ios: true, android: false })).toBe(false); // deployment still off
+
+      // The Android switch alone turns nothing on.
+      vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'false');
+      expect(nativePushOffered({ ios: true, android: true })).toBe(false);
+    });
+
+    it('never loads the plugin on Android without the Android switch, even with a stored token', async () => {
+      localStorage.setItem('fg.nativePush.token', 'fcm-token-old');
+      await syncNativePush();
+      expect(nativePlugin.checkPermissions).not.toHaveBeenCalled();
+      expect(nativePlugin.register).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('registers on Android once both switches are on', async () => {
+      vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'true');
+      nativePlugin.register.mockImplementation(async () => {
+        nativePlugin.callbacks.registration?.({ value: 'fcm-token-1' });
+      });
+
+      await expect(registerNativePush()).resolves.toBe(true);
+
+      expect(api.post).toHaveBeenCalledWith('/notifications/devices', {
+        platform: 'android',
+        token: 'fcm-token-1',
+      });
+    });
+
+    it('does not change iOS: the first switch alone registers there', async () => {
+      (window as unknown as { Capacitor: unknown }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+      };
+      expect(nativePushOffered({ ios: true, android: false })).toBe(true);
+      nativePlugin.register.mockImplementation(async () => {
+        nativePlugin.callbacks.registration?.({ value: 'apns-token-1' });
+      });
+      await expect(registerNativePush()).resolves.toBe(true);
+      expect(api.post).toHaveBeenCalledWith('/notifications/devices', {
+        platform: 'ios',
+        token: 'apns-token-1',
+      });
     });
   });
 

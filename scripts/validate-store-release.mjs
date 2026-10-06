@@ -459,12 +459,20 @@ if (templateValues.has('VITE_API_URL')) {
 }
 // Native push is off until the owner setup in docs/native-push-setup.md is
 // done. The template is what every release env is copied from, so it has to
-// say so explicitly: a template that turned it on would ship an Android build
-// that tries to register with no google-services.json in it.
+// say so explicitly, for both switches: a template that turned Android on
+// would ship an Android build that tries to register with no
+// google-services.json in it.
 if (templateValues.get('VITE_NATIVE_PUSH_ENABLED') !== 'false') {
   fail(
     `${envExamplePath} must set VITE_NATIVE_PUSH_ENABLED=false; native push is turned on per ` +
       'build, in the local .env.mobile.production, once docs/native-push-setup.md is done'
+  );
+}
+if (templateValues.get('VITE_NATIVE_PUSH_ANDROID_ENABLED') !== 'false') {
+  fail(
+    `${envExamplePath} must set VITE_NATIVE_PUSH_ANDROID_ENABLED=false; Android push is turned ` +
+      'on per build, in the local .env.mobile.production, once the Firebase steps in ' +
+      'docs/native-push-setup.md are done'
   );
 }
 
@@ -499,9 +507,33 @@ const nativePushHasCallSite = pushCallSites.length > 0;
 // behind VITE_NATIVE_PUSH_ENABLED (frontend/src/services/nativePush.ts), which
 // is false in the committed template. The iOS entitlement is committed, so it
 // is required whenever a call site exists; the Android credential only when a
-// production build actually turns push on.
+// production build actually turns push on FOR ANDROID.
+//
+// iOS first (docs/native-push-setup.md §5): one web bundle goes into both
+// shells, and VITE_NATIVE_PUSH_ENABLED alone turns push on for iOS only. On
+// Android, nativePush.ts also requires VITE_NATIVE_PUSH_ANDROID_ENABLED=true
+// before it loads the plugin or calls register(), so an Android shell built
+// from an iOS-only push bundle never registers, and google-services.json is
+// not needed for it. The bundle carries that answer, which is why the check
+// keys on the variable the bundle reads and not on whether Gradle happens
+// to run (Gradle builds without the file either way, and warns only at info
+// level).
 const nativePushBuildEnabled = process.env.VITE_NATIVE_PUSH_ENABLED === 'true';
+const nativePushAndroidBuildEnabled =
+  nativePushBuildEnabled && process.env.VITE_NATIVE_PUSH_ANDROID_ENABLED === 'true';
 const nativePushIsReachable = nativePushHasCallSite && (!production || nativePushBuildEnabled);
+const nativePushReachableOnAndroid =
+  nativePushHasCallSite && (!production || nativePushAndroidBuildEnabled);
+if (
+  production &&
+  !nativePushBuildEnabled &&
+  process.env.VITE_NATIVE_PUSH_ANDROID_ENABLED === 'true'
+) {
+  fail(
+    'VITE_NATIVE_PUSH_ANDROID_ENABLED=true has no effect while VITE_NATIVE_PUSH_ENABLED is not ' +
+      'true; set both, or neither, so the build says what it does'
+  );
+}
 
 if (nativePushIsReachable) {
   const entitlements = ['frontend/ios/App/App/App.entitlements'].filter((path) =>
@@ -580,10 +612,11 @@ if (production) {
     } catch (error) {
       fail(`Could not validate google-services.json: ${String(error)}`);
     }
-  } else if (nativePushIsReachable) {
+  } else if (nativePushReachableOnAndroid) {
     fail(
-      'VITE_NATIVE_PUSH_ENABLED=true but frontend/android/app/google-services.json is absent; ' +
-        'the Android build could not register for push. See docs/native-push-setup.md'
+      'VITE_NATIVE_PUSH_ANDROID_ENABLED=true but frontend/android/app/google-services.json is ' +
+        'absent; the Android build could not register for push. Add the file (docs/native-push-' +
+        'setup.md §1) or leave the Android switch false for an iOS-only push build'
     );
   }
 }
