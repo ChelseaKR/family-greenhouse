@@ -381,6 +381,27 @@ describe('NotificationSettings', () => {
       }
     });
 
+    it('never shows a UTC alias, not even on the first frame with the stored prefs', async () => {
+      // The value the field holds the moment the form first appears, read
+      // before React's effects run: what a test on a busy machine, or a person,
+      // sees first. It used to be the browser's own name for UTC ("Etc/UTC"),
+      // swapped for the stored "UTC" a moment later.
+      for (const zone of ['Etc/UTC', 'GMT']) {
+        stubBrowserTimeZone(zone);
+        const seen: string[] = [];
+        const observer = new MutationObserver(() => {
+          const field = screen.queryByLabelText<HTMLInputElement>('Timezone');
+          if (field && seen.length === 0) seen.push(field.value);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        const { notificationService } = await renderSettings(prefs());
+        observer.disconnect();
+        expect(seen).toEqual(['UTC']);
+        expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+        cleanupRender();
+      }
+    });
+
     it('falls back to the stored zone, without a write, when the browser cannot resolve one', async () => {
       // Runtime that throws.
       resolvedOptionsSpy.mockImplementation(() => {

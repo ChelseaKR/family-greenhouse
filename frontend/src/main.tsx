@@ -21,6 +21,7 @@ import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
 import { useAuthStore } from './store/authStore';
 import { isNativeApp } from './lib/platform';
+import { isAbandonedChunkLoad } from './lib/pageLeaving';
 // Self-hosted brand fonts. Bitter Variable is the display face used in the
 // wordmark and major headlines; Instrument Sans is the body face. Both are loaded
 // at app boot from /node_modules so the page renders in-brand on first
@@ -103,16 +104,25 @@ const app = (
  * Anything else — the empty shell, a first-time visitor — falls through to the
  * plain client render this app has always done.
  */
+// React logs every error a boundary catches. A route's code download that the
+// browser cancelled because the page is being left (Safari reports it as a
+// failed import) is not one: see lib/pageLeaving.ts.
+const rootOptions = {
+  onCaughtError: (error: unknown) => {
+    if (!isAbandonedChunkLoad(error)) console.error(error);
+  },
+};
+
 const prerenderedPath = rootElement.dataset.prerendered;
 const currentPath = window.location.pathname.replace(/(.)\/$/, '$1');
 const rootRedirectsAway =
   currentPath === '/' && (useAuthStore.getState().isAuthenticated || isNativeApp());
 
 if (prerenderedPath !== undefined && prerenderedPath === currentPath && !rootRedirectsAway) {
-  hydrateRoot(rootElement, app);
+  hydrateRoot(rootElement, app, rootOptions);
 } else {
   // Drop any server markup we've decided not to hydrate so React starts from a
   // clean container rather than rendering over it.
   rootElement.replaceChildren();
-  createRoot(rootElement).render(app);
+  createRoot(rootElement, rootOptions).render(app);
 }

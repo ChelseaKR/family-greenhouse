@@ -9,7 +9,7 @@
  * the module header says so.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, resetDb } from '../../src/local-server';
 import { totpCode } from '../../src/local-server-mfa';
 

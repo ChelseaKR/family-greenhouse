@@ -7,7 +7,7 @@
  * and that the secret token is returned exactly once.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import {
   app,
   db,

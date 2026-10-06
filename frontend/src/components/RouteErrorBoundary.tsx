@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { reportFrontendError } from '@/services/frontendTelemetry';
+import { isAbandonedChunkLoad } from '@/lib/pageLeaving';
 
 /**
  * Catches errors thrown while loading or rendering a lazy route. Suspense
@@ -29,6 +30,9 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error): void {
+    // The page is being left and took this route's code download with it:
+    // not a failure anyone will see, so not one to report.
+    if (isAbandonedChunkLoad(error)) return;
     reportFrontendError(error);
     console.error('[route-boundary]', error);
   }

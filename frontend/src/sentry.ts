@@ -33,6 +33,7 @@
  *    promise no session recordings, so both replay rates are pinned to 0 and
  *    adding the replay integration later cannot quietly turn recording on.
  */
+import { isAbandonedChunkLoad } from '@/lib/pageLeaving';
 import type { Breadcrumb, BrowserOptions, ErrorEvent } from '@sentry/react';
 import {
   normalizeTelemetryRoute,
@@ -77,6 +78,17 @@ export function scrubSentryUrl(value: unknown): unknown {
  * person. Runs after the SDK's own integrations have enriched the event, so it
  * sees the `request` block the HttpContext integration adds.
  */
+/**
+ * Sentry's `beforeSend`: drop a code download the browser cancelled because
+ * the page is being left (not a crash: lib/pageLeaving.ts), scrub the rest.
+ */
+export function sentryBeforeSend(
+  event: ErrorEvent,
+  hint: { originalException?: unknown }
+): ErrorEvent | null {
+  return isAbandonedChunkLoad(hint.originalException) ? null : scrubSentryEvent(event);
+}
+
 export function scrubSentryEvent(event: ErrorEvent): ErrorEvent {
   // Nothing here calls `Sentry.setUser`, and `dataCollection.userInfo` is off;
   // this makes sure a future call cannot re-attach an identity either.
@@ -128,7 +140,7 @@ export async function initSentry(): Promise<void> {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     dataCollection: SENTRY_DATA_COLLECTION,
-    beforeSend: scrubSentryEvent,
+    beforeSend: sentryBeforeSend,
     beforeBreadcrumb: scrubSentryBreadcrumb,
   });
 }

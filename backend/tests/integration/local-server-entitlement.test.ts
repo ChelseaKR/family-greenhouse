@@ -23,7 +23,7 @@
  * everyone, plus the lifetime floor where the floor is what is at stake.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import {
   app,
   db,
