@@ -322,7 +322,11 @@ test.describe('Mobile-first UX correctness', () => {
           '/account',
         ]) {
           await page.goto(route);
-          await page.locator('body').waitFor({ state: 'visible' });
+          // These pages load their code after the shell; measured before it
+          // has arrived, the page is empty and the checks pass on nothing.
+          // Not every one of them has a `main` (Welcome), so wait for the
+          // network to go quiet, as the public-pages loop does.
+          await page.waitForLoadState('networkidle');
           await expectNoDocumentOverflow(page, `${viewport.name} ${route}`);
           await expectMinimumControlTargets(page, `${viewport.name} ${route}`);
         }

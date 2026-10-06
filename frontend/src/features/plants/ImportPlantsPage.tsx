@@ -334,7 +334,7 @@ function ImportFlow() {
             ref={fileInputRef}
             type="file"
             accept=".csv,.json,text/csv,application/json"
-            className="sr-only"
+            className="hidden"
             aria-label={t('importPlants.browse')}
             onChange={(e) => {
               const file = e.target.files?.[0];
