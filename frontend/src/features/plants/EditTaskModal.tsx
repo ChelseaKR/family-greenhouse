@@ -1,4 +1,5 @@
 import { Fragment, useEffect } from 'react';
+import { NumberStepper } from '@/components/NumberStepper';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm } from 'react-hook-form';
@@ -58,6 +59,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<TaskFormInput, unknown, TaskFormData>({
     resolver: zodResolver(taskSchema),
@@ -183,15 +185,26 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                     />
                   )}
 
-                  <Input
-                    label="Frequency (days)"
-                    type="number"
-                    inputMode="numeric"
+                  <NumberStepper
+                    value={Number(watch('frequency'))}
                     min={1}
                     max={365}
-                    error={errors.frequency?.message}
-                    {...register('frequency')}
-                  />
+                    onStep={(next) =>
+                      setValue('frequency', next, { shouldDirty: true, shouldValidate: true })
+                    }
+                    decreaseLabel={t('tasks.frequencyStepper.less')}
+                    increaseLabel={t('tasks.frequencyStepper.more')}
+                  >
+                    <Input
+                      label="Frequency (days)"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={365}
+                      error={errors.frequency?.message}
+                      {...register('frequency')}
+                    />
+                  </NumberStepper>
 
                   <fieldset className="rounded-md border border-primary-100 p-3">
                     <legend className="px-1 text-sm font-medium text-ink">

@@ -1041,6 +1041,10 @@
       "daysOverdue_many": "{{count}} días de retraso",
       "assignedTo": "Asignada a {{name}}",
       "assignedToYou": "Asignada a ti"
+    },
+    "frequencyStepper": {
+      "less": "Un día menos",
+      "more": "Un día más"
     }
   },
   "today": {
