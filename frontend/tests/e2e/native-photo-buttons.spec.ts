@@ -204,6 +204,11 @@ for (const device of DEVICES) {
         await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, Plants`);
         await monstera.click();
         await expect(page).toHaveURL(/\/plants\/[^/]+$/);
+        // The URL changes before the plant page's chunk has loaded, and until
+        // it has, the Plants list is still on screen with its own "More plant
+        // actions" menu. Wait for the plant page itself, so the menu below
+        // (and the overflow check) is the plant page's and not the list's.
+        await expect(page.getByRole('heading', { level: 1, name: /monstera/i })).toBeVisible();
         await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page`);
 
         // On the plant page the two photo actions are in its "…" menu now,

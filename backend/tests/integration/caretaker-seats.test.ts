@@ -190,6 +190,26 @@ describe('caretaker public surface', () => {
     }
   });
 
+  it('never shows a plant’s private notes, or a task’s, on the caretaker page', async () => {
+    entitleSeedHousehold();
+    const auth = await loginAsSeed();
+    const seat = await createSeat(auth);
+    const SECRET = 'PRIVATE-NOTE-do-not-leak-7c';
+    const plant = db.plants.get(seedPlantId)!;
+    plant.notes = `${SECRET} plant`;
+    plant.careRule = null; // no house rule: nothing may fall back to the notes
+    const task = db.tasks.get(seedTaskId)!;
+    task.notes = `${SECRET} task`;
+    task.nextDue = new Date(Date.now() - 60_000).toISOString();
+
+    const view = await request(app).get(`/caretaker/${seat.token}`);
+    expect(view.status).toBe(200);
+    // The seeded plant's task IS on the page, so its absence below means
+    // the notes were withheld, not that the plant was missing.
+    expect(view.body.tasks.map((t: { taskId: string }) => t.taskId)).toContain(seedTaskId);
+    expect(JSON.stringify(view.body)).not.toContain(SECRET);
+  });
+
   it('answers one generic 404 for malformed, unknown, expired and revoked tokens', async () => {
     entitleSeedHousehold();
     const auth = await loginAsSeed();
