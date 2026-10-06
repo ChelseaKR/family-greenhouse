@@ -83,6 +83,16 @@ export function hasNativePresent(): boolean {
 }
 
 /**
+ * True inside the iOS app when a web form can be drawn as a native sheet
+ * (NativeChrome's `presentForm`): Add care task then opens as one. An app
+ * built before the method existed answers false and keeps the web dialog.
+ * Never true on the website.
+ */
+export function hasNativeFormSheet(): boolean {
+  return hasNativeChromeMethod('presentForm');
+}
+
+/**
  * True inside the iOS app when the navigation bar can carry a screen's own
  * menus and search field (NativeChrome's `setBarTools`): the Plants list
  * then puts its Filter and More menus and its search in the native bar

@@ -403,7 +403,8 @@ The plugin's API, in full:
 | native -> web | `rightButton`      | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                                                                                                                                  |
 | web -> native | `present`          | `{ token, kind: 'alert' or 'actionSheet', title?, message?, actions: [{ id, title, style: 'default', 'destructive' or 'cancel' }], anchor?: { x, y, width, height } }`, answered `{ id }`: the tapped action, or null for no choice. See "Alerts and action sheets (iOS)"                                                     |
 | web -> native | `updatePresented`  | `{ token, title?, message? }`: new words for the alert showing                                                                                                                                                                                                                                                                |
-| web -> native | `dismissPresented` | `{ token }`: the web closed it; it answers no choice                                                                                                                                                                                                                                                                          |
+| web -> native | `dismissPresented` | `{ token }`: the web closed it (an alert or a form sheet); it answers no choice                                                                                                                                                                                                                                               |
+| web -> native | `presentForm`      | `{ token, title, message?, cancel, submit, fields }`, answered `{ values }` or `{ values: null }` (see "Form sheets")                                                                                                                                                                                                         |
 | web -> native | `setBarTools`      | `{ path, menus: [{ id, label, symbol, groups: [{ title?, items: [{ id, label, checked? }] }] }], search: { placeholder, text } or null }`: a screen's own pull-down menus beside the "+" and its search field (Plants' Filter and More menus). Empty `menus` with `search: null` removes them. See `config/nativeBarTools.ts` |
 | native -> web | `barMenuSelect`    | `{ path, id }`: an item of those menus was picked (only ids the web sent)                                                                                                                                                                                                                                                     |
 | native -> web | `barSearch`        | `{ path, text }`: the bar's search text changed ('' on Cancel)                                                                                                                                                                                                                                                                |
@@ -485,8 +486,29 @@ The dialogs keep their props, so their callers do not change; `ConfirmDialog`
 and `RemovePlantDialog` render `NativeDialog` (a lazy chunk the website never
 downloads) when `hasNativePresent()` is true, which needs the iOS app with the
 NativeChrome plugin listing `present`. Everywhere else, the web dialogs render
-exactly as before. Forms (Add care task, Edit plant, Move plants and the rest)
-are still web dialogs in the app.
+exactly as before. Forms other than Add care task (Edit plant, Move plants
+and the rest) are still web dialogs in the app.
+
+### Form sheets
+
+Add care task is a native form sheet in the app (NativeChrome `presentForm`,
+`ios/App/App/NativeFormSheet.swift`): a grouped form in a sheet with a
+grabber, medium and large detents, and Cancel and Add in the sheet's own bar.
+The web owns the words, the choices and the starting values
+(`frontend/src/config/nativeFormSheet.ts`) and saves through the same request
+as the web form; Swift only draws the fields and hands the values back.
+
+The rule both sides keep: **only the sheet's own submit button reports
+values**, and only with every required field that shows filled in (the
+button is disabled until then). Cancel, a swipe down, the web closing it, or
+another sheet or alert replacing it answer `{ values: null }`
+(`NativeFormSheetModel.swift`, plain Swift that compiles on its own with
+`swiftc`), and the web accepts values only if they are exactly what this form
+sends (`formSheetValues`); anything else closes the form without writing. A
+save the server refuses opens the sheet again with what was entered and the
+reason. Unlike an alert, a form sheet is not closed when the app goes to the
+background, so nothing typed is lost. An app built before `presentForm`, and
+the website, keep the web dialog.
 
 ### Fresh data, offline and unreachable
 

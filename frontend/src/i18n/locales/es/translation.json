@@ -1045,6 +1045,16 @@
     "frequencyStepper": {
       "less": "Un día menos",
       "more": "Un día más"
+    },
+    "formSheet": {
+      "addTitle": "Añadir tarea de cuidado",
+      "add": "Añadir",
+      "type": "Tarea",
+      "customName": "Nombre de la tarea",
+      "howOften": "Con qué frecuencia",
+      "everyDay": "Cada día",
+      "everyNDays": "Cada {n} días",
+      "notes": "Notas"
     }
   },
   "today": {
