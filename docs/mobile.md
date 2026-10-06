@@ -671,9 +671,11 @@ a refused refresh), leaves the household it was registered under, or deletes
 the account, and when APNs or FCM reports it dead. The full table is in
 `docs/notifications.md`.
 
-**Not verified end to end.** Nothing has been sent to a real device yet.
-Step 8 of the setup doc is that check, and it comes before
-`native_push_enabled = true` in production.
+**Not yet verified end to end.** `native_push_enabled` was set to `true` in
+production on 2026-10-05, before the setup doc's step 8 device checks, because
+no public build existed to be affected: only the owner's TestFlight build could
+register a device. Step 8 runs against production with build 4001. Until it
+passes, treat push as unverified and keep the store listing's email-only line.
 
 ## Store submission checklist
 

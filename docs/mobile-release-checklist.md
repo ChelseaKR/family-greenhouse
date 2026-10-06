@@ -34,9 +34,10 @@
 - [ ] The iPhone screenshots match this build's UI. If the UI changed since
       they were taken, run `npm run store:screenshots:ios --workspace frontend`
       and look at all eight frames (`store-assets/README.md`).
-- [ ] Listing still says reminders are email-only. Native push is not
-      implemented and production SMS is off, so this stays true until
-      `docs/mobile.md`'s push work ships.
+- [ ] Listing still says reminders are email-only. Native push is built and
+      switched on for iOS in production (2026-10-05) but not yet verified on a
+      device, and production SMS is off, so this stays true until
+      `docs/native-push-setup.md` step 8 passes; then the listing changes.
 - [x] Android API 36 release bundle compiles with JDK 21.
 - [ ] Apple Developer and Google Play accounts have accepted current
       agreements. Apple: enrolled and approved (Team ID `6X5YH93QNM`); the

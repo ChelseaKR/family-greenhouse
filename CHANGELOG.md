@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Native push is switched on in production for iOS.** `native_push_enabled`
+  is `true`, so the households, notifications and reminders Lambdas get
+  `NATIVE_PUSH_ENABLED = "true"` and the API reports `devicePush.ios: true`
+  to app builds made with `VITE_NATIVE_PUSH_ENABLED=true`. It went on before
+  the device checks in `docs/native-push-setup.md` because no public build of
+  the app existed yet; only the owner's TestFlight build can register a
+  device. Android stays off. The store listing's reminders line is unchanged
+  until the checks pass. The secret name and the IAM grant came with #956.
+
 ## [0.39.0] - 2026-10-04
 
 **On a phone, Plants and Tasks now lead with what needs care today, and every
