@@ -195,7 +195,19 @@ async function expectNoA11yViolations(page: Page, label: string) {
         calmFrames += 1;
       } else {
         calmFrames = 0;
-        await Promise.allSettled(running.map((animation) => animation.finished));
+        // Never wait on `Animation.finished`: Chromium settles it only in a
+        // frame, and a transition on an item of a <details> menu that closed
+        // before its first frame (the plant page's "…" menu, on the way to
+        // a dialog) never gets one, so the promise stays pending for good
+        // while the page is idle (#955, #883). Ask for a frame instead, which
+        // makes Chromium produce one, and read the states again.
+        await new Promise<void>((resolve) => {
+          const fallback = setTimeout(resolve, 100);
+          requestAnimationFrame(() => {
+            clearTimeout(fallback);
+            resolve();
+          });
+        });
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -310,7 +322,11 @@ test.describe('Mobile-first UX correctness', () => {
           '/account',
         ]) {
           await page.goto(route);
-          await page.locator('body').waitFor({ state: 'visible' });
+          // These pages load their code after the shell; measured before it
+          // has arrived, the page is empty and the checks pass on nothing.
+          // Not every one of them has a `main` (Welcome), so wait for the
+          // network to go quiet, as the public-pages loop does.
+          await page.waitForLoadState('networkidle');
           await expectNoDocumentOverflow(page, `${viewport.name} ${route}`);
           await expectMinimumControlTargets(page, `${viewport.name} ${route}`);
         }
