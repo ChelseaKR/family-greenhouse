@@ -22,16 +22,16 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:start -->
 
-| Plugin                          | What it backs                                                                                                                                             |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@capacitor/app`                | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below. |
-| `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
-| `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).      |
-| `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                        |
-| `@capacitor/push-notifications` | APNs/FCM device-token registration and notification taps (`frontend/src/services/nativePush.ts`). Off until setup — see "Push notifications" below.       |
-| `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                    |
-| `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                       |
-| `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).             |
+| Plugin                          | What it backs                                                                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@capacitor/app`                | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below.                                                                      |
+| `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant, the leaf health check, the sitter photo page and the caretaker page (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
+| `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).                                                                           |
+| `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                                                                                             |
+| `@capacitor/push-notifications` | APNs device-token registration and notification taps (`frontend/src/services/nativePush.ts`). On for iOS from build 4001, off for Android — see "Push notifications" below.                                                    |
+| `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                                                                                         |
+| `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                                                                                            |
+| `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).                                                                                  |
 
 <!-- capacitor-plugins:end -->
 
@@ -65,10 +65,14 @@ before:
 
 ### Photos
 
-**The two plant photo screens are native; the rest are not.** On a plant's
-page (`PlantImageUpload.tsx`) and on Add plant (`AddPlantPage.tsx`), the
+**Every photo screen is native in the shells.** On a plant's page
+(`PlantImageUpload.tsx`), on Add plant (`AddPlantPage.tsx`), on the leaf
+health check (`LeafHealthCard.tsx`), on the sitter photo page
+(`SitterPhotoBack.tsx`) and on the caretaker page (`CaretakerPage.tsx`, which
+asks Take photo or Choose photo in a native sheet anchored on the button), the
 shells show **Take photo** and **Choose photo** in place of the file input
-(`NativePhotoButtons.tsx` over `services/nativeCamera.ts`):
+(`NativePhotoButtons.tsx` over `services/nativeCamera.ts`; the last three
+since #946, in 0.40.0):
 
 - **Take photo** opens the system camera (`Camera.takePhoto`). Nothing is
   saved to the gallery.
@@ -85,10 +89,11 @@ shells show **Take photo** and **Choose photo** in place of the file input
   permission would make the camera intent require a runtime grant it
   otherwise does not need.
 
-The leaf-health check, the sitter photo page and the caretaker page keep the
-WebView `<input type="file">`, and in a browser every photo path is still that
-input. `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
-camera directly from the WebView picker. **`NSCameraUsageDescription` and
+In a browser every photo path is still the WebView `<input type="file">`, and
+an app build from before #946 keeps it on the leaf-health check, the sitter
+photo page and the caretaker page. `LeafHealthCard` adds
+`capture="environment"` to that input, which makes iOS open the camera
+directly from the WebView picker. **`NSCameraUsageDescription` and
 `NSPhotoLibraryUsageDescription` must stay in `Info.plist` for both reasons**:
 iOS terminates the app if a purpose string is missing when either the plugin
 or the WebView picker opens, and the validator requires both, non-empty.
@@ -626,10 +631,9 @@ Greenhouse plans are available on the web" (legal text, owner decision).
 
 ## Push notifications
 
-**Built, and switched off until the owner setup is done.** The steps, the
-secret names, and the device checklist are in
-[`docs/native-push-setup.md`](native-push-setup.md). There are two switches,
-both off by default:
+**On for iOS, off for Android.** The steps, the secret names, and the device
+checklist are in [`docs/native-push-setup.md`](native-push-setup.md). There
+are two switches, both off by default:
 
 - **Deployment:** Terraform `native_push_enabled` (`NATIVE_PUSH_ENABLED` on the
   Lambdas). While it is off, no device push is sent, and the notification
@@ -671,11 +675,16 @@ a refused refresh), leaves the household it was registered under, or deletes
 the account, and when APNs or FCM reports it dead. The full table is in
 `docs/notifications.md`.
 
-**Not yet verified end to end.** `native_push_enabled` was set to `true` in
-production on 2026-10-05, before the setup doc's step 8 device checks, because
-no public build existed to be affected: only the owner's TestFlight build could
-register a device. Step 8 runs against production with build 4001. Until it
-passes, treat push as unverified and keep the store listing's email-only line.
+**Verified end to end on iOS, 2026-10-09.** `native_push_enabled` was set to
+`true` in production on 2026-10-05, before the setup doc's step 8 device
+checks, because no public build existed to be affected: only the owner's
+TestFlight build could register a device. Step 8 then passed against
+production on an iPhone running build 4001, the first build made with
+`VITE_NATIVE_PUSH_ENABLED=true`: the opt-in row and the Tasks card, the
+one-time permission prompt, a reminder delivered as a push with the badge,
+and quiet hours honored. The App Store listing says so from 0.40.0; name push
+in review notes only for a build made with the switch. Android is unverified
+and off.
 
 ## Store submission checklist
 
@@ -758,12 +767,13 @@ passes, treat push as unverified and keep the store listing's email-only line.
     page and on Add plant, the build shows Take photo and Choose photo, which
     open the system camera and the system photo picker (see "Photos" above).
     Mobile Safari only offers a file input.
-  - **What is not an argument.** The WebView file picker that the leaf-health,
-    sitter and caretaker screens still use behaves exactly like mobile
-    Safari's. Opening offline is what a bundled web app does anyway,
-    so it doesn't count as a feature. Push delivery is still off end to end,
-    tracked in
-    [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469).
+  - **What is not an argument.** Opening offline is what a bundled web app
+    does anyway, so it doesn't count as a feature. Push is an argument only for a build
+    made with `VITE_NATIVE_PUSH_ENABLED=true` (4001 onward, verified on an
+    iPhone on 2026-10-09; see "Push notifications" above); a build made
+    without it shows no push UI, and
+    [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) is the
+    record of what claiming it too early costs.
 
   A 4.2 rejection is a multi-week loop. Talk to review, don't resubmit
   blind.

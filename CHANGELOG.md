@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **The App Store listing says reminders also arrive as push notifications
+  on iPhone.** Native push passed the device checks in
+  `docs/native-push-setup.md` (section 8) on 2026-10-09 with build 4001, the
+  first build made with `VITE_NATIVE_PUSH_ENABLED=true`, so the description's
+  reminders section and the release notes in
+  `store-assets/metadata/en-US.json` no longer say push is not part of the
+  release, and the App Review notes in `docs/APP-STORE.md` name push and how
+  to reach a reminder. The Google Play copy is unchanged, because Android
+  push is off. Documentation only; no app code changes.
+
 ## [0.40.0] - 2026-10-06
 
 **The public sitter, caretaker, kiosk and plant tag pages now call work that

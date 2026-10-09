@@ -1,10 +1,10 @@
 # Native push: owner setup
 
-Native push notifications for the iOS and Android apps are **built and switched
-off**. They stay off until every step below is done and checked on a device.
-**iOS goes first** (owner decision, 2026-10-05): the APNs steps are done and
-the Firebase steps are deferred, so the first push build is iOS-only. There
-are three switches, and all default to off:
+Native push notifications are **on for iOS and off for Android**. **iOS went
+first** (owner decision, 2026-10-05): the APNs steps are done, the switch is
+on in production, and build 4001 passed the section 8 device checks on an
+iPhone on 2026-10-09. The Firebase steps are deferred, so every push build so
+far is iOS-only. There are three switches, and all default to off:
 
 | Switch                                           | Where                                                                                                  | Default |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------- |
@@ -216,9 +216,15 @@ Logs to watch (CloudWatch, notification Lambdas):
 - `apns_credentials_unavailable` / `device_push_credentials_unavailable` mean
   the secret isn't readable.
 
+Build 4001 passed on an iPhone on 2026-10-09: the row and the card (1), the
+prompt (2), a reminder delivered with the badge (3) and quiet hours (4).
+Checks 5 and 6 are not recorded here; run them before the next push change.
+
 ## 9. Store listings
 
-Once it's on and verified:
+Done for the App Store with 0.40.0 (the description's REMINDERS section and
+the review notes in `docs/APP-STORE.md`); the Google Play copy waits for
+Android. Once it's on and verified:
 
 - App Store privacy label: **Device ID**, linked to the user, not used for
   tracking, purpose App Functionality. It's already declared in

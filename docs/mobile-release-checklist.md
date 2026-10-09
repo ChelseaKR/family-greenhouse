@@ -34,10 +34,14 @@
 - [ ] The iPhone screenshots match this build's UI. If the UI changed since
       they were taken, run `npm run store:screenshots:ios --workspace frontend`
       and look at all eight frames (`store-assets/README.md`).
-- [ ] Listing still says reminders are email-only. Native push is built and
-      switched on for iOS in production (2026-10-05) but not yet verified on a
-      device, and production SMS is off, so this stays true until
-      `docs/native-push-setup.md` step 8 passes; then the listing changes.
+- [x] The App Store listing says reminders arrive by email and, on iPhone, as
+      push notifications once turned on. Native push passed
+      `docs/native-push-setup.md` step 8 on an iPhone on 2026-10-09 with build
+      4001, the first build made with `VITE_NATIVE_PUSH_ENABLED=true`. Submit
+      that build or a later one made the same way; a build without the switch
+      shows no push UI, and the listing would then overclaim. Android push is
+      off, so the Google Play copy still says reminders are email-only, and
+      production SMS is off.
 - [x] Android API 36 release bundle compiles with JDK 21.
 - [ ] Apple Developer and Google Play accounts have accepted current
       agreements. Apple: enrolled and approved (Team ID `6X5YH93QNM`); the
