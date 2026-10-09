@@ -781,8 +781,43 @@ describe('composeDigestEmail', () => {
 
     const { html, text } = report.composeDigestEmail(emptyReport({ atRisk }), recipient());
     expect(html).toContain('Monstera');
-    expect(html).not.toMatch(/<img\b/i);
+    // The header's brand logo is the only image an email carries.
+    expect(html.match(/<img\b/gi)).toHaveLength(1);
+    expect(html).toContain('/brand/logo-dark.png');
     expect(html + text).not.toContain('/plants/hh/p1/a.jpg');
+  });
+
+  it('never lets a plant\u2019s private notes, care rule, placement or a task note reach any part', async () => {
+    const { leakedSentinels } = await import('../../support/emailHtmlChecks.js');
+    const SENTINELS = [
+      'PRIVATE-PLANT-NOTE-7f3a',
+      'PRIVATE-CARE-RULE-9c1d',
+      'PRIVATE-PLACEMENT-2b8e',
+      'PRIVATE-TASK-NOTE-4d2f',
+    ];
+    vi.mocked(plantService.getPlants).mockResolvedValue([
+      plant({
+        id: 'p1',
+        notes: 'PRIVATE-PLANT-NOTE-7f3a',
+        careRule: 'PRIVATE-CARE-RULE-9c1d',
+        placementNote: 'PRIVATE-PLACEMENT-2b8e',
+      }),
+    ] as never);
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([
+      task({ plantId: 'p1', notes: 'PRIVATE-TASK-NOTE-4d2f' }),
+    ] as never);
+    const atRisk = await report.gatherAtRisk('hh', NOW);
+    expect(atRisk.status).toBe('ok');
+    if (atRisk.status !== 'ok') return;
+    expect(JSON.stringify(atRisk.rows)).not.toMatch(/PRIVATE-/);
+
+    const built = await report.gatherDigestReport('hh', NOW, atRisk);
+    for (const locale of ['en', 'es'] as const) {
+      const message = report.composeDigestEmail(built, recipient({ locale }));
+      // Control: the plant itself did reach the email.
+      expect(message.html).toContain('Monstera');
+      expect(leakedSentinels(message, SENTINELS), locale).toEqual([]);
+    }
   });
 
   it('carries one schedule-drift reading, with both intervals and a deep link', () => {

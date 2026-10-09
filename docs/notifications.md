@@ -42,8 +42,12 @@ holds delivery. The composer is pure — no DynamoDB, no environment — which i
 what makes the rules below testable
 (`backend/tests/unit/services/reminderEmail.test.ts`).
 
-A rendered example, for a member with nine due rows, one of them unclaimed, who
-is covering for someone on holiday:
+The email leg is branded HTML with this text as its `text/plain` twin; see
+[The reminder email](#the-reminder-email) below. The text composition is also
+what push and SMS are cut from.
+
+A rendered example of the text part, for a member with nine due rows, one of
+them unclaimed, who is covering for someone on holiday:
 
 ```
 Subject: Plant care reminder: 3 overdue, 1 due today and 5 coming up,
@@ -99,6 +103,59 @@ catch-up care, 0 coming up soon`; empty buckets are simply omitted.
   Nothing in the backend stores a user language yet, so `reminders.ts` passes
   `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
   read of that field when it lands.
+
+### The reminder email
+
+`reminderEmail.composeReminderMessage` wraps the composition above and adds
+the email: its own subject, an HTML part from the shared kit
+(`services/email/template.ts`) and a text part. `reminders.ts` hands all three
+to `notifier.sendToUser` as `payload.email`, which only the email leg reads;
+push and SMS keep the counts title and bodies.
+
+What a person sees, in English and Spanish:
+
+- **Subject and title say what to do**, named after the most urgent row with
+  the true count of the rest: _Water Monstera and 2 more today_ / _Regar
+  Monstera y 2 más hoy_. "today" is appended only when nothing listed is
+  overdue. A custom task keeps the household's own word (_Mist Monstera_); a
+  task with no readable label gets _Care for Monstera_ / _Cuidar Monstera_; a
+  most-urgent plant whose name could not be read gives a count instead
+  (_3 plants need care today_), never a placeholder name. The counts sentence
+  that used to be the subject is the inbox preview line.
+- **Rows are grouped by state** under headings that ask rather than scold:
+  _Ready for some catch-up care_ (overdue), _Due today_, _Coming up_, _Check
+  the due date_ (a date that could not be read), then _Up for grabs_ with the
+  note that anyone in the household can take those. Each row is the plant name linked to
+  its page, the task and the shared due phrase from `describeRow`
+  (_Water · 6 days overdue_), and a button, _Mark done in the app_ / _Marcar
+  como hecha en la app_, to the plant page where the task is marked done. The
+  label says "in the app" because there is no one-tap complete from email
+  (ADR 0021 defers it to the plant-tag capability); a button must not promise
+  one.
+- **A capped section states the true remainder** as a link, _and 2 more_ /
+  _y 2 más_, to the due-filtered task list. The aged-out note, the cover note,
+  the weather lines (under _Outside today_) and the reply hint follow, then a
+  _See all tasks_ button.
+- **The footer names the household**: _You are getting this because daily
+  plant-care reminders are on for you in The Kim House on Family Greenhouse_,
+  the standing no-password line, and a _Reminder settings_ link to
+  `/settings?section=notifications`. When the household row cannot be read
+  the line says "on Family Greenhouse" and nothing is invented.
+- **The text part is the composition's own body** (the numbered list the
+  reply-to-act path is bound to), the list link, and the same footer. When a
+  reply address is bound, the HTML rows carry the same numbers as the text
+  rows, so a reply can name a row from either part.
+
+The household row is read once per household per run, for the footer's name
+and the forecast's location together; a failed read is logged and the email
+still goes out with the generic footer and no weather line.
+
+Rendered output lives in `backend/test-output/email/` (git-ignored) after
+`backend/tests/unit/services/email/renderedEmails.test.ts` runs; the daily
+reminder is also committed as a golden under
+`backend/tests/unit/services/email/__goldens__/`. `npm run email:preview -w
+backend` renders and then screenshots every email in light mode, dark mode and
+at phone width with headless Chromium.
 
 ### Which day a reminder goes out on (#343)
 
@@ -422,9 +479,10 @@ Set `SES_FROM_EMAIL` to a verified SES identity. The Lambda role needs `ses:Send
 
 Out of the SES sandbox, you can send to anyone. In sandbox mode, the recipient address must also be verified — fine for staging, fatal for production. File a support case to get out of sandbox before launch.
 
-The reminder body is a multi-line list; see "What the reminder actually says"
-above for the layout and the rules it holds. The digest, recap and welcome
-emails compose their own bodies.
+The reminder is branded HTML with a multi-line text twin; see "What the
+reminder actually says" above for the text layout and the rules it holds, and
+"The reminder email" for the HTML. The digest, recap and welcome emails compose
+their own bodies through the same kit.
 
 Replies to an app email reach `support@` via `SES_REPLY_TO` (Terraform:
 `ses_reply_to_email`), which the inbound SES rule set forwards to a human —
@@ -514,23 +572,44 @@ phishing rationale the old text-only policy rested on point by point.
 
 The rendering kit lives in `backend/src/services/email/`:
 
-| File                 | What it owns                                                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `template.ts`        | `renderEmail(doc)` → `{ html, text }`. Blocks: heading, text, notice, row, button, divider. Tables + inline styles, 600px cap, dark-mode palette, preheader. Escapes every interpolated value. |
-| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `unsubscribeUrl`, plus `safeLinkUrl`. No image URLs: an email carries no photos (ADR 0033).            |
-| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                     |
-| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                               |
-| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                           |
-| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                |
-| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                      |
+| File                 | What it owns                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `template.ts`        | `renderEmail(doc, { textBody? })` → `{ html, text }`. Blocks: heading, text, notice, row (with an optional action button), button, link, divider. Tables + inline styles, the brand header band with the logo, the design-token palette on both the light and the dark path, 600px cap, preheader. Escapes every interpolated value. |
+| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `notificationSettingsUrl`, `unsubscribeUrl`, `brandLogoUrl`, plus `safeLinkUrl`. The logo is the one image: a fixed file on our origin, no query string. An email carries no photos (ADR 0033).                                              |
+| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                                                                                                                                                           |
+| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                                                                                                                                                                     |
+| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                                                                                                                                                                 |
+| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                                                                                                                                                      |
+| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                                                                                                                                                            |
 
 The plain-text part is generated from the same block list by its own layout
 rules, so it reads as a real document rather than stripped HTML.
 
-Adopted so far: the welcome email, the weekly digest, the annual recap. The
-reminder and pest-alert payloads still go out text-only through
-`notifier.sendToUser`'s generic `{title, body, url}` shape; converting them
-means giving the notifier a structured payload.
+Adopted so far: the welcome email, the weekly digest, the annual recap, and the
+daily reminder (through `payload.email` on `notifier.sendToUser`, the
+structured part only the email leg reads). The pest-alert payload still goes
+out text-only through the generic `{title, body, url}` shape; the invite,
+household and billing emails compose their own text and have no HTML part yet.
+
+#### What every email promises
+
+The rendering kit's header comment is the contract, and
+`backend/tests/unit/services/email/renderedEmails.test.ts` checks every email
+the kit renders against it, in both languages: table layout, inline styles, no
+script, no remote stylesheet, no web font, no `url()`, no form; the one image
+(the brand logo, with alt text, width and height, on our own origin, no query
+string); `color-scheme` meta and dark-mode rules; absolute http(s) links on our
+origins only, every one present in BOTH parts; and under 100 kB.
+`emailHtmlChecks.test.ts` is that checker's negative control: each rule is fed
+a document that breaks it and must name the problem.
+
+**Private plant notes never reach an email.** A plant's `notes`, `careRule`
+and `placementNote` and a task's `notes` are asserted absent from every part
+of the reminder (end to end through `remindHousehold`), the weekly digest
+(through `gatherAtRisk`) and the up-for-grabs household email (through the
+queue row and `renderQueued`), with a control that the plant itself did reach
+the message. The welcome, invite, billing and recap builders take no plant
+row, so there is nothing of the kind for them to leak.
 
 #### Email language
 

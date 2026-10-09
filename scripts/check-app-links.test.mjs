@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { collectSites, declaredRoutes, matchesRoute, readPath } from './check-app-links.mjs';
+import {
+  collectSites,
+  declaredRoutes,
+  isPublicFile,
+  matchesRoute,
+  readPath,
+} from './check-app-links.mjs';
 
 /** The route table's shape, trimmed to the part #721 turned on. */
 const APP_TSX = [
@@ -132,4 +138,17 @@ test('a path documented in a comment is not a site', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a file under frontend/public/ is a static object the site serves, not a dead route', () => {
+  // The brand logo every email header loads (services/email/links.ts).
+  assert.equal(isPublicFile('/brand/logo-dark.png'), true);
+  assert.equal(isPublicFile('/brand/logo-dark.png?v=2'), true);
+  // A renamed or missing asset is dead here before it is dead in an inbox.
+  assert.equal(isPublicFile('/brand/missing.png'), false);
+  // No extension: still a route question, never a file lookup.
+  assert.equal(isPublicFile('/settings'), false);
+  assert.equal(isPublicFile('/brand'), false);
+  // Nothing outside the public directory can be reached through it.
+  assert.equal(isPublicFile('/../package.json'), false);
 });

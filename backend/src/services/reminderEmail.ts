@@ -46,6 +46,9 @@
  *    from `notifier.sendToUser` inherit the same language.
  */
 import type { HouseholdMember } from '../models/types.js';
+import { t } from './email/catalog.js';
+import { renderEmail, type EmailBlock } from './email/template.js';
+import { REMINDER_EMAIL_COPY, capitalizeFirst } from './reminderEmailCopy.js';
 
 export type ReminderLocale = 'en' | 'es';
 
@@ -573,6 +576,205 @@ export function composeReminderEmail(input: ReminderEmailInput): ReminderComposi
   };
 }
 
+// ---------------------------------------------------------------------------
+// The branded email (HTML + text), on top of the composition above.
+// ---------------------------------------------------------------------------
+
+/** What the email needs beyond the rows: the links its footer and buttons
+ *  carry, and the household's name for the "why you got this" line. All
+ *  handed in, so this file stays free of environment and storage. */
+export interface ReminderMessageContext {
+  /** Null when the household's name could not be read, or it has none:
+   *  the footer then says "a household" rather than inventing one. */
+  householdName: string | null;
+  /** The due-filtered task list: the "and N more" links and the closing button. */
+  tasksUrl: string;
+  /** The notifications tab of settings: the footer's "Reminder settings". */
+  settingsUrl: string;
+}
+
+export interface ReminderMessage extends ReminderComposition {
+  /**
+   * The email's subject: the H1, which says what to do ("Water Monstera and
+   * 2 more today"). `subject` above stays the counts line, which push and
+   * SMS keep as their title.
+   */
+  emailSubject: string;
+  /** The `text/html` part, from `services/email/template.ts`. */
+  html: string;
+  /** The `text/plain` part: `body`, the list link and the shared footer. */
+  text: string;
+}
+
+/**
+ * The title: what to do, named after the most urgent row, with the TRUE
+ * count of the rest. "today" is appended only when nothing in the list is
+ * overdue or unreadable, so the word is never attached to a late task.
+ */
+function emailTitle(rows: ReminderTaskRow[], locale: ReminderLocale): string {
+  const copy = REMINDER_EMAIL_COPY[locale];
+  const format = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const today = rows.every((r) => r.due.kind === 'today' || r.due.kind === 'upcoming');
+  const first = rows[0];
+  if (!first || first.plantName === null) {
+    return copy.titleCount(format(rows.length), rows.length === 1, today);
+  }
+  const task = first.taskLabel ? capitalizeFirst(first.taskLabel, locale) : copy.careVerb;
+  if (rows.length === 1) return copy.titleOne(task, first.plantName, today);
+  return copy.titleMany(task, first.plantName, format(rows.length - 1), today);
+}
+
+/**
+ * Compose the reminder as a complete email: the text composition above, plus
+ * the branded HTML part built from the same rows and the same words.
+ *
+ * Rules, on top of `composeReminderEmail`'s:
+ *
+ *   - **The two parts cannot disagree.** The HTML lists exactly `listed`,
+ *     in the same order, and when `replyHint` numbers the text it numbers the
+ *     HTML the same way, so a reply can name a row from either part. The
+ *     text part IS `body` (the tested, reply-bound list), not a second
+ *     rendering of it.
+ *   - **Overdue work is grouped, not scolded.** Assigned rows are sectioned
+ *     by state — catch-up care, due today, coming up — and the per-row due
+ *     phrase is `describeRow`'s, shared with push and the family chat.
+ *   - **Every row can be acted on.** Each carries a button to its plant,
+ *     where the task is marked done. The label says "in the app": there is
+ *     no one-tap complete from email (ADR 0021 defers it to the plant-tag
+ *     capability), and a button must not promise one.
+ *   - **A cap states the true remainder**, as a link to the full list.
+ */
+export function composeReminderMessage(
+  input: ReminderEmailInput,
+  context: ReminderMessageContext
+): ReminderMessage {
+  const composed = composeReminderEmail(input);
+  const { locale } = input;
+  const copy = REMINDER_EMAIL_COPY[locale];
+  const baseCopy = COPY[locale];
+  const format = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const replyHint = input.replyHint === true;
+
+  const assigned = input.rows.filter((r) => !r.upForGrabs);
+  const unclaimed = input.rows.filter((r) => r.upForGrabs);
+  const listedAssigned = composed.listed.filter((r) => !r.upForGrabs);
+  const listedUnclaimed = composed.listed.filter((r) => r.upForGrabs);
+
+  const rowBlock = (row: ReminderTaskRow): EmailBlock => {
+    const described = describeRow(row, locale);
+    const number = replyHint ? `${composed.listed.indexOf(row) + 1}. ` : '';
+    return {
+      kind: 'row',
+      title: `${number}${described.plant}`,
+      href: row.url,
+      // The task and the shared due phrase, e.g. "Water · 6 days overdue". A
+      // format rather than copy: the joiner is the same in every language.
+      lines: [`${capitalizeFirst(described.task, locale)} · ${described.due}`],
+      action: { label: copy.markDone, href: row.url },
+    };
+  };
+
+  const blocks: EmailBlock[] = [];
+  const summary = summaryClause(countRows(input.rows), locale);
+  if (summary) blocks.push({ kind: 'text', text: baseCopy.summarySentence(summary) });
+
+  const sections: Array<[string, ReminderTaskRow[]]> = [
+    [copy.headingCatchUp, listedAssigned.filter((r) => r.due.kind === 'overdue')],
+    [copy.headingToday, listedAssigned.filter((r) => r.due.kind === 'today')],
+    [copy.headingSoon, listedAssigned.filter((r) => r.due.kind === 'upcoming')],
+    // An unreadable due date is its own group, last (that is where the
+    // composition sorts it, and the numbers must stay in order): it is the
+    // row most in need of a look, its heading says what to do, and its own
+    // phrase says the date could not be read, so it is never presented as
+    // late.
+    [copy.headingUnknown, listedAssigned.filter((r) => r.due.kind === 'unknown')],
+  ];
+  for (const [headingText, rows] of sections) {
+    if (rows.length === 0) continue;
+    blocks.push({ kind: 'heading', text: headingText });
+    for (const row of rows) blocks.push(rowBlock(row));
+  }
+  if (listedAssigned.length < assigned.length) {
+    const rest = assigned.length - listedAssigned.length;
+    blocks.push({
+      kind: 'link',
+      label: copy.andMore(format(rest), rest === 1),
+      href: context.tasksUrl,
+    });
+  }
+
+  if (listedUnclaimed.length > 0) {
+    blocks.push({ kind: 'heading', text: copy.headingUnclaimed });
+    blocks.push({ kind: 'text', text: copy.unclaimedIntro, tone: 'muted' });
+    for (const row of listedUnclaimed) blocks.push(rowBlock(row));
+    if (listedUnclaimed.length < unclaimed.length) {
+      const rest = unclaimed.length - listedUnclaimed.length;
+      blocks.push({
+        kind: 'link',
+        label: copy.andMore(format(rest), rest === 1),
+        href: context.tasksUrl,
+      });
+    }
+  }
+
+  if (input.restingCount > 0) {
+    blocks.push({
+      kind: 'text',
+      tone: 'muted',
+      text: baseCopy.restingNote(
+        format(input.restingCount),
+        input.restingCount === 1,
+        format(input.restingAfterDays)
+      ),
+    });
+  }
+
+  for (const line of coveringLines(input.covering, locale, input.timeZone)) {
+    blocks.push({ kind: 'text', text: line });
+  }
+
+  const climate = climateLines(input.climate, locale);
+  if (climate.length > 0) {
+    blocks.push({ kind: 'heading', text: copy.headingOutside });
+    for (const line of climate) blocks.push({ kind: 'text', text: line });
+  }
+
+  if (replyHint && composed.listed.length > 0) {
+    blocks.push({
+      kind: 'text',
+      tone: 'muted',
+      text: composed.listed.length === 1 ? baseCopy.replyHintOne : baseCopy.replyHintMany,
+    });
+  }
+
+  blocks.push({ kind: 'button', label: copy.seeAll, href: context.tasksUrl });
+
+  const emailSubject = emailTitle(input.rows, locale);
+  const household = context.householdName?.trim();
+  const { html, text } = renderEmail(
+    {
+      locale,
+      title: emailSubject,
+      // The counts line, which used to be the subject, is the preview text:
+      // subject says what to do, preview says how much there is.
+      preheader: summary ? `${capitalizeFirst(summary, locale)}.` : baseCopy.subjectPrefix,
+      blocks,
+      footer: {
+        reason: household
+          ? t(locale, 'footer.reason.reminder', { household })
+          : t(locale, 'footer.reason.reminderGeneric'),
+        safety: t(locale, 'footer.safety'),
+        links: [{ label: t(locale, 'footer.manageReminders'), href: context.settingsUrl }],
+      },
+    },
+    // The text part is the composition's own body plus the list link, exactly
+    // what the email leg sent before it had an HTML part.
+    { textBody: `${composed.body}\n\n${context.tasksUrl}` }
+  );
+
+  return { ...composed, emailSubject, html, text };
+}
+
 /**
  * Resolve one away-assignee's display name.
  *
@@ -591,4 +793,4 @@ export function resolveCoveredName(
   return fromTask ? fromTask : null;
 }
 
-export const __testing = { COPY, summaryFragments, formatAwayUntil };
+export const __testing = { COPY, summaryFragments, formatAwayUntil, emailTitle };

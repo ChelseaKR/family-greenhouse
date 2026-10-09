@@ -409,6 +409,60 @@ describe('upForGrabsHousehold', () => {
     expect(pks).toEqual(['USER#u1', 'USER#u2']);
   });
 
+  it('never lets a plant\u2019s private notes, care rule, placement or a task note reach the email', async () => {
+    const { leakedSentinels } = await import('../../support/emailHtmlChecks.js');
+    const SENTINELS = [
+      'PRIVATE-PLANT-NOTE-7f3a',
+      'PRIVATE-CARE-RULE-9c1d',
+      'PRIVATE-PLACEMENT-2b8e',
+      'PRIVATE-TASK-NOTE-4d2f',
+    ];
+    const taskService = await import('../../../src/services/taskService.js');
+    const plantService = await import('../../../src/services/plantService.js');
+    vi.mocked(taskService.getTasksDueBy).mockResolvedValue([
+      { ...unassignedTask, notes: 'PRIVATE-TASK-NOTE-4d2f' },
+    ] as never);
+    vi.mocked(plantService.getPlants).mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'Monstera',
+        notes: 'PRIVATE-PLANT-NOTE-7f3a',
+        careRule: 'PRIVATE-CARE-RULE-9c1d',
+        placementNote: 'PRIVATE-PLACEMENT-2b8e',
+      },
+    ] as never);
+    const { upForGrabsHousehold, renderQueued } =
+      await import('../../../src/services/householdEmails.js');
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+
+    expect(await upForGrabsHousehold('hh', NOW)).toBe('queued');
+    // The queue write is an UpdateCommand carrying the item as `:one`.
+    const values = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) =>
+          (c[0] as { input: { ExpressionAttributeValues?: Record<string, unknown> } }).input
+            .ExpressionAttributeValues
+      )
+      .find((v) => v?.[':entityType'] === 'HouseholdEmailQueueItem');
+    expect(values).toBeDefined();
+    // The queued row is what gets rendered later: nothing private may be stored on it.
+    expect(JSON.stringify(values)).not.toMatch(/PRIVATE-/);
+    const queued = {
+      kind: values?.[':kind'] as 'up_for_grabs',
+      items: values?.[':one'] as string[],
+      overflow: 0,
+    };
+
+    for (const locale of ['en', 'es'] as const) {
+      const message = renderQueued(queued, locale, NOW);
+      expect(message).not.toBeNull();
+      // Control: the plant itself did reach the email.
+      expect(message?.text).toContain('Monstera');
+      expect(leakedSentinels(message ?? {}, SENTINELS), locale).toEqual([]);
+    }
+  });
+
   it('queries a week ahead, not the reminder window', async () => {
     const taskService = await import('../../../src/services/taskService.js');
     vi.mocked(taskService.getTasksDueBy).mockResolvedValue([] as never);
