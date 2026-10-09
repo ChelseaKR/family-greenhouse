@@ -22,16 +22,17 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:start -->
 
-| Plugin                          | What it backs                                                                                                                                                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@capacitor/app`                | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below.                                                                      |
-| `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant, the leaf health check, the sitter photo page and the caretaker page (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
-| `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).                                                                           |
-| `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                                                                                             |
-| `@capacitor/push-notifications` | APNs device-token registration and notification taps (`frontend/src/services/nativePush.ts`). On for iOS from build 4001, off for Android — see "Push notifications" below.                                                    |
-| `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                                                                                         |
-| `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                                                                                            |
-| `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).                                                                                  |
+| Plugin                                | What it backs                                                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@aparajita/capacitor-secure-storage` | The refresh token, in the iOS keychain and the Android keystore, so the app stays signed in across launches (`frontend/src/services/sessionVault.ts`). See "Staying signed in" below.                                          |
+| `@capacitor/app`                      | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below.                                                                      |
+| `@capacitor/camera`                   | The native camera and system photo picker for plant photos on the plant page and Add plant, the leaf health check, the sitter photo page and the caretaker page (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
+| `@capacitor/haptics`                  | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).                                                                           |
+| `@capacitor/keyboard`                 | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                                                                                             |
+| `@capacitor/push-notifications`       | APNs device-token registration and notification taps (`frontend/src/services/nativePush.ts`). On for iOS from build 4001, off for Android — see "Push notifications" below.                                                    |
+| `@capacitor/share`                    | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                                                                                         |
+| `@capacitor/splash-screen`            | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                                                                                            |
+| `@capacitor/text-zoom`                | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).                                                                                  |
 
 <!-- capacitor-plugins:end -->
 
@@ -373,7 +374,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Status bar         | The app has no dark theme, so the bar follows the surface under it, not the system appearance: light icons on the launch screen and the drawer, dark icons on the app. iOS declares `UIUserInterfaceStyle` Light; Android's theme is Light with the page's paper background.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Keyboard           | `@capacitor/keyboard` resizes the iOS WebView above the keyboard (its default `native` mode); Capacitor's SystemBars pads the Android one by the IME inset. `nativeShell.ts` then scrolls the focused field to the middle of what is left. The plugin hides the iOS Prev / Next / Done bar on load with no setting to stop it, so `restoreKeyboardAccessoryBar()` turns it back on at launch.                                                                                                                                                                                                                                                                                                                                                                                          |
 | Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login. The refresh token is kept in the device keychain and read back at launch, so the app stays signed in until sign-out (ADR 0034). See "Staying signed in" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Text size          | iOS: WKWebView ignores Dynamic Type, so `useNativeTextSize` reads the preferred size through `@capacitor/text-zoom` on launch and on every return to the foreground, and applies it as the page's text-size adjustment, every size from the smallest to AX5 (about 312%), with no cap: a layout that clips at a large size is fixed by wrapping or scrolling, never by a smaller size (owner decision, 2026-09-18). From AX1 up `<html data-text-size="large">` switches on the `large-text:` variant (index.css), which stacks side-by-side rows and lets the top bar scroll away. `tests/e2e/largest-text.spec.ts` holds the main screens at 312% in English and Spanish. Android's WebView already applies the system font scale.                                                   |
 | Screen readers     | The navigation drawer is announced by name ("Main navigation"), not as an unnamed dialog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -542,6 +543,42 @@ honest about its age:
 
 The notice shows on the website too. The resume refresh and pull to refresh
 are native only.
+
+### Staying signed in
+
+A WebView drops `sessionStorage` whenever the app process ends (a force quit,
+a reboot, iOS reclaiming memory), and `sessionStorage` is where the website
+keeps the refresh token unless "Keep me signed in" is ticked. So every cold
+start of the app more than an hour after the last one, when the ID token had
+expired, began on the sign-in screen (ADR 0034). Inside the shells:
+
+- **The refresh token lives in the device keychain** (iOS keychain, Android
+  Keystore), through `@aparajita/capacitor-secure-storage`, and in no web
+  storage (`services/sessionVault.ts`). The item is readable only after the
+  device's first unlock, is in no backup, and is not synced. The user and the
+  short-lived tokens stay in `localStorage`, so the first render already
+  knows the person is signed in and shows the loading state, never the
+  sign-in screen, while the keychain is read.
+- **A launch reads the keychain before judging the session**
+  (`authStore.verifySession`), and the api interceptor waits for the same
+  read before deciding there is nothing to refresh with. A known-expired ID
+  token goes straight to the refresh (`lib/jwtExpiry.ts`); an offline launch
+  keeps the session, as before.
+- **Sign-out removes the item.** A refused refresh is a full sign-out. A
+  reinstall is a fresh start: with no session in `localStorage`, a token the
+  keychain kept through the reinstall is dropped, not used.
+- **The sign-in screen does not ask.** Instead of the website's checkbox it
+  says "This device stays signed in until you sign out." The website keeps
+  its opt-in.
+- **The Cognito client's refresh-token validity is 365 days** (was 30). It is
+  fixed at sign-in and not extended on use, so a phone signs in again once a
+  year.
+
+To check on a device: sign in, force quit, reopen (signed in, no sign-in
+flash); reboot the phone, reopen (same); wait past an hour, reopen (same,
+with one silent refresh); sign out, reopen (sign-in screen).
+`tests/e2e/native-stays-signed-in.spec.ts` plays the same sequence with the
+shell pretended.
 
 ## Store payment rules (read before touching billing UI)
 

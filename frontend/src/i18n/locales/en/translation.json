@@ -319,6 +319,7 @@
     "password": "Password",
     "forgotPassword": "Forgot your password?",
     "keepSignedIn": "Keep me signed in on this device",
+    "staysSignedInHere": "This device stays signed in until you sign out.",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required",
     "signUpFree": "Sign up free",

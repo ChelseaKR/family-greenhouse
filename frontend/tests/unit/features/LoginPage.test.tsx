@@ -360,3 +360,29 @@ describe('LoginPage — passkeys (#671)', () => {
     expect(sent.start).toHaveLength(0);
   });
 });
+
+describe('LoginPage — staying signed in (ADR 0034)', () => {
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it('asks on the website, off by default', () => {
+    renderLogin();
+    const box = screen.getByRole('checkbox', { name: /keep me signed in on this device/i });
+    expect(box).not.toBeChecked();
+  });
+
+  it('inside the shells says the device stays signed in instead of asking', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    renderLogin();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/this device stays signed in until you sign out\./i)
+    ).toBeInTheDocument();
+    // Password recovery is still one tap away.
+    expect(screen.getByRole('link', { name: /forgot/i })).toBeInTheDocument();
+  });
+});

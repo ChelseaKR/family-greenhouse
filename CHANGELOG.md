@@ -16,6 +16,42 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **The Terraform plan changes one attribute of the Cognito app client.**
+  `module.auth.aws_cognito_user_pool_client.main` updates in place with
+  `refresh_token_validity: 30 => 365` (days), from
+  `infrastructure/modules/auth/main.tf` (ADR 0034). Alongside the usual 19
+  Lambda `GIT_SHA` updates, expect `Plan: 0 to add, 20 to change, 0 to
+destroy.` Anything else means stop. Tokens issued before the apply keep
+  the 30 days they were issued with; the first sign-in after it gets a year.
+  No stored data changes shape.
+- **The app-only changes reach people through store builds**, not through
+  this tag's web deploy. The web deploy carries the code, which does nothing
+  on the website. A device signed in under an older build signs in once more
+  on the first launch of the new one (its refresh token was in the WebView's
+  `sessionStorage`, which the update dropped); after that it stays.
+
+### Added
+
+- **iOS and Android apps: the app stays signed in (ADR 0034).** Opening the
+  app used to mean signing in again whenever more than an hour had passed:
+  the refresh token lived in the WebView's `sessionStorage`, which ends with
+  the app process, and only the hour-long ID token survived a cold start.
+  The apps now keep the refresh token in the iOS keychain or the Android
+  keystore (`@aparajita/capacitor-secure-storage` 8.0.1, pinned; readable
+  after the device's first unlock, in no backup, not synced), read it back
+  at launch before judging the session, and refresh silently with it. A
+  launch never shows the sign-in screen while that happens, and an
+  ID token the client can see has expired goes straight to the refresh,
+  one round trip fewer. Sign-out removes the token; a refused refresh signs
+  the device out; a reinstall starts fresh. The sign-in screen in the apps
+  says "This device stays signed in until you sign out." instead of showing
+  the website's checkbox. The website is unchanged. All JS combined
+  651.64 → 654.5 kB measured; the budget moves 653 → 674 kB.
+- **The store validator recognizes third-party Capacitor plugins.** Any
+  dependency whose package carries a `capacitor` block is now held to the
+  `docs/mobile.md` plugin table and to the iOS and Android link checks, not
+  only the `@capacitor/*` ones.
+
 ### Changed
 
 - **The App Store listing says reminders also arrive as push notifications
