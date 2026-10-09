@@ -656,6 +656,33 @@ would have failed every iOS send. Both run under the `browser` channel of
 per-channel lease) apply unchanged. A reminder sets the app-icon badge to the
 number of tasks it names. The app clears it when opened.
 
+**What a reminder says, and what a tap does.** A reminder about one task
+reads "Water the Monstera" ("Monstera necesita riego") with when it is due
+and what to do next; several tasks get a count and the first two plant names.
+The words are composed in `backend/src/services/reminderCopy.ts` and the
+rules are in `docs/notifications.md` ("What a push notification says").
+Tapping a one-task reminder opens that plant's page at its Care Tasks
+(`/plants/{id}?task={taskId}#care`); several open `/tasks?filter=due`. Both
+are claimed routes (see "Deep links"), so the app opens either way.
+
+**Done and Snooze from the notification (iOS).** A one-task reminder also
+carries two buttons, **Done** and **Snooze until tomorrow**, shown on a
+long-press or a pull-down. `AppDelegate.swift` registers the
+`FG_TASK_REMINDER` category with those two actions at every launch, and the
+backend sets `aps.category` to it on a one-task reminder only. A chosen button
+reaches `nativePush.ts` as `pushNotificationActionPerformed` with `actionId`
+"done" or "snooze", which posts to the task's own complete or snooze endpoint
+with the stored session and the occurrence the reminder was about, so a
+repeat, a tap from two devices, or a tap after someone else did it is a no-op
+on the server. The buttons do not open the app: iOS starts it in the
+background for the request, and the Capacitor plugin retains the event until
+the web layer is listening, so an app that was not running acts at its next
+launch at the latest. After a Done or Snooze the notification and the icon
+count are cleared. Android shows no buttons (the system renders FCM
+notifications, and buttons need a native builder the shell does not have);
+the ids ride in `data` for a later handler, and a tap opens the plant. The
+device checks are steps 3 to 8 of the setup doc.
+
 **When permission is asked.** Only after a tap: the opt-in card on the Tasks
 page (`NativePushPrompt`), shown when there's care on the list and the OS
 hasn't been asked yet, or **This device → Turn on** in Settings →

@@ -435,6 +435,188 @@ describe('reminder content', () => {
   });
 });
 
+/**
+ * The push presentation that rides beside the email composition: the short
+ * title and body from `reminderCopy`, the deep link, and the task the
+ * notification's actions act on. Read from the same `sendToUser` call.
+ */
+describe('reminder push presentation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type PushSide = {
+    push?: {
+      title: string;
+      body: string;
+      url?: string;
+      task?: { taskId: string; plantId: string; expectedNextDue?: string };
+      actions?: { done: string; snooze: string };
+    };
+    badge?: number;
+  };
+
+  async function lastPush() {
+    return (await lastPayload()) as unknown as PushSide;
+  }
+
+  it('names the action and the plant, links the plant care section and binds the actions to the occurrence', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const due = iso(-2 * HOUR);
+    await setup([
+      { id: 't1', nextDue: due, plantId: 'p1', assignedTo: 'u1', type: 'water', customType: null },
+    ]);
+
+    await remindHousehold('hh', NOW);
+    const { push, badge } = await lastPush();
+
+    expect(push).toEqual({
+      title: 'Water the Monstera',
+      body: 'Due today. Mark it done once you have, or snooze it until tomorrow.',
+      url: 'http://localhost:3000/plants/p1?task=t1#care',
+      task: { taskId: 't1', plantId: 'p1', expectedNextDue: due },
+      actions: { done: 'Done', snooze: 'Snooze until tomorrow' },
+    });
+    expect(badge).toBe(1);
+    // The email keeps its own subject and footer link.
+    const payload = await lastPayload();
+    expect(payload.title).toBe('Plant care reminder: 1 due today');
+    expect(payload.url).toBe('http://localhost:3000/tasks?filter=due');
+  });
+
+  it('opens the due list for several tasks, with a count and the first two names, and no actions', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    await setup(
+      [
+        {
+          id: 't1',
+          nextDue: iso(-6 * DAY),
+          plantId: 'p1',
+          assignedTo: 'u1',
+          type: 'water',
+          customType: null,
+        },
+        {
+          id: 't2',
+          nextDue: iso(-2 * DAY),
+          plantId: 'p2',
+          assignedTo: 'u1',
+          type: 'water',
+          customType: null,
+        },
+        {
+          id: 't3',
+          nextDue: iso(-1 * HOUR),
+          plantId: 'p3',
+          assignedTo: null,
+          type: 'water',
+          customType: null,
+        },
+      ],
+      [
+        { id: 'p1', name: 'Monstera' },
+        { id: 'p2', name: 'Fiddle Leaf Fig' },
+        { id: 'p3', name: 'Pothos' },
+      ]
+    );
+
+    await remindHousehold('hh', NOW);
+    const { push, badge } = await lastPush();
+
+    expect(push).toEqual({
+      title: '3 plants need water',
+      body: 'Monstera and Fiddle Leaf Fig and 1 more. 2 overdue and 1 due today. Nobody has claimed 1 of them. Tap to see the list.',
+      url: 'http://localhost:3000/tasks?filter=due',
+    });
+    expect(badge).toBe(3);
+  });
+
+  it('is composed in the recipient language', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    await setup([
+      {
+        id: 't1',
+        nextDue: iso(-1 * DAY),
+        plantId: 'p1',
+        assignedTo: 'u1',
+        type: 'water',
+        customType: null,
+      },
+    ]);
+    vi.mocked(prefs.getPreferences).mockImplementation(async (userId: string) =>
+      prefsFor(userId, { emailLocale: 'es' })
+    );
+
+    await remindHousehold('hh', NOW);
+    const { push } = await lastPush();
+
+    expect(push?.title).toBe('Monstera necesita riego');
+    expect(push?.body).toBe(
+      'Tocaba ayer. Márcala como hecha cuando la hagas, o pospónla hasta mañana.'
+    );
+    expect(push?.actions).toEqual({ done: 'Hecho', snooze: 'Posponer hasta mañana' });
+  });
+
+  it('never carries a plant note, a care rule, a task note or a person into the push side', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const SECRET = {
+      plantNotes: 'SECRET-PLANT-NOTE spare key under the pot',
+      careRule: 'SECRET-RULE bottom-water only',
+      taskNotes: 'SECRET-TASK-NOTE use the blue can',
+      assignedToName: 'SECRET-PERSON Ada Example',
+      email: 'ada@x.com',
+    };
+    const plants = [
+      { id: 'p1', name: 'Monstera', notes: SECRET.plantNotes, careRule: SECRET.careRule },
+      { id: 'p2', name: 'Fern', notes: SECRET.plantNotes, careRule: SECRET.careRule },
+    ];
+    for (const tasks of [
+      [
+        {
+          id: 't1',
+          nextDue: iso(-2 * HOUR),
+          plantId: 'p1',
+          assignedTo: 'u1',
+          assignedToName: SECRET.assignedToName,
+          type: 'water',
+          customType: null,
+          notes: SECRET.taskNotes,
+        },
+      ],
+      [
+        {
+          id: 't1',
+          nextDue: iso(-2 * HOUR),
+          plantId: 'p1',
+          assignedTo: 'u1',
+          assignedToName: SECRET.assignedToName,
+          type: 'water',
+          customType: null,
+          notes: SECRET.taskNotes,
+        },
+        {
+          id: 't2',
+          nextDue: iso(-3 * DAY),
+          plantId: 'p2',
+          assignedTo: null,
+          assignedToName: null,
+          type: 'custom',
+          customType: 'Mist',
+          notes: SECRET.taskNotes,
+        },
+      ],
+    ]) {
+      vi.clearAllMocks();
+      await setup(tasks, plants);
+      await remindHousehold('hh', NOW);
+      const { push } = await lastPush();
+      expect(push).toBeDefined();
+      const rendered = JSON.stringify(push);
+      for (const value of Object.values(SECRET)) expect(rendered).not.toContain(value);
+      expect(rendered).not.toContain('SECRET');
+    }
+  });
+});
+
 describe('reminder climate', () => {
   beforeEach(() => vi.clearAllMocks());
 

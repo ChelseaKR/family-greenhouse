@@ -1861,7 +1861,15 @@
     "emailSuppressedComplaint": "Esta dirección se marcó como spam, así que dejamos de enviarle mensajes. No se entrega nada: ni recordatorios ni el resumen semanal. Reanúdalo abajo si fue un error o si has cambiado de opinión.",
     "emailStatusUnknown": "No pudimos comprobar si tu correo se está entregando en este momento. Esto no significa ni que sí ni que no: inténtalo de nuevo en un instante.",
     "emailResume": "Reanudar el correo a esta dirección",
-    "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío."
+    "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío.",
+    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana."
+  },
+  "pushActions": {
+    "done": "{{plant}}: marcada como hecha.",
+    "snoozed": "{{plant}}: pospuesta hasta mañana.",
+    "already": "{{plant}}: ese recordatorio ya estaba atendido.",
+    "failed": "La acción del recordatorio no se completó. Abre la tarea para intentarlo de nuevo.",
+    "unnamedPlant": "Esta planta"
   },
   "statusPage": {
     "notActivelyChecked": "No se comprueba activamente",

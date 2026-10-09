@@ -73,6 +73,7 @@ import * as notifier from './notifier.js';
 import * as climate from './climate.js';
 import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
+import * as reminderCopy from './reminderCopy.js';
 import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
@@ -711,18 +712,25 @@ export async function remindHousehold(
 
     /** One rendered row. Plant names come from the active-plant read, which
      *  every task in `due` already matched; an empty stored name resolves to
-     *  null so the composer says the name is missing rather than printing "". */
+     *  null so the composer says the name is missing rather than printing "".
+     *  The three extra fields feed the push presentation: the type for its
+     *  title, and the ids for the one-task deep link and the notification's
+     *  Done / Snooze actions. */
     const rowFor = (
       t: Task,
       upForGrabs: boolean,
       locale: reminderEmail.ReminderLocale
-    ): ReminderTaskRow => ({
+    ): ReminderTaskRow &
+      reminderCopy.ReminderCopyRow & { taskId: string; plantId: string; nextDue: string } => ({
       plantName: activePlantNames.get(t.plantId)?.trim() || null,
       taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, locale),
+      taskType: t.type,
       due: dueStateFor(t.nextDue, now),
       upForGrabs,
       url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
       taskId: t.id,
+      plantId: t.plantId,
+      nextDue: t.nextDue,
     });
 
     // The forecast is read at most once per household per run, and only when a
@@ -871,6 +879,33 @@ export async function remindHousehold(
       });
       const composed = replyable?.composed ?? reminderEmail.composeReminderEmail(composeInput);
 
+      // The push notification: a title that names the action and the plant,
+      // a body that says when, and — for exactly one task — a link to that
+      // plant's care section plus the Done / Snooze actions, bound to the
+      // occurrence being reminded about so a late tap cannot complete the
+      // next one. Several tasks open the due list. Ids only reach the
+      // payload; `reminderCopy` has no field for a note or a name.
+      const shortCopy = reminderCopy.composeReminderShortCopy({ rows, locale: memberLocale });
+      const only = rows.length === 1 ? rows[0] : null;
+      const push: notifier.PushPresentation = {
+        title: shortCopy.title,
+        body: shortCopy.body,
+        url: only
+          ? frontendUrl(
+              `/plants/${encodeURIComponent(only.plantId)}?task=${encodeURIComponent(only.taskId)}#care`
+            )
+          : frontendUrl('/tasks?filter=due'),
+        ...(only && shortCopy.actions
+          ? {
+              task: { taskId: only.taskId, plantId: only.plantId, expectedNextDue: only.nextDue },
+              actions: {
+                done: shortCopy.actions.done,
+                snooze: shortCopy.actions.snoozeUntilTomorrow,
+              },
+            }
+          : {}),
+      };
+
       let result: notifier.SendResult;
       try {
         result = await notifier.sendToUser(
@@ -882,8 +917,10 @@ export async function remindHousehold(
             tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
             url: frontendUrl('/tasks?filter=due'),
             // The app icon shows how many tasks this reminder names (device
-            // push only; the app clears it when opened).
+            // push only; the app clears it when opened, and after a Done or
+            // Snooze from a single-task notification).
             badge: rows.length,
+            push,
             ...(replyable ? { emailReplyTo: replyable.replyTo } : {}),
           },
           {

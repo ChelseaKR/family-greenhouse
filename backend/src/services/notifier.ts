@@ -57,6 +57,60 @@ export interface NotificationPayload {
    * configured `SES_REPLY_TO`.
    */
   emailReplyTo?: string;
+  /**
+   * What the PUSH legs show instead of `title` / `body`, when a notification
+   * has room for only a title and a sentence or two and the email's subject
+   * and list would not fit. Web push and device push read it; email and SMS
+   * ignore it. Omitted, push shows `title` and the compact body as before.
+   */
+  push?: PushPresentation;
+}
+
+/**
+ * The one task a reminder is about, carried so an action on the notification
+ * can act on exactly that occurrence (`expectedNextDue` makes the action a
+ * no-op once the task has moved on; see `taskService.completeTaskWithOutcome`).
+ * Ids only: never a name, a note or anything else from the row.
+ */
+export interface PushTaskRef {
+  taskId: string;
+  plantId: string;
+  expectedNextDue?: string;
+}
+
+/**
+ * The labels of the actions a notification may offer, keyed by the action
+ * id the clients post back (`frontend/public/push-handler.js`,
+ * `frontend/src/services/pushActions.ts`, the iOS category in
+ * `frontend/ios/App/App/AppDelegate.swift`). Present only with `task`.
+ */
+export interface PushActionLabels {
+  done: string;
+  snooze: string;
+}
+
+export interface PushPresentation {
+  title: string;
+  body: string;
+  /** The deep link for THIS presentation, when it differs from `url`. */
+  url?: string;
+  task?: PushTaskRef;
+  actions?: PushActionLabels;
+}
+
+/**
+ * What the push legs serialize: the browser leg as the JSON the service
+ * worker renders, the device leg as the fields `DevicePushMessage` carries.
+ * `emailReplyTo` can never be on it (see `pushPayloadOf`).
+ */
+export interface PushPayload {
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+  badge?: number;
+  task?: PushTaskRef;
+  actions?: PushActionLabels;
 }
 
 /** `shortBody` when the caller supplied one, else the full body. */
@@ -67,11 +121,23 @@ function compactBody(payload: NotificationPayload): string {
 /**
  * The payload the push legs send. `emailReplyTo` is removed: it is a bearer
  * credential for the email leg only (#667), and the browser leg serializes the
- * whole payload to the push service — and logs it on a dry run.
+ * whole payload to the push service — and logs it on a dry run. A `push`
+ * presentation replaces the title, body and link; everything else about the
+ * payload (tag, badge) is the same notification.
  */
-function pushPayloadOf(payload: NotificationPayload): NotificationPayload {
-  const push: NotificationPayload = { ...payload, body: compactBody(payload) };
-  delete push.emailReplyTo;
+export function pushPayloadOf(payload: NotificationPayload): PushPayload {
+  const push: PushPayload = {
+    title: payload.push?.title ?? payload.title,
+    body: payload.push?.body ?? compactBody(payload),
+  };
+  const url = payload.push?.url ?? payload.url;
+  if (url) push.url = url;
+  if (payload.tag) push.tag = payload.tag;
+  if (typeof payload.badge === 'number') push.badge = payload.badge;
+  if (payload.push?.task) {
+    push.task = { ...payload.push.task };
+    if (payload.push.actions) push.actions = { ...payload.push.actions };
+  }
   return push;
 }
 
@@ -125,7 +191,7 @@ export interface SendOptions {
  * `sendToUser` never counts an unconfigured or unreachable channel as a
  * delivery and burns the day's reminder slot for nothing.
  */
-async function sendBrowserPush(userId: string, payload: NotificationPayload): Promise<boolean> {
+async function sendBrowserPush(userId: string, payload: PushPayload): Promise<boolean> {
   const subs = await pushSubscriptions.getUserSubscriptions(userId);
   if (subs.length === 0) return false;
   if (!ensureWebPushConfigured()) {
@@ -233,7 +299,7 @@ export function devicePushAvailability(): { ios: boolean; android: boolean } {
  * push existed. With it on but a platform's credential unnamed, that
  * platform's transport answers `unconfigured` without a network call.
  */
-async function sendDevicePush(userId: string, payload: NotificationPayload): Promise<boolean> {
+async function sendDevicePush(userId: string, payload: PushPayload): Promise<boolean> {
   if (!nativePushEnabled()) return false;
   const devices = await deviceTokens.getUserDeviceTokens(userId);
   if (devices.length === 0) return false;
@@ -245,6 +311,10 @@ async function sendDevicePush(userId: string, payload: NotificationPayload): Pro
     url: payload.url,
     tag: payload.tag,
     ...(typeof payload.badge === 'number' ? { badge: payload.badge } : {}),
+    // The task the notification's actions act on. The labels are not sent to
+    // a device: iOS shows the titles its registered category carries, and
+    // Android renders no actions (see fcmNotifier.messageBody).
+    ...(payload.task ? { task: payload.task } : {}),
   });
   const ios = devices.filter((device) => device.platform === 'ios');
   const android = devices.filter((device) => device.platform !== 'ios');

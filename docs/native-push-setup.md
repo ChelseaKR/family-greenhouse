@@ -197,15 +197,44 @@ internal-testing build), work through each of these:
    shows the opt-in card while there's care on the list. Nothing is asked at
    launch.
 2. Tap **Turn on**. The OS asks once. Allow it.
-3. Trigger a reminder (a task due today, outside your quiet hours; an admin
-   can call `POST /notifications/run-reminders`). It arrives on the phone
-   with the task count on the app icon. Tapping it opens `/tasks`.
-4. Set quiet hours around now and run it again. Nothing arrives until the
+3. Trigger a reminder for exactly one task (a plant with one watering task
+   due today, outside your quiet hours; an admin can call
+   `POST /notifications/run-reminders`). It arrives on the phone reading
+   **"Water the <plant name>"** with the body **"Due today. Mark it done
+   once you have, or snooze it until tomorrow."** (on a phone set to
+   Spanish: **"<plant name> necesita riego"**, **"Toca hoy. Márcala como
+   hecha cuando la hagas, o pospónla hasta mañana."**), and the app icon
+   shows **1**. Tapping it opens that plant's page, scrolled to Care Tasks.
+4. Long-press the same notification (or pull it down). It shows two buttons,
+   **Done** and **Snooze until tomorrow** ("Hecho" / "Posponer hasta
+   mañana"). If it shows none, the build is not carrying the category from
+   `AppDelegate.swift`, or `aps.category` did not arrive: check the payload
+   in the `reminders` Lambda log against `FG_TASK_REMINDER`.
+5. With the app in the background, tap **Done**. The notification goes away
+   and the icon count clears without the app opening. Open the app: the task
+   is logged as completed today with the next date a week out, and the
+   activity feed names you. Snooze a second reminder the same way: the task's
+   due date moves to tomorrow and the icon count clears.
+6. Force-quit the app, trigger a one-task reminder again, and tap **Snooze
+   until tomorrow**. iOS starts the app in the background for the request.
+   Check whether the task moved to tomorrow before you open the app; if it
+   moved only when you opened it, say so in the release notes (the action is
+   retained until the web layer is listening, and the request is a no-op
+   once the occurrence has moved on, so nothing is lost either way).
+7. Tap **Done** on a notification whose task someone else already completed
+   (complete it on the website first). Nothing changes on the server, and
+   the app, when opened, says the reminder was already handled rather than
+   marking it done again.
+8. Trigger a reminder for two or more tasks. It reads **"2 plants need
+   water"** (or "2 care tasks") with the first two plant names and the
+   counts in the body, shows the task count on the icon, has no buttons on a
+   long-press, and tapping it opens `/tasks` filtered to what is due.
+9. Set quiet hours around now and run it again. Nothing arrives until the
    window ends.
-5. Sign out, then sign in as a different account. The first account's
-   reminders stop arriving on that phone.
-6. Deny the permission in the phone's Settings and reopen the app. The row
-   explains how to turn it back on, and the device is removed server-side.
+10. Sign out, then sign in as a different account. The first account's
+    reminders stop arriving on that phone.
+11. Deny the permission in the phone's Settings and reopen the app. The row
+    explains how to turn it back on, and the device is removed server-side.
 
 Logs to watch (CloudWatch, notification Lambdas):
 

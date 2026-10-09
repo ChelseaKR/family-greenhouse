@@ -291,3 +291,129 @@ describe('native push registration', () => {
     });
   });
 });
+
+// --- Acting on a notification -------------------------------------------------
+
+const pushActionsMock = vi.hoisted(() => ({ performPushAction: vi.fn() }));
+vi.mock('@/services/pushActions', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/services/pushActions')>('@/services/pushActions');
+  return { ...actual, performPushAction: pushActionsMock.performPushAction };
+});
+const capacitorApp = vi.hoisted(() => ({
+  addListener: vi.fn(async () => ({ remove: async () => undefined })),
+}));
+vi.mock('@capacitor/app', () => ({ App: { addListener: capacitorApp.addListener } }));
+
+import { initNativePush } from '@/services/nativePush';
+
+describe('acting on a notification', () => {
+  type Performed = (event: {
+    actionId: string;
+    notification: { id: string; data?: Record<string, unknown> };
+  }) => void;
+  const DATA = {
+    aps: { alert: { title: 'Water the Fern' }, category: 'FG_TASK_REMINDER' },
+    url: 'https://familygreenhouse.net/plants/p1?task=t1#care',
+    taskId: 't1',
+    plantId: 'p1',
+    expectedNextDue: '2026-06-01T08:00:00.000Z',
+  };
+  let pushState: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    nativePlugin.callbacks = {};
+    localStorage.clear();
+    (window as unknown as { Capacitor: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+    nativePlugin.addListener.mockImplementation(
+      async (event: string, callback: (value: { value?: string; error?: string }) => void) => {
+        nativePlugin.callbacks[event] = callback;
+        return { remove: async () => undefined };
+      }
+    );
+    nativePlugin.removeAllDeliveredNotifications.mockResolvedValue(undefined);
+    pushState = vi.spyOn(window.history, 'pushState').mockImplementation(() => undefined);
+
+    initNativePush();
+    await vi.waitFor(() =>
+      expect(nativePlugin.callbacks.pushNotificationActionPerformed).toBeDefined()
+    );
+  });
+  afterEach(() => {
+    pushState.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  /** `null` means a notification carrying no data at all. */
+  function performed(actionId: string, data: Record<string, unknown> | null = DATA) {
+    (nativePlugin.callbacks.pushNotificationActionPerformed as unknown as Performed)({
+      actionId,
+      notification: { id: 'n1', data: data ?? undefined },
+    });
+  }
+
+  it('posts Done for the task the notification names, then clears the notification and the badge', async () => {
+    pushActionsMock.performPushAction.mockResolvedValue('done');
+
+    performed('done');
+
+    await vi.waitFor(() =>
+      expect(nativePlugin.removeAllDeliveredNotifications).toHaveBeenCalledOnce()
+    );
+    expect(pushActionsMock.performPushAction).toHaveBeenCalledWith({
+      action: 'done',
+      taskId: 't1',
+      plantId: 'p1',
+      expectedNextDue: '2026-06-01T08:00:00.000Z',
+    });
+    // A button does not open the app or navigate it.
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
+  it('posts Snooze the same way', async () => {
+    pushActionsMock.performPushAction.mockResolvedValue('snoozed');
+
+    performed('snooze');
+
+    await vi.waitFor(() =>
+      expect(nativePlugin.removeAllDeliveredNotifications).toHaveBeenCalledOnce()
+    );
+    expect(pushActionsMock.performPushAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'snooze', taskId: 't1' })
+    );
+  });
+
+  it('leaves the notification and the badge alone when the action could not be made', async () => {
+    pushActionsMock.performPushAction.mockResolvedValue('failed');
+
+    performed('done');
+
+    await vi.waitFor(() => expect(pushActionsMock.performPushAction).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    expect(nativePlugin.removeAllDeliveredNotifications).not.toHaveBeenCalled();
+  });
+
+  it('opens the link on a plain tap, and does nothing for a dismissal', () => {
+    performed('tap');
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plants/p1?task=t1#care');
+    expect(pushActionsMock.performPushAction).not.toHaveBeenCalled();
+
+    pushState.mockClear();
+    performed('dismiss');
+    expect(pushState).not.toHaveBeenCalled();
+    expect(pushActionsMock.performPushAction).not.toHaveBeenCalled();
+  });
+
+  it('ignores a button on a notification that names no task', async () => {
+    performed('done', { url: DATA.url });
+    performed('done', null);
+    await Promise.resolve();
+    expect(pushActionsMock.performPushAction).not.toHaveBeenCalled();
+    expect(nativePlugin.removeAllDeliveredNotifications).not.toHaveBeenCalled();
+  });
+});

@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -118,6 +118,16 @@ export function PlantDetailPage() {
   // Title reflects the plant once it's loaded; falls back to a generic
   // "Plant" label during the loading flash.
   useDocumentTitle(plant?.name ?? 'Plant');
+
+  // A reminder about one task links to this page's care section
+  // (`/plants/:id?task=…#care`, services/reminders.ts). A pushState
+  // navigation inside the shells and a plain load of a hash URL both leave a
+  // single-page app at the top, so scroll to the care tasks once the plant
+  // has rendered them.
+  useEffect(() => {
+    if (location.hash !== '#care' || !plant) return;
+    document.getElementById('care')?.scrollIntoView?.({ block: 'start' });
+  }, [location.hash, plant]);
 
   // Newest watering inside the recent-completions window the API returns.
   const lastWatered = plant?.recentCompletions.find(
@@ -672,8 +682,8 @@ export function PlantDetailPage() {
           the plant has no lineage at all) */}
       <PlantLineageCard lineage={plant.lineage} />
 
-      {/* Tasks */}
-      <Card>
+      {/* Tasks. `id="care"` is the fragment a single-task reminder links to. */}
+      <Card id="care">
         <CardHeader
           title="Care Tasks"
           description={

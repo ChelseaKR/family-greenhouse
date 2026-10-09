@@ -16,6 +16,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Reminder notifications name the plant and the care, open the task they
+  name, and can be answered from the notification itself.** A push reminder
+  used to read "Plant care reminder: 1 due today" and open the task list. It
+  now reads "Water the Monstera" ("Monstera necesita riego") with when it is
+  due and what to do next ("Due today. Mark it done once you have, or snooze
+  it until tomorrow."), and overdue is stated as a date ("Due 3 days ago"),
+  not a verdict. Several tasks get a count and the first two plant names ("3
+  plants need water. Monstera and Fern and 1 more. 2 overdue and 1 due
+  today."), never a wall. Tapping a one-task reminder opens that plant's care
+  section; several open the due list. On iPhone a one-task reminder carries
+  Done and Snooze until tomorrow as notification buttons (a long-press or
+  pull-down shows them), on the website Chrome and Edge show the same two
+  buttons, and on Android a tap opens the plant while the buttons are not
+  built yet (the system renders FCM notifications). Each button posts to the
+  task's own complete or snooze endpoint with the app's stored session and the
+  occurrence it was about, so a second tap, a tap from two devices, or a tap
+  after someone else did it changes nothing and says so. The app icon count is
+  cleared with the notification after a Done or Snooze. The words live in one
+  module (`services/reminderCopy.ts`), in English and Spanish, with no field
+  that could carry a plant's notes or a person. Settings → Notifications shows
+  one line of what a reminder says. The email reminder is unchanged. Store
+  note: the iPhone buttons need a build carrying this change; the words and
+  the deep link reach every installed app with the backend deploy.
+
 ## [0.40.0] - 2026-10-06
 
 **The public sitter, caretaker, kiosk and plant tag pages now call work that

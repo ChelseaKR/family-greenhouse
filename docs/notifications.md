@@ -24,8 +24,9 @@ Lambda runReminders
 For each member of the household:
   1. Read prefs from DDB (USER#{id} / PREFS)
   2. Roll up their assigned + unassigned tasks due today (their zone) or overdue
-  3. Compose one payload {title, body, shortBody, url, tag}
-     via services/reminderEmail.composeReminderEmail
+  3. Compose one payload {title, body, shortBody, url, tag, badge, push}
+     via services/reminderEmail.composeReminderEmail (the email and SMS words)
+     and services/reminderCopy.composeReminderShortCopy (the push words)
   4. Reserve each eligible channel's daily delivery marker
   5. notifier.sendToUser(recipient, payload, {channels})
         │
@@ -188,8 +189,78 @@ is applied the reminder simply omits the line.
 
 SMS is capped at one 140-byte segment and a push body shows two or three lines,
 so the payload carries a `shortBody` — the counts sentence on its own. Email
-gets the full list; SMS and browser push get `shortBody`. Callers that omit it
-are unchanged: `body` is used everywhere.
+gets the full list and SMS gets `shortBody`. Push gets neither: it has its own
+words, below. Callers that omit both are unchanged: `body` is used everywhere.
+
+### What a push notification says
+
+`services/reminderCopy.ts` composes the short form of a reminder: the title
+and body a notification shows, which web push and the native shells share and
+which an email heading can reuse. It is pure like the email composer, with no
+transport in it: it does not know what a URL, an APNs category or a service
+worker is. `reminders.ts` attaches the destination and the task, as the
+`push` presentation on the payload (`notifier.PushPresentation`), and the
+push legs show it instead of the email's subject and list.
+
+The rules, held by `backend/tests/unit/services/reminderCopy.test.ts` in both
+languages:
+
+- **The title names the action and the plant.** "Water the Monstera"; in
+  Spanish "Monstera necesita riego", because "Riega la Monstera" would need
+  the gender of a name the household chose. A custom task keeps the household
+  wording, plant first: "Monstera: Mist the leaves". Several tasks name what
+  they have in common ("2 plants need water", "2 plantas necesitan riego") or
+  the count ("3 care tasks").
+- **The body says when, and what happens next.** "Due today. Mark it done
+  once you have, or snooze it until tomorrow." / "Toca hoy. Márcala como hecha
+  cuando la hagas, o pospónla hasta mañana."
+- **Overdue is a date, not a verdict.** "Due yesterday", "Due 3 days ago"
+  ("Tocaba hace 3 días"). The household that is behind is the one the product
+  must not nag.
+- **Many tasks get a count and the first two names, not a wall.** "Monstera
+  and Fern and 3 more. 2 overdue, 2 due today and 1 with no readable due date.
+  Tap to see the list."
+- **Nothing private.** The row type has no field for a plant's `notes`, its
+  care rule, a person or an address, so the words cannot carry them; the test
+  renders a fixture that has every one of those fields and asserts none
+  appears. A push payload crosses Apple's, Google's or a browser vendor's
+  servers and sits on the lock screen of whoever holds the phone.
+- **A failed read is never a value.** A plant whose name did not load, a
+  custom task with no name and an unreadable due date get the same wording the
+  email uses ("We could not read its due date; please check it in the app").
+
+**Where a tap goes.** One task: that plant's care section,
+`/plants/{plantId}?task={taskId}#care` (the plant page scrolls to it).
+Several: `/tasks?filter=due`. Both are routes the iOS and Android apps claim
+(`docs/mobile.md`, "Deep links"), so a tap opens the app where it is
+installed. The email keeps its own footer link.
+
+**Acting from the notification.** A reminder about exactly one task carries
+the task it names (`task` on the push payload: `taskId`, `plantId` and the
+occurrence's `expectedNextDue`; ids only) and the labels of two actions,
+**Done** and **Snooze until tomorrow** ("Hecho", "Posponer hasta mañana").
+Where the platform shows them:
+
+| Platform | Buttons                                                                                                                                | What a chosen button does                                                                                                                                                    |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down. | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
+| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                            | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
+| Android  | None: an FCM notification message is rendered by the system, and buttons need a native builder the shell does not have.                | A tap opens the plant. The ids ride in `data` for a future handler.                                                                                                          |
+
+Every action echoes `expectedNextDue`, so a second tap, a tap from two
+devices, or a tap after someone else did it is a no-op on the server
+(`taskService.completeTaskWithOutcome`), and the app says "already handled"
+rather than "done" when the task it got back was not completed just now. A
+request that cannot be made (no session, offline, the app suspended before it
+ran) changes nothing; on iOS the plugin retains the event until the web layer
+is listening, so an app that was not running acts at its next launch. Nothing
+in a notification is a credential, and nothing in it is trusted for
+authorization.
+
+**The badge.** `badge` is the number of tasks the reminder names: this
+member's open tasks due today or overdue (not the resting ones). The app
+clears it when opened, and after a Done or Snooze from a single-task
+notification, since the one task it counted is no longer open today.
 
 ### Accepted is not delivered
 
@@ -379,7 +450,11 @@ every other channel (`sendToUser`), and the reminder rules — the daily slot,
 the per-channel lease, the overdue decay — are the reminder path's own, so
 native push adds none of its own. A reminder carries the number of tasks it
 names as the app-icon badge (`aps.badge` on iOS, `notification_count` on
-Android); the app clears it when opened.
+Android); the app clears it when opened. The words, the deep link and the
+Done / Snooze actions are described under "What a push notification says"
+above; on iOS a single-task reminder sets `aps.category` to
+`FG_TASK_REMINDER` and carries the task ids as custom keys, and on Android the
+same ids ride in `data`.
 
 **Why iOS goes to APNs directly.** `@capacitor/push-notifications` gives the
 iOS shell a raw APNs token. FCM cannot send to that without the Firebase iOS

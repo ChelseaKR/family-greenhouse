@@ -1,4 +1,5 @@
 import UIKit
+import UserNotifications
 import Capacitor
 
 @UIApplicationMain
@@ -7,7 +8,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        registerReminderNotificationCategory()
         return true
     }
 
@@ -56,6 +57,54 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    // MARK: - Reminder notification actions
+
+    /// The category a reminder about exactly one task arrives with
+    /// (`aps.category`, set by backend/src/services/apnsNotifier.ts). The
+    /// string must match `APNS_REMINDER_CATEGORY` there; a mismatch shows a
+    /// notification with no buttons and no error anywhere.
+    static let reminderCategoryIdentifier = "FG_TASK_REMINDER"
+
+    /// Register the Done and Snooze buttons a single-task reminder shows on a
+    /// long-press (or a pull-down). Done at every launch: iOS keeps the set
+    /// per app install and this is the only place it is defined.
+    ///
+    /// Neither action carries `.foreground`, so choosing one does not open
+    /// the app: iOS starts it in the background for the request, the
+    /// Capacitor plugin reports it as `pushNotificationActionPerformed` with
+    /// `actionId` "done" or "snooze" and retains that event until the web
+    /// layer's listener is attached (frontend/src/services/nativePush.ts),
+    /// which posts it to the task's own endpoint with the stored session. An
+    /// app that was not running acts at its next launch at the latest, and
+    /// the request is a no-op on the server once the occurrence has moved on.
+    ///
+    /// Registering categories asks for no permission and shows nothing.
+    private func registerReminderNotificationCategory() {
+        let titles = reminderActionTitles()
+        let done = UNNotificationAction(identifier: "done", title: titles.done, options: [])
+        let snooze = UNNotificationAction(identifier: "snooze", title: titles.snooze, options: [])
+        let category = UNNotificationCategory(
+            identifier: AppDelegate.reminderCategoryIdentifier,
+            actions: [done, snooze],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+
+    /// The button titles, in the device's language. The app bundle carries no
+    /// string catalogs (the web layer owns every other string), so the first
+    /// preferred language decides, and the words are the ones
+    /// `reminderActionCopy` in backend/src/services/reminderCopy.ts uses for
+    /// web push, so the two platforms read the same.
+    private func reminderActionTitles() -> (done: String, snooze: String) {
+        let language = Locale.preferredLanguages.first?.lowercased() ?? "en"
+        if language.hasPrefix("es") {
+            return (done: "Hecho", snooze: "Posponer hasta mañana")
+        }
+        return (done: "Done", snooze: "Snooze until tomorrow")
     }
 
 }

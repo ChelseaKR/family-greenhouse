@@ -15,6 +15,7 @@ import { initSentry } from './sentry';
 import { initPwaRegistration } from './services/pwaRegistration';
 import { initNativeDeepLinks } from './services/nativeDeepLinks';
 import { initNativeBackButton } from './services/nativeBackButton';
+import { initPushActions } from './services/pushActions';
 import { initGoogleAnalytics } from './services/googleAnalytics';
 import './i18n';
 import { isRTL } from './i18n';
@@ -68,6 +69,10 @@ const queryClient = new QueryClient({
     },
   },
 });
+// Done / Snooze from a reminder notification (web push messages here; the
+// native shells call in through nativePush.ts). Needs the query client so
+// the lists on screen refresh once an action lands.
+initPushActions(queryClient);
 
 const rootElement = document.getElementById('root')!;
 

@@ -85,6 +85,15 @@ export interface DevicePushMessage {
    * leaves the icon alone. Shown only where the person allowed notifications.
    */
   badge?: number;
+  /**
+   * The one task this notification is about, when there is exactly one, so
+   * an action on the notification can act on that occurrence. Ids only. On
+   * iOS it also selects the actionable category (apnsNotifier.ts); on
+   * Android it rides in `data` for the shell, which shows no action buttons
+   * (an FCM `notification` message is rendered by the system, and buttons
+   * would need a native notification builder the shell does not have).
+   */
+  task?: { taskId: string; plantId: string; expectedNextDue?: string };
 }
 
 /** Whether a Firebase service account is named at all. Reads no secret. */
@@ -323,13 +332,26 @@ export function messageBody(message: DevicePushMessage): Record<string, unknown>
       ? { notification_count: Math.max(0, message.badge) }
       : {}),
   };
+  // `data` is what the shell reads on tap. Strings only — FCM rejects any
+  // other JSON type in this map. The task ids let a future Android action
+  // handler act on the right occurrence; today the shell only follows `url`.
+  const data: Record<string, string> = {
+    ...(message.url ? { url: message.url } : {}),
+    ...(message.task
+      ? {
+          taskId: message.task.taskId,
+          plantId: message.task.plantId,
+          ...(message.task.expectedNextDue
+            ? { expectedNextDue: message.task.expectedNextDue }
+            : {}),
+        }
+      : {}),
+  };
   return {
     message: {
       token: message.token,
       notification: { title: message.title, body: message.body },
-      // `data` is what the shell reads on tap. Strings only — FCM rejects
-      // any other JSON type in this map.
-      ...(message.url ? { data: { url: message.url } } : {}),
+      ...(Object.keys(data).length > 0 ? { data } : {}),
       ...(collapseId || Object.keys(androidNotification).length > 0
         ? {
             android: {
