@@ -154,6 +154,7 @@ async function lastPayload() {
     body: string;
     shortBody?: string;
     url?: string;
+    email?: { subject: string; text: string; html: string };
   };
 }
 
@@ -579,5 +580,120 @@ describe('reminder climate', () => {
       expect(body.includes('Rain is forecast')).toBe(tipsSayRain);
       expect(body.includes('bring tender plants indoors')).toBe(tipsSayFrost);
     }
+  });
+});
+
+describe('reminder content — the branded email part', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('hands the email leg its own subject, HTML and text, built from the same rows', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const household = await import('../../../src/services/householdService.js');
+    vi.mocked(household.getHousehold).mockResolvedValue({
+      id: 'hh',
+      name: 'The Kim House',
+    } as never);
+    await setup(
+      [
+        { id: 't1', nextDue: iso(-6 * DAY), plantId: 'p1', assignedTo: 'u1', type: 'water' },
+        { id: 't2', nextDue: iso(+2 * HOUR), plantId: 'p2', assignedTo: null, type: 'fertilize' },
+      ],
+      [
+        { id: 'p1', name: 'Monstera' },
+        { id: 'p2', name: 'Fiddle Leaf Fig' },
+      ]
+    );
+
+    await remindHousehold('hh', NOW);
+    const payload = await lastPayload();
+    // Push and SMS keep the counts title; the email says what to do.
+    expect(payload.title).toBe(
+      'Plant care reminder: 1 overdue and 1 coming up, including 1 nobody has claimed'
+    );
+    expect(payload.email?.subject).toBe('Water Monstera and 1 more');
+    const html = payload.email?.html ?? '';
+    expect(html).toContain('http://localhost:3000/brand/logo-dark.png');
+    expect(html).toContain('http://localhost:3000/plants/p1');
+    expect(html).toContain('http://localhost:3000/plants/p2');
+    expect(html).toContain('Mark done in the app');
+    expect(html).toContain('Up for grabs');
+    expect(html).toContain('http://localhost:3000/tasks?filter=due');
+    expect(html).toContain('http://localhost:3000/settings?section=notifications');
+    expect(html).toContain('reminders are on for you in The Kim House');
+    expect(payload.email?.text).toContain(payload.body);
+    expect(payload.email?.text).toContain('Reminder settings: http://localhost:3000/settings');
+  });
+
+  it('still sends, with the generic footer, when the household row cannot be read', async () => {
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const household = await import('../../../src/services/householdService.js');
+    vi.mocked(household.getHousehold).mockRejectedValue(new Error('ddb down'));
+    await setup([
+      { id: 't1', nextDue: iso(-1 * DAY), plantId: 'p1', assignedTo: 'u1', type: 'water' },
+    ]);
+
+    expect(await remindHousehold('hh', NOW)).toBe(1);
+    const payload = await lastPayload();
+    expect(payload.email?.html).toContain('reminders are on for you on Family Greenhouse');
+    expect(payload.email?.html).not.toContain('The Kim House');
+    // One household read for both the name and the forecast, not two.
+    expect(household.getHousehold).toHaveBeenCalledTimes(1);
+  });
+
+  it('never lets a plant\u2019s private notes, care rule, placement or a task note reach any part', async () => {
+    const { leakedSentinels } = await import('../../support/emailHtmlChecks.js');
+    const { remindHousehold } = await import('../../../src/services/reminders.js');
+    const household = await import('../../../src/services/householdService.js');
+    vi.mocked(household.getHousehold).mockResolvedValue({
+      id: 'hh',
+      name: 'The Kim House',
+      notes: 'PRIVATE-HOUSEHOLD-NOTE-1a2b',
+    } as never);
+    const SENTINELS = [
+      'PRIVATE-PLANT-NOTE-7f3a',
+      'PRIVATE-CARE-RULE-9c1d',
+      'PRIVATE-PLACEMENT-2b8e',
+      'PRIVATE-TASK-NOTE-4d2f',
+      'PRIVATE-HOUSEHOLD-NOTE-1a2b',
+    ];
+    await setup(
+      [
+        {
+          id: 't1',
+          nextDue: iso(-3 * DAY),
+          plantId: 'p1',
+          assignedTo: 'u1',
+          type: 'custom',
+          customType: 'mist',
+          notes: 'PRIVATE-TASK-NOTE-4d2f',
+        },
+        { id: 't2', nextDue: iso(+1 * HOUR), plantId: 'p1', assignedTo: null, type: 'water' },
+      ],
+      [
+        {
+          id: 'p1',
+          name: 'Monstera',
+          notes: 'PRIVATE-PLANT-NOTE-7f3a',
+          careRule: 'PRIVATE-CARE-RULE-9c1d',
+          placementNote: 'PRIVATE-PLACEMENT-2b8e',
+        } as never,
+      ]
+    );
+
+    await remindHousehold('hh', NOW);
+    const payload = await lastPayload();
+    // Control: the plant and the custom task did reach the email.
+    expect(payload.email?.html).toContain('Monstera');
+    expect(payload.email?.subject).toBe('Mist Monstera and 1 more');
+    expect(
+      leakedSentinels(
+        {
+          subject: `${payload.title}\n${payload.email?.subject ?? ''}`,
+          text: `${payload.body}\n${payload.shortBody ?? ''}\n${payload.email?.text ?? ''}`,
+          html: payload.email?.html,
+        },
+        SENTINELS
+      )
+    ).toEqual([]);
   });
 });

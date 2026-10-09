@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "email:preview": "vitest run tests/unit/services/email/renderedEmails.test.ts && node scripts/email-previews.mjs",
     "reads:check": "node scripts/check-settled-read-states.mjs",
     "entitlements:check": "node scripts/check-entitlement-gates.mjs",
     "eval": "vitest run tests/eval",

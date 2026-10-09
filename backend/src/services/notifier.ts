@@ -57,6 +57,16 @@ export interface NotificationPayload {
    * configured `SES_REPLY_TO`.
    */
   emailReplyTo?: string;
+  /**
+   * The EMAIL leg's own rendering: a subject and both MIME parts, composed
+   * by `services/email/template.ts` (the daily reminder:
+   * `reminderEmail.composeReminderMessage`). When present the email goes out
+   * `multipart/alternative` with these, and `title` / `body` / `url` serve
+   * push and SMS only. Omitted keeps the text-only email built from `title`,
+   * `body` and `url`, exactly as before. Never reaches a push leg
+   * (`pushPayloadOf`): it is tens of kilobytes against a 4 kB push limit.
+   */
+  email?: { subject: string; text: string; html: string };
 }
 
 /** `shortBody` when the caller supplied one, else the full body. */
@@ -67,12 +77,30 @@ function compactBody(payload: NotificationPayload): string {
 /**
  * The payload the push legs send. `emailReplyTo` is removed: it is a bearer
  * credential for the email leg only (#667), and the browser leg serializes the
- * whole payload to the push service — and logs it on a dry run.
+ * whole payload to the push service — and logs it on a dry run. `email` is
+ * removed for size: the rendered HTML is far over the push payload limit.
  */
 function pushPayloadOf(payload: NotificationPayload): NotificationPayload {
   const push: NotificationPayload = { ...payload, body: compactBody(payload) };
   delete push.emailReplyTo;
+  delete push.email;
   return push;
+}
+
+/** What the email leg sends: the structured rendering when the caller
+ *  composed one, else the generic text built from `title`, `body`, `url`. */
+function emailMessageOf(payload: NotificationPayload): {
+  subject: string;
+  text: string;
+  html?: string;
+} {
+  if (payload.email) {
+    return { subject: payload.email.subject, text: payload.email.text, html: payload.email.html };
+  }
+  return {
+    subject: payload.title,
+    text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
+  };
 }
 
 /**
@@ -404,8 +432,7 @@ export async function sendToUser(
         emailNotifier
           .sendEmailAccepted({
             to: recipient.email,
-            subject: payload.title,
-            text: payload.url ? `${payload.body}\n\n${payload.url}` : payload.body,
+            ...emailMessageOf(payload),
             ...(payload.emailReplyTo ? { replyTo: payload.emailReplyTo } : {}),
           })
           .then((result) => {

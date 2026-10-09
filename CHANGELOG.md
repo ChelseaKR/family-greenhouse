@@ -27,6 +27,36 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   release, and the App Review notes in `docs/APP-STORE.md` name push and how
   to reach a reminder. The Google Play copy is unchanged, because Android
   push is off. Documentation only; no app code changes.
+- **The daily reminder email is branded HTML that says what to do.** Subject
+  and title name the most urgent plant and its task with the true count of the
+  rest (_Water Monstera and 2 more today_ / _Regar Monstera y 2 más hoy_); rows
+  are grouped under _Ready for some catch-up care_, _Due today_, _Coming up_,
+  _Check the due date_ and _Up for grabs_, each with the plant linked, the task and due phrase, and a
+  _Mark done in the app_ button to the plant page; a capped section says _and
+  N more_ with a link to the task list; the footer names the household and
+  links to reminder settings. Push and SMS keep their counts title. The welcome,
+  weekly digest and year recap emails pick up the same branded shell with no
+  copy change.
+- **Every email now carries the brand**: a Forest header band with the logo
+  (`https://familygreenhouse.net/brand/logo-dark.png`, with alt text and
+  dimensions; the one image an email loads, ADR 0021 amended), the
+  design-token palette stated on both the light and the dark path, the brand
+  faces named first in the font stacks with system fallbacks and nothing
+  fetched, rows as Paper-on-Glass panes, and the terracotta accent only on an
+  honest-failure notice.
+- **The text part is kept.** Every message is `multipart/alternative`; the
+  reminder's text part is the tested numbered list the reply-to-act path is
+  bound to, and the HTML rows carry the same numbers when a reply address is
+  bound.
+- **Checked in the repo.** `renderedEmails.test.ts` renders every email in
+  both languages to `backend/test-output/email/` (git-ignored), checks each
+  for email-HTML validity, size and link parity between the two parts, and
+  keeps the reminder as a committed golden; `emailHtmlChecks.test.ts` is the
+  checker's negative control; `npm run email:preview -w backend` screenshots
+  each in light, dark and phone views. Private plant notes are asserted absent
+  from the reminder, the digest and the up-for-grabs email end to end.
+- `scripts/check-app-links.mjs` accepts a backend-built link to a file under
+  `frontend/public/` and verifies the file exists.
 
 ## [0.40.0] - 2026-10-06
 
