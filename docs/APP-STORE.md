@@ -1,8 +1,10 @@
 # App Store Connect listing
 
-Status: draft, unsubmitted. This is the content to paste into App Store
-Connect at submission time, so writing marketing copy is not something that
-happens under time pressure. Nothing here is new copy — the name, subtitle,
+Status: 0.34.0 (build 3400) was submitted on 2026-09-17 and rejected the
+same day; 0.40.0 (build 4001, the first build with native push on for iOS)
+is the resubmission. This is the content to paste into App Store Connect at
+submission time, so writing marketing copy is not something that happens
+under time pressure. Nothing here is new copy — the name, subtitle,
 promotional text, description, and keywords are reproduced from
 `store-assets/metadata/en-US.json`, which `store-assets/README.md` already
 describes as "reviewed English metadata" and which
@@ -33,10 +35,10 @@ that it contradicts.
 | Launch screen, icon                      | `LaunchScreen.storyboard`; one 1024×1024 universal icon with no alpha channel                                                                                                                                                                                                                                                                                                                                                                                                                                  | `sips -g hasAlpha`                                                                                                                                   |
 | Appearance                               | Forced light (`UIUserInterfaceStyle` Light), as decided 2026-10-02                                                                                                                                                                                                                                                                                                                                                                                                                                             | `Info.plist`                                                                                                                                         |
 | Universal links                          | **Working end to end now.** `applinks:familygreenhouse.net` entitlement, `@capacitor/app` with the `appUrlOpen` handler (`services/nativeDeepLinks.ts`), and Apple's CDN serves the association file (`200 application/json`, the right app ID)                                                                                                                                                                                                                                                                | `curl https://app-site-association.cdn-apple.com/a/v1/familygreenhouse.net`                                                                          |
-| Push                                     | Built; `native_push_enabled` is on in production for iOS (2026-10-05, unverified on a device until setup step 8 passes); a store build shows push UI only when made with `VITE_NATIVE_PUSH_ENABLED=true` (4001 onward); Android off                                                                                                                                                                                                                                                                            | §4.3                                                                                                                                                 |
+| Push                                     | **Verified on a device, 2026-10-09.** `native_push_enabled` is on in production for iOS (2026-10-05); build 4001 (`VITE_NATIVE_PUSH_ENABLED=true`, `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`) passed the setup doc's step 8 on an iPhone: the opt-in row and card, the one-time permission prompt, a reminder delivered as a push, and quiet hours honored. A build made without the switch (4000 and earlier) shows no push UI. Android off                                                                    | §4.3; `docs/native-push-setup.md` step 8                                                                                                             |
 | Locked features show no price in the app | Fixed: `LockedFeature` drops the price and the plan button when `isNativeApp()` (#903)                                                                                                                                                                                                                                                                                                                                                                                                                         | `components/LockedFeature.tsx`                                                                                                                       |
 | Legal and support URLs                   | `/legal/privacy`, `/support`, `/account-deletion` answer 200                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `curl`                                                                                                                                               |
-| Store screenshots                        | Being re-captured by the store-screenshots lane for the new native frame; §3 describes the previous set                                                                                                                                                                                                                                                                                                                                                                                                        | not re-checked here                                                                                                                                  |
+| Store screenshots                        | 8 iPhone frames from the iOS app itself (#921, #942, #943) and 4 iPad frames from the website; §3 lists them. Frame 08 predates push and shows no "This device" row                                                                                                                                                                                                                                                                                                                                            | `npm run mobile:validate`; the frames in `store-assets/app-store/`                                                                                   |
 
 ### Availability and the payment position (owner decision, 2026-10-04)
 
@@ -85,14 +87,16 @@ now available," May 1, 2025
 >
 > Demo account: [to be filled in App Store Connect only, never in this repository]
 >
-> What is native in the app: Apple's tab bar and navigation bar (Home, Plants, Tasks, Household, More), large titles, the back swipe, search and menus in the navigation bar on Plants, alerts and action sheets for confirmations, a native Settings list, the camera and photo picker (on a plant's page, "…" → Take photo / Choose photo, and on Add plant), the share sheet, printing a plant's passport, and haptics when care is marked done.
+> What is native in the app: Apple's tab bar and navigation bar (Home, Plants, Tasks, Household, More), large titles, the back swipe, search and menus in the navigation bar on Plants, alerts and action sheets for confirmations, a native Settings list, Add care task as a native form sheet, the camera and photo picker (on a plant's page, "…" → Take photo / Choose photo; on Add plant; on the leaf health check; and on the sitter and caretaker pages), the share sheet, printing a plant's passport, haptics, and push notifications for care reminders.
 >
 > The app sells nothing and collects no payment. Paid plans exist on our website; the app shows the household's plan as read-only and has no purchase path, price or link to one.
 >
-> Reminders in this version are sent by email. Push notifications are not enabled in this build.
+> Reminders: by email, and on iPhone as push notifications once turned on. Nothing is asked at launch. Settings → Notifications → This device → Turn on shows the iOS permission prompt once; the Tasks tab offers the same while care is due. A reminder is sent once a day, on the hourly run after the account's quiet hours end (08:00 in the account's time zone with none set), for the tasks due that day, with the number of tasks on the app icon. Tapping it opens Tasks. Push needs a physical iPhone; the Simulator has no push token.
 
 Fill the demo account only in App Store Connect. Re-read the native list
-against the build being submitted: name only what that build carries.
+against the build being submitted: name only what that build carries. The
+push paragraph is true of build 4001 onward only (made with
+`VITE_NATIVE_PUSH_ENABLED=true`); build 4000 shows no push UI.
 
 ## 1. Listing fields
 
@@ -131,10 +135,10 @@ against the build being submitted: name only what that build carries.
 > • Identify a plant from a photo (one identification a month on the free plan, more on paid plans), and run a leaf health check when something looks off.
 > • Subscribe to upcoming care from your own calendar app.
 >
-> EMAIL REMINDERS
+> REMINDERS
 > • Email reminders when care is due, plus an optional weekly digest of the plants most at risk.
+> • On iPhone, turn notifications on and reminders also arrive as push notifications, with the number of tasks due on the app icon.
 > • Set quiet hours so reminders do not arrive overnight.
-> • This version sends reminders by email. Push notifications are not part of this release.
 >
 > ASK ABOUT YOUR PLANTS
 > • A plant care assistant, included with the paid Garden and Greenhouse plans, answers questions using your household's own plants and tasks.
@@ -229,8 +233,9 @@ What each row actually is, for whoever fills out the questionnaire:
 - **Other User Content** — plant names, notes, task text, and similar
   free-text fields a household enters.
 - **Device ID (optional)** — the APNs push token, collected only when the
-  person turns notifications on in the app (native push ships switched off;
-  see `docs/native-push-setup.md`). Used only to deliver this app's own
+  person turns notifications on in the app (on for iOS from build 4001,
+  verified 2026-10-09; Android off; see `docs/native-push-setup.md`). Used
+  only to deliver this app's own
   reminders: not advertising, not analytics, not tracking. It is deleted when
   they turn notifications off on that phone, sign out on it, leave the
   household it was set up under, or delete the account. It is declared in
@@ -333,7 +338,7 @@ The iPad frames come from `npm run store:screenshots --workspace frontend`
 | 05  | Tasks         | The Tasks tab as a checklist: the large title, the filter button in the native navigation bar, and Today / Upcoming (5 each). "Overdue" leads with the Peace Lily (water, 1 day overdue, Bedroom, up for grabs), then "Today" with Aloe (up for grabs), Fiddle Leaf Fig ("T"), Golden Pothos ("M") and Monstera ("You"), each with a round check circle. |
 | 06  | Household     | The Household tab: "Who's carrying the care", with each member's care in the last 30 days and jobs held now, and 4 jobs up for grabs.                                                                                                                                                                                                                    |
 | 07  | Plant sitter  | The page Dana's "Long weekend" sitter link opens, in the app: what needs doing, in which room, with Done buttons, no account needed, and the date the link stops working. The capture creates the link.                                                                                                                                                  |
-| 08  | Notifications | Settings, Notifications: the email reminder, the weekly digest and the household emails, as switches. No push setting: this release sends reminders by email.                                                                                                                                                                                            |
+| 08  | Notifications | Settings, Notifications: the email reminder, the weekly digest and the household emails, as switches. Captured from a build without push, so no "This device" row; build 4001 shows one above these switches (the Simulator capture cannot, because it has no push token).                                                                               |
 
 Google Play's `store-assets/google-play/phone/` has the same four web frames
 as the iPad set, plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
@@ -439,6 +444,15 @@ each item it raised, re-verified today:
    build made without them. Claim push in review notes only for a build made
    after `docs/native-push-setup.md` is done, and after step 8 there
    (a reminder received on a device running that build).
+
+   **Update, 2026-10-09:** done for iOS. `native_push_enabled` went on in
+   production with 0.40.0 (#958), and build 4001 (made with
+   `VITE_NATIVE_PUSH_ENABLED=true` and `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`)
+   passed step 8 on an iPhone: the opt-in row and the Tasks card, the
+   one-time permission prompt, a reminder delivered as a push with the badge,
+   and quiet hours honored. The listing's reminders section and the review
+   notes above say so. Android stays off, so the Google Play copy keeps its
+   email-only line.
 
 4. **One more, not from #469: a locked feature used to show a price with no
    way to pay. Fixed.** `LockedFeature` (gating `/chat`, the trip-sitter

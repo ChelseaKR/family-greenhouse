@@ -136,12 +136,18 @@ enforces the brand as a prefix rather than exact equality for this reason.
 Everything in the listing was checked against the shipped native build. Two
 constraints are easy to break by accident:
 
-- **Reminders are email-only in the native shells.** Native push is not
-  implemented (`docs/mobile.md`), browser push is hidden when `isNativeApp()`,
-  and SMS is off in production (`sms_notifications_enabled = ""`). The listing
-  says "email reminders" and says push is not in this release. Do not
-  shorten that to "reminders" — an app that advertises notifications and
-  delivers none is a 2.3.1 rejection and a bad first review.
+- **Push is claimed for iPhone only, and only for a build made with it.**
+  Native push is on in production for iOS and was verified on an iPhone on
+  2026-10-09 with build 4001 (`docs/native-push-setup.md`, step 8), so the
+  App Store description says reminders arrive by email and, on iPhone, as
+  push notifications once turned on. That is true only of a build made with
+  `VITE_NATIVE_PUSH_ENABLED=true`; one made without it shows no push UI, and
+  an app that advertises notifications and delivers none is a 2.3.1
+  rejection and a bad first review. Android push is off
+  (`VITE_NATIVE_PUSH_ANDROID_ENABLED=false`, no FCM credential), browser push
+  is hidden when `isNativeApp()`, and SMS is off in production
+  (`sms_notifications_enabled = ""`), so the Google Play copy still says
+  reminders are email-only.
 - **No purchase claims.** The native build hides all billing UI, so the
   listing states the app collects no payment. If in-app purchase is ever
   added, this copy has to change with it.
