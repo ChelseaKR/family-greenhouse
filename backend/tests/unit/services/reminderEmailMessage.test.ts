@@ -183,6 +183,39 @@ describe('composeReminderMessage — rows', () => {
     expect(html).not.toMatch(/overdue by|you forgot|neglect/i);
   });
 
+  it('pins the heading of every group and their order, in both languages', () => {
+    // One row per state, deliberately handed in NOT in display order: the
+    // composition sorts, and the HTML must follow the documented order
+    // (overdue, today, upcoming, unreadable date, unassigned) with exactly
+    // one heading each. A second "catch-up" heading over the unreadable-date
+    // row is the defect this pins (seen in a render on 2026-10-09).
+    const plan: Array<[keyof typeof REMINDER_EMAIL_COPY.en, string, Partial<ReminderTaskRow>]> = [
+      ['headingCatchUp', 'Late', { due: { kind: 'overdue', days: 6 } }],
+      ['headingToday', 'Now', { due: { kind: 'today' } }],
+      ['headingSoon', 'Soon', { due: { kind: 'upcoming' } }],
+      ['headingUnknown', 'Unread', { due: { kind: 'unknown' } }],
+      ['headingUnclaimed', 'Free', { due: { kind: 'overdue', days: 1 }, upForGrabs: true }],
+    ];
+    const rows = [...plan].reverse().map(([, plantName, over]) => row({ plantName, ...over }));
+    for (const locale of REMINDER_LOCALES) {
+      const copy = REMINDER_EMAIL_COPY[locale];
+      const { html } = composeReminderMessage(input({ rows, locale }), context);
+      const headings = [...html.matchAll(/fg-label" style="[^"]*">([^<]*)</g)].map((m) => m[1]);
+      expect(headings, locale).toEqual(plan.map(([key]) => copy[key] as string));
+      // Each plant sits between its own heading and the next one.
+      const at = (needle: string) => html.indexOf(needle);
+      plan.forEach(([key, plantName], i) => {
+        const here = at(copy[key] as string);
+        const next = i + 1 < plan.length ? at(copy[plan[i + 1][0]] as string) : html.length;
+        expect(at(`>${plantName}<`), `${locale}: ${plantName}`).toBeGreaterThan(here);
+        expect(at(`>${plantName}<`), `${locale}: ${plantName}`).toBeLessThan(next);
+      });
+      // Every heading is a distinct phrase and appears once.
+      expect(new Set(headings).size).toBe(headings.length);
+      expect(copy.headingUnknown).not.toBe(copy.headingCatchUp);
+    }
+  });
+
   it('omits a heading when its group is empty, and never prints an empty section', () => {
     const { html } = composeReminderMessage(
       input({ rows: [row({ due: { kind: 'today' } })] }),
