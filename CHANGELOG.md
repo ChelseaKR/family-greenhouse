@@ -16,7 +16,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
-- **The Terraform plan changes one attribute of the Cognito app client.**
+- **The Terraform plan changes one attribute of the Cognito app client (#963).**
   `module.auth.aws_cognito_user_pool_client.main` updates in place with
   `refresh_token_validity: 30 => 365` (days), from
   `infrastructure/modules/auth/main.tf` (ADR 0034). Alongside the usual 19
@@ -32,7 +32,7 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
 
 ### Added
 
-- **iOS and Android apps: the app stays signed in (ADR 0034).** Opening the
+- **iOS and Android apps: the app stays signed in (ADR 0034, #963).** Opening the
   app used to mean signing in again whenever more than an hour had passed:
   the refresh token lived in the WebView's `sessionStorage`, which ends with
   the app process, and only the hour-long ID token survived a cold start.
@@ -47,7 +47,7 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   says "This device stays signed in until you sign out." instead of showing
   the website's checkbox. The website is unchanged. All JS combined
   651.64 → 654.5 kB measured; the budget moves 653 → 674 kB.
-- **The store validator recognizes third-party Capacitor plugins.** Any
+- **The store validator recognizes third-party Capacitor plugins (#963).** Any
   dependency whose package carries a `capacitor` block is now held to the
   `docs/mobile.md` plugin table and to the iOS and Android link checks, not
   only the `@capacitor/*` ones.
