@@ -24,6 +24,7 @@ import { useAuthStore } from '@/store/authStore';
 import { planLimitHitContext, track } from '@/services/analytics';
 import i18n from '@/i18n';
 import { isNativeApp } from '@/lib/platform';
+import { sessionVaultAvailable } from '@/services/sessionVault';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -93,6 +94,20 @@ api.interceptors.request.use(
 let refreshPromise: Promise<string> | null = null;
 
 /**
+ * The refresh token to try with, or null. Inside the shells the token lives
+ * in the device keychain and reaches state only once the store has read it
+ * (authStore.restoreVaultedSession), so a request that 401s at launch,
+ * before that read has landed, waits for it rather than concluding there is
+ * nothing to refresh with. On the website this is a plain state read.
+ */
+async function usableRefreshToken(): Promise<string | null> {
+  const { refreshToken, restoreVaultedSession } = useAuthStore.getState();
+  if (refreshToken || !sessionVaultAvailable()) return refreshToken;
+  await restoreVaultedSession();
+  return useAuthStore.getState().refreshToken;
+}
+
+/**
  * Did the server answer, and refuse? An axios error carries a `response`
  * only when one arrived; a request error (no `response`) is a network
  * failure. Anything that is not an axios error at all is a bug in our own
@@ -155,9 +170,16 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
-      const refreshToken = useAuthStore.getState().refreshToken;
+      const refreshToken = await usableRefreshToken();
 
       if (!refreshToken) {
+        if (sessionVaultAvailable()) {
+          // A shell with the keychain: one WebView, no other tabs. A session
+          // this device cannot refresh is over, and a full sign-out clears
+          // the stale tokens so the next launch does not retry them.
+          useAuthStore.getState().logout();
+          return Promise.reject(error);
+        }
         // No refresh token in THIS tab (refresh tokens are sessionStorage-
         // only). Clear this tab's in-memory session without rewriting the
         // shared localStorage payload — other tabs may hold valid sessions
@@ -193,9 +215,9 @@ api.interceptors.response.use(
  * routes a 401 means "wrong password", not "stale token". Rejects without
  * touching the session when this tab holds no refresh token.
  */
-export function refreshSession(): Promise<string> {
-  const refreshToken = useAuthStore.getState().refreshToken;
-  if (!refreshToken) return Promise.reject(new Error('No refresh token in this tab'));
+export async function refreshSession(): Promise<string> {
+  const refreshToken = await usableRefreshToken();
+  if (!refreshToken) throw new Error('No refresh token in this tab');
   if (!refreshPromise) refreshPromise = startRefresh(refreshToken);
   return refreshPromise;
 }

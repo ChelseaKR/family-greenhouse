@@ -103,6 +103,31 @@ export function hasNativeBarTools(): boolean {
   return hasNativeChromeMethod('setBarTools');
 }
 
+/**
+ * True inside the shells when the bridge lists a plugin named `name` that
+ * answers every method in `methods`, read from `Capacitor.PluginHeaders` the
+ * way `hasNativeFrame` reads NativeChrome's. A plugin that is installed in
+ * npm but not registered by the binary (an older app build, or a shell
+ * pretended in a test without it) is not available, and a plugin's JavaScript
+ * side must never be driven without its native half: a plugin's "native"
+ * class binds its methods to the bridge proxy's wrappers, and with no header
+ * the proxy resolves a wrapper back to the same bound method, an endless
+ * chain of promise callbacks that never yields, so the page stops answering
+ * (measured 2026-10-09; services/sessionVault.ts, ADR 0034). Never true on
+ * the website.
+ */
+export function hasNativePlugin(name: string, methods: string[] = []): boolean {
+  if (!isNativeApp()) return false;
+  const headers = (
+    capacitorGlobal() as
+      { PluginHeaders?: Array<{ name?: string; methods?: Array<{ name?: string }> }> } | undefined
+  )?.PluginHeaders;
+  const header = Array.isArray(headers) ? headers.find((h) => h?.name === name) : undefined;
+  if (!header) return false;
+  const listed = new Set((Array.isArray(header.methods) ? header.methods : []).map((m) => m?.name));
+  return methods.every((m) => listed.has(m));
+}
+
 /** Whether the app's NativeChrome plugin lists `method`, from its header. */
 function hasNativeChromeMethod(method: string): boolean {
   if (!hasNativeFrame()) return false;

@@ -331,6 +331,7 @@
     "password": "Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "keepSignedIn": "Mantener la sesión iniciada en este dispositivo",
+    "staysSignedInHere": "Este dispositivo mantiene la sesión iniciada hasta que cierres sesión.",
     "invalidEmail": "Introduce un correo válido",
     "passwordRequired": "La contraseña es obligatoria",
     "signUpFree": "Regístrate gratis",

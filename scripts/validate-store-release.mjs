@@ -163,9 +163,27 @@ const appName = match(capacitor, /appName:\s*['"]([^'"]+)['"]/, 'Capacitor appNa
 // package is installed". `cap sync` regenerates those two files; a plugin
 // added to package.json and never synced is in neither.
 const CAPACITOR_PLATFORM_PACKAGES = ['@capacitor/core', '@capacitor/ios', '@capacitor/android'];
+// A Capacitor plugin is any dependency whose own package.json carries a
+// `capacitor` block (the CLI finds plugins the same way), so third-party
+// plugins such as @aparajita/capacitor-secure-storage (ADR 0034) are held to
+// the same table and the same link checks as the @capacitor/* ones. The
+// `@capacitor/` prefix is the fallback for a dependency whose package.json
+// cannot be read here.
+function isCapacitorPlugin(name) {
+  if (CAPACITOR_PLATFORM_PACKAGES.includes(name)) return false;
+  for (const dir of ['frontend/node_modules', 'node_modules']) {
+    const manifest = resolve(root, dir, name, 'package.json');
+    if (!existsSync(manifest)) continue;
+    try {
+      return Boolean(JSON.parse(readFileSync(manifest, 'utf8')).capacitor);
+    } catch {
+      break;
+    }
+  }
+  return name.startsWith('@capacitor/');
+}
 const installedPlugins = Object.keys(packages.frontend.dependencies ?? {})
-  .filter((name) => name.startsWith('@capacitor/'))
-  .filter((name) => !CAPACITOR_PLATFORM_PACKAGES.includes(name))
+  .filter(isCapacitorPlugin)
   .sort();
 
 const mobileDoc = read('docs/mobile.md');
@@ -175,7 +193,9 @@ const pluginTable = mobileDoc.match(
 if (!pluginTable) {
   fail('docs/mobile.md is missing the capacitor-plugins table markers');
 } else {
-  const documented = [...pluginTable[1].matchAll(/`(@capacitor\/[a-z0-9-]+)`/g)]
+  // The first column of each row names the package; the second column's
+  // backticks name files and events, which are not plugins.
+  const documented = [...pluginTable[1].matchAll(/^\|\s*`((?:@[a-z0-9-]+\/)?[a-z0-9-]+)`\s*\|/gm)]
     .map((row) => row[1])
     .sort();
   const undocumented = installedPlugins.filter((name) => !documented.includes(name));

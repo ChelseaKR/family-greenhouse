@@ -103,6 +103,13 @@ default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-sr
 - Email confirmation required before login (Cognito enforces; the local-server mirrors).
 - Token refresh replaces the short-lived ID/access tokens while retaining a
   valid Cognito refresh token when Cognito does not rotate it.
+- Where the refresh token lives: `sessionStorage` on the website by default,
+  `localStorage` only behind the "Keep me signed in" opt-in (finding 7.1),
+  and inside the iOS/Android apps the device keychain or keystore, in no web
+  storage at all, through `frontend/src/services/sessionVault.ts` (ADR 0034).
+  The keychain item is `afterFirstUnlockThisDeviceOnly`: not in backups, not
+  synced. Sign-out deletes it. The Cognito client's refresh-token validity is
+  365 days; sign-out does not yet revoke the token server-side.
 - The frontend axios interceptor handles a 401 once per request; if refresh itself 401s, the user is logged out silently rather than allowed to keep clicking around with stale state.
 - Session validation on app load (`authStore.verifySession`) calls `/auth/me`
   with the ID token and now attempts the same refresh flow on a 401 before

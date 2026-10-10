@@ -19,6 +19,16 @@
  *     stolen one is good until logout or its 30 days run out.
  *   - A `storage` event listener propagates logout across tabs: a logout
  *     in one tab triggers logout in all other tabs of the same origin.
+ *   - Inside the iOS/Android shells (ADR 0034) the refresh token goes to
+ *     NEITHER web storage: it is written to the device keychain/keystore
+ *     through services/sessionVault.ts and read back from there at launch,
+ *     before the session is verified. sessionStorage dies with the app
+ *     process, so the hardened web default meant a fresh sign-in on every
+ *     cold start; a phone has a lock screen in front of it, and "keep me
+ *     signed in" is not a question there. The checkbox is not shown in the
+ *     shells. The other fields stay in localStorage, so the first render
+ *     already knows the person is signed in and never shows the sign-in
+ *     screen while the vault is read.
  *
  * Why zustand vs Context: zustand lets services (axios interceptors) read
  * state without being inside the React tree. The 401-refresh interceptor
@@ -26,6 +36,7 @@
  */
 import { create } from 'zustand';
 import { isNativeApp } from '@/lib/platform';
+import { jwtIsExpired } from '@/lib/jwtExpiry';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import {
   identify,
@@ -33,6 +44,11 @@ import {
   setActiveHousehold,
   setTelemetryAuthToken,
 } from '@/services/analytics';
+import {
+  readVaultedRefreshToken,
+  sessionVaultAvailable,
+  writeVaultedRefreshToken,
+} from '@/services/sessionVault';
 
 export interface User {
   id: string;
@@ -94,15 +110,27 @@ interface AuthState {
   clearLocalSession: () => void;
   setLoading: (loading: boolean) => void;
   verifySession: () => Promise<void>;
+  /**
+   * Inside the shells: load the refresh token from the device keychain into
+   * this state, once. Resolves at once on the website or when there is
+   * nothing stored. verifySession awaits it before judging the session, and
+   * the api interceptor awaits it before concluding there is no refresh
+   * token to try with, so a request that fires at launch (native push's
+   * registration sync) cannot end the session the vault was about to restore.
+   */
+  restoreVaultedSession: () => Promise<void>;
 }
 
-// Custom Storage that splits keys across localStorage (default) and
-// sessionStorage (long-lived secrets). The bracketing here is the
-// JSON-payload field name inside the persisted state, not the storage key.
+// Custom Storage that splits keys across localStorage (default),
+// sessionStorage (long-lived secrets) and, inside the shells, the device
+// keychain. The bracketing here is the JSON-payload field name inside the
+// persisted state, not the storage key.
 const SESSION_FIELDS = new Set(['refreshToken']);
 // An empty set means "hold nothing back" — every field, refresh token
 // included, persists to localStorage.
 const NO_SESSION_FIELDS = new Set<string>();
+/** Inside the shells the refresh token is kept out of web storage altogether. */
+const VAULT_FIELDS = new Set(['refreshToken']);
 
 /**
  * Which fields this write holds back to sessionStorage. Read from the
@@ -114,24 +142,56 @@ function sessionFieldsFor(state: Record<string, unknown>): Set<string> {
   return state.rememberMe === true ? NO_SESSION_FIELDS : SESSION_FIELDS;
 }
 
-function splitJsonByField(json: string): { local: string; session: string } {
+/**
+ * Which fields this write sends to the device keychain instead of the web.
+ * Only a shell whose bridge lists the plugin: without it, the shells keep
+ * the website's storage model, so an app build that does not register the
+ * plugin behaves exactly as it did before the keychain existed.
+ */
+function vaultFieldsFor(): Set<string> {
+  return sessionVaultAvailable() ? VAULT_FIELDS : NO_SESSION_FIELDS;
+}
+
+function splitJsonByField(json: string): {
+  local: string;
+  session: string;
+  vault: Record<string, unknown>;
+} {
   try {
     const parsed = JSON.parse(json) as { state?: Record<string, unknown> };
     const state = (parsed.state ?? {}) as Record<string, unknown>;
     const fields = sessionFieldsFor(state);
+    const vaulted = vaultFieldsFor();
     const localState: Record<string, unknown> = {};
     const sessionState: Record<string, unknown> = {};
+    const vaultState: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(state)) {
-      if (fields.has(k)) sessionState[k] = v;
+      if (vaulted.has(k)) vaultState[k] = v;
+      else if (fields.has(k)) sessionState[k] = v;
       else localState[k] = v;
     }
     return {
       local: JSON.stringify({ ...parsed, state: localState }),
       session: JSON.stringify({ ...parsed, state: sessionState }),
+      vault: vaultState,
     };
   } catch {
-    return { local: json, session: '{}' };
+    return { local: json, session: '{}', vault: {} };
   }
+}
+
+// The refresh token the vault was last told to hold (or read back from it),
+// so a persist write that carries the same value does not touch the keychain
+// again. Every `set` writes through persist, and most of them (a user
+// update, the active household) have nothing to say to the keychain.
+let vaultedRefreshToken: string | null = null;
+
+function syncVault(vault: Record<string, unknown>): void {
+  if (!sessionVaultAvailable()) return;
+  const token = typeof vault.refreshToken === 'string' ? vault.refreshToken : null;
+  if (token === vaultedRefreshToken) return;
+  vaultedRefreshToken = token;
+  void writeVaultedRefreshToken(token);
 }
 
 function mergeJsonFromSplit(local: string | null, session: string | null): string | null {
@@ -168,16 +228,27 @@ const splitStorage: StateStorage = {
   },
   setItem: (name, value) => {
     if (typeof window === 'undefined' || suppressPersistWrites) return;
-    const { local, session } = splitJsonByField(value);
+    const { local, session, vault } = splitJsonByField(value);
     window.localStorage.setItem(name, local);
     window.sessionStorage.setItem(`${name}-session`, session);
+    syncVault(vault);
   },
   removeItem: (name) => {
     if (typeof window === 'undefined') return;
     window.localStorage.removeItem(name);
     window.sessionStorage.removeItem(`${name}-session`);
+    syncVault({});
   },
 };
+
+// One restore per launch, shared by verifySession and the api interceptor.
+let vaultRestore: Promise<void> | null = null;
+
+/** Test seam: forget what the vault was last told and the one-per-launch restore. */
+export function resetAuthVaultForTests(): void {
+  vaultedRefreshToken = null;
+  vaultRestore = null;
+}
 
 /**
  * Signing out inside the iOS/Android app releases this device's push
@@ -292,7 +363,24 @@ export const useAuthStore = create<AuthState>()(
 
       setLoading: (loading) => set({ isLoading: loading }),
 
+      restoreVaultedSession: () => {
+        if (!sessionVaultAvailable()) return Promise.resolve();
+        vaultRestore ??= readVaultedRefreshToken().then((token) => {
+          if (!token) return;
+          // What the vault holds is what the vault holds: this set must not
+          // write it back (syncVault compares against this value).
+          vaultedRefreshToken = token;
+          if (!get().refreshToken) set({ refreshToken: token });
+        });
+        return vaultRestore;
+      },
+
       verifySession: async () => {
+        // Inside the shells the refresh token is not in web storage, so it
+        // is not in state yet either. Load it before judging anything: with
+        // an expired ID token and no refresh token, the only verdict is
+        // "signed out", and that would be the wrong one.
+        await get().restoreVaultedSession();
         const {
           idToken,
           accessToken,
@@ -310,11 +398,18 @@ export const useAuthStore = create<AuthState>()(
         // When this tab can't recover the session on its own (no refresh
         // token — it's sessionStorage-only, so e.g. a freshly-opened tab),
         // fail tab-locally instead of nuking the shared localStorage that
-        // other tabs with valid refresh tokens still depend on.
-        const failSession = refreshToken ? logout : clearLocalSession;
+        // other tabs with valid refresh tokens still depend on. A shell with
+        // the keychain has one WebView and no tabs to protect: a refused
+        // session there is a full sign-out, so stale tokens are not retried
+        // at every launch.
+        const failSession = refreshToken || sessionVaultAvailable() ? logout : clearLocalSession;
 
         // No token, just mark as not loading
         if (!authToken) {
+          // iOS keeps an app's keychain items through a reinstall, and a
+          // reinstall is a fresh start: with no session on this install, a
+          // token left over from the last one is dropped, not picked up.
+          if (refreshToken && sessionVaultAvailable()) set({ refreshToken: null });
           setLoading(false);
           return;
         }
@@ -358,11 +453,19 @@ export const useAuthStore = create<AuthState>()(
 
         let response: Response | null | 'unreachable';
         try {
-          response = await fetchMe(authToken);
-          // Refresh only means "the bearer expired" for a 401. Retrying a
-          // forbidden request or a server outage with fresh credentials adds
-          // load and cannot change the outcome.
-          if (response.status === 401) response = await refreshAndRetry();
+          if (refreshToken && jwtIsExpired(authToken)) {
+            // The bearer's own `exp` has passed, so /auth/me would answer
+            // 401 and the refresh would follow anyway. Skip straight to it:
+            // a cold start of the app is where that round trip shows. The
+            // server still judges the refresh (lib/jwtExpiry.ts).
+            response = await refreshAndRetry();
+          } else {
+            response = await fetchMe(authToken);
+            // Refresh only means "the bearer expired" for a 401. Retrying a
+            // forbidden request or a server outage with fresh credentials
+            // adds load and cannot change the outcome.
+            if (response.status === 401) response = await refreshAndRetry();
+          }
         } catch {
           // The initial /auth/me call itself threw (network error) — still
           // worth trying a refresh (a flaky first request shouldn't cost an
