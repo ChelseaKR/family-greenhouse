@@ -126,7 +126,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
-    "@size-limit/file": "^13.0.1",
+    "@size-limit/file": "^14.1.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^7.0.1",
