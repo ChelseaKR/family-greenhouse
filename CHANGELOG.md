@@ -45,7 +45,9 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   one round trip fewer. Sign-out removes the token; a refused refresh signs
   the device out; a reinstall starts fresh. The sign-in screen in the apps
   says "This device stays signed in until you sign out." instead of showing
-  the website's checkbox. The website is unchanged. All JS combined
+  the website's checkbox. All of it only in a shell whose bridge lists the
+  plugin; a build without it keeps the website's storage model and
+  checkbox. The website is unchanged. All JS combined
   651.64 → 654.5 kB measured; the budget moves 653 → 674 kB.
 - **The store validator recognizes third-party Capacitor plugins (#963).** Any
   dependency whose package carries a `capacitor` block is now held to the

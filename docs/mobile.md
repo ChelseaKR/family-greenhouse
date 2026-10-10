@@ -570,6 +570,14 @@ expired, began on the sign-in screen (ADR 0034). Inside the shells:
 - **The sign-in screen does not ask.** Instead of the website's checkbox it
   says "This device stays signed in until you sign out." The website keeps
   its opt-in.
+- **Only when the bridge lists the plugin.** `sessionVaultAvailable()` reads
+  `Capacitor.PluginHeaders` for `SecureStorage`, the way the native frame is
+  detected. A shell without it (an app build that does not register the
+  plugin, or a test that pretends the shell without it) keeps the website's
+  storage model and checkbox exactly; the plugin's JavaScript is never
+  loaded without its native half (driven that way, its first read is an
+  endless chain of promise callbacks and the page stops answering; measured
+  2026-10-09, ADR 0034).
 - **The Cognito client's refresh-token validity is 365 days** (was 30). It is
   fixed at sign-in and not extended on use, so a phone signs in again once a
   year.

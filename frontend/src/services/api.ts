@@ -24,6 +24,7 @@ import { useAuthStore } from '@/store/authStore';
 import { planLimitHitContext, track } from '@/services/analytics';
 import i18n from '@/i18n';
 import { isNativeApp } from '@/lib/platform';
+import { sessionVaultAvailable } from '@/services/sessionVault';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -101,7 +102,7 @@ let refreshPromise: Promise<string> | null = null;
  */
 async function usableRefreshToken(): Promise<string | null> {
   const { refreshToken, restoreVaultedSession } = useAuthStore.getState();
-  if (refreshToken || !isNativeApp()) return refreshToken;
+  if (refreshToken || !sessionVaultAvailable()) return refreshToken;
   await restoreVaultedSession();
   return useAuthStore.getState().refreshToken;
 }
@@ -172,10 +173,10 @@ api.interceptors.response.use(
       const refreshToken = await usableRefreshToken();
 
       if (!refreshToken) {
-        if (isNativeApp()) {
-          // One WebView, no other tabs: a session this device cannot
-          // refresh is over, and a full sign-out clears the stale tokens
-          // so the next launch does not retry them.
+        if (sessionVaultAvailable()) {
+          // A shell with the keychain: one WebView, no other tabs. A session
+          // this device cannot refresh is over, and a full sign-out clears
+          // the stale tokens so the next launch does not retry them.
           useAuthStore.getState().logout();
           return Promise.reject(error);
         }

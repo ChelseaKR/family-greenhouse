@@ -1,4 +1,4 @@
-import { isNativeApp } from '@/lib/platform';
+import { hasNativePlugin } from '@/lib/platform';
 
 /**
  * Where the refresh token lives inside the iOS/Android shells: the iOS
@@ -31,6 +31,26 @@ import { isNativeApp } from '@/lib/platform';
 /** The plugin's key; its own prefix is prepended on the device. */
 const REFRESH_TOKEN_KEY = 'session.refreshToken';
 
+/** The plugin's name on the bridge, and the methods every operation goes through. */
+const PLUGIN_NAME = 'SecureStorage';
+const PLUGIN_METHODS = ['internalGetItem', 'internalSetItem', 'internalRemoveItem'];
+
+/**
+ * True inside a shell whose bridge lists the SecureStorage plugin. Only then
+ * does the refresh token go to the keychain; a shell without the plugin (an
+ * app build that does not register it, or a test that pretends the shell
+ * without it) keeps the website's storage model exactly, checkbox included.
+ * Checked on every call, synchronously: the plugin's JavaScript is never
+ * loaded without its native half (see lib/platform.ts, hasNativePlugin).
+ * Driven without it, its first read never settles and never yields either:
+ * an endless chain of promise callbacks, so the page stops answering and no
+ * timer, the 5 s ceiling below included, ever fires. Measured on the
+ * production build with the shell pretended and no header, 2026-10-09.
+ */
+export function sessionVaultAvailable(): boolean {
+  return hasNativePlugin(PLUGIN_NAME, PLUGIN_METHODS);
+}
+
 type Vault = {
   getItem: (key: string) => Promise<string | null>;
   setItem: (key: string, value: string) => Promise<void>;
@@ -40,7 +60,7 @@ type Vault = {
 let vaultPromise: Promise<Vault | null> | null = null;
 
 async function loadVault(): Promise<Vault | null> {
-  if (!isNativeApp()) return null;
+  if (!sessionVaultAvailable()) return null;
   vaultPromise ??= import('@aparajita/capacitor-secure-storage')
     .then(async ({ SecureStorage, KeychainAccess }) => {
       await SecureStorage.setDefaultKeychainAccess(KeychainAccess.afterFirstUnlockThisDeviceOnly);
@@ -73,7 +93,7 @@ export const VAULT_READ_TIMEOUT_MS = 5000;
  * does not answer in time.
  */
 export async function readVaultedRefreshToken(): Promise<string | null> {
-  if (!isNativeApp()) return null;
+  if (!sessionVaultAvailable()) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<null>((resolve) => {
     timer = setTimeout(() => resolve(null), VAULT_READ_TIMEOUT_MS);
@@ -101,7 +121,7 @@ let writeChain: Promise<void> = Promise.resolve();
  * Resolves once the write has settled; never rejects.
  */
 export function writeVaultedRefreshToken(token: string | null): Promise<void> {
-  if (!isNativeApp()) return Promise.resolve();
+  if (!sessionVaultAvailable()) return Promise.resolve();
   writeChain = writeChain.then(async () => {
     const vault = await loadVault();
     if (!vault) return;

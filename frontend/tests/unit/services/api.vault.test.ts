@@ -18,10 +18,16 @@ const vault = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@/services/sessionVault', () => ({
-  readVaultedRefreshToken: vault.read,
-  writeVaultedRefreshToken: vault.write,
-}));
+// The keychain itself is faked; `sessionVaultAvailable` stays real, so the
+// bridge-header check runs against the pretense below.
+vi.mock('@/services/sessionVault', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/sessionVault')>();
+  return {
+    ...actual,
+    readVaultedRefreshToken: vault.read,
+    writeVaultedRefreshToken: vault.write,
+  };
+});
 
 import { api, refreshSession } from '@/services/api';
 import { resetAuthVaultForTests, useAuthStore } from '@/store/authStore';
@@ -55,6 +61,16 @@ describe('api interceptor inside the shells', () => {
     (window as unknown as { Capacitor?: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'ios',
+      PluginHeaders: [
+        {
+          name: 'SecureStorage',
+          methods: [
+            { name: 'internalGetItem', rtype: 'promise' },
+            { name: 'internalSetItem', rtype: 'promise' },
+            { name: 'internalRemoveItem', rtype: 'promise' },
+          ],
+        },
+      ],
     };
   });
 

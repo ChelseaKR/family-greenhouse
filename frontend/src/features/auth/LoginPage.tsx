@@ -13,7 +13,7 @@ import {
   type LoginCredentials,
 } from '@/services/authService';
 import { getPasskeyAssertion, isCeremonyCanceled, passkeysUsableHere } from '@/lib/webauthn';
-import { isNativeApp } from '@/lib/platform';
+import { sessionVaultAvailable } from '@/services/sessionVault';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -255,10 +255,11 @@ export function LoginPage() {
         />
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          {isNativeApp() ? (
-            // The shells keep the refresh token in the device keychain and
-            // stay signed in until sign-out (ADR 0034); there is no choice
-            // to offer, so the line says what happens instead of asking.
+          {sessionVaultAvailable() ? (
+            // A shell with the keychain plugin keeps the refresh token there
+            // and stays signed in until sign-out (ADR 0034); there is no
+            // choice to offer, so the line says what happens instead of
+            // asking. A shell without the plugin keeps the website's choice.
             <p className="text-sm text-gray-700">{t('auth.staysSignedInHere')}</p>
           ) : (
             <label className="inline-flex cursor-pointer items-center gap-2">

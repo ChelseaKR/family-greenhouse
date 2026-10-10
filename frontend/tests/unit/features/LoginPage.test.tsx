@@ -372,10 +372,20 @@ describe('LoginPage — staying signed in (ADR 0034)', () => {
     expect(box).not.toBeChecked();
   });
 
-  it('inside the shells says the device stays signed in instead of asking', () => {
+  it('inside a shell with the keychain plugin says the device stays signed in instead of asking', () => {
     (window as unknown as { Capacitor?: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'ios',
+      PluginHeaders: [
+        {
+          name: 'SecureStorage',
+          methods: [
+            { name: 'internalGetItem', rtype: 'promise' },
+            { name: 'internalSetItem', rtype: 'promise' },
+            { name: 'internalRemoveItem', rtype: 'promise' },
+          ],
+        },
+      ],
     };
     renderLogin();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
@@ -384,5 +394,17 @@ describe('LoginPage — staying signed in (ADR 0034)', () => {
     ).toBeInTheDocument();
     // Password recovery is still one tap away.
     expect(screen.getByRole('link', { name: /forgot/i })).toBeInTheDocument();
+  });
+
+  it('inside a shell whose bridge does not list the plugin keeps the website checkbox', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    renderLogin();
+    expect(
+      screen.getByRole('checkbox', { name: /keep me signed in on this device/i })
+    ).not.toBeChecked();
+    expect(screen.queryByText(/stays signed in until you sign out/i)).not.toBeInTheDocument();
   });
 });

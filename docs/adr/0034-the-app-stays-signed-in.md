@@ -111,6 +111,18 @@ All-JS-combined budget stood at 653 kB over a measured 651.64 kB, so a plugin co
   token rotation, which would make an active phone's session renew itself indefinitely (the
   backend echoes the old token today, and the website's "Keep me signed in" sessions share one
   token across tabs, which rotation would break without more work).
+- Only a shell whose bridge lists the plugin uses it (`Capacitor.PluginHeaders`, read the way the
+  native frame is detected). A shell without it, an app build that does not register the plugin or a
+  test that pretends the shell without it, keeps the website's storage model exactly, checkbox
+  included. This is not optional: the plugin's "native" JavaScript class binds each storage method
+  to the bridge proxy's wrapper for it, and with no header Capacitor's proxy resolves that wrapper
+  back to the same bound method, so the first keychain read is an endless chain of promise callbacks
+  that never yields to the event loop. Measured on the production build with the shell pretended
+  and no header (2026-10-09): the page reached `/login` in under 200 ms, then stopped answering
+  `page.evaluate` for good and the next `page.goto` timed out; the 5 s ceiling on the read is a
+  timer, and no timer fires while the microtask queue never drains. In CI that took six
+  shell-pretended e2e specs down (`page.goto: net::ERR_ABORTED`, `locator.waitFor` timeouts). With
+  the header listed, the same read answered and the page kept running.
 - The plugin declares `@capacitor/android`, `@capacitor/app`, `@capacitor/core`, `@capacitor/ios` and
   `@capacitor/keyboard` as dependencies rather than peer dependencies. They resolve to the copies
   already installed, so nothing is duplicated, but a Capacitor major bump has to carry this plugin

@@ -19,10 +19,16 @@ const vault = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@/services/sessionVault', () => ({
-  readVaultedRefreshToken: vault.read,
-  writeVaultedRefreshToken: vault.write,
-}));
+// The keychain itself is faked; `sessionVaultAvailable` stays real, so the
+// bridge-header check runs against the pretense below.
+vi.mock('@/services/sessionVault', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/sessionVault')>();
+  return {
+    ...actual,
+    readVaultedRefreshToken: vault.read,
+    writeVaultedRefreshToken: vault.write,
+  };
+});
 
 import { resetAuthVaultForTests, useAuthStore } from '@/store/authStore';
 
@@ -45,10 +51,25 @@ const expiredJwt = (() => {
   return `eyJhbGciOiJSUzI1NiJ9.${payload}.signature`;
 })();
 
-function pretendToBeTheShell() {
+/** The shell with the plugin registered: the bridge lists it, as on a device. */
+function pretendToBeTheShell({ withPlugin = true } = {}) {
   (window as unknown as { Capacitor?: unknown }).Capacitor = {
     isNativePlatform: () => true,
     getPlatform: () => 'ios',
+    ...(withPlugin
+      ? {
+          PluginHeaders: [
+            {
+              name: 'SecureStorage',
+              methods: [
+                { name: 'internalGetItem', rtype: 'promise' },
+                { name: 'internalSetItem', rtype: 'promise' },
+                { name: 'internalRemoveItem', rtype: 'promise' },
+              ],
+            },
+          ],
+        }
+      : {}),
   };
 }
 
@@ -269,6 +290,37 @@ describe('authStore inside the shells — a cold start', () => {
     expect(state.refreshToken).toBe('refresh-1');
     expect(state.isLoading).toBe(false);
     expect(vault.write).not.toHaveBeenCalled();
+  });
+});
+
+describe('authStore inside a shell whose bridge does not list the plugin', () => {
+  beforeEach(() => pretendToBeTheShell({ withPlugin: false }));
+
+  it('keeps the website storage model: sessionStorage by default, localStorage when asked', async () => {
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+    expect(vault.write).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('auth-storage-session') ?? '').toContain('refresh-secret');
+    expect(localStorage.getItem('auth-storage') ?? '').not.toContain('refresh-secret');
+
+    useAuthStore.getState().setRememberMe(true);
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-secret');
+    expect(localStorage.getItem('auth-storage') ?? '').toContain('refresh-secret');
+    expect(vault.write).not.toHaveBeenCalled();
+  });
+
+  it('judges a launch without reading any keychain, and clears only this tab on a refused token', async () => {
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+    useAuthStore.setState({ refreshToken: null });
+    server.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 }))
+    );
+
+    await useAuthStore.getState().verifySession();
+
+    expect(vault.read).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    // The pre-keychain behavior, unchanged: the shared payload survives.
+    expect(localStorage.getItem('auth-storage') ?? '').toContain('id-1');
   });
 });
 

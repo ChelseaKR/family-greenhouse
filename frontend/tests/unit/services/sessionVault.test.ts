@@ -29,10 +29,25 @@ import {
 
 const KEY = 'session.refreshToken';
 
-function pretendToBeTheShell(platform: 'ios' | 'android') {
+/** The shell with the plugin registered: the bridge lists it, as on a device. */
+function pretendToBeTheShell(platform: 'ios' | 'android', { withPlugin = true } = {}) {
   (window as unknown as { Capacitor?: unknown }).Capacitor = {
     isNativePlatform: () => true,
     getPlatform: () => platform,
+    ...(withPlugin
+      ? {
+          PluginHeaders: [
+            {
+              name: 'SecureStorage',
+              methods: [
+                { name: 'internalGetItem', rtype: 'promise' },
+                { name: 'internalSetItem', rtype: 'promise' },
+                { name: 'internalRemoveItem', rtype: 'promise' },
+              ],
+            },
+          ],
+        }
+      : {}),
   };
 }
 
@@ -54,6 +69,41 @@ describe('sessionVault', () => {
       expect(plugin.getItem).not.toHaveBeenCalled();
       expect(plugin.setItem).not.toHaveBeenCalled();
       expect(plugin.setDefaultKeychainAccess).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('inside a shell whose bridge does not list the plugin', () => {
+    // An app build that does not register the plugin, or a test that
+    // pretends the shell without it. The plugin's JavaScript must not be
+    // driven: its "native" class binds its methods to the bridge proxy's
+    // wrappers, and with no header the proxy resolves a wrapper back to the
+    // same bound method, an endless chain of promise callbacks that never
+    // yields (the page stopped answering; the six e2e failures on 2026-10-09).
+    beforeEach(() => pretendToBeTheShell('ios', { withPlugin: false }));
+
+    it('holds nothing and loads nothing, like the website', async () => {
+      expect(await readVaultedRefreshToken()).toBeNull();
+      await writeVaultedRefreshToken('refresh-1');
+      expect(plugin.getItem).not.toHaveBeenCalled();
+      expect(plugin.setItem).not.toHaveBeenCalled();
+      expect(plugin.setDefaultKeychainAccess).not.toHaveBeenCalled();
+    });
+
+    it('is not available when the header lists the plugin without its methods', async () => {
+      for (const header of [
+        { name: 'SecureStorage', methods: [{ name: 'internalGetItem' }] },
+        { name: 'SecureStorage' },
+      ]) {
+        (window as unknown as { Capacitor?: unknown }).Capacitor = {
+          isNativePlatform: () => true,
+          getPlatform: () => 'ios',
+          PluginHeaders: [header],
+        };
+        expect(await readVaultedRefreshToken()).toBeNull();
+        await writeVaultedRefreshToken('refresh-1');
+      }
+      expect(plugin.getItem).not.toHaveBeenCalled();
+      expect(plugin.setItem).not.toHaveBeenCalled();
     });
   });
 

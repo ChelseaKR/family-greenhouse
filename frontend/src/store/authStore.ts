@@ -44,7 +44,11 @@ import {
   setActiveHousehold,
   setTelemetryAuthToken,
 } from '@/services/analytics';
-import { readVaultedRefreshToken, writeVaultedRefreshToken } from '@/services/sessionVault';
+import {
+  readVaultedRefreshToken,
+  sessionVaultAvailable,
+  writeVaultedRefreshToken,
+} from '@/services/sessionVault';
 
 export interface User {
   id: string;
@@ -138,9 +142,14 @@ function sessionFieldsFor(state: Record<string, unknown>): Set<string> {
   return state.rememberMe === true ? NO_SESSION_FIELDS : SESSION_FIELDS;
 }
 
-/** Which fields this write sends to the device keychain instead of the web. */
+/**
+ * Which fields this write sends to the device keychain instead of the web.
+ * Only a shell whose bridge lists the plugin: without it, the shells keep
+ * the website's storage model, so an app build that does not register the
+ * plugin behaves exactly as it did before the keychain existed.
+ */
 function vaultFieldsFor(): Set<string> {
-  return isNativeApp() ? VAULT_FIELDS : NO_SESSION_FIELDS;
+  return sessionVaultAvailable() ? VAULT_FIELDS : NO_SESSION_FIELDS;
 }
 
 function splitJsonByField(json: string): {
@@ -178,7 +187,7 @@ function splitJsonByField(json: string): {
 let vaultedRefreshToken: string | null = null;
 
 function syncVault(vault: Record<string, unknown>): void {
-  if (!isNativeApp()) return;
+  if (!sessionVaultAvailable()) return;
   const token = typeof vault.refreshToken === 'string' ? vault.refreshToken : null;
   if (token === vaultedRefreshToken) return;
   vaultedRefreshToken = token;
@@ -355,7 +364,7 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       restoreVaultedSession: () => {
-        if (!isNativeApp()) return Promise.resolve();
+        if (!sessionVaultAvailable()) return Promise.resolve();
         vaultRestore ??= readVaultedRefreshToken().then((token) => {
           if (!token) return;
           // What the vault holds is what the vault holds: this set must not
@@ -389,17 +398,18 @@ export const useAuthStore = create<AuthState>()(
         // When this tab can't recover the session on its own (no refresh
         // token — it's sessionStorage-only, so e.g. a freshly-opened tab),
         // fail tab-locally instead of nuking the shared localStorage that
-        // other tabs with valid refresh tokens still depend on. The shells
-        // have one WebView and no tabs to protect: a refused session there
-        // is a full sign-out, so stale tokens are not retried at every launch.
-        const failSession = refreshToken || isNativeApp() ? logout : clearLocalSession;
+        // other tabs with valid refresh tokens still depend on. A shell with
+        // the keychain has one WebView and no tabs to protect: a refused
+        // session there is a full sign-out, so stale tokens are not retried
+        // at every launch.
+        const failSession = refreshToken || sessionVaultAvailable() ? logout : clearLocalSession;
 
         // No token, just mark as not loading
         if (!authToken) {
           // iOS keeps an app's keychain items through a reinstall, and a
           // reinstall is a fresh start: with no session on this install, a
           // token left over from the last one is dropped, not picked up.
-          if (refreshToken && isNativeApp()) set({ refreshToken: null });
+          if (refreshToken && sessionVaultAvailable()) set({ refreshToken: null });
           setLoading(false);
           return;
         }
