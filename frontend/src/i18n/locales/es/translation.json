@@ -392,6 +392,28 @@
       "noPasskey": "Esta cuenta todavía no tiene ninguna llave de acceso. Inicia sesión con tu contraseña y añade una en Ajustes → Seguridad.",
       "rejected": "Esa llave de acceso no ha funcionado. Vuelve a intentarlo o inicia sesión con tu contraseña.",
       "expired": "Ha pasado demasiado tiempo. Vuelve a probar con la llave de acceso."
+    },
+    "intro": {
+      "skip": "Omitir",
+      "next": "Siguiente",
+      "pagePosition": "Página {n} de {total}",
+      "household": {
+        "title": "Una lista de plantas para toda la casa",
+        "body": "Todas las personas de tu hogar ven las mismas plantas, habitaciones y calendarios de cuidado."
+      },
+      "claim": {
+        "title": "Tómala y nadie riega dos veces",
+        "body": "Una tarea que nadie ha tomado queda libre. Tómala y el resto de la casa verá que alguien se encarga."
+      },
+      "away": {
+        "title": "¿Te vas unos días? Deja las plantas en buenas manos",
+        "body": "Envía a quien cuide tus plantas un enlace que funciona sin cuenta y deja de funcionar en la fecha que elijas."
+      },
+      "start": {
+        "title": "Empieza con tu hogar",
+        "body": "Crea una cuenta para preparar tu hogar o inicia sesión en el que ya compartes."
+      },
+      "haveAccount": "Ya tengo una cuenta"
     }
   },
   "joinInvite": {

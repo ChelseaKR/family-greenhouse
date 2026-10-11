@@ -36,15 +36,24 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:end -->
 
-One more plugin lives in the iOS app target rather than npm, so the table
-above (npm packages only) does not list it: **`Print`**
-(`frontend/ios/App/App/PrintPlugin.swift`, registered by
+Three more plugins live in the iOS app target rather than npm, so the table
+above (npm packages only) does not list them. Each is registered by
 `MainViewController.swift`, which `Main.storyboard` names as the bridge view
-controller). WKWebView drops `window.print()`, so the print buttons on the
-plant passport, plant tags, sitter brief and caretaker report call
-`frontend/src/services/nativePrint.ts`, which opens the iOS print sheet
-through it: AirPrint, or Share to save or send a PDF. Android has no
-counterpart yet, and its WebView drops `window.print()` too.
+controller, and the web uses each only when `Capacitor.PluginHeaders` lists
+it, so an app built without one, and Android, keep the web's own version.
+`npm run mobile:validate` holds this table to the Swift: every class that
+declares a `jsName` is listed here, registered, and built by the Xcode
+project, and nothing else is listed.
+
+<!-- app-target-plugins:start -->
+
+| Plugin         | What it backs                                                                                                                                                                                                                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NativeChrome` | Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). See "The native frame (iOS)" below.                                                                                                                                                 |
+| `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (`NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; ADR 0035). See "The signed-out intro (iOS)" below.                                                   |
+| `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too. |
+
+<!-- app-target-plugins:end -->
 
 Everything else the apps do is the same web code running in a WebView. One
 thing looks native and is not, because it has been written into review notes
@@ -373,7 +382,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Launch             | The launch screen stays up until the first page's heading renders, then fades (`SplashScreen.launchAutoHide: false`, released by `nativeShell.ts`; a 5 s fallback armed in `nativeLaunchBoot.ts` means a startup error cannot leave it up). The WebView background is the launch screen's forest green, not white.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Status bar         | The app has no dark theme, so the bar follows the surface under it, not the system appearance: light icons on the launch screen and the drawer, dark icons on the app. iOS declares `UIUserInterfaceStyle` Light; Android's theme is Light with the page's paper background.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Keyboard           | `@capacitor/keyboard` resizes the iOS WebView above the keyboard (its default `native` mode); Capacitor's SystemBars pads the Android one by the IME inset. `nativeShell.ts` then scrolls the focused field to the middle of what is left. The plugin hides the iOS Prev / Next / Done bar on load with no setting to stop it, so `restoreKeyboardAccessoryBar()` turns it back on at launch.                                                                                                                                                                                                                                                                                                                                                                                          |
-| Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. On iOS the native intro opens over sign-in (see "The signed-out intro (iOS)"). See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                                                   |
 | Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login. The refresh token is kept in the device keychain and read back at launch, so the app stays signed in until sign-out (ADR 0034). See "Staying signed in" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Text size          | iOS: WKWebView ignores Dynamic Type, so `useNativeTextSize` reads the preferred size through `@capacitor/text-zoom` on launch and on every return to the foreground, and applies it as the page's text-size adjustment, every size from the smallest to AX5 (about 312%), with no cap: a layout that clips at a large size is fixed by wrapping or scrolling, never by a smaller size (owner decision, 2026-09-18). From AX1 up `<html data-text-size="large">` switches on the `large-text:` variant (index.css), which stacks side-by-side rows and lets the top bar scroll away. `tests/e2e/largest-text.spec.ts` holds the main screens at 312% in English and Spanish. Android's WebView already applies the system font scale.                                                   |
 | Screen readers     | The navigation drawer is announced by name ("Main navigation"), not as an unnamed dialog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -515,6 +524,59 @@ save the server refuses opens the sheet again with what was entered and the
 reason. Unlike an alert, a form sheet is not closed when the app goes to the
 background, so nothing typed is lost. An app built before `presentForm`, and
 the website, keep the web dialog.
+
+### The signed-out intro (iOS)
+
+A signed-out start in the iOS app (the first launch, a launch after
+sign-out, a sign-out) opens on a native intro instead of the bare web
+sign-in form (ADR 0035). It is SwiftUI, presented full screen over the web
+view by the `NativeIntro` plugin, and the web's sign-in screen is underneath
+it the whole time.
+
+- **Pages.** Three story pages ("One plant list for the whole house",
+  "Claim it, and nobody waters twice", "Going away? Hand the plants over"),
+  then the last page, "Start with your household", with **Create account**
+  and **I already have an account**. Swipe or tap Next to move, tap a dot to
+  jump, Skip (top right) goes to the last page. A light selection tick plays
+  on every page change; a tap on a door plays a light impact.
+- **Pictures.** The brand's greenhouse mark, its two plants growing up from
+  the threshold, and the empty-state art's greenhouse frame around an SF
+  Symbol (a water drop being claimed, a suitcase with a link), redrawn in
+  Swift from `public/brand/*.svg` and `components/illustrations`. Body text
+  is SF Pro and titles are the system serif: the brand faces are web fonts
+  and are not bundled in the binary.
+- **Who owns what.** The web owns every word, in the en and es catalogs
+  (`auth.intro.*`, plus the sign-up screen's own `auth.createAccount` and the
+  brand tagline), built by `config/nativeIntro.ts` and sent with each
+  request, so Swift carries no strings of its own. Swift owns the pages,
+  paging, motion and haptics, and answers only which door was tapped
+  (`{ choice: 'create' | 'signIn' | null }`). The web then opens its own
+  sign-up screen, or puts focus in the sign-in form's email field. Nothing in
+  sign-in, sign-up, Cognito or the session changes.
+- **When.** The whole story once per install, until it is answered or the
+  person signs in on this install (`lib/nativeIntroState.ts`, a
+  `localStorage` mark iOS deletes with the app). After that, a signed-out
+  start shows only the last page. At most once per signed-out stretch: from
+  sign-in to sign-up and back does not bring it up again. Not after a
+  `?redirect=` link to sign-in or a just-confirmed email, where the person
+  already chose to sign in. With registration paused it offers only the
+  sign-in door.
+- **Accessibility.** Dynamic Type at every size (the page scrolls when it no
+  longer fits, and the picture shrinks at the accessibility sizes), VoiceOver
+  (titles are headings and get focus on a page change, the dots are one
+  adjustable "Page 2 of 4" element, the two-finger escape skips to the last
+  page or closes the intro from it), Reduce Motion (nothing moves but the
+  system's page swipe), light and dark (the intro follows the phone's
+  appearance; the web pages stay light), safe areas, and iPad width.
+- **Fallback.** The web asks for the intro only when the bridge lists
+  `NativeIntro` with `present` and `dismiss`. Android, the website, and an
+  iOS build without the plugin render the sign-in screen exactly as before,
+  and never load the plugin's code.
+
+`tests/e2e/native-intro.spec.ts` plays a signed-out launch, both doors, the
+relaunch, a sign-out, Spanish, the no-plugin build and the website with the
+shell pretended; `tests/e2e/native-review-hygiene.spec.ts` holds the intro's
+words to the store payment rules.
 
 ### Fresh data, offline and unreachable
 

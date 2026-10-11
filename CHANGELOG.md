@@ -16,6 +16,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **iOS app: a native intro when no one is signed in (ADR 0035).** A
+  signed-out start used to be the website's sign-in form in a web view.
+  The iOS app now opens on a SwiftUI intro over that form: three pages on
+  what the app is for ("One plant list for the whole house", "Claim it, and
+  nobody waters twice", "Going away? Hand the plants over"), drawn with the
+  brand's greenhouse mark and SF Symbols, then "Start with your household"
+  with **Create account** and **I already have an account**, which open the
+  existing sign-up screen or the sign-in form. Swipe, Next, page dots and
+  Skip; haptics on page changes; Dynamic Type, VoiceOver, Reduce Motion,
+  light and dark. The whole story shows once per install; after that, and
+  after sign-out, only the last page. English and Spanish through the
+  catalogs. Sign-in, sign-up and the session are unchanged. Only in an app
+  whose bridge lists the new `NativeIntro` plugin, so Android, the website
+  and older builds keep the sign-in screen as it was. All JS combined
+  655.83 → 657.25 kB measured, within the 674 kB budget.
+- **The store validator holds the iOS app-target plugins (ADR 0035).** Every
+  Swift class that declares a `jsName` must be registered by
+  `MainViewController`, built by the Xcode project and listed in the new
+  app-target table in `docs/mobile.md`.
+
 ## [0.41.0] - 2026-10-10
 
 **The iOS app stays signed in, and a reminder now says which plant, what

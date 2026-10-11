@@ -25,6 +25,9 @@
 		A11E0012000000000000001C /* NativeFormSheetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E0013000000000000001D /* NativeFormSheetModel.swift */; };
 		A11E000A000000000000000A /* NativeFrameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000B000000000000000B /* NativeFrameController.swift */; };
 		A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E000D000000000000000D /* NativeChromePlugin.swift */; };
+		A11E00160000000000000020 /* NativeIntroModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00170000000000000021 /* NativeIntroModel.swift */; };
+		A11E00180000000000000022 /* NativeIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00190000000000000023 /* NativeIntroView.swift */; };
+		A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001B0000000000000025 /* NativeIntroPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +52,9 @@
 		A11E0013000000000000001D /* NativeFormSheetModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFormSheetModel.swift; sourceTree = "<group>"; };
 		A11E000B000000000000000B /* NativeFrameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFrameController.swift; sourceTree = "<group>"; };
 		A11E000D000000000000000D /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
+		A11E00170000000000000021 /* NativeIntroModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroModel.swift; sourceTree = "<group>"; };
+		A11E00190000000000000023 /* NativeIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroView.swift; sourceTree = "<group>"; };
+		A11E001B0000000000000025 /* NativeIntroPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +100,9 @@
 				A11E0013000000000000001D /* NativeFormSheetModel.swift */,
 				A11E000B000000000000000B /* NativeFrameController.swift */,
 				A11E000D000000000000000D /* NativeChromePlugin.swift */,
+				A11E00170000000000000021 /* NativeIntroModel.swift */,
+				A11E00190000000000000023 /* NativeIntroView.swift */,
+				A11E001B0000000000000025 /* NativeIntroPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -198,6 +207,9 @@
 				A11E0012000000000000001C /* NativeFormSheetModel.swift in Sources */,
 				A11E000A000000000000000A /* NativeFrameController.swift in Sources */,
 				A11E000C000000000000000C /* NativeChromePlugin.swift in Sources */,
+				A11E00160000000000000020 /* NativeIntroModel.swift in Sources */,
+				A11E00180000000000000022 /* NativeIntroView.swift in Sources */,
+				A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

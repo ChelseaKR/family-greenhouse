@@ -64,6 +64,7 @@ be invisible.
 | [0032](0032-household-chat-channel-webhooks-sealed-with-kms.md)              | A household chat-channel webhook is the first replayed secret, so it is sealed with KMS                                    | Proposed |
 | [0033](0033-plant-photos-are-served-only-through-short-lived-signed-urls.md) | Plant photos are served only through short-lived signed URLs                                                               | Accepted |
 | [0034](0034-the-app-stays-signed-in.md)                                      | The app stays signed in: the refresh token lives in the device keychain, for a year                                        | Accepted |
+| [0035](0035-the-ios-app-opens-signed-out-on-a-native-intro.md)               | The iOS app opens signed-out on a native intro that hands off to the web's own sign-in and sign-up                         | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 
