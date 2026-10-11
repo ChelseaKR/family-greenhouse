@@ -16,6 +16,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **An operator backfill that strips location metadata from photos already
+  stored — built, not run.** `backfill:photo-metadata` (backend) reads every
+  version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
+  PNG-text place names, IPTC place fields and MPF trailing images, and with
+  `--confirm` rewrites each affected photo in place under the same key. The image data is copied, not re-encoded, and a JPEG keeps its
+  orientation. The write is conditional on the ETag it read, so a photo
+  deleted or replaced mid-run is never brought back. `--delete-old-versions`
+  also removes the versioned originals. It is a dry run by default, and it
+  prints counts and short refs, never keys or coordinates. A read-only census
+  on 2026-09-18 found no location metadata in any stored photo or old
+  version, so there's nothing for it to do today. It's for photos
+  stored between now and the release that carries #849. Runbook: "Strip
+  location metadata from stored photos".
+
 ## [0.41.0] - 2026-10-10
 
 **The iOS app stays signed in, and a reminder now says which plant, what
