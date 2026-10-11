@@ -16,6 +16,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-10-10
+
+**The iOS app stays signed in, and a reminder now says which plant, what
+care, and what to do about it.** Opening the app used to mean signing in
+again whenever more than an hour had passed; the refresh token now lives in
+the device keychain, and the Cognito client keeps it valid for a year. The
+daily reminder email is branded HTML that names the most urgent plant and its
+task, groups the rest, and links each plant to its page; every email the kit
+renders gets the same shell. A push reminder names the plant and the care,
+opens that plant's care section, and on iPhone can be answered with Done or
+Snooze until tomorrow from the notification itself. The App Store listing
+says reminders arrive as push on iPhone. The sign-in change and the
+notification buttons reach people through store builds (0.41.0, build 4100);
+the email and the new reminder words reach everyone with this tag's deploy.
+
 - **The Terraform plan changes one attribute of the Cognito app client (#963).**
   `module.auth.aws_cognito_user_pool_client.main` updates in place with
   `refresh_token_validity: 30 => 365` (days), from
@@ -24,11 +39,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 destroy.` Anything else means stop. Tokens issued before the apply keep
   the 30 days they were issued with; the first sign-in after it gets a year.
   No stored data changes shape.
-- **The app-only changes reach people through store builds**, not through
-  this tag's web deploy. The web deploy carries the code, which does nothing
-  on the website. A device signed in under an older build signs in once more
-  on the first launch of the new one (its refresh token was in the WebView's
-  `sessionStorage`, which the update dropped); after that it stays.
+  - This is the only `infrastructure/` change since 0.40.0: one file, the
+    attribute and its comment. The AWS provider updates the client in place
+    with `UpdateUserPoolClient`; only `user_pool_id` and `generate_secret`
+    force a replacement, and neither changes. `token_validity_units` keeps
+    `refresh_token = "days"`, so 365 means 365 days. A `must be replaced` on
+    the client, or any change to the user pool itself, means stop.
+  - The deploy workflows are unchanged since 0.40.0, no stored data is
+    migrated, and the Terms of Service text is unchanged, so their effective
+    date stays 0.38.2's (October 2, 2026).
+- **The app-only changes reach people through store builds** (0.41.0, build
+  4100), not through this tag's web deploy. The web deploy carries the code,
+  which does nothing on the website. A device signed in under an older build
+  signs in once more on the first launch of the new one (its refresh token
+  was in the WebView's `sessionStorage`, which the update dropped); after
+  that it stays (#963). The iPhone notification buttons, the badge clearing
+  after a button and the Settings preview line need a build carrying #964;
+  the new reminder words and deep links, and the branded email (#962), reach
+  every installed app and every inbox with this tag's deploy. An iOS build
+  made with `VITE_NATIVE_PUSH_ENABLED=true` and
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED=false` offers push, as build 4001 did.
 
 ### Added
 
@@ -57,7 +87,7 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
 ### Changed
 
 - **The App Store listing says reminders also arrive as push notifications
-  on iPhone.** Native push passed the device checks in
+  on iPhone (#961).** Native push passed the device checks in
   `docs/native-push-setup.md` (section 8) on 2026-10-09 with build 4001, the
   first build made with `VITE_NATIVE_PUSH_ENABLED=true`, so the description's
   reminders section and the release notes in
@@ -65,7 +95,7 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   release, and the App Review notes in `docs/APP-STORE.md` name push and how
   to reach a reminder. The Google Play copy is unchanged, because Android
   push is off. Documentation only; no app code changes.
-- **The daily reminder email is branded HTML that says what to do.** Subject
+- **The daily reminder email is branded HTML that says what to do (#962).** Subject
   and title name the most urgent plant and its task with the true count of the
   rest (_Water Monstera and 2 more today_ / _Regar Monstera y 2 más hoy_); rows
   are grouped under _Ready for some catch-up care_, _Due today_, _Coming up_,
@@ -75,18 +105,18 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   links to reminder settings. Push and SMS keep their counts title. The welcome,
   weekly digest and year recap emails pick up the same branded shell with no
   copy change.
-- **Every email now carries the brand**: a Forest header band with the logo
+- **Every email now carries the brand (#962)**: a Forest header band with the logo
   (`https://familygreenhouse.net/brand/logo-dark.png`, with alt text and
   dimensions; the one image an email loads, ADR 0021 amended), the
   design-token palette stated on both the light and the dark path, the brand
   faces named first in the font stacks with system fallbacks and nothing
   fetched, rows as Paper-on-Glass panes, and the terracotta accent only on an
   honest-failure notice.
-- **The text part is kept.** Every message is `multipart/alternative`; the
+- **The text part is kept (#962).** Every message is `multipart/alternative`; the
   reminder's text part is the tested numbered list the reply-to-act path is
   bound to, and the HTML rows carry the same numbers when a reply address is
   bound.
-- **Checked in the repo.** `renderedEmails.test.ts` renders every email in
+- **Checked in the repo (#962).** `renderedEmails.test.ts` renders every email in
   both languages to `backend/test-output/email/` (git-ignored), checks each
   for email-HTML validity, size and link parity between the two parts, and
   keeps the reminder as a committed golden; `emailHtmlChecks.test.ts` is the
@@ -94,9 +124,9 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   each in light, dark and phone views. Private plant notes are asserted absent
   from the reminder, the digest and the up-for-grabs email end to end.
 - `scripts/check-app-links.mjs` accepts a backend-built link to a file under
-  `frontend/public/` and verifies the file exists.
+  `frontend/public/` and verifies the file exists (#962).
 - **Reminder notifications name the plant and the care, open the task they
-  name, and can be answered from the notification itself.** A push reminder
+  name, and can be answered from the notification itself (#964).** A push reminder
   used to read "Plant care reminder: 1 due today" and open the task list. It
   now reads "Water the Monstera" ("Monstera necesita riego") with when it is
   due and what to do next ("Due today. Mark it done once you have, or snooze
@@ -116,9 +146,9 @@ destroy.` Anything else means stop. Tokens issued before the apply keep
   module (`services/reminderCopy.ts`), in English and Spanish, with no field
   that could carry a plant's notes or a person. Settings → Notifications shows
   one line of what a reminder says. The email reminder has its own entry
-  above. Store
-  note: the iPhone buttons need a build carrying this change; the words and
-  the deep link reach every installed app with the backend deploy.
+  above. Store note: the iPhone buttons need a build carrying this change;
+  the words and the deep link reach every installed app with the backend
+  deploy.
 
 ## [0.40.0] - 2026-10-06
 
