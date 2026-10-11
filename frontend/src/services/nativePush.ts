@@ -1,5 +1,6 @@
 import { api } from './api';
 import { isNativeApp, getNativePlatform } from '@/lib/platform';
+import { performPushAction, pushActionFromId, readPushTaskRef } from './pushActions';
 
 /**
  * Native (Capacitor iOS/Android) push. The web push path (service worker +
@@ -305,22 +306,48 @@ function inAppPath(url: unknown): string | null {
 }
 
 /**
- * Wire native push into the running app: open a tapped notification's link
- * in the app, and sync registration now and on every return to the
- * foreground. Nothing is loaded unless this is a shell built with push.
+ * Wire native push into the running app: act on a notification's Done or
+ * Snooze button, open a tapped notification's link in the app, and sync
+ * registration now and on every return to the foreground. Nothing is loaded
+ * unless this is a shell built with push.
+ *
+ * The action listener is attached before anything else so that an event the
+ * plugin retained from a launch it caused (iOS starts the app in the
+ * background for a notification action) is consumed at once.
  */
 export function initNativePush(): void {
   if (!isNativeApp() || !nativePushBuildEnabled()) return;
 
   void (async () => {
     const { PushNotifications } = await import('@capacitor/push-notifications');
-    await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
-      const path = inAppPath((notification.data as { url?: unknown } | undefined)?.url);
-      if (!path) return;
-      // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
-      window.history.pushState(null, '', path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    });
+    await PushNotifications.addListener(
+      'pushNotificationActionPerformed',
+      ({ actionId, notification }) => {
+        const data: unknown = notification.data;
+        const action = pushActionFromId(actionId);
+        if (action) {
+          // A button on a single-task reminder. The ids come from the
+          // notification; the server checks everything about them.
+          const task = readPushTaskRef(data);
+          if (!task) return;
+          void performPushAction({ action, ...task }).then((outcome) => {
+            if (outcome === 'failed') return;
+            // The reminder named one task and it is no longer open today, so
+            // the count it put on the icon is stale: clear it with the
+            // notification. (Rejects before this launch has registered, in
+            // which case the sync at launch clears both.)
+            void PushNotifications.removeAllDeliveredNotifications().catch(() => undefined);
+          });
+          return;
+        }
+        if (actionId !== 'tap') return; // 'dismiss', or an action this build does not know.
+        const path = inAppPath((data as { url?: unknown } | undefined)?.url);
+        if (!path) return;
+        // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
+        window.history.pushState(null, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    );
 
     const { App } = await import('@capacitor/app');
     await App.addListener('appStateChange', ({ isActive }) => {

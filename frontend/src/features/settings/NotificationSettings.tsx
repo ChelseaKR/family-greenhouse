@@ -540,6 +540,7 @@ export function NotificationSettings() {
                     ? 'Permission denied — update your browser settings to re-enable.'
                     : 'Enable to be alerted when overdue tasks appear in the dashboard.'}
               </p>
+              <p className="mt-1 text-sm text-gray-500">{t('notifications.reminderPreview')}</p>
             </div>
             {browserActive ? (
               <Button
@@ -937,6 +938,7 @@ function NativePushSetting() {
                 ? t('nativePush.deniedHint')
                 : t('notifications.deviceInactive')}
           </p>
+          <p className="mt-1 text-sm text-gray-500">{t('notifications.reminderPreview')}</p>
         </div>
         {enabled ? (
           <Button
