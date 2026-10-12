@@ -1694,6 +1694,10 @@
       "statsEmpty": "No signups yet. Once someone joins using your link, they'll show up here.",
       "rowGranted": "Bonus granted",
       "rowSkipped": "No bonus — your household already had an active plan or gift when this one landed"
+    },
+    "about": {
+      "rate": "Rate Family Greenhouse",
+      "rateHint": "Opens the App Store, where you can leave a rating or review."
     }
   },
   "security": {

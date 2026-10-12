@@ -4,6 +4,7 @@ import { taskService } from '@/services/taskService';
 import type { Task } from '@/services/plantService';
 import { toast } from '@/store/toastStore';
 import { playHaptic } from '@/services/nativeHaptics';
+import { noteCareDoneInBackground } from '@/services/nativeReview';
 import { readDuplicateCare } from '@/features/tasks/doubleCare';
 import type { PushActionOutcome, PushActionRequest } from './pushActions';
 
@@ -90,7 +91,10 @@ export async function runPushAction(
   void queryClient?.invalidateQueries({ queryKey: ['tasks'] });
   void queryClient?.invalidateQueries({ queryKey: ['plants'] });
 
-  if (outcome === 'done') playHaptic('completed');
+  if (outcome === 'done') {
+    playHaptic('completed');
+    noteCareDoneInBackground();
+  }
   if (outcome === 'snoozed') playHaptic('snoozed');
   const name = plant.trim() || i18n.t('pushActions.unnamedPlant');
   const message = i18n.t(`pushActions.${outcome}`, { plant: name });

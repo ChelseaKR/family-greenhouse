@@ -1738,6 +1738,10 @@
       "statsEmpty": "Todavía no hay registros. Cuando alguien se una con tu enlace, aparecerá aquí.",
       "rowGranted": "Bonificación otorgada",
       "rowSkipped": "Sin bonificación — tu hogar ya tenía un plan o regalo activo cuando llegó esta recomendación"
+    },
+    "about": {
+      "rate": "Califica Family Greenhouse",
+      "rateHint": "Abre la App Store, donde puedes dejar una calificación o una reseña."
     }
   },
   "security": {
