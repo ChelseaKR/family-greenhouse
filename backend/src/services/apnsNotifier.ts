@@ -44,6 +44,16 @@ import type { DevicePushMessage, DevicePushOutcome } from './fcmNotifier.js';
 /** The app's bundle identifier: the `apns-topic` every request names. */
 export const APNS_TOPIC = 'net.familygreenhouse.app';
 
+/**
+ * The notification category the iOS app registers with a Done and a Snooze
+ * action (`frontend/ios/App/App/AppDelegate.swift`). Set on a notification
+ * that is about exactly one task; a long-press then shows the two buttons,
+ * and the shell posts the chosen action to the task's own endpoint
+ * (`frontend/src/services/nativePush.ts`). The two identifiers must match
+ * the Swift side exactly, so this constant is pinned by a unit test.
+ */
+export const APNS_REMINDER_CATEGORY = 'FG_TASK_REMINDER';
+
 const HOSTS = {
   production: 'https://api.push.apple.com',
   sandbox: 'https://api.sandbox.push.apple.com',
@@ -217,8 +227,22 @@ export function apnsPayload(message: DevicePushMessage): Record<string, unknown>
       // icon's badge as it was rather than zeroing it.
       ...(typeof message.badge === 'number' ? { badge: Math.max(0, message.badge) } : {}),
       ...(message.tag ? { 'thread-id': message.tag } : {}),
+      // A single-task reminder gets the actionable category. Without `task`
+      // there is nothing a Done button could complete, so no category and no
+      // buttons.
+      ...(message.task ? { category: APNS_REMINDER_CATEGORY } : {}),
     },
     ...(message.url ? { url: message.url } : {}),
+    // The shell reads these from the tapped notification's userInfo. Ids only.
+    ...(message.task
+      ? {
+          taskId: message.task.taskId,
+          plantId: message.task.plantId,
+          ...(message.task.expectedNextDue
+            ? { expectedNextDue: message.task.expectedNextDue }
+            : {}),
+        }
+      : {}),
   };
 }
 

@@ -210,3 +210,35 @@ where that stops being free.
 - PR #418's `recipientLocale` returns English unconditionally and says so in
   ADR 0018's Consequences. That is now a one-line change to
   `resolveEmailLocaleForUser` once both land.
+
+## Amendment (2026-10-09): one image, the brand logo
+
+The "no `<img>` at all" row in the table above is narrowed, not reversed. The
+owner asked for reminder emails that are "rich html and fully branded", and a
+brand without its mark is a color scheme. Every email now carries one image:
+`frontend/public/brand/logo-dark.png`, served by the site itself at a stable
+path (`services/email/links.ts`, `brandLogoUrl`).
+
+What keeps the mitigation intact:
+
+- **It identifies nobody.** One fixed file, the same bytes for every
+  recipient, no query string, no per-message path. A mail client's request
+  for it says "someone opened a Family Greenhouse email", which the
+  `List-Unsubscribe` and settings links already said. A tracking pixel is
+  the opposite on every one of those points, and the rendering checks
+  (`tests/support/emailHtmlChecks.ts`) fail on a second image, on a query
+  string, and on an image off our origin.
+- **It is still not a photo.** ADR 0033 stands: no plant photo URL can live in
+  an inbox, and the template has no code path that puts one there.
+- **It degrades to its name.** `alt="Family Greenhouse"` with width and
+  height, on a Forest band that is the same on the light and the dark path,
+  so a client that blocks images (Outlook desktop by default) shows the name
+  at the right size on the right color.
+- **`scripts/check-app-links.mjs` verifies the file exists** under
+  `frontend/public/`, so a renamed asset fails the gate before it is a broken
+  image in anyone's inbox.
+
+The template's palette and type are now the design tokens in `docs/brand.md`
+rather than an ad-hoc green, with every pair stated on both color paths; the
+brand faces are named first in the font stacks and fall back to system faces,
+so nothing is fetched.

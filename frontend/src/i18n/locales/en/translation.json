@@ -319,6 +319,7 @@
     "password": "Password",
     "forgotPassword": "Forgot your password?",
     "keepSignedIn": "Keep me signed in on this device",
+    "staysSignedInHere": "This device stays signed in until you sign out.",
     "invalidEmail": "Please enter a valid email address",
     "passwordRequired": "Password is required",
     "signUpFree": "Sign up free",
@@ -1013,6 +1014,16 @@
     "frequencyStepper": {
       "less": "One day less",
       "more": "One day more"
+    },
+    "formSheet": {
+      "addTitle": "Add care task",
+      "add": "Add",
+      "type": "Task",
+      "customName": "Name of the task",
+      "howOften": "How often",
+      "everyDay": "Every day",
+      "everyNDays": "Every {n} days",
+      "notes": "Notes"
     }
   },
   "today": {
@@ -1807,7 +1818,15 @@
     "emailSuppressedComplaint": "This address was reported as spam, so we stopped sending to it. Nothing is being delivered — not reminders, not the weekly digest. Resume below if that was a mistake or you have changed your mind.",
     "emailStatusUnknown": "We couldn't check whether your email is being delivered right now. This says nothing either way — try again in a moment.",
     "emailResume": "Resume email to this address",
-    "emailResumed": "Email resumed. We'll try your address again on the next send."
+    "emailResumed": "Email resumed. We'll try your address again on the next send.",
+    "reminderPreview": "A reminder reads like “Water the Monstera” and says when it is due. Where your device allows it, the notification itself offers Done and Snooze until tomorrow."
+  },
+  "pushActions": {
+    "done": "{{plant}}: marked done.",
+    "snoozed": "{{plant}}: snoozed until tomorrow.",
+    "already": "{{plant}}: that reminder was already handled.",
+    "failed": "That reminder action did not go through. Open the task to try again.",
+    "unnamedPlant": "This plant"
   },
   "statusPage": {
     "notActivelyChecked": "Not actively checked",

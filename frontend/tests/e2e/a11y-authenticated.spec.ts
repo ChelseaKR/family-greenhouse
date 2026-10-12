@@ -39,7 +39,19 @@ async function expectNoA11yViolations(page: import('@playwright/test').Page, lab
         calmFrames += 1;
       } else {
         calmFrames = 0;
-        await Promise.allSettled(running.map((a) => a.finished));
+        // Never wait on `Animation.finished`: Chromium settles it only in a
+        // frame, and a transition on an item of a <details> menu that closed
+        // before its first frame (the plant page's "…" menu, on the way to
+        // a dialog) never gets one, so the promise stays pending for good
+        // while the page is idle (#955, #883). Ask for a frame instead, which
+        // makes Chromium produce one, and read the states again.
+        await new Promise<void>((resolve) => {
+          const fallback = setTimeout(resolve, 100);
+          requestAnimationFrame(() => {
+            clearTimeout(fallback);
+            resolve();
+          });
+        });
       }
       await new Promise((r) => setTimeout(r, 100));
     }

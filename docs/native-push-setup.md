@@ -1,19 +1,26 @@
 # Native push: owner setup
 
-Native push notifications for the iOS and Android apps are **built and switched
-off**. They stay off until every step below is done and checked on a device.
-There are two switches, and both default to off:
+Native push notifications are **on for iOS and off for Android**. **iOS went
+first** (owner decision, 2026-10-05): the APNs steps are done, the switch is
+on in production, and build 4001 passed the section 8 device checks on an
+iPhone on 2026-10-09. The Firebase steps are deferred, so every push build so
+far is iOS-only. There are three switches, and all default to off:
 
-| Switch                                   | Where                                                                                                  | Default |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------- |
-| `native_push_enabled` (deployment)       | `infrastructure/environments/production/terraform.tfvars` becomes `NATIVE_PUSH_ENABLED` on the Lambdas | `false` |
-| `VITE_NATIVE_PUSH_ENABLED` (store build) | your local `frontend/.env.mobile.production` (the committed template must say `false`)                 | `false` |
+| Switch                                           | Where                                                                                                  | Default |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------- |
+| `native_push_enabled` (deployment)               | `infrastructure/environments/production/terraform.tfvars` becomes `NATIVE_PUSH_ENABLED` on the Lambdas | `false` |
+| `VITE_NATIVE_PUSH_ENABLED` (store build, iOS)    | your local `frontend/.env.mobile.production` (the committed template must say `false`)                 | `false` |
+| `VITE_NATIVE_PUSH_ANDROID_ENABLED` (store build) | the same local file; Android needs this one as well (the template must say `false`)                    | `false` |
 
 While `native_push_enabled` is false, the backend sends no device push, and the
 notification preferences tell the apps `devicePush: {ios: false, android:
 false}`, so they show no opt-in and no Settings row. That holds whatever
 credentials exist. While `VITE_NATIVE_PUSH_ENABLED` is false, the build never
-loads the push plugin at all.
+loads the push plugin at all. One web bundle goes into both shells, so Android
+has a switch of its own: while `VITE_NATIVE_PUSH_ANDROID_ENABLED` is false, an
+Android shell never loads the plugin either, whatever the first switch says.
+That is what lets an iOS-only push build be made without
+`google-services.json`.
 
 **How delivery works.** iOS goes to APNs directly, with a token-based `.p8`
 key. Android goes through Firebase Cloud Messaging (FCM). They differ because
@@ -107,13 +114,20 @@ In `infrastructure/environments/production/terraform.tfvars`:
 
 ```hcl
 native_push_enabled           = false   # still off
-fcm_service_account_secret_id = "family-greenhouse/production/fcm-service-account"
+fcm_service_account_secret_id = ""      # blank until the Android steps (1 and 2) are done
 apns_auth_key_secret_id       = "family-greenhouse/production/apns-auth-key"
 apns_environment              = "production"
 ```
 
 Merge that as its own PR. It deploys with the next release tag. With the
-switch still off, the only effect is the Lambdas' environment and IAM grant.
+switch still off, the only effect is the Lambdas' environment and IAM grant:
+the `households`, `notifications` and `reminders` Lambdas gain
+`APNS_AUTH_KEY_SECRET_ID`, and the one `GetSecretValue` statement in the
+shared Lambda role policy names the APNs secret instead of the
+`apns-disabled` sentinel. A blank FCM id keeps the Android half exactly as it
+is: the grant stays on the nonexistent `fcm-disabled` sentinel, and
+`devicePush.android` stays false even after step 7. Fill it in when Android
+ships.
 
 **No `gh secret set` is needed for push.** The two values Terraform gets are
 secret **names**, which aren't sensitive, and the key material goes straight
@@ -133,13 +147,22 @@ In your local `frontend/.env.mobile.production` (gitignored), set:
 
 ```bash
 VITE_NATIVE_PUSH_ENABLED=true
+VITE_NATIVE_PUSH_ANDROID_ENABLED=false
 ```
 
-Then run `npm run mobile:release -- frontend/.env.mobile.production`. With
-`VITE_NATIVE_PUSH_ENABLED=true`, the release validator refuses to build unless
-`frontend/android/app/google-services.json` exists and names
-`net.familygreenhouse.app`, and it always requires the iOS `aps-environment`
-entitlement.
+Then run `npm run mobile:release -- frontend/.env.mobile.production`. That is
+an **iOS-only push build**: the iOS app registers with APNs, and the Android
+shell built from the same bundle never loads the push plugin, so it needs no
+`google-services.json`. The release validator requires the committed iOS
+`aps-environment` entitlement, and requires both switches to be `false` in the
+committed template.
+
+Once steps 1 and 2 are done and the FCM id is set in step 4, set
+`VITE_NATIVE_PUSH_ANDROID_ENABLED=true` as well. With that, the validator
+refuses to build unless `frontend/android/app/google-services.json` exists and
+names `net.familygreenhouse.app`. The Android switch does nothing on its own:
+a build with it `true` and `VITE_NATIVE_PUSH_ENABLED` not `true` is refused,
+so the file always says what the build does.
 
 ## 6. Test on staging first (optional but recommended)
 
@@ -158,24 +181,60 @@ native_push_enabled = true
 
 This is a PR. It takes effect with the next release tag, which you create.
 
+Done for iOS on 2026-10-05, before the section 8 device checks: no public
+build of the app existed yet (Family Greenhouse was not on the App Store), so
+the only build that could register a device was the owner's TestFlight build,
+and production is the environment those checks run against, with build 4001.
+If a check fails, set the switch back to `false` and deploy (see "Turning it
+off again").
+
 ## 8. Check on a device
 
-On a TestFlight build and a Play internal-testing build carrying step 5, work
-through each of these:
+On a TestFlight build carrying step 5 (and, once Android ships, a Play
+internal-testing build), work through each of these:
 
 1. Settings → Notifications shows **This device → Turn on**, and the Tasks page
    shows the opt-in card while there's care on the list. Nothing is asked at
    launch.
 2. Tap **Turn on**. The OS asks once. Allow it.
-3. Trigger a reminder (a task due today, outside your quiet hours; an admin
-   can call `POST /notifications/run-reminders`). It arrives on the phone
-   with the task count on the app icon. Tapping it opens `/tasks`.
-4. Set quiet hours around now and run it again. Nothing arrives until the
+3. Trigger a reminder for exactly one task (a plant with one watering task
+   due today, outside your quiet hours; an admin can call
+   `POST /notifications/run-reminders`). It arrives on the phone reading
+   **"Water the <plant name>"** with the body **"Due today. Mark it done
+   once you have, or snooze it until tomorrow."** (on a phone set to
+   Spanish: **"<plant name> necesita riego"**, **"Toca hoy. Márcala como
+   hecha cuando la hagas, o pospónla hasta mañana."**), and the app icon
+   shows **1**. Tapping it opens that plant's page, scrolled to Care Tasks.
+4. Long-press the same notification (or pull it down). It shows two buttons,
+   **Done** and **Snooze until tomorrow** ("Hecho" / "Posponer hasta
+   mañana"). If it shows none, the build is not carrying the category from
+   `AppDelegate.swift`, or `aps.category` did not arrive: check the payload
+   in the `reminders` Lambda log against `FG_TASK_REMINDER`.
+5. With the app in the background, tap **Done**. The notification goes away
+   and the icon count clears without the app opening. Open the app: the task
+   is logged as completed today with the next date a week out, and the
+   activity feed names you. Snooze a second reminder the same way: the task's
+   due date moves to tomorrow and the icon count clears.
+6. Force-quit the app, trigger a one-task reminder again, and tap **Snooze
+   until tomorrow**. iOS starts the app in the background for the request.
+   Check whether the task moved to tomorrow before you open the app; if it
+   moved only when you opened it, say so in the release notes (the action is
+   retained until the web layer is listening, and the request is a no-op
+   once the occurrence has moved on, so nothing is lost either way).
+7. Tap **Done** on a notification whose task someone else already completed
+   (complete it on the website first). Nothing changes on the server, and
+   the app, when opened, says the reminder was already handled rather than
+   marking it done again.
+8. Trigger a reminder for two or more tasks. It reads **"2 plants need
+   water"** (or "2 care tasks") with the first two plant names and the
+   counts in the body, shows the task count on the icon, has no buttons on a
+   long-press, and tapping it opens `/tasks` filtered to what is due.
+9. Set quiet hours around now and run it again. Nothing arrives until the
    window ends.
-5. Sign out, then sign in as a different account. The first account's
-   reminders stop arriving on that phone.
-6. Deny the permission in the phone's Settings and reopen the app. The row
-   explains how to turn it back on, and the device is removed server-side.
+10. Sign out, then sign in as a different account. The first account's
+    reminders stop arriving on that phone.
+11. Deny the permission in the phone's Settings and reopen the app. The row
+    explains how to turn it back on, and the device is removed server-side.
 
 Logs to watch (CloudWatch, notification Lambdas):
 
@@ -186,9 +245,15 @@ Logs to watch (CloudWatch, notification Lambdas):
 - `apns_credentials_unavailable` / `device_push_credentials_unavailable` mean
   the secret isn't readable.
 
+Build 4001 passed on an iPhone on 2026-10-09: the row and the card (1), the
+prompt (2), a reminder delivered with the badge (3) and quiet hours (4).
+Checks 5 and 6 are not recorded here; run them before the next push change.
+
 ## 9. Store listings
 
-Once it's on and verified:
+Done for the App Store with 0.40.0 (the description's REMINDERS section and
+the review notes in `docs/APP-STORE.md`); the Google Play copy waits for
+Android. Once it's on and verified:
 
 - App Store privacy label: **Device ID**, linked to the user, not used for
   tracking, purpose App Functionality. It's already declared in
