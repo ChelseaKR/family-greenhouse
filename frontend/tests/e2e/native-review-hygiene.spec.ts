@@ -74,6 +74,78 @@ test.describe('inside the iOS app', () => {
   });
 });
 
+test.describe('inside the iOS app, the signed-out intro', () => {
+  // The intro (ADR 0035) is the app's first screen for a new install, which
+  // is the screen App Review sees first. Every word it can show, in English
+  // and Spanish, says nothing about plans, prices, gifts, trials or buying.
+  // The shell is pretended with the NativeIntro plugin listed, and the
+  // pretend bridge records what the web asked it to show.
+  async function pretendWithTheIntro(page: Page, language: 'en' | 'es') {
+    await page.addInitScript((lng) => {
+      localStorage.setItem('i18nextLng', lng);
+      const w = window as unknown as Record<string, unknown>;
+      const shown: unknown[] = [];
+      w.__introShown = shown;
+      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => 'ios',
+        PluginHeaders: [
+          {
+            name: 'NativeIntro',
+            methods: [
+              { name: 'present', rtype: 'promise' },
+              { name: 'dismiss', rtype: 'promise' },
+            ],
+          },
+        ],
+        nativePromise: (plugin: string, method: string, options: unknown) => {
+          if (plugin === 'NativeIntro' && method === 'present') {
+            shown.push(options);
+            return Promise.resolve({ choice: null });
+          }
+          return Promise.resolve();
+        },
+        nativeCallback: () => 'callback',
+      };
+    }, language);
+  }
+
+  for (const language of ['en', 'es'] as const) {
+    test(`its words (${language}) offer no plans, prices, gifts, trials or purchases`, async ({
+      page,
+    }) => {
+      await pretendWithTheIntro(page, language);
+      await page.goto('/');
+      await expect(page).toHaveURL(/\/login$/, { timeout: 15000 });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () => (window as unknown as { __introShown: unknown[] }).__introShown.length
+            ),
+          {
+            timeout: 15000,
+          }
+        )
+        .toBe(1);
+      const request = await page.evaluate(
+        () =>
+          (window as unknown as { __introShown: Array<Record<string, unknown>> }).__introShown[0]
+      );
+      // The control: the intro was really asked for, with its pages and doors.
+      expect((request.pages as unknown[]).length).toBe(4);
+      expect(request.signIn).toBeTruthy();
+      const words = JSON.stringify(request);
+      expect(words).not.toMatch(/\$\s*\d|€\s*\d/);
+      expect(words).not.toMatch(
+        /\b(plans?|pric\w*|free|gratis|gift\w*|regal\w*|trial|prueba|purchas\w*|buy\w*|compr\w*|subscri\w*|suscri\w*|seedling|upgrade|mejora)\b/i
+      );
+      expect(words).not.toMatch(/on the web|web browser|en la web|navegador/i);
+    });
+  }
+});
+
 test.describe('on the website (unchanged)', () => {
   test('the control: a signed-out `/` is the landing page, not sign-in', async ({ page }) => {
     await page.goto('/');

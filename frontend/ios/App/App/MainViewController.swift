@@ -19,6 +19,10 @@ class MainViewController: CAPBridgeViewController {
         // paint that the native bars are there (lib/platform.ts
         // hasNativeFrame) and never draws its own header.
         bridge?.registerPluginInstance(nativeChrome)
+        // The signed-out intro (NativeIntroPlugin.swift). The web asks for it
+        // only when the bridge lists it, so a build without it keeps the web
+        // sign-in screen.
+        bridge?.registerPluginInstance(NativeIntroPlugin())
         observeBackSwipe()
     }
 

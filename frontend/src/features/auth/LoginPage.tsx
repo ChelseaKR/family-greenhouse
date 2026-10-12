@@ -24,6 +24,7 @@ import { AuthShell } from './AuthShell';
 import { safeAppRedirect } from './safeRedirect';
 import { readMfaErrorCode, submitCode, submitCredentials, type SignInState } from './signInFlow';
 import { TotpChallengeForm } from './TotpChallengeForm';
+import { useNativeIntro } from './useNativeIntro';
 
 // Built per-render from the active locale so validation messages are
 // translated (zod resolves the message at schema-construction time, so the
@@ -100,10 +101,28 @@ export function LoginPage() {
     handleSubmit,
     trigger,
     getValues,
+    setFocus,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: confirmState?.email ?? '' },
+  });
+
+  // In the iOS app, a signed-out start (a launch, a sign-out, a link that
+  // needs an account) opens on the native intro, which hands back to this
+  // screen or to sign-up, keeping where the person was going (ADR 0035). Not
+  // after an explicit ?redirect= or a just-confirmed email: those people
+  // already chose to sign in. Nothing happens on the website, on Android, or
+  // in an app built without it.
+  useNativeIntro({
+    enabled: !redirectParam && !confirmState?.justConfirmed && !confirmState?.email,
+    signupHref,
+    // The form was covered until now; start it at the email field, unless
+    // something on the page already has focus.
+    onSignIn: () => {
+      const active = document.activeElement;
+      if (!active || active === document.body) setFocus('email');
+    },
   });
 
   const finishSignIn = (response: AuthResponse) => {
