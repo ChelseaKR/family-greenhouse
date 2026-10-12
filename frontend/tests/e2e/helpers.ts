@@ -197,6 +197,13 @@ export async function navigateTo(page: Page, linkName: RegExp, urlPattern: RegEx
  * spellings, e.g. /^remove/i for "Remove" and "Remove…".
  */
 export async function choosePlantAction(page: Page, name: RegExp) {
+  // The Plants list has a "…" menu with this same name. Clicking a plant
+  // changes the URL before the plant page's chunk has loaded, and until it
+  // has, the list is still on screen: its menu would open and then go away
+  // with the list. Wait for the list (its "Plants" heading) to be gone first.
+  await page
+    .getByRole('heading', { level: 1, name: 'Plants', exact: true })
+    .waitFor({ state: 'detached', timeout: 15000 });
   const more = page.getByLabel('More plant actions', { exact: true });
   const direct = page.getByRole('button', { name }).or(page.getByRole('link', { name }));
   // Whichever form this layout has: decide only once one of them is visible
