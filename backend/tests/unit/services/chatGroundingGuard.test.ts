@@ -732,3 +732,53 @@ describe('checkHouseholdClaims (a count of a household that was only partly sent
     });
   });
 });
+
+describe('an unknown verdict never grounds a safety claim', () => {
+  const ZZ: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'ZZ plant (Zamioculcas zamiifolia): cats unknown; dogs unknown.',
+    petSafety: [
+      { names: ['zz plant', 'zamioculcas zamiifolia'], cats: 'unknown', dogs: 'unknown' },
+    ],
+  };
+  const HALF: RetrievedSpan = {
+    source: 'tool:check_pet_toxicity',
+    text: 'Fixture: cats non-toxic; dogs unknown.',
+    petSafety: [{ names: ['fixturewort'], cats: 'non-toxic', dogs: 'unknown' }],
+  };
+
+  it('blocks "safe" for an animal whose verdict is unknown', () => {
+    expect(
+      checkSafetyClaims('The ZZ plant is safe for cats.', [ZZ]).ungroundedSafetyClaims
+    ).toHaveLength(1);
+    expect(
+      checkSafetyClaims('Fixturewort is safe for dogs.', [HALF]).ungroundedSafetyClaims
+    ).toHaveLength(1);
+  });
+
+  it('still grounds "safe" for the animal that is cited non-toxic', () => {
+    expect(
+      checkSafetyClaims('Fixturewort is safe for cats.', [HALF]).ungroundedSafetyClaims
+    ).toEqual([]);
+  });
+});
+
+describe('the assistant tool answers in cited mode', () => {
+  it('reports the ZZ plant as unknown and tells the model not to fill the gap', async () => {
+    const { lookupPetToxicityForModel, PET_TOXICITY_UNKNOWN_GUIDANCE } =
+      await import('../../../src/services/chat/tools.js');
+    const result = lookupPetToxicityForModel('zz plant');
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.matches[0]).toMatchObject({
+      slug: 'zz-plant',
+      cats: 'unknown',
+      dogs: 'unknown',
+      note: null,
+    });
+    expect(result.unknownGuidance).toBe(PET_TOXICITY_UNKNOWN_GUIDANCE);
+    expect(PET_TOXICITY_UNKNOWN_GUIDANCE).toContain('888-426-4435');
+    const cited = lookupPetToxicityForModel('pothos');
+    expect(cited.status === 'found' && cited.unknownGuidance).toBeFalsy();
+  });
+});

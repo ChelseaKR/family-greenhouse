@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -457,5 +457,39 @@ describe('analytics history window (ADR 0014)', () => {
     expect(await screen.findByText('By task type, last 30 days')).toBeInTheDocument();
     expect(screen.getByText('Top contributors, last 30 days')).toBeInTheDocument();
     expect(screen.queryByText(/By task type in 20/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the free plan’s history-window note', () => {
+  const FREE_REVIEW = { ...EMPTY_REVIEW, historyLimitDays: 30 };
+  const NOTE = /Analytics on the free plan cover the last 30 days/;
+
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  // The control for the in-app test: on the website the note links to the plans.
+  it('on the website: says what the window is, with a "See plans" link', async () => {
+    const { container } = renderAnalytics({ failing: false, overrides: { review: FREE_REVIEW } });
+    await settled(container);
+
+    expect(await screen.findByText(NOTE)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+  });
+
+  it('in the app: the same note, with no "See plans" link (Guideline 3.1.1)', async () => {
+    // The global the Capacitor bridge injects (lib/platform.ts reads it).
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    const { container } = renderAnalytics({ failing: false, overrides: { review: FREE_REVIEW } });
+    await settled(container);
+
+    expect(await screen.findByText(NOTE)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See plans' })).toBeNull();
   });
 });

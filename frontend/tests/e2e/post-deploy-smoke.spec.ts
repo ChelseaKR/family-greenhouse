@@ -65,6 +65,7 @@ import {
   purgeExactSmokeS3Object,
   purgeSmokeOwnedPartitions,
   runAllCleanupSteps,
+  isSignedS3GetFor,
   s3ObjectTargetFromPresignedUrl,
   safeResponseDiagnostic,
   testFixtureClaimPartition,
@@ -878,10 +879,13 @@ test.describe('post-deploy smoke', () => {
     uploadedS3Target = s3Target;
 
     // Register the delivery assertion as soon as the presign response reveals
-    // the public image URL, before the client can finish PUT + confirm + route.
+    // the uploaded key, before the client can finish PUT + confirm + route.
+    // The presign's `imageUrl` is the stored reference, which loads nothing
+    // since #855 (ADR 0033): the page renders a short-lived signed S3 URL for
+    // the same bucket and key, so that is the response to wait for.
     const renderedImageResponsePromise = page.waitForResponse(
       (response) =>
-        response.request().resourceType() === 'image' && response.url() === imageUrl.href
+        response.request().resourceType() === 'image' && isSignedS3GetFor(response.url(), s3Target)
     );
 
     const s3PutResponse = await s3PutPromise;
@@ -925,7 +929,7 @@ test.describe('post-deploy smoke', () => {
     ).toBeGreaterThan(0);
 
     await expect(page).toHaveURL(new RegExp(`/plants/${plantId}$`));
-    await expect(page.getByRole('heading', { name: plantName })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: plantName })).toBeVisible();
     const renderedPhoto = page.getByRole('img', { name: `Photo of ${plantName}` });
     await expect(renderedPhoto).toBeVisible();
     await expect

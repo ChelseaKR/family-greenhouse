@@ -69,3 +69,49 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
     </div>
   );
 }
+
+/**
+ * The plant page while it loads: the photo and name header, the status card
+ * and a few care rows, where they will appear (the phone and the website).
+ */
+export function PlantPageSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <div role="status" aria-label={t('common.loading')} className="space-y-5">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-24 w-24 shrink-0 rounded-2xl" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-7 w-2/3" />
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+      </div>
+      <Skeleton className="h-28 w-full rounded-2xl" />
+      <div className="divide-y divide-primary-100/60">
+        <ListRowSkeleton />
+        <ListRowSkeleton />
+        <ListRowSkeleton />
+      </div>
+      <span className="sr-only">{t('common.loading')}</span>
+    </div>
+  );
+}
+
+/** The household page while it loads: its name, then the member rows. */
+export function HouseholdSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <div role="status" aria-label={t('common.loading')} className="space-y-5">
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-8 w-1/2" />
+      </div>
+      <div className="rounded-2xl border border-primary-100/70 bg-paper px-4">
+        <ListRowSkeleton />
+        <ListRowSkeleton />
+        <ListRowSkeleton />
+      </div>
+      <Skeleton className="h-24 w-full rounded-2xl" />
+      <span className="sr-only">{t('common.loading')}</span>
+    </div>
+  );
+}

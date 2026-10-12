@@ -420,6 +420,12 @@ variable "native_push_enabled" {
   default     = false
 }
 
+variable "passport_import_enabled" {
+  description = "Plant passport import switch (#676). True sets PASSPORT_IMPORT_ENABLED=1 on the plants Lambda; false leaves its environment untouched and the three passport routes answer 404 PASSPORT_IMPORT_DISABLED."
+  type        = bool
+  default     = false
+}
+
 # --- Sentry / release tagging ---
 variable "sentry_dsn" {
   description = "Sentry DSN. Empty = Sentry disabled (instrument() falls through to a no-op wrapper)."

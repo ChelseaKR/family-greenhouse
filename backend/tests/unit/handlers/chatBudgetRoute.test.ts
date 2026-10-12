@@ -142,7 +142,7 @@ describe('GET /chat/budget', () => {
 
   it('reports the ENTITLED tier cap, not the plan row, once a card has failed (#476)', async () => {
     // The turn itself is enforced against getEntitledPlan (services/chat/
-    // index.ts), so a past_due Greenhouse household is refused outright. This
+    // index.ts), so an unpaid Greenhouse household is refused outright. This
     // endpoint read `planId` and reported the Greenhouse cap anyway — a
     // confident "used X of Y" whose Y is not the Y anything enforces.
     process.env.CHAT_BUDGET_INPUT_TOKENS_SEEDLING = '62500';
@@ -153,7 +153,7 @@ describe('GET /chat/budget', () => {
 
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({
       planId: 'greenhouse',
-      status: 'past_due',
+      status: 'unpaid',
     } as Awaited<ReturnType<typeof billing.getHouseholdSubscription>>);
     const res = (await getChatBudget(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 

@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { delay, http, HttpResponse } from 'msw';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TasksPage } from '@/features/tasks/TasksPage';
 import { useAuthStore, User } from '@/store/authStore';
 import { server } from '../../../msw/server';
+import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
+
+// Done waits out the shared 5-second Undo window (useDeferredCompletion), so
+// these tests move the clock explicitly instead of leaning on waitFor's own
+// 5-second timeout, which once happened to cover the window by luck.
+async function pass(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
 
 const API = 'http://localhost:4000';
 
@@ -76,6 +86,14 @@ function serve(careRule: string | null) {
 }
 
 describe('TasksPage house rule at completion', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    resetDeferredCareQueueForTests();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function signIn() {
     useAuthStore.setState({
       accessToken: 'access-1',
@@ -97,17 +115,23 @@ describe('TasksPage house rule at completion', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
 
-    await waitFor(() => expect(completions).toEqual(['t1']));
+    await pass(UNDO_WINDOW_MS - 200);
+    expect(completions).toEqual([]);
+    await pass(400);
+    expect(completions).toEqual(['t1']);
   });
 
-  it('completes straight away, with nothing shown, when the plant has no rule', async () => {
+  it('with no rule, shows nothing and completes when the Undo window ends', async () => {
     signIn();
     const completions = serve(null);
     renderTasksPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
 
-    await waitFor(() => expect(completions).toEqual(['t1']));
+    await pass(UNDO_WINDOW_MS - 200);
+    expect(completions).toEqual([]);
+    await pass(400);
+    expect(completions).toEqual(['t1']);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText(/House rule/)).not.toBeInTheDocument();
   });

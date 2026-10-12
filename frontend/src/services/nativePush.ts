@@ -1,5 +1,6 @@
 import { api } from './api';
 import { isNativeApp, getNativePlatform } from '@/lib/platform';
+import { performPushAction, pushActionFromId, readPushTaskRef } from './pushActions';
 
 /**
  * Native (Capacitor iOS/Android) push. The web push path (service worker +
@@ -12,11 +13,14 @@ import { isNativeApp, getNativePlatform } from '@/lib/platform';
  * ## Off until setup is done — two switches, both default off
  *
  *   1. The BUILD: `VITE_NATIVE_PUSH_ENABLED=true` in the store build's
- *      `.env.mobile.production`. Android cannot register without
- *      `google-services.json` in the binary, so a build without it must never
- *      reach this code; `scripts/validate-store-release.mjs --production`
- *      requires that file (and the iOS entitlement) once this is true, and
- *      requires the committed template to keep it false.
+ *      `.env.mobile.production` turns push on for iOS. Android cannot
+ *      register without `google-services.json` in the binary, and one web
+ *      bundle goes into both shells, so Android has its own second switch,
+ *      `VITE_NATIVE_PUSH_ANDROID_ENABLED=true`: without it an Android shell
+ *      never loads the plugin, whatever the first switch says.
+ *      `scripts/validate-store-release.mjs --production` requires the iOS
+ *      entitlement once the first is true and the Android file once the
+ *      second is, and requires the committed template to keep both false.
  *   2. The DEPLOYMENT: Terraform `native_push_enabled` plus a credential per
  *      platform, reported to the app as `devicePush` on the notification
  *      preferences. Off, or missing this platform's credential, and the app
@@ -82,9 +86,19 @@ function writeToken(token: string | null): void {
   }
 }
 
-/** Whether this binary was built with native push (switch 1). */
+/**
+ * Whether this binary was built with native push for the platform it is
+ * running on (switch 1). iOS needs `VITE_NATIVE_PUSH_ENABLED`; Android needs
+ * `VITE_NATIVE_PUSH_ANDROID_ENABLED` as well, because the bundle cannot see
+ * whether the Android project had `google-services.json` and must not guess.
+ * Every path that would load the plugin reads this first.
+ */
 export function nativePushBuildEnabled(): boolean {
-  return import.meta.env.VITE_NATIVE_PUSH_ENABLED === 'true';
+  if (import.meta.env.VITE_NATIVE_PUSH_ENABLED !== 'true') return false;
+  if (getNativePlatform() === 'android') {
+    return import.meta.env.VITE_NATIVE_PUSH_ANDROID_ENABLED === 'true';
+  }
+  return true;
 }
 
 /**
@@ -165,10 +179,12 @@ async function obtainToken(): Promise<string> {
  * resulting device token with the backend. This is the ONLY place the OS
  * permission prompt is raised, and it is called only from a button the
  * person tapped. Resolves true on success; throws on permission denial so the
- * caller can say how to turn it back on. No-ops (false) outside the shells.
+ * caller can say how to turn it back on. No-ops (false) outside the shells
+ * and in a build that does not carry push for this platform, so a bundle
+ * built for iOS only never calls register() on Android.
  */
 export async function registerNativePush(): Promise<boolean> {
-  if (!isNativeApp()) return false;
+  if (!isNativeApp() || !nativePushBuildEnabled()) return false;
   const { PushNotifications } = await import('@capacitor/push-notifications');
 
   let status = await PushNotifications.checkPermissions();
@@ -290,22 +306,48 @@ function inAppPath(url: unknown): string | null {
 }
 
 /**
- * Wire native push into the running app: open a tapped notification's link
- * in the app, and sync registration now and on every return to the
- * foreground. Nothing is loaded unless this is a shell built with push.
+ * Wire native push into the running app: act on a notification's Done or
+ * Snooze button, open a tapped notification's link in the app, and sync
+ * registration now and on every return to the foreground. Nothing is loaded
+ * unless this is a shell built with push.
+ *
+ * The action listener is attached before anything else so that an event the
+ * plugin retained from a launch it caused (iOS starts the app in the
+ * background for a notification action) is consumed at once.
  */
 export function initNativePush(): void {
   if (!isNativeApp() || !nativePushBuildEnabled()) return;
 
   void (async () => {
     const { PushNotifications } = await import('@capacitor/push-notifications');
-    await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
-      const path = inAppPath((notification.data as { url?: unknown } | undefined)?.url);
-      if (!path) return;
-      // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
-      window.history.pushState(null, '', path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    });
+    await PushNotifications.addListener(
+      'pushNotificationActionPerformed',
+      ({ actionId, notification }) => {
+        const data: unknown = notification.data;
+        const action = pushActionFromId(actionId);
+        if (action) {
+          // A button on a single-task reminder. The ids come from the
+          // notification; the server checks everything about them.
+          const task = readPushTaskRef(data);
+          if (!task) return;
+          void performPushAction({ action, ...task }).then((outcome) => {
+            if (outcome === 'failed') return;
+            // The reminder named one task and it is no longer open today, so
+            // the count it put on the icon is stale: clear it with the
+            // notification. (Rejects before this launch has registered, in
+            // which case the sync at launch clears both.)
+            void PushNotifications.removeAllDeliveredNotifications().catch(() => undefined);
+          });
+          return;
+        }
+        if (actionId !== 'tap') return; // 'dismiss', or an action this build does not know.
+        const path = inAppPath((data as { url?: unknown } | undefined)?.url);
+        if (!path) return;
+        // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
+        window.history.pushState(null, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    );
 
     const { App } = await import('@capacitor/app');
     await App.addListener('appStateChange', ({ isActive }) => {

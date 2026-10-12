@@ -17,10 +17,14 @@
  *      carries `?task=` as a forward hook the plant page can honour later
  *      without any email changing.
  *
- *   2. **Links only.** `safeLinkUrl` rejects anything that is not
- *      http(s)/mailto. An email loads no images at all: remote images are a
- *      tracking and spoofing surface (ADR 0021), and a plant photo is served
- *      only through a URL too short-lived to sit in an inbox (ADR 0033).
+ *   2. **Links only, plus one image.** `safeLinkUrl` rejects anything that
+ *      is not http(s)/mailto. The only image an email loads is the brand
+ *      logo (`brandLogoUrl`): one fixed file on our own origin, the same
+ *      bytes for every recipient, with no query string, so it can identify
+ *      nobody. Remote images are otherwise a tracking and spoofing surface
+ *      (ADR 0021), and a plant photo is served only through a URL too
+ *      short-lived to sit in an inbox (ADR 0033), so no other image is built
+ *      here.
  */
 
 /** Base URL of the web app, no trailing slash. Mirrors the FRONTEND_URL
@@ -77,6 +81,25 @@ export function tasksUrl(): string {
 
 export function settingsUrl(): string {
   return appUrl('/settings');
+}
+
+/**
+ * The notifications tab of settings, where the reminder channels live. The
+ * tabs are query parameters, not paths (`SettingsPage.selectTab()`), which is
+ * why this is not `/settings/notifications` (issue #721).
+ */
+export function notificationSettingsUrl(): string {
+  return appUrl('/settings?section=notifications');
+}
+
+/**
+ * The brand lockup every email header shows: `frontend/public/brand/logo-dark.png`,
+ * served by the site at a stable public path. One file, no query string, no
+ * per-recipient variation, so the request a mail client makes for it can
+ * identify nobody. `scripts/check-app-links.mjs` verifies the file exists.
+ */
+export function brandLogoUrl(): string {
+  return appUrl('/brand/logo-dark.png');
 }
 
 export function analyticsUrl(): string {

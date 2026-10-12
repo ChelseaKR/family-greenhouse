@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  __palette,
   escapeHtml,
   renderEmail,
   type EmailDocument,
@@ -100,11 +101,12 @@ describe('renderEmail', () => {
     expect(html).not.toContain('<i>settings</i>');
   });
 
-  it('emits no image at all, for every kind of block (ADR 0033)', () => {
+  it('emits exactly one image, the brand logo, and never a plant photo (ADR 0033)', () => {
     // A photo URL cannot live in an email: it is served only through a
     // signature that expires within the hour or so, and a mailbox keeps a
     // message for years. So the renderer has no image path to take, whatever
-    // a composer hands it.
+    // a composer hands it. The one image is the header's logo: a fixed file
+    // on our own origin, with alt text and dimensions.
     const { html } = renderEmail(
       doc({
         blocks: [
@@ -125,8 +127,78 @@ describe('renderEmail', () => {
         ],
       })
     );
-    expect(html).not.toMatch(/<img\b/i);
+    const images = html.match(/<img\b[^>]*>/gi) ?? [];
+    expect(images).toHaveLength(1);
+    expect(images[0]).toContain('src="https://app.example/brand/logo-dark.png"');
+    expect(images[0]).toContain('alt="Family Greenhouse"');
+    expect(images[0]).toContain(`width="${__palette.LOGO_WIDTH}"`);
+    expect(images[0]).toContain(`height="${__palette.LOGO_HEIGHT}"`);
     expect(html).not.toContain('/plants/h1/p1/photo.jpg');
+  });
+
+  it('renders a row action as a button to the row link, in both parts', () => {
+    const { html, text } = renderEmail(
+      doc({
+        blocks: [
+          {
+            kind: 'row',
+            title: '1. Monstera',
+            href: 'https://app.example/plants/p1',
+            lines: ['Water · 6 days overdue'],
+            action: { label: 'Mark done in the app', href: 'https://app.example/plants/p1' },
+          },
+          { kind: 'link', label: 'and 3 more', href: 'https://app.example/tasks?filter=due' },
+        ],
+      })
+    );
+    expect(html).toContain('Mark done in the app');
+    expect(html).toContain('class="fg-button"');
+    expect(html).toContain('and 3 more');
+    // The action's URL is the row's own, so the text part prints it once.
+    expect(text).toContain(
+      '1. Monstera\n    Water · 6 days overdue\n    https://app.example/plants/p1'
+    );
+    expect(text).not.toContain('Mark done in the app:');
+    expect(text).toContain('and 3 more: https://app.example/tasks?filter=due');
+  });
+
+  it('uses a caller-supplied text body under the same title and footer', () => {
+    const { text } = renderEmail(
+      doc({ blocks: [{ kind: 'text', text: 'Generated prose that must NOT appear.' }] }),
+      { textBody: '1. Monstera — water, 2 days overdue\n   https://app.example/plants/p1' }
+    );
+    expect(
+      text.startsWith('Your week in the greenhouse\n===========================\n\n1. Monstera')
+    ).toBe(true);
+    expect(text).not.toContain('Generated prose');
+    expect(text).toContain(
+      '--\nYou are a member of The Kim House.\nWe will never ask for your password.'
+    );
+    expect(text).toContain('Email settings: https://app.example/settings');
+  });
+
+  it('states every color on both the light and the dark path, from the brand tokens', () => {
+    const { html } = renderEmail(doc({ blocks: [{ kind: 'notice', text: 'x' }] }));
+    const { LIGHT, DARK } = __palette;
+    // Light values are inline; dark twins are in the one <style> block.
+    for (const value of [LIGHT.band, LIGHT.title, LIGHT.accent, LIGHT.paneBg, LIGHT.noticeBg]) {
+      expect(html).toContain(value);
+    }
+    const style = /<style>([\s\S]*?)<\/style>/u.exec(html)?.[1] ?? '';
+    for (const value of [
+      DARK.page,
+      DARK.card,
+      DARK.text,
+      DARK.accent,
+      DARK.paneBg,
+      DARK.noticeBg,
+    ]) {
+      expect(style).toContain(value);
+    }
+    // The band is Forest on both paths: the logo never sits on a surface it was not drawn for.
+    expect(style).not.toContain('.fg-band');
+    expect(html).toContain(`background-color:${LIGHT.band}`);
+    expect(LIGHT.band).toBe('#173404');
   });
 
   it('refuses a javascript: href rather than linking it', () => {

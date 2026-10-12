@@ -42,6 +42,14 @@ function renderFrameAt(path: string) {
 
 function subscriptionIs(sub: SubscriptionState) {
   vi.spyOn(billingService, 'getCurrentSubscription').mockResolvedValue(sub);
+  vi.spyOn(billingService, 'listPlans').mockResolvedValue({
+    paymentsAvailable: true,
+    commercialHold: { active: false, effectiveDate: '2026-09-01' },
+    plans: [
+      { id: 'seedling', name: 'Seedling', description: '', maxPlants: 20, maxMembers: 3 },
+      { id: 'garden', name: 'Garden', description: '', maxPlants: 200, maxMembers: null },
+    ] as never,
+  });
 }
 
 const pastDue: SubscriptionState = {
@@ -74,11 +82,29 @@ describe('the app frame when a payment has failed', () => {
     });
   });
 
-  it.each(['/dashboard', '/plants/new'])('shows the banner above %s', async (path) => {
-    subscriptionIs(pastDue);
-    renderFrameAt(path);
+  it.each(['/dashboard', '/plants/new'])(
+    'shows the retrying banner above %s, saying the plan is kept',
+    async (path) => {
+      subscriptionIs(pastDue);
+      renderFrameAt(path);
 
-    expect(await screen.findByTestId('payment-failed-banner')).toBeInTheDocument();
+      expect(await screen.findByTestId('payment-failed-banner')).toHaveAttribute(
+        'data-stage',
+        'retrying'
+      );
+      expect(screen.getByText('Your last payment didn’t go through')).toBeInTheDocument();
+      expect(await screen.findByText(/keeps the Garden plan/)).toBeInTheDocument();
+    }
+  );
+
+  it('shows the lapsed banner once Stripe has given up', async () => {
+    subscriptionIs({ ...pastDue, status: 'unpaid' });
+    renderFrameAt('/plants/new');
+
+    expect(await screen.findByTestId('payment-failed-banner')).toHaveAttribute(
+      'data-stage',
+      'lapsed'
+    );
     expect(screen.getByText('We couldn’t take your last payment')).toBeInTheDocument();
   });
 

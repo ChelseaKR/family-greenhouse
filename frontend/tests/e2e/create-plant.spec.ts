@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { navigateTo, provisionAccount, uiLogin, ProvisionedAccount } from './helpers';
+import {
+  navigateTo,
+  provisionAccount,
+  uiLogin,
+  ProvisionedAccount,
+  pickPlantPagePhoto,
+} from './helpers';
 
 const VALID_PNG = readFileSync(new URL('../../public/brand/favicon-32x32.png', import.meta.url));
 
@@ -59,7 +65,9 @@ test.describe('Create plant flow', () => {
     await page.getByRole('button', { name: /add plant/i }).click();
 
     // After save we should land on the new plant's detail page.
-    await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1, name: uniqueName })).toBeVisible({
+      timeout: 15000,
+    });
     await expect(page.getByText('Every 7 days')).toBeVisible();
     await expect(page.getByText('Every 30 days')).toBeVisible();
     await expect(page.getByText('Every 90 days')).toBeVisible();
@@ -120,7 +128,7 @@ test.describe('Create plant flow', () => {
     // The plant POST committed before the injected upload failure. Recovery
     // lands on that exact record and replaces the submitted /plants/new entry.
     await expect(page).toHaveURL(/\/plants\/[^/]+$/, { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: uniqueName })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: uniqueName })).toBeVisible();
     // `variant="info"` — the plant DID save, so the recovery notice is
     // announced politely (role="status") rather than interrupting whatever the
     // screen reader is mid-sentence on. See components/Alert.tsx.
@@ -149,7 +157,7 @@ test.describe('Create plant flow', () => {
 
     // Retrying is now an image-only operation on PlantDetailPage; it cannot
     // POST another plant.
-    await page.getByLabel(/upload photo/i).setInputFiles(photo);
+    await pickPlantPagePhoto(page, photo);
     const putResponse = await realPut;
     const confirmResponse = await confirm;
     const imageResponse = await displayedBytes;

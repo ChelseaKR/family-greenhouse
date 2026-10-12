@@ -11,7 +11,7 @@
  * AWS — for that, see the Playwright e2e in tests/e2e/.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, provisionLocalUserFixture, resetDb } from '../../src/local-server';
 
 const NEW_EMAIL = 'new-user@example.com';

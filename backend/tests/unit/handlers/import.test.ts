@@ -255,7 +255,7 @@ describe('POST /plants/import', () => {
     expect(activity.recordActivity).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'hands the SEEDLING cap to the service when the Garden subscription is %s',
     async (status) => {
       // Import shares POST /plants' cap. Resolving it off planId alone let a

@@ -8,6 +8,7 @@ import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { userRateLimit, rateLimit } from '../../middleware/rateLimit.js';
 import * as sitterService from '../../services/sitterService.js';
 import { buildSitterBrief } from '../../services/sitterBrief.js';
+import { verdictModeFromQuery } from '../../models/petToxicity.js';
 import { sitterBriefIncluded } from '../../services/sitterPlanGate.js';
 import { sitterPhotoRoutes } from './sitterPhotos.js';
 import * as caretakerPublic from '../caretakers/public.js';
@@ -69,7 +70,7 @@ async function resolvePlanBestEffort(householdId: string): Promise<Plan | null> 
     // household acting on their own account — the double-care detector on
     // completion and the two drift endpoints — so this is the STARTING
     // question: nothing here was issued to a third party who cannot fix the
-    // card. A household mid-dunning gets the free tier's behaviour, exactly
+    // card. A lapsed household gets the free tier's behaviour, exactly
     // as a downgrade already gives it. It also picks up the lifetime floor,
     // so an outright purchase survives a later subscription being cancelled.
     return getEntitledPlan(await billing.getHouseholdSubscription(householdId));
@@ -1043,7 +1044,9 @@ export const getSitterBrief = createHandler(
     if (!sitterBriefIncluded(plan)) {
       throw createHttpError(404, 'This sitter link is invalid or has expired.');
     }
-    return successResponse(await buildSitterBrief(link));
+    return successResponse(
+      await buildSitterBrief(link, new Date(), verdictModeFromQuery(event.queryStringParameters))
+    );
   }
   // Anonymous, like the task view. The brief is a heavier read (plants +
   // spaces + tasks), so the per-IP allowance is tighter than the 60/min list.

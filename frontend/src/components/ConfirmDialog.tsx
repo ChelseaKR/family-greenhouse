@@ -1,7 +1,10 @@
-import { Fragment, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from './Button';
+import { NativeDialog } from './NativeDialog';
+import { hasNativePresent } from '@/lib/platform';
+import { playHaptic } from '@/services/nativeHaptics';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -35,6 +38,31 @@ export function ConfirmDialog({
   // layout, so the ref is the change that fixes focus without moving anything
   // a sighted user is looking at.
   const cancelRef = useRef<HTMLButtonElement | null>(null);
+
+  // In the apps, a destructive confirmation arrives with the system warning
+  // haptic, as iOS's own do. Once per opening.
+  useEffect(() => {
+    if (isOpen && variant === 'danger') playHaptic('warning');
+  }, [isOpen, variant]);
+
+  // In the iOS app: Apple's own alert, over the native bars. The confirm
+  // button is drawn red when `variant` is danger; only a tap on it confirms.
+  if (hasNativePresent()) {
+    return (
+      <NativeDialog
+        kind="confirm"
+        isOpen={isOpen}
+        onClose={onClose}
+        onConfirm={onConfirm}
+        title={title}
+        message={message}
+        confirmLabel={confirmLabel}
+        cancelLabel={cancelLabel}
+        variant={variant}
+        isLoading={isLoading}
+      />
+    );
+  }
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>

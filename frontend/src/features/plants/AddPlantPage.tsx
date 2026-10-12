@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { playHaptic } from '@/services/nativeHaptics';
 import { useNavigate, useLocation, Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -395,6 +396,7 @@ export function AddPlantPage() {
     },
     onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
+      playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(
@@ -430,7 +432,7 @@ export function AddPlantPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <Link
         to="/plants"
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
         Back to plants

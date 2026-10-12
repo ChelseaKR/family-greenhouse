@@ -15,7 +15,7 @@
  *   - erasure bypasses the window, and a departing member is scrubbed from
  *     the trash the same way they are scrubbed from live rows.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { BatchWriteCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { createInMemoryDynamo } from '../../integration/support/inMemoryDynamo.js';
 import { seedHousehold } from '../../integration/support/seed.js';
@@ -308,6 +308,16 @@ describe('restoreEntry (plant)', () => {
   });
 
   it('does not bring back a share link whose own 14-day life ended while it was in the trash', async () => {
+    // The share's 14 days start at the real clock when it is created, but
+    // the trash entry's 30 days start at the fixed T0. Once the real date
+    // passed T0 + 15 days (2026-10-02 12:00 UTC), "a day after the share
+    // expired" fell outside the trash window, and restore refused for the
+    // wrong reason. Pin the clock to T0 so both windows start together.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const trash = await import('../../../src/services/trashService.js');
     const plantService = await import('../../../src/services/plantService.js');
     const seeded = await seedFurnishedPlant();

@@ -176,7 +176,7 @@ describe('escalation — rule storage', () => {
     );
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused', 'canceled'])(
+  it.each(['unpaid', 'incomplete', 'paused', 'canceled'])(
     'resolves the gating plan from ENTITLEMENT: %s reads as the free tier (#476)',
     async (subscriptionStatus) => {
       // PUT /households/{id}/escalation now refuses to turn the rule ON for a
@@ -297,7 +297,7 @@ describe('escalation — the scan hook', () => {
     const { sent } = await mockStore({
       escalateAfterDays: 5,
       planId: 'garden',
-      subscriptionStatus: 'past_due',
+      subscriptionStatus: 'unpaid',
     });
     await members();
     const notifier = await import('../../../src/services/notifier.js');

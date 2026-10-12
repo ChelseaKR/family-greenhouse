@@ -57,6 +57,13 @@ const REDACTED_PATHS = [
   '*.idToken',
   'apiKey',
   '*.apiKey',
+  // A credential row's own key suffix: the token's digest on a hashed row, but
+  // the PLAINTEXT token on a pre-#450 row (`keyToken` in the credential
+  // services). And a cutting-share code, which travels as `code` (#450).
+  // Top-level only for `code`: `err.code` is an error class, not a secret.
+  'keyToken',
+  '*.keyToken',
+  'code',
   'imageBase64',
   '*.imageBase64',
   // A household chat-channel webhook address is a bearer credential (#674).

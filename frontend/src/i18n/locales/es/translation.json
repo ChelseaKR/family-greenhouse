@@ -190,7 +190,8 @@
     "schedule": "Por fecha",
     "round": "Ronda de cuidado",
     "title": "Tu ruta de cuidado",
-    "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}"
+    "summary": "Tareas pendientes: {{tasks}} · Espacios por visitar: {{spaces}}",
+    "later": "Para más adelante: {{count}}. Cambia a Por fecha para verlas."
   },
   "sharedCarePulse": {
     "eyebrow": "Configuración del cuidado compartido",
@@ -298,7 +299,12 @@
     "household": "Hogar",
     "settings": "Ajustes",
     "signOut": "Cerrar sesión",
-    "today": "Hoy, en todos tus hogares"
+    "today": "Hoy, en todos tus hogares",
+    "home": "Inicio",
+    "more": "Más",
+    "about": "Acerca de",
+    "households": "Hogares",
+    "signOutConfirm": "¿Cerrar sesión en Family Greenhouse?"
   },
   "publicShell": {
     "careGuides": "Guías de cuidado",
@@ -325,6 +331,7 @@
     "password": "Contraseña",
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "keepSignedIn": "Mantener la sesión iniciada en este dispositivo",
+    "staysSignedInHere": "Este dispositivo mantiene la sesión iniciada hasta que cierres sesión.",
     "invalidEmail": "Introduce un correo válido",
     "passwordRequired": "La contraseña es obligatoria",
     "signUpFree": "Regístrate gratis",
@@ -465,6 +472,7 @@
     "poisonControlLink": "ASPCA Animal Poison Control",
     "aboutHeading": "Cómo se hace esta página",
     "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
+    "careGuideLink": "Guía de cuidados: {{name}} (riego, luz y problemas comunes)",
     "checkAnother": "Buscar otra planta",
     "breadcrumbHome": "Inicio",
     "breadcrumbHub": "Mascotas y plantas",
@@ -725,7 +733,95 @@
       "unavailableBody": "No pudimos cargar la guía de cuidados de esta especie en este momento. Nada ha cambiado en la planta: inténtalo de nuevo más tarde."
     },
     "lastWateredBy": "Regada por última vez {{when}} por {{name}}.",
-    "noWateringYet": "Todavía no se ha registrado ningún riego para esta planta."
+    "noWateringYet": "Todavía no se ha registrado ningún riego para esta planta.",
+    "list": {
+      "eyebrow": "Invernadero",
+      "description": "Gestiona las plantas de tu hogar.",
+      "applyTemplate": "Aplicar plantilla",
+      "collection": "Colección de plantas",
+      "active": "Activas",
+      "past": "Plantas anteriores",
+      "searchLabel": "Buscar plantas",
+      "searchPlaceholder": "Buscar plantas…",
+      "viewMode": "Modo de vista",
+      "gridView": "Vista en cuadrícula",
+      "listView": "Vista en lista",
+      "matches_one": "{{count}} planta coincide con «{{query}}».",
+      "matches_other": "{{count}} plantas coinciden con «{{query}}».",
+      "matches_many": "{{count}} plantas coinciden con «{{query}}».",
+      "inView_one": "{{count}} planta en esta vista.",
+      "inView_other": "{{count}} plantas en esta vista.",
+      "inView_many": "{{count}} plantas en esta vista.",
+      "noneFoundTitle": "No se encontraron plantas",
+      "noneFoundDescription": "Ninguna planta coincide con «{{query}}»",
+      "clearSearch": "Borrar la búsqueda",
+      "emptyTitle": "Añadamos tu primera planta",
+      "emptyDescription": "Ponle un nombre o empieza a escribir una especie y completaremos los cuidados por ti. Una vez añadida, llevaremos la cuenta del riego y de todo lo demás.",
+      "emptyHint": "Tarda menos de un minuto.",
+      "importPlants": "Importar una lista de plantas",
+      "noDetails": "Sin detalles",
+      "count_one": "{{count}} planta",
+      "count_other": "{{count}} plantas",
+      "count_many": "{{count}} plantas",
+      "filter": "Filtrar plantas",
+      "more": "Más acciones de plantas",
+      "groupBy": "Agrupar por",
+      "groupCare": "Estado de cuidado",
+      "groupRoom": "Espacio",
+      "groupName": "Nombre",
+      "show": "Mostrar",
+      "everyone": "Plantas de todos",
+      "mine": "Solo las mías",
+      "spaces": "Espacios",
+      "tags": "Etiquetas",
+      "allTags": "Todas las etiquetas",
+      "manageSpaces": "Gestionar espacios",
+      "removeFilter": "Quitar filtro: {{label}}",
+      "sectionNeeds": "Necesitan cuidado",
+      "sectionSoon": "Próximamente",
+      "sectionLater": "Todo en orden",
+      "sectionNone": "Sin cuidados programados",
+      "sectionAll": "Todas las plantas",
+      "dueOverdue_one": "{{task}}: {{count}} día de retraso",
+      "dueOverdue_other": "{{task}}: {{count}} días de retraso",
+      "dueOverdue_many": "{{task}}: {{count}} días de retraso",
+      "dueToday": "{{task}}: hoy",
+      "dueIn": "{{task}}: {{when}}",
+      "noCare": "Sin cuidados programados",
+      "you": "Tú",
+      "youCovering": "Tú, cubriendo",
+      "covering": "{{name}}, cubriendo",
+      "coveringAria": "{{name}}, cubriendo a {{away}}",
+      "assigned": "Asignada",
+      "careUnavailable": "No se pudo cargar el estado de cuidado, así que no se muestra. Tus plantas aparecen abajo.",
+      "careLoading": "Cargando el estado de cuidado…",
+      "doAria": "{{task}} {{plant}}",
+      "undoAria": "Deshacer: {{task}} {{plant}}",
+      "marked": "{{task}}: hecho",
+      "doneToast": "Hecho: {{task}}, {{plant}}",
+      "undo": "Deshacer",
+      "undoTooLate": "Ya estaba guardado. Lo verás en el historial de cuidados de la planta.",
+      "doNow": "{{task}} ahora",
+      "claim": "Me encargo yo",
+      "moveTo": "Mover a…",
+      "openPlant": "Abrir la planta",
+      "snooze1d": "1 día",
+      "snooze3d": "3 días",
+      "snooze1w": "1 semana",
+      "snoozeSkip": "Saltar este ciclo",
+      "snoozedToast": "Pospuesta",
+      "swipeMore": "Más"
+    },
+    "detail": {
+      "more": "Más acciones de la planta",
+      "statusLabel": "Lo que necesita esta planta ahora",
+      "lastBy": "la última vez, {{name}}, {{when}}",
+      "watered": "Regada",
+      "remove": "Quitar…",
+      "restore": "Volver al cuidado activo",
+      "doAria": "{{task}} {{plant}}",
+      "claim": "Me encargo yo"
+    }
   },
   "importPlants": {
     "title": "Importar plantas",
@@ -898,6 +994,68 @@
       "field": "Intervalo de {{season}} (días)",
       "placeholder": "Frecuencia base",
       "noLocationHelp": "Añade una ubicación del hogar y estas temporadas empezarán a aplicarse."
+    },
+    "list": {
+      "segments": "Mostrar tareas de",
+      "today": "Hoy",
+      "upcoming": "Próximas",
+      "overdue": "Atrasadas",
+      "tomorrow": "Mañana",
+      "count_one": "{{count}} tarea",
+      "count_other": "{{count}} tareas",
+      "count_many": "{{count}} tareas",
+      "inView_one": "{{count}} tarea en esta vista.",
+      "inView_other": "{{count}} tareas en esta vista.",
+      "inView_many": "{{count}} tareas en esta vista.",
+      "filter": "Filtrar tareas",
+      "everyone": "Las tareas de todos",
+      "groupDate": "Fecha",
+      "actions": "Acciones para {{plant}}",
+      "allDoneTitle": "Todo listo por hoy",
+      "nextUp": "Lo próximo: {{plant}}, {{when}}.",
+      "upcomingEmpty": "No hay nada programado después de hoy.",
+      "emptyTitle": "Todavía no hay cuidados programados",
+      "emptyBody": "Añade una planta y aquí aparecerán su riego y el resto de sus cuidados.",
+      "filteredEmpty": "Ninguna tarea coincide con estos filtros.",
+      "clearFilters": "Quitar filtros"
+    },
+    "page": {
+      "eyebrow": "El trabajo de hoy",
+      "description": "Gestiona las tareas de cuidado de tus plantas.",
+      "filtersLabel": "Filtros de tareas",
+      "filterAll": "Todas",
+      "filterMine": "Mis tareas",
+      "filterToday": "Hoy",
+      "filterWeek": "Esta semana",
+      "filterOverdue": "Atrasadas",
+      "overdueUnknown": "Número de atrasadas desconocido",
+      "emptyTitle": "No hay tareas",
+      "emptyAll": "Añade tareas de cuidado a tus plantas para verlas aquí.",
+      "emptyFiltered": "Ninguna tarea coincide con el filtro actual.",
+      "clearFilter": "Quitar filtro",
+      "viewPlants": "Ver plantas",
+      "shown_one": "{{count}} tarea mostrada.",
+      "shown_other": "{{count}} tareas mostradas.",
+      "shown_many": "{{count}} tareas mostradas.",
+      "daysOverdue_one": "{{count}} día de retraso",
+      "daysOverdue_other": "{{count}} días de retraso",
+      "daysOverdue_many": "{{count}} días de retraso",
+      "assignedTo": "Asignada a {{name}}",
+      "assignedToYou": "Asignada a ti"
+    },
+    "frequencyStepper": {
+      "less": "Un día menos",
+      "more": "Un día más"
+    },
+    "formSheet": {
+      "addTitle": "Añadir tarea de cuidado",
+      "add": "Añadir",
+      "type": "Tarea",
+      "customName": "Nombre de la tarea",
+      "howOften": "Con qué frecuencia",
+      "everyDay": "Cada día",
+      "everyNDays": "Cada {n} días",
+      "notes": "Notas"
     }
   },
   "today": {
@@ -1231,7 +1389,8 @@
     "petSource": "De nuestra lista verificada de seguridad para mascotas, coincidencia con {{matched}} ({{scientific}}), basada en la base de datos de la ASPCA.",
     "verdict": {
       "toxic": "tóxica",
-      "non-toxic": "no tóxica"
+      "non-toxic": "no tóxica",
+      "unknown": "sin veredicto"
     },
     "task": {
       "water": "Riega",
@@ -1242,7 +1401,8 @@
     "unavailableTitle": "Esta guía de cuidados no está disponible",
     "unavailableBody": "Puede que el enlace haya caducado, se haya desactivado o que el plan de este hogar no incluya la guía. Puede que la lista diaria de tareas siga funcionando: prueba el enlace que te enviaron.",
     "errorTitle": "Algo salió mal",
-    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento."
+    "errorBody": "No pudimos cargar la guía de cuidados en este momento. Actualiza la página e inténtalo de nuevo en un momento.",
+    "petUnknown": "Sin veredicto citado de seguridad para mascotas: gatos: {{cats}}, perros: {{dogs}}."
   },
   "kiosk": {
     "title": "Cuidado de plantas de hoy",
@@ -1393,7 +1553,8 @@
       "help": "Ayuda",
       "plantTags": "Etiquetas",
       "refer": "Recomendar a un amigo",
-      "security": "Seguridad"
+      "security": "Seguridad",
+      "about": "Acerca de"
     },
     "preferences": {
       "title": "Preferencias",
@@ -1448,10 +1609,12 @@
       "currentPlan": "Tu hogar tiene el plan {{plan}}.",
       "currentPlanTrial": "Tu hogar tiene el plan {{plan}} (prueba gratuita).",
       "currentPlanUnpaid": "Tu hogar tiene el plan {{plan}}, pero su último pago no se ha completado.",
+      "paymentRetryingTitle": "Tu último pago no se ha completado",
+      "paymentRetryingBody": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva el plan {{plan}} y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Plántula (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservar {{plan}}.",
+      "paymentRetryingBodyNoPlan": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva su plan de pago y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Plántula (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservarlo.",
       "paymentFailedTitle": "No hemos podido cobrar tu último pago",
       "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Plántula en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
       "paymentFailedActionAdmin": "Actualiza la tarjeta en “Gestionar suscripción”, más abajo.",
-      "paymentFailedActionNative": "Abre Family Greenhouse en un navegador web para actualizar la tarjeta.",
       "paymentFailedBodyOwned": "Hasta que se resuelva, tu hogar tiene los límites del plan que ya compró de por vida o que recibió como regalo, en lugar de los de tu suscripción. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras de ese plan.",
       "paymentFailedBanner": {
         "actionAdmin": "Actualiza la tarjeta en Ajustes → Estado del plan",
@@ -1699,7 +1862,15 @@
     "emailSuppressedComplaint": "Esta dirección se marcó como spam, así que dejamos de enviarle mensajes. No se entrega nada: ni recordatorios ni el resumen semanal. Reanúdalo abajo si fue un error o si has cambiado de opinión.",
     "emailStatusUnknown": "No pudimos comprobar si tu correo se está entregando en este momento. Esto no significa ni que sí ni que no: inténtalo de nuevo en un instante.",
     "emailResume": "Reanudar el correo a esta dirección",
-    "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío."
+    "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío.",
+    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana."
+  },
+  "pushActions": {
+    "done": "{{plant}}: marcada como hecha.",
+    "snoozed": "{{plant}}: pospuesta hasta mañana.",
+    "already": "{{plant}}: ese recordatorio ya estaba atendido.",
+    "failed": "La acción del recordatorio no se completó. Abre la tarea para intentarlo de nuevo.",
+    "unnamedPlant": "Esta planta"
   },
   "statusPage": {
     "notActivelyChecked": "No se comprueba activamente",
@@ -1710,9 +1881,7 @@
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
     "openAccount": "Abrir ajustes de la cuenta",
-    "backToSetup": "Volver a la configuración",
-    "planAvailableTitle": "Qué sigue disponible",
-    "planAvailableBody": "Al iniciar sesión tienes acceso a las plantas, tareas, funciones compartidas del hogar y cuidados incluidos en tu cuenta actual. Esta aplicación no cobra pagos."
+    "backToSetup": "Volver a la configuración"
   },
   "connection": {
     "offlineTitle": "Estás sin conexión",
@@ -1723,7 +1892,8 @@
     "offlineChanges": "Los cambios que hagas ahora se enviarán cuando vuelvas a tener conexión, siempre que la app siga abierta.",
     "unreachableChanges": "Los cambios que hagas ahora no se guardarán hasta que se pueda conectar de nuevo.",
     "refreshing": "Actualizando",
-    "refreshed": "Actualizado"
+    "refreshed": "Actualizado",
+    "requestUnreachable": "No se puede conectar con Family Greenhouse. Revisa tu conexión e inténtalo de nuevo."
   },
   "validation": {
     "nameRequired": "El nombre es obligatorio",
@@ -2203,7 +2373,6 @@
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
     "registerCta": "Crear una cuenta gratuita",
-    "nativeNotice": "Regalar no está disponible en la aplicación. Abre familygreenhouse.net en la web para enviar un regalo.",
     "navLink": "Regalar una suscripción"
   },
   "caretaker": {
@@ -2563,11 +2732,6 @@
       "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
       "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
     },
-    "native": {
-      "eyebrow": "Información del plan",
-      "title": "Tu plan de Family Greenhouse",
-      "lede": "La app móvil no ofrece compras ni cambios de plan. Si ya tienes cuenta, puedes ver el estado de tu plan y tu uso en Ajustes → Facturación, y cambiar de plan en la web."
-    },
     "meta": {
       "title": {
         "open": "Planes y precios — Family Greenhouse",
@@ -2640,7 +2804,9 @@
       "otherArchive": "Este hogar se restauró desde otra exportación. Restaura en un hogar nuevo.",
       "changed": "Algo cambió desde que la revisaste. Vuelve a revisarla.",
       "overLimit": "Esta exportación tiene {{active}} plantas activas y el plan {{plan}} permite {{limit}}. No se restaurará nada hasta que mejores el plan.",
+      "overLimitInApp": "Esta exportación tiene {{active}} plantas activas y el plan {{plan}} permite {{limit}}, así que no se restaurará nada en este hogar.",
       "stoppedAtLimit": "Se detuvo en el límite del plan. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Mejora el plan y vuelve a restaurar.",
+      "stoppedAtLimitInApp": "Se detuvo en el límite del plan. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Si vuelves a restaurar el mismo archivo más tarde, solo se añadirá lo que falta.",
       "interrupted": "Se detuvo a medias. Plantas: {{plants}}/{{totalPlants}}, tareas: {{tasks}}/{{totalTasks}}. Vuelve a restaurar para terminar; no se añade nada dos veces."
     },
     "preview": {
@@ -2668,6 +2834,24 @@
       "members": "Los miembros (vuelve a invitarlos)",
       "billing": "La facturación: no se traslada ningún plan, suscripción ni periodo de prueba",
       "links": "Los enlaces de cuidador, pantalla de pared, etiquetas, compartir, calendario y API (crea enlaces nuevos)"
+    }
+  },
+  "petSafety": {
+    "cats": "Gatos:",
+    "dogs": "Perros:",
+    "verdict": {
+      "toxic": "Tóxica",
+      "nonToxic": "No tóxica",
+      "unknown": "Sin veredicto"
+    },
+    "cardSafe": "{{name}} es segura para mascotas",
+    "cardHarmful": "{{name}} puede ser dañina para las mascotas",
+    "cardUnknown": "Sin veredicto citado para {{name}}",
+    "callPoisonControl": "Llamar al {{phone}}",
+    "caution": {
+      "both": "{{name}} no figura en la lista de la ASPCA, así que no podemos dar un veredicto. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
+      "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
+      "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
     }
   }
 }

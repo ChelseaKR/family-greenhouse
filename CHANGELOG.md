@@ -16,6 +16,536 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-10-10
+
+**The iOS app stays signed in, and a reminder now says which plant, what
+care, and what to do about it.** Opening the app used to mean signing in
+again whenever more than an hour had passed; the refresh token now lives in
+the device keychain, and the Cognito client keeps it valid for a year. The
+daily reminder email is branded HTML that names the most urgent plant and its
+task, groups the rest, and links each plant to its page; every email the kit
+renders gets the same shell. A push reminder names the plant and the care,
+opens that plant's care section, and on iPhone can be answered with Done or
+Snooze until tomorrow from the notification itself. The App Store listing
+says reminders arrive as push on iPhone. The sign-in change and the
+notification buttons reach people through store builds (0.41.0, build 4100);
+the email and the new reminder words reach everyone with this tag's deploy.
+
+- **The Terraform plan changes one attribute of the Cognito app client (#963).**
+  `module.auth.aws_cognito_user_pool_client.main` updates in place with
+  `refresh_token_validity: 30 => 365` (days), from
+  `infrastructure/modules/auth/main.tf` (ADR 0034). Alongside the usual 19
+  Lambda `GIT_SHA` updates, expect `Plan: 0 to add, 20 to change, 0 to
+destroy.` Anything else means stop. Tokens issued before the apply keep
+  the 30 days they were issued with; the first sign-in after it gets a year.
+  No stored data changes shape.
+  - This is the only `infrastructure/` change since 0.40.0: one file, the
+    attribute and its comment. The AWS provider updates the client in place
+    with `UpdateUserPoolClient`; only `user_pool_id` and `generate_secret`
+    force a replacement, and neither changes. `token_validity_units` keeps
+    `refresh_token = "days"`, so 365 means 365 days. A `must be replaced` on
+    the client, or any change to the user pool itself, means stop.
+  - The deploy workflows are unchanged since 0.40.0, no stored data is
+    migrated, and the Terms of Service text is unchanged, so their effective
+    date stays 0.38.2's (October 2, 2026).
+- **The app-only changes reach people through store builds** (0.41.0, build
+  4100), not through this tag's web deploy. The web deploy carries the code,
+  which does nothing on the website. A device signed in under an older build
+  signs in once more on the first launch of the new one (its refresh token
+  was in the WebView's `sessionStorage`, which the update dropped); after
+  that it stays (#963). The iPhone notification buttons, the badge clearing
+  after a button and the Settings preview line need a build carrying #964;
+  the new reminder words and deep links, and the branded email (#962), reach
+  every installed app and every inbox with this tag's deploy. An iOS build
+  made with `VITE_NATIVE_PUSH_ENABLED=true` and
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED=false` offers push, as build 4001 did.
+
+### Added
+
+- **iOS and Android apps: the app stays signed in (ADR 0034, #963).** Opening the
+  app used to mean signing in again whenever more than an hour had passed:
+  the refresh token lived in the WebView's `sessionStorage`, which ends with
+  the app process, and only the hour-long ID token survived a cold start.
+  The apps now keep the refresh token in the iOS keychain or the Android
+  keystore (`@aparajita/capacitor-secure-storage` 8.0.1, pinned; readable
+  after the device's first unlock, in no backup, not synced), read it back
+  at launch before judging the session, and refresh silently with it. A
+  launch never shows the sign-in screen while that happens, and an
+  ID token the client can see has expired goes straight to the refresh,
+  one round trip fewer. Sign-out removes the token; a refused refresh signs
+  the device out; a reinstall starts fresh. The sign-in screen in the apps
+  says "This device stays signed in until you sign out." instead of showing
+  the website's checkbox. All of it only in a shell whose bridge lists the
+  plugin; a build without it keeps the website's storage model and
+  checkbox. The website is unchanged. All JS combined
+  651.64 → 654.5 kB measured; the budget moves 653 → 674 kB.
+- **The store validator recognizes third-party Capacitor plugins (#963).** Any
+  dependency whose package carries a `capacitor` block is now held to the
+  `docs/mobile.md` plugin table and to the iOS and Android link checks, not
+  only the `@capacitor/*` ones.
+
+### Changed
+
+- **The App Store listing says reminders also arrive as push notifications
+  on iPhone (#961).** Native push passed the device checks in
+  `docs/native-push-setup.md` (section 8) on 2026-10-09 with build 4001, the
+  first build made with `VITE_NATIVE_PUSH_ENABLED=true`, so the description's
+  reminders section and the release notes in
+  `store-assets/metadata/en-US.json` no longer say push is not part of the
+  release, and the App Review notes in `docs/APP-STORE.md` name push and how
+  to reach a reminder. The Google Play copy is unchanged, because Android
+  push is off. Documentation only; no app code changes.
+- **The daily reminder email is branded HTML that says what to do (#962).** Subject
+  and title name the most urgent plant and its task with the true count of the
+  rest (_Water Monstera and 2 more today_ / _Regar Monstera y 2 más hoy_); rows
+  are grouped under _Ready for some catch-up care_, _Due today_, _Coming up_,
+  _Check the due date_ and _Up for grabs_, each with the plant linked, the task and due phrase, and a
+  _Mark done in the app_ button to the plant page; a capped section says _and
+  N more_ with a link to the task list; the footer names the household and
+  links to reminder settings. Push and SMS keep their counts title. The welcome,
+  weekly digest and year recap emails pick up the same branded shell with no
+  copy change.
+- **Every email now carries the brand (#962)**: a Forest header band with the logo
+  (`https://familygreenhouse.net/brand/logo-dark.png`, with alt text and
+  dimensions; the one image an email loads, ADR 0021 amended), the
+  design-token palette stated on both the light and the dark path, the brand
+  faces named first in the font stacks with system fallbacks and nothing
+  fetched, rows as Paper-on-Glass panes, and the terracotta accent only on an
+  honest-failure notice.
+- **The text part is kept (#962).** Every message is `multipart/alternative`; the
+  reminder's text part is the tested numbered list the reply-to-act path is
+  bound to, and the HTML rows carry the same numbers when a reply address is
+  bound.
+- **Checked in the repo (#962).** `renderedEmails.test.ts` renders every email in
+  both languages to `backend/test-output/email/` (git-ignored), checks each
+  for email-HTML validity, size and link parity between the two parts, and
+  keeps the reminder as a committed golden; `emailHtmlChecks.test.ts` is the
+  checker's negative control; `npm run email:preview -w backend` screenshots
+  each in light, dark and phone views. Private plant notes are asserted absent
+  from the reminder, the digest and the up-for-grabs email end to end.
+- `scripts/check-app-links.mjs` accepts a backend-built link to a file under
+  `frontend/public/` and verifies the file exists (#962).
+- **Reminder notifications name the plant and the care, open the task they
+  name, and can be answered from the notification itself (#964).** A push reminder
+  used to read "Plant care reminder: 1 due today" and open the task list. It
+  now reads "Water the Monstera" ("Monstera necesita riego") with when it is
+  due and what to do next ("Due today. Mark it done once you have, or snooze
+  it until tomorrow."), and overdue is stated as a date ("Due 3 days ago"),
+  not a verdict. Several tasks get a count and the first two plant names ("3
+  plants need water. Monstera and Fern and 1 more. 2 overdue and 1 due
+  today."), never a wall. Tapping a one-task reminder opens that plant's care
+  section; several open the due list. On iPhone a one-task reminder carries
+  Done and Snooze until tomorrow as notification buttons (a long-press or
+  pull-down shows them), on the website Chrome and Edge show the same two
+  buttons, and on Android a tap opens the plant while the buttons are not
+  built yet (the system renders FCM notifications). Each button posts to the
+  task's own complete or snooze endpoint with the app's stored session and the
+  occurrence it was about, so a second tap, a tap from two devices, or a tap
+  after someone else did it changes nothing and says so. The app icon count is
+  cleared with the notification after a Done or Snooze. The words live in one
+  module (`services/reminderCopy.ts`), in English and Spanish, with no field
+  that could carry a plant's notes or a person. Settings → Notifications shows
+  one line of what a reminder says. The email reminder has its own entry
+  above. Store note: the iPhone buttons need a build carrying this change;
+  the words and the deep link reach every installed app with the backend
+  deploy.
+
+## [0.40.0] - 2026-10-06
+
+**The public sitter, caretaker, kiosk and plant tag pages now call work that
+is due today "due today" all day, the way the signed-in app does.** Safari no
+longer reports a page you left while it was still loading as an app failure,
+and the pet-safety pages and four posts link the care guides they name.
+Density in Preferences is a segmented control, "every N days" has a stepper,
+and the Household tab, the plant page and the desktop Tasks page show the
+shape of what is coming while they load. The rest is for the iOS app, which
+is not yet in the App Store: Add care task as a native form sheet, the camera
+and photo library on the leaf health check and on the sitter and caretaker
+pages, haptics, and **native push switched on in production for iOS**, so an
+iOS build made with push enabled can deliver reminders to the phone (Android
+stays off). The store builds also move to Capacitor 8.5.2, which fixes a
+critical advisory.
+
+- **The Terraform plan destroys one unused CloudFront cache policy and
+  switches native push on for iOS (#940, #956, #958).** Expect
+  `Plan: 0 to add, 20 to change, 1 to destroy.`
+  - The one destroy is `module.frontend.aws_cloudfront_cache_policy.images`
+    (`family-greenhouse-images-production`, id
+    `ed4acfb8-cf62-4698-9d1b-aef5144915b1`), dropped from
+    `infrastructure/modules/frontend/main.tf`. 0.38.1 kept it for one release
+    so the distribution could stop using it first, and nothing has used it
+    since 0.38.1 deployed (#940).
+  - The 20 in-place updates are the 19 Lambda functions, every one with the
+    usual `GIT_SHA` change, and on `households`, `notifications` and
+    `reminders` also `APNS_AUTH_KEY_SECRET_ID` from `""` to
+    `family-greenhouse/production/apns-auth-key` (#956) and
+    `NATIVE_PUSH_ENABLED` from `"false"` to `"true"` (#958); plus
+    `module.api.aws_iam_role_policy.lambda`, whose one
+    `secretsmanager:GetSecretValue` statement for push names that secret in
+    place of the `apns-disabled` sentinel (#956). `FCM_SERVICE_ACCOUNT_SECRET_ID`
+    stays `""` and the FCM grant stays on its sentinel.
+  - Anything else means stop. These are the only `infrastructure/` changes
+    since 0.39.0 (`environments/production/terraform.tfvars`,
+    `modules/api/main.tf`, `modules/frontend/main.tf` and `variables.tf`). No
+    stored data is migrated, and the Terms of Service text is unchanged, so
+    their effective date stays 0.38.2's (October 2, 2026).
+- **Do not run Deploy to Staging from this release yet (#940).** Staging is
+  still on the layout from before 0.38.1, where its own images policy is in
+  use by two distributions. A staging apply of this code would detach and
+  destroy in one apply, the order that failed 0.38.0. Apply staging once from
+  0.38.2 or later without this change first.
+- **The deploy workflows change only in their pinned action versions
+  (#949):** `configure-aws-credentials` 6.2.4 to 6.3.0 in the production,
+  staging and alert-relay workflows, `codecov-action` 7.0.0 to 7.1.1 and
+  `gradle/actions` 6.3.0 to 6.4.0.
+- **The app-only changes reach people through store builds** (0.40.0, build
+  4000), not through this tag's web deploy. Those builds carry Capacitor
+  8.5.2 for iOS and Android, which fixes GHSA-rvm3-566m-v7fv (critical, in
+  8.5.0: remote content could be loaded at the app origin through the
+  internal HTTP proxy path). An iOS build made with
+  `VITE_NATIVE_PUSH_ENABLED=true` and `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`
+  offers push once this tag's deploy reports `devicePush.ios: true`; the
+  device checks in `docs/native-push-setup.md` (section 8) run against
+  production with the owner's TestFlight build.
+
+### Added
+
+- **Density as a segmented control, and a stepper for "every N days" (#947).**
+  Settings, then Preferences shows Cozy and Compact as one segmented control,
+  as in iOS Settings; it is still a radio group for the keyboard and
+  assistive tech, and the two segments stack at the accessibility text sizes.
+  Add care task and Edit task get − and + beside the "Frequency (days)"
+  field, stopping at 1 and 365; a typed number still works.
+- **Skeletons while pages load (#944).** The Household tab, the plant page and
+  the desktop Tasks page show the shape of what is coming instead of a
+  centered spinner, each announced to screen readers as "Loading…". No tab
+  root shows a spinner while its data loads any more.
+- **Internal links from the pet-safety pages and four posts to the care
+  guides (#945).** 22 of the 28 `/pet-safe/<plant>` pages link their own care
+  guide (the six without a guide of the same name do not). The two
+  pet-safety posts link the safety page of every plant they name, and say
+  which plants have none. The yellow-leaves and overwatering posts link the
+  guides whose own text covers that problem. No verdict, note or citation
+  changed, and the sitemap stays at 88 addresses.
+- **iOS app: Add care task as a native form sheet (#948).** A grouped form
+  with a grabber, medium and large detents, and Cancel and Add in the sheet's
+  own bar, drawn by Swift from the words, choices and starting values the web
+  sends in the app's language. Dismissing never submits: only the sheet's Add
+  button reports values, and the web accepts only a known task kind, a whole
+  number of days from 1 to 365 and a name for a Custom task. A save the
+  server refuses reopens the sheet with what was entered and the reason, and
+  a half-filled sheet survives a trip out of the app. The other eight forms,
+  older app builds and the website keep the web dialog.
+- **iOS and Android apps: the camera and photo library for the leaf health
+  check, the sitter page and the caretaker page (#946).** Each opens the
+  camera or the library natively, as the plant photo already does, instead of
+  the web file picker; the caretaker page asks Take photo or Choose photo in
+  a native sheet, anchored on the button. A refused permission says why and
+  how to turn it on. The website keeps its file inputs. Neither public page
+  gains any data, and a new test holds that a plant's or a task's private
+  notes appear nowhere in the caretaker page's response.
+- **iOS and Android apps: haptics (#944).** A selection tick when the native
+  tab or the Tasks segment changes, a warning pattern when a destructive
+  confirmation appears, and a success pattern once a plant or a task is
+  added, from the server's answer. The website plays none.
+- **iPhone App Store screenshots with real plant photos and the Tasks
+  checklist (#942, #943).** Each demo plant shows a public-domain or CC0
+  photograph from Wikimedia Commons, uploaded by the capture the way a person
+  does; `store-assets/photo-credits.json` records each one's source, author,
+  license and checksum. The Tasks frame shows the checklist from 0.39.0.
+
+### Changed
+
+- **Native push is switched on in production for iOS (#958).**
+  `native_push_enabled` is `true`, so the households, notifications and
+  reminders Lambdas get `NATIVE_PUSH_ENABLED = "true"` and the API reports
+  `devicePush.ios: true` to app builds made with `VITE_NATIVE_PUSH_ENABLED=true`.
+  It went on before the device checks in `docs/native-push-setup.md` because
+  no public build of the app existed yet; only the owner's TestFlight build
+  can register a device. Android stays off. The store listing's reminders
+  line is unchanged until the checks pass. The secret name and the IAM grant
+  came with #956.
+- **iOS-first native push prep (#956).** Production Terraform names the APNs
+  secret, `family-greenhouse/production/apns-auth-key` (a name, not the key;
+  the key material never leaves Secrets Manager), and the one push
+  `GetSecretValue` grant names it too. The store validator allows an iOS-only
+  push build: Android has its own build switch,
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED`, and without it the Android app never
+  offers push, never asks for permission and never loads the plugin, whatever
+  the deployment reports. A build that sets the Android switch without the
+  main one is refused.
+- **The Lighthouse mobile performance floor is 0.80 (#954),** down from 0.85.
+  `/login` scored 0.83 or 0.84 on every CI run since the runner moved to
+  Chrome 154, so the check failed on runner speed rather than on the page. The
+  2026-10-02 control that added a 250 ms busy loop at startup scored 0.75, so
+  the new floor still fails on a real regression. The desktop floor and every
+  other assertion are unchanged.
+- **Dependencies (#949).** stripe 22.5.0 to 22.6.1 (its pinned Stripe API
+  version moves to `2026-08-26.dahlia`; nothing the backend calls changes
+  shape), the AWS SDK Bedrock and Cognito clients, Capacitor iOS and Android
+  8.5.0 to 8.5.2, and lockfile-only moves of brace-expansion, undici and
+  ip-address.
+
+### Fixed
+
+- **The public pages call due-today work "due today" all day (#939).** The
+  sitter page, the sitter brief, the caretaker and kiosk pages and the plant
+  tag page showed the API's instant `overdue` flag, so a task due at 9:00
+  read "Overdue" from 9:01 while the signed-in app said "Today" until
+  midnight. They now read a task's day the way the app does, by calendar day
+  in the browser's zone, and the sitter, caretaker and kiosk pages no longer
+  round elapsed hours into days. An unreadable due date shows no label. The
+  API and its `overdue` field are unchanged.
+- **Safari no longer reports a page you left mid-load as an app failure
+  (#941).** WebKit reports a code chunk a navigation cut short as a failed
+  import, and the route boundary then showed "We couldn't load this page" and
+  sent it to telemetry and Sentry, so every quick tap away from a page still
+  fetching its code counted as a failure. A chunk-load error while the page
+  is being left is no longer reported; every other error, and a failed load on
+  a page that stays, still is.
+- **The Timezone field starts on "UTC" when the browser's zone is a UTC alias
+  (#941),** such as Etc/UTC or GMT, instead of showing the alias for a frame.
+- **Three flaky tests, each fixed at its cause (#941).** The backend test
+  server binds 127.0.0.1 explicitly, so another process holding the same port
+  on loopback can no longer answer its requests, and the suite's retry is
+  removed; the public-pages reflow test waits for each page to settle. Two
+  e2e helpers no longer open the Plants list's "…" menu in place of the plant
+  page's (#946, #948).
+- **Two more e2e checks fixed at their cause (#957).** The accessibility
+  helper waited on an animation promise that Chromium never settles when a
+  menu closes before the next frame, so a test could hang for 90 seconds and
+  pass on retry; it now asks for a frame and reads the animation states
+  again. The 320px checks measured five pages before their code had loaded,
+  so they passed on nothing; with the wait in place, the Import page's
+  visually hidden file input counted as an undersized control, and it is now
+  hidden the way the caretaker and sitter pages hide theirs. The Browse button
+  still opens it.
+
+## [0.39.0] - 2026-10-04
+
+**On a phone, Plants and Tasks now lead with what needs care today, and every
+Done waits five seconds with Undo before anything is saved.** The phone
+website (under 640px wide) and the iOS app get the new Plants list, plant page
+and Tasks checklist; the desktop website keeps its layout. The plant care
+guides answer pet toxicity only from cited ASPCA listings, and the pet-safety
+checker shows "Unknown", never "Non-toxic", when no listing backs a verdict.
+Plant tags, which have failed in production since they were added in 0.24.0,
+work for the first time. Most of the rest is for the iOS app, which is not yet in the App Store: a
+native tab bar, navigation bar, alerts and settings list, and no price or
+purchase prompt anywhere in the app.
+
+- **Nothing changes in the infrastructure, the data or the Terms.** No
+  `infrastructure/` file changed since 0.38.2, no stored data is migrated, and
+  the Terms of Service text is unchanged, so their effective date stays 0.38.2's
+  (October 2, 2026).
+- **Older clients keep their pet-safety answer (#907).** The API returns the
+  new `unknown` verdict only to clients that ask for it with `?unknown=1`, which
+  this release's web app and store builds send. Anything else, including app
+  builds already installed, gets the earlier answer, which never reads as safe
+  without a citation.
+- **The deploy now ships the plant tags function too (#931).** It is the one
+  change to the deploy pipeline: 19 functions get new code instead of 18. If
+  this first deploy rolls back, the plant tags function keeps the new code,
+  because it has no earlier working version to return to.
+- **The app-only changes reach people through store builds** (0.39.0, build
+  3900), not through this tag's web deploy.
+
+### Added
+
+- **A "Today first" Plants list on phones (#911, #913).** Plants are grouped
+  into Needs care, Coming up, All good and No care scheduled, each row saying
+  what is due, when, and who has it ("You", a first name, or "Up for grabs").
+  Search, a Filter menu and a "…" menu replace the row of controls. While the
+  tasks are loading or fail to load, no plant is shown as "All good".
+- **Water from the Plants list (#916).** A round Done button on every row that
+  is due, swipes on a touchscreen, and a long-press menu (Water now, I'll do it,
+  Snooze, Move to, Open plant).
+- **A plant page that leads with what the plant needs now, on phones (#915,
+  #917).** A compact header, a status card with the one thing to do (Watered or
+  Done, I'll do it, Snooze), and the nine other actions in a "…" menu. The care
+  guide is headed with the plant's own name.
+- **A Tasks checklist on phones (#926, #928, #929, #930).** Today and Upcoming segments,
+  overdue first, a check circle on the left of each row, who has each task, and
+  Claim, Ask family, Skip and Open plant in the row's menu. A filter menu
+  (Show, Group by, Spaces) with removable tokens for the filters in force. The
+  care round now covers only what is due, starting with the most overdue plant.
+  Task rows swipe the way Plants rows do, and Snooze is in their menu (#929).
+  Only one row's swipe actions show at a time, on Plants and Tasks alike; a
+  filter that hides every task says so, with Clear filters; and every string
+  left on the Tasks page, desktop included, is in English and Spanish (#930).
+- **Undo for every Done (#916, #919, #920).** Marking care done on the Plants
+  list, the plant page, the Tasks tab or Home waits five seconds with Undo
+  before anything is written, through one shared queue, so a task cannot be
+  completed twice from two screens.
+- **Richer plant care guides (#906).** Every `/care/<plant>` guide gains a
+  propagation section, humidity advice and three related plants, and five new
+  questions answer searches about lifespan and indoor ivy. 19 new `/pet-safe/<plant>` pages; the
+  sitemap grows from 69 to 88 addresses.
+- **iOS app: a native frame (#905, #908, #909, #912, #914).** Apple's own tab
+  bar (Home, Plants, Tasks, Household, More) and navigation bar with large
+  titles around the web content; confirmations and choices as native alerts and
+  action sheets; Settings as a native list with switches; and the Plants search
+  and menus in the navigation bar.
+- **iOS app: edge-swipe back, the system font for body text, and native touch
+  (#904).**
+- **iPhone App Store screenshots taken from the iOS app itself (#921).**
+
+### Changed
+
+- **Pet toxicity is stated only when a plant's own ASPCA listing backs it
+  (#906, #907).** 14 ASPCA listings were added. 15 of the 24 care guides had
+  stated a verdict with no listing on record; anything uncited now reads
+  "Unknown", with a caution line and the ASPCA Animal Poison Control number.
+  The ZZ plant guide no longer calls the plant toxic. The `/pet-safe` checker,
+  the sitter brief, the plant passport and the assistant's pet-toxicity tool
+  all apply the same rule, and none of them can render an unknown or missing
+  verdict as "Non-toxic". The FAQ structured data carries the pet question only
+  when both animals are cited.
+- **No price or purchase prompt anywhere in the iOS app (#903, #924).** In the
+  app, the pricing and gift pages go to Settings, then Plan status, which shows
+  the plan and its limits only; "See plans" links, "on the web" sentences, the
+  changelog's billing entries and upgrade clauses in plan-limit messages are
+  left out. The website is unchanged.
+- **The store description no longer says "Plans are bought on the web, not in
+  the app." (#923).**
+- **The portfolio standards are vendored at v3.0.1 (#902).**
+
+### Fixed
+
+- **Plant tags work in production for the first time (#931).** The deploy
+  pipeline named the Lambda functions it ships in hard-coded lists, and the
+  plant tags function, added in 0.24.0, was never in them. It kept running
+  the empty placeholder it was created with, so tagging a plant, the tags
+  page, the public scan page and completing a task from a scan all failed
+  with a server error. This release deploys its code, and a test now fails
+  whenever a deploy list and the Terraform-defined functions disagree.
+- **"Network Error" is now a translated sentence (#904).** When a request gets
+  no answer, the website and the app say "Can't reach Family Greenhouse. Check
+  your connection and try again." in English or Spanish.
+- **Every dropdown has a full-size target in Safari (#927).** The Settings
+  language select was 23px tall and the notification email-language select
+  18px in Safari; every single-line select is now at least 40px, with the same
+  chevron in every browser.
+- **A long press on a phone Plants row no longer swallows its next tap (#925).**
+- **"Snooze…" in a phone row menu opens the "how long" choice again (#929).**
+  On the website the sheet opened and closed within the same tap, on Plants
+  and Tasks alike, so nothing showed.
+- **iOS app: the privacy manifest declares the camera library's file-timestamp
+  use (#922),** which App Store Connect would otherwise reject as ITMS-91053,
+  and the required device capability is `arm64` instead of a leftover `armv7`.
+
+## [0.38.2] - 2026-10-02
+
+**0.38.1 deployed only partly. This release ships its frontend, and fixes the
+step that stopped it.** On 2026-10-02 the 0.38.1 deploy applied its Terraform
+(the CDN photo route is gone, as intended) and deployed the 0.38.1 backend.
+The frontend deploy then failed at its asset prune, after the new frontend had
+been uploaded, and the automatic rollback restored the 0.37.0 frontend and
+backend. The 18 production Lambda functions were then restored to the 0.38.1
+code by hand, because photos now load only through the signed links that
+backend issues. Since then production has run the 0.38.1 infrastructure and
+backend with the 0.37.0 frontend. 0.38.2 is 0.38.1's code plus the fix below,
+so the 0.38.0 and 0.38.1 entries describe what it ships.
+
+### Fixed
+
+- **A refused asset prune can no longer roll back a release.** The prune that
+  deletes old frontend files ran inside the frontend deploy and refused to
+  delete more than half of the bucket. On 0.38.1 it wanted 1,202 of 1,617
+  objects, and the diff was right: all 1,202 were content-hashed files from
+  the seven builds 0.31.0 to 0.37.0, at least 13 days old and absent from the
+  new build. After a quiet spell the bucket is mostly superseded builds, so
+  the ratio refused a correct prune, the frontend deploy failed, and the
+  rollback reverted a release that was fine. The prune now runs in its own
+  job, only after the post-deploy smoke has passed, and the rollback never
+  reads it. A refusal fails that job and the run's notification, deletes
+  nothing, and keeps the release. The guard now checks that the bucket really
+  holds the build it is comparing against: it refuses when the build is
+  empty, when any of the build's own assets is missing from the bucket, or
+  when the prune would remove more than 20 builds' worth of files. It only
+  ever deletes hashed `assets/` files. A dry run of the same plan is
+  documented in `docs/deployment.md` under "Asset prune refused".
+- **The Terms of Service effective date is this release's date.** Their text
+  is unchanged since 0.38.0, but neither 0.38.0 nor 0.38.1 reached customers
+  with its frontend, so the date is the date of the release that does.
+
+## [0.38.1] - 2026-10-02
+
+**0.38.0 never deployed. This release ships everything listed under 0.38.0
+below, unchanged, plus one infrastructure fix that lets it apply.** On
+2026-10-02 the 0.38.0 Terraform apply stopped with CloudFront's 409
+`CachePolicyInUse`. #855 removed the images cache policy in the same change
+that detached it from the distribution, and Terraform deleted the policy
+before updating the distribution that still used it. The apply had already
+added the four new API routes, widened the Lambda role's secrets statement
+and changed one alarm description; it never changed the distribution or the
+images bucket policy. The backend and frontend deploys did not run and the
+automatic rollback finished, so production kept serving 0.37.0 with photos
+working.
+
+### Fixed
+
+- **The release that removes the CDN photo route can now apply.** The images
+  cache policy stays in the Terraform configuration, unchanged and unused, for
+  this release, so the plan updates the distribution in place and deletes
+  nothing. A later release removes the policy once production's distribution
+  no longer names it. The pinned Terraform (1.5.7) has no `removed` block, so
+  keeping the resource is the only way to put the two steps in order. The
+  Terms of Service did not change, so their effective date stays 0.38.0's.
+
+## [0.38.0] - 2026-10-02
+
+**Billing behavior changes in this release, and payments are live.** A
+household whose card fails now keeps its paid plan while Stripe retries the
+card, and drops to the free plan only when Stripe cancels after the last retry
+(#818, under Changed below). The Terms of Service gain a paragraph saying so,
+and their effective date is this release's date.
+
+- **Included, but switched off:** native push notifications for the apps
+  (#851), off until `native_push_enabled` is `true` and the store build sets
+  `VITE_NATIVE_PUSH_ENABLED` (both `false`); plant passport import (#865), off
+  until `passport_import_enabled` is `true` (it is `false`; its three routes
+  answer 404 `PASSPORT_IMPORT_DISABLED`); and Android App Links (#848), which
+  write no `assetlinks.json` until the two Play signing fingerprints are
+  pasted in.
+- **Photos load only through signed links from this release on (#855).** The
+  release's Terraform removes the CDN route to the images bucket before the
+  backend that signs links is deployed, so photos in the app do not load for
+  the few minutes between the two. Stored photos need no migration.
+- **Legacy plaintext credentials move to their hashed keys on first use
+  (#866).** No table migration runs at deploy; each pre-hashing plant tag,
+  kiosk, sitter, caretaker or share row is moved the first time it resolves.
+  The code in 0.37.0 already reads both forms. The operator backfill for rows
+  nobody uses stays a separate, manual step (`docs/runbooks.md`).
+- **The apps get their app-only changes from store builds.** The iOS print,
+  iPad photo button, text size and privacy manifest fixes (#858, #861) and the
+  Android App Links declaration (#848) reach people through the 0.38.0 store
+  builds (build 3800), not through this tag's web deploy.
+
+### Changed
+
+- **A failed payment no longer costs a household its plan while the card is
+  being retried, and it ends in cancellation.** Until now the first declined
+  charge dropped the household to the free Seedling plan's limits at once, even
+  though Stripe keeps retrying the card for some time afterwards. The household
+  now keeps its plan and every paid feature while those automatic retries run.
+  If the last retry fails, Stripe cancels the subscription and the household
+  moves to the free plan's limits; nothing is deleted. Paying — or updating the
+  card so a retry succeeds — restores everything at once. Plans bought
+  outright and running gifts are unaffected either way. The banner, Settings →
+  Plan status, the Terms of Service ("Automatic renewal") and the payment-failed
+  email all say this plainly, in English and Spanish. No number of days is
+  stated: the window is the retry schedule set in Stripe. **Deploy note, for the
+  owner:** this depends on two Stripe Dashboard settings that nothing in this
+  repository can read, the retry schedule and "Cancel the subscription" as what
+  happens after the last retry (never "leave the subscription past-due", which
+  would keep paid access with no payment). Both are set: cancel after the last
+  retry (confirmed 2026-10-01) and Stripe's Smart Retries default schedule; the
+  checklist is in `docs/billing.md`. The Terms' effective date is now the date
+  of the release that ships them: it reads "takes effect with the next
+  release" until the release PR fills it, and a release with the date unset or
+  not its own refuses to deploy. (#593)
+
 ### Added
 
 - **The data export now lists what it holds, so a restore can tell a whole file
@@ -37,6 +567,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   is not the 6 MB Lambda response), spaces, care history and photo timelines in
   the export, and merging into a household that already has data. Deploy note:
   no new route and no infrastructure change.
+
+- **Plant passport hand-off: whoever receives a passport can add the plant to
+  their own greenhouse with its care summary — built, switched off.** Three
+  routes on the plants Lambda. `POST /plants/{id}/passport-share` makes an
+  ordinary 14-day cutting-share link that also carries a frozen summary the
+  server derives from the household's own records: the house rule, each
+  task's interval (seasonal ones named by season), how many care entries were
+  logged in the last 90 days and when, and the parent plant and cuttings taken.
+  It has no field for the plant's private notes, a completion's or task's
+  notes, who did the care, where the plant sits, an id or a token, and it says
+  so when a house rule, a schedule or any care is missing rather than leaving
+  the section out. `GET /plants/shared/{code}/passport` serves that summary to
+  the recipient without an account. `POST /plants/shared/{code}/passport/import`
+  adds one plant to the caller's own household with the summary as its first
+  note (in English or Spanish, following the recipient's saved language). It
+  takes no body and refuses any field in one, never reads or writes another
+  household's data, goes through the same plan-capped create as adding a plant
+  by hand (402 at the cap), and lets a household import a given link once (409
+  on a repeat, naming its copy). No photo and no task comes with it, and the
+  cutting-share routes are unchanged. Off until the owner turns on Terraform
+  `passport_import_enabled` (default `false`, and `false` in production): the
+  routes are wired either way and answer 404 `PASSPORT_IMPORT_DISABLED` until
+  then. The screens for it follow in a separate change.
 
 - **Conversion events in Google Analytics 4, so ads and search can be judged
   on sales.** On the website only, and under the same opt-outs as page views,
@@ -87,6 +640,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The undelivered-reports alarm says what it counts (#863).** The
+  `FrontendReportsUndelivered` alarm's description and the metric's comments
+  said one point was one browser session; it is one log line, and every past
+  firing came from a single client. The description now says so and names the
+  first two things to check. This is an in-place update to one CloudWatch
+  alarm at this release's Terraform apply; no threshold changes.
+
+- **The AI-evaluation waiver is re-issued, dated, to 2027-01-05, and the chat
+  model question is closed.** The 2026-07-05 waiver expired 2026-10-05 and its
+  own terms required a dated decision; it is re-issued (option c) with the same
+  scope, because no live Bedrock scoring exists yet. Claude Haiku 4.5 is
+  endorsed as the intended chat model; `model-card.md` and
+  `docs/chat-rag-design.md` now say so. No code or configuration changes.
+
 - **The iPhone app follows every text size, and the keyboard's Prev / Next /
   Done bar is back.** The iOS app stopped growing text at 200% (#845), below
   the accessibility sizes someone may have chosen in Settings; it now applies
@@ -103,6 +670,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the way they do in every other app.
 
 ### Fixed
+
+- **A browser sends at most one "reports were lost" note per 10 minutes
+  (#862).** A browser that could not deliver its error reports said so again
+  on every page load, so one automated visitor walking 15 pages tripped the
+  undelivered-reports alarm with no outage (2026-09-08, 2026-09-18,
+  2026-09-19). The count it holds is deferred to the next window, never
+  dropped.
 
 - **Print works in the iPhone and iPad app.** "Print passport", the plant
   tags' "Print the sheet", and the Print buttons on the sitter brief and the
@@ -131,6 +705,32 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   that drops it. The App Store privacy answers in `docs/APP-STORE.md` list it.
 
 ### Security
+
+- **axios is 1.20.0 (#888).** 1.19.0 was affected by GHSA-542g-h47m-68v8
+  (CVE-2026-101901), a denial of service during HTTP/2 session setup. Internal
+  dependency change; no user-facing change.
+
+- **A credential written before hashing is moved to its hashed key the first
+  time it is used, and no log or telemetry line carries a token (issue #450).**
+  Until now a plant tag, kiosk link, sitter link, caretaker seat or cutting
+  share minted before its surface was hashed stayed in plaintext in the table
+  until an operator ran the backfill (and a plant tag or kiosk link never
+  expires, so it would have stayed indefinitely). The first request that
+  resolves one now moves it, in the same atomic transaction the backfill uses,
+  and the person keeps the same link, label or display. A scan that races a
+  revocation, another scan or the backfill cannot leave two live rows or bring a
+  revoked label back, and a failed move costs the upgrade, never the request.
+  The operator script also takes `--limit N` to run in batches. The audit found
+  and closed four more places a credential could be written down: the request
+  log scrubbed only a path parameter called `token`, so a cutting share's
+  `/plants/shared/{code}` was logged in full; the rate limiter's audited
+  bucket key fell back to the literal path when an event had no route
+  template; the logger's backstop redaction did not know a credential row's
+  `keyToken` (the plaintext token on a legacy row) or a share `code`; and the
+  telemetry endpoint accepted a route made of a token. The legacy-row check now
+  compares in constant time. `tests/integration/credential-leaks.test.ts` drives
+  every credential through the real handlers and fails if its token is in the
+  table, in any response but the creation response, or in any log line.
 
 - **Plant photos are served only through short-lived signed URLs.** Every
   response that shows a photo now carries a link signed for that request,

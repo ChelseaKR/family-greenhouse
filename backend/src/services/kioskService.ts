@@ -88,6 +88,7 @@
 import { PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { randomBytes } from 'node:crypto';
 import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
+import { upgradeLegacyRow } from './tokenHashBackfill.js';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { DynamoDBItem } from '../models/types.js';
@@ -382,6 +383,7 @@ export async function getActiveKioskLink(token: string): Promise<KioskLink | nul
     token,
     pk: (suffix) => `KIOSK#${suffix}`,
     read: readLinkRow,
+    upgrade: upgradeLegacyRow('kioskLink', token),
   });
   if (!item) return null;
 

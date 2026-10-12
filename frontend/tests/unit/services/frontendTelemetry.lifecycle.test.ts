@@ -144,6 +144,23 @@ describe('error reporting', () => {
     ]);
   });
 
+  it('does not report a code download cancelled because the page is being left', async () => {
+    const { reportFrontendError } = await import('@/services/frontendTelemetry');
+    const { watchPageLeaving, resetPageLeavingForTests } = await import('@/lib/pageLeaving');
+    resetPageLeavingForTests();
+    const page = new EventTarget() as EventTarget & Window;
+    watchPageLeaving(page);
+    page.dispatchEvent(new Event('beforeunload'));
+
+    // Safari's words for an import the navigation cut short.
+    reportFrontendError(new TypeError('Importing a module script failed.'));
+    // Anything else on the way out still counts.
+    reportFrontendError(new Error('something else entirely'));
+    resetPageLeavingForTests();
+
+    expect(bodies(fetchMock).map((body) => body.message)).toEqual(['Error in browser']);
+  });
+
   it('coerces an unknown error name to Error and stringifies non-Errors', async () => {
     const { reportFrontendError } = await import('@/services/frontendTelemetry');
     const custom = new Error('weird');

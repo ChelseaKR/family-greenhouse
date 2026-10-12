@@ -43,7 +43,7 @@ export default function SignsOfOverwatering() {
         </li>
         <li>
           <strong>Yellowing lower leaves, several at once.</strong> One old bottom leaf yellowing
-          slowly is normal ageing. Several going soft-yellow together, low on the plant, is the
+          slowly is normal aging. Several going soft-yellow together, low on the plant, is the
           classic overwatering pattern.
         </li>
         <li>
@@ -58,7 +58,7 @@ export default function SignsOfOverwatering() {
           watering-frequency readout.
         </li>
         <li>
-          <strong>Mould, algae or a white crust on the surface.</strong> Fuzzy white growth or a
+          <strong>Mold, algae or a white crust on the surface.</strong> Fuzzy white growth or a
           green film means the surface never dries.
         </li>
         <li>
@@ -109,7 +109,7 @@ export default function SignsOfOverwatering() {
           restarts the whole cycle.
         </li>
         <li>
-          <strong>Don&rsquo;t fertilise.</strong> Damaged roots can&rsquo;t use it, and fertiliser
+          <strong>Don&rsquo;t fertilize.</strong> Damaged roots can&rsquo;t use it, and fertilizer
           salts in wet soil make things worse. Feed once it&rsquo;s clearly growing again.
         </li>
       </ol>
@@ -118,6 +118,17 @@ export default function SignsOfOverwatering() {
         &mdash; it can&rsquo;t support the foliage it has. Recovery looks like new growth, not like
         the old leaves coming back. Some plants won&rsquo;t make it, and cutting off a healthy piece
         to propagate is a reasonable insurance policy while you wait.
+      </p>
+
+      <h2>Plant by plant</h2>
+      <p>
+        How much water is too much depends on the plant. Each of our care guides gives that
+        plant&rsquo;s watering rhythm and the problems it most often shows, and these ones cover
+        overwatering on that plant specifically: <a href="/care/snake-plant">snake plant</a>,
+        <a href="/care/zz-plant">ZZ plant</a>, <a href="/care/aloe-vera">aloe vera</a>,
+        <a href="/care/jade-plant">jade plant</a>, <a href="/care/peace-lily">peace lily</a> and
+        <a href="/care/fiddle-leaf-fig">fiddle-leaf fig</a>. The{' '}
+        <a href="/care">care guide index</a> lists every plant we cover.
       </p>
 
       <h2>The shared-household version</h2>
@@ -136,7 +147,7 @@ export default function SignsOfOverwatering() {
         than to the whole household.
       </p>
       <p>
-        If you want the fuller diagnosis on discoloured foliage, we went through the causes in{' '}
+        If you want the fuller diagnosis on discolored foliage, we went through the causes in{' '}
         <a href="/blog/why-are-my-plant-leaves-turning-yellow">why plant leaves turn yellow</a>.
       </p>
     </article>

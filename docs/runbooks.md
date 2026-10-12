@@ -284,6 +284,55 @@ aws cognito-idp admin-set-user-mfa-preference \
    `SOFTWARE_TOKEN_MFA`. Reply that they can sign in with their password and
    set up a new authenticator under Settings → Security.
 
+## Re-key credentials still stored in plaintext (#450)
+
+**Symptom:** the table still holds a sitter link, kiosk link, caretaker seat,
+plant tag or cutting share under its plaintext token (a row keyed
+`PLANTTAG#<64 hex>` that carries a `token` attribute, or `SHARE#<32 hex>` with
+`code`). Every one of them was minted before that surface was hashed; nothing
+new is written this way.
+
+**What already happens without you:** a legacy credential is moved to its
+hashed key by the first request that uses it, in one transaction
+(`upgradeLegacyRow`), and the person's link, label or display is unchanged.
+Each move writes one `credential.lazy_upgrade` line (surface and outcome only,
+never a token). Sitter, caretaker and share rows also age out on their own TTL.
+What is left is what nobody has used since: mostly plant tags and kiosk links,
+which never expire.
+
+**Fix**, from `backend/`, with AWS credentials for the target environment.
+Deploy first: the code before #811 reads tags and shares only by the plaintext
+key, so re-keying under it would stop every printed label from scanning.
+
+```bash
+# dry run first: reads only, prints how many legacy rows each surface has and
+# which rows it will skip (and why). Never prints a token.
+TABLE_NAME=family-greenhouse-production npm run backfill:token-hashes --workspace backend
+
+# a batch at a time (at most 25 rows per surface per run); run it again for the
+# next 25. A moved row is no longer legacy, so every run is new work.
+TABLE_NAME=family-greenhouse-production npm run backfill:token-hashes --workspace backend -- --limit 25 --confirm
+
+# or all of it
+TABLE_NAME=family-greenhouse-production npm run backfill:token-hashes --workspace backend -- --confirm
+```
+
+It is safe to re-run. A row a live request changed or moved while the script was
+running is left alone and counted as `raced`; the exit status is 2 when any row
+raced, so re-run until it exits 0. It is done when the dry run reports
+`0 legacy row(s)` for every surface.
+
+**Rollback:** rolling back only the upgrade-on-use change (to the release that
+first hashed tags and shares) is harmless: that code reads both generations, and
+a moved row is just a hashed row. Rolling back further is what strands
+credentials: a credential minted or moved after #811 deploys is stored hashed,
+and the release before #811 cannot read a hashed tag or share. If production is
+rolled back to before #811, those labels and links stop resolving until it is
+redeployed. Sitter, kiosk and caretaker links are unaffected (main hashed them
+already). There is nothing to undo in the table.
+
+---
+
 ## Post-deploy test fixtures in production data
 
 **Symptom:** a count of households, members, or plants that does not match what

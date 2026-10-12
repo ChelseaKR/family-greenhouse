@@ -26,8 +26,8 @@
  *
  * nativeBackButton.ts loads this module, and this module loads
  * `@capacitor/app`, only inside the Android shell, so web visitors download
- * neither. iOS has no back button; its edge swipe is WKWebView's own and is
- * not configured here.
+ * neither. iOS has no back button; its edge swipe is WKWebView's own, switched
+ * on and limited in ios/App/App/MainViewController.swift (BackSwipePolicy).
  */
 
 /** What Escape closes: Headless UI dialogs, menus and listboxes. */

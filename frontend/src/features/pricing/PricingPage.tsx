@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';
@@ -59,22 +59,13 @@ export function PricingPage() {
     jsonLd: pricingJsonLd(),
   });
 
+  // Inside the iOS and Android apps there is no plans page: /pricing opens
+  // Settings → Plan status, which shows the household's plan and its limits
+  // and nothing else (no prices, no gift link, no pointer to buying anywhere
+  // else). Anything here that points at a purchase outside the app is a
+  // Guideline 3.1.1 problem; see "Store payment rules" in docs/mobile.md.
   if (native) {
-    return (
-      <PublicShell>
-        <PageIntro
-          eyebrow={t('pricingPage.native.eyebrow')}
-          title={t('pricingPage.native.title')}
-          lede={t('pricingPage.native.lede')}
-        />
-        <section className="mt-12 rounded-2xl border border-primary-100 bg-white p-6">
-          <h2 className="font-serif text-2xl tracking-tight text-ink">
-            {t('mobile.planAvailableTitle')}
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-gray-700">{t('mobile.planAvailableBody')}</p>
-        </section>
-      </PublicShell>
-    );
+    return <Navigate to="/settings/billing" replace />;
   }
 
   return (

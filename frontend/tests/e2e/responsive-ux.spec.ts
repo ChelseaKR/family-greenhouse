@@ -1,6 +1,12 @@
 import { expect, test, type Page, type Response } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { navigateTo, provisionAccount, uiLogin, type ProvisionedAccount } from './helpers';
+import {
+  navigateTo,
+  provisionAccount,
+  uiLogin,
+  type ProvisionedAccount,
+  choosePlantAction,
+} from './helpers';
 
 const ENFORCED_A11Y_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -189,7 +195,19 @@ async function expectNoA11yViolations(page: Page, label: string) {
         calmFrames += 1;
       } else {
         calmFrames = 0;
-        await Promise.allSettled(running.map((animation) => animation.finished));
+        // Never wait on `Animation.finished`: Chromium settles it only in a
+        // frame, and a transition on an item of a <details> menu that closed
+        // before its first frame (the plant page's "…" menu, on the way to
+        // a dialog) never gets one, so the promise stays pending for good
+        // while the page is idle (#955, #883). Ask for a frame instead, which
+        // makes Chromium produce one, and read the states again.
+        await new Promise<void>((resolve) => {
+          const fallback = setTimeout(resolve, 100);
+          requestAnimationFrame(() => {
+            clearTimeout(fallback);
+            resolve();
+          });
+        });
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -238,6 +256,13 @@ test.describe('Mobile-first UX correctness', () => {
 
       await page.goto(route);
       await page.locator('body').waitFor({ state: 'visible' });
+      // Let the page finish loading its lazy code and data before measuring
+      // it and before leaving it. Measured while chunks were still arriving,
+      // the layout checks saw a page half built; left mid-load, WebKit logs
+      // the cancelled downloads as errors ("Importing a module script
+      // failed", "XMLHttpRequest cannot load … due to access control
+      // checks") on a page nobody is looking at any more.
+      await page.waitForLoadState('networkidle');
 
       if (boundaryResponse) {
         const response = await boundaryResponse;
@@ -297,7 +322,11 @@ test.describe('Mobile-first UX correctness', () => {
           '/account',
         ]) {
           await page.goto(route);
-          await page.locator('body').waitFor({ state: 'visible' });
+          // These pages load their code after the shell; measured before it
+          // has arrived, the page is empty and the checks pass on nothing.
+          // Not every one of them has a `main` (Welcome), so wait for the
+          // network to go quiet, as the public-pages loop does.
+          await page.waitForLoadState('networkidle');
           await expectNoDocumentOverflow(page, `${viewport.name} ${route}`);
           await expectMinimumControlTargets(page, `${viewport.name} ${route}`);
         }
@@ -314,12 +343,13 @@ test.describe('Mobile-first UX correctness', () => {
     await navigateTo(page, /^plants$/i, /\/plants$/);
     const plantsHeading = page.getByRole('heading', { name: 'Plants', exact: true });
     await expect(plantsHeading).toBeVisible();
-    const header = plantsHeading.locator('xpath=ancestor::header');
-    await expect(header.getByRole('button', { name: /apply template/i })).toBeVisible();
-    await expect(header.getByRole('button', { name: /add plant/i })).toBeVisible();
+    // On a phone the page leads with the list: Add stays a button beside the
+    // title and the bulk actions live in the "…" menu.
+    await expect(page.getByRole('button', { name: /add plant/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'plants header');
 
-    await header.getByRole('button', { name: /apply template/i }).click();
+    await page.getByLabel('More plant actions').click();
+    await page.getByRole('button', { name: /apply template/i }).click();
     const templateDialog = page.getByRole('dialog', { name: /apply care template/i });
     await expect(
       templateDialog.getByRole('heading', { name: /apply care template/i })
@@ -368,7 +398,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'edit task dialog');
     await editTaskDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /^edit$/i }).click();
+    await choosePlantAction(page, /^edit$/i);
     const editPlantDialog = page.getByRole('dialog', { name: /edit plant/i });
     await expect(editPlantDialog.getByRole('heading', { name: /edit plant/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'edit plant dialog');
@@ -376,7 +406,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'edit plant dialog');
     await editPlantDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /share cutting/i }).click();
+    await choosePlantAction(page, /share cutting/i);
     const shareDialog = page.getByRole('dialog', { name: /share this cutting/i });
     await expect(shareDialog.getByRole('heading', { name: /share this cutting/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'share cutting dialog');
@@ -384,7 +414,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'share cutting dialog');
     await shareDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /check leaf health/i }).click();
+    await choosePlantAction(page, /check leaf health/i);
     const leafDialog = page.getByRole('dialog', { name: /leaf health check/i });
     await expect(leafDialog.getByRole('heading', { name: /leaf health check/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'leaf health dialog');
@@ -392,7 +422,7 @@ test.describe('Mobile-first UX correctness', () => {
     await expectNoA11yViolations(page, 'leaf health dialog');
     await leafDialog.getByRole('button', { name: /^close$/i }).click();
 
-    await page.getByRole('button', { name: /^remove$/i }).click();
+    await choosePlantAction(page, /^remove/i);
     const removeDialog = page.getByRole('dialog', {
       name: /move Audit Monstera out of active care/i,
     });

@@ -268,16 +268,35 @@ describe('payment failed', () => {
     expect(text).not.toContain('last automatic attempt');
   });
 
-  it('says what happens if it is never paid without claiming a tier it cannot know', () => {
-    // Whether a `past_due` household loses its caps immediately depends on a
-    // Stripe dashboard setting and on whether PR #364's `getEntitledPlan` has
-    // landed. The copy is worded to be true either way.
+  it('says plainly that the plan is kept while the card is retried and what the last failed retry does (#593)', () => {
+    // The owner's decision (2026-09-17 grace, 2026-09-19 end state): a
+    // `past_due` household keeps its plan while Stripe retries, and once the
+    // last retry fails Stripe cancels the subscription and the household is on
+    // the free caps. The Stripe dashboard setting that cancels is the owner's
+    // to set (docs/billing.md), and the entitlement rule is in models/plans.ts.
     const { text } = composeBillingEmail(failed, ctx('en'));
-    expect(text).toContain('Stripe stops retrying');
-    expect(text).toContain('subscription will not continue');
+    expect(text).toContain('Your household keeps its plan for as long as the card is being');
+    expect(text).toContain('When the retries end without a payment, Stripe cancels the');
+    expect(text).toContain("subscription and your household moves to the free plan's limits.");
     expect(text).toContain('Nothing is deleted either way');
-    expect(text).not.toContain('moves to the free plan');
-    expect(text).not.toContain('keeps its plan');
+    // Old wording, which left the end state open.
+    expect(text).not.toContain('will not continue');
+  });
+
+  it('says the same, in Spanish', () => {
+    const { text } = composeBillingEmail(failed, ctx('es'));
+    expect(text).toContain('Tu hogar conserva su plan mientras se siga reintentando el cobro.');
+    expect(text).toContain('Stripe cancelará la');
+    expect(text).toContain('tu hogar pasará a los límites del plan gratuito.');
+  });
+
+  it('with no retry left, says the subscription is canceled unless the invoice is paid first', () => {
+    const none: BillingNotice = { ...failed, nextAttempt: { state: 'none' } };
+    const { text } = composeBillingEmail(none, ctx('en'));
+    expect(text).toContain('With no retry left, Stripe cancels the subscription');
+    expect(text).toContain("household moves to the free plan's limits unless the invoice is");
+    // No promise that the plan is kept "while retrying" when nothing is left to retry.
+    expect(text).not.toContain('for as long as the card is being');
   });
 
   it('leads with a direct pay link when Stripe hosted one — the revenue-saving line', () => {

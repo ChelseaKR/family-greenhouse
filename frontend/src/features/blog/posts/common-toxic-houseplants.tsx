@@ -71,12 +71,12 @@ export default function CommonToxicHouseplants() {
         it&rsquo;s one of the few genuinely pet-safe statement plants.
       </p>
 
-      <h3>ZZ plant &rarr; parlour palm</h3>
+      <h3>ZZ plant &rarr; parlor palm</h3>
       <p>
         The <a href="/care/zz-plant">ZZ</a> is the &ldquo;I can&rsquo;t keep anything alive&rdquo;
         plant, and it&rsquo;s toxic to cats and dogs (the reputation overstates it, but it&rsquo;s
         real). If you want near-indestructible <em>and</em> pet-safe, the{' '}
-        <a href="/care/parlor-palm">parlour palm</a> (Chamaedorea) is the swap: non-toxic, low-light
+        <a href="/care/parlor-palm">parlor palm</a> (Chamaedorea) is the swap: non-toxic, low-light
         tolerant, slow, and forgiving. It&rsquo;s leafier and softer than a ZZ rather than glossy
         and architectural, but it fills the same &ldquo;tough green thing for a dim room&rdquo;
         slot.
@@ -119,11 +119,24 @@ export default function CommonToxicHouseplants() {
 
       <h2>Check before you buy</h2>
       <p>
-        We built a free lookup into Family Greenhouse so you don&rsquo;t have to memorise any of
+        We built a free lookup into Family Greenhouse so you don&rsquo;t have to memorize any of
         this &mdash; type a plant name into the <a href="/pet-safe">pet-safe checker</a> and it
         returns the cats-versus-dogs answer in plain language, grounded in the same ASPCA data, no
         signup required. It&rsquo;s meant for the moment you&rsquo;re standing in a shop holding a
         plant with a useless label, deciding whether it&rsquo;s coming home.
+      </p>
+      <p>
+        Each plant in this post except the ZZ plant also has a page of its own, with the cat and dog
+        verdicts shown next to the ASPCA listing they come from:{' '}
+        <a href="/pet-safe/lily">true lily</a>,<a href="/pet-safe/pothos">pothos</a>,{' '}
+        <a href="/pet-safe/spider-plant">spider plant</a>,
+        <a href="/pet-safe/aloe-vera">aloe vera</a>, <a href="/pet-safe/snake-plant">snake plant</a>
+        ,<a href="/pet-safe/peace-lily">peace lily</a>, <a href="/pet-safe/calathea">calathea</a>,
+        <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
+        <a href="/pet-safe/philodendron">philodendron</a>,<a href="/pet-safe/monstera">monstera</a>,{' '}
+        <a href="/pet-safe/dieffenbachia">dieffenbachia</a> and
+        <a href="/pet-safe/poinsettia">poinsettia</a>. We have no cited listing recorded for the ZZ
+        plant, so we don&rsquo;t publish a verdict for it.
       </p>
       <p>
         And once a plant is home, the safe ones still need keeping alive.{' '}

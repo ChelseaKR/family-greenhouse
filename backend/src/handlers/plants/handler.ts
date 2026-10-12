@@ -372,9 +372,10 @@ export const createPlant = createHandler(
     // are backfilled lazily inside the service from the real (paginated)
     // active-plant count.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     // Propagation: a cutting must point at a real plant in the SAME
@@ -625,9 +626,10 @@ export const updatePlant = createHandler(
     // like createPlant — see plantService.updatePlant for why this can't be
     // left uncapped now that the active-plant count is an atomic counter.
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.updatePlant>>;
@@ -1063,9 +1065,10 @@ export const acceptSharedPlant = createHandler(
     const notes = prefix.slice(0, 1000);
 
     const sub = await billing.getHouseholdSubscription(user.householdId!);
-    // Caps follow ENTITLEMENT, not the plan row: a past_due/unpaid/incomplete
-    // household resolves to Seedling's free caps until Stripe reports the
-    // subscription in good standing again. See getEntitledPlan.
+    // Caps follow ENTITLEMENT, not the plan row: an unpaid/incomplete household
+    // resolves to Seedling's free caps until Stripe reports the subscription in
+    // good standing again (past_due keeps the plan while Stripe retries, #593).
+    // See getEntitledPlan.
     const plan = getEntitledPlan(sub);
 
     let plant: Awaited<ReturnType<typeof plantService.createPlant>>;
@@ -1116,6 +1119,7 @@ export const acceptSharedPlant = createHandler(
 import { identify } from './identify.js';
 import { importPlants } from './import.js';
 import { checkPlantHealth } from './health.js';
+import { getSharedPassport, importSharedPassport, sharePlantPassport } from './passport.js';
 
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
@@ -1133,6 +1137,12 @@ export const handler = createRouter({
   'GET /plants/shared/{code}': getSharedPlant,
   'POST /plants/shared/{code}/accept': acceptSharedPlant,
   'POST /plants/{id}/share': sharePlant,
+  // Plant passport (#676, handlers/plants/passport.ts): a cutting link that
+  // also carries the plant's care summary. All three answer 404 until
+  // Terraform's passport_import_enabled turns the feature on.
+  'POST /plants/{id}/passport-share': sharePlantPassport,
+  'GET /plants/shared/{code}/passport': getSharedPassport,
+  'POST /plants/shared/{code}/passport/import': importSharedPassport,
   'GET /plants/{id}': getPlant,
   'PUT /plants/{id}': updatePlant,
   'DELETE /plants/{id}': deletePlant,

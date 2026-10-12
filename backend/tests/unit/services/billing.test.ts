@@ -3481,3 +3481,112 @@ describe('applyStripeEvent → household audit log', () => {
     expect(householdAudit.recordBillingTransition).not.toHaveBeenCalled();
   });
 });
+
+describe('the retry window end to end through the webhook (#593)', () => {
+  // The owner's decision: past_due keeps the paid plan while Stripe retries,
+  // and when the last retry fails Stripe CANCELS the subscription
+  // (customer.subscription.deleted). unpaid and incomplete_expired also end
+  // it. A lifetime purchase is a floor that no subscription event clears.
+  // These walk real webhook deltas onto a household row and resolve the row
+  // with the same getEntitledPlan every gate uses.
+  const updated = (status: string) =>
+    ({
+      id: `evt_${status}`,
+      created: 1_700_000_000,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_1',
+          status,
+          customer: 'cus_1',
+          metadata: { householdId: 'hh-1', planId: 'greenhouse' },
+        },
+      },
+    }) as unknown as Stripe.Event;
+  const deleted = {
+    id: 'evt_deleted',
+    created: 1_700_000_100,
+    type: 'customer.subscription.deleted',
+    data: { object: { id: 'sub_1', status: 'canceled', metadata: { householdId: 'hh-1' } } },
+  } as unknown as Stripe.Event;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(['past_due', 'unpaid', 'canceled', 'incomplete_expired'])(
+    'a subscription event to %s never writes lifetimePlanId',
+    async (status) => {
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      // Absent, not null: updateHouseholdSubscription REMOVEs a null field,
+      // so either would be a path that clears the floor.
+      expect(deltaForStripeEvent(updated(status))?.fields).not.toHaveProperty('lifetimePlanId');
+    }
+  );
+
+  it('customer.subscription.deleted never writes lifetimePlanId', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    expect(deltaForStripeEvent(deleted)?.fields).not.toHaveProperty('lifetimePlanId');
+  });
+
+  it('active -> past_due keeps the plan; the final cancellation drops to Seedling', async () => {
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    const { getEntitledPlan, PLANS } = await import('../../../src/models/plans.js');
+    let row: Record<string, unknown> = { planId: 'greenhouse', status: 'active' };
+    row = { ...row, ...deltaForStripeEvent(updated('past_due'))!.fields };
+    expect(getEntitledPlan(row)).toBe(PLANS.greenhouse);
+    row = { ...row, ...deltaForStripeEvent(deleted)!.fields };
+    expect(row.status).toBe('canceled');
+    expect(getEntitledPlan(row)).toBe(PLANS.seedling);
+  });
+
+  it.each(['unpaid', 'incomplete_expired'])(
+    'Stripe giving up as %s drops a subscribed household to Seedling',
+    async (status) => {
+      const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+      const { getEntitledPlan, PLANS } = await import('../../../src/models/plans.js');
+      const row = {
+        planId: 'greenhouse',
+        status: 'past_due',
+        ...deltaForStripeEvent(updated(status))!.fields,
+      };
+      expect(getEntitledPlan(row)).toBe(PLANS.seedling);
+    }
+  );
+
+  it('a lifetime household keeps its floor through past_due, unpaid and the final cancellation', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { applyStripeEvent, deltaForStripeEvent } =
+      await import('../../../src/services/billing.js');
+    const { getEntitledPlan, PLANS } = await import('../../../src/models/plans.js');
+    let row: Record<string, unknown> = {
+      planId: 'greenhouse',
+      status: 'active',
+      stripeSubscriptionId: 'sub_1',
+      lifetimePlanId: 'garden',
+    };
+    row = { ...row, ...deltaForStripeEvent(updated('past_due'))!.fields };
+    expect(getEntitledPlan(row)).toBe(PLANS.greenhouse);
+    row = { ...row, ...deltaForStripeEvent(updated('unpaid'))!.fields };
+    expect(getEntitledPlan(row)).toBe(PLANS.garden);
+
+    // The cancellation through the real apply path: the stored lifetime tier
+    // is restored onto planId, and the Update never touches lifetimePlanId.
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { ...row, subscriptionStatus: 'unpaid' } })
+      .mockResolvedValue({});
+    await applyStripeEvent(deleted);
+    const update = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind?: string; input: Record<string, unknown> })
+      .find((c) => c.kind === 'Update');
+    expect(update).toBeDefined();
+    const values = update!.input.ExpressionAttributeValues as Record<string, unknown>;
+    expect(values[':planId']).toBe('garden');
+    expect(values[':subscriptionStatus']).toBe('canceled');
+    expect(String(update!.input.UpdateExpression)).not.toContain('lifetimePlanId');
+    expect(
+      getEntitledPlan({ ...row, planId: values[':planId'] as string, status: 'canceled' })
+    ).toBe(PLANS.garden);
+  });
+});

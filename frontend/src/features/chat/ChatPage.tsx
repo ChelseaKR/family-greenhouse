@@ -238,7 +238,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col lg:h-dvh">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col lg:h-dvh native-frame:h-dvh!">
       <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-2 border-b border-primary-100/80">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -385,7 +385,7 @@ export function ChatPage() {
         )}
       </div>
 
-      <div className="border-t border-primary-100/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+      <div className="border-t border-primary-100/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 native-frame:pb-3!">
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}

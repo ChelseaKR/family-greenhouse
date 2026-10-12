@@ -98,11 +98,12 @@ describe('resolveEntitlement (per user, across every membership)', () => {
     expect(await resolveEntitlement([HOME])).toBe('locked');
   });
 
-  // #476: entitlement consults payment status, not `planId` alone. Stripe does
-  // not cancel on a failed charge — it retries for weeks, and `planId` stays on
-  // the paid tier the whole time.
+  // #476: entitlement consults payment status, not `planId` alone. `planId`
+  // stays on the paid tier until the subscription is deleted, so a household
+  // Stripe has given up on (`unpaid`) still says so. (`past_due`, while Stripe
+  // retries, is entitled on purpose: #593.)
   it('is locked, not entitled, for a household whose card has failed', async () => {
-    for (const status of ['past_due', 'unpaid', 'incomplete', 'canceled'] as const) {
+    for (const status of ['unpaid', 'incomplete', 'canceled'] as const) {
       vi.mocked(billing.getHouseholdSubscription).mockReset();
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(
         subWithStatus('greenhouse', status)

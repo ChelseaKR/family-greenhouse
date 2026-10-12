@@ -181,9 +181,11 @@ echo "Deploying Lambda functions..."
 # digests is the EventBridge weekly/yearly email job; emailEvents is the
 # SNS-invoked SES bounce/complaint consumer; emailReplies is the SES-invoked
 # reply-to-act consumer (#667); checkoutRecovery is the
-# EventBridge abandoned-checkout recovery scan. Keep this list in sync
-# with infrastructure/modules/api locals + the CD workflow's deploy loop.
-HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream)
+# EventBridge abandoned-checkout recovery scan; plantTags serves the plant-tag
+# routes (#424). Keep this list in sync with infrastructure/modules/api locals
+# + the CD workflows' deploy loops; backend/tests/unit/config/
+# deployHandlerLists.test.ts fails when any of them drifts.
+HANDLERS=(auth plants tasks households me billing notifications species climate apiKeys api plantTags reminders chat digests emailEvents emailReplies checkoutRecovery chat-stream)
 # Every function that did not end up running this build's code. The loop keeps
 # going so one broken function does not leave the rest on the old release, but
 # the script must not end by saying the deploy is complete when this is not

@@ -9,7 +9,7 @@
  * codes and `details.code` values the production handlers answer with.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, resetDb } from '../../src/local-server';
 import {
   base32Decode,

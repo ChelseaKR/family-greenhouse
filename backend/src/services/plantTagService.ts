@@ -60,6 +60,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { v4 as uuid } from 'uuid';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { hashCapabilityToken, readTokenRow } from '../utils/tokenHash.js';
+import { upgradeLegacyRow } from './tokenHashBackfill.js';
 import { PIN_MAX_FAILURES, PIN_LOCKOUT_MS, PIN_RE } from '../models/plantTags.js';
 import { DynamoDBItem } from '../models/types.js';
 import { logger } from '../utils/logger.js';
@@ -257,6 +258,7 @@ export async function getActiveTag(token: string): Promise<PlantTag | null> {
     token,
     pk: (suffix) => `${TAG_PREFIX}${suffix}`,
     read: readTagRow,
+    upgrade: upgradeLegacyRow('plantTag', token),
   });
   if (!item) return null;
   const tag = itemToTag(item);

@@ -159,6 +159,24 @@ describe('buildSitterBrief', () => {
     expect(entry.petSafety?.note).toMatch(/calcium oxalate/i);
   });
 
+  it('reports unknown for an uncited plant only to a client that opted in', async () => {
+    const { buildSitterBrief } = await load(
+      [plant({ species: 'Zamioculcas zamiifolia', name: 'Zed' })],
+      []
+    );
+    const [cited] = (await buildSitterBrief(LINK, NOW, 'cited')).plants;
+    expect(cited.petSafety).toMatchObject({
+      slug: 'zz-plant',
+      cats: 'unknown',
+      dogs: 'unknown',
+      note: null,
+    });
+    // The default is legacy: an old bundle opening /sit/<token>/brief must
+    // never receive a value it would render as "Non-toxic".
+    const [legacy] = (await buildSitterBrief(LINK, NOW)).plants;
+    expect(legacy.petSafety).toMatchObject({ slug: 'zz-plant', cats: 'toxic', dogs: 'toxic' });
+  });
+
   it('returns null — not "safe" — for a plant the curated table does not know', async () => {
     const { buildSitterBrief } = await load(
       [plant({ id: 'p9', name: 'Doris', species: 'Nothing recognisable here' })],

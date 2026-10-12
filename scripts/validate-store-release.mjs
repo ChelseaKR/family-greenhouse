@@ -163,9 +163,27 @@ const appName = match(capacitor, /appName:\s*['"]([^'"]+)['"]/, 'Capacitor appNa
 // package is installed". `cap sync` regenerates those two files; a plugin
 // added to package.json and never synced is in neither.
 const CAPACITOR_PLATFORM_PACKAGES = ['@capacitor/core', '@capacitor/ios', '@capacitor/android'];
+// A Capacitor plugin is any dependency whose own package.json carries a
+// `capacitor` block (the CLI finds plugins the same way), so third-party
+// plugins such as @aparajita/capacitor-secure-storage (ADR 0034) are held to
+// the same table and the same link checks as the @capacitor/* ones. The
+// `@capacitor/` prefix is the fallback for a dependency whose package.json
+// cannot be read here.
+function isCapacitorPlugin(name) {
+  if (CAPACITOR_PLATFORM_PACKAGES.includes(name)) return false;
+  for (const dir of ['frontend/node_modules', 'node_modules']) {
+    const manifest = resolve(root, dir, name, 'package.json');
+    if (!existsSync(manifest)) continue;
+    try {
+      return Boolean(JSON.parse(readFileSync(manifest, 'utf8')).capacitor);
+    } catch {
+      break;
+    }
+  }
+  return name.startsWith('@capacitor/');
+}
 const installedPlugins = Object.keys(packages.frontend.dependencies ?? {})
-  .filter((name) => name.startsWith('@capacitor/'))
-  .filter((name) => !CAPACITOR_PLATFORM_PACKAGES.includes(name))
+  .filter(isCapacitorPlugin)
   .sort();
 
 const mobileDoc = read('docs/mobile.md');
@@ -175,7 +193,9 @@ const pluginTable = mobileDoc.match(
 if (!pluginTable) {
   fail('docs/mobile.md is missing the capacitor-plugins table markers');
 } else {
-  const documented = [...pluginTable[1].matchAll(/`(@capacitor\/[a-z0-9-]+)`/g)]
+  // The first column of each row names the package; the second column's
+  // backticks name files and events, which are not plugins.
+  const documented = [...pluginTable[1].matchAll(/^\|\s*`((?:@[a-z0-9-]+\/)?[a-z0-9-]+)`\s*\|/gm)]
     .map((row) => row[1])
     .sort();
   const undocumented = installedPlugins.filter((name) => !documented.includes(name));
@@ -313,6 +333,20 @@ if (!/<key>NSPrivacyTracking<\/key>\s*<false\/>/.test(privacyManifest)) {
       'with third-party data for advertising, and declaring tracking would require an ATT prompt'
   );
 }
+// IONCameraLib (linked by @capacitor/camera) reads file creation dates and its
+// own manifest is not bundled into the app (its Package.swift does not list it
+// as a resource), so the app's manifest has to declare FileTimestamp for it, or
+// App Store Connect rejects the upload with ITMS-91053.
+if (
+  packages.frontend.dependencies?.['@capacitor/camera'] &&
+  !/NSPrivacyAccessedAPICategoryFileTimestamp<\/string>[\s\S]*?C617\.1/.test(privacyManifest)
+) {
+  fail(
+    'iOS privacy manifest must declare NSPrivacyAccessedAPICategoryFileTimestamp (C617.1, 3B52.1) ' +
+      'while @capacitor/camera is installed: IONCameraLib reads file creation dates and its own ' +
+      'manifest is not bundled'
+  );
+}
 if (/NSPrivacyAccessedAPITypes<\/key>\s*<array\s*\/>/.test(privacyManifest)) {
   fail(
     'iOS privacy manifest must omit NSPrivacyAccessedAPITypes instead of declaring an empty array'
@@ -355,8 +389,22 @@ assertPng('store-assets/google-play/feature-graphic-1024x500.png', 1024, 500, {
   opaque: true,
 });
 assertPng('store-assets/app-store/app-icon-1024.png', 1024, 1024, { opaque: true });
-for (const name of ['01-dashboard', '02-plants', '03-plant-detail', '04-tasks']) {
+// The iPhone frames come from the iOS app itself (`npm run
+// store:screenshots:ios`, frontend/scripts/store-shots/shots.mjs); the iPad
+// and Play frames from the website (`npm run store:screenshots`).
+for (const name of [
+  '01-plants',
+  '02-home',
+  '03-plant-detail',
+  '04-plant-care',
+  '05-tasks',
+  '06-household',
+  '07-sitter',
+  '08-notifications',
+]) {
   assertPng(`store-assets/app-store/iphone-6.9/${name}.png`, 1320, 2868);
+}
+for (const name of ['01-dashboard', '02-plants', '03-plant-detail', '04-tasks']) {
   assertPng(`store-assets/app-store/ipad-13/${name}.png`, 2064, 2752);
   assertPng(`store-assets/google-play/phone/${name}.png`, 1080, 2400);
 }
@@ -431,12 +479,20 @@ if (templateValues.has('VITE_API_URL')) {
 }
 // Native push is off until the owner setup in docs/native-push-setup.md is
 // done. The template is what every release env is copied from, so it has to
-// say so explicitly: a template that turned it on would ship an Android build
-// that tries to register with no google-services.json in it.
+// say so explicitly, for both switches: a template that turned Android on
+// would ship an Android build that tries to register with no
+// google-services.json in it.
 if (templateValues.get('VITE_NATIVE_PUSH_ENABLED') !== 'false') {
   fail(
     `${envExamplePath} must set VITE_NATIVE_PUSH_ENABLED=false; native push is turned on per ` +
       'build, in the local .env.mobile.production, once docs/native-push-setup.md is done'
+  );
+}
+if (templateValues.get('VITE_NATIVE_PUSH_ANDROID_ENABLED') !== 'false') {
+  fail(
+    `${envExamplePath} must set VITE_NATIVE_PUSH_ANDROID_ENABLED=false; Android push is turned ` +
+      'on per build, in the local .env.mobile.production, once the Firebase steps in ' +
+      'docs/native-push-setup.md are done'
   );
 }
 
@@ -471,9 +527,33 @@ const nativePushHasCallSite = pushCallSites.length > 0;
 // behind VITE_NATIVE_PUSH_ENABLED (frontend/src/services/nativePush.ts), which
 // is false in the committed template. The iOS entitlement is committed, so it
 // is required whenever a call site exists; the Android credential only when a
-// production build actually turns push on.
+// production build actually turns push on FOR ANDROID.
+//
+// iOS first (docs/native-push-setup.md §5): one web bundle goes into both
+// shells, and VITE_NATIVE_PUSH_ENABLED alone turns push on for iOS only. On
+// Android, nativePush.ts also requires VITE_NATIVE_PUSH_ANDROID_ENABLED=true
+// before it loads the plugin or calls register(), so an Android shell built
+// from an iOS-only push bundle never registers, and google-services.json is
+// not needed for it. The bundle carries that answer, which is why the check
+// keys on the variable the bundle reads and not on whether Gradle happens
+// to run (Gradle builds without the file either way, and warns only at info
+// level).
 const nativePushBuildEnabled = process.env.VITE_NATIVE_PUSH_ENABLED === 'true';
+const nativePushAndroidBuildEnabled =
+  nativePushBuildEnabled && process.env.VITE_NATIVE_PUSH_ANDROID_ENABLED === 'true';
 const nativePushIsReachable = nativePushHasCallSite && (!production || nativePushBuildEnabled);
+const nativePushReachableOnAndroid =
+  nativePushHasCallSite && (!production || nativePushAndroidBuildEnabled);
+if (
+  production &&
+  !nativePushBuildEnabled &&
+  process.env.VITE_NATIVE_PUSH_ANDROID_ENABLED === 'true'
+) {
+  fail(
+    'VITE_NATIVE_PUSH_ANDROID_ENABLED=true has no effect while VITE_NATIVE_PUSH_ENABLED is not ' +
+      'true; set both, or neither, so the build says what it does'
+  );
+}
 
 if (nativePushIsReachable) {
   const entitlements = ['frontend/ios/App/App/App.entitlements'].filter((path) =>
@@ -552,10 +632,11 @@ if (production) {
     } catch (error) {
       fail(`Could not validate google-services.json: ${String(error)}`);
     }
-  } else if (nativePushIsReachable) {
+  } else if (nativePushReachableOnAndroid) {
     fail(
-      'VITE_NATIVE_PUSH_ENABLED=true but frontend/android/app/google-services.json is absent; ' +
-        'the Android build could not register for push. See docs/native-push-setup.md'
+      'VITE_NATIVE_PUSH_ANDROID_ENABLED=true but frontend/android/app/google-services.json is ' +
+        'absent; the Android build could not register for push. Add the file (docs/native-push-' +
+        'setup.md §1) or leave the Android switch false for an iOS-only push build'
     );
   }
 }

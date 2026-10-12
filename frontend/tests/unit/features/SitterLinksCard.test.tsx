@@ -315,6 +315,22 @@ describe('SitterLinksCard plan caps', () => {
     );
   });
 
+  it('Seedling inside the iOS app: says what Garden allows, with no link to the plans', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      renderCard([], 'admin', [], 'seedling');
+      expect(
+        await screen.findByText(/Garden allows sitter links up to 90 days/)
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('Garden: allows 90 days, keeps the 14-day default, and shows no upgrade prompt', async () => {
     renderCard([], 'admin', [], 'garden');
 

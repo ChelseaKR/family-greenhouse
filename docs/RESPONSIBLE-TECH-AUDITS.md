@@ -87,6 +87,18 @@ AI-Evaluation-Standard: APPLIES (tiers: tool-use + RAG, citation/grounding guard
 
 ### Dated waiver
 
+> **Re-issued 2026-10-01, owner Chelsea Kelly-Reif (CKR). Expires 2027-01-05 (≤ 1 quarter). Supersedes the 2026-07-05 expiry below.**
+>
+> Decision at expiry, per the original terms: option **(c), re-issue, dated and explained**. Not (a): no harness scores live Bedrock output yet, because that needs a paid, owner-triggered eval run that has not happened. Not (b): declaring the offline starter harness the permanent equivalent would accept, as permanent, a gate that does not measure answer quality; this card's own retrieval scores are 1.0 by construction.
+>
+> Still waived until 2027-01-05, unchanged in scope: §1 live faithfulness, hallucination and refusal scoring; §2 live-model refusal and no-fabrication scoring, the Promptfoo OWASP LLM01–10 config, and a Garak baseline; §6 `docs/audits/iso42001-soa.md` and `docs/audits/ai-impact-assessment-chat.md`.
+>
+> Changed since 2026-07-05: the benchmark is now 153 items (`evals/benchmark.jsonl`), and the model-identity question is closed. The maintainer endorses Claude Haiku 4.5 as the intended chat model (see `model-card.md`, "Model identity"). The freeze rule below still applies.
+>
+> By 2027-01-05, again one of (a), (b) or (c), as a dated decision.
+
+#### Original waiver (2026-07-05)
+
 > **Waived as of 2026-07-05, owner Chelsea Kelly-Reif (CKR). Expires 2026-10-05 (≤ 1 quarter).**
 >
 > The following AI-EVALUATION-STANDARD gates are **not yet fully wired** and are explicitly waived, not silently skipped, until the expiry date above:

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PrinterIcon, QrCodeIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -153,9 +154,14 @@ export function PlantTagsPage() {
       {data && !data.allowance.enabled && (
         <Card>
           <CardHeader title={t('plantTags.lockedTitle')} description={t('plantTags.lockedBody')} />
-          <Link to="/pricing" className="text-primary-700 underline hover:text-primary-800">
-            {t('plantTags.lockedCta')}
-          </Link>
+          {/* No "see the plans" link in the apps (Guideline 3.1.1). */}
+          {isNativeApp() ? (
+            <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+          ) : (
+            <Link to="/pricing" className="text-primary-700 underline hover:text-primary-800">
+              {t('plantTags.lockedCta')}
+            </Link>
+          )}
         </Card>
       )}
 

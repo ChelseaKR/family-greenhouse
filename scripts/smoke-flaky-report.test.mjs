@@ -272,7 +272,12 @@ function notify(env) {
 }
 
 test('notify fails the run on a retried or unreadable smoke and passes a clean one', () => {
-  const kept = { SMOKE_RESULT: 'success', CLEANUP_RESULT: 'success', ROLLBACK_RESULT: 'skipped' };
+  const kept = {
+    SMOKE_RESULT: 'success',
+    CLEANUP_RESULT: 'success',
+    PRUNE_RESULT: 'success',
+    ROLLBACK_RESULT: 'skipped',
+  };
 
   const clean = notify({ ...kept, SMOKE_FLAKY: '0' });
   assert.equal(clean.status, 0, clean.stdout + clean.stderr);
@@ -305,9 +310,33 @@ test('notify keeps its existing verdicts for failed and rolled-back deploys', ()
   const cleanupFailed = notify({
     SMOKE_RESULT: 'success',
     CLEANUP_RESULT: 'failure',
+    PRUNE_RESULT: 'success',
     ROLLBACK_RESULT: 'skipped',
     SMOKE_FLAKY: '0',
   });
   assert.equal(cleanupFailed.status, 1);
   assert.match(cleanupFailed.stdout, /retention cleanup failed/);
+});
+
+test('notify fails a kept release whose asset prune refused, and says it was kept', () => {
+  for (const PRUNE_RESULT of ['failure', 'cancelled', '']) {
+    const r = notify({
+      SMOKE_RESULT: 'success',
+      CLEANUP_RESULT: 'success',
+      PRUNE_RESULT,
+      ROLLBACK_RESULT: 'skipped',
+      SMOKE_FLAKY: '0',
+    });
+    assert.equal(
+      r.status,
+      1,
+      `PRUNE_RESULT=${JSON.stringify(PRUNE_RESULT)} must fail the run:\n${r.stdout}`
+    );
+    assert.match(
+      r.stdout,
+      /::warning::v9\.9\.9 is live and was kept, but the superseded-asset prune did not succeed/
+    );
+    assert.match(r.stdout, /Nothing was rolled back/);
+    assert.doesNotMatch(r.stdout, /successful!|rolled back\.$/m);
+  }
 });

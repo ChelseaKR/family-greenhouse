@@ -461,7 +461,7 @@ describe('plants identify handler', () => {
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'meters an %s Garden household on the SEEDLING allowance — Plant.id calls cost money',
     async (status) => {
       const plantIdentification = await import('../../../src/services/plantIdentification.js');

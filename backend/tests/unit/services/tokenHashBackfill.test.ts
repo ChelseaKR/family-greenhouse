@@ -44,6 +44,15 @@ vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
 }));
+// The logger is real everywhere except that its output is captured, so the
+// upgrade-on-use tests can assert what a request logs (and that no token is in it).
+const logged = vi.hoisted(() => ({ lines: [] as string[] }));
+vi.mock('../../../src/utils/logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/utils/logger.js')>();
+  const logger = actual.createLogger({ write: (chunk: string) => void logged.lines.push(chunk) });
+  logger.level = 'trace';
+  return { ...actual, logger, withRequest: (ctx: object) => logger.child(ctx) };
+});
 
 type Row = Record<string, unknown>;
 type Cmd = { kind: string; input: Record<string, any> };
@@ -53,6 +62,8 @@ const keyOf = (pk: unknown, sk: unknown) => `${String(pk)}|${String(sk)}`;
 /** Runs just before a TransactWrite is evaluated — a live request landing
  *  between the backfill's scan and its write. */
 let beforeTransact: (() => void) | null = null;
+/** When set, every TransactWrite fails with it — a throttle, an outage. */
+let transactFailure: Error | null = null;
 const SCAN_PAGE = 2;
 
 class TransactionCanceled extends Error {
@@ -124,6 +135,7 @@ async function fakeSend(cmd: Cmd): Promise<unknown> {
       };
     }
     case 'TransactWrite': {
+      if (transactFailure) throw transactFailure;
       beforeTransact?.();
       beforeTransact = null;
       const items = input.TransactItems as Array<Record<string, any>>;
@@ -156,6 +168,8 @@ async function load() {
 beforeEach(() => {
   rows.clear();
   beforeTransact = null;
+  transactFailure = null;
+  logged.lines.length = 0;
   vi.clearAllMocks();
 });
 
@@ -287,12 +301,17 @@ describe('tokenHashBackfill — the credentials people already hold keep working
     const seats = await import('../../../src/services/caretakerService.js');
     const plants = await import('../../../src/services/plantService.js');
 
-    // Before: all five resolve (through the legacy fallback).
+    // Before: all five resolve (through the legacy fallback). Resolving one
+    // also upgrades it in place (`upgradeLegacyRow`), which is not what this
+    // test is about — it is about rows NOBODY has used — so put the legacy
+    // generation back untouched before the backfill runs.
     expect((await tags.getActiveTag(TAG_TOKEN))?.id).toBe('tag-1');
     expect((await kiosk.getActiveKioskLink(KIOSK_TOKEN))?.id).toBe('kiosk-1');
     expect((await sitter.getActiveLink(SITTER_TOKEN))?.id).toBe('link-1');
     expect((await seats.getActiveCaretaker(SEAT_TOKEN))?.id).toBe('seat-1');
     expect((await plants.getPlantShare(SHARE_CODE))?.plantId).toBe('p1');
+    rows.clear();
+    seedAllSurfaces();
 
     for (const name of backfill.BACKFILL_SURFACE_NAMES) {
       const report = await backfill.backfillSurface(backfill.LEGACY_SURFACES[name], {
@@ -374,9 +393,8 @@ describe('tokenHashBackfill — a live request during the run', () => {
       apply: true,
     });
     expect(report).toMatchObject({ legacy: 1, rekeyed: 0, raced: 1 });
-    const tags = await import('../../../src/services/plantTagService.js');
-    expect(await tags.getActiveTag(TAG_TOKEN)).toBeNull();
-    // Left exactly where it was, for a re-run to pick up.
+    // Left exactly where it was, for a re-run to pick up. (Checked before any
+    // read: a read of a legacy label would move it itself.)
     expect(rows.get(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'))?.status).toBe('revoked');
     expect(rows.size).toBe(1);
 
@@ -385,6 +403,7 @@ describe('tokenHashBackfill — a live request during the run', () => {
       apply: true,
     });
     expect(again).toMatchObject({ rekeyed: 1, raced: 0 });
+    const tags = await import('../../../src/services/plantTagService.js');
     expect(await tags.getActiveTag(TAG_TOKEN)).toBeNull();
     expect(tableDump()).not.toContain(TAG_TOKEN);
   });
@@ -561,5 +580,295 @@ describe('tokenHashBackfill — dry run and what it will not touch', () => {
       ':m1': 'NULL',
       ':m3': 0,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Upgrade on use: the first request that resolves a legacy credential moves it
+// ---------------------------------------------------------------------------
+
+const transactCount = async () => {
+  const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+  return vi
+    .mocked(dynamodb.send)
+    .mock.calls.filter((c) => (c[0] as unknown as Cmd).kind === 'TransactWrite').length;
+};
+
+/** One legacy credential per surface, with the read path that resolves it. */
+const SURFACES: ReadonlyArray<{
+  name: 'plantTag' | 'kioskLink' | 'sitterLink' | 'caretakerSeat' | 'plantShare';
+  salt: string;
+  prefix: string;
+  token: string;
+  id: string;
+  resolve: () => Promise<unknown>;
+}> = [
+  {
+    name: 'plantTag',
+    salt: 'family-greenhouse-planttag-v1',
+    prefix: 'PLANTTAG#',
+    token: TAG_TOKEN,
+    id: 'tag-1',
+    resolve: async () =>
+      (await import('../../../src/services/plantTagService.js')).getActiveTag(TAG_TOKEN),
+  },
+  {
+    name: 'kioskLink',
+    salt: 'family-greenhouse-kiosk-v1',
+    prefix: 'KIOSK#',
+    token: KIOSK_TOKEN,
+    id: 'kiosk-1',
+    resolve: async () =>
+      (await import('../../../src/services/kioskService.js')).getActiveKioskLink(KIOSK_TOKEN),
+  },
+  {
+    name: 'sitterLink',
+    salt: 'family-greenhouse-sitter-v1',
+    prefix: 'SITTER#',
+    token: SITTER_TOKEN,
+    id: 'link-1',
+    resolve: async () =>
+      (await import('../../../src/services/sitterService.js')).getActiveLink(SITTER_TOKEN),
+  },
+  {
+    name: 'caretakerSeat',
+    salt: 'family-greenhouse-caretaker-v1',
+    prefix: 'CARETAKER#',
+    token: SEAT_TOKEN,
+    id: 'seat-1',
+    resolve: async () =>
+      (await import('../../../src/services/caretakerService.js')).getActiveCaretaker(SEAT_TOKEN),
+  },
+  {
+    name: 'plantShare',
+    salt: 'family-greenhouse-plantshare-v1',
+    prefix: 'SHARE#',
+    token: SHARE_CODE,
+    id: 'p1',
+    resolve: async () =>
+      (await import('../../../src/services/plantService.js')).getPlantShare(SHARE_CODE),
+  },
+];
+
+describe('upgrade on use — a credential leaves plaintext the first time it is used', () => {
+  it.each(SURFACES)(
+    '$name: resolves, is moved to its hashed key, and is moved exactly once',
+    async ({ salt, prefix, token, resolve }) => {
+      await load();
+      seedAllSurfaces();
+      const key = keyOf(`${prefix}${digest(salt, token)}`, 'METADATA');
+
+      // First use: the person holding the credential gets the same answer as
+      // before — and the row it read is now stored under the digest.
+      expect(await resolve()).toBeTruthy();
+      expect(rows.has(key)).toBe(true);
+      expect(rows.has(keyOf(`${prefix}${token}`, 'METADATA'))).toBe(false);
+      expect(rows.size).toBe(5); // moved, not copied
+      expect(tableDump()).not.toContain(token);
+      expect(await transactCount()).toBe(1);
+
+      // Every later use is a plain hashed read: no second move.
+      expect(await resolve()).toBeTruthy();
+      expect(await resolve()).toBeTruthy();
+      expect(await transactCount()).toBe(1);
+    }
+  );
+
+  it('serves the request from the hashed row, so a PIN write in the same request lands', async () => {
+    await load();
+    seed(legacyTag({ pinFailures: 3 }));
+    const tags = await import('../../../src/services/plantTagService.js');
+    const tag = await tags.getActiveTag(TAG_TOKEN);
+    const hash = digest('family-greenhouse-planttag-v1', TAG_TOKEN);
+    // What the scan handler holds now addresses the row that EXISTS. Before
+    // this, a legacy read left `keyToken` = the plaintext key, which the move
+    // has just deleted — so the next `bumpFailures` would have thrown.
+    expect(tag?.keyToken).toBe(hash);
+    expect(tag?.token).toBeNull();
+    expect(tag?.pinFailures).toBe(3);
+    expect(rows.get(keyOf(`PLANTTAG#${hash}`, 'METADATA'))?.tokenHash).toBe(hash);
+  });
+
+  it('logs the move by surface and outcome only — never a token, a key or a row', async () => {
+    await load();
+    seedAllSurfaces();
+    for (const surface of SURFACES) await surface.resolve();
+    const output = logged.lines.join('');
+    expect(output).toContain('credential.lazy_upgrade');
+    for (const surface of SURFACES) {
+      expect(output).not.toContain(surface.token);
+      expect(output).not.toContain(digest(surface.salt, surface.token));
+    }
+  });
+
+  it('a digest lifted from the table never triggers a move', async () => {
+    await load();
+    seed(legacyTag());
+    const tags = await import('../../../src/services/plantTagService.js');
+    // Move it legitimately, then present the digest from the dump.
+    await tags.getActiveTag(TAG_TOKEN);
+    expect(await transactCount()).toBe(1);
+    const leaked = digest('family-greenhouse-planttag-v1', TAG_TOKEN);
+    expect(await tags.getActiveTag(leaked)).toBeNull();
+    expect(await transactCount()).toBe(1);
+  });
+
+  it('upgradeLegacyRow refuses a token the row does not hold, and a row that is already hashed', async () => {
+    const { backfill } = await load();
+    const other = 'e'.repeat(64);
+    expect(await backfill.upgradeLegacyRow('plantTag', other)(legacyTag())).toBeNull();
+    expect(
+      await backfill.upgradeLegacyRow('plantTag', TAG_TOKEN)({ ...legacyTag(), tokenHash: 'x' })
+    ).toBeNull();
+    expect(await transactCount()).toBe(0);
+  });
+
+  describe('a live request landing during the move', () => {
+    it('a revocation cancels it: the label stays revoked, the row is untouched, the scan is refused', async () => {
+      await load();
+      seed(legacyTag());
+      beforeTransact = () => {
+        const row = rows.get(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'))!;
+        row.status = 'revoked';
+        row.revokedAt = '2026-09-19T12:00:00.000Z';
+      };
+      const tags = await import('../../../src/services/plantTagService.js');
+      expect(await tags.getActiveTag(TAG_TOKEN)).toBeNull();
+      // Left exactly where it was, for the next use or the backfill.
+      expect(rows.get(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'))?.status).toBe('revoked');
+      expect(rows.size).toBe(1);
+    });
+
+    it('negative control: WITHOUT the unchanged-condition the same revocation is undone', async () => {
+      const { backfill } = await load();
+      const registry = backfill.LEGACY_SURFACES.plantTag;
+      const original = registry.mutableAttributes;
+      seed(legacyTag());
+      beforeTransact = () => {
+        rows.get(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'))!.status = 'revoked';
+      };
+      (registry as { mutableAttributes: readonly string[] }).mutableAttributes = [];
+      try {
+        const tags = await import('../../../src/services/plantTagService.js');
+        // Sabotage landed: the request moved a row that had just been revoked…
+        const tag = await tags.getActiveTag(TAG_TOKEN);
+        expect(await transactCount()).toBe(1);
+        // …from the STALE copy it read, so the revoked label scans again.
+        expect(tag?.status).toBe('active');
+      } finally {
+        (registry as { mutableAttributes: readonly string[] }).mutableAttributes = original;
+      }
+    });
+
+    it('another scan (or the operator backfill) moving it first is not an error: one row, served from the hashed key', async () => {
+      const { backfill } = await load();
+      seed(legacyTag());
+      const hash = digest('family-greenhouse-planttag-v1', TAG_TOKEN);
+      beforeTransact = () => {
+        // The other mover's COMMITTED write, built by the backfill's own
+        // `rekeyedItem` so it is exactly the row the backfill leaves behind.
+        const legacy = rows.get(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'))!;
+        rows.delete(keyOf(`PLANTTAG#${TAG_TOKEN}`, 'METADATA'));
+        const moved = backfill.rekeyedItem(backfill.LEGACY_SURFACES.plantTag, legacy, TAG_TOKEN);
+        rows.set(keyOf(moved.PK, moved.SK), moved);
+      };
+      const tags = await import('../../../src/services/plantTagService.js');
+      const tag = await tags.getActiveTag(TAG_TOKEN);
+      expect(tag?.id).toBe('tag-1');
+      expect(tag?.keyToken).toBe(hash);
+      expect(rows.size).toBe(1);
+      expect(tableDump()).not.toContain(TAG_TOKEN);
+    });
+  });
+
+  it('a write failure costs the upgrade, never the request', async () => {
+    await load();
+    seedAllSurfaces();
+    transactFailure = Object.assign(new Error('ThrottlingException for hh-1'), {
+      name: 'ThrottlingException',
+    });
+    for (const surface of SURFACES) {
+      // Served exactly as before the change…
+      expect(await surface.resolve()).toBeTruthy();
+    }
+    // …the legacy rows are untouched, ready for the next use or the backfill…
+    for (const surface of SURFACES) {
+      expect(rows.has(keyOf(`${surface.prefix}${surface.token}`, 'METADATA'))).toBe(true);
+    }
+    // …and the failure was logged by surface and error class, nothing else.
+    const output = logged.lines.join('');
+    expect(output).toContain('credential.lazy_upgrade_failed');
+    expect(output).toContain('ThrottlingException');
+    expect(output).not.toContain('hh-1');
+    for (const surface of SURFACES) expect(output).not.toContain(surface.token);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The operator script's batch size
+// ---------------------------------------------------------------------------
+
+describe('tokenHashBackfill — batch size (--limit)', () => {
+  function seedTags(count: number) {
+    for (let i = 0; i < count; i += 1) {
+      const token = 'abcdef'[i].repeat(64);
+      seed(legacyTag({ PK: `PLANTTAG#${token}`, token, id: `tag-${i}` }));
+    }
+  }
+  const legacyLeft = () => [...rows.values()].filter((r) => typeof r.token === 'string').length;
+
+  it('moves at most `limit` rows a run, and each re-run takes the next batch until none are left', async () => {
+    const { backfill } = await load();
+    seedTags(5);
+    const surface = backfill.LEGACY_SURFACES.plantTag;
+
+    const first = await backfill.backfillSurface(surface, { apply: true, limit: 2 });
+    expect(first).toMatchObject({ legacy: 5, rekeyed: 2, deferred: 3, limit: 2 });
+    expect(legacyLeft()).toBe(3);
+
+    const second = await backfill.backfillSurface(surface, { apply: true, limit: 2 });
+    expect(second).toMatchObject({ legacy: 3, rekeyed: 2, deferred: 1 });
+    expect(legacyLeft()).toBe(1);
+
+    const third = await backfill.backfillSurface(surface, { apply: true, limit: 2 });
+    expect(third).toMatchObject({ legacy: 1, rekeyed: 1, deferred: 0 });
+    expect(legacyLeft()).toBe(0);
+    expect(rows.size).toBe(5);
+
+    // Idempotent: a further run finds nothing and writes nothing.
+    const before = tableDump();
+    const again = await backfill.backfillSurface(surface, { apply: true, limit: 2 });
+    expect(again).toMatchObject({ legacy: 0, rekeyed: 0, raced: 0, deferred: 0 });
+    expect(tableDump()).toBe(before);
+    expect(await transactCount()).toBe(5);
+  });
+
+  it('a dry run with a limit reports the batch and writes nothing', async () => {
+    const { backfill } = await load();
+    seedTags(4);
+    const before = tableDump();
+    const report = await backfill.backfillSurface(backfill.LEGACY_SURFACES.plantTag, {
+      apply: false,
+      limit: 3,
+    });
+    expect(report).toMatchObject({ legacy: 4, rekeyed: 0, deferred: 1, limit: 3 });
+    expect(tableDump()).toBe(before);
+    expect(await transactCount()).toBe(0);
+  });
+
+  it('without a limit it is unbounded and reports no batch', async () => {
+    const { backfill } = await load();
+    seedTags(3);
+    const report = await backfill.backfillSurface(backfill.LEGACY_SURFACES.plantTag, {
+      apply: true,
+    });
+    expect(report).toMatchObject({ rekeyed: 3, deferred: 0, limit: null });
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])('refuses a limit of %s', async (limit) => {
+    const { backfill } = await load();
+    await expect(
+      backfill.backfillSurface(backfill.LEGACY_SURFACES.plantTag, { apply: false, limit })
+    ).rejects.toThrow(/positive integer/);
   });
 });

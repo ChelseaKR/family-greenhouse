@@ -176,6 +176,13 @@ When you're ready to actually charge:
   so the card-expiring email is a best-effort early warning and
   `invoice.payment_failed` remains the dependable dunning path. Do not describe
   it to customers as complete coverage.
+- **Failed-payment settings are load-bearing (#593).** The app keeps a household's
+  paid plan while Stripe retries a failed payment, and expects Stripe to
+  **cancel the subscription** after the last retry. Set the retry schedule
+  (Billing → Revenue recovery → Retries) and choose "Cancel the subscription"
+  in the failed payment settings; never "Leave the subscription past-due", which
+  keeps paid access with no payment. The steps, and a test-clock drill, are in
+  `docs/billing.md` under "Entitlement vs. plan".
 - Stripe can deliver an event more than once and does not guarantee ordering. The app records processed event IDs and conditions household updates on Stripe's event timestamp; do not remove either guard.
 - Before going live, complete one monthly, annual, and lifetime test checkout; replay a webhook from Stripe Workbench; and verify the household plan, customer ID, subscription ID, and period end in DynamoDB.
 

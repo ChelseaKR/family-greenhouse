@@ -228,18 +228,23 @@ the one credential left (#450, whose comments set out the trade below).
   hashed key, then one point read on the old plaintext key. That fallback only
   honours a row that still carries the presented token; without that check a
   digest from a dump, presented at `/tag/{digest}`, would land on the hashed
-  row's own key and scan. `backend/src/scripts/backfillTokenHashes.ts` re-keys
-  the legacy rows under the digest of the token they already hold, so the same
-  printed QR code resolves afterwards. Nothing is reprinted.
+  row's own key and scan. A legacy row is moved to its hashed key by the first
+  scan that reaches it (the backfill's own atomic transaction, so a scan racing
+  a revocation, another scan or the operator script cannot leave two live rows
+  or bring a revoked label back), and `backend/src/scripts/backfillTokenHashes.ts`
+  re-keys the labels nobody has scanned, under the digest of the token they
+  already hold, so the same printed QR code resolves afterwards. Nothing is
+  reprinted.
 - **What it costs: a label's code can be shown only when it is made.** The
   print sheet used to re-render every active tag's QR from the stored token.
   It now prints the labels issued on the current visit, from the issue
   response, and lists earlier ones as printed. Replacing a lost or faded label
   is **New code**, which is the same physical work as reprinting (one label
   printed, one label stuck on) and additionally turns the lost one off. What
-  is genuinely gone is a second copy of a label that is still in use. Until
-  the backfill runs, a pre-#450 row still carries its token and the sheet can
-  still print it.
+  is genuinely gone is a second copy of a label that is still in use. Until a
+  pre-#450 label is first scanned or the backfill reaches it, its row still
+  carries its token and the sheet can still print it; from then on the sheet
+  lists it as printed.
 - **Not chosen:** envelope-encrypting the token with KMS so the sheet could
   keep reprinting (a new key, grant and rotation duty in `infrastructure/`, and
   a decryptable copy of every label still at rest behind one more

@@ -56,6 +56,8 @@ interface Fixture {
   species?: string | null;
   history?: 'ok' | 'fail';
   toxicity?: 'match' | 'none' | 'fail';
+  /** Overrides the served match's fields, e.g. an unknown or unexpected verdict. */
+  match?: Record<string, unknown>;
 }
 
 function plantPayload(fixture: Fixture) {
@@ -136,7 +138,12 @@ const POTHOS_MATCH = {
 
 /** Serves the page's reads; returns counters for the requests that matter. */
 function serve(fixture: Fixture = {}) {
-  const calls = { share: 0, perenual: 0, toxicityQueries: [] as string[] };
+  const calls = {
+    share: 0,
+    perenual: 0,
+    toxicityQueries: [] as string[],
+    optedIn: [] as boolean[],
+  };
   const role = fixture.role ?? 'admin';
   useAuthStore.setState({
     accessToken: 'access-1',
@@ -162,9 +169,13 @@ function serve(fixture: Fixture = {}) {
     http.get(`${API}/species/toxicity`, ({ request }) => {
       const q = new URL(request.url).searchParams.get('q') ?? '';
       calls.toxicityQueries.push(q);
+      calls.optedIn.push(new URL(request.url).searchParams.get('unknown') === '1');
       if (fixture.toxicity === 'fail') return HttpResponse.json({}, { status: 503 });
       const hit = (fixture.toxicity ?? 'match') === 'match' && q === 'Epipremnum aureum';
-      return HttpResponse.json({ query: q, results: hit ? [POTHOS_MATCH] : [] });
+      return HttpResponse.json({
+        query: q,
+        results: hit ? [{ ...POTHOS_MATCH, ...fixture.match }] : [],
+      });
     }),
     // The Perenual species detail is the WRONG source for a pet claim. It is
     // served here only so that a call to it is counted rather than erroring.
@@ -399,5 +410,34 @@ describe('PlantPassportPage — QR code and print', () => {
     expect(
       await axe(container, { runOnly: { type: 'tag', values: WCAG_TAGS } })
     ).toHaveNoViolations();
+  });
+});
+
+describe('PlantPassportPage pet verdicts', () => {
+  it('opts in to unknown verdicts on every lookup', async () => {
+    const calls = serve();
+    renderPassport();
+    await settled();
+    expect(calls.optedIn.length).toBeGreaterThan(0);
+    expect(calls.optedIn.every(Boolean)).toBe(true);
+  });
+
+  it.each([
+    ['unknown', { cats: 'unknown', dogs: 'unknown', note: null }],
+    // Not a value the API sends: the service must turn it into unknown.
+    ['an unexpected value', { cats: 'safe', dogs: 'Non-toxic' }],
+  ])('renders %s as no verdict plus the caution, never as safe', async (_label, match) => {
+    serve({ match });
+    renderPassport();
+    const sheet = await settled();
+    const pet = within(sheet).getByTestId('passport-pet-safety');
+    expect(pet).toHaveTextContent('No cited pet-safety verdict — cats: unknown, dogs: unknown.');
+    expect(within(pet).getByTestId('pet-caution')).toHaveTextContent(
+      'Pothos isn’t on the ASPCA’s list, so we can’t give a verdict.'
+    );
+    expect(pet).toHaveTextContent('(888-426-4435)');
+    expect(pet).not.toHaveTextContent(/non-toxic|Listed as non-toxic/i);
+    // The table's note is withheld when nothing cites it.
+    expect(pet).not.toHaveTextContent('calcium oxalate');
   });
 });

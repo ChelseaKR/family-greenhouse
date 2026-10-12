@@ -310,6 +310,32 @@ describe('GET /sitter/{token}/brief (public)', () => {
     expect(res.body).not.toContain('createdBy');
   });
 
+  it.each([
+    [{ unknown: '1' }, 'cited'],
+    [null, 'legacy'],
+    [{ unknown: 'yes' }, 'legacy'],
+  ] as const)(
+    'builds the brief in the mode the client asked for (%j -> %s)',
+    async (query, mode) => {
+      const { getActiveLink } = await import('../../../src/services/sitterService.js');
+      const { buildSitterBrief } = await import('../../../src/services/sitterBrief.js');
+      vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
+      vi.mocked(buildSitterBrief).mockResolvedValueOnce(briefFixture as never);
+
+      const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
+      await getSitterBrief(
+        anonEvent({
+          path: `/sitter/${TOKEN}/brief`,
+          pathParameters: { token: TOKEN },
+          queryStringParameters: query,
+        }),
+        ctx,
+        () => {}
+      );
+      expect(vi.mocked(buildSitterBrief).mock.lastCall?.[2]).toBe(mode);
+    }
+  );
+
   it('404s (the SAME generic message) on a plan without the brief, and does not build it', async () => {
     const { getActiveLink } = await import('../../../src/services/sitterService.js');
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
@@ -331,7 +357,7 @@ describe('GET /sitter/{token}/brief (public)', () => {
 
   // -- #476: an already-issued, unexpired link CONTINUES ------------------
 
-  it.each(['past_due', 'unpaid', 'incomplete', 'paused'])(
+  it.each(['unpaid', 'incomplete', 'paused'])(
     'still serves the brief while the household card has failed (%s) (#476)',
     async (status) => {
       // The sitter is not the buyer. They are standing in someone else's
@@ -360,7 +386,7 @@ describe('GET /sitter/{token}/brief (public)', () => {
     }
   );
 
-  it('still 404s a free-tier household whose status is past_due (#476)', async () => {
+  it('still 404s a free-tier household whose status is unpaid (#476)', async () => {
     // The paired positive control: "continuing" is not "everyone gets in".
     // A tier that never included the brief still does not have it, whatever
     // the subscription status says.
@@ -370,7 +396,7 @@ describe('GET /sitter/{token}/brief (public)', () => {
     vi.mocked(getActiveLink).mockResolvedValueOnce(activeLink() as never);
     vi.mocked(getHouseholdSubscription).mockResolvedValueOnce({
       planId: 'seedling',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
 
     const { getSitterBrief } = await import('../../../src/handlers/tasks/handler.js');
@@ -459,7 +485,7 @@ describe('GET /sitter/{token} — brief availability', () => {
     vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
     vi.mocked(getHouseholdSubscription).mockResolvedValueOnce({
       planId: 'garden',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
 
     const { getSitterView } = await import('../../../src/handlers/tasks/handler.js');
@@ -473,7 +499,7 @@ describe('GET /sitter/{token} — brief availability', () => {
     expect(JSON.parse(res.body).briefAvailable).toBe(true);
   });
 
-  it('still reports briefAvailable false for a free household that is past_due (#476)', async () => {
+  it('still reports briefAvailable false for a free household that is unpaid (#476)', async () => {
     const { getActiveLink } = await import('../../../src/services/sitterService.js');
     const { getSitterTasks } = await import('../../../src/services/taskService.js');
     const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
@@ -481,7 +507,7 @@ describe('GET /sitter/{token} — brief availability', () => {
     vi.mocked(getSitterTasks).mockResolvedValueOnce([] as never);
     vi.mocked(getHouseholdSubscription).mockResolvedValueOnce({
       planId: 'seedling',
-      status: 'past_due',
+      status: 'unpaid',
     } as never);
 
     const { getSitterView } = await import('../../../src/handlers/tasks/handler.js');

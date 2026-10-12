@@ -37,7 +37,7 @@ describe('external integration deployment wiring', () => {
 
   it('keeps Perenual available to every handler that consumes enrichment', () => {
     expect(apiModule).toMatch(
-      /plants\s*=\s*merge\(local\.plant_integration_environment,\s*local\.perenual_environment,\s*local\.identify_top_up_offer_environment\)/
+      /plants\s*=\s*merge\(local\.plant_integration_environment,\s*local\.perenual_environment,\s*local\.identify_top_up_offer_environment(?:,\s*local\.passport_import_environment)?\)/
     );
     expect(apiModule).toMatch(
       /notifications\s*=\s*merge\(local\.notification_environment,\s*local\.perenual_environment\)/

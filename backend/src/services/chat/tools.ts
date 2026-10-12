@@ -251,14 +251,23 @@ export const PET_TOXICITY_EMERGENCY_GUIDANCE =
 export const PET_TOXICITY_NOT_IN_CHECKER_GUIDANCE =
   'This plant is not in our checker. Tell the user exactly that. Do NOT guess or state a verdict from memory — say you cannot confirm whether it is safe, and point them to the ASPCA toxic and non-toxic plant list or their vet.';
 
+/**
+ * Sent with a `found` result when any match has an `unknown` animal: the
+ * table cannot cite a verdict, and the model must not supply one.
+ */
+export const PET_TOXICITY_UNKNOWN_GUIDANCE =
+  'A verdict of "unknown" means our source (the ASPCA plant list) gives no verdict for that animal. Say exactly that. Do NOT state or imply that the plant is safe or toxic for that animal from memory. Tell the user to keep the plant out of reach of pets, and if a pet eats some, to call their vet or the ASPCA Animal Poison Control Center (888-426-4435).';
+
 export type PetToxicityToolResult =
   | {
       status: 'found';
       query: string;
       source: string;
-      /** The matcher's output, best match first, unchanged. */
+      /** The matcher's output in `cited` mode, best match first, unchanged. */
       matches: PetToxicityMatch[];
       emergency: string;
+      /** Present only when some match has an `unknown` animal. */
+      unknownGuidance?: string;
     }
   | {
       status: 'not_in_checker';
@@ -280,7 +289,8 @@ export function lookupPetToxicityForModel(rawPlantName: unknown): PetToxicityToo
     };
   }
   const query = trimmed.slice(0, MAX_PLANT_NAME_LENGTH);
-  const matches = lookupToxicity(query);
+  // Always `cited`: the model must see `unknown`, never an uncited verdict.
+  const matches = lookupToxicity(query, 5, 'cited');
   if (matches.length === 0) {
     return {
       status: 'not_in_checker',
@@ -291,12 +301,14 @@ export function lookupPetToxicityForModel(rawPlantName: unknown): PetToxicityToo
       emergency: PET_TOXICITY_EMERGENCY_GUIDANCE,
     };
   }
+  const anyUnknown = matches.some((m) => m.cats === 'unknown' || m.dogs === 'unknown');
   return {
     status: 'found',
     query,
     source: PET_TOXICITY_SOURCE,
     matches,
     emergency: PET_TOXICITY_EMERGENCY_GUIDANCE,
+    ...(anyUnknown ? { unknownGuidance: PET_TOXICITY_UNKNOWN_GUIDANCE } : {}),
   };
 }
 

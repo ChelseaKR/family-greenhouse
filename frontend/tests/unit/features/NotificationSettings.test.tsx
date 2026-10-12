@@ -381,6 +381,27 @@ describe('NotificationSettings', () => {
       }
     });
 
+    it('never shows a UTC alias, not even on the first frame with the stored prefs', async () => {
+      // The value the field holds the moment the form first appears, read
+      // before React's effects run: what a test on a busy machine, or a person,
+      // sees first. It used to be the browser's own name for UTC ("Etc/UTC"),
+      // swapped for the stored "UTC" a moment later.
+      for (const zone of ['Etc/UTC', 'GMT']) {
+        stubBrowserTimeZone(zone);
+        const seen: string[] = [];
+        const observer = new MutationObserver(() => {
+          const field = screen.queryByLabelText<HTMLInputElement>('Timezone');
+          if (field && seen.length === 0) seen.push(field.value);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        const { notificationService } = await renderSettings(prefs());
+        observer.disconnect();
+        expect(seen).toEqual(['UTC']);
+        expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+        cleanupRender();
+      }
+    });
+
     it('falls back to the stored zone, without a write, when the browser cannot resolve one', async () => {
       // Runtime that throws.
       resolvedOptionsSpy.mockImplementation(() => {
@@ -950,6 +971,9 @@ describe('NotificationSettings inside the native shells', () => {
       timeZone: 'UTC',
     } as unknown as Intl.ResolvedDateTimeFormatOptions);
     vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+    // This shell is Android, which needs its own build switch as well
+    // (nativePush.ts): an iOS-only push build offers Android nothing.
+    vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'true');
     (window as unknown as { Capacitor: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'android',
@@ -971,6 +995,13 @@ describe('NotificationSettings inside the native shells', () => {
     expect(await screen.findByText('This device')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn on' })).toBeEnabled();
     // Rendering the row asks the OS for nothing.
+    expect(nativePushMock.registerNativePush).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing on Android in a build that carries push for iOS only', async () => {
+    vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'false');
+    await renderSettings(prefs({ devicePush: { ios: true, android: true } }));
+    expect(screen.queryByText('This device')).toBeNull();
     expect(nativePushMock.registerNativePush).not.toHaveBeenCalled();
   });
 

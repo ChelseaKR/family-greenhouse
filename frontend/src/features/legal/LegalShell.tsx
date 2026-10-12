@@ -5,7 +5,11 @@ import { REVIEWED_LEGAL_LOCALES } from './reviewedLocales';
 
 interface LegalShellProps {
   title: string;
-  /** ISO calendar date (`YYYY-MM-DD`); rendered as a long date in the active locale. */
+  /**
+   * ISO calendar date (`YYYY-MM-DD`); rendered as a long date in the active
+   * locale. `UNRELEASED` (the Terms between a text change and the release that
+   * ships it) says so instead of naming a day. A release refuses it.
+   */
   effectiveDate: string;
   children: React.ReactNode;
 }
@@ -26,22 +30,30 @@ function localCalendarDate(iso: string): Date {
  * the same site as the blog, care guides, and changelog rather than a
  * differently-styled annex.
  */
+/** The effective date of a legal page whose new text no release has shipped yet. */
+export const UNRELEASED_EFFECTIVE_DATE = 'UNRELEASED';
+
 export function LegalShell({ title, effectiveDate, children }: LegalShellProps) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language ?? 'en';
   const baseLanguage = language.split('-')[0];
   const isTranslation = baseLanguage !== 'en';
   const isReviewed = REVIEWED_LEGAL_LOCALES.has(baseLanguage);
-  const date = formatDate(
-    localCalendarDate(effectiveDate),
-    { month: 'long', day: 'numeric', year: 'numeric' },
-    language
-  );
+  const pending = effectiveDate === UNRELEASED_EFFECTIVE_DATE;
+  const date = pending
+    ? ''
+    : formatDate(
+        localCalendarDate(effectiveDate),
+        { month: 'long', day: 'numeric', year: 'numeric' },
+        language
+      );
 
   return (
     <PublicShell>
       <PageIntro eyebrow={t('legal.shell.eyebrow')} title={title} />
-      <p className="mt-4 text-sm text-gray-600">{t('legal.shell.effective', { date })}</p>
+      <p className="mt-4 text-sm text-gray-600">
+        {pending ? t('legal.shell.effectivePending') : t('legal.shell.effective', { date })}
+      </p>
 
       {isTranslation && (
         <div

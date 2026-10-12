@@ -50,9 +50,14 @@ const en: Catalog = {
     'You are getting this because you are a member of a household on Family Greenhouse.',
   'footer.reason.welcome':
     'You are getting this because you just created a household on Family Greenhouse.',
+  'footer.reason.reminder':
+    'You are getting this because daily plant-care reminders are on for you in {{household}} on Family Greenhouse.',
+  'footer.reason.reminderGeneric':
+    'You are getting this because daily plant-care reminders are on for you on Family Greenhouse.',
   'footer.safety':
     'Family Greenhouse will never ask for your password or payment details by email.',
   'footer.manage': 'Email settings',
+  'footer.manageReminders': 'Reminder settings',
   'footer.unsubscribe': 'Unsubscribe from these',
 
   // --- task-type labels ----------------------------------------------------
@@ -184,9 +189,14 @@ const es: Catalog = {
     'Recibes este correo porque formas parte de un hogar en Family Greenhouse.',
   'footer.reason.welcome':
     'Recibes este correo porque acabas de crear un hogar en Family Greenhouse.',
+  'footer.reason.reminder':
+    'Recibes este correo porque tienes activados los recordatorios diarios de cuidado de plantas en {{household}} en Family Greenhouse.',
+  'footer.reason.reminderGeneric':
+    'Recibes este correo porque tienes activados los recordatorios diarios de cuidado de plantas en Family Greenhouse.',
   'footer.safety':
     'Family Greenhouse nunca te pedirá tu contraseña ni tus datos de pago por correo.',
   'footer.manage': 'Ajustes de correo',
+  'footer.manageReminders': 'Ajustes de recordatorios',
   'footer.unsubscribe': 'Darse de baja',
 
   // --- task-type labels ----------------------------------------------------

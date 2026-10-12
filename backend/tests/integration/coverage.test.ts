@@ -5,7 +5,7 @@
  * list and an upcoming vacation window, end to end through Express.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, db, resetDb, seedHouseholdId, seedPlantId, seedUserId } from '../../src/local-server';
 
 const SEED_EMAIL = 'test@example.com';

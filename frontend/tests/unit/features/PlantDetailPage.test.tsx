@@ -262,7 +262,12 @@ describe('PlantDetailPage', () => {
 
     // `variant="info"` announces politely (role="status"): the plant did
     // save, so this must not interrupt whatever is being read.
-    const recovery = await screen.findByRole('status');
+    // (Found by its words: the loading skeleton is a status too, until the
+    // plant arrives.)
+    const recovery = (await screen.findByText(/Plant saved; photo not uploaded/)).closest(
+      '[role="status"]'
+    );
+    expect(recovery).not.toBeNull();
     expect(recovery).toHaveTextContent('Plant saved; photo not uploaded');
     expect(recovery).toHaveTextContent('Choose the photo again below to retry');
     expect(screen.getByLabelText(/upload photo/i)).toBeEnabled();

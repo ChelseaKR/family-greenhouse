@@ -235,10 +235,10 @@ variable "sprout_integration_secret_id" {
   default     = ""
 }
 
-# Native push (APNs/FCM). Blank everywhere today: the Firebase project and the
-# APNs key it would name do not exist yet (docs/mobile.md § Push
-# notifications). While it is blank the notification Lambdas get no Secrets
-# Manager grant beyond a deliberately nonexistent secret, and
+# Native push (APNs/FCM). Android is deferred (iOS first, 2026-10-05), so this
+# is blank everywhere: the Firebase project it would name does not exist yet
+# (docs/native-push-setup.md). While it is blank the notification Lambdas get
+# no Secrets Manager grant beyond a deliberately nonexistent secret, and
 # services/fcmNotifier.ts never makes a call.
 variable "fcm_service_account_secret_id" {
   description = "Secrets Manager id (name or ARN) holding the Firebase service-account JSON for ANDROID native push (FCM). Blank disables Android device push."
@@ -271,6 +271,17 @@ variable "apns_environment" {
 # device push is sent and the apps never offer it, whatever credentials exist.
 variable "native_push_enabled" {
   description = "Turn native (APNs/FCM) push on. False keeps it off end to end: no sends, and the apps hide the opt-in."
+  type        = bool
+  default     = false
+}
+
+# The plant passport import switch (#676). OFF: the three passport routes
+# answer 404 PASSPORT_IMPORT_DISABLED, no passport link can be made, and the
+# recipient page shows the plain cutting card it always has. Turning it on adds
+# one Lambda environment variable and nothing else; the routes themselves are
+# wired regardless (an API Gateway route that answers 404 is inert).
+variable "passport_import_enabled" {
+  description = "Turn the plant passport import on (#676). False keeps it off end to end: the routes answer 404 PASSPORT_IMPORT_DISABLED and the apps show nothing new. The plan for flipping it must show only aws_lambda_function.handlers[\"plants\"] updating in place (its environment)."
   type        = bool
   default     = false
 }

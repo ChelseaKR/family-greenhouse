@@ -146,8 +146,18 @@ describe('the published pages', () => {
   });
 
   it('never publish an uncited entry, including ones the table marks non-toxic', () => {
+    // Since 2026-10-02 every row the table records as non-toxic carries its
+    // listing, so the non-toxic-but-uncited case is held by a fixture.
+    expect(
+      toPlantSafetyPage({
+        ...FIXTURE,
+        cats: 'non-toxic',
+        dogs: 'non-toxic',
+        aspcaListing: undefined,
+      })
+    ).toBeNull();
     const uncited = PET_TOXICITY.filter((e) => e.aspcaListing === undefined);
-    expect(uncited.some((e) => e.cats === 'non-toxic')).toBe(true); // e.g. spider plant
+    expect(uncited.map((e) => e.slug)).toEqual(['zz-plant']);
     for (const entry of uncited) expect(findPlantSafetyPage(entry.slug)).toBeUndefined();
   });
 

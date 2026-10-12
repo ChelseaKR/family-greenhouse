@@ -13,6 +13,9 @@
  * include the current space and placement note as explicit care directions.
  */
 
+import type { PetVerdict } from '@/features/petsafe/petVerdict';
+import { UNKNOWN_VERDICT_OPT_IN, normalizeToxicityMatch } from './petToxicityService';
+
 export interface SitterTask {
   taskId: string;
   plantName: string;
@@ -40,9 +43,11 @@ export interface SitterBriefPetSafety {
   slug: string;
   commonName: string;
   scientificName: string;
-  cats: 'toxic' | 'non-toxic';
-  dogs: 'toxic' | 'non-toxic';
-  note: string;
+  /** Render only through features/petsafe/petVerdict.ts. */
+  cats: PetVerdict;
+  dogs: PetVerdict;
+  /** Null when any animal is unknown (nothing cites the note). */
+  note: string | null;
   /** The plant name/species the table was matched on, so a reader can judge
    *  the match instead of trusting a verdict pinned to a nickname. */
   matchedOn: string;
@@ -112,17 +117,33 @@ export const sitterService = {
    * from what it already knows about the link.
    */
   async getBrief(token: string, signal?: AbortSignal): Promise<SitterBrief> {
-    const response = await fetch(`${API_URL}/sitter/${encodeURIComponent(token)}/brief`, {
-      signal,
-      headers: { Accept: 'application/json' },
-    });
+    const response = await fetch(
+      `${API_URL}/sitter/${encodeURIComponent(token)}/brief?${UNKNOWN_VERDICT_OPT_IN}`,
+      {
+        signal,
+        headers: { Accept: 'application/json' },
+      }
+    );
     if (response.status === 404 || response.status === 410) {
       throw new SitterLinkInactiveError();
     }
     if (!response.ok) {
       throw new Error(`Sitter brief failed (${response.status})`);
     }
-    return (await response.json()) as SitterBrief;
+    const brief = (await response.json()) as SitterBrief;
+    // Normalize every verdict at the boundary: a value this bundle does not
+    // know becomes `unknown`, never a verdict.
+    return {
+      ...brief,
+      plants: (brief.plants ?? []).map((plant) => {
+        if (!plant.petSafety) return plant;
+        const match = normalizeToxicityMatch(plant.petSafety);
+        return {
+          ...plant,
+          petSafety: match ? { ...match, matchedOn: plant.petSafety.matchedOn } : null,
+        };
+      }),
+    };
   },
 
   async completeTask(token: string, taskId: string, expectedNextDue: string): Promise<SitterTask> {

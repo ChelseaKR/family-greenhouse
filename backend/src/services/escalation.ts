@@ -86,7 +86,7 @@ export async function getEscalationRule(householdId: string): Promise<Escalation
   return {
     escalateAfterDays: normalizeEscalateAfterDays(item.escalateAfterDays),
     // ENTITLEMENT, not the plan row (#476). PUT /households/{id}/escalation
-    // now refuses to TURN THE RULE ON for a household mid-dunning; without
+    // now refuses to TURN THE RULE ON for a lapsed household; without
     // this, the hourly scan would keep ACTING on a rule already stored — the
     // two halves of one feature disagreeing, exactly the mint-vs-use split
     // #540 closed for API keys. Every escalation sends real email.
@@ -225,7 +225,7 @@ export async function runEscalations(
   if (!hasHouseholdToolkit(getPlan(rule.planId))) {
     // `rule.planId` is already the ENTITLED plan (see getEscalationRule), so
     // this getPlan is a catalog lookup on a resolved id, not a plan-row read.
-    // A downgraded — or mid-dunning — household keeps its stored rule but the
+    // A downgraded — or lapsed — household keeps its stored rule but the
     // scan stops acting on it: no data cleanup required to honour the gate,
     // and the rule resumes by itself when the card is fixed.
     logger.info({ householdId, planId: rule.planId }, 'escalation.skipped_plan_gate');

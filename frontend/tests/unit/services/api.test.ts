@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse, delay } from 'msw';
 import { AxiosError } from 'axios';
-import { api, getErrorMessage } from '@/services/api';
+import { api, getErrorMessage, withoutPurchaseCalls } from '@/services/api';
 import { track } from '@/services/analytics';
 import { useAuthStore } from '@/store/authStore';
 import { server, handlers } from '../../msw/server';
@@ -217,6 +217,56 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage('string')).toBe('An unexpected error occurred');
   });
 
+  describe('a request that got no answer', () => {
+    // Axios's own text for these is English, and it used to reach the screen
+    // as is ("Network Error" on the dashboard, in every language, on the
+    // website and in the apps).
+    const unreachable = "Can't reach Family Greenhouse. Check your connection and try again.";
+
+    it.each([
+      ['offline or unreachable', new AxiosError('Network Error', AxiosError.ERR_NETWORK)],
+      ['timed out', new AxiosError('timeout of 15000ms exceeded', AxiosError.ECONNABORTED)],
+      ['timed out (transitional)', new AxiosError('timeout exceeded', AxiosError.ETIMEDOUT)],
+      ['a bare "Network Error" with no code', new AxiosError('Network Error')],
+    ])('%s: says so in words, never the raw axios text', (_label, err) => {
+      expect(getErrorMessage(err)).toBe(unreachable);
+      expect(getErrorMessage(err)).not.toMatch(/Network Error|timeout/);
+    });
+
+    it('is translated, not English under every language', async () => {
+      const { default: i18n } = await import('@/i18n');
+      const { ensureLanguageCatalog } = await import('@/i18n');
+      await ensureLanguageCatalog('es');
+      await i18n.changeLanguage('es');
+      try {
+        expect(getErrorMessage(new AxiosError('Network Error', AxiosError.ERR_NETWORK))).toBe(
+          'No se puede conectar con Family Greenhouse. Revisa tu conexión e inténtalo de nuevo.'
+        );
+      } finally {
+        await i18n.changeLanguage('en');
+      }
+    });
+
+    it('still shows what the server said when it did answer', () => {
+      const err = new AxiosError(
+        'Request failed with status code 503',
+        AxiosError.ERR_BAD_RESPONSE
+      );
+      err.response = {
+        data: { message: 'Down for maintenance' },
+        status: 503,
+        statusText: '',
+        headers: {},
+        config: {},
+      } as never;
+      expect(getErrorMessage(err)).toBe('Down for maintenance');
+    });
+
+    it('leaves a cancelled request alone (nobody is waiting on it)', () => {
+      expect(getErrorMessage(new AxiosError('canceled', AxiosError.ERR_CANCELED))).toBe('canceled');
+    });
+  });
+
   describe('standardized error-body contract', () => {
     function axiosErrorWithBody(data: unknown): AxiosError {
       const err = new AxiosError('Request failed with status code 500');
@@ -344,5 +394,70 @@ describe('plan-limit refusals (402)', () => {
     });
 
     expect(track).not.toHaveBeenCalled();
+  });
+});
+
+describe('plan refusals (402) inside the native shells', () => {
+  function refusal(message: string, status = 402): AxiosError {
+    const err = new AxiosError(`Request failed with status code ${status}`);
+    err.response = { data: { message }, status, statusText: '', headers: {}, config: {} } as never;
+    return err;
+  }
+  const HOMES =
+    'Your Seedling plan includes 1 home and you already belong to 1 household. Upgrade to Greenhouse for unlimited homes.';
+  const SITTER =
+    'Your Seedling plan allows 1 live sitter link at a time. Revoke one to create another, or upgrade to Garden for several at once.';
+
+  afterEach(() => {
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  // The control: on the website the backend's whole message is shown.
+  it('on the website: shows the message as the server wrote it', () => {
+    expect(getErrorMessage(refusal(HOMES))).toBe(HOMES);
+    expect(getErrorMessage(refusal(SITTER))).toBe(SITTER);
+  });
+
+  it('in the app: keeps what the plan allows and drops the call to upgrade or buy', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    expect(getErrorMessage(refusal(HOMES))).toBe(
+      'Your Seedling plan includes 1 home and you already belong to 1 household.'
+    );
+    expect(getErrorMessage(refusal(SITTER))).toBe(
+      'Your Seedling plan allows 1 live sitter link at a time. Revoke one to create another.'
+    );
+    // Not a 402: untouched, even in the app.
+    expect(getErrorMessage(refusal('Upgrade the app to continue.', 400))).toBe(
+      'Upgrade the app to continue.'
+    );
+  });
+
+  it('withoutPurchaseCalls: every refusal shape the backend sends', () => {
+    expect(
+      withoutPurchaseCalls(
+        "Your Seedling plan's 1 plant identifications for this month are used up. Buy a top-up pack of 20 identifications, or upgrade for a higher monthly allowance."
+      )
+    ).toBe("Your Seedling plan's 1 plant identifications for this month are used up.");
+    expect(
+      withoutPurchaseCalls(
+        "During the no-card Garden trial, identifications use the free plan's allowance of 1 a month, and this month's is used up. Choose a paid plan for a higher monthly allowance."
+      )
+    ).toBe(
+      "During the no-card Garden trial, identifications use the free plan's allowance of 1 a month, and this month's is used up."
+    );
+    expect(
+      withoutPurchaseCalls(
+        'Your Seedling plan is limited to 20 plants. Remove or archive a plant before adding more.'
+      )
+    ).toBe(
+      'Your Seedling plan is limited to 20 plants. Remove or archive a plant before adding more.'
+    );
+    // Nothing left: the app's neutral line instead of an empty alert.
+    expect(withoutPurchaseCalls('Upgrade to start chatting.')).toBe(
+      "Plan changes aren't available in the app."
+    );
   });
 });

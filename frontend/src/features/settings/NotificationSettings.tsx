@@ -20,7 +20,7 @@ import {
   type PreferencesUpdate,
 } from '@/services/notificationService';
 import { getErrorMessage } from '@/services/api';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, nativeSwitchRole } from '@/lib/platform';
 import { useNativePush } from '@/hooks/useNativePush';
 import { resolveBrowserTimeZone } from '@/utils/timeZone';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -108,7 +108,13 @@ export function NotificationSettings() {
   const [dndEndDraft, setDndEndDraft] = useState('');
   // Resolved once per mount; null when this browser cannot name its zone.
   const [browserTimeZone] = useState(resolveBrowserTimeZone);
-  const [tzDraft, setTzDraft] = useState(browserTimeZone ?? 'UTC');
+  // A browser that names UTC some other way ("Etc/UTC", "GMT") starts the
+  // field on "UTC", the name the server stores: otherwise the first frame
+  // showed the alias and the stored-prefs effect swapped it a moment later,
+  // a flicker for a person and a race for any test that read the field.
+  const [tzDraft, setTzDraft] = useState(
+    browserTimeZone && !UTC_ALIASES.has(browserTimeZone) ? browserTimeZone : 'UTC'
+  );
   // The background timezone write below runs at most once per mount.
   const timezoneDefaulted = useRef(false);
   const localeDefaulted = useRef(false);
@@ -534,6 +540,7 @@ export function NotificationSettings() {
                     ? 'Permission denied — update your browser settings to re-enable.'
                     : 'Enable to be alerted when overdue tasks appear in the dashboard.'}
               </p>
+              <p className="mt-1 text-sm text-gray-500">{t('notifications.reminderPreview')}</p>
             </div>
             {browserActive ? (
               <Button
@@ -572,6 +579,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">Email notifications</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.email}
@@ -621,6 +629,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.weeklyDigestTitle')}</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={(prefs.weeklyDigest ?? true) && prefs.email}
@@ -654,6 +663,7 @@ export function NotificationSettings() {
                 <label className="inline-flex items-center cursor-pointer">
                   <span className="sr-only">{t(`notifications.${toggle.titleKey}`)}</span>
                   <input
+                    {...nativeSwitchRole()}
                     type="checkbox"
                     className="h-5 w-5 accent-primary-700"
                     checked={(prefs[toggle.key] ?? true) && prefs.email}
@@ -681,6 +691,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.yearRecapTitle')}</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={(prefs.yearRecap ?? true) && prefs.email}
@@ -728,6 +739,7 @@ export function NotificationSettings() {
             <label className="inline-flex items-center cursor-pointer">
               <span className="sr-only">SMS notifications</span>
               <input
+                {...nativeSwitchRole()}
                 type="checkbox"
                 className="h-5 w-5 accent-primary-700"
                 checked={prefs.sms}
@@ -821,6 +833,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">Pest alerts</span>
             <input
+              {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
               checked={prefs.pestAlerts ?? false}
@@ -925,6 +938,7 @@ function NativePushSetting() {
                 ? t('nativePush.deniedHint')
                 : t('notifications.deviceInactive')}
           </p>
+          <p className="mt-1 text-sm text-gray-500">{t('notifications.reminderPreview')}</p>
         </div>
         {enabled ? (
           <Button

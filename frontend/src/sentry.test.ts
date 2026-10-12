@@ -45,7 +45,7 @@ describe('initSentry', () => {
 
   it('initialises with every identity-bearing collection category off', async () => {
     vi.stubEnv('VITE_SENTRY_DSN', DSN);
-    const { initSentry, scrubSentryBreadcrumb, scrubSentryEvent } = await import('./sentry');
+    const { initSentry, scrubSentryBreadcrumb, sentryBeforeSend } = await import('./sentry');
     await initSentry();
 
     expect(init).toHaveBeenCalledTimes(1);
@@ -64,8 +64,30 @@ describe('initSentry', () => {
       },
     });
     expect(options.sendDefaultPii).not.toBe(true);
-    expect(options.beforeSend).toBe(scrubSentryEvent);
+    expect(options.beforeSend).toBe(sentryBeforeSend);
     expect(options.beforeBreadcrumb).toBe(scrubSentryBreadcrumb);
+  });
+});
+
+describe('sentryBeforeSend', () => {
+  it('drops a code download cancelled by leaving the page, and scrubs everything else', async () => {
+    const { sentryBeforeSend } = await import('./sentry');
+    const { watchPageLeaving, resetPageLeavingForTests } = await import('@/lib/pageLeaving');
+    const aborted = new TypeError('Importing a module script failed.');
+    const event = (): ErrorEvent => ({ user: { id: 'u1' } }) as unknown as ErrorEvent;
+
+    resetPageLeavingForTests();
+    // Staying: a failed code load is a real crash report, scrubbed.
+    const kept = sentryBeforeSend(event(), { originalException: aborted });
+    expect(kept).not.toBeNull();
+    expect(kept!.user).toBeUndefined();
+
+    const page = new EventTarget() as EventTarget & Window;
+    watchPageLeaving(page);
+    page.dispatchEvent(new Event('beforeunload'));
+    expect(sentryBeforeSend(event(), { originalException: aborted })).toBeNull();
+    expect(sentryBeforeSend(event(), { originalException: new Error('boom') })).not.toBeNull();
+    resetPageLeavingForTests();
   });
 });
 

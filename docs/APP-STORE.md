@@ -1,8 +1,10 @@
 # App Store Connect listing
 
-Status: draft, unsubmitted. This is the content to paste into App Store
-Connect at submission time, so writing marketing copy is not something that
-happens under time pressure. Nothing here is new copy — the name, subtitle,
+Status: 0.34.0 (build 3400) was submitted on 2026-09-17 and rejected the
+same day; 0.40.0 (build 4001, the first build with native push on for iOS)
+is the resubmission. This is the content to paste into App Store Connect at
+submission time, so writing marketing copy is not something that happens
+under time pressure. Nothing here is new copy — the name, subtitle,
 promotional text, description, and keywords are reproduced from
 `store-assets/metadata/en-US.json`, which `store-assets/README.md` already
 describes as "reviewed English metadata" and which
@@ -16,6 +18,85 @@ Everything below was checked against `origin/main` @ `06706f55`
 (`chore(release): prepare 0.34.0 (#792)`) on 2026-09-14/15, including the
 same-day analytics and universal-links work. Where a fact could go stale
 quickly (deep links, push), the section says how to re-check it.
+
+## 0. Readiness re-check, 2026-10-04
+
+Re-verified against `origin/main` @ `c4a4f908` (after #911 to #919, the native
+frame and the Plants redesign). This section supersedes anything older below
+that it contradicts.
+
+| Item                                     | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | How it was checked                                                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Privacy manifest, collected data         | 11 types, tracking false, unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `npm run mobile:validate`                                                                                                                            |
+| Privacy manifest, required-reason APIs   | **Was missing; now declared.** `@capacitor/camera` links IONCameraLib, which reads a file's creation date (`resourceValues(forKeys: [.creationDateKey])`). Its own manifest is not bundled into the app (its Package.swift lists no resource), so App Store Connect would reject the upload with ITMS-91053. FileTimestamp (C617.1, 3B52.1) is now in our manifest, and the validator requires it while the camera plugin is installed. Our own Swift and the other eight plugins call no required-reason API. | Source scan of every linked package, plus the manifests inside a built `App.app` (only Capacitor's and Cordova's are there, both empty of API types) |
+| Usage strings                            | Camera and Photo Library present and specific. No microphone, location or photo-save strings, and none needed: the app never records audio, never asks for device location, and saves no photo (`saveToGallery: false`).                                                                                                                                                                                                                                                                                       | `Info.plist`, `services/nativeCamera.ts`                                                                                                             |
+| Export compliance                        | `ITSAppUsesNonExemptEncryption` false (HTTPS only)                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `Info.plist`                                                                                                                                         |
+| Device capabilities                      | **Was `armv7`** (a template leftover: the binary is arm64 only and the deployment target is iOS 15, where every device is arm64). Now `arm64`. Safe for a first submission.                                                                                                                                                                                                                                                                                                                                    | `Info.plist`, project build settings                                                                                                                 |
+| Launch screen, icon                      | `LaunchScreen.storyboard`; one 1024×1024 universal icon with no alpha channel                                                                                                                                                                                                                                                                                                                                                                                                                                  | `sips -g hasAlpha`                                                                                                                                   |
+| Appearance                               | Forced light (`UIUserInterfaceStyle` Light), as decided 2026-10-02                                                                                                                                                                                                                                                                                                                                                                                                                                             | `Info.plist`                                                                                                                                         |
+| Universal links                          | **Working end to end now.** `applinks:familygreenhouse.net` entitlement, `@capacitor/app` with the `appUrlOpen` handler (`services/nativeDeepLinks.ts`), and Apple's CDN serves the association file (`200 application/json`, the right app ID)                                                                                                                                                                                                                                                                | `curl https://app-site-association.cdn-apple.com/a/v1/familygreenhouse.net`                                                                          |
+| Push                                     | **Verified on a device, 2026-10-09.** `native_push_enabled` is on in production for iOS (2026-10-05); build 4001 (`VITE_NATIVE_PUSH_ENABLED=true`, `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`) passed the setup doc's step 8 on an iPhone: the opt-in row and card, the one-time permission prompt, a reminder delivered as a push, and quiet hours honored. A build made without the switch (4000 and earlier) shows no push UI. Android off                                                                    | §4.3; `docs/native-push-setup.md` step 8                                                                                                             |
+| Locked features show no price in the app | Fixed: `LockedFeature` drops the price and the plan button when `isNativeApp()` (#903)                                                                                                                                                                                                                                                                                                                                                                                                                         | `components/LockedFeature.tsx`                                                                                                                       |
+| Legal and support URLs                   | `/legal/privacy`, `/support`, `/account-deletion` answer 200                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `curl`                                                                                                                                               |
+| Store screenshots                        | 8 iPhone frames from the iOS app itself (#921, #942, #943) and 4 iPad frames from the website; §3 lists them. Frame 08 predates push and shows no "This device" row                                                                                                                                                                                                                                                                                                                                            | `npm run mobile:validate`; the frames in `store-assets/app-store/`                                                                                   |
+
+### Availability and the payment position (owner decision, 2026-10-04)
+
+- **Availability: the United States storefront only.** In App Store
+  Connect → Pricing and Availability, select the United States and nothing
+  else. Every other storefront brings back the rule that the app and its
+  metadata may not carry "buttons, external links, or other calls to
+  action that direct customers to purchasing mechanisms other than in-app
+  purchase" (Guideline 3.1.1(a)); the United States storefront is exempt
+  from it. Widening availability later means re-reading this section first.
+- **Ship as built.** The app stays a free download with no In-App Purchase.
+  Garden and Greenhouse are sold only on familygreenhouse.net (Stripe), and a
+  plan bought there applies in the app. The app shows the household's plan
+  read-only, with no price, no purchase path, and no link or wording that
+  points to one (see `docs/mobile.md`, "Store payment rules").
+- **The position, if App Review asks:** Guideline 3.1.3(f), "Free
+  Stand-alone Apps": "Free apps acting as a stand-alone companion to a paid
+  web based tool ... do not need to use in-app purchase, provided there is
+  no purchasing inside the app, or calls to action for purchase outside of
+  the app." This is an argument, not a safe harbor. Its examples are
+  business tools (VoIP, cloud storage, email, web hosting), and 3.1.1 says
+  that unlocking "features or functionality within your app" needs In-App
+  Purchase. 3.1.3(b) Multiplatform Services allows features bought on the
+  web only "provided those items are also available as in-app purchases
+  within the app," which this build does not do.
+- **If App Review rejects under 3.1.1:** add In-App Purchase for the plans
+  (StoreKit auto-renewing subscriptions alongside Stripe), which is what
+  3.1.3(b) asks for. It is a larger project (a subscription group, App Store
+  Server Notifications, merging Apple and Stripe entitlements per household,
+  restore, Terms and privacy-label updates) and is not started until a
+  rejection says it is needed.
+- **The listing** no longer says where plans are bought: "Plans are bought on
+  the web, not in the app." was removed from the description (owner
+  decision, 2026-10-04).
+
+Sources, read on 2026-10-04: Apple's App Review Guidelines
+(<https://developer.apple.com/app-store/review/guidelines/>, "Last Updated:
+June 8, 2026"), sections 3.1.1, 3.1.1(a), 3.1.3, 3.1.3(a), 3.1.3(b) and
+3.1.3(f); and Apple's note on the United States change, "Updated guidelines
+now available," May 1, 2025
+(<https://developer.apple.com/news/?id=9txfddzf>).
+
+### App Review notes (draft, paste at submission)
+
+> Family Greenhouse is a shared plant-care app for a household. To review it, sign in with the demo account below, which belongs to a household with plants, rooms and three members.
+>
+> Demo account: [to be filled in App Store Connect only, never in this repository]
+>
+> What is native in the app: Apple's tab bar and navigation bar (Home, Plants, Tasks, Household, More), large titles, the back swipe, search and menus in the navigation bar on Plants, alerts and action sheets for confirmations, a native Settings list, Add care task as a native form sheet, the camera and photo picker (on a plant's page, "…" → Take photo / Choose photo; on Add plant; on the leaf health check; and on the sitter and caretaker pages), the share sheet, printing a plant's passport, haptics, and push notifications for care reminders.
+>
+> The app sells nothing and collects no payment. Paid plans exist on our website; the app shows the household's plan as read-only and has no purchase path, price or link to one.
+>
+> Reminders: by email, and on iPhone as push notifications once turned on. Nothing is asked at launch. Settings → Notifications → This device → Turn on shows the iOS permission prompt once; the Tasks tab offers the same while care is due. A reminder is sent once a day, on the hourly run after the account's quiet hours end (08:00 in the account's time zone with none set), for the tasks due that day, with the number of tasks on the app icon. Tapping it opens Tasks. Push needs a physical iPhone; the Simulator has no push token.
+
+Fill the demo account only in App Store Connect. Re-read the native list
+against the build being submitted: name only what that build carries. The
+push paragraph is true of build 4001 onward only (made with
+`VITE_NATIVE_PUSH_ENABLED=true`); build 4000 shows no push UI.
 
 ## 1. Listing fields
 
@@ -54,13 +135,13 @@ quickly (deep links, push), the section says how to re-check it.
 > • Identify a plant from a photo (one identification a month on the free plan, more on paid plans), and run a leaf health check when something looks off.
 > • Subscribe to upcoming care from your own calendar app.
 >
-> EMAIL REMINDERS
+> REMINDERS
 > • Email reminders when care is due, plus an optional weekly digest of the plants most at risk.
+> • On iPhone, turn notifications on and reminders also arrive as push notifications, with the number of tasks due on the app icon.
 > • Set quiet hours so reminders do not arrive overnight.
-> • This version sends reminders by email. Push notifications are not part of this release.
 >
 > ASK ABOUT YOUR PLANTS
-> • A plant care assistant, included with the paid Garden and Greenhouse plans, answers questions using your household's own plants and tasks. Plans are bought on the web, not in the app.
+> • A plant care assistant, included with the paid Garden and Greenhouse plans, answers questions using your household's own plants and tasks.
 > • Any reminder it suggests is shown for your confirmation before anything is scheduled.
 > • Report an answer that looks wrong and we review it.
 >
@@ -80,9 +161,10 @@ true of an app with a six-figure review count.
 ### Price and payment model
 
 The app itself is free to download; there is no paid tier of the app and no
-in-app purchase. The listing must say this because it's the reason
-Guideline 3.1.1 doesn't apply here in the way it might look like it should:
-subscriptions exist, but only on the web, never through the app.
+in-app purchase. Subscriptions exist, but only on the web, never through the
+app. Whether that satisfies Guideline 3.1.1 is a judgment, not a given: see
+"Availability and the payment position" in §0 for the position taken and
+the plan if App Review disagrees.
 
 Actual current subscription pricing (`backend/src/models/plans.ts`, the
 source of truth — verify there before a submission if pricing may have
@@ -100,11 +182,11 @@ ceiling exceeds what those cadences earn per month). Existing subscribers on
 them keep renewing; only monthly is currently offered to a new household.
 None of this is sold in the app: `BillingSettings.tsx` gates on
 `isNativeApp()` and shows a neutral "Plan changes aren't available in the
-app," with no link, and the native `/pricing` route is informational only.
+app," with no link, and in the app `/pricing` and `/gift` open Settings →
+Plan status rather than any plans page.
 This is Apple's Guideline 3.1.1 rule for a "digital goods" subscription, not
 a choice made for this listing — see `docs/mobile.md`, "Store payment
-rules," for the two-store policy this follows and the one surface that
-still slips a price into the app (§4 below covers it).
+rules," for the two-store policy this follows.
 
 ## 2. Privacy nutrition label (App Privacy questionnaire)
 
@@ -151,8 +233,9 @@ What each row actually is, for whoever fills out the questionnaire:
 - **Other User Content** — plant names, notes, task text, and similar
   free-text fields a household enters.
 - **Device ID (optional)** — the APNs push token, collected only when the
-  person turns notifications on in the app (native push ships switched off;
-  see `docs/native-push-setup.md`). Used only to deliver this app's own
+  person turns notifications on in the app (on for iOS from build 4001,
+  verified 2026-10-09; Android off; see `docs/native-push-setup.md`). Used
+  only to deliver this app's own
   reminders: not advertising, not analytics, not tracking. It is deleted when
   they turn notifications off on that phone, sign out on it, leave the
   household it was set up under, or delete the account. It is declared in
@@ -211,45 +294,72 @@ What each row actually is, for whoever fills out the questionnaire:
 
 ## 3. Screenshots
 
-`store-assets/app-store/` already holds real, rendered PNGs — this is not
-an empty folder structure. Confirmed present:
+`store-assets/app-store/` holds real, rendered PNGs:
 
 - `app-icon-1024.png`
-- `ipad-13/01-dashboard.png` … `04-tasks.png` (4 frames)
-- `iphone-6.9/01-dashboard.png` … `04-tasks.png` (4 frames)
+- `iphone-6.9/01-plants.png` … `08-notifications.png` (8 frames, 1320 x 2868):
+  **the iOS app itself**, with the native tab bar and navigation bar
+- `ipad-13/01-dashboard.png` … `04-tasks.png` (4 frames, 2064 x 2752): the
+  website in Playwright, with the web layout and menu drawer
 
-All eight were captured by `npm run store:screenshots --workspace
-frontend` against the seeded **store-demo household** — "The Fernwood
-House" (`backend/src/local-server-store-demo.ts`, started with
-`SEED_STORE_DEMO=1`), not a live user's data. What's actually in each
-frame:
+Both sets show the seeded **store-demo household**, "The Fernwood House"
+(`backend/src/local-server-store-demo.ts`, started with `SEED_STORE_DEMO=1`):
+invented people with `@example.com` addresses, not a live user's data. The
+demo household is on the free Seedling plan, so no frame shows a price, a
+plan to buy or an upgrade prompt.
 
-| #   | Frame        | Real content                                                                                                                                                                                                                                       |
-| --- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01  | Dashboard    | The Fernwood House dashboard, greeting member Dana Whitfield, showing household-wide task status: one overdue job nobody has claimed ("up for grabs") and four due today, across all three members (Dana Whitfield, Marisol Reyes, Theo Nakamura). |
-| 02  | Plants       | The shared plant list: 8 plants (Monstera, Fiddle Leaf Fig, Golden Pothos, Aloe, Snake Plant, Peace Lily, ZZ Plant, Jade Plant) across 5 rooms (Living Room, Kitchen, Bedroom, Back Study, Back Porch).                                            |
-| 03  | Plant detail | A single plant's detail page — room, schedule, and care history. Renders the brand placeholder image, not a photo (see gap below).                                                                                                                 |
-| 04  | Tasks        | The household task list, including the claim/up-for-grabs interaction on the unclaimed overdue job.                                                                                                                                                |
+### Regenerating the iPhone frames
 
-Google Play's `store-assets/google-play/phone/` has the same four frames
-plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
+Run `npm run store:screenshots:ios --workspace frontend` on a Mac with Xcode
+and the iOS 26 simulator runtime, then look at every frame before
+committing it. The script (`frontend/scripts/store-shots/capture-ios.mjs`)
+starts the mock API with `SEED_STORE_DEMO=1` if port 4000 is free, runs
+`npm run build` and `cap sync ios`, builds a Debug simulator app, installs it
+fresh on the one iPhone 17 Pro Max simulator (or `--udid <id>`) with light
+appearance and a 9:41 status bar, and walks the shot list in
+`frontend/scripts/store-shots/shots.mjs`. The in-app driver, `tour.js`, goes
+into that simulator build only and is removed from the synced web folder
+right after Xcode copies it; it is never in `src/`, `dist/` or a release
+build. It signs in through the real form and opens each route; the native
+bars follow the route as they do for a tap. `store-assets/README.md` has the
+details. Re-run it for each release whose UI changed, so the frames match
+the binary under review. `npm run mobile:validate` checks that all eight
+exist at 1320 x 2868.
+
+The iPad frames come from `npm run store:screenshots --workspace frontend`
+(Playwright), as before.
+
+| #   | iPhone frame  | Real content                                                                                                                                                                                                                                                                                                                                             |
+| --- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01  | Plants        | The Plants tab: the large title, the ⋯, filter and + buttons in the native navigation bar, the search field, and the list led by "Needs care": 5 plants with what each needs, its room, who holds it ("You", a member's initial, or up for grabs) and a round water button; then "Coming up" with 3 more. Each plant shows its photo.                    |
+| 02  | Home          | Dana's Home tab with its large title: 8 plants, 4 due today, 1 overdue; "To do now" with the overdue Peace Lily up for grabs and today's Monstera held by Dana Whitfield.                                                                                                                                                                                |
+| 03  | Plant detail  | The Monstera, opened from Plants (back chevron, title and ⋯ menu in the navigation bar): the status card ("Water today", "You · last by Marisol Reyes, 7 days ago", Watered and Snooze), the house rule ("Bottom-water this one") and the household's note. The thumbnail is its photo.                                                                  |
+| 04  | Plant care    | The same page further down: the curated care tips for _Monstera deliciosa_ (light, water, humidity, notes) and its weekly watering task with its streak.                                                                                                                                                                                                 |
+| 05  | Tasks         | The Tasks tab as a checklist: the large title, the filter button in the native navigation bar, and Today / Upcoming (5 each). "Overdue" leads with the Peace Lily (water, 1 day overdue, Bedroom, up for grabs), then "Today" with Aloe (up for grabs), Fiddle Leaf Fig ("T"), Golden Pothos ("M") and Monstera ("You"), each with a round check circle. |
+| 06  | Household     | The Household tab: "Who's carrying the care", with each member's care in the last 30 days and jobs held now, and 4 jobs up for grabs.                                                                                                                                                                                                                    |
+| 07  | Plant sitter  | The page Dana's "Long weekend" sitter link opens, in the app: what needs doing, in which room, with Done buttons, no account needed, and the date the link stops working. The capture creates the link.                                                                                                                                                  |
+| 08  | Notifications | Settings, Notifications: the email reminder, the weekly digest and the household emails, as switches. Captured from a build without push, so no "This device" row; build 4001 shows one above these switches (the Simulator capture cannot, because it has no push token).                                                                               |
+
+Google Play's `store-assets/google-play/phone/` has the same four web frames
+as the iPad set, plus `app-icon-512.png` and `feature-graphic-1024x500.png`.
 
 Known gaps in this set, carried over from `store-assets/README.md` and
 still true — worth fixing before they're needed, not hidden:
 
-- **No plant photographs in any frame.** Every plant in the store-demo
-  household has no `imageUrl`, so the plant-detail hero and card images all
-  render the brand placeholder rather than a photo. Fixing this needs real,
-  consented photographs of real plants added to the seed — not a synthetic
-  or stock image standing in for "this household's plant."
+- **The plant photos are not the household's own.** The iPhone capture
+  gives each demo plant a photograph of its species from Wikimedia Commons
+  (public domain or CC0), uploaded through the app's own photo
+  upload. Sources, authors and licenses are in
+  `store-assets/photo-credits.json` and `store-assets/README.md`. The iPad
+  and Google Play frames still show the brand placeholder.
 - **No caption overlays.** These are raw device frames; both stores support
   captioned marketing frames and most competitors use them.
 - **No Android tablet screenshots**, despite the iPad frames proving the
   app runs on a tablet — Play down-ranks large-screen surfacing without
   7"/10" frames.
-- **Four frames each.** Apple allows up to 10, Play up to 8 — there's room
-  to add more before submission (a household-invite or sitter-link screen
-  would show a real differentiator the current four don't touch).
+- **Four iPad and four Play frames.** Apple allows up to 10, Play up to 8.
+  The iPhone set has 8, including the sitter page. The iPad and Play frames
+  still show the website's layout with the menu drawer.
 - **English-only**, despite the app itself shipping a complete, gate-enforced
   Spanish catalog (`frontend/src/i18n/locales/es`). Both stores localize the
   listing independently of the binary; this needs a native-Spanish reviewer,
@@ -335,22 +445,28 @@ each item it raised, re-verified today:
    after `docs/native-push-setup.md` is done, and after step 8 there
    (a reminder received on a device running that build).
 
-4. **One more, not from #469: a locked feature can show a price with no way
-   to pay.** `LockedFeature` (gating `/chat`, the trip-sitter offer, and API
-   key settings) checks the household's plan, not `isNativeApp()`. On a free
-   Seedling household inside the native shell, it will show "Included with
-   Garden — $4.99 a month for the whole household" and, for an admin, a
-   **Change plan** button — a subscription price and a call to action inside
-   an app that cannot sell one. The button's destination is native-gated and
-   says plan changes aren't available, so it never reaches a purchase
-   mechanism, but a reviewer who reads "a plant care assistant answers
-   questions about your plants" in the description, taps Chat, and lands on
-   a priced upgrade prompt is a real Guideline 2.3.1 (accurate metadata) /
-   3.1.1 (in-app purchase) risk on the same screen. `docs/mobile.md`, "Store
-   payment rules," documents this as not yet fixed. If a reviewer flags it,
-   the honest answer is: known, tracked, not yet gated on native — fixing it
-   is a product decision about what paying members see in the app, not a
-   quick patch.
+   **Update, 2026-10-09:** done for iOS. `native_push_enabled` went on in
+   production with 0.40.0 (#958), and build 4001 (made with
+   `VITE_NATIVE_PUSH_ENABLED=true` and `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`)
+   passed step 8 on an iPhone: the opt-in row and the Tasks card, the
+   one-time permission prompt, a reminder delivered as a push with the badge,
+   and quiet hours honored. The listing's reminders section and the review
+   notes above say so. Android stays off, so the Google Play copy keeps its
+   email-only line.
+
+4. **One more, not from #469: a locked feature used to show a price with no
+   way to pay. Fixed.** `LockedFeature` (gating `/chat`, the trip-sitter
+   offer, and API key settings) showed "Included with Garden — $4.99 a month
+   for the whole household" and a **Change plan** button inside the shells.
+   Since #804 and #903 it checks `isNativeApp()` and shows only what the
+   feature is and "Plan changes aren't available in the app." The 2026-10-04
+   sweep closed the rest: the changelog's billing entries, the analytics
+   "See plans" link, the trial notice's checkout line, the archive restore's
+   "upgrade" wording, and the "Upgrade …" sentences in the server's plan
+   refusals no longer appear in the app (`docs/mobile.md`, "Store payment
+   rules"). One wording is left on purpose: the Terms page (a legal text)
+   says paid plans "are available on the web" and are "not sold inside the
+   mobile apps".
 
 ## Sources checked while writing this
 

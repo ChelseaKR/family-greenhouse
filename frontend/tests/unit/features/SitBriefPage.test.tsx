@@ -4,6 +4,7 @@
  * curated pet-safety table does not know shows no verdict at all, and a failed
  * read is an error rather than an empty-looking brief.
  */
+import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -221,5 +222,76 @@ describe('sitterBrief.noCareNote, in every catalog', () => {
     expect(value).not.toMatch(CARE_INSTRUCTION);
     // One sentence. The second sentence is where the advice hid.
     expect(value.replace(/[.!?]\s*$/, '')).not.toMatch(/[.!?]/);
+  });
+});
+
+describe('SitBriefPage pet verdicts', () => {
+  const unknownPlant = (cats: string, dogs: string) =>
+    plant({
+      petSafety: {
+        slug: 'zz-plant',
+        commonName: 'ZZ plant',
+        scientificName: 'Zamioculcas zamiifolia',
+        cats: cats as never,
+        dogs: dogs as never,
+        note: null,
+        matchedOn: 'Zamioculcas zamiifolia',
+      },
+    });
+
+  it.each([
+    ['unknown', 'unknown', 'unknown'],
+    // A value this bundle does not know, reaching the page unnormalized.
+    ['an unexpected value', 'safe', 'Non-toxic'],
+  ])('shows %s as no verdict plus the caution, never as safe', async (_label, cats, dogs) => {
+    getBrief.mockResolvedValue(brief({ plants: [unknownPlant(cats, dogs)] }));
+    renderPage();
+    const box = await screen.findByTestId('sitter-pet-safety');
+    expect(box).toHaveAttribute('data-outcome', 'unknown');
+    expect(box).toHaveTextContent('No cited pet-safety verdict — cats: unknown, dogs: unknown.');
+    expect(screen.getByTestId('pet-caution')).toHaveTextContent(
+      'ZZ plant isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center (888-426-4435).'
+    );
+    expect(box).not.toHaveTextContent(/Listed as non-toxic/);
+    expect(box.className).not.toMatch(/bg-primary-50/);
+  });
+
+  it('keeps the green all-clear for an explicit, cited non-toxic', async () => {
+    getBrief.mockResolvedValue(
+      brief({
+        plants: [
+          plant({
+            petSafety: {
+              slug: 'spider-plant',
+              commonName: 'Spider plant',
+              scientificName: 'Chlorophytum comosum',
+              cats: 'non-toxic',
+              dogs: 'non-toxic',
+              note: 'Non-toxic per the ASPCA.',
+              matchedOn: 'Spider plant',
+            },
+          }),
+        ],
+      })
+    );
+    renderPage();
+    const box = await screen.findByTestId('sitter-pet-safety');
+    expect(box).toHaveAttribute('data-outcome', 'safe');
+    expect(box).toHaveTextContent('Listed as non-toxic to cats and dogs.');
+    expect(screen.queryByTestId('pet-caution')).toBeNull();
+  });
+
+  it('renders the Spanish caution, not English', async () => {
+    // Load the shipped Spanish catalog the way the language picker does.
+    await ensureLocaleCatalog(i18n, 'es');
+    await i18n.changeLanguage('es');
+    getBrief.mockResolvedValue(brief({ plants: [unknownPlant('unknown', 'unknown')] }));
+    renderPage();
+    const caution = await screen.findByTestId('pet-caution');
+    expect(caution).toHaveTextContent(
+      'ZZ plant no figura en la lista de la ASPCA, así que no podemos dar un veredicto.'
+    );
+    expect(caution).toHaveTextContent('(888-426-4435)');
+    expect(caution.textContent).not.toMatch(/isn’t on the ASPCA’s list/);
   });
 });
