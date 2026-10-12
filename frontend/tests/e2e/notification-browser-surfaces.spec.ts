@@ -178,3 +178,42 @@ test.describe('notification preference network recovery', () => {
     await expect(page.getByRole('checkbox', { name: 'Email notifications' })).toBeVisible();
   });
 });
+
+test('a Done button on a reminder notification completes the task it named', async ({ page }) => {
+  const nextDue = new Date(Date.now() - 2 * 3_600_000).toISOString();
+  const account = await provisionAccount({
+    emailPrefix: 'push-action-done',
+    plant: { name: 'Push Action Fern', species: 'Nephrolepis exaltata' },
+    waterTask: { frequency: 7, nextDue },
+  });
+  expect(account.taskId).toBeDefined();
+  await uiLogin(page, account.email, account.password);
+  await page.goto('/tasks?filter=due');
+  const taskRow = page.locator('li', {
+    has: page.getByRole('link', { name: 'Push Action Fern' }),
+  });
+  await expect(taskRow).toBeVisible();
+
+  const supported = await page.evaluate(() => 'serviceWorker' in navigator);
+  test.skip(!supported, 'this engine has no navigator.serviceWorker to carry the worker message');
+
+  // The worker hands a chosen button to the page as a message on
+  // navigator.serviceWorker (public/push-handler.js, unit-tested on its
+  // own), and the page performs it with its own session. Dispatching that
+  // message is the one step a real push would add that a browser under test
+  // cannot receive; everything after it is the real path to the real API.
+  await page.evaluate(
+    ({ taskId, expectedNextDue }) => {
+      navigator.serviceWorker.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'fg:push-action', action: 'done', taskId, expectedNextDue },
+        })
+      );
+    },
+    { taskId: account.taskId!, expectedNextDue: nextDue }
+  );
+
+  await expect(page.getByText('Push Action Fern: marked done.')).toBeVisible();
+  // Watered now and due again in a week, it leaves the due list.
+  await expect(taskRow).toHaveCount(0);
+});

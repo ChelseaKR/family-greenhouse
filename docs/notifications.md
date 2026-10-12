@@ -24,8 +24,9 @@ Lambda runReminders
 For each member of the household:
   1. Read prefs from DDB (USER#{id} / PREFS)
   2. Roll up their assigned + unassigned tasks due today (their zone) or overdue
-  3. Compose one payload {title, body, shortBody, url, tag}
-     via services/reminderEmail.composeReminderEmail
+  3. Compose one payload {title, body, shortBody, url, tag, badge, push}
+     via services/reminderEmail.composeReminderEmail (the email and SMS words)
+     and services/reminderCopy.composeReminderShortCopy (the push words)
   4. Reserve each eligible channel's daily delivery marker
   5. notifier.sendToUser(recipient, payload, {channels})
         │
@@ -42,8 +43,12 @@ holds delivery. The composer is pure — no DynamoDB, no environment — which i
 what makes the rules below testable
 (`backend/tests/unit/services/reminderEmail.test.ts`).
 
-A rendered example, for a member with nine due rows, one of them unclaimed, who
-is covering for someone on holiday:
+The email leg is branded HTML with this text as its `text/plain` twin; see
+[The reminder email](#the-reminder-email) below. The text composition is also
+what push and SMS are cut from.
+
+A rendered example of the text part, for a member with nine due rows, one of
+them unclaimed, who is covering for someone on holiday:
 
 ```
 Subject: Plant care reminder: 3 overdue, 1 due today and 5 coming up,
@@ -99,6 +104,59 @@ catch-up care, 0 coming up soon`; empty buckets are simply omitted.
   Nothing in the backend stores a user language yet, so `reminders.ts` passes
   `'en'` from a single constant (`REMINDER_LOCALE_ADOPTION`) that becomes a
   read of that field when it lands.
+
+### The reminder email
+
+`reminderEmail.composeReminderMessage` wraps the composition above and adds
+the email: its own subject, an HTML part from the shared kit
+(`services/email/template.ts`) and a text part. `reminders.ts` hands all three
+to `notifier.sendToUser` as `payload.email`, which only the email leg reads;
+push and SMS keep the counts title and bodies.
+
+What a person sees, in English and Spanish:
+
+- **Subject and title say what to do**, named after the most urgent row with
+  the true count of the rest: _Water Monstera and 2 more today_ / _Regar
+  Monstera y 2 más hoy_. "today" is appended only when nothing listed is
+  overdue. A custom task keeps the household's own word (_Mist Monstera_); a
+  task with no readable label gets _Care for Monstera_ / _Cuidar Monstera_; a
+  most-urgent plant whose name could not be read gives a count instead
+  (_3 plants need care today_), never a placeholder name. The counts sentence
+  that used to be the subject is the inbox preview line.
+- **Rows are grouped by state** under headings that ask rather than scold:
+  _Ready for some catch-up care_ (overdue), _Due today_, _Coming up_, _Check
+  the due date_ (a date that could not be read), then _Up for grabs_ with the
+  note that anyone in the household can take those. Each row is the plant name linked to
+  its page, the task and the shared due phrase from `describeRow`
+  (_Water · 6 days overdue_), and a button, _Mark done in the app_ / _Marcar
+  como hecha en la app_, to the plant page where the task is marked done. The
+  label says "in the app" because there is no one-tap complete from email
+  (ADR 0021 defers it to the plant-tag capability); a button must not promise
+  one.
+- **A capped section states the true remainder** as a link, _and 2 more_ /
+  _y 2 más_, to the due-filtered task list. The aged-out note, the cover note,
+  the weather lines (under _Outside today_) and the reply hint follow, then a
+  _See all tasks_ button.
+- **The footer names the household**: _You are getting this because daily
+  plant-care reminders are on for you in The Kim House on Family Greenhouse_,
+  the standing no-password line, and a _Reminder settings_ link to
+  `/settings?section=notifications`. When the household row cannot be read
+  the line says "on Family Greenhouse" and nothing is invented.
+- **The text part is the composition's own body** (the numbered list the
+  reply-to-act path is bound to), the list link, and the same footer. When a
+  reply address is bound, the HTML rows carry the same numbers as the text
+  rows, so a reply can name a row from either part.
+
+The household row is read once per household per run, for the footer's name
+and the forecast's location together; a failed read is logged and the email
+still goes out with the generic footer and no weather line.
+
+Rendered output lives in `backend/test-output/email/` (git-ignored) after
+`backend/tests/unit/services/email/renderedEmails.test.ts` runs; the daily
+reminder is also committed as a golden under
+`backend/tests/unit/services/email/__goldens__/`. `npm run email:preview -w
+backend` renders and then screenshots every email in light mode, dark mode and
+at phone width with headless Chromium.
 
 ### Which day a reminder goes out on (#343)
 
@@ -188,8 +246,78 @@ is applied the reminder simply omits the line.
 
 SMS is capped at one 140-byte segment and a push body shows two or three lines,
 so the payload carries a `shortBody` — the counts sentence on its own. Email
-gets the full list; SMS and browser push get `shortBody`. Callers that omit it
-are unchanged: `body` is used everywhere.
+gets the full list and SMS gets `shortBody`. Push gets neither: it has its own
+words, below. Callers that omit both are unchanged: `body` is used everywhere.
+
+### What a push notification says
+
+`services/reminderCopy.ts` composes the short form of a reminder: the title
+and body a notification shows, which web push and the native shells share and
+which an email heading can reuse. It is pure like the email composer, with no
+transport in it: it does not know what a URL, an APNs category or a service
+worker is. `reminders.ts` attaches the destination and the task, as the
+`push` presentation on the payload (`notifier.PushPresentation`), and the
+push legs show it instead of the email's subject and list.
+
+The rules, held by `backend/tests/unit/services/reminderCopy.test.ts` in both
+languages:
+
+- **The title names the action and the plant.** "Water the Monstera"; in
+  Spanish "Monstera necesita riego", because "Riega la Monstera" would need
+  the gender of a name the household chose. A custom task keeps the household
+  wording, plant first: "Monstera: Mist the leaves". Several tasks name what
+  they have in common ("2 plants need water", "2 plantas necesitan riego") or
+  the count ("3 care tasks").
+- **The body says when, and what happens next.** "Due today. Mark it done
+  once you have, or snooze it until tomorrow." / "Toca hoy. Márcala como hecha
+  cuando la hagas, o pospónla hasta mañana."
+- **Overdue is a date, not a verdict.** "Due yesterday", "Due 3 days ago"
+  ("Tocaba hace 3 días"). The household that is behind is the one the product
+  must not nag.
+- **Many tasks get a count and the first two names, not a wall.** "Monstera
+  and Fern and 3 more. 2 overdue, 2 due today and 1 with no readable due date.
+  Tap to see the list."
+- **Nothing private.** The row type has no field for a plant's `notes`, its
+  care rule, a person or an address, so the words cannot carry them; the test
+  renders a fixture that has every one of those fields and asserts none
+  appears. A push payload crosses Apple's, Google's or a browser vendor's
+  servers and sits on the lock screen of whoever holds the phone.
+- **A failed read is never a value.** A plant whose name did not load, a
+  custom task with no name and an unreadable due date get the same wording the
+  email uses ("We could not read its due date; please check it in the app").
+
+**Where a tap goes.** One task: that plant's care section,
+`/plants/{plantId}?task={taskId}#care` (the plant page scrolls to it).
+Several: `/tasks?filter=due`. Both are routes the iOS and Android apps claim
+(`docs/mobile.md`, "Deep links"), so a tap opens the app where it is
+installed. The email keeps its own footer link.
+
+**Acting from the notification.** A reminder about exactly one task carries
+the task it names (`task` on the push payload: `taskId`, `plantId` and the
+occurrence's `expectedNextDue`; ids only) and the labels of two actions,
+**Done** and **Snooze until tomorrow** ("Hecho", "Posponer hasta mañana").
+Where the platform shows them:
+
+| Platform | Buttons                                                                                                                                | What a chosen button does                                                                                                                                                    |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down. | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
+| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                            | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
+| Android  | None: an FCM notification message is rendered by the system, and buttons need a native builder the shell does not have.                | A tap opens the plant. The ids ride in `data` for a future handler.                                                                                                          |
+
+Every action echoes `expectedNextDue`, so a second tap, a tap from two
+devices, or a tap after someone else did it is a no-op on the server
+(`taskService.completeTaskWithOutcome`), and the app says "already handled"
+rather than "done" when the task it got back was not completed just now. A
+request that cannot be made (no session, offline, the app suspended before it
+ran) changes nothing; on iOS the plugin retains the event until the web layer
+is listening, so an app that was not running acts at its next launch. Nothing
+in a notification is a credential, and nothing in it is trusted for
+authorization.
+
+**The badge.** `badge` is the number of tasks the reminder names: this
+member's open tasks due today or overdue (not the resting ones). The app
+clears it when opened, and after a Done or Snooze from a single-task
+notification, since the one task it counted is no longer open today.
 
 ### Accepted is not delivered
 
@@ -379,7 +507,11 @@ every other channel (`sendToUser`), and the reminder rules — the daily slot,
 the per-channel lease, the overdue decay — are the reminder path's own, so
 native push adds none of its own. A reminder carries the number of tasks it
 names as the app-icon badge (`aps.badge` on iOS, `notification_count` on
-Android); the app clears it when opened.
+Android); the app clears it when opened. The words, the deep link and the
+Done / Snooze actions are described under "What a push notification says"
+above; on iOS a single-task reminder sets `aps.category` to
+`FG_TASK_REMINDER` and carries the task ids as custom keys, and on Android the
+same ids ride in `data`.
 
 **Why iOS goes to APNs directly.** `@capacitor/push-notifications` gives the
 iOS shell a raw APNs token. FCM cannot send to that without the Firebase iOS
@@ -422,9 +554,10 @@ Set `SES_FROM_EMAIL` to a verified SES identity. The Lambda role needs `ses:Send
 
 Out of the SES sandbox, you can send to anyone. In sandbox mode, the recipient address must also be verified — fine for staging, fatal for production. File a support case to get out of sandbox before launch.
 
-The reminder body is a multi-line list; see "What the reminder actually says"
-above for the layout and the rules it holds. The digest, recap and welcome
-emails compose their own bodies.
+The reminder is branded HTML with a multi-line text twin; see "What the
+reminder actually says" above for the text layout and the rules it holds, and
+"The reminder email" for the HTML. The digest, recap and welcome emails compose
+their own bodies through the same kit.
 
 Replies to an app email reach `support@` via `SES_REPLY_TO` (Terraform:
 `ses_reply_to_email`), which the inbound SES rule set forwards to a human —
@@ -514,23 +647,44 @@ phishing rationale the old text-only policy rested on point by point.
 
 The rendering kit lives in `backend/src/services/email/`:
 
-| File                 | What it owns                                                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `template.ts`        | `renderEmail(doc)` → `{ html, text }`. Blocks: heading, text, notice, row, button, divider. Tables + inline styles, 600px cap, dark-mode palette, preheader. Escapes every interpolated value. |
-| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `unsubscribeUrl`, plus `safeLinkUrl`. No image URLs: an email carries no photos (ADR 0033).            |
-| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                     |
-| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                               |
-| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                           |
-| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                |
-| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                      |
+| File                 | What it owns                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `template.ts`        | `renderEmail(doc, { textBody? })` → `{ html, text }`. Blocks: heading, text, notice, row (with an optional action button), button, link, divider. Tables + inline styles, the brand header band with the logo, the design-token palette on both the light and the dark path, 600px cap, preheader. Escapes every interpolated value. |
+| `links.ts`           | The only place an email builds a URL. `plantUrl`, `taskUrl`, `tasksUrl`, `settingsUrl`, `notificationSettingsUrl`, `unsubscribeUrl`, `brandLogoUrl`, plus `safeLinkUrl`. The logo is the one image: a fixed file on our origin, no query string. An email carries no photos (ADR 0033).                                              |
+| `catalog.ts`         | English + Spanish strings, `t()` / `tn()`, `formatCount`, `formatDaysAgo`.                                                                                                                                                                                                                                                           |
+| `locale.ts`          | `resolveEmailLocaleForUser(userId, householdId?)` — **the accessor every composer should call.**                                                                                                                                                                                                                                     |
+| `capability.ts`      | Revocable per-user tokens for one-click unsubscribe.                                                                                                                                                                                                                                                                                 |
+| `mime.ts`            | `multipart/alternative` assembly and RFC 2047 subject encoding.                                                                                                                                                                                                                                                                      |
+| `unsubscribePage.ts` | The (deliberately unstyled) landing page.                                                                                                                                                                                                                                                                                            |
 
 The plain-text part is generated from the same block list by its own layout
 rules, so it reads as a real document rather than stripped HTML.
 
-Adopted so far: the welcome email, the weekly digest, the annual recap. The
-reminder and pest-alert payloads still go out text-only through
-`notifier.sendToUser`'s generic `{title, body, url}` shape; converting them
-means giving the notifier a structured payload.
+Adopted so far: the welcome email, the weekly digest, the annual recap, and the
+daily reminder (through `payload.email` on `notifier.sendToUser`, the
+structured part only the email leg reads). The pest-alert payload still goes
+out text-only through the generic `{title, body, url}` shape; the invite,
+household and billing emails compose their own text and have no HTML part yet.
+
+#### What every email promises
+
+The rendering kit's header comment is the contract, and
+`backend/tests/unit/services/email/renderedEmails.test.ts` checks every email
+the kit renders against it, in both languages: table layout, inline styles, no
+script, no remote stylesheet, no web font, no `url()`, no form; the one image
+(the brand logo, with alt text, width and height, on our own origin, no query
+string); `color-scheme` meta and dark-mode rules; absolute http(s) links on our
+origins only, every one present in BOTH parts; and under 100 kB.
+`emailHtmlChecks.test.ts` is that checker's negative control: each rule is fed
+a document that breaks it and must name the problem.
+
+**Private plant notes never reach an email.** A plant's `notes`, `careRule`
+and `placementNote` and a task's `notes` are asserted absent from every part
+of the reminder (end to end through `remindHousehold`), the weekly digest
+(through `gatherAtRisk`) and the up-for-grabs household email (through the
+queue row and `renderQueued`), with a control that the plant itself did reach
+the message. The welcome, invite, billing and recap builders take no plant
+row, so there is nothing of the kind for them to leak.
 
 #### Email language
 

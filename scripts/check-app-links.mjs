@@ -81,6 +81,12 @@ import process from 'node:process';
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APP_TSX = join(REPO_ROOT, 'frontend', 'src', 'App.tsx');
 
+/** Files Vite copies to the site root as they are, so the distribution serves
+ *  each at the same path: `frontend/public/brand/logo-dark.png` is
+ *  `https://familygreenhouse.net/brand/logo-dark.png`. The one such link the
+ *  backend builds is the logo every email header shows. */
+export const PUBLIC_DIR = join(REPO_ROOT, 'frontend', 'public');
+
 /** Everything that composes an outbound message or an API-returned link. */
 export const SCAN_ROOTS = [
   join(REPO_ROOT, 'backend', 'src'),
@@ -145,6 +151,21 @@ export function declaredRoutes(source = readFileSync(APP_TSX, 'utf8')) {
     );
   }
   return { paths, catchAll };
+}
+
+/**
+ * True when `path` names a file under `frontend/public/`: a static object the
+ * site serves, not a page the router has to know about. Only a path with a
+ * file extension is considered, so `/settings` is still a route question, and
+ * the file must exist on disk, so a renamed asset is a dead link here before
+ * it is one in anyone's inbox.
+ */
+export function isPublicFile(path, publicDir = PUBLIC_DIR) {
+  const clean = path.split(/[?#]/u)[0];
+  if (!/\/[^/]+\.[a-z0-9]{2,5}$/iu.test(clean)) return false;
+  const full = resolve(publicDir, `.${clean}`);
+  if (!full.startsWith(`${publicDir}/`)) return false;
+  return existsSync(full) && statSync(full).isFile();
 }
 
 /** True when `path` is matched by a declared route. `:param` matches exactly
@@ -292,7 +313,8 @@ function main() {
   const { paths: routes, catchAll } = declaredRoutes();
   const { sites, dismissed, unresolved, files } = collectSites();
 
-  const dead = sites.filter((site) => !matchesRoute(site.path, routes));
+  const dead = sites.filter((site) => !matchesRoute(site.path, routes) && !isPublicFile(site.path));
+  const staticFiles = sites.filter((site) => isPublicFile(site.path)).length;
   const examinable = sites.length;
   const resolving = examinable - dead.length;
 
@@ -302,7 +324,8 @@ function main() {
   );
   console.log(`app-links: ${files.length} source files swept for outbound links`);
   console.log(
-    `app-links: ${resolving}/${examinable} backend-built paths resolve to a declared route`
+    `app-links: ${resolving}/${examinable} backend-built paths resolve to a declared route` +
+      ` (${staticFiles} of them to a file under frontend/public/)`
   );
   console.log(
     `app-links: ${dismissed.length} dismissed as another origin, ${unresolved.length} unresolved`
@@ -310,7 +333,11 @@ function main() {
 
   if (verbose) {
     for (const site of sites) {
-      const ok = matchesRoute(site.path, routes) ? 'ok  ' : 'DEAD';
+      const ok = matchesRoute(site.path, routes)
+        ? 'ok  '
+        : isPublicFile(site.path)
+          ? 'file'
+          : 'DEAD';
       console.log(`  ${ok} ${site.path.padEnd(30)} ${site.where}:${site.line}`);
     }
     for (const site of dismissed) {

@@ -5,6 +5,11 @@ node_modules/
 # Local research / scratch notes (not part of the published source)
 docs/research/
 
+# Rendered email previews (backend/tests/unit/services/email/renderedEmails.test.ts
+# writes every email's HTML + text here, and backend/scripts/email-previews.mjs
+# adds light/dark screenshots). Regenerate with `npm run email:preview -w backend`.
+backend/test-output/
+
 # Build outputs
 frontend/vite.config.js
 frontend/vite.config.d.ts

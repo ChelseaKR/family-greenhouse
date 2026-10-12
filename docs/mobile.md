@@ -22,16 +22,17 @@ removed, or left un-synced without this table moving with it.
 
 <!-- capacitor-plugins:start -->
 
-| Plugin                          | What it backs                                                                                                                                             |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@capacitor/app`                | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below. |
-| `@capacitor/camera`             | The native camera and system photo picker for plant photos on the plant page and Add plant (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
-| `@capacitor/haptics`            | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).      |
-| `@capacitor/keyboard`           | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                        |
-| `@capacitor/push-notifications` | APNs/FCM device-token registration and notification taps (`frontend/src/services/nativePush.ts`). Off until setup — see "Push notifications" below.       |
-| `@capacitor/share`              | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                    |
-| `@capacitor/splash-screen`      | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                       |
-| `@capacitor/text-zoom`          | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).             |
+| Plugin                                | What it backs                                                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@aparajita/capacitor-secure-storage` | The refresh token, in the iOS keychain and the Android keystore, so the app stays signed in across launches (`frontend/src/services/sessionVault.ts`). See "Staying signed in" below.                                          |
+| `@capacitor/app`                      | `appUrlOpen` for iOS Universal Links and Android App Links (`frontend/src/services/nativeDeepLinks.ts`). See "Deep links" and "Android App Links", below.                                                                      |
+| `@capacitor/camera`                   | The native camera and system photo picker for plant photos on the plant page and Add plant, the leaf health check, the sitter photo page and the caretaker page (`frontend/src/services/nativeCamera.ts`). See "Photos" below. |
+| `@capacitor/haptics`                  | A success tap when a task is completed and a light tick when one is snoozed, after the server accepts it (`frontend/src/services/nativeHaptics.ts`).                                                                           |
+| `@capacitor/keyboard`                 | Resizes the iOS WebView above the keyboard, so the header stays put and fields stay in view. See "Keyboard" below.                                                                                                             |
+| `@capacitor/push-notifications`       | APNs device-token registration and notification taps (`frontend/src/services/nativePush.ts`). On for iOS from build 4001, off for Android — see "Push notifications" below.                                                    |
+| `@capacitor/share`                    | The OS share sheet for invite, sitter, caretaker, cutting and referral links (`frontend/src/services/nativeShare.ts`).                                                                                                         |
+| `@capacitor/splash-screen`            | Holds the launch screen until the first route renders (`frontend/src/services/nativeShell.ts`). See "Launch" below.                                                                                                            |
+| `@capacitor/text-zoom`                | iOS Dynamic Type: the text size set in iOS Settings, every size including the accessibility ones (`frontend/src/hooks/useNativeTextSize.ts`).                                                                                  |
 
 <!-- capacitor-plugins:end -->
 
@@ -65,10 +66,14 @@ before:
 
 ### Photos
 
-**The two plant photo screens are native; the rest are not.** On a plant's
-page (`PlantImageUpload.tsx`) and on Add plant (`AddPlantPage.tsx`), the
+**Every photo screen is native in the shells.** On a plant's page
+(`PlantImageUpload.tsx`), on Add plant (`AddPlantPage.tsx`), on the leaf
+health check (`LeafHealthCard.tsx`), on the sitter photo page
+(`SitterPhotoBack.tsx`) and on the caretaker page (`CaretakerPage.tsx`, which
+asks Take photo or Choose photo in a native sheet anchored on the button), the
 shells show **Take photo** and **Choose photo** in place of the file input
-(`NativePhotoButtons.tsx` over `services/nativeCamera.ts`):
+(`NativePhotoButtons.tsx` over `services/nativeCamera.ts`; the last three
+since #946, in 0.40.0):
 
 - **Take photo** opens the system camera (`Camera.takePhoto`). Nothing is
   saved to the gallery.
@@ -85,10 +90,11 @@ shells show **Take photo** and **Choose photo** in place of the file input
   permission would make the camera intent require a runtime grant it
   otherwise does not need.
 
-The leaf-health check, the sitter photo page and the caretaker page keep the
-WebView `<input type="file">`, and in a browser every photo path is still that
-input. `LeafHealthCard` adds `capture="environment"`, which makes iOS open the
-camera directly from the WebView picker. **`NSCameraUsageDescription` and
+In a browser every photo path is still the WebView `<input type="file">`, and
+an app build from before #946 keeps it on the leaf-health check, the sitter
+photo page and the caretaker page. `LeafHealthCard` adds
+`capture="environment"` to that input, which makes iOS open the camera
+directly from the WebView picker. **`NSCameraUsageDescription` and
 `NSPhotoLibraryUsageDescription` must stay in `Info.plist` for both reasons**:
 iOS terminates the app if a purpose string is missing when either the plugin
 or the WebView picker opens, and the validator requires both, non-empty.
@@ -356,7 +362,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Billing            | `BillingSettings.tsx` gates on `isNativeApp()`, so the billing screen is read-only, and since #804 so is every other purchase surface: `LockedFeature` shows what a paid feature is with no price and no ask, and `AskToUpgrade` renders only inside the web-only plan grid. Since 2026-10-02 `/pricing` and `/gift` open Settings → Plan status, and no screen links to them — see "Store payment rules" below, and do not add purchase links without reading it.                                                                                                                                                                                                                                                                                                                     |
 | Haptics            | Completing a task plays the system success pattern and snoozing one a light tick, fired from the mutation's `onSuccess`, so the tap means the server accepted it. The OS decides whether to play them (System Haptics on iOS).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Share sheet        | Every link the app hands out (household invite, plant-sitter link, caretaker seat, cutting share, referral link) opens the system share sheet instead of copying, and the button reads "Share link". Copy is one of the sheet's actions. Closing the sheet does not copy behind the person's back. The website keeps its copy buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Push notifications | Web push does not exist in the WebViews. Native push (APNs for iOS, FCM for Android) is built and OFF: the opt-in and the Settings row appear only when the build sets `VITE_NATIVE_PUSH_ENABLED` and the deployment sets `native_push_enabled`. See "Push notifications" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Push notifications | Web push does not exist in the WebViews. Native push (APNs for iOS, FCM for Android) is built and OFF: the opt-in and the Settings row appear only when the build sets `VITE_NATIVE_PUSH_ENABLED` (Android also needs `VITE_NATIVE_PUSH_ANDROID_ENABLED`) and the deployment sets `native_push_enabled`. See "Push notifications" below.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Back (Android)     | `nativeBackButton.ts` listens through `@capacitor/app`: back closes an open dialog, menu or the drawer first, then goes back in the app, and on the first screen moves the app to the background like any Android app. It was a no-op there before. Predictive back works: the handler is switched off whenever back would leave, so Android animates it.                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Back (iOS)         | With the native frame showing, the back chevron and the edge swipe are the tab's navigation controller's, within the tab only (see "Navigation (iOS)"). On sign-in and setup, where there are no bars, the edge swipe from the left goes back through the app's own history, with WebKit's page-peel animation (`allowsBackForwardNavigationGestures`, set in `MainViewController.swift`). It is on only while `BackSwipePolicy` allows the page behind: never on the first screen, never onto `/` (which only redirects), another origin or nothing, and never across the line between sign-in or setup and the signed-in app, so it cannot go back into sign-in after signing in. `frontend/tests/unit/config/nativeBackSwipe.test.ts` keeps its route names in step with `App.tsx`. |
 | Look and touch     | `<html data-native>` (set at boot by `markNativePlatform`, before the first paint) switches on native-only CSS in `index.css`: body text in the system font (SF on iOS) with headings on the brand faces, no gray tap highlight, no link-preview callout on links and buttons, and no text selection on chrome (navigation, buttons, tabs, labels). Content and every form field stay selectable. The website never gets the attribute, so none of it applies there (`tests/e2e/native-shell-polish.spec.ts`).                                                                                                                                                                                                                                                                         |
@@ -368,7 +374,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Status bar         | The app has no dark theme, so the bar follows the surface under it, not the system appearance: light icons on the launch screen and the drawer, dark icons on the app. iOS declares `UIUserInterfaceStyle` Light; Android's theme is Light with the page's paper background.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Keyboard           | `@capacitor/keyboard` resizes the iOS WebView above the keyboard (its default `native` mode); Capacitor's SystemBars pads the Android one by the IME inset. `nativeShell.ts` then scrolls the focused field to the middle of what is left. The plugin hides the iOS Prev / Next / Done bar on load with no setting to stop it, so `restoreKeyboardAccessoryBar()` turns it back on at launch.                                                                                                                                                                                                                                                                                                                                                                                          |
 | Signed-out start   | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Auth               | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login. The refresh token is kept in the device keychain and read back at launch, so the app stays signed in until sign-out (ADR 0034). See "Staying signed in" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Text size          | iOS: WKWebView ignores Dynamic Type, so `useNativeTextSize` reads the preferred size through `@capacitor/text-zoom` on launch and on every return to the foreground, and applies it as the page's text-size adjustment, every size from the smallest to AX5 (about 312%), with no cap: a layout that clips at a large size is fixed by wrapping or scrolling, never by a smaller size (owner decision, 2026-09-18). From AX1 up `<html data-text-size="large">` switches on the `large-text:` variant (index.css), which stacks side-by-side rows and lets the top bar scroll away. `tests/e2e/largest-text.spec.ts` holds the main screens at 312% in English and Spanish. Android's WebView already applies the system font scale.                                                   |
 | Screen readers     | The navigation drawer is announced by name ("Main navigation"), not as an unnamed dialog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -403,7 +409,8 @@ The plugin's API, in full:
 | native -> web | `rightButton`      | `{ id }`: the navigation bar's trailing button (Plants' "+")                                                                                                                                                                                                                                                                  |
 | web -> native | `present`          | `{ token, kind: 'alert' or 'actionSheet', title?, message?, actions: [{ id, title, style: 'default', 'destructive' or 'cancel' }], anchor?: { x, y, width, height } }`, answered `{ id }`: the tapped action, or null for no choice. See "Alerts and action sheets (iOS)"                                                     |
 | web -> native | `updatePresented`  | `{ token, title?, message? }`: new words for the alert showing                                                                                                                                                                                                                                                                |
-| web -> native | `dismissPresented` | `{ token }`: the web closed it; it answers no choice                                                                                                                                                                                                                                                                          |
+| web -> native | `dismissPresented` | `{ token }`: the web closed it (an alert or a form sheet); it answers no choice                                                                                                                                                                                                                                               |
+| web -> native | `presentForm`      | `{ token, title, message?, cancel, submit, fields }`, answered `{ values }` or `{ values: null }` (see "Form sheets")                                                                                                                                                                                                         |
 | web -> native | `setBarTools`      | `{ path, menus: [{ id, label, symbol, groups: [{ title?, items: [{ id, label, checked? }] }] }], search: { placeholder, text } or null }`: a screen's own pull-down menus beside the "+" and its search field (Plants' Filter and More menus). Empty `menus` with `search: null` removes them. See `config/nativeBarTools.ts` |
 | native -> web | `barMenuSelect`    | `{ path, id }`: an item of those menus was picked (only ids the web sent)                                                                                                                                                                                                                                                     |
 | native -> web | `barSearch`        | `{ path, text }`: the bar's search text changed ('' on Cancel)                                                                                                                                                                                                                                                                |
@@ -485,8 +492,29 @@ The dialogs keep their props, so their callers do not change; `ConfirmDialog`
 and `RemovePlantDialog` render `NativeDialog` (a lazy chunk the website never
 downloads) when `hasNativePresent()` is true, which needs the iOS app with the
 NativeChrome plugin listing `present`. Everywhere else, the web dialogs render
-exactly as before. Forms (Add care task, Edit plant, Move plants and the rest)
-are still web dialogs in the app.
+exactly as before. Forms other than Add care task (Edit plant, Move plants
+and the rest) are still web dialogs in the app.
+
+### Form sheets
+
+Add care task is a native form sheet in the app (NativeChrome `presentForm`,
+`ios/App/App/NativeFormSheet.swift`): a grouped form in a sheet with a
+grabber, medium and large detents, and Cancel and Add in the sheet's own bar.
+The web owns the words, the choices and the starting values
+(`frontend/src/config/nativeFormSheet.ts`) and saves through the same request
+as the web form; Swift only draws the fields and hands the values back.
+
+The rule both sides keep: **only the sheet's own submit button reports
+values**, and only with every required field that shows filled in (the
+button is disabled until then). Cancel, a swipe down, the web closing it, or
+another sheet or alert replacing it answer `{ values: null }`
+(`NativeFormSheetModel.swift`, plain Swift that compiles on its own with
+`swiftc`), and the web accepts values only if they are exactly what this form
+sends (`formSheetValues`); anything else closes the form without writing. A
+save the server refuses opens the sheet again with what was entered and the
+reason. Unlike an alert, a form sheet is not closed when the app goes to the
+background, so nothing typed is lost. An app built before `presentForm`, and
+the website, keep the web dialog.
 
 ### Fresh data, offline and unreachable
 
@@ -515,6 +543,50 @@ honest about its age:
 
 The notice shows on the website too. The resume refresh and pull to refresh
 are native only.
+
+### Staying signed in
+
+A WebView drops `sessionStorage` whenever the app process ends (a force quit,
+a reboot, iOS reclaiming memory), and `sessionStorage` is where the website
+keeps the refresh token unless "Keep me signed in" is ticked. So every cold
+start of the app more than an hour after the last one, when the ID token had
+expired, began on the sign-in screen (ADR 0034). Inside the shells:
+
+- **The refresh token lives in the device keychain** (iOS keychain, Android
+  Keystore), through `@aparajita/capacitor-secure-storage`, and in no web
+  storage (`services/sessionVault.ts`). The item is readable only after the
+  device's first unlock, is in no backup, and is not synced. The user and the
+  short-lived tokens stay in `localStorage`, so the first render already
+  knows the person is signed in and shows the loading state, never the
+  sign-in screen, while the keychain is read.
+- **A launch reads the keychain before judging the session**
+  (`authStore.verifySession`), and the api interceptor waits for the same
+  read before deciding there is nothing to refresh with. A known-expired ID
+  token goes straight to the refresh (`lib/jwtExpiry.ts`); an offline launch
+  keeps the session, as before.
+- **Sign-out removes the item.** A refused refresh is a full sign-out. A
+  reinstall is a fresh start: with no session in `localStorage`, a token the
+  keychain kept through the reinstall is dropped, not used.
+- **The sign-in screen does not ask.** Instead of the website's checkbox it
+  says "This device stays signed in until you sign out." The website keeps
+  its opt-in.
+- **Only when the bridge lists the plugin.** `sessionVaultAvailable()` reads
+  `Capacitor.PluginHeaders` for `SecureStorage`, the way the native frame is
+  detected. A shell without it (an app build that does not register the
+  plugin, or a test that pretends the shell without it) keeps the website's
+  storage model and checkbox exactly; the plugin's JavaScript is never
+  loaded without its native half (driven that way, its first read is an
+  endless chain of promise callbacks and the page stops answering; measured
+  2026-10-09, ADR 0034).
+- **The Cognito client's refresh-token validity is 365 days** (was 30). It is
+  fixed at sign-in and not extended on use, so a phone signs in again once a
+  year.
+
+To check on a device: sign in, force quit, reopen (signed in, no sign-in
+flash); reboot the phone, reopen (same); wait past an hour, reopen (same,
+with one silent refresh); sign out, reopen (sign-in screen).
+`tests/e2e/native-stays-signed-in.spec.ts` plays the same sequence with the
+shell pretended.
 
 ## Store payment rules (read before touching billing UI)
 
@@ -604,21 +676,24 @@ Greenhouse plans are available on the web" (legal text, owner decision).
 
 ## Push notifications
 
-**Built, and switched off until the owner setup is done.** The steps, the
-secret names, and the device checklist are in
-[`docs/native-push-setup.md`](native-push-setup.md). There are two switches,
-both off by default:
+**On for iOS, off for Android.** The steps, the secret names, and the device
+checklist are in [`docs/native-push-setup.md`](native-push-setup.md). There
+are two switches, both off by default:
 
 - **Deployment:** Terraform `native_push_enabled` (`NATIVE_PUSH_ENABLED` on the
   Lambdas). While it is off, no device push is sent, and the notification
   preferences report `devicePush: {ios: false, android: false}`, so the apps
   show no opt-in and no Settings row, whatever credentials exist.
 - **Store build:** `VITE_NATIVE_PUSH_ENABLED` in the local
-  `.env.mobile.production`. The committed template must say `false`
+  `.env.mobile.production` turns push on for iOS. Android needs
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED` as well: one web bundle goes into both
+  shells, and while the Android switch is `false` an Android shell never loads
+  the push plugin, so an iOS-only push build needs no `google-services.json`.
+  The committed template must say `false` for both
   (`scripts/validate-store-release.mjs` enforces that). A `--production` build
-  that sets it `true` must carry `google-services.json` for the Android
-  package, and every mode requires the committed iOS `aps-environment`
-  entitlement.
+  that sets the Android switch `true` must carry `google-services.json` for
+  the Android package, and every mode requires the committed iOS
+  `aps-environment` entitlement.
 
 **Delivery.** iOS goes to APNs directly (`backend/src/services/apnsNotifier.ts`,
 HTTP/2 with a `.p8` provider token). Android goes through FCM HTTP v1
@@ -629,6 +704,33 @@ would have failed every iOS send. Both run under the `browser` channel of
 `notifier.sendToUser`, so quiet hours and the reminder rules (daily slot,
 per-channel lease) apply unchanged. A reminder sets the app-icon badge to the
 number of tasks it names. The app clears it when opened.
+
+**What a reminder says, and what a tap does.** A reminder about one task
+reads "Water the Monstera" ("Monstera necesita riego") with when it is due
+and what to do next; several tasks get a count and the first two plant names.
+The words are composed in `backend/src/services/reminderCopy.ts` and the
+rules are in `docs/notifications.md` ("What a push notification says").
+Tapping a one-task reminder opens that plant's page at its Care Tasks
+(`/plants/{id}?task={taskId}#care`); several open `/tasks?filter=due`. Both
+are claimed routes (see "Deep links"), so the app opens either way.
+
+**Done and Snooze from the notification (iOS).** A one-task reminder also
+carries two buttons, **Done** and **Snooze until tomorrow**, shown on a
+long-press or a pull-down. `AppDelegate.swift` registers the
+`FG_TASK_REMINDER` category with those two actions at every launch, and the
+backend sets `aps.category` to it on a one-task reminder only. A chosen button
+reaches `nativePush.ts` as `pushNotificationActionPerformed` with `actionId`
+"done" or "snooze", which posts to the task's own complete or snooze endpoint
+with the stored session and the occurrence the reminder was about, so a
+repeat, a tap from two devices, or a tap after someone else did it is a no-op
+on the server. The buttons do not open the app: iOS starts it in the
+background for the request, and the Capacitor plugin retains the event until
+the web layer is listening, so an app that was not running acts at its next
+launch at the latest. After a Done or Snooze the notification and the icon
+count are cleared. Android shows no buttons (the system renders FCM
+notifications, and buttons need a native builder the shell does not have);
+the ids ride in `data` for a later handler, and a tap opens the plant. The
+device checks are steps 3 to 8 of the setup doc.
 
 **When permission is asked.** Only after a tap: the opt-in card on the Tasks
 page (`NativePushPrompt`), shown when there's care on the list and the OS
@@ -645,9 +747,16 @@ a refused refresh), leaves the household it was registered under, or deletes
 the account, and when APNs or FCM reports it dead. The full table is in
 `docs/notifications.md`.
 
-**Not verified end to end.** Nothing has been sent to a real device yet.
-Step 8 of the setup doc is that check, and it comes before
-`native_push_enabled = true` in production.
+**Verified end to end on iOS, 2026-10-09.** `native_push_enabled` was set to
+`true` in production on 2026-10-05, before the setup doc's step 8 device
+checks, because no public build existed to be affected: only the owner's
+TestFlight build could register a device. Step 8 then passed against
+production on an iPhone running build 4001, the first build made with
+`VITE_NATIVE_PUSH_ENABLED=true`: the opt-in row and the Tasks card, the
+one-time permission prompt, a reminder delivered as a push with the badge,
+and quiet hours honored. The App Store listing says so from 0.40.0; name push
+in review notes only for a build made with the switch. Android is unverified
+and off.
 
 ## Store submission checklist
 
@@ -730,12 +839,13 @@ Step 8 of the setup doc is that check, and it comes before
     page and on Add plant, the build shows Take photo and Choose photo, which
     open the system camera and the system photo picker (see "Photos" above).
     Mobile Safari only offers a file input.
-  - **What is not an argument.** The WebView file picker that the leaf-health,
-    sitter and caretaker screens still use behaves exactly like mobile
-    Safari's. Opening offline is what a bundled web app does anyway,
-    so it doesn't count as a feature. Push delivery is still off end to end,
-    tracked in
-    [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469).
+  - **What is not an argument.** Opening offline is what a bundled web app
+    does anyway, so it doesn't count as a feature. Push is an argument only for a build
+    made with `VITE_NATIVE_PUSH_ENABLED=true` (4001 onward, verified on an
+    iPhone on 2026-10-09; see "Push notifications" above); a build made
+    without it shows no push UI, and
+    [#469](https://github.com/ChelseaKR/family-greenhouse/issues/469) is the
+    record of what claiming it too early costs.
 
   A 4.2 rejection is a multi-week loop. Talk to review, don't resubmit
   blind.
