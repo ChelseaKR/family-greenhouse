@@ -16,9 +16,33 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-10-12
+
+**The iOS app opens signed-out on a native intro instead of a sign-in
+form.** A new install sees three short pages on what the app is for, then a
+page with two doors, Create account and I already have an account, which
+lead to the same sign-up and sign-in screens as before. The intro is in the
+app binary, so it reaches people through a store build (0.42.0, build 4200),
+not through this tag's web deploy; the website and Android are unchanged.
+The rest of the release is dependency updates, one of them to the Stripe
+library the billing Lambda uses.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  and nothing under `.github/` changed since 0.41.0, so the only changes are
+  the 19 Lambda `GIT_SHA` updates: expect `Plan: 0 to add, 19 to change, 0
+to destroy.` Anything else means stop. No stored data is migrated, no API
+  contract changes, and the Terms of Service text is unchanged, so their
+  effective date stays 0.38.2's (October 2, 2026).
+- **The intro reaches people through store builds** (0.42.0, build 4200).
+  The web deploy carries its code, which does nothing on the website or in an
+  app whose bridge does not list the `NativeIntro` plugin. An iOS build made
+  with `VITE_NATIVE_PUSH_ENABLED=true` and
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED=false` offers push, as builds 4001 and
+  4100 did.
+
 ### Added
 
-- **iOS app: a native intro when no one is signed in (ADR 0035).** A
+- **iOS app: a native intro when no one is signed in (ADR 0035, #966).** A
   signed-out start used to be the website's sign-in form in a web view.
   The iOS app now opens on a SwiftUI intro over that form: three pages on
   what the app is for ("One plant list for the whole house", "Claim it, and
@@ -33,10 +57,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   whose bridge lists the new `NativeIntro` plugin, so Android, the website
   and older builds keep the sign-in screen as it was. All JS combined
   655.83 → 657.25 kB measured, within the 674 kB budget.
-- **The store validator holds the iOS app-target plugins (ADR 0035).** Every
-  Swift class that declares a `jsName` must be registered by
+- **The store validator holds the iOS app-target plugins (ADR 0035,
+  #966).** Every Swift class that declares a `jsName` must be registered by
   `MainViewController`, built by the Xcode project and listed in the new
   app-target table in `docs/mobile.md`.
+
+### Changed
+
+- **Internal, no user-facing change: runtime dependency updates.** `stripe`
+  22.6.1 → 22.6.2 (#877) in the backend; its one change is that
+  `webhooks.constructEvent` now refuses an empty webhook secret. The billing
+  webhook already answers 500 "Webhook secret not configured" before calling
+  it when the secret is unset, and production's is set, so a signed event is
+  handled as before. `@aws-sdk/client-cognito-identity-provider` 3.1127.0 →
+  3.1137.0 (#876) in the backend and the frontend's development tooling.
+- **Internal, no user-facing change: development dependencies.**
+  `proxy-addr` 2.0.7 → 2.0.8 (#950), `compression` 1.8.1 → 1.8.2 (#951) and
+  `source-map-js` 1.2.1 → 1.2.2 (#952), all lockfile-only and used only by
+  the local server, Lighthouse CI and the CSS build. `brace-expansion`
+  5.0.12, 1.1.21 and 2.1.7 (#894) and `undici` 8.11.2 (#887) merged with no
+  file change, because 0.41.0 already carried those versions.
 
 ## [0.41.0] - 2026-10-10
 
