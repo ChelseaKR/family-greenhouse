@@ -48,12 +48,12 @@ Swift ones built by the Xcode project), and nothing else is listed.
 
 <!-- app-target-plugins:start -->
 
-| Plugin         | What it backs                                                                                                                                                                                                                                                                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NativeChrome` | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below.                             |
-| `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (iOS: `NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; Android: `android/app/src/main/java/net/familygreenhouse/app/intro/`; ADR 0035). See "The signed-out intro (iOS)" and "The signed-out intro (Android)" below. |
-| `NativeReview` | Apple's rating sheet (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`; ADR 0036). The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" below.                                 |
-| `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                                               |
+| Plugin         | What it backs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NativeChrome` | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below.                                                                                                                       |
+| `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (iOS: `NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; Android: `android/app/src/main/java/net/familygreenhouse/app/intro/`; ADR 0035). See "The signed-out intro (iOS)" and "The signed-out intro (Android)" below.                                                                                           |
+| `NativeReview` | The store's rating card: Apple's sheet on iOS (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`), Google Play's in-app review on Android (`review/NativeReviewPlugin.kt`); ADR 0036. The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" and "Ratings (Android)" below. |
+| `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                                                                                                                                         |
 
 <!-- app-target-plugins:end -->
 
@@ -694,9 +694,29 @@ moment", plus a "Rate" row, with no incentives and no sentiment pre-filter
   review form. Android and the website do not show it.
 - **Gated on the plugin header.** `hasNativeReview()` is true only on iOS
   when `Capacitor.PluginHeaders` lists `NativeReview` with `requestReview`
-  (and `App` with `getInfo`), so a build without the plugin, Android and the
-  website record nothing and load nothing. The state is one `localStorage`
+  (and `App` with `getInfo`), so a build without the plugin and the website
+  record nothing and load nothing. The state is one `localStorage`
   key, `fg.reviewPrompt`, which iOS deletes with the app.
+
+### Ratings (Android)
+
+The Android app asks at the same moments, by the same rules and the same
+`localStorage` state (`hasNativeReview()` accepts Android when the bridge
+lists the plugin). The ask goes to Google Play's In-App Review API
+(`com.google.android.play:review`) through `review/NativeReviewPlugin.kt`,
+which answers the same `{ requested }`.
+
+- **Play decides the rest.** Play keeps its own quota, shows nothing to an
+  app that was not installed from Play (a sideloaded or emulator build), and
+  never says whether the person rated. The plugin answers `requested: true`
+  only when Play started its flow; when the app is not in the foreground or
+  Play cannot start one, it answers `false`, nothing is recorded, and the
+  next completion may try again.
+- **The Rate row** in Settings → About opens the Google Play listing
+  (`https://play.google.com/store/apps/details?id=net.familygreenhouse.app`),
+  which Play opens in the Play Store app, with the hint "Opens Google Play,
+  where you can leave a rating or review." It points at a listing that exists
+  only once the first build is uploaded to Play.
 
 ### Fresh data, offline and unreachable
 

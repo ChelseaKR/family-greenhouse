@@ -1741,7 +1741,8 @@
     },
     "about": {
       "rate": "Califica Family Greenhouse",
-      "rateHint": "Abre la App Store, donde puedes dejar una calificación o una reseña."
+      "rateHint": "Abre la App Store, donde puedes dejar una calificación o una reseña.",
+      "rateHintAndroid": "Abre Google Play, donde puedes dejar una calificación o una reseña."
     }
   },
   "security": {

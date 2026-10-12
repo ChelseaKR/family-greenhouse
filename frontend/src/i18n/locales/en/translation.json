@@ -1697,7 +1697,8 @@
     },
     "about": {
       "rate": "Rate Family Greenhouse",
-      "rateHint": "Opens the App Store, where you can leave a rating or review."
+      "rateHint": "Opens the App Store, where you can leave a rating or review.",
+      "rateHintAndroid": "Opens Google Play, where you can leave a rating or review."
     }
   },
   "security": {

@@ -29,7 +29,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   for a rating. Settings → About gains **Rate Family Greenhouse** ("Califica
   Family Greenhouse"), which opens the App Store's review form. Through a
   new app-target plugin, `NativeReview`, used only when the bridge lists it,
-  so Android, the website and older builds are unchanged. All JS combined
+  so the website and older builds are unchanged (Android: below). All JS combined
   658.61 kB measured, within the 674 kB budget.
 - **Android app: the native frame (ADR 0037).** The Android app gets what
   the iOS app's frame does, drawn with Material 3 in Jetpack Compose behind
@@ -51,6 +51,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   TalkBack reads titles as headings and the dots as one "Page 2 of 4"
   control, and Remove animations stops the motion. Only in an Android build
   whose bridge lists the new `NativeIntro` plugin.
+- **Android app: a rating ask after care is recorded, and the Rate row
+  (ADR 0036).** The Android app asks at the same moments and by the same
+  rules as the iOS app, with Google Play's own in-app review card; Play
+  decides whether it shows and never says whether the person rated.
+  Settings → About's **Rate Family Greenhouse** opens the Google Play
+  listing. Only in an Android build whose bridge lists the `NativeReview`
+  plugin.
 - **The store validator holds the Android app-target plugins.** Every Kotlin
   class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
   and listed in the app-target table in `docs/mobile.md`.

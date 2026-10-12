@@ -25,3 +25,12 @@ export function siteUrl(path = '/'): string {
  */
 export const APP_STORE_APP_ID = '6812185914';
 export const APP_STORE_WRITE_REVIEW_URL = `https://apps.apple.com/app/id${APP_STORE_APP_ID}?action=write-review`;
+
+/**
+ * The Android app's Google Play listing, where a rating or review is left.
+ * The same row opens it inside the Android app: the shell hands an outside
+ * link to Android, and Play claims play.google.com links, so it opens in the
+ * Play Store app when it is installed.
+ */
+export const ANDROID_APPLICATION_ID = 'net.familygreenhouse.app';
+export const PLAY_STORE_LISTING_URL = `https://play.google.com/store/apps/details?id=${ANDROID_APPLICATION_ID}`;
