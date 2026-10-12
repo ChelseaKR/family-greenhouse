@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { CalendarDaysIcon, CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import type { TFunction } from 'i18next';
+import {
+  AdjustmentsHorizontalIcon,
+  ArrowUturnLeftIcon,
+  CalendarDaysIcon,
+  CheckIcon,
+  ClockIcon,
+  HandRaisedIcon,
+  MapPinIcon,
+  MegaphoneIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import { taskService, SnoozeReason, TaskWithCoverage } from '@/services/taskService';
 import { plantService } from '@/services/plantService';
 import { climateService } from '@/services/climateService';
@@ -20,17 +31,40 @@ import { AskFamilyDialog } from './AskFamilyDialog';
 import {
   useAskFamilyMutation,
   useClaimTaskMutation,
-  useCompleteTaskMutation,
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from './taskMutations';
 import { careRuleFor, useCareRuleGate } from './useCareRuleGate';
+import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
+import { useActionChooser } from '@/features/plants/useActionChooser';
+import { ToolbarMenu, type MenuGroupModel } from '@/features/plants/ToolbarMenu';
+import { taskWhoText } from '@/features/plants/plantCareText';
+import { formatDate } from '@/i18n/format';
+import { ListSkeleton } from '@/components/Skeleton';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { hasNativeBarTools, hasNativeFrame } from '@/lib/platform';
+import { useNativeBarTools } from '@/features/plants/useNativeBarTools';
+import { screenPath } from '@/config/nativeFrame';
+import {
+  byDueThenName,
+  checklistItems,
+  dateSections,
+  inSegment,
+  roomSections,
+  segmentCounts,
+  type ChecklistItem,
+  type ChecklistSection,
+  type Segment,
+} from './checklistModel';
+import { TaskChecklist } from './TaskChecklist';
+import type { SwipeAction } from './TaskRow';
+import { playHaptic } from '@/services/nativeHaptics';
+import { toast } from '@/store/toastStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { NativePushPrompt } from '@/components/NativePushPrompt';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { EmptyTasks } from '@/components/illustrations/EmptyTasks';
 import { Alert } from '@/components/Alert';
@@ -41,7 +75,7 @@ import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { calendarDaysBetween, isOverdue, isToday } from '@/utils/date';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { useSpaces } from '@/hooks/useSpaces';
-import { buildCareRoundGroups, filterTasksForSpace } from './careRounds';
+import { buildCareRoundGroups, filterTasksForSpace, mostOverdueFirst } from './careRounds';
 import { TaskLocation } from '@/components/TaskLocation';
 import { plantLocationLabel } from '@/utils/spaces';
 
@@ -64,29 +98,22 @@ function filterFromSearchParam(value: string | null): FilterType {
     : 'all';
 }
 
-function formatDueDate(dateString: string): string {
+function formatDueDate(dateString: string, t: TFunction): string {
   const date = new Date(dateString);
   // calendarDaysBetween is DST-safe (UTC-noon anchored) — local-midnight
   // subtraction + Math.ceil reported "2 days overdue" for yesterday across
   // the fall-back transition.
   const diff = calendarDaysBetween(new Date(), date);
 
-  if (diff < 0) {
-    const daysOverdue = -diff;
-    return `${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue`;
-  }
-  if (diff === 0) {
-    return 'Today';
-  }
-  if (diff === 1) {
-    return 'Tomorrow';
-  }
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  if (diff < 0) return t('tasks.page.daysOverdue', { count: -diff });
+  if (diff === 0) return t('tasks.list.today');
+  if (diff === 1) return t('tasks.list.tomorrow');
+  return formatDate(date, { weekday: 'short', month: 'short', day: 'numeric', year: undefined });
 }
 
 export function TasksPage() {
-  useDocumentTitle('Tasks');
   const { t } = useTranslation();
+  useDocumentTitle(t('tasks.title'));
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,6 +123,24 @@ export function TasksPage() {
   const [displayMode, setDisplayMode] = useState<'schedule' | 'round'>(() =>
     requestedSpaceFilter ? 'round' : 'schedule'
   );
+  // Phones get the "Checklist": the website under 640px, and the iOS app at
+  // every width (its native bars replace the page's own header). The desktop
+  // website keeps the layout below.
+  const isMobile = useIsMobile();
+  const compact = isMobile || hasNativeFrame();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const [segment, setSegment] = useState<Segment>('today');
+  // The phone's filters live in the page, never in the URL: in the iOS app a
+  // new query on the tab's first screen would be a new screen in its stack.
+  // A link that arrives with `?filter=mine` or `?space=` still opens on it.
+  const [who, setWho] = useState<'all' | 'mine' | 'open'>(
+    requestedTaskFilter === 'mine' ? 'mine' : 'all'
+  );
+  const [spaceChoice, setSpaceChoice] = useState<string | null>(requestedSpaceFilter);
+  const [groupBy, setGroupBy] = useState<'date' | 'room'>('date');
+  const chooser = useActionChooser();
 
   useEffect(() => {
     setFilter(requestedTaskFilter);
@@ -205,16 +250,22 @@ export function TasksPage() {
     at: number;
   } | null>(null);
 
-  const completeTaskMutation = useCompleteTaskMutation(householdId);
-  // House rule gate: a plant with a care rule shows it before the completion
-  // goes through; with no rule the click completes exactly as before.
+  // Done waits out the same 5-second Undo window as the Plants list and the
+  // plant page (useDeferredCompletion, one shared queue): nothing is written
+  // until it passes, and Undo inside it writes nothing. House rule gate
+  // first: a plant with a care rule shows it before anything starts.
+  const deferred = useDeferredCompletion(householdId);
   const careRuleGate = useCareRuleGate<TaskWithCoverage>(
     (task) => careRuleFor(plantsById.get(task.plantId)),
     (task) => {
-      setFocusAfterComplete({ taskId: task.id, at: Date.now() });
-      completeTaskMutation.mutate({ taskId: task.id, expectedNextDue: task.nextDue });
+      deferred.schedule(task, plantsById.get(task.plantId)?.name ?? task.plantName, (id) =>
+        // The row re-buckets when the completion lands: put focus back then.
+        setFocusAfterComplete({ taskId: id, at: Date.now() })
+      );
     }
   );
+  const doneOrUndo = (task: TaskWithCoverage) =>
+    deferred.pending.has(task.id) ? deferred.undo(task.id) : careRuleGate.request(task);
 
   useEffect(() => {
     if (!focusAfterComplete) return;
@@ -308,23 +359,433 @@ export function TasksPage() {
   const taskCountSummary =
     isLoading || error || tasks === undefined
       ? ''
-      : `${sortedTasks.length} ${sortedTasks.length === 1 ? 'task' : 'tasks'} shown.`;
+      : t('tasks.page.shown', { count: sortedTasks.length });
 
   // The round's own fallback group name carries the same distinction: with
   // the rooms (or the plants) unread, every task collapses into one group,
   // and calling that group "Unplaced" states a placement for the whole
   // household that nothing computed.
+  // A care round is today's walk: only what is due now (overdue and today),
+  // starting in the room with the most overdue plant. It used to take every
+  // task in the filter, so the walk began with plants due next week and the
+  // overdue one waited in the third room.
+  const dueNowTasks = sortedTasks.filter(
+    (task) => isOverdue(task.nextDue) || isToday(task.nextDue)
+  );
   const careRoundGroups = useMemo(
-    () => buildCareRoundGroups(sortedTasks, plants ?? [], spaces, unplacedGroupName),
+    () =>
+      mostOverdueFirst(buildCareRoundGroups(dueNowTasks, plants ?? [], spaces, unplacedGroupName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dueNowTasks derives from sortedTasks
     [plants, sortedTasks, spaces, unplacedGroupName]
   );
+
+  const spaceCard = activeSpaceName && (
+    <Card
+      variant="paper"
+      padding="sm"
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-center gap-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-800">
+          <MapPinIcon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-ink">
+            {t('spaces.taskFilterTitle', { space: activeSpaceName })}
+          </p>
+          <p className="text-xs text-gray-600">{t('spaces.taskFilterDescription')}</p>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete('space');
+          setSearchParams(nextParams, { replace: true });
+        }}
+      >
+        {t('spaces.showAllTaskSpaces')}
+      </Button>
+    </Card>
+  );
+
+  // ---- The phone layout ("Checklist") ----
+  const phoneSpace =
+    spaceChoice === 'unplaced' || (spaceChoice !== null && spacesById.has(spaceChoice))
+      ? spaceChoice
+      : null;
+  const phoneSpaceName =
+    phoneSpace === 'unplaced'
+      ? t('spaces.unplaced')
+      : phoneSpace
+        ? (spacesById.get(phoneSpace)?.name ?? null)
+        : null;
+  const isMine = (task: TaskWithCoverage) =>
+    task.assignedTo === user?.id || task.effectiveAssignee === user?.id;
+  const isOpen = (task: TaskWithCoverage) => !task.assignedTo && !task.effectiveAssignee;
+  const checklist = useMemo(
+    () =>
+      compact
+        ? checklistItems(
+            filterTasksForSpace(tasks ?? [], plants ?? [], spaces, phoneSpace).filter(
+              (task) => who === 'all' || (who === 'mine' ? isMine(task) : isOpen(task))
+            ),
+            (task) => plantsById.get(task.plantId)?.name ?? task.plantName
+          )
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMine reads user?.id only
+    [compact, tasks, plants, spaces, phoneSpace, who, user?.id, plantsById]
+  );
+  const segmentItems = checklist.filter((item) => inSegment(item, segment));
+  // The care round: the segment's tasks only (on Today, what is due now, never
+  // next week's plants), the room with the most overdue task first.
+  const roomKeyOf = (item: ChecklistItem) => {
+    const spaceId = plantsById.get(item.task.plantId)?.spaceId;
+    return spaceId && spacesById.has(spaceId) ? spaceId : 'unplaced';
+  };
+  const checklistSections: ChecklistSection[] =
+    groupBy === 'room'
+      ? roomSections(
+          checklist,
+          segment,
+          roomKeyOf,
+          spaces.map((space) => space.id)
+        )
+      : dateSections(checklist, segment);
+  const roomTitle = (id: string) =>
+    id === 'unplaced' ? unplacedGroupName : (spacesById.get(id)?.name ?? unplacedGroupName);
+  const nextUp = checklist.filter((item) => item.days > 0).sort(byDueThenName)[0] ?? null;
+
+  // Which claim action a task offers, and whether Ask family does: the same
+  // rules as the desktop row's buttons (ClaimControls, AskFamilyButton).
+  // Claim open work, give back your own, take over work that came by a space
+  // default, Move Day or rotation; never ask over someone's own claim.
+  const claimKindOf = (task: TaskWithCoverage): 'claim' | 'unclaim' | 'takeOver' | null => {
+    if (!task.assignedTo) return 'claim';
+    if (task.assignedTo === user?.id) return 'unclaim';
+    if (
+      task.assignmentSource === 'space_default' ||
+      task.assignmentSource === 'move_day' ||
+      task.assignmentSource === 'rotation'
+    )
+      return 'takeOver';
+    return null;
+  };
+  const canAsk = (task: TaskWithCoverage) =>
+    !isHelpRequestOpen(task) &&
+    !(!!task.assignedTo && task.assignmentSource === null && task.assignedTo !== user?.id);
+  const claimTitle = {
+    claim: 'plants.list.claim',
+    unclaim: 'tasks.unclaim',
+    takeOver: 'tasks.takeOver',
+  };
+  const claimOrUnclaim = (task: TaskWithCoverage) => {
+    if (claimKindOf(task) === 'unclaim') unclaimMutation.mutate(task.id);
+    else claimMutation.mutate(task.id);
+  };
+
+  const snoozeMutation = useMutation({
+    mutationFn: ({ task, days }: { task: TaskWithCoverage; days: number }) =>
+      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
+      playHaptic('snoozed');
+      toast.info(t('plants.list.snoozedToast'));
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+  /** How long, as the Plants list asks it; nothing happens without a choice. */
+  const snoozeTask = async (task: TaskWithCoverage, from: Element | null) => {
+    const id = await chooser.choose(
+      {
+        title: t('tasks.snooze'),
+        options: [
+          { id: '1', title: t('plants.list.snooze1d') },
+          { id: '3', title: t('plants.list.snooze3d') },
+          { id: '7', title: t('plants.list.snooze1w') },
+          { id: 'cycle', title: t('plants.list.snoozeSkip') },
+        ],
+        cancel: t('common.cancel'),
+      },
+      from
+    );
+    if (!id) return;
+    snoozeMutation.mutate({ task, days: id === 'cycle' ? task.frequency : Number(id) });
+  };
+
+  const swipeActionsFor = (item: ChecklistItem): SwipeAction[] => {
+    const task = item.task;
+    const kind = claimKindOf(task);
+    return [
+      ...(kind
+        ? [
+            {
+              id: 'claim',
+              label: t(claimTitle[kind]),
+              Icon: kind === 'unclaim' ? ArrowUturnLeftIcon : HandRaisedIcon,
+              tone: kind === 'unclaim' ? 'bg-gray-600' : 'bg-accent-600',
+              run: () => claimOrUnclaim(task),
+            },
+          ]
+        : []),
+      ...(canAsk(task)
+        ? [
+            {
+              id: 'ask',
+              label: t('tasks.askFamily.button'),
+              Icon: MegaphoneIcon,
+              tone: 'bg-sky-700',
+              run: () => setAskTarget(task),
+            },
+          ]
+        : []),
+      {
+        id: 'snooze',
+        label: t('tasks.snooze'),
+        Icon: ClockIcon,
+        tone: 'bg-gray-500',
+        run: (from: Element | null) => void snoozeTask(task, from),
+      },
+    ];
+  };
+
+  const openTaskMenu = async (item: ChecklistItem, from: Element | null) => {
+    const task = item.task;
+    const name = deferred.taskName(task);
+    const kind = claimKindOf(task);
+    const options: { id: string; title: string }[] = [
+      deferred.pending.has(task.id)
+        ? { id: 'undo', title: t('plants.list.undo') }
+        : { id: 'done', title: t('plants.list.doNow', { task: name }) },
+    ];
+    if (kind) options.push({ id: 'claim', title: t(claimTitle[kind]) });
+    if (canAsk(task)) options.push({ id: 'ask', title: `${t('tasks.askFamily.button')}…` });
+    options.push({ id: 'snooze', title: `${t('tasks.snooze')}…` });
+    const reason = skipReasonFor(task);
+    if (reason)
+      options.push({
+        id: 'skip',
+        title: t(reason === 'rain' ? 'tasks.skipRain' : 'tasks.skipFrost'),
+      });
+    options.push({ id: 'open', title: t('plants.list.openPlant') });
+    const id = await chooser.choose(
+      { title: item.plantName, options, cancel: t('common.cancel') },
+      from
+    );
+    if (id === 'done' || id === 'undo') doneOrUndo(task);
+    else if (id === 'claim') claimOrUnclaim(task);
+    else if (id === 'ask') setAskTarget(task);
+    else if (id === 'snooze') await snoozeTask(task, from);
+    else if (id === 'skip' && reason) skipMutation.mutate({ task, reason });
+    else if (id === 'open') navigate(`/plants/${task.plantId}`);
+  };
+
+  const filterGroups: MenuGroupModel[] = [
+    {
+      title: t('plants.list.show'),
+      items: [
+        { id: 'who:all', label: t('tasks.list.everyone'), checked: who === 'all' },
+        { id: 'who:mine', label: t('plants.list.mine'), checked: who === 'mine' },
+        { id: 'who:open', label: t('tasks.upForGrabs'), checked: who === 'open' },
+      ],
+    },
+    {
+      title: t('plants.list.groupBy'),
+      items: [
+        { id: 'group:date', label: t('tasks.list.groupDate'), checked: groupBy === 'date' },
+        { id: 'group:room', label: t('plants.list.groupRoom'), checked: groupBy === 'room' },
+      ],
+    },
+    ...(spaces.length > 0
+      ? [
+          {
+            title: t('plants.list.spaces'),
+            items: [
+              { id: 'space:', label: t('spaces.all'), checked: phoneSpace === null },
+              ...spaces.map((space) => ({
+                id: `space:${space.id}`,
+                label: space.name,
+                checked: phoneSpace === space.id,
+              })),
+              {
+                id: 'space:unplaced',
+                label: t('spaces.unplaced'),
+                checked: phoneSpace === 'unplaced',
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+  const onFilterMenu = (id: string) => {
+    const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
+    if (kind === 'who' && (value === 'all' || value === 'mine' || value === 'open')) setWho(value);
+    else if (kind === 'group') setGroupBy(value === 'room' ? 'room' : 'date');
+    else if (kind === 'space') setSpaceChoice(value || null);
+    // A new filter or grouping reshapes the list: start at its top, where
+    // the token that explains it sits. In the iOS app the bar does this.
+    if (!hasNativeBarTools()) window.scrollTo(0, 0);
+  };
+  // In the iOS app the filter menu is a bar button. Its tools are filed under
+  // this screen's own path, query and all, as the bar knows the screen.
+  const nativeBar = compact && hasNativeBarTools();
+  useNativeBarTools(
+    nativeBar
+      ? {
+          path: screenPath(location.pathname, location.search),
+          menus:
+            (tasks ?? []).length > 0
+              ? [
+                  {
+                    id: 'filter',
+                    label: t('tasks.list.filter'),
+                    symbol: 'line.3.horizontal.decrease.circle',
+                    groups: filterGroups,
+                  },
+                ]
+              : [],
+          search: null,
+        }
+      : null,
+    onFilterMenu,
+    () => undefined
+  );
+  // One removable token per filter in force, so the list never shrinks
+  // without saying why.
+  const filterTokens = [
+    who !== 'all' && {
+      label: who === 'mine' ? t('plants.list.mine') : t('tasks.upForGrabs'),
+      clear: () => setWho('all'),
+    },
+    phoneSpaceName && { label: phoneSpaceName, clear: () => setSpaceChoice(null) },
+  ].filter((x): x is { label: string; clear: () => void } => Boolean(x));
+
+  const dialogs = (
+    <>
+      {careRuleGate.dialog}
+      <AskFamilyDialog
+        isOpen={askTarget !== null}
+        plantName={askTarget?.plantName ?? ''}
+        isPending={askMutation.isPending}
+        onClose={() => setAskTarget(null)}
+        onConfirm={(note) => {
+          if (!askTarget) return;
+          askMutation.mutate({ task: askTarget, note });
+          setAskTarget(null);
+        }}
+      />
+    </>
+  );
+
+  if (compact) {
+    const settled = !isLoading && !error && tasks !== undefined;
+    return (
+      // In the iOS app the bar holds the title, so the list starts right
+      // under it: the title row takes no room (`contents`: its h1 stays for
+      // VoiceOver, visually hidden by index.css when it matches the bar).
+      <div className="space-y-3 native-frame:-mt-4">
+        <div className="native-frame:contents">
+          <h1 className="font-serif text-3xl leading-tight text-ink">{t('tasks.title')}</h1>
+        </div>
+        <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
+        {isLoading ? (
+          <ListSkeleton rows={6} />
+        ) : error ? (
+          <Alert variant="error">{getErrorMessage(error)}</Alert>
+        ) : (
+          <TaskChecklist
+            segment={segment}
+            onSegment={setSegment}
+            counts={segmentCounts(checklist)}
+            toolbar={
+              nativeBar ? null : (
+                <ToolbarMenu
+                  label={t('tasks.list.filter')}
+                  icon={<AdjustmentsHorizontalIcon className="h-5 w-5" aria-hidden="true" />}
+                  groups={filterGroups}
+                  onSelect={onFilterMenu}
+                />
+              )
+            }
+            tokens={
+              filterTokens.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {filterTokens.map((token) => (
+                    <button
+                      key={token.label}
+                      type="button"
+                      onClick={token.clear}
+                      aria-label={t('plants.list.removeFilter', { label: token.label })}
+                      className="inline-flex min-h-touch items-center gap-1 rounded-full bg-primary-100 px-3 text-sm font-semibold text-primary-800"
+                    >
+                      {token.label}
+                      <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              ) : null
+            }
+            sections={checklistSections}
+            roomTitle={roomTitle}
+            householdEmpty={(tasks ?? []).length === 0}
+            filtered={who !== 'all' || phoneSpace !== null}
+            onClearFilters={() => {
+              setWho('all');
+              setSpaceChoice(null);
+            }}
+            nextUp={nextUp}
+            taskName={(item) => deferred.taskName(item.task)}
+            roomOf={(item) => rowExtras.locationFor(item.task)}
+            whoOf={(item) => taskWhoText(item.task, user?.id, t)}
+            pending={deferred.pending}
+            onCheck={(item) => doneOrUndo(item.task)}
+            onMenu={(item, from) => void openTaskMenu(item, from)}
+            registerCheck={rowExtras.registerDone}
+            swipeActionsFor={swipeActionsFor}
+            extraFor={(item) => {
+              const task = item.task;
+              const reason = skipReasonFor(task);
+              const asked = !task.assignedTo && isHelpRequestOpen(task);
+              if (!reason && !asked) return null;
+              return (
+                <>
+                  {asked && (
+                    <AskedForHelpBadge
+                      name={task.helpAskedByName ?? null}
+                      note={task.helpAskedNote}
+                    />
+                  )}
+                  {reason && (
+                    <ClimateSkipChip
+                      reason={reason}
+                      onSkip={() => skipMutation.mutate({ task, reason })}
+                      isPending={skipMutation.isPending}
+                    />
+                  )}
+                </>
+              );
+            }}
+          />
+        )}
+        {/* What a segment, filter or grouping change did to the list, for a
+            screen reader (#447). Empty until the read has settled. */}
+        <p aria-live="polite" className="sr-only">
+          {settled ? t('tasks.list.inView', { count: segmentItems.length }) : ''}
+        </p>
+        {chooser.element}
+        {dialogs}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Today's work"
-        title="Tasks"
-        description="Manage your plant care tasks."
+        eyebrow={t('tasks.page.eyebrow')}
+        title={t('tasks.title')}
+        description={t('tasks.page.description')}
       />
 
       {/* The native push opt-in, at the moment it is worth something: this
@@ -332,37 +793,7 @@ export function TasksPage() {
           without push, or while native_push_enabled is off. */}
       <NativePushPrompt hasUpcomingCare={(tasks ?? []).length > 0} />
 
-      {activeSpaceName && (
-        <Card
-          variant="paper"
-          padding="sm"
-          className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-800">
-              <MapPinIcon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-ink">
-                {t('spaces.taskFilterTitle', { space: activeSpaceName })}
-              </p>
-              <p className="text-xs text-gray-600">{t('spaces.taskFilterDescription')}</p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              const nextParams = new URLSearchParams(searchParams);
-              nextParams.delete('space');
-              setSearchParams(nextParams, { replace: true });
-            }}
-          >
-            {t('spaces.showAllTaskSpaces')}
-          </Button>
-        </Card>
-      )}
+      {spaceCard}
 
       <div
         className="inline-flex rounded-lg border border-primary-200/70 bg-paper p-1 large-text:grid large-text:w-full large-text:grid-cols-1"
@@ -400,13 +831,13 @@ export function TasksPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Task filters">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t('tasks.page.filtersLabel')}>
         {[
-          { id: 'all', label: 'All' },
-          { id: 'mine', label: 'My tasks' },
-          { id: 'today', label: 'Today' },
-          { id: 'week', label: 'This week' },
-          { id: 'overdue', label: 'Overdue' },
+          { id: 'all', label: t('tasks.page.filterAll') },
+          { id: 'mine', label: t('tasks.page.filterMine') },
+          { id: 'today', label: t('tasks.page.filterToday') },
+          { id: 'week', label: t('tasks.page.filterWeek') },
+          { id: 'overdue', label: t('tasks.page.filterOverdue') },
         ].map((f) => (
           <button
             key={f.id}
@@ -424,7 +855,7 @@ export function TasksPage() {
             {f.id === 'overdue' && (
               <span
                 className="ml-1.5 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent-100 text-accent-800"
-                {...(overdueCount === null ? { 'aria-label': 'Overdue count unknown' } : {})}
+                {...(overdueCount === null ? { 'aria-label': t('tasks.page.overdueUnknown') } : {})}
               >
                 {overdueCount === null ? '—' : overdueCount}
               </span>
@@ -439,28 +870,22 @@ export function TasksPage() {
 
       {/* Task list */}
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <LoadingSpinner size="lg" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : error ? (
         <Alert variant="error">{getErrorMessage(error)}</Alert>
       ) : !sortedTasks || sortedTasks.length === 0 ? (
         <EmptyState
           icon={<EmptyTasks className="mx-auto h-40 w-auto" />}
-          title="No tasks found"
-          description={
-            filter === 'all'
-              ? 'Add care tasks to your plants to see them here.'
-              : 'No tasks match the current filter.'
-          }
+          title={t('tasks.page.emptyTitle')}
+          description={filter === 'all' ? t('tasks.page.emptyAll') : t('tasks.page.emptyFiltered')}
           action={
             filter !== 'all' ? (
               <Button variant="secondary" onClick={() => setFilter('all')}>
-                Clear filter
+                {t('tasks.page.clearFilter')}
               </Button>
             ) : (
               <Link to="/plants">
-                <Button>View plants</Button>
+                <Button>{t('tasks.page.viewPlants')}</Button>
               </Link>
             )
           }
@@ -476,10 +901,15 @@ export function TasksPage() {
                 <h2 className="font-serif text-xl text-ink">{t('careRounds.title')}</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   {t('careRounds.summary', {
-                    tasks: sortedTasks.length,
+                    tasks: dueNowTasks.length,
                     spaces: careRoundGroups.length,
                   })}
                 </p>
+                {sortedTasks.length > dueNowTasks.length && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    {t('careRounds.later', { count: sortedTasks.length - dueNowTasks.length })}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-gray-500">
                   {careRoundGroups.map((group) => group.name).join(' → ')}
                 </p>
@@ -491,12 +921,8 @@ export function TasksPage() {
               key={group.id}
               title={`${t(`spaces.${group.environment}`)} · ${group.name}`}
               tasks={group.tasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           ))}
@@ -505,14 +931,10 @@ export function TasksPage() {
         <div className="space-y-6">
           {overdueTasks.length > 0 && (
             <TaskSection
-              title="Overdue"
+              title={t('tasks.list.overdue')}
               tasks={overdueTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               variant="danger"
               extras={rowExtras}
             />
@@ -520,45 +942,26 @@ export function TasksPage() {
 
           {todayTasks.length > 0 && (
             <TaskSection
-              title="Today"
+              title={t('tasks.list.today')}
               tasks={todayTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           )}
 
           {upcomingTasks.length > 0 && (
             <TaskSection
-              title="Upcoming"
+              title={t('tasks.list.upcoming')}
               tasks={upcomingTasks}
-              onComplete={careRuleGate.request}
-              completingTaskId={
-                completeTaskMutation.isPending
-                  ? (completeTaskMutation.variables?.taskId ?? null)
-                  : null
-              }
+              onComplete={doneOrUndo}
+              pendingTaskIds={deferred.pending}
               extras={rowExtras}
             />
           )}
         </div>
       )}
-      {careRuleGate.dialog}
-      <AskFamilyDialog
-        isOpen={askTarget !== null}
-        plantName={askTarget?.plantName ?? ''}
-        isPending={askMutation.isPending}
-        onClose={() => setAskTarget(null)}
-        onConfirm={(note) => {
-          if (!askTarget) return;
-          askMutation.mutate({ task: askTarget, note });
-          setAskTarget(null);
-        }}
-      />
+      {dialogs}
     </div>
   );
 }
@@ -588,8 +991,9 @@ interface TaskRowExtras {
 interface TaskSectionProps {
   title: string;
   tasks: TaskWithCoverage[];
+  /** Done, or Undo while the task is inside its Undo window. */
   onComplete: (task: TaskWithCoverage) => void;
-  completingTaskId: string | null;
+  pendingTaskIds: ReadonlySet<string>;
   variant?: 'default' | 'danger';
   extras: TaskRowExtras;
 }
@@ -598,10 +1002,12 @@ function TaskSection({
   title,
   tasks,
   onComplete,
-  completingTaskId,
+  pendingTaskIds,
   variant = 'default',
   extras,
 }: TaskSectionProps) {
+  const { t } = useTranslation();
+  const myUserId = useAuthStore((state) => state.user?.id);
   return (
     <Card variant="paper" padding="none">
       <div
@@ -651,15 +1057,21 @@ function TaskSection({
                   </Link>
                   <p className="text-xs text-gray-600">
                     <span className="font-medium">
-                      {task.customType || taskTypeLabels[task.type]}
+                      {task.customType ||
+                        t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type)}
                     </span>
                     {' • '}
                     <span
                       className={clsx(isOverdue(task.nextDue) && 'text-accent-700 font-medium')}
                     >
-                      {formatDueDate(task.nextDue)}
+                      {formatDueDate(task.nextDue, t)}
                     </span>
-                    {task.assignedToName && ` • Assigned to ${task.assignedToName}`}
+                    {task.assignedToName &&
+                      ` • ${
+                        task.assignedTo === myUserId
+                          ? t('tasks.page.assignedToYou')
+                          : t('tasks.page.assignedTo', { name: task.assignedToName })
+                      }`}
                   </p>
                   <TaskLocationOrNothing label={extras.locationFor(task)} />
                   {(!task.assignedTo || task.coveringFor || skipReason) && (
@@ -694,27 +1106,34 @@ function TaskSection({
                   isPending={extras.claimPending}
                 />
                 <AskFamilyButton task={task} onAsk={extras.onAsk} isPending={extras.askPending} />
-                {/* `aria-disabled` while the completion is in flight, never
-                    `disabled`. A browser blurs a focused element the moment it
-                    becomes disabled, so the keyboard user who had just pressed
-                    Done was thrown out of the row to the top of the document
-                    (measured in Chromium: document.activeElement === body) and
-                    had to Tab back through the whole page to reach the next
-                    task. The button stays focusable and still announces itself
-                    as unavailable; the handler is what refuses a second press. */}
+                {/* Inside its Undo window the same button is Undo, so a
+                    keyboard user's focus stays put and a second press undoes
+                    rather than completing twice (one shared queue refuses a
+                    second completion anyway). */}
                 <Button
                   ref={(node) => extras.registerDone(task.id, node)}
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    if (completingTaskId === task.id) return;
-                    onComplete(task);
-                  }}
-                  aria-disabled={completingTaskId === task.id}
-                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                  leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+                  onClick={() => onComplete(task)}
+                  aria-label={
+                    pendingTaskIds.has(task.id)
+                      ? t('plants.list.undoAria', {
+                          task:
+                            task.customType ||
+                            t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type),
+                          plant: task.plantName,
+                        })
+                      : undefined
+                  }
+                  leftIcon={
+                    pendingTaskIds.has(task.id) ? (
+                      <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                    )
+                  }
                 >
-                  Done
+                  {pendingTaskIds.has(task.id) ? t('plants.list.undo') : t('tasks.complete')}
                 </Button>
               </div>
             </li>

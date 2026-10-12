@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ChevronUpDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { listMyHouseholds } from '@/services/householdService';
 import { useAuthStore } from '@/store/authStore';
-import { track } from '@/services/analytics';
+import { useSwitchHousehold } from '@/hooks/useSwitchHousehold';
 import clsx from 'clsx';
 
 /**
@@ -18,11 +18,10 @@ import clsx from 'clsx';
  */
 export function HouseholdSwitcher() {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const activeHouseholdId = useAuthStore((s) => s.activeHouseholdId);
-  const setActiveHouseholdId = useAuthStore((s) => s.setActiveHouseholdId);
+  const switchHousehold = useSwitchHousehold();
 
   const { data: memberships } = useQuery({
     queryKey: ['me', 'households'],
@@ -64,19 +63,7 @@ export function HouseholdSwitcher() {
                   : 'text-primary-100 hover:bg-primary-800'
               )}
               onClick={(e) => {
-                setActiveHouseholdId(m.householdId === user?.householdId ? null : m.householdId);
-                track('household_switched');
-                // No blanket invalidation needed: every household-scoped
-                // query key embeds the active household id (see
-                // useActiveHouseholdId), so switching changes the keys
-                // themselves — mounted queries refetch under the new
-                // household and the old household's cache can never leak
-                // into the new one. We only invalidate the new household's
-                // entries so anything cached from a previous visit (within
-                // its staleTime, e.g. api-keys/chat-budget) is refreshed.
-                queryClient.invalidateQueries({
-                  predicate: (q) => q.queryKey.includes(m.householdId),
-                });
+                switchHousehold(m.householdId);
                 (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
               }}
             >

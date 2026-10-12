@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+// The iPhone set is not here: it is captured from the iOS app itself by
+// `npm run store:screenshots:ios` (scripts/store-shots/capture-ios.mjs).
 const outputByProject: Record<string, string> = {
-  'app-store-iphone': 'app-store/iphone-6.9',
   'app-store-ipad': 'app-store/ipad-13',
   'google-play-phone': 'google-play/phone',
 };

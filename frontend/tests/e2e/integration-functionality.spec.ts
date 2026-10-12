@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { provisionAccount, uiLogin } from './helpers';
+import { provisionAccount, uiLogin, choosePlantAction } from './helpers';
 
 /**
  * Browser-level functionality for the user-facing integrations that are easy
@@ -203,7 +203,7 @@ test('a cutting link previews publicly and grafts into a signed-in greenhouse', 
   await uiLogin(page, account.email, account.password);
   await page.goto(`/plants/${account.plantId}`);
 
-  await page.getByRole('button', { name: /share cutting/i }).click();
+  await choosePlantAction(page, /share cutting/i);
   const dialog = page.getByRole('dialog', { name: /share this cutting/i });
   const shareInput = dialog.getByLabel(/share this cutting/i);
   await expect(shareInput).toHaveValue(/\/shared\//);
@@ -230,7 +230,10 @@ test('a cutting link previews publicly and grafts into a signed-in greenhouse', 
   await page.goto(shareUrl);
   await page.getByRole('button', { name: /add to my greenhouse/i }).click();
   await expect(page).toHaveURL(/\/plants\/[^/]+$/, { timeout: 15_000 });
-  await expect(page.getByRole('heading', { name: 'Mother Pothos' })).toBeVisible();
+  // Level 1: since #917 the care guide's heading carries the plant's name
+  // too ("Caring for Mother Pothos"), so an unlevelled match finds two once
+  // that card has rendered.
+  await expect(page.getByRole('heading', { level: 1, name: 'Mother Pothos' })).toBeVisible();
 });
 
 test('a no-account sitter completes real care and the owner sees the history', async ({

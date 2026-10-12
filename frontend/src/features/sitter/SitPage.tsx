@@ -9,6 +9,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { sitterService, SitterLinkInactiveError, type SitterTask } from '@/services/sitterService';
 import { SitterPhotoBack } from './SitterPhotoBack';
 import { formatDate } from '@/i18n/format';
+import { dueDayOffset } from '@/utils/date';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -43,11 +44,18 @@ function instructionFor(task: SitterTask): string {
   }
 }
 
-function dueLabel(task: SitterTask, now: number): string {
-  const due = new Date(task.dueDate).getTime();
-  if (task.overdue) return 'Overdue';
-  const days = Math.round((due - now) / (24 * 60 * 60 * 1000));
-  if (days <= 0) return 'Due today';
+/**
+ * The task's day, read the way every signed-in page reads it: by the calendar
+ * day in this browser's zone (`dueDayOffset`), not by the API's `overdue`
+ * flag. That flag is the instant rule, so a task due at 09:00 came back
+ * "overdue" from 09:01 and this page called the household's due-today work
+ * "Overdue" every afternoon. `null` (an unreadable date) shows no label rather
+ * than a guessed one.
+ */
+function dueLabel(days: number | null): string | null {
+  if (days === null) return null;
+  if (days < 0) return 'Overdue';
+  if (days === 0) return 'Due today';
   if (days === 1) return 'Due tomorrow';
   return `Due in ${days} days`;
 }
@@ -155,7 +163,7 @@ export function SitPage() {
     target?.focus();
   }, [done, justCompleted, tasks]);
 
-  const now = Date.now();
+  const now = new Date();
   const remaining = tasks.filter((t) => !done.has(t.taskId));
   const allDone = status === 'ready' && remaining.length === 0;
   // Same distinction the caretaker page draws (#604): an empty list on arrival
@@ -242,6 +250,8 @@ export function SitPage() {
                 {remaining.map((task) => {
                   const isPending = pending.has(task.taskId);
                   const location = [task.spaceName, task.placementNote].filter(Boolean).join(' · ');
+                  const days = dueDayOffset(task.dueDate, now);
+                  const label = dueLabel(days);
                   return (
                     <li
                       key={task.taskId}
@@ -255,13 +265,16 @@ export function SitPage() {
                             <span>{location}</span>
                           </p>
                         )}
-                        <p
-                          className={
-                            'mt-0.5 text-sm ' + (task.overdue ? 'text-amber-700' : 'text-gray-600')
-                          }
-                        >
-                          {dueLabel(task, now)}
-                        </p>
+                        {label && (
+                          <p
+                            className={
+                              'mt-0.5 text-sm ' +
+                              (days !== null && days < 0 ? 'text-amber-700' : 'text-gray-600')
+                            }
+                          >
+                            {label}
+                          </p>
+                        )}
                       </div>
                       <Button
                         ref={(node) => {

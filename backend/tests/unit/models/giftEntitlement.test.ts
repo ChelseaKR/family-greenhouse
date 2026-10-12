@@ -91,7 +91,7 @@ describe('a running gift raises entitlement to the gifted tier', () => {
   it('survives a Stripe subscription that is not in good standing: the gift was paid for', () => {
     const dunning: EntitlementSubscription = {
       planId: 'garden',
-      status: 'past_due',
+      status: 'unpaid',
       stripeSubscriptionId: 'sub_1',
       giftPlanId: 'garden',
       giftEndsAt: ENDS,

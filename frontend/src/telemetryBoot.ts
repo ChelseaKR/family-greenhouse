@@ -26,5 +26,8 @@
  * that sees a bundle which stopped being served.
  */
 import { initFrontendTelemetry } from './services/frontendTelemetry';
+import { watchPageLeaving } from './lib/pageLeaving';
 
 initFrontendTelemetry();
+// Before any route can start loading code: see lib/pageLeaving.ts.
+watchPageLeaving();

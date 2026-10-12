@@ -9,7 +9,7 @@ import { Link } from 'react-router';
 export function BackToApp({ show }: { show: boolean }) {
   if (!show) return null;
   return (
-    <nav aria-label="Back to app" className="mb-6">
+    <nav aria-label="Back to app" className="mb-6 native-frame:hidden!">
       <Link to="/dashboard" className="text-sm text-primary-700 underline hover:text-primary-800">
         ← Back to your dashboard
       </Link>

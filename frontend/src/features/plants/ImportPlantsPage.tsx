@@ -334,7 +334,7 @@ function ImportFlow() {
             ref={fileInputRef}
             type="file"
             accept=".csv,.json,text/csv,application/json"
-            className="sr-only"
+            className="hidden"
             aria-label={t('importPlants.browse')}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -590,7 +590,7 @@ function PageHeader({ t }: { t: TFunction }) {
   return (
     <Link
       to="/plants"
-      className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+      className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 native-frame:hidden!"
     >
       <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" />
       {t('plants.backToPlants')}

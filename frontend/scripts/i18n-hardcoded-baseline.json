@@ -12,12 +12,12 @@
     "features/auth/ResetPasswordPage.tsx": 6,
     "features/chat/ChatPage.tsx": 8,
     "features/dashboard/ClimateCard.tsx": 4,
-    "features/dashboard/DashboardPage.tsx": 15,
+    "features/dashboard/DashboardPage.tsx": 14,
     "features/dashboard/YearInReviewCard.tsx": 1,
     "features/household/HouseholdPage.tsx": 8,
     "features/household/JoinHouseholdPage.tsx": 12,
     "features/household/SitterLinksCard.tsx": 4,
-    "features/petsafe/PetSafePage.tsx": 10,
+    "features/petsafe/PetSafePage.tsx": 8,
     "features/plants/AddPlantPage.tsx": 16,
     "features/plants/AddTaskModal.tsx": 11,
     "features/plants/BulkApplyTemplateDialog.tsx": 10,
@@ -28,17 +28,15 @@
     "features/plants/EditTaskModal.tsx": 11,
     "features/plants/NoCareDataNotice.tsx": 2,
     "features/plants/PhotoTimeline.tsx": 2,
-    "features/plants/PlantDetailPage.tsx": 18,
+    "features/plants/PlantDetailPage.tsx": 17,
     "features/plants/PlantImageUpload.tsx": 2,
-    "features/plants/PlantsPage.tsx": 6,
     "features/plants/SuggestedCareCard.tsx": 3,
     "features/settings/AccountSettings.tsx": 11,
     "features/settings/ApiKeysSettings.tsx": 11,
     "features/settings/NotificationSettings.tsx": 13,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 9,
-    "features/status/StatusPage.tsx": 16,
-    "features/tasks/TasksPage.tsx": 3
+    "features/status/StatusPage.tsx": 16
   },
   "attributes": {
     "components/CommandPalette.tsx": 1,
@@ -61,7 +59,6 @@
     "features/plants/EditTaskModal.tsx": 2,
     "features/plants/PhotoTimeline.tsx": 1,
     "features/plants/PlantDetailPage.tsx": 5,
-    "features/plants/PlantsPage.tsx": 7,
     "features/plants/SuggestedCareCard.tsx": 1,
     "features/settings/AccountPage.tsx": 2,
     "features/settings/AccountSettings.tsx": 9,
@@ -70,7 +67,6 @@
     "features/settings/NotificationSettings.tsx": 7,
     "features/settings/SettingsPage.tsx": 1,
     "features/sitter/SitPage.tsx": 2,
-    "features/status/StatusPage.tsx": 1,
-    "features/tasks/TasksPage.tsx": 6
+    "features/status/StatusPage.tsx": 1
   }
 }

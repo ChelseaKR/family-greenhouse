@@ -61,6 +61,25 @@ async function applyLargestTextSize(page: Page) {
   }, percent);
 }
 
+/**
+ * The page is no wider than the screen. At AX5 on an iPad, the Plants and
+ * plant page headers once kept their no-wrap action buttons in one row beside
+ * the title, 1007px wide on a 744px iPad mini. A mobile engine then grows the
+ * layout viewport to fit, and the bottom of the page falls outside what can be
+ * scrolled into view: the last plant card could not be tapped. It went unseen
+ * while a memorial footer sat below the last card; with that footer moved to
+ * Settings → About in the apps, the click on the card timed out.
+ */
+async function expectNoSidewaysOverflow(page: Page, where: string) {
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.scrollingElement!.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(scrollWidth, `${where}: the page is wider than the screen`).toBeLessThanOrEqual(
+    clientWidth
+  );
+}
+
 interface Findings {
   /** Rendered size of a 16px probe over 16: proves the text size applied. */
   applied: number;
@@ -182,11 +201,37 @@ for (const device of DEVICES) {
         await page.goto('/plants');
         const monstera = page.getByRole('link', { name: /monstera/i }).first();
         await monstera.waitFor({ state: 'visible', timeout: 15000 });
+        await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, Plants`);
         await monstera.click();
         await expect(page).toHaveURL(/\/plants\/[^/]+$/);
+        // The URL changes before the plant page's chunk has loaded, and until
+        // it has, the Plants list is still on screen with its own "More plant
+        // actions" menu. Wait for the plant page itself, so the menu below
+        // (and the overflow check) is the plant page's and not the list's.
+        await expect(page.getByRole('heading', { level: 1, name: /monstera/i })).toBeVisible();
+        await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page`);
+
+        // On the plant page the two photo actions are in its "…" menu now,
+        // with the rest of the plant's actions; the buttons themselves are
+        // checked on Add plant, the one screen that still shows them.
+        // On a phone-width plant page (and in the app's frame) the photo
+        // actions are in the "…" menu with the rest of the plant's actions;
+        // a wide page without the frame still shows the buttons.
+        const more = page.getByLabel('More plant actions', { exact: true });
+        // Phone widths get the compact plant page (this stub has no native
+        // frame, so a tablet keeps the wide one).
+        const inMenu = (page.viewportSize()?.width ?? 1024) < 640;
+        if (inMenu) {
+          await more.click();
+          const menu = page.locator('details[open]');
+          await expect(menu.getByRole('button', { name: 'Take photo' })).toBeVisible();
+          await expect(menu.getByRole('button', { name: 'Choose photo' })).toBeVisible();
+          await expectNoSidewaysOverflow(page, `${device.name}, ${textSize} text, plant page menu`);
+          await page.keyboard.press('Escape');
+        }
 
         const screens = [
-          { screen: 'plant page', go: () => Promise.resolve() },
+          ...(inMenu ? [] : [{ screen: 'plant page', go: () => Promise.resolve() }]),
           { screen: 'Add plant', go: () => page.goto('/plants/new') },
         ];
         for (const { screen, go } of screens) {
@@ -206,14 +251,6 @@ for (const device of DEVICES) {
             expect(findings.applied, `${where}: default text size`).toBeCloseTo(1, 1);
           }
           expect(findings.problems, `${where}: photo buttons overlap or spill`).toEqual([]);
-        }
-
-        // The phone's full-width plant page still has room for both on one
-        // row, as it did before; stacking everywhere would be a regression.
-        if (device.name === 'iPhone 17 Pro' && textSize === 'default') {
-          await page.goBack();
-          const findings = await inspectPhotoButtons(page);
-          expect(findings.rows, 'iPhone plant page: the buttons share one row').toBe(1);
         }
       });
     });

@@ -7,7 +7,7 @@
  * the service builds — the row a stranger's link resolves to, and the
  * conditions that make a replay lose.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scryptSync } from 'node:crypto';
 
 /** The production digest of a share code (the same restatement plantShare.test.ts pins). */
@@ -269,6 +269,16 @@ describe('getPlantShare — the stored passport block is untrusted', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The row's dates are built from the fixed NOW, but getPlantShare checks
+    // expiry against the real clock. Without this the link "expired" for
+    // real at NOW + 13 days (2026-10-02 12:00 UTC) and every case below read
+    // as no share at all. Only Date is faked, so mocked promises still settle.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('returns a well-formed block', async () => {

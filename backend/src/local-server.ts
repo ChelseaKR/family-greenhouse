@@ -122,7 +122,7 @@ import { giftSubscriptionSummary } from './models/giftSubscriptions.js';
 import { analyticsWindow } from './services/analyticsWindow.js';
 // Pure module (no imports of its own), so it cannot reach utils/dynamodb.ts.
 import { computeCoverage } from './services/coverageMath.js';
-import { lookupToxicity } from './models/petToxicity.js';
+import { lookupToxicity, verdictModeFromQuery, type VerdictMode } from './models/petToxicity.js';
 import {
   checkSitterLinkPlanGate,
   countLiveSitterLinks,
@@ -1147,7 +1147,7 @@ function recordActivity(input: RecordActivityInput): void {
  * Before this pass every gate below read `PLANS[h?.planId ?? 'seedling']`,
  * which is `getPlan(h?.planId)` with the fallback written out by hand: it
  * could see the first field and neither of the other two. So the mock granted
- * a `past_due` household everything for the whole dunning window, and dropped
+ * an `unpaid` household everything until planId was reset, and dropped
  * a household that had bought a tier outright to Seedling the moment an
  * unrelated subscription was cancelled — the same two defects #364 and #476
  * fixed in the handlers. That divergence matters here for one reason: the
@@ -2432,7 +2432,7 @@ app.post(
     // Plan gate — mirrors the handler: window length + live-link count.
     // ENTITLEMENT (#476): this is the ISSUING half of the sitter-link
     // decision and the piece that makes the other half safe. A household
-    // mid-dunning cannot mint a new link or a longer window, while a link it
+    // that has lapsed cannot mint a new link or a longer window, while a link it
     // already handed out keeps working to its expiry (see GET /sitter/:token
     // and the photo routes below).
     const plan = entitledPlan(req.params.id);
@@ -5135,7 +5135,7 @@ app.get('/sitter/:token', (req, res) => {
  *  task, with the household's own care words, the VERIFIED pet-toxicity entry
  *  (never generated, null when the curated table has no match), the latest
  *  photo, and the tasks due inside the window. */
-function sitterBriefFor(link: SitterLink) {
+function sitterBriefFor(link: SitterLink, verdictMode: VerdictMode) {
   const now = new Date();
   const nowIso = now.toISOString();
   const cutoffIso = link.expiresAt > nowIso ? link.expiresAt : nowIso;
@@ -5171,7 +5171,7 @@ function sitterBriefFor(link: SitterLink) {
     placementNote: plant.placementNote?.trim() || null,
     ...resolveCareNote(plant),
     photoUrl: plant.imageUrl ?? null,
-    petSafety: resolvePetSafety(plant),
+    petSafety: resolvePetSafety(plant, verdictMode),
     tasks: tasksByPlant.get(plant.id) ?? [],
   }));
   entries.sort((a, b) => {
@@ -5205,7 +5205,7 @@ app.get('/sitter/:token/brief', (req, res) => {
   if (!sitterBriefIncluded(plan)) {
     return res.status(404).json({ message: 'This sitter link is invalid or has expired.' });
   }
-  res.json(sitterBriefFor(link));
+  res.json(sitterBriefFor(link, verdictModeFromQuery(req.query as Record<string, string>)));
 });
 
 const sitterCompleteTaskSchema = z
@@ -6744,7 +6744,8 @@ app.get('/species/search', authMiddleware, (req, res) => {
 // segment first (API Gateway does this automatically in production).
 app.get('/species/toxicity', (req, res) => {
   const q = (typeof req.query.q === 'string' ? req.query.q : '').trim();
-  const results = q.length >= 2 ? lookupToxicity(q.slice(0, 80)) : [];
+  const mode = verdictModeFromQuery(req.query as Record<string, string>);
+  const results = q.length >= 2 ? lookupToxicity(q.slice(0, 80), 5, mode) : [];
   res.set('Cache-Control', 'public, max-age=3600');
   res.json({ query: q, results });
 });
@@ -6798,7 +6799,7 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
   // `planId` below stays the tier the household is ON — that is what
   // production publishes from the subscription row, and it is truthful. The
   // CAPS have to be the ones actually ENFORCED (#476): resolving them off
-  // planId alone would advertise Garden's plant cap to a past_due household
+  // planId alone would advertise Garden's plant cap to an unpaid household
   // whose next POST /plants is refused at Seedling's.
   const planId = h?.planId ?? 'seedling';
   const plan = entitledPlan(user.householdId);
@@ -7785,7 +7786,7 @@ app.post(
     const user = (req as any).user;
     // ENTITLEMENT, not the plan row (#476/#540). Using a key is gated on
     // entitlement in production's middleware/apiKey.ts, so minting one off
-    // `planId` alone was the inconsistent half: a past_due household could
+    // `planId` alone was the inconsistent half: an unpaid household could
     // issue a key its own next request would then be refused with.
     // And the FLAG, not the id (#592), mirroring the production handler.
     if (!featureOf(entitledPlan(user.householdId), 'apiKeys')) {

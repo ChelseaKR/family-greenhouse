@@ -344,7 +344,8 @@ function spanFromPetToxicityResult(value: unknown): RetrievedSpan {
       source: `tool:${PET_TOXICITY_TOOL_NAME}`,
       text: result.matches
         .map(
-          (m) => `${m.commonName} (${m.scientificName}): cats ${m.cats}; dogs ${m.dogs}. ${m.note}`
+          (m) =>
+            `${m.commonName} (${m.scientificName}): cats ${m.cats}; dogs ${m.dogs}.${m.note ? ` ${m.note}` : ''}`
         )
         .join('\n'),
       petSafety,
@@ -561,7 +562,7 @@ async function* turnEvents(
   // share, before any idempotency/budget/Bedrock work — no future caller of
   // either entry point can accidentally skip it.
   // Entitlement, not the plan row: each turn spends Bedrock tokens, so a
-  // past_due/unpaid household resolves to Seedling and hits the 402 above the
+  // unpaid/incomplete household resolves to Seedling and hits the 402 above the
   // same as a household that never paid. See getEntitledPlan.
   // The FLAG, not the id (#592). This asked `plan.id === 'seedling'` — naming
   // the one tier that must not have chat rather than asking whether this tier

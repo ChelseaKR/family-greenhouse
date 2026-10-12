@@ -82,6 +82,26 @@ describe('AutoHandoffCard', () => {
     expect(screen.queryByLabelText('Put a task up for grabs after')).not.toBeInTheDocument();
   });
 
+  it('inside the iOS app, renders the locked state with no button to the plans', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+        planId: 'seedling',
+      } as never);
+      renderCard();
+      expect(
+        await screen.findByText('Auto-handoff is part of the Garden household toolkit.')
+      ).toBeInTheDocument();
+      expect(screen.getByText("Plan changes aren't available in the app.")).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('lets a Garden admin turn the rule on, offering nothing below the 5-day floor', async () => {
     vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
       planId: 'garden',

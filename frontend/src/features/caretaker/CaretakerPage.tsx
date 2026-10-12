@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { hasNativePresent } from '@/lib/platform';
+import {
+  canUseNativeCamera,
+  nativePhotoErrorMessage,
+  pickNativePhoto,
+} from '@/services/nativeCamera';
+import { chooseFromMenu } from '@/services/nativePresent';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { CameraIcon, MapPinIcon } from '@heroicons/react/24/outline';
@@ -13,6 +20,7 @@ import {
   type CaretakerTask,
 } from '@/services/caretakerVisitService';
 import { formatDate } from '@/i18n/format';
+import { dueDayOffset } from '@/utils/date';
 
 /**
  * The caretaker's page: /caretaker/{token}. No account, no sign-in.
@@ -124,8 +132,8 @@ export function CaretakerPage() {
   );
 
   const handlePhotoPicked = useCallback(
-    async (file: File | undefined) => {
-      const task = tasks.find((candidate) => candidate.taskId === photoTaskId);
+    async (file: File | undefined, forTaskId: string | null = photoTaskId) => {
+      const task = tasks.find((candidate) => candidate.taskId === forTaskId);
       setPhotoTaskId(null);
       if (!file || !task) return;
       setActionError(null);
@@ -147,6 +155,34 @@ export function CaretakerPage() {
     [photoTaskId, t, tasks, token]
   );
 
+  /** In the apps: Apple's sheet asks camera or library, then straight there. */
+  const addNativePhoto = async (taskId: string, from: Element) => {
+    const source = await chooseFromMenu({
+      title: t('caretaker.page.addPhoto'),
+      options: [
+        { id: 'camera', title: t('plants.photoPicker.take') },
+        { id: 'library', title: t('plants.photoPicker.choose') },
+      ],
+      cancel: t('common.cancel'),
+      from,
+    });
+    if (source !== 'camera' && source !== 'library') {
+      setPhotoTaskId(null);
+      return;
+    }
+    try {
+      const file = await pickNativePhoto(source);
+      if (!file) {
+        setPhotoTaskId(null);
+        return;
+      }
+      await handlePhotoPicked(file, taskId);
+    } catch (error) {
+      setPhotoTaskId(null);
+      setActionError(nativePhotoErrorMessage(error, t));
+    }
+  };
+
   const handleNote = useCallback(async () => {
     const text = noteText.trim();
     if (!text) return;
@@ -167,11 +203,14 @@ export function CaretakerPage() {
     }
   }, [noteText, t, token]);
 
-  const now = Date.now();
-  const dueLabel = (task: CaretakerTask): string => {
-    if (task.overdue) return t('caretaker.page.overdue');
-    const days = Math.round((new Date(task.dueDate).getTime() - now) / (24 * 60 * 60 * 1000));
-    if (days <= 0) return t('caretaker.page.dueToday');
+  // The calendar day in this browser's zone, as every signed-in page reads it,
+  // not the API's instant-rule `overdue` flag, which called a task due at 09:00
+  // "Overdue" from 09:01 (see `dueDayOffset`). `null` shows no label.
+  const now = new Date();
+  const dueLabel = (days: number | null): string | null => {
+    if (days === null) return null;
+    if (days < 0) return t('caretaker.page.overdue');
+    if (days === 0) return t('caretaker.page.dueToday');
     if (days === 1) return t('caretaker.page.dueTomorrow');
     return t('caretaker.page.dueInDays', { count: days });
   };
@@ -251,6 +290,8 @@ export function CaretakerPage() {
                 {remaining.map((task) => {
                   const location = [task.spaceName, task.placementNote].filter(Boolean).join(' · ');
                   const instruction = instructionFor(task);
+                  const days = dueDayOffset(task.dueDate, now);
+                  const label = dueLabel(days);
                   return (
                     <li
                       key={task.taskId}
@@ -265,14 +306,16 @@ export function CaretakerPage() {
                               <span>{location}</span>
                             </p>
                           )}
-                          <p
-                            className={
-                              'mt-0.5 text-sm ' +
-                              (task.overdue ? 'text-amber-700' : 'text-gray-600')
-                            }
-                          >
-                            {dueLabel(task)}
-                          </p>
+                          {label && (
+                            <p
+                              className={
+                                'mt-0.5 text-sm ' +
+                                (days !== null && days < 0 ? 'text-amber-700' : 'text-gray-600')
+                              }
+                            >
+                              {label}
+                            </p>
+                          )}
                         </div>
                         <Button
                           variant="primary"
@@ -290,9 +333,12 @@ export function CaretakerPage() {
                           size="sm"
                           isLoading={photoBusy && photoTaskId === task.taskId}
                           leftIcon={<CameraIcon className="h-4 w-4" aria-hidden="true" />}
-                          onClick={() => {
+                          onClick={(event) => {
                             setPhotoTaskId(task.taskId);
-                            fileInput.current?.click();
+                            // An app without Apple's sheets keeps the picker.
+                            if (canUseNativeCamera() && hasNativePresent())
+                              void addNativePhoto(task.taskId, event.currentTarget);
+                            else fileInput.current?.click();
                           }}
                           aria-label={t('caretaker.page.addPhotoAria', { plant: task.plantName })}
                         >

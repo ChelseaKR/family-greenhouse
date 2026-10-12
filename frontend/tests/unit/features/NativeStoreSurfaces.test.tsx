@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@/App';
@@ -45,16 +45,19 @@ describe('native store policy surfaces', () => {
     delete (window as unknown as { Capacitor?: unknown }).Capacitor;
   });
 
-  it('replaces public checkout pricing with neutral, purchase-free plan information', () => {
+  it('sends /pricing to Settings → Plan status instead of rendering a plans page', async () => {
+    // Owner decision 2026-10-02: the apps have no plans page at all. The
+    // neutral page this replaced still said plans "can change on the web".
     render(
-      <MemoryRouter>
-        <PricingPage />
+      <MemoryRouter initialEntries={['/pricing']}>
+        <Routes>
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/settings/billing" element={<p>Plan status</p>} />
+        </Routes>
       </MemoryRouter>
     );
-    expect(
-      screen.getByRole('heading', { name: 'Your Family Greenhouse plan' })
-    ).toBeInTheDocument();
-    expect(screen.getByText(/No payment is collected in this app/)).toBeInTheDocument();
+    expect(await screen.findByText('Plan status')).toBeInTheDocument();
+    expect(screen.queryByText(/on the web/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
     expect(screen.queryByText('$39.99')).not.toBeInTheDocument();
   });

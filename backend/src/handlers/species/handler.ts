@@ -16,7 +16,7 @@ import { successResponse, cacheableResponse } from '../../utils/response.js';
 import * as enrichment from '../../services/enrichment.js';
 import { configurationStatus } from '../../services/perenual.js';
 import { deriveCareSuggestion } from '../../services/careRecommendations.js';
-import { lookupToxicity } from '../../models/petToxicity.js';
+import { lookupToxicity, verdictModeFromQuery } from '../../models/petToxicity.js';
 import createHttpError from 'http-errors';
 
 // `Number.parseInt` truncates trailing garbage ("7abc" → 7, "7e2" → 7), so a
@@ -273,7 +273,12 @@ export const toxicity = createHandler(
     const q = (event.queryStringParameters?.q ?? '').trim();
     // Cap the query length so a giant string can't blow up the matcher; the
     // table is tiny, so this is belt-and-braces.
-    const matches = q.length >= 2 ? lookupToxicity(q.slice(0, 80)) : [];
+    // `?unknown=1` (current clients) gets cited verdicts with `unknown`;
+    // anything else is an older bundle, possibly a native build that cannot
+    // be updated, and gets the legacy answer that never reads as safe without
+    // a citation (see VerdictMode).
+    const mode = verdictModeFromQuery(event.queryStringParameters);
+    const matches = q.length >= 2 ? lookupToxicity(q.slice(0, 80), 5, mode) : [];
     return Promise.resolve(
       cacheableResponse(
         { query: q, results: matches },

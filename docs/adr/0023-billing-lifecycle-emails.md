@@ -216,6 +216,22 @@ correct; if the dashboard setting changes, it is still correct.
 > states the same thing on `Settings → Billing`, so the email is no longer the
 > only place a household can learn its card was declined.
 
+> **Update (2026-09-19).** #593 changed the entitlement rule again, on the
+> owner's decision. `getEntitledPlan` now entitles `active`, `trialing` and
+> `past_due`: a household keeps its paid plan while Stripe retries a failed
+> payment, and the owner has chosen **cancel** as the setting for "subscription
+> status after all retries fail", so the last failed retry ends the
+> subscription and the household is on Seedling's caps. Both unknowns above are
+> now decisions, so the email says them (the plan is kept while the card is
+> retried; when the retries end without a payment Stripe cancels the
+> subscription and the household moves to the free plan's limits) instead of
+> being worded to be true under every setting. That wording is true only while
+> the dashboard setting is cancel, which this repository cannot read: the
+> checklist is in `docs/billing.md`. The "Consequences" bullet below about
+> _mark unpaid_ and _leave past_due_ describes the state before #364; today
+> _mark unpaid_ also drops the household to Seedling's caps, and only _leave
+> past_due_ keeps paid access indefinitely.
+
 ### 5. Recipients are the household's admins
 
 Only an admin can reach checkout or the billing portal (`requireAdmin` on

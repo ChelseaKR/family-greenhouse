@@ -6,7 +6,7 @@
  * with its per-tag lockout, and the no-PII guarantee of the public payload.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { v4 as uuidv4 } from 'uuid';
 import {
   app,

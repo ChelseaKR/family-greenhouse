@@ -1214,7 +1214,7 @@ describe('runChatTurn', () => {
     }
   );
 
-  it.each(['past_due', 'unpaid', 'incomplete'])(
+  it.each(['unpaid', 'incomplete'])(
     'rejects with 402 when the Garden subscription is %s — each turn spends Bedrock tokens',
     async (status) => {
       vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({

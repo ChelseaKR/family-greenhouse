@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { NativePhotoButtons } from '@/components/NativePhotoButtons';
+import { canUseNativeCamera } from '@/services/nativeCamera';
 import { useTranslation } from 'react-i18next';
 import { CameraIcon } from '@heroicons/react/24/outline';
 import { Alert } from '@/components/Alert';
@@ -36,6 +38,7 @@ interface SitterPhotoBackProps {
 
 export function SitterPhotoBack({ token, tasks, onLinkInactive }: SitterPhotoBackProps) {
   const { t } = useTranslation();
+  const native = canUseNativeCamera();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<SitterPhotoStatus | null>(null);
   const [statusUnknown, setStatusUnknown] = useState(false);
@@ -70,12 +73,16 @@ export function SitterPhotoBack({ token, tasks, onLinkInactive }: SitterPhotoBac
     return () => controller.abort();
   }, [token, onLinkInactive]);
 
-  const handleFilePick = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilePick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) void acceptPhoto(file);
+  };
+
+  /** A photo from the web picker or from the app's camera and library. */
+  const acceptPhoto = useCallback(
+    async (file: File) => {
       setError(null);
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      if (!file) return;
       if (!file.type.startsWith('image/')) {
         setError(t('sitter.photo.notAnImage'));
         return;
@@ -175,14 +182,24 @@ export function SitterPhotoBack({ token, tasks, onLinkInactive }: SitterPhotoBac
           onChange={handleFilePick}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            leftIcon={<CameraIcon className="h-4 w-4" aria-hidden="true" />}
-          >
-            {t('sitter.photo.choosePhoto')}
-          </Button>
+          {/* In the apps: Take photo and Choose photo, straight to the camera
+              or the library. */}
+          {native ? (
+            <NativePhotoButtons
+              onPick={(file) => void acceptPhoto(file)}
+              onError={setError}
+              disabled={busy}
+            />
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              leftIcon={<CameraIcon className="h-4 w-4" aria-hidden="true" />}
+            >
+              {t('sitter.photo.choosePhoto')}
+            </Button>
+          )}
           {preview && (
             <img
               src={preview}

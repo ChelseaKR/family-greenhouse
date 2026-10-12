@@ -147,6 +147,7 @@ const MUST_BLOCK_MERGE = [
     label: "the README's commercial-status banner (#688)",
   },
   { pattern: /citation:check/, label: 'CITATION.cff version parity (#685)' },
+  { pattern: /terms-date:check/, label: 'the Terms effective date is a release date (#593)' },
 ];
 
 function requiredContexts() {

@@ -63,7 +63,7 @@ import { randomUUID } from 'node:crypto';
 import { GetCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
-import type { Task } from '../models/types.js';
+import type { Household, Task } from '../models/types.js';
 import * as householdService from './householdService.js';
 import * as taskService from './taskService.js';
 import * as plantService from './plantService.js';
@@ -73,6 +73,7 @@ import * as notifier from './notifier.js';
 import * as climate from './climate.js';
 import * as reminderEmail from './reminderEmail.js';
 import type { ReminderClimate, ReminderTaskRow, DueState } from './reminderEmail.js';
+import * as reminderCopy from './reminderCopy.js';
 import * as emailSuppression from './emailSuppression.js';
 import * as escalation from './escalation.js';
 import * as scheduledFanOut from './scheduledFanOut.js';
@@ -539,11 +540,35 @@ function compareRows(a: ReminderTaskRow, b: ReminderTaskRow): number {
  * an empty one. A reminder that could not read the weather says nothing about
  * the weather; it must never imply "no rain expected".
  */
-async function readReminderClimate(householdId: string): Promise<ReminderClimate> {
+/**
+ * The household row, read once per household per run (and only when a member
+ * is about to be composed a reminder). Two consumers: the forecast needs its
+ * location, and the email footer names it. A failed read is `unavailable`,
+ * distinct from a household that exists and has no location: the first is
+ * logged, the second is the normal case for most households.
+ */
+type HouseholdRead = { status: 'read'; household: Household | null } | { status: 'unavailable' };
+
+async function readHouseholdRecord(householdId: string): Promise<HouseholdRead> {
   try {
-    const household = await householdService.getHousehold(householdId);
-    if (!household?.location) return { status: 'unavailable' };
-    const snapshot = await climate.getWeatherCached(household.location.lat, household.location.lon);
+    return { status: 'read', household: await householdService.getHousehold(householdId) };
+  } catch (err) {
+    logger.info(
+      { householdId, err: (err as Error).message, msg: 'reminders.household_unavailable' },
+      'reminders.household_unavailable'
+    );
+    return { status: 'unavailable' };
+  }
+}
+
+async function readReminderClimate(
+  householdId: string,
+  read: HouseholdRead
+): Promise<ReminderClimate> {
+  if (read.status !== 'read' || !read.household?.location) return { status: 'unavailable' };
+  const { location } = read.household;
+  try {
+    const snapshot = await climate.getWeatherCached(location.lat, location.lon);
     if (!snapshot) return { status: 'unavailable' };
     const condition = snapshot.condition.toLowerCase();
     const todayLow = snapshot.forecast[0]?.minC ?? snapshot.tempC;
@@ -586,12 +611,16 @@ async function replyableComposition(
     householdId: string;
     channels: ReadonlyMap<notifier.NotificationChannel, string>;
     now: Date;
+    message: reminderEmail.ReminderMessageContext;
   }
-): Promise<{ composed: reminderEmail.ReminderComposition; replyTo: string } | null> {
+): Promise<{ composed: reminderEmail.ReminderMessage; replyTo: string } | null> {
   const config = replyConfig();
   if (!config.enabled || !context.channels.has('email')) return null;
 
-  const composed = reminderEmail.composeReminderEmail({ ...input, replyHint: true });
+  const composed = reminderEmail.composeReminderMessage(
+    { ...input, replyHint: true },
+    context.message
+  );
   const nextDueById = new Map(tasks.map((t) => [t.id, t.nextDue]));
   const bound: emailReplyTokens.ReplyTokenTask[] = [];
   for (const row of composed.listed) {
@@ -711,27 +740,46 @@ export async function remindHousehold(
 
     /** One rendered row. Plant names come from the active-plant read, which
      *  every task in `due` already matched; an empty stored name resolves to
-     *  null so the composer says the name is missing rather than printing "". */
+     *  null so the composer says the name is missing rather than printing "".
+     *  The three extra fields feed the push presentation: the type for its
+     *  title, and the ids for the one-task deep link and the notification's
+     *  Done / Snooze actions. */
     const rowFor = (
       t: Task,
       upForGrabs: boolean,
       locale: reminderEmail.ReminderLocale
-    ): ReminderTaskRow => ({
+    ): ReminderTaskRow &
+      reminderCopy.ReminderCopyRow & { taskId: string; plantId: string; nextDue: string } => ({
       plantName: activePlantNames.get(t.plantId)?.trim() || null,
       taskLabel: reminderEmail.taskLabelFor(t.type, t.customType, locale),
+      taskType: t.type,
       due: dueStateFor(t.nextDue, now),
       upForGrabs,
       url: frontendUrl(`/plants/${encodeURIComponent(t.plantId)}`),
       taskId: t.id,
+      plantId: t.plantId,
+      nextDue: t.nextDue,
     });
 
     // The forecast is read at most once per household per run, and only when a
     // member is actually about to be composed a reminder — the daily dedupe
     // marker means that is at most once a day in practice, not once an hour.
+    let householdOnce: Promise<HouseholdRead> | null = null;
+    const householdRecord = (): Promise<HouseholdRead> => {
+      householdOnce ??= readHouseholdRecord(householdId);
+      return householdOnce;
+    };
     let climateOnce: Promise<ReminderClimate> | null = null;
     const householdClimate = (): Promise<ReminderClimate> => {
-      climateOnce ??= readReminderClimate(householdId);
+      climateOnce ??= householdRecord().then((read) => readReminderClimate(householdId, read));
       return climateOnce;
+    };
+    /** For the email footer. Null for an unreadable row AND for a household
+     *  with no name: either way the footer says "a household", never a name
+     *  it did not read. */
+    const householdName = async (): Promise<string | null> => {
+      const read = await householdRecord();
+      return read.status === 'read' ? read.household?.name?.trim() || null : null;
     };
 
     for (const member of members) {
@@ -863,13 +911,50 @@ export async function remindHousehold(
         restingCount: restingForMember,
         restingAfterDays: REMINDER_OVERDUE_DECAY_DAYS,
       };
+      // The links the email's buttons and footer carry, and the household's
+      // name for its "why you got this" line. The rows above carry their own
+      // plant links already.
+      const messageContext: reminderEmail.ReminderMessageContext = {
+        householdName: await householdName(),
+        tasksUrl: frontendUrl('/tasks?filter=due'),
+        settingsUrl: frontendUrl('/settings?section=notifications'),
+      };
       const replyable = await replyableComposition(composeInput, fresh, {
         userId: member.userId,
         householdId,
         channels: reservations,
         now,
+        message: messageContext,
       });
-      const composed = replyable?.composed ?? reminderEmail.composeReminderEmail(composeInput);
+      const composed =
+        replyable?.composed ?? reminderEmail.composeReminderMessage(composeInput, messageContext);
+
+      // The push notification: a title that names the action and the plant,
+      // a body that says when, and — for exactly one task — a link to that
+      // plant's care section plus the Done / Snooze actions, bound to the
+      // occurrence being reminded about so a late tap cannot complete the
+      // next one. Several tasks open the due list. Ids only reach the
+      // payload; `reminderCopy` has no field for a note or a name.
+      const shortCopy = reminderCopy.composeReminderShortCopy({ rows, locale: memberLocale });
+      const only = rows.length === 1 ? rows[0] : null;
+      const push: notifier.PushPresentation = {
+        title: shortCopy.title,
+        body: shortCopy.body,
+        url: only
+          ? frontendUrl(
+              `/plants/${encodeURIComponent(only.plantId)}?task=${encodeURIComponent(only.taskId)}#care`
+            )
+          : frontendUrl('/tasks?filter=due'),
+        ...(only && shortCopy.actions
+          ? {
+              task: { taskId: only.taskId, plantId: only.plantId, expectedNextDue: only.nextDue },
+              actions: {
+                done: shortCopy.actions.done,
+                snooze: shortCopy.actions.snoozeUntilTomorrow,
+              },
+            }
+          : {}),
+      };
 
       let result: notifier.SendResult;
       try {
@@ -882,8 +967,14 @@ export async function remindHousehold(
             tag: `reminder-${householdId}-${localDateKey(now, timeZone)}`,
             url: frontendUrl('/tasks?filter=due'),
             // The app icon shows how many tasks this reminder names (device
-            // push only; the app clears it when opened).
+            // push only; the app clears it when opened, and after a Done or
+            // Snooze from a single-task notification).
             badge: rows.length,
+            // The email leg's branded rendering: its own subject (what to
+            // do), the HTML part and the text part. Push and SMS keep the
+            // title and bodies above.
+            email: { subject: composed.emailSubject, text: composed.text, html: composed.html },
+            push,
             ...(replyable ? { emailReplyTo: replyable.replyTo } : {}),
           },
           {

@@ -11,7 +11,7 @@ export default function PetSafeHardToKill() {
     <article className="prose-fg">
       <p className="lead">
         &ldquo;Pet-safe&rdquo; and &ldquo;hard to kill&rdquo; sound like two easy boxes to tick. Put
-        them together and most of the internet&rsquo;s favourite beginner plants fall out of the
+        them together and most of the internet&rsquo;s favorite beginner plants fall out of the
         running &mdash; <a href="/care/pothos">pothos</a>, <a href="/care/zz-plant">ZZ</a>,{' '}
         <a href="/care/snake-plant">snake plant</a>, <a href="/care/peace-lily">peace lily</a>,{' '}
         <a href="/care/aloe-vera">aloe</a>, <a href="/care/heartleaf-philodendron">philodendron</a>{' '}
@@ -46,7 +46,7 @@ export default function PetSafeHardToKill() {
         is it.
       </p>
 
-      <h3>2. Parlour palm (Chamaedorea elegans)</h3>
+      <h3>2. Parlor palm (Chamaedorea elegans)</h3>
       <p>
         Non-toxic, genuinely low-light tolerant, and slow enough that it almost never needs
         repotting. It asks for a drink when the top inch of soil dries and otherwise leaves you
@@ -57,10 +57,10 @@ export default function PetSafeHardToKill() {
 
       <h3>3. Areca palm (Dypsis lutescens)</h3>
       <p>
-        Bigger and thirstier than the <a href="/care/parlor-palm">parlour palm</a> but every bit as
+        Bigger and thirstier than the <a href="/care/parlor-palm">parlor palm</a> but every bit as
         pet-safe. This is the one to buy if you want a floor plant a cat will inevitably brush past
         &mdash; it&rsquo;s non-toxic, so a nibbled frond is a non-event. It wants brighter light and
-        more consistent water than the parlour palm, so it&rsquo;s a notch fussier, but nothing a
+        more consistent water than the parlor palm, so it&rsquo;s a notch fussier, but nothing a
         regular check-in won&rsquo;t cover.
       </p>
 
@@ -92,9 +92,9 @@ export default function PetSafeHardToKill() {
           plant is not. Check the specific species, never the category.
         </li>
         <li>
-          <strong>&ldquo;Lucky&rdquo; and gift plants.</strong> Jade, ZZ, and the peace lilies that
-          turn up in supermarket bouquets are all toxic. A plant being marketed as low-maintenance
-          tells you nothing about whether it&rsquo;s pet-safe.
+          <strong>&ldquo;Lucky&rdquo; and gift plants.</strong> <a href="/care/jade-plant">Jade</a>,
+          ZZ, and the peace lilies that turn up in supermarket bouquets are all toxic. A plant being
+          marketed as low-maintenance tells you nothing about whether it&rsquo;s pet-safe.
         </li>
         <li>
           <strong>Anything called a &ldquo;lily.&rdquo;</strong> True lilies (Lilium) and daylilies
@@ -116,13 +116,26 @@ export default function PetSafeHardToKill() {
         buy &mdash; type a plant name into the <a href="/pet-safe">pet-safe checker</a>, no signup,
         and it gives you the cats-versus-dogs verdict in plain language, grounded in the same ASPCA
         data. It&rsquo;s the fastest way to settle the question standing in the aisle of a garden
-        centre.
+        center.
+      </p>
+      <p>
+        Most plants in this post also have a page of their own, with each cat and dog verdict shown
+        next to the ASPCA listing it comes from: the{' '}
+        <a href="/pet-safe/spider-plant">spider plant</a>,
+        <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
+        <a href="/pet-safe/boston-fern">Boston fern</a>,<a href="/pet-safe/calathea">calathea</a>,{' '}
+        <a href="/pet-safe/pothos">pothos</a>, <a href="/pet-safe/snake-plant">snake plant</a>,
+        <a href="/pet-safe/peace-lily">peace lily</a>, <a href="/pet-safe/aloe-vera">aloe vera</a>,
+        <a href="/pet-safe/philodendron">philodendron</a>,{' '}
+        <a href="/pet-safe/jade-plant">jade plant</a> and
+        <a href="/pet-safe/lily">true lilies</a>. The areca palm and the ZZ plant have no page,
+        because we have no cited listing recorded for them.
       </p>
 
       <h2>The honest summary</h2>
       <p>
         If you have a pet and want something you genuinely can&rsquo;t kill, buy a{' '}
-        <a href="/care/spider-plant">spider plant</a> and a parlour palm and call it a day. If you
+        <a href="/care/spider-plant">spider plant</a> and a parlor palm and call it a day. If you
         want the showy foliage, a calathea is safe but demanding, so pair it with a system that
         reminds you to keep up its routine. <a href="/">Family Greenhouse</a> is the one I built for
         exactly that &mdash; it tracks each plant&rsquo;s schedule and, for the fussier ones, holds

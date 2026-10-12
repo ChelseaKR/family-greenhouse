@@ -15,6 +15,7 @@
  * Same reasoning as telemetryBoot.ts, one module later. Outside the shells
  * this does nothing.
  */
+import { markNativeFrame, markNativePlatform } from './lib/platform';
 import {
   armNativeSplashFallback,
   initNativeKeyboardScroll,
@@ -22,6 +23,12 @@ import {
 } from './services/nativeShell';
 
 armNativeSplashFallback();
+// Before React renders anything: the native-only CSS (system body font, tap
+// and selection behavior) keys on this, so the first paint is already right.
+markNativePlatform();
+// Same moment, same reason: with the iOS app's native tab and navigation bars
+// there, the web header and drawer must not paint even once.
+markNativeFrame();
 // Not order-sensitive like the line above; they live here because this is the
 // one native-shell entry point main.tsx already has.
 initNativeKeyboardScroll();

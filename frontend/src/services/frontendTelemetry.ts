@@ -9,6 +9,8 @@
  * it can do is refuse to pretend nothing was lost — see the delivery
  * bookkeeping below and issue #576.
  */
+import { isAbandonedChunkLoad } from '@/lib/pageLeaving';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const RELEASE = import.meta.env.VITE_GIT_SHA || undefined;
 const SESSION_KEY = 'fg-telemetry-session';
@@ -322,6 +324,8 @@ async function deliver(payload: Record<string, unknown>, kind: SendKind): Promis
 
 export function reportFrontendError(error: unknown): void {
   if (!telemetryAllowed() || errorCount >= MAX_ERRORS_PER_SESSION) return;
+  // A code download cancelled by leaving the page is not an app failure.
+  if (isAbandonedChunkLoad(error)) return;
   errorCount += 1;
   const source = error instanceof Error ? error : new Error(String(error));
   const name = KNOWN_ERROR_NAMES.has(source.name) ? source.name : 'Error';

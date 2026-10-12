@@ -240,9 +240,18 @@ resource "aws_cognito_user_pool_client" "main" {
     "name",
   ]
 
-  access_token_validity  = 1  # hours
-  id_token_validity      = 1  # hours
-  refresh_token_validity = 30 # days
+  access_token_validity = 1 # hours
+  id_token_validity     = 1 # hours
+  # How long a device stays signed in without a new sign-in (ADR 0034). The
+  # iOS and Android apps keep this token in the platform keychain/keystore;
+  # the website keeps it in sessionStorage unless the person ticks "Keep me
+  # signed in". Cognito fixes a refresh token's expiry when it is issued and
+  # does not extend it on use (REFRESH_TOKEN_AUTH returns no new refresh
+  # token), so this number IS the longest a phone goes between sign-ins. It
+  # was 30, the Cognito default; the maximum is 3650. Tokens issued before an
+  # apply keep the validity they were issued with: the first sign-in after the
+  # apply is the one that gets a year.
+  refresh_token_validity = 365 # days
 
   token_validity_units {
     access_token  = "hours"

@@ -22,6 +22,9 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { planLimitHitContext, track } from '@/services/analytics';
+import i18n from '@/i18n';
+import { isNativeApp } from '@/lib/platform';
+import { sessionVaultAvailable } from '@/services/sessionVault';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -91,6 +94,20 @@ api.interceptors.request.use(
 let refreshPromise: Promise<string> | null = null;
 
 /**
+ * The refresh token to try with, or null. Inside the shells the token lives
+ * in the device keychain and reaches state only once the store has read it
+ * (authStore.restoreVaultedSession), so a request that 401s at launch,
+ * before that read has landed, waits for it rather than concluding there is
+ * nothing to refresh with. On the website this is a plain state read.
+ */
+async function usableRefreshToken(): Promise<string | null> {
+  const { refreshToken, restoreVaultedSession } = useAuthStore.getState();
+  if (refreshToken || !sessionVaultAvailable()) return refreshToken;
+  await restoreVaultedSession();
+  return useAuthStore.getState().refreshToken;
+}
+
+/**
  * Did the server answer, and refuse? An axios error carries a `response`
  * only when one arrived; a request error (no `response`) is a network
  * failure. Anything that is not an axios error at all is a bug in our own
@@ -153,9 +170,16 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
 
-      const refreshToken = useAuthStore.getState().refreshToken;
+      const refreshToken = await usableRefreshToken();
 
       if (!refreshToken) {
+        if (sessionVaultAvailable()) {
+          // A shell with the keychain: one WebView, no other tabs. A session
+          // this device cannot refresh is over, and a full sign-out clears
+          // the stale tokens so the next launch does not retry them.
+          useAuthStore.getState().logout();
+          return Promise.reject(error);
+        }
         // No refresh token in THIS tab (refresh tokens are sessionStorage-
         // only). Clear this tab's in-memory session without rewriting the
         // shared localStorage payload — other tabs may hold valid sessions
@@ -191,9 +215,9 @@ api.interceptors.response.use(
  * routes a 401 means "wrong password", not "stale token". Rejects without
  * touching the session when this tab holds no refresh token.
  */
-export function refreshSession(): Promise<string> {
-  const refreshToken = useAuthStore.getState().refreshToken;
-  if (!refreshToken) return Promise.reject(new Error('No refresh token in this tab'));
+export async function refreshSession(): Promise<string> {
+  const refreshToken = await usableRefreshToken();
+  if (!refreshToken) throw new Error('No refresh token in this tab');
   if (!refreshPromise) refreshPromise = startRefresh(refreshToken);
   return refreshPromise;
 }
@@ -214,9 +238,45 @@ export interface ApiError {
  * but we still tolerate plain-string bodies (legacy text/plain responses,
  * proxies, or JSON the client failed to parse). Falls back to the JS Error
  * message, then a generic string. Never throws.
+ *
+ * A request that got no answer at all (offline, the API unreachable, a
+ * timeout) has nothing from the server to show, and axios's own text for it
+ * is the English "Network Error" or "timeout of 15000ms exceeded". That used
+ * to be shown as is, in every language, on the website and in the apps; it is
+ * now the translated `connection.requestUnreachable`.
  */
 export function getErrorMessage(error: unknown): string {
+  const message = serverErrorMessage(error);
+  // A 402 is the plan refusing something, and its message usually ends by
+  // telling a web reader to upgrade or buy. Inside the apps, which cannot sell
+  // a plan (Guideline 3.1.1), those sentences are dropped and the rest — what
+  // the plan allows, what to remove first — is kept.
+  if (isNativeApp() && axios.isAxiosError(error) && error.response?.status === 402) {
+    return withoutPurchaseCalls(message);
+  }
+  return message;
+}
+
+/**
+ * `message` without the calls to action the backend's plan refusals carry:
+ * a sentence that starts with "Upgrade", "Buy" or "Choose a paid plan", and a
+ * trailing ", or upgrade …" clause. When nothing else is left, the app's
+ * neutral "Plan changes aren't available in the app."
+ */
+export function withoutPurchaseCalls(message: string): string {
+  const kept = message
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/^(upgrade|buy|choose a paid plan)\b/i.test(sentence.trim()))
+    .map((sentence) => sentence.replace(/,\s*or (upgrade|choose a paid plan)\b[^.!?]*/i, ''));
+  const text = kept.join(' ').trim();
+  return text || i18n.t('settings.billing.nativeUnavailable');
+}
+
+function serverErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    if (isNoResponseError(error)) {
+      return i18n.t('connection.requestUnreachable');
+    }
     const data: unknown = error.response?.data;
     // Standard contract: JSON body with a string `message`.
     if (
@@ -253,4 +313,15 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
   return 'An unexpected error occurred';
+}
+
+/** No response came back: offline, unreachable, or timed out (not cancelled). */
+function isNoResponseError(error: AxiosError): boolean {
+  if (error.response) return false;
+  return (
+    error.code === AxiosError.ERR_NETWORK ||
+    error.code === AxiosError.ECONNABORTED ||
+    error.code === AxiosError.ETIMEDOUT ||
+    error.message === 'Network Error'
+  );
 }

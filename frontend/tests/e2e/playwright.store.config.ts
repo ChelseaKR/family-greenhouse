@@ -11,17 +11,11 @@ export default defineConfig({
   // and was silently ignored; `contextOptions` is where the runner reads it.
   // See playwright.config.ts and #440.
   use: { baseURL: 'http://localhost:4174', contextOptions: { reducedMotion: 'reduce' } },
+  // No iPhone project: the 6.9-inch App Store frames come from the iOS app
+  // itself, native tab bar and navigation bar included, through
+  // `npm run store:screenshots:ios` (scripts/store-shots/capture-ios.mjs).
+  // A website in a phone-sized viewport no longer looks like the iPhone app.
   projects: [
-    {
-      name: 'app-store-iphone',
-      use: {
-        browserName: 'webkit',
-        viewport: { width: 440, height: 956 },
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
-      },
-    },
     {
       name: 'app-store-ipad',
       use: {

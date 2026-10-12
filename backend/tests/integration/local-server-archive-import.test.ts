@@ -9,7 +9,7 @@
  * behaviour itself is proven in archive-import.test.ts.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import {
   app,
   db,

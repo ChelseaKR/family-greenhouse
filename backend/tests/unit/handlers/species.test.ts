@@ -444,6 +444,34 @@ describe('species handler', () => {
   });
 
   describe('toxicity (public pet-safety lookup)', () => {
+    const ask = async (params: Record<string, string>) => {
+      const { toxicity } = await import('../../../src/handlers/species/handler.js');
+      const res = (await toxicity(
+        buildAnonymousEvent({ path: '/species/toxicity', queryStringParameters: params }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      return JSON.parse(res.body).results as Array<Record<string, unknown>>;
+    };
+
+    it('answers unknown, with no note, for an uncited row when the client opts in', async () => {
+      const [zz] = await ask({ q: 'zz plant', unknown: '1' });
+      expect(zz).toMatchObject({ slug: 'zz-plant', cats: 'unknown', dogs: 'unknown', note: null });
+    });
+
+    it('keeps the legacy answer for clients that do not opt in (old bundles, old app builds)', async () => {
+      // Old bundles render anything but 'toxic' as "Non-toxic"; they must
+      // never receive 'unknown'.
+      const [zz] = await ask({ q: 'zz plant' });
+      expect(zz).toMatchObject({ slug: 'zz-plant', cats: 'toxic', dogs: 'toxic' });
+      for (const q of ['zz', 'lily', 'palm', 'fern', 'christmas', 'money', 'ivy']) {
+        for (const match of await ask({ q })) {
+          expect(['toxic', 'non-toxic'], `${q}: ${String(match.slug)}`).toContain(match.cats);
+          expect(['toxic', 'non-toxic'], `${q}: ${String(match.slug)}`).toContain(match.dogs);
+        }
+      }
+    });
+
     it('answers an anonymous query with cat/dog verdicts and a public cache header', async () => {
       const { toxicity } = await import('../../../src/handlers/species/handler.js');
       const res = (await toxicity(

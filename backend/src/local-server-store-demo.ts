@@ -570,10 +570,11 @@ export function seedStoreDemoHousehold(db: StoreDemoDeps): void {
       placementNote: null,
       summerSpaceId: null,
       winterSpaceId: null,
-      // No photograph. Every photo the app can show here would have to be
-      // invented, and an invented picture presented as a household's own plant
-      // is exactly what the "no real user data" rule is protecting against.
-      // The brand placeholder is the honest empty state and is what ships.
+      // No photograph in the seed. The iPhone store capture uploads a
+      // public-domain or CC0 photo of each species through the photo
+      // upload API (frontend/scripts/store-shots/shots.mjs and
+      // store-assets/photo-credits.json), so every other caller of this seed
+      // keeps the brand placeholder.
       imageUrl: null,
       notes: plant.notes,
       careRule: plant.careRule ?? null,

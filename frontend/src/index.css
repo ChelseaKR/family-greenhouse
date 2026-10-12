@@ -21,6 +21,14 @@
    --------------------------------------------------------------------- */
 @custom-variant large-text (&:where(html[data-text-size='large'] *));
 
+/* Inside the iOS app's native frame: Apple's tab bar and navigation bar,
+   drawn by Swift around the web content (ios/App/App/NativeFrame*.swift).
+   `<html data-native-frame>` is set by lib/platform.ts `markNativeFrame`
+   before the first paint, only there, so `native-frame:` utilities (used
+   with `!`, to outrank the responsive display utilities beside them) hide
+   the web's own header, drawer and back links in the app and nowhere else. */
+@custom-variant native-frame (&:where(html[data-native-frame] *));
+
 /* A word wider than its box at 312% breaks rather than running off the
    edge. `break-word`, not `anywhere`, here and in the two rules below:
    `anywhere` also shrinks every flex item's minimum width to one letter, so
@@ -169,6 +177,28 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* A select is never shorter than a tap target. Safari draws a styled select
+   as a native pop-up button at its own height: it ignores padding AND
+   min-height there, so a select styled like the text fields (`.input`, py-2
+   text-sm) came out 23px tall, and the email-language select 18px, under the
+   24px minimum target size. Drawing the select ourselves (no native
+   appearance, a chevron as its background) makes padding and min-height
+   count in every browser; 40px matches the text fields beside it. The end
+   padding is reserved for the chevron, so long option text never runs
+   under it, whatever padding utility the select carries. */
+@layer base {
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1.25rem 1.25rem;
+    padding-inline-end: 2.25rem !important;
+  }
+}
+
 /* Scrolling dialog overlays (`fixed inset-0 overflow-y-auto`): keep the
    panel's title and close button out from under the status bar and its
    buttons above the home indicator when a tall dialog is scrolled to either
@@ -241,6 +271,161 @@ html[data-text-size='large'] .whitespace-nowrap {
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Inside the native shells. `<html data-native="ios">` (or "android") is
+   set by lib/platform.ts `markNativePlatform`, before the first paint, and
+   only there: on the website no rule below can match, so it renders exactly
+   as before.
+   --------------------------------------------------------------------- */
+@layer base {
+  /* Body text in the system font (SF on iOS), as native apps use; headings
+     keep the brand faces (owner decision 2026-10-02). Bitter headings carry
+     `font-serif`, a utility, which outranks this base layer; every other
+     heading is held on the brand sans here. */
+  html[data-native] {
+    --font-sans:
+      -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    /* No gray flash over whatever was tapped: buttons and links show their
+       own pressed and focus states. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-native] :where(h1, h2, h3, h4, h5, h6) {
+    font-family:
+      'Instrument Sans Variable',
+      Inter,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+  }
+
+  /* A long press on a link, a button or a picture inside one raises
+     WebKit's link preview and "Open / Copy link" menu, a browser's menu
+     inside an app. A picture on its own (a plant's photo) keeps it, so it
+     can still be saved. */
+  html[data-native] :where(a, button, [role='button'], summary),
+  html[data-native] :where(a, button, [role='button']) :where(img, svg) {
+    -webkit-touch-callout: none;
+  }
+
+  /* The app's chrome does not select like a document: a long press on a
+     tab, a button or the navigation does not start a text selection.
+     Content, notes, names and every form field stay selectable (below). */
+  html[data-native]
+    :where(
+      nav,
+      header,
+      button,
+      [role='button'],
+      [role='tab'],
+      [role='tablist'],
+      [role='menuitem'],
+      summary,
+      label
+    ) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  html[data-native]
+    :where(input, textarea, select, [contenteditable]:not([contenteditable='false'])) {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Inside the iOS app's native frame (`html[data-native-frame]`). The
+   navigation bar shows the screen's title. When it shows the same words as
+   the page's h1, NativeFrameBridge marks that h1 `data-native-title="bar"`:
+   it is then hidden from sight but stays in the page, so VoiceOver still
+   reads it and the launch screen still finds `#main-content h1`. Its eyebrow
+   and hand-drawn underline (`data-title-decor`) go with it.
+   --------------------------------------------------------------------- */
+@layer base {
+  /* Measured in the simulator: with the bars there, WebKit reports
+     env(safe-area-inset-top) and -bottom as the full bar heights (116px and
+     83px on an iPhone 17 Pro) while the scroll view already insets the page
+     by exactly that much, and position: fixed already lays out between the
+     bars. So inside the frame nothing pads by env() top or bottom again. The
+     page behind the glass bars is paper, not the launch screen's forest. */
+  html[data-native-frame] {
+    background-color: var(--color-paper);
+  }
+
+  html[data-native-frame] body {
+    padding-bottom: 0;
+  }
+
+  html[data-native-frame] h1[data-native-title='bar'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  html[data-native-frame] :has(> h1[data-native-title='bar']) > [data-title-decor],
+  html[data-native-frame] :has(> * > h1[data-native-title='bar']) > [data-title-decor] {
+    display: none;
+  }
+}
+
+/* In the frame, a true on/off setting's checkbox (`role="switch"`, from
+   `nativeSwitchRole()` in lib/platform.ts) is drawn as an iOS switch: 51 by
+   31 points, the knob sliding right and the track turning the app's green
+   when on. Only the drawing changes; it is the same checkbox. In utilities,
+   so it outranks the h-5 / w-5 / accent-* utilities on the same input. */
+@layer utilities {
+  html[data-native-frame] input[type='checkbox'][role='switch'] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    width: 51px;
+    height: 31px;
+    margin: 0;
+    border: 0;
+    border-radius: 9999px;
+    background-color: #e9e9eb;
+    background-image: radial-gradient(
+      circle,
+      #fff 0 12.5px,
+      rgb(0 0 0 / 0.12) 13px,
+      transparent 14px
+    );
+    background-size: 31px 31px;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    transition:
+      background-color 0.2s ease,
+      background-position 0.2s ease;
+    cursor: pointer;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:checked {
+    background-color: var(--color-primary-700);
+    background-position: 20px 0;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  html[data-native-frame] input[type='checkbox'][role='switch']:focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
   }
 }
 
@@ -371,5 +556,15 @@ html[data-text-size='large'] .whitespace-nowrap {
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.82),
       0 18px 50px -36px rgb(23 52 4 / 0.42);
+  }
+}
+
+/* Inside the iOS app's native frame, the dialogs' safe-area padding would
+   pad a second time (see "Inside the iOS app's native frame" above). In the
+   utilities layer, so it outranks the utility it undoes. */
+@layer utilities {
+  html[data-native-frame] .safe-area-y {
+    padding-top: 0;
+    padding-bottom: 0;
   }
 }

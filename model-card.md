@@ -101,6 +101,15 @@ reflect Haiku 4.5 as the intentional choice, or set
 `var.bedrock_chat_model_id` to a Sonnet inference profile in the environments
 that should run it. This card does not make that call — it surfaces it.
 
+**Resolved 2026-10-01 (CKR):** Haiku 4.5 is the intended chat and leaf-health
+model. Reasons: it is about a third of Sonnet 4.6's list price, and the chat is
+tool-use Q&A over a small corpus behind a grounding guard, which is the case
+the code comment in `backend/src/services/chat/bedrock.ts` already gives.
+`chat-rag-design.md` now names Haiku 4.5. No measured comparison against Sonnet
+exists; that belongs to the live eval still waived in
+`docs/RESPONSIBLE-TECH-AUDITS.md` (re-issued 2026-10-01, expires 2027-01-05).
+Moving to Sonnet later is a model bump under the waiver's freeze rule.
+
 - **Chat model:** configurable via `BEDROCK_CHAT_MODEL_ID`. Current default /
   actual production value: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
 - **Embedding model:** `amazon.titan-embed-text-v2:0` (1024 dimensions),

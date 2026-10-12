@@ -712,7 +712,7 @@ async function readHouseholdPlan(householdId: string): Promise<PlanRead> {
   try {
     // ENTITLEMENT, not the plan row (#476). The analytics history window is a
     // plan LIMIT, and a downgrade already narrows it (ADR 0014); a household
-    // mid-dunning is treated the same way rather than keeping the paid
+    // that has lapsed is treated the same way rather than keeping the paid
     // window for the weeks Stripe spends retrying. The rows are never
     // trimmed, so nothing is lost — only the window a request may ask for.
     return {
@@ -1254,7 +1254,7 @@ export const createSitterLink = createHandler(
     //
     // ENTITLEMENT, not the plan row (#476). This is the ISSUING half of the
     // sitter-link decision and the piece that makes the other half safe: a
-    // household mid-dunning cannot mint a new link or a longer window, while
+    // lapsed household cannot mint a new link or a longer window, while
     // a link it already handed out keeps working to its expiry (see
     // handlers/tasks/handler.ts and handlers/tasks/sitterPhotos.ts). Starting
     // is gated on the card; continuing is not.
@@ -1432,7 +1432,7 @@ export const setEscalationRule = createHandler(
     }
     // ENTITLEMENT, not the plan row (#476). Turning auto-handoff ON is a new
     // grant — it starts a new class of email for the whole household — so a
-    // household mid-dunning may not. A rule already stored keeps its row and
+    // household that has lapsed may not. A rule already stored keeps its row and
     // is separately gated at scan time in services/escalation.ts, so nothing
     // has to be cleaned up and nothing is lost when the card is fixed.
     const plan = getEntitledPlan(await billing.getHouseholdSubscription(householdId));

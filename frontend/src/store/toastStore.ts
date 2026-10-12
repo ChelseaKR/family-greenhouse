@@ -23,11 +23,15 @@ export interface Toast {
 
 export interface ToastOptions {
   action?: ToastAction;
+  /** How long it stays, when it must end with something else (an Undo
+   *  window): the default lengths below otherwise. */
+  durationMs?: number;
 }
 
 interface ToastState {
   toasts: Toast[];
-  add: (variant: ToastVariant, message: string, options?: ToastOptions) => void;
+  /** Shows a toast and answers its id, for `dismiss`. */
+  add: (variant: ToastVariant, message: string, options?: ToastOptions) => number;
   dismiss: (id: number) => void;
 }
 
@@ -56,9 +60,10 @@ export const useToastStore = create<ToastState>((set) => ({
         () => {
           set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
         },
-        action ? ACTION_DURATION_MS : DURATION_MS[variant]
+        options?.durationMs ?? (action ? ACTION_DURATION_MS : DURATION_MS[variant])
       );
     }
+    return id;
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

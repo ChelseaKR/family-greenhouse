@@ -16,6 +16,7 @@ import {
   type ArchiveImportResult,
 } from '@/services/archiveImportService';
 import { formatDate } from '@/i18n/format';
+import { isNativeApp } from '@/lib/platform';
 import { ARCHIVE_MAX_BYTES, archiveUpload, readArchiveFile, uploadBytes } from './archiveFile';
 import type { ArchiveFile, ArchiveFileError } from './archiveFile';
 
@@ -46,6 +47,17 @@ const ERROR_KEYS: Record<ArchiveFileError | string, string> = {
   stopped_at_plan_limit: 'stoppedAtLimit',
   interrupted: 'interrupted',
 };
+
+/**
+ * The two plan-limit refusals tell a web reader to upgrade. Inside the apps,
+ * which cannot sell a plan (Guideline 3.1.1), they say what happened without
+ * that call to action (`overLimitInApp`, `stoppedAtLimitInApp`).
+ */
+const IN_APP_VARIANTS = new Set(['overLimit', 'stoppedAtLimit']);
+
+function errorKey(key: string): string {
+  return isNativeApp() && IN_APP_VARIANTS.has(key) ? `${key}InApp` : key;
+}
 
 type Details = Record<string, unknown> & {
   landed?: { plants?: number; tasks?: number };
@@ -93,7 +105,7 @@ export function ArchiveImportCard() {
   });
 
   function message(code: string, values: Record<string, unknown> = {}): string {
-    return t(`archiveImport.errors.${ERROR_KEYS[code] ?? 'invalid'}`, values);
+    return t(`archiveImport.errors.${errorKey(ERROR_KEYS[code] ?? 'invalid')}`, values);
   }
 
   function serverError(error: unknown): string {
@@ -336,7 +348,7 @@ function ArchivePreview({
 
       {!planLimit.fits && (
         <Alert variant="error">
-          {t('archiveImport.errors.overLimit', {
+          {t(`archiveImport.errors.${errorKey('overLimit')}`, {
             active: counts.activePlants,
             plan: planLimit.planName,
             limit: planLimit.limit,

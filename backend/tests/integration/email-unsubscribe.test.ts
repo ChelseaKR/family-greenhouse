@@ -17,7 +17,7 @@
  *      what you exercise locally is what ships.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import request from 'supertest';
+import request from '../support/request';
 import { app, __resetUnsubscribeRateLimitForTests } from '../../src/local-server.js';
 
 const TOKEN_PATH = '/notifications/email/unsubscribe';

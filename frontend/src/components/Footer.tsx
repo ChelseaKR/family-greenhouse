@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { MemorialFrame } from './brand/MemorialFrame';
 import { AnalyticsOptOutToggle } from './AnalyticsOptOutToggle';
+import { isNativeApp } from '@/lib/platform';
 
 // Labels are catalog keys (#467). Several are shared with the site header and
 // the landing footer, so one word is not translated three different ways.
@@ -19,6 +20,14 @@ const FOOTER_LINKS = [
   { labelKey: 'footer.terms', to: '/legal/terms' },
 ];
 
+/**
+ * Links the iOS and Android apps leave out. Plans and gifts are purchases, and
+ * a link toward buying anywhere but In-App Purchase is a Guideline 3.1.1
+ * problem (docs/mobile.md, "Store payment rules"). Inside the apps both
+ * routes open Settings → Plan status anyway.
+ */
+const WEB_ONLY_LINKS = new Set(['/pricing', '/gift']);
+
 /** A proper noun, the same in every locale. */
 const PLANT_DATA_PROVIDER = 'Perenual';
 
@@ -28,11 +37,15 @@ const PLANT_DATA_PROVIDER = 'Perenual';
  * ground, same memorial treatment, plus one row of cross-links so
  * readers arriving from search can find the rest of the site.
  *
- * The dedication line is intentional and quiet — please leave it.
+ * The dedication line is intentional and quiet — please leave it. In the
+ * iOS and Android apps it lives on Settings → About instead, and nowhere
+ * else (owner decision 2026-10-02); the website keeps it here.
  */
 export function Footer() {
   const { t } = useTranslation();
   const year = new Date().getFullYear();
+  const native = isNativeApp();
+  const links = native ? FOOTER_LINKS.filter((link) => !WEB_ONLY_LINKS.has(link.to)) : FOOTER_LINKS;
   return (
     <footer className="bg-primary-900">
       <div className="mx-auto max-w-7xl px-6 py-10 text-center">
@@ -40,18 +53,20 @@ export function Footer() {
           aria-label={t('footer.navLabel')}
           className="flex flex-wrap justify-center gap-x-6 gap-y-2"
         >
-          {FOOTER_LINKS.map((link) => (
+          {links.map((link) => (
             <Link key={link.to} to={link.to} className="text-sm text-primary-200 hover:text-white">
               {t(link.labelKey)}
             </Link>
           ))}
         </nav>
         <AnalyticsOptOutToggle className="mt-4" />
-        <div className="mt-8 flex items-center justify-center gap-4">
-          <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50" />
-          <p className="text-sm italic text-primary-200">{t('footer.memorial')}</p>
-          <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50 -scale-x-100" />
-        </div>
+        {!native && (
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50" />
+            <p className="text-sm italic text-primary-200">{t('footer.memorial')}</p>
+            <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50 -scale-x-100" />
+          </div>
+        )}
         <p className="mt-6 text-sm text-primary-200">
           {t('footer.copyrightPlantData', { year })}{' '}
           <a

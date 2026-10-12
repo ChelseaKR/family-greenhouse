@@ -1,5 +1,6 @@
 import type { Plant, PlantSpace } from '@/services/plantService';
 import type { TaskWithCoverage } from '@/services/taskService';
+import { calendarDaysBetween } from '@/utils/date';
 
 export interface CareRoundGroup {
   id: string;
@@ -67,4 +68,21 @@ export function filterTasksForSpace(
     }
     return plantSpaceId === spaceId && knownSpaceIds.has(spaceId);
   });
+}
+
+/**
+ * The round starts where the most overdue work is: rooms sorted by their
+ * most urgent task (calendar days, so the time of day a task is stored with
+ * never decides), keeping the physical route order between rooms that are
+ * equally urgent. Each group's tasks must already be sorted by due date.
+ */
+export function mostOverdueFirst(
+  groups: readonly CareRoundGroup[],
+  now: Date = new Date()
+): CareRoundGroup[] {
+  const firstDue = (group: CareRoundGroup) =>
+    group.tasks.length > 0
+      ? calendarDaysBetween(now, new Date(group.tasks[0].nextDue))
+      : Number.POSITIVE_INFINITY;
+  return [...groups].sort((a, b) => firstDue(a) - firstDue(b));
 }

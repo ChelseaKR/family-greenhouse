@@ -1,11 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PlantDetailPage } from '@/features/plants/PlantDetailPage';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
+import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
+
+// Done waits out the shared 5-second Undo window (#919). Step the clock
+// through it: a waitFor with its own 5-second timeout raced the window and
+// failed under load.
+async function throughTheWindow(completions: string[]) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(UNDO_WINDOW_MS - 200);
+  });
+  expect(completions).toEqual([]);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(400);
+  });
+}
 
 const API = 'http://localhost:4000';
 
@@ -71,6 +85,14 @@ function serve(careRule: string | null) {
 }
 
 describe('PlantDetailPage house rule', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    resetDeferredCareQueueForTests();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('shows the rule on the page and again before a task is marked done', async () => {
     const completions = serve('Bottom-water only');
     renderDetail();
@@ -87,7 +109,8 @@ describe('PlantDetailPage house rule', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Mark done' }));
 
-    await waitFor(() => expect(completions).toEqual(['t1']));
+    await throughTheWindow(completions);
+    expect(completions).toEqual(['t1']);
   });
 
   it('renders no rule row and no dialog when the plant has none', async () => {
@@ -99,7 +122,8 @@ describe('PlantDetailPage house rule', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
-    await waitFor(() => expect(completions).toEqual(['t1']));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await throughTheWindow(completions);
+    expect(completions).toEqual(['t1']);
   });
 });

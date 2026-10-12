@@ -32,22 +32,22 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.{test,spec}.ts', 'src/**/*.{test,spec}.ts'],
     // The integration suite does many supertest roundtrips against an
-    // in-memory Express app. Under parallel-worker CPU contention these
-    // brush against testTimeout and produce intermittent 401s/timeouts.
-    // Three layered mitigations:
+    // in-memory Express app. Two layered mitigations for CPU contention:
     //   1. fileParallelism off — files don't compete for CPU.
     //   2. testTimeout bumped to 10s — absorbs scheduler hiccups.
-    //   3. retry once — covers the residual flake without masking real
-    //      regressions (unit tests never flake so this never triggers there).
+    // There is no retry. The "intermittent 401s" a retry once covered were
+    // not CPU contention: supertest's request(app) listened on `::` and
+    // connected to 127.0.0.1, so a port another process held on 127.0.0.1
+    // took the request (a 404, then a 401). Requests now go through
+    // tests/support/request.ts, on a server bound to 127.0.0.1
+    // (tests/integration/loopback-request.test.ts reproduces both).
     // The structural fix (refactor local-server.ts to a createApp() factory
-    // so each test file gets an isolated app+db) is on the roadmap; this
-    // unblocks CI in the meantime.
+    // so each test file gets an isolated app+db) is still on the roadmap.
     // Threads also avoid intermittent child-process startup timeouts in the
     // fork pool on laptops and shared runners; fileParallelism remains off.
     pool: 'threads',
     fileParallelism: false,
     testTimeout: 10_000,
-    retry: 1,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

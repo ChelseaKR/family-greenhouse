@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import {
+  ArrowUturnLeftIcon,
   CheckIcon,
   ExclamationTriangleIcon,
   InformationCircleIcon,
@@ -27,11 +28,11 @@ import {
 import { isHelpRequestOpen } from '@/features/tasks/helpRequest';
 import {
   useClaimTaskMutation,
-  useCompleteTaskMutation,
   useSkipCycleMutation,
   useUnclaimTaskMutation,
 } from '@/features/tasks/taskMutations';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
+import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 import { YearInReviewCard } from './YearInReviewCard';
@@ -118,18 +119,10 @@ export function DashboardPage() {
     [activity, activityFilter]
   );
 
-  const completeTaskMutation = useCompleteTaskMutation(householdId);
-
-  const handleCompleteTask = async (task: TaskWithCoverage) => {
-    try {
-      await completeTaskMutation.mutateAsync({
-        taskId: task.id,
-        expectedNextDue: task.nextDue,
-      });
-    } catch {
-      // Error is handled by the mutation
-    }
-  };
+  // Done waits out the same 5-second Undo window as everywhere else
+  // (useDeferredCompletion, one shared queue): nothing is written until it
+  // passes, and Undo inside it writes nothing.
+  const deferred = useDeferredCompletion(householdId);
 
   // Same climate query the ClimateCard below issues (shared key → one
   // fetch); powers the "Rain expected — skip this cycle?" chips on rows.
@@ -146,8 +139,12 @@ export function DashboardPage() {
   // a completion goes through; with no rule the click completes as before.
   const careRuleGate = useCareRuleGate<TaskWithCoverage>(
     (task) => careRuleFor(plantsById.get(task.plantId)),
-    (task) => void handleCompleteTask(task)
+    (task) => {
+      deferred.schedule(task, plantsById.get(task.plantId)?.name ?? task.plantName);
+    }
   );
+  const doneOrUndo = (task: TaskWithCoverage) =>
+    deferred.pending.has(task.id) ? deferred.undo(task.id) : careRuleGate.request(task);
   const placementForTask = (task: TaskWithCoverage) => {
     const spaceId = plantsById.get(task.plantId)?.spaceId;
     return spaceId ? spacesById.get(spaceId) : undefined;
@@ -305,11 +302,8 @@ export function DashboardPage() {
                 key={task.id}
                 task={task}
                 locationLabel={taskLocationLabel(task.plantId)}
-                onComplete={careRuleGate.request}
-                isCompleting={
-                  completeTaskMutation.isPending &&
-                  completeTaskMutation.variables?.taskId === task.id
-                }
+                onComplete={doneOrUndo}
+                isPending={deferred.pending.has(task.id)}
                 skipReason={climateSkipSuggestion(task, placementForTask(task), climateSignals)}
                 onSkip={(t, reason) => skipMutation.mutate({ task: t, reason })}
                 skipPending={skipMutation.isPending}
@@ -777,8 +771,9 @@ interface TaskItemProps {
   task: TaskWithCoverage;
   /** `null` while the plants read is still in flight: say nothing. */
   locationLabel: string | null;
+  /** Done, or Undo while the task is inside its Undo window. */
   onComplete: (task: TaskWithCoverage) => void;
-  isCompleting: boolean;
+  isPending: boolean;
   skipReason: Extract<SnoozeReason, 'rain' | 'frost'> | null;
   onSkip: (task: TaskWithCoverage, reason: SnoozeReason) => void;
   skipPending: boolean;
@@ -791,7 +786,7 @@ function TaskItem({
   task,
   locationLabel,
   onComplete,
-  isCompleting,
+  isPending,
   skipReason,
   onSkip,
   skipPending,
@@ -799,6 +794,7 @@ function TaskItem({
   onUnclaim,
   claimPending,
 }: TaskItemProps) {
+  const { t } = useTranslation();
   const overdue = isOverdue(task.nextDue);
   const style = taskTypeStyles[task.type] ?? taskTypeStyles.custom;
   const { Icon } = style;
@@ -866,10 +862,23 @@ function TaskItem({
           variant="secondary"
           size="sm"
           onClick={() => onComplete(task)}
-          disabled={isCompleting}
-          leftIcon={<CheckIcon className="h-4 w-4" aria-hidden="true" />}
+          aria-label={
+            isPending
+              ? t('plants.list.undoAria', {
+                  task: task.customType || taskTypeLabels[task.type],
+                  plant: task.plantName,
+                })
+              : undefined
+          }
+          leftIcon={
+            isPending ? (
+              <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <CheckIcon className="h-4 w-4" aria-hidden="true" />
+            )
+          }
         >
-          Done
+          {isPending ? t('plants.list.undo') : t('tasks.complete')}
         </Button>
       </div>
     </li>

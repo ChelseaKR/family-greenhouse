@@ -287,6 +287,12 @@ export const STEPS = [
     why: 'CITATION.cff drifting from package.json — it said 0.23.0 while the code was 0.29.0, so a citation of this work named the wrong release for six weeks, and nothing compared the two files (#685)',
   },
   {
+    id: 'terms-date:check',
+    script: 'terms-date:check',
+    weight: 0,
+    why: 'the Terms of Service naming a day the text never took effect — the #593 failed-payment terms were dated the day they were written, weeks before any release could ship them; the date is now the release date, and a text change resets it (#593)',
+  },
+  {
     id: 'lockfile:check',
     script: 'lockfile:check',
     weight: 0,

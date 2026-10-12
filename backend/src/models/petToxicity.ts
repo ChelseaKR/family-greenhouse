@@ -66,6 +66,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'pothos',
     commonName: 'Pothos',
     scientificName: 'Epipremnum aureum',
+    aspcaListing: {
+      title: 'Golden Pothos',
+      scientificName: 'Epipremnum aureum',
+      path: '/toxic-and-non-toxic-plants/golden-pothos',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['devil’s ivy', 'devils ivy', 'golden pothos', 'money plant', 'epipremnum'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -75,6 +81,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'monstera',
     commonName: 'Monstera',
     scientificName: 'Monstera deliciosa',
+    aspcaListing: {
+      title: 'Swiss Cheese Plant',
+      scientificName: 'Monstera deliciosa',
+      path: '/toxic-and-non-toxic-plants/swiss-cheese-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['swiss cheese plant', 'split-leaf philodendron', 'split leaf philodendron'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -84,15 +96,27 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'snake-plant',
     commonName: 'Snake plant',
     scientificName: 'Dracaena trifasciata',
+    aspcaListing: {
+      title: 'Snake Plant',
+      scientificName: 'Sansevieria trifasciata',
+      path: '/toxic-and-non-toxic-plants/snake-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['mother-in-law’s tongue', 'mother in laws tongue', 'sansevieria', 'dracaena'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Contains saponins, which cause drooling, vomiting and the odd bout of diarrhoea if eaten. Mildly toxic rather than dangerous — most pets feel rotten for a while and recover.',
+    note: 'Contains saponins, which cause nausea, vomiting and diarrhea if eaten. Mildly toxic rather than dangerous — most pets feel rotten for a while and recover.',
   },
   {
     slug: 'spider-plant',
     commonName: 'Spider plant',
     scientificName: 'Chlorophytum comosum',
+    aspcaListing: {
+      title: 'Spider Plant',
+      scientificName: 'Chlorophytum comosum',
+      path: '/toxic-and-non-toxic-plants/spider-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['airplane plant', 'ribbon plant', 'chlorophytum'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -102,6 +126,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'peace-lily',
     commonName: 'Peace lily',
     scientificName: 'Spathiphyllum',
+    aspcaListing: {
+      title: 'Peace Lily',
+      scientificName: 'Spathiphyllum',
+      path: '/toxic-and-non-toxic-plants/peace-lily',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['spathiphyllum', 'closet plant'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -111,24 +141,42 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'aloe-vera',
     commonName: 'Aloe vera',
     scientificName: 'Aloe vera',
+    aspcaListing: {
+      title: 'Aloe',
+      scientificName: 'Aloe vera',
+      path: '/toxic-and-non-toxic-plants/aloe',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['aloe', 'medicine plant', 'burn plant'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The gel inside is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy and diarrhoea if eaten. Keep the plant out of reach even though aloe gel is a human first-aid staple.',
+    note: 'The gel inside is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy and diarrhea if eaten. Keep the plant out of reach even though aloe gel is a human first-aid staple.',
   },
   {
     slug: 'jade-plant',
     commonName: 'Jade plant',
     scientificName: 'Crassula ovata',
+    aspcaListing: {
+      title: 'Jade Plant',
+      scientificName: 'Crassula argentea',
+      path: '/toxic-and-non-toxic-plants/jade-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['lucky plant', 'crassula', 'friendship tree'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to both, though exactly why isn’t fully understood — eating it causes vomiting, a wobbly unsteady gait and a slowed heart rate. Worth a vet call if a pet has had a real mouthful.',
+    note: 'Toxic to both, though exactly why isn’t fully understood — eating it causes vomiting, depression (lethargy) and incoordination. Worth a vet call if a pet has had a real mouthful.',
   },
   {
     slug: 'philodendron',
     commonName: 'Philodendron',
     scientificName: 'Philodendron',
+    aspcaListing: {
+      title: 'Heartleaf Philodendron',
+      scientificName: 'Philodendron hederaceum',
+      path: '/toxic-and-non-toxic-plants/heartleaf-philodendron',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['heartleaf philodendron', 'philodendron hederaceum'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -147,33 +195,57 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'fiddle-leaf-fig',
     commonName: 'Fiddle-leaf fig',
     scientificName: 'Ficus lyrata',
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['fiddle leaf fig', 'ficus', 'fig'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The sap contains crystals that irritate the mouth and skin, causing drooling and vomiting if leaves are eaten. More of a nuisance than a danger, but the milky sap can also cause a skin rash.',
+    note: 'The ASPCA lists the Ficus genus as toxic: the milky sap carries ficin and ficusin, which irritate the stomach and the skin. Expect vomiting or drooling if leaves are eaten, and a possible rash where sap touches skin.',
   },
   {
     slug: 'rubber-plant',
     commonName: 'Rubber plant',
     scientificName: 'Ficus elastica',
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['rubber tree', 'rubber fig', 'ficus elastica'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The milky sap irritates the mouth and gut and can cause drooling, vomiting and a skin reaction. Mildly toxic — keep curious chewers away and wipe up any sap from broken leaves.',
+    note: 'A Ficus, which the ASPCA lists as toxic: the milky sap carries ficin and ficusin, which irritate the gut and the skin. Keep curious chewers away and wipe up any sap from broken leaves.',
   },
   {
     slug: 'dieffenbachia',
     commonName: 'Dieffenbachia',
     scientificName: 'Dieffenbachia',
+    aspcaListing: {
+      title: 'Dieffenbachia',
+      scientificName: 'Dieffenbachia',
+      path: '/toxic-and-non-toxic-plants/dieffenbachia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['dumb cane', 'dumbcane', 'leopard lily'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Among the harsher of the calcium-oxalate plants — chewing causes intense oral pain, drooling and, in bad cases, enough swelling to make breathing difficult. One to keep firmly out of reach of pets and children.',
+    note: 'Among the harsher of the calcium-oxalate plants — chewing causes intense burning of the mouth, tongue and lips, drooling, vomiting and difficulty swallowing. One to keep firmly out of reach.',
   },
   {
     slug: 'calathea',
     commonName: 'Calathea',
     scientificName: 'Calathea',
+    aspcaListing: {
+      title: 'Calathea',
+      scientificName: 'Calathea spp.',
+      path: '/toxic-and-non-toxic-plants/calathea',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['prayer plant', 'goeppertia', 'maranta', 'rattlesnake plant'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -183,6 +255,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'boston-fern',
     commonName: 'Boston fern',
     scientificName: 'Nephrolepis exaltata',
+    aspcaListing: {
+      title: 'Boston Fern',
+      scientificName: 'Nephrolepis exalta bostoniensis',
+      path: '/toxic-and-non-toxic-plants/boston-fern',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     // Deliberately NO bare 'fern' alias — the mirror of the note on
     // asparagus-fern below. A bare 'fern' here put this NON-TOXIC row in the
     // exact-match tier for the query "fern", which outranks every later tier
@@ -199,6 +277,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'asparagus-fern',
     commonName: 'Asparagus fern',
     scientificName: 'Asparagus densiflorus',
+    aspcaListing: {
+      title: 'Emerald Feather',
+      scientificName: 'Asparagus densiflorus',
+      path: '/toxic-and-non-toxic-plants/emerald-feather',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     // Despite the name, this is NOT a true fern (it's in the asparagus/lily
     // family) — critically, it does NOT belong in the "true ferns are safe"
     // group above. Deliberately no bare "fern" alias: that would collide
@@ -207,12 +291,18 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     aliases: ['sprenger fern', 'emerald fern', 'foxtail fern', 'asparagus densiflorus'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the berries carry sapogenins that cause vomiting, diarrhea and abdominal pain, and repeated skin contact with the sap can cause allergic dermatitis. Keep it well out of reach.',
+    note: 'Toxic to cats and dogs per the ASPCA — eating the berries can cause vomiting, abdominal pain or diarrhea, and repeated skin contact can cause allergic dermatitis. Keep it well out of reach.',
   },
   {
     slug: 'african-violet',
     commonName: 'African violet',
     scientificName: 'Saintpaulia',
+    aspcaListing: {
+      title: 'African Violet',
+      scientificName: 'Saintpaulia spp.',
+      path: '/toxic-and-non-toxic-plants/african-violet',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['saintpaulia', 'violet'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -222,6 +312,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'orchid',
     commonName: 'Orchid (Phalaenopsis)',
     scientificName: 'Phalaenopsis',
+    aspcaListing: {
+      title: 'Phalaenopsis Orchid',
+      scientificName: 'Phalaenopsis sp.',
+      path: '/toxic-and-non-toxic-plants/phalaenopsis-orchid',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
     aliases: ['phalaenopsis', 'moth orchid', 'orchids'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -231,6 +327,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'lily',
     commonName: 'True lily',
     scientificName: 'Lilium',
+    aspcaListing: {
+      title: 'Lily',
+      scientificName: 'Lilium species',
+      path: '/toxic-and-non-toxic-plants/lily',
+      listed: { cats: 'toxic', dogs: 'non-toxic' },
+    },
     aliases: [
       'lilium',
       'easter lily',
@@ -241,13 +343,19 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       'hemerocallis',
     ],
     cats: 'toxic',
-    dogs: 'toxic',
-    note: 'This is the dangerous one. True lilies (Lilium) and daylilies (Hemerocallis) cause sudden kidney failure in cats — even pollen, vase water or a single leaf can be fatal. If a cat has had ANY contact, treat it as an emergency and call a vet immediately. Less severe in dogs, but still keep them away.',
+    dogs: 'non-toxic',
+    note: 'This is the dangerous one. True lilies (Lilium) and daylilies (Hemerocallis) cause sudden kidney failure in cats — even pollen, vase water or a single leaf can be fatal. If a cat has had ANY contact, treat it as an emergency and call a vet immediately. The ASPCA lists true lilies as non-toxic to dogs; the danger is to cats.',
   },
   {
     slug: 'sago-palm',
     commonName: 'Sago palm',
     scientificName: 'Cycas revoluta',
+    aspcaListing: {
+      title: 'Sago Palm',
+      scientificName: 'Cycas revoluta, zamia species',
+      path: '/toxic-and-non-toxic-plants/sago-palm',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['cycad', 'cycas', 'king sago'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -257,6 +365,12 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'poinsettia',
     commonName: 'Poinsettia',
     scientificName: 'Euphorbia pulcherrima',
+    aspcaListing: {
+      title: 'Poinsettia',
+      scientificName: 'Euphorbia pulcherrima',
+      path: '/toxic-and-non-toxic-plants/poinsettia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
     aliases: ['euphorbia', 'christmas flower', 'christmas star'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -266,8 +380,17 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
   // Added to cover the /care/<plant> guides shipped in #384. Every verdict
   // below was read off that plant's own ASPCA entry page (recorded per entry
   // as `aspcaListing`), not inferred from the slug or from the care guide's
-  // prose. The entries above this line carry no per-plant listing, so no
-  // `/pet-safe/<slug>` page is generated for them.
+  // prose. The entries above this line had no per-plant listing until
+  // 2026-10-02, when the fourteen that have a /care guide were read off their
+  // own live ASPCA pages too (fiddle-leaf fig and rubber plant cite ASPCA's
+  // genus-level Ficus listing, "Weeping Fig", Ficus sp.). The rest above this
+  // line still carry none, so no `/pet-safe/<slug>` page is generated for
+  // them. The remaining five (African violet, asparagus fern, true lily, sago
+  // palm, poinsettia) were read off their live ASPCA pages the same day, when
+  // the checker started answering "unknown" for uncited rows. True lily was
+  // corrected to non-toxic for dogs, as its listing states; asparagus fern
+  // cites ASPCA's species-level "Emerald Feather" listing. ZZ plant has no
+  // ASPCA listing at all and is the one row left uncited.
   // ---------------------------------------------------------------------
   {
     slug: 'bird-of-paradise',
@@ -364,7 +487,7 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     ],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the triterpenoid saponins cause vomiting, drooling, belly pain and diarrhoea. The leaves are more dangerous than the berries, and it is a trailing vine a cat will happily bat at, so hang it well out of reach.',
+    note: 'Toxic to cats and dogs per the ASPCA — the triterpenoid saponins cause vomiting, drooling, belly pain and diarrhea. The leaves are more dangerous than the berries, and it is a trailing vine a cat will happily bat at, so hang it well out of reach.',
   },
   {
     slug: 'money-tree',
@@ -488,24 +611,107 @@ export function normalizeName(raw: string): string {
     .trim();
 }
 
+/**
+ * What the product may tell a person about one animal. `unknown` means the
+ * table cannot cite a verdict for it: there is no per-plant ASPCA listing, or
+ * the listing is silent or disagrees with the recorded verdict.
+ */
+export type ReportedVerdict = ToxicityVerdict | 'unknown';
+
+export const PET_ANIMALS = ['cats', 'dogs'] as const;
+export type PetAnimal = (typeof PET_ANIMALS)[number];
+
+const LISTING_PATH = /^\/toxic-and-non-toxic-plants\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isText = (value: unknown): boolean => typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * The citation rule, the same one the /care and /pet-safe pages apply
+ * (`claimFor` in frontend/src/features/petsafe/plantSafetyPages.ts; a
+ * frontend test holds the two to the same answer for every row). A verdict is
+ * reported only when the entry records exactly `toxic` or `non-toxic` AND
+ * its own ASPCA listing states that same verdict for the animal. Anything
+ * else, including a blank or unexpected field, is `unknown`, never safe.
+ * Written against loose input because it is the last line between a data
+ * mistake and a pet owner.
+ */
+export function citedVerdict(
+  entry: { [K in keyof PetToxicityEntry]?: unknown },
+  animal: PetAnimal
+): ReportedVerdict {
+  const recorded = entry[animal];
+  if (recorded !== 'toxic' && recorded !== 'non-toxic') return 'unknown';
+  const listing = entry.aspcaListing as Partial<AspcaListing> | undefined | null;
+  if (!listing || typeof listing !== 'object') return 'unknown';
+  if (!isText(listing.title) || !isText(listing.scientificName)) return 'unknown';
+  if (typeof listing.path !== 'string' || !LISTING_PATH.test(listing.path)) return 'unknown';
+  const listed: unknown = listing.listed;
+  if (!listed || typeof listed !== 'object') return 'unknown';
+  if ((listed as Record<string, unknown>)[animal] !== recorded) return 'unknown';
+  return recorded;
+}
+
+/**
+ * How a lookup reports verdicts.
+ *
+ * - `cited`: each animal is `citedVerdict`, so an uncited row says `unknown`,
+ *   and the row's note is withheld unless both animals are cited (the note is
+ *   the table's own prose, and on an uncited row nothing sources it).
+ * - `legacy`: for clients that predate `unknown`. Their bundles, including
+ *   native app builds that web deploys cannot update, render anything other
+ *   than `toxic` as "Non-toxic", so they must never receive `unknown` or an
+ *   uncited `non-toxic`. A cited verdict passes through; an uncited animal
+ *   recorded `toxic` stays `toxic` (what these clients have always been
+ *   told); and a row with an uncited animal recorded `non-toxic` is left out
+ *   of the results entirely, because the only words those clients have for it
+ *   are "Non-toxic" (unsupported) or "Toxic" (false).
+ *
+ * New clients opt in to `cited` with `?unknown=1` (see the species and
+ * sitter-brief handlers). The assistant's tool always uses `cited`.
+ */
+export type VerdictMode = 'cited' | 'legacy';
+
+/**
+ * The opt-in a client sends to receive `cited` verdicts: `?unknown=1`. A
+ * query parameter rather than a header so it needs no CORS change and is part
+ * of the URL every HTTP cache keys on: a cached `cited` answer can never be
+ * served to a client that did not ask for it.
+ */
+export function verdictModeFromQuery(
+  params: Record<string, string | undefined> | null | undefined
+): VerdictMode {
+  return params?.unknown === '1' ? 'cited' : 'legacy';
+}
+
 export interface PetToxicityMatch {
   slug: string;
   commonName: string;
   scientificName: string;
-  cats: ToxicityVerdict;
-  dogs: ToxicityVerdict;
-  note: string;
+  cats: ReportedVerdict;
+  dogs: ReportedVerdict;
+  /** The table's note; null in `cited` mode when any animal is unknown. */
+  note: string | null;
 }
 
-function toMatch(entry: PetToxicityEntry): PetToxicityMatch {
-  return {
+function toMatch(entry: PetToxicityEntry, mode: VerdictMode): PetToxicityMatch | null {
+  const base = {
     slug: entry.slug,
     commonName: entry.commonName,
     scientificName: entry.scientificName,
-    cats: entry.cats,
-    dogs: entry.dogs,
-    note: entry.note,
   };
+  const cats = citedVerdict(entry, 'cats');
+  const dogs = citedVerdict(entry, 'dogs');
+  if (mode === 'cited') {
+    const bothCited = cats !== 'unknown' && dogs !== 'unknown';
+    return { ...base, cats, dogs, note: bothCited ? entry.note : null };
+  }
+  const legacy = (animal: PetAnimal, cited: ReportedVerdict): ToxicityVerdict | null => {
+    if (cited !== 'unknown') return cited;
+    return entry[animal] === 'toxic' ? 'toxic' : null;
+  };
+  const legacyCats = legacy('cats', cats);
+  const legacyDogs = legacy('dogs', dogs);
+  if (legacyCats === null || legacyDogs === null) return null;
+  return { ...base, cats: legacyCats, dogs: legacyDogs, note: entry.note };
 }
 
 /** True when an entry is toxic to either species. */
@@ -548,7 +754,11 @@ function toxicFirst(bucket: PetToxicityEntry[]): PetToxicityEntry[] {
  *      hand back an unrelated species' (possibly wrong) toxicity verdict.
  * Ties inside a tier are broken toxic-first — see `toxicFirst`.
  */
-export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
+export function lookupToxicity(
+  query: string,
+  limit = 5,
+  mode: VerdictMode = 'cited'
+): PetToxicityMatch[] {
   const q = normalizeName(query);
   if (q.length < 2) return [];
 
@@ -581,5 +791,10 @@ export function lookupToxicity(query: string, limit = 5): PetToxicityMatch[] {
       if (!ordered.includes(e)) ordered.push(e);
     }
   }
-  return ordered.slice(0, limit).map(toMatch);
+  // Map before slicing: legacy mode can drop a row, and the caller still
+  // asked for up to `limit` answers.
+  return ordered
+    .map((entry) => toMatch(entry, mode))
+    .filter((match): match is PetToxicityMatch => match !== null)
+    .slice(0, limit);
 }

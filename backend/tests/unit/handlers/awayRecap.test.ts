@@ -188,7 +188,7 @@ describe('GET /households/{id}/away-recap', () => {
     expect(sitterService.listSitterLinks).not.toHaveBeenCalled();
   });
 
-  it.each(['past_due', 'unpaid', 'paused'])(
+  it.each(['unpaid', 'paused'])(
     '402s while the card has failed (%s), before any link read (#476)',
     async (status) => {
       // Unlike the sitter's own routes, the recap is read by a signed-in

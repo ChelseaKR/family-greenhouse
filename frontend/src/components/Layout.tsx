@@ -29,6 +29,7 @@ import { ConnectionNotice } from './ConnectionNotice';
 import { PullToRefresh } from './PullToRefresh';
 import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
 import { setNativeStatusBarOverDarkSurface } from '@/services/nativeShell';
+import { isNativeApp } from '@/lib/platform';
 import clsx from 'clsx';
 
 /**
@@ -101,6 +102,7 @@ export function Layout() {
   const chatPlanId = effectivePlanId(subscription);
   const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
   const isChatRoute = location.pathname === '/chat' && chatAvailable;
+  const native = isNativeApp();
   // Settings → Plan status renders the full payment-failed notice itself, at
   // the top of the card it explains; the banner there would say it twice. The
   // chat route is a full-height composer with no page padding to sit in.
@@ -189,8 +191,10 @@ export function Layout() {
         </Dialog>
       </Transition.Root>
 
-      {/* Desktop sidebar — no drawer to close, so navigation is a no-op. */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
+      {/* Desktop sidebar — no drawer to close, so navigation is a no-op.
+          Inside the iOS app's native frame (an iPad is wide enough for it)
+          the system tab bar is the navigation instead. */}
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col native-frame:hidden!">
         <SidebarContent
           user={user}
           chatAvailable={chatAvailable}
@@ -200,7 +204,7 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-72">
+      <div className="lg:pl-72 native-frame:pl-0!">
         {/* Mobile header. Solid bg-paper (no /opacity + blur): a translucent
             sticky bar lets page text show through at reduced contrast while
             scrolling, which both fails WCAG AA for the underlying text and
@@ -212,7 +216,10 @@ export function Layout() {
         {/* At the iOS accessibility text sizes the wordmark wraps and the bar
             grows to about a quarter of the screen, so there it scrolls away
             with the page instead of covering that much of every screen. */}
-        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden large-text:static">
+        {/* Inside the iOS app's native frame the system navigation bar and
+            tab bar replace this header and the drawer it opens
+            (html[data-native-frame], set before the first paint). */}
+        <div className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-x-4 border-b border-dew/60 bg-paper/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xs sm:gap-x-6 sm:px-6 lg:hidden large-text:static native-frame:hidden!">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700"
@@ -243,8 +250,10 @@ export function Layout() {
 
         {/* Memorial closing line, flanked by mirrored botanical sprigs. The
             text itself is unchanged from the original; only the decoration
-            around it is new. Sprigs are aria-hidden as decoration. */}
-        {!isChatRoute && (
+            around it is new. Sprigs are aria-hidden as decoration. In the
+            iOS and Android apps it lives on Settings → About instead, and
+            nowhere else (owner decision 2026-10-02). */}
+        {!isChatRoute && !native && (
           <footer className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center gap-4">
               <MemorialFrame className="h-8 w-32 text-primary-700/40 hidden sm:block" />

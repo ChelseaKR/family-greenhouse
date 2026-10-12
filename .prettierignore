@@ -34,3 +34,8 @@ backend/src/data/plant-care-corpus
 # docs/standards/.standards-version). Not authored here; reformatting it would
 # diverge from upstream and churn the version-sync diff. Treat as vendored.
 docs/standards
+
+# Golden renders of the branded emails, compared byte for byte by
+# backend/tests/unit/services/email/renderedEmails.test.ts (toMatchFileSnapshot).
+# Reflowing the markup would fail every comparison; they are output, not source.
+backend/tests/unit/services/email/__goldens__

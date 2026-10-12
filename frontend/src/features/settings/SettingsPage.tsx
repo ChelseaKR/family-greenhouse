@@ -14,57 +14,34 @@ import { AccountSettings } from './AccountSettings';
 import { TrashSettings } from './TrashSettings';
 import { HouseholdChannelSettings } from './HouseholdChannelSettings';
 import { SecuritySettings } from './SecuritySettings';
+import { AboutSettings } from './AboutSettings';
+import { hasNativeFrame, isNativeApp } from '@/lib/platform';
+import {
+  NATIVE_SETTINGS_SECTIONS,
+  SETTINGS_SECTIONS,
+  SETTINGS_SECTION_LABEL,
+  settingsSectionPath,
+  type SettingsSection,
+} from './settingsSections';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { PageHeader } from '@/components/PageHeader';
 
-type Tab =
-  | 'preferences'
-  | 'notifications'
-  | 'plant-tags'
-  | 'billing'
-  | 'refer'
-  | 'kiosk'
-  | 'api-keys'
-  | 'trash'
-  | 'security'
-  | 'account';
+type Tab = SettingsSection;
 
-const TABS: Tab[] = [
-  'preferences',
-  'notifications',
-  'plant-tags',
-  'billing',
-  'refer',
-  'kiosk',
-  'api-keys',
-  'trash',
-  // Security sits before Account so Account stays the last tab (End key).
-  'security',
-  'account',
-];
-
-const TAB_LABEL: Record<Tab, string> = {
-  preferences: 'settings.tabs.preferences',
-  notifications: 'settings.tabs.notifications',
-  'plant-tags': 'settings.tabs.plantTags',
-  billing: 'settings.tabs.billing',
-  refer: 'settings.tabs.refer',
-  kiosk: 'settings.tabs.kiosk',
-  'api-keys': 'settings.tabs.apiKeys',
-  trash: 'settings.tabs.trash',
-  account: 'settings.tabs.account',
-  security: 'settings.tabs.security',
-};
+const TABS = SETTINGS_SECTIONS;
+const NATIVE_TABS = NATIVE_SETTINGS_SECTIONS;
+const TAB_LABEL = SETTINGS_SECTION_LABEL;
 
 export function SettingsPage() {
   useDocumentTitle('Settings');
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const tabs = isNativeApp() ? NATIVE_TABS : TABS;
   const requestedSection = new URLSearchParams(location.search).get('section');
   const tab: Tab = location.pathname.endsWith('/billing')
     ? 'billing'
-    : TABS.includes(requestedSection as Tab)
+    : tabs.includes(requestedSection as Tab)
       ? (requestedSection as Tab)
       : 'preferences';
 
@@ -76,20 +53,16 @@ export function SettingsPage() {
   }, [tab]);
 
   function selectTab(nextTab: Tab) {
-    if (nextTab === 'billing') {
-      navigate('/settings/billing');
-      return;
-    }
-    navigate(nextTab === 'preferences' ? '/settings' : `/settings?section=${nextTab}`);
+    navigate(settingsSectionPath(nextTab));
   }
 
   function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, currentTab: Tab) {
-    const currentIndex = TABS.indexOf(currentTab);
+    const currentIndex = tabs.indexOf(currentTab);
     let nextTab: Tab | undefined;
-    if (event.key === 'ArrowRight') nextTab = TABS[(currentIndex + 1) % TABS.length];
-    if (event.key === 'ArrowLeft') nextTab = TABS[(currentIndex - 1 + TABS.length) % TABS.length];
-    if (event.key === 'Home') nextTab = TABS[0];
-    if (event.key === 'End') nextTab = TABS[TABS.length - 1];
+    if (event.key === 'ArrowRight') nextTab = tabs[(currentIndex + 1) % tabs.length];
+    if (event.key === 'ArrowLeft') nextTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
+    if (event.key === 'Home') nextTab = tabs[0];
+    if (event.key === 'End') nextTab = tabs[tabs.length - 1];
     if (!nextTab) return;
 
     event.preventDefault();
@@ -97,22 +70,32 @@ export function SettingsPage() {
     requestAnimationFrame(() => document.getElementById(`settings-tab-${nextTab}`)?.focus());
   }
 
+  // In the iOS app, Settings is a native list of these sections (More ->
+  // Settings), and each section is its own screen named in the navigation
+  // bar: the page is titled with the section, and the web's section picker
+  // and tabs are not drawn.
+  const framed = hasNativeFrame();
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Your account"
-        title={t('settings.title')}
-        description={t('settings.description')}
-      />
+      {framed ? (
+        <PageHeader title={t(TAB_LABEL[tab])} />
+      ) : (
+        <PageHeader
+          eyebrow="Your account"
+          title={t('settings.title')}
+          description={t('settings.description')}
+        />
+      )}
 
-      <label className="block sm:hidden">
+      <label className="block sm:hidden native-frame:hidden">
         <span className="label">Settings section</span>
         <select
           className="input"
           value={tab}
           onChange={(event) => selectTab(event.target.value as Tab)}
         >
-          {TABS.map((id) => (
+          {tabs.map((id) => (
             <option key={id} value={id}>
               {t(TAB_LABEL[id])}
             </option>
@@ -120,14 +103,14 @@ export function SettingsPage() {
         </select>
       </label>
 
-      <div className="hidden border-b border-primary-100/80 sm:block">
+      <div className="hidden border-b border-primary-100/80 sm:block native-frame:hidden">
         <nav aria-label="Settings sections">
           <div
             className="-mb-px flex gap-3 overflow-x-auto sm:gap-6"
             role="tablist"
             aria-orientation="horizontal"
           >
-            {TABS.map((id) => (
+            {tabs.map((id) => (
               <button
                 key={id}
                 id={`settings-tab-${id}`}
@@ -168,6 +151,7 @@ export function SettingsPage() {
         {tab === 'trash' && <TrashSettings />}
         {tab === 'account' && <AccountSettings />}
         {tab === 'security' && <SecuritySettings />}
+        {tab === 'about' && <AboutSettings />}
       </div>
     </div>
   );

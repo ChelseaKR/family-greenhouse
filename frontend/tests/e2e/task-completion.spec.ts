@@ -114,10 +114,11 @@ test.describe('Task completion', () => {
 
     await taskRow.getByRole('button', { name: /done/i }).click();
 
-    // After completion the task moves out of "Today" — the next due date
-    // jumps by the task frequency (7d), so it lands in "Upcoming" rather
-    // than disappearing entirely. The row should no longer say "Today".
-    await expect(taskRow.getByText(/^today$/i)).toHaveCount(0);
+    // Done waits out the 5-second Undo window, then completes. The next due
+    // date jumps by the task frequency (7d), so the task lands in "Upcoming"
+    // rather than disappearing entirely. The row should no longer say "Today".
+    await expect(taskRow.getByRole('button', { name: /^undo: /i })).toBeVisible();
+    await expect(taskRow.getByText(/^today$/i)).toHaveCount(0, { timeout: 12000 });
     expect(consoleErrors).toEqual([]);
   });
 });

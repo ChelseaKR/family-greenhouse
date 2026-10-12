@@ -146,6 +146,31 @@ describe('CrossHomeTodayPage', () => {
     expect(screen.queryByText(/unexpected error/i)).not.toBeInTheDocument();
   });
 
+  it('inside the iOS app, explains Greenhouse on a 402 with no call to upgrade', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      server.use(
+        http.get(`${API}/me/today`, () =>
+          HttpResponse.json(
+            { message: 'Today across your homes is included with the Greenhouse plan.' },
+            { status: 402 }
+          )
+        )
+      );
+      renderPage();
+
+      expect(await screen.findByText('Included with Greenhouse')).toBeInTheDocument();
+      expect(screen.getByText("Plan changes aren't available in the app.")).toBeInTheDocument();
+      expect(screen.queryByText(/upgrade/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'View plan status' })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
   it('surfaces any other failure as an error with a retry, never as an empty queue', async () => {
     server.use(
       http.get(`${API}/me/today`, () =>

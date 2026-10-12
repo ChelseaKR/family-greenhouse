@@ -34,8 +34,24 @@ module.exports = {
     },
     assert: {
       assertions: {
-        // Slightly looser perf budget on mobile — still must clear 0.85 (good).
-        'categories:performance': ['error', { minScore: 0.85 }],
+        // 0.80, lowered from 0.85 on 2026-10-05 (owner decision).
+        //
+        // The 0.85 floor sat on top of what `/login` actually scores on a
+        // hosted ubuntu-latest runner: over the eight `main` runs from
+        // 2026-10-04 to 2026-10-06 in which this job ran, every one of the 24
+        // samples was 0.83 or 0.84, and the best-of-three LHCI reports was
+        // 0.84 seven times and 0.83 once. `/` and the desktop profile passed
+        // every time, and three of the eight commits changed nothing under
+        // `frontend/src` (a version bump and two store-screenshot commits).
+        // The check was sampling runner CPU, not the code, and every merge
+        // needed an admin override — a floor that always fails gates nothing.
+        //
+        // 0.80 sits three to four points under the worst observed run, so a
+        // real regression still fails it (a 250 ms busy loop at startup was
+        // measured locally at 0.75 on 2026-10-02), while a runner that lands a
+        // point slow no longer does. Raise it back when `/login` gets faster;
+        // the LCP ceiling below is the better lever.
+        'categories:performance': ['error', { minScore: 0.8 }],
         'categories:accessibility': ['error', { minScore: 0.95 }],
         'categories:best-practices': ['error', { minScore: 0.9 }],
         'categories:seo': ['error', { minScore: 0.9 }],
