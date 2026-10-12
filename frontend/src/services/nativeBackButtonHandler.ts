@@ -24,11 +24,20 @@
  * to go back through. The listener still ends in step 3 in case that estimate
  * is ever wrong, so a stale toggle costs an animation, never a dead button.
  *
+ * With the native frame (Material's bars, drawn in Kotlin; lib/platform.ts
+ * `hasNativeFrame`), the app owns everything after step 1: each tab's back
+ * stack, back from a tab to Home, and back on sign-in and setup, the same
+ * way the iOS frame owns its stacks (NativeFrameController.kt). The web then
+ * intercepts back ONLY while it has something open on top of the page, and
+ * @capacitor/app's callback, added after the frame's, takes the press first.
+ *
  * nativeBackButton.ts loads this module, and this module loads
  * `@capacitor/app`, only inside the Android shell, so web visitors download
  * neither. iOS has no back button; its edge swipe is WKWebView's own, switched
  * on and limited in ios/App/App/MainViewController.swift (BackSwipePolicy).
  */
+
+import { hasNativeFrame } from '@/lib/platform';
 
 /** What Escape closes: Headless UI dialogs, menus and listboxes. */
 export const OVERLAY_SELECTOR =
@@ -67,7 +76,8 @@ export function hasInAppHistory(): boolean {
   return typeof state?.idx === 'number' ? state.idx > 0 : window.history.length > 1;
 }
 
-export function shouldInterceptBack(): boolean {
+export function shouldInterceptBack(frame = hasNativeFrame()): boolean {
+  if (frame) return topmostOverlay() !== null;
   return topmostOverlay() !== null || hasInAppHistory();
 }
 
@@ -75,20 +85,13 @@ export function shouldInterceptBack(): boolean {
 export async function installNativeBackButton(): Promise<void> {
   const { App } = await import('@capacitor/app');
 
-  await App.addListener('backButton', ({ canGoBack }) => {
-    if (closeTopmostOverlay()) return;
-    if (canGoBack) {
-      window.history.back();
-      return;
-    }
-    void App.minimizeApp();
-  });
+  const frame = hasNativeFrame();
 
   let intercepting: boolean | null = null;
   let scheduled = false;
   const sync = () => {
     scheduled = false;
-    const next = shouldInterceptBack();
+    const next = shouldInterceptBack(frame);
     if (next === intercepting) return;
     intercepting = next;
     void App.toggleBackButtonHandler({ enabled: next }).catch(() => undefined);
@@ -98,6 +101,21 @@ export async function installNativeBackButton(): Promise<void> {
     scheduled = true;
     requestAnimationFrame(sync);
   };
+
+  await App.addListener('backButton', ({ canGoBack }) => {
+    if (closeTopmostOverlay()) return;
+    // The frame handles the rest; a stale toggle costs one press here, and
+    // the next sync hands back to the frame.
+    if (frame) {
+      schedule();
+      return;
+    }
+    if (canGoBack) {
+      window.history.back();
+      return;
+    }
+    void App.minimizeApp();
+  });
 
   // Every navigation and every overlay opening or closing changes the DOM,
   // so one observer covers both without hooking the router.
