@@ -565,10 +565,11 @@ locals {
     SMS_NOTIFICATIONS_ENABLED  = var.sms_notifications_enabled
     # Native push (docs/native-push-setup.md). NATIVE_PUSH_ENABLED is the
     # switch: "false" (the default) sends no device push and tells the apps
-    # not to offer it, whatever credentials exist. The secret ids are blank in
-    # every environment today, which keeps each transport a no-op that logs
-    # one line per container and never opens a socket. Android goes through
-    # FCM, iOS to APNs directly (services/apnsNotifier.ts explains why).
+    # not to offer it, whatever credentials exist. A blank secret id keeps
+    # that transport a no-op that logs one line per container and never
+    # opens a socket; production names the APNs secret (iOS first) and leaves
+    # FCM blank. Android goes through FCM, iOS to APNs directly
+    # (services/apnsNotifier.ts explains why).
     NATIVE_PUSH_ENABLED           = var.native_push_enabled ? "true" : "false"
     FCM_SERVICE_ACCOUNT_SECRET_ID = var.fcm_service_account_secret_id
     APNS_AUTH_KEY_SECRET_ID       = var.apns_auth_key_secret_id

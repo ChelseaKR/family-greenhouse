@@ -13,6 +13,7 @@ import {
   type LoginCredentials,
 } from '@/services/authService';
 import { getPasskeyAssertion, isCeremonyCanceled, passkeysUsableHere } from '@/lib/webauthn';
+import { sessionVaultAvailable } from '@/services/sessionVault';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -254,15 +255,23 @@ export function LoginPage() {
         />
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <label className="inline-flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-primary-700"
-              checked={keepSignedIn}
-              onChange={(event) => setKeepSignedIn(event.target.checked)}
-            />
-            <span className="text-sm text-gray-700">{t('auth.keepSignedIn')}</span>
-          </label>
+          {sessionVaultAvailable() ? (
+            // A shell with the keychain plugin keeps the refresh token there
+            // and stays signed in until sign-out (ADR 0034); there is no
+            // choice to offer, so the line says what happens instead of
+            // asking. A shell without the plugin keeps the website's choice.
+            <p className="text-sm text-gray-700">{t('auth.staysSignedInHere')}</p>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary-700"
+                checked={keepSignedIn}
+                onChange={(event) => setKeepSignedIn(event.target.checked)}
+              />
+              <span className="text-sm text-gray-700">{t('auth.keepSignedIn')}</span>
+            </label>
+          )}
           <Link
             to="/forgot-password"
             className="text-sm font-medium text-primary-700 hover:text-primary-600"

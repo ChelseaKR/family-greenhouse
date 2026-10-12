@@ -971,6 +971,9 @@ describe('NotificationSettings inside the native shells', () => {
       timeZone: 'UTC',
     } as unknown as Intl.ResolvedDateTimeFormatOptions);
     vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+    // This shell is Android, which needs its own build switch as well
+    // (nativePush.ts): an iOS-only push build offers Android nothing.
+    vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'true');
     (window as unknown as { Capacitor: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'android',
@@ -992,6 +995,13 @@ describe('NotificationSettings inside the native shells', () => {
     expect(await screen.findByText('This device')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn on' })).toBeEnabled();
     // Rendering the row asks the OS for nothing.
+    expect(nativePushMock.registerNativePush).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing on Android in a build that carries push for iOS only', async () => {
+    vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'false');
+    await renderSettings(prefs({ devicePush: { ios: true, android: true } }));
+    expect(screen.queryByText('This device')).toBeNull();
     expect(nativePushMock.registerNativePush).not.toHaveBeenCalled();
   });
 
