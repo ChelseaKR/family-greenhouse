@@ -100,10 +100,12 @@ public class NativeIntroPlugin: CAPPlugin, CAPBridgedPlugin {
 /// opens the chosen screen while the intro fades), with the status bar
 /// following the intro's own light or dark surface.
 final class IntroHostingController: UIHostingController<IntroView> {
-    /// `style` is the phone's own appearance, read from the screen: the
-    /// app's windows are light only (Info.plist UIUserInterfaceStyle), since
-    /// its web pages have no dark theme, but the intro is native and follows
-    /// the phone.
+    /// `style` is read from the screen. While Info.plist pins
+    /// UIUserInterfaceStyle to Light (the web pages have no dark theme), iOS
+    /// reports that pin through every trait, the screen's included, so this
+    /// is always light and the intro's dark palette is unused. It follows
+    /// the phone only if the pin moves from Info.plist to the web view's
+    /// window.
     init(rootView: IntroView, style: UIUserInterfaceStyle) {
         super.init(rootView: rootView)
         modalPresentationStyle = .overFullScreen

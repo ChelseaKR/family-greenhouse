@@ -78,9 +78,11 @@ Constraints that shaped the decision:
    page; a selection tick on every page change and a light impact on a door; Dynamic Type at every
    size with the page scrolling when it no longer fits; VoiceOver headings, focus moved to the new
    page's title, the dots as one adjustable element, and the escape gesture; Reduce Motion; safe
-   areas; iPad width. The intro follows the phone's light or dark appearance, though the web pages
-   stay light (Info.plist `UIUserInterfaceStyle`): it is native and has both palettes (Paper by
-   day, the launch screen's Forest at night).
+   areas; iPad width. The intro is light, like the rest of the app: Info.plist pins
+   `UIUserInterfaceStyle` to Light because the web pages have no dark theme, and iOS reports that
+   pin through every trait, the screen's included (measured on the simulator with the system in
+   dark mode). The intro carries a second palette (the launch screen's Forest) that takes effect
+   only if the pin moves from Info.plist to the web view's window, which is a separate decision.
 
 ## Consequences
 

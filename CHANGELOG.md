@@ -26,8 +26,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   brand's greenhouse mark and SF Symbols, then "Start with your household"
   with **Create account** and **I already have an account**, which open the
   existing sign-up screen or the sign-in form. Swipe, Next, page dots and
-  Skip; haptics on page changes; Dynamic Type, VoiceOver, Reduce Motion,
-  light and dark. The whole story shows once per install; after that, and
+  Skip; haptics on page changes; Dynamic Type, VoiceOver and Reduce Motion.
+  Light, like the rest of the app. The whole story shows once per install; after that, and
   after sign-out, only the last page. English and Spanish through the
   catalogs. Sign-in, sign-up and the session are unchanged. Only in an app
   whose bridge lists the new `NativeIntro` plugin, so Android, the website

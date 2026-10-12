@@ -566,8 +566,10 @@ it the whole time.
   (titles are headings and get focus on a page change, the dots are one
   adjustable "Page 2 of 4" element, the two-finger escape skips to the last
   page or closes the intro from it), Reduce Motion (nothing moves but the
-  system's page swipe), light and dark (the intro follows the phone's
-  appearance; the web pages stay light), safe areas, and iPad width.
+  system's page swipe), safe areas, and iPad width. The intro is light, like
+  the rest of the app: Info.plist pins `UIUserInterfaceStyle` to Light and iOS
+  reports that pin through every trait, so the intro's dark palette is unused
+  while the pin stays in Info.plist.
 - **Fallback.** The web asks for the intro only when the bridge lists
   `NativeIntro` with `present` and `dismiss`. Android, the website, and an
   iOS build without the plugin render the sign-in screen exactly as before,
