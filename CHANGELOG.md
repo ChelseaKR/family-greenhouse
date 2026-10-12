@@ -16,6 +16,311 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-10-10
+
+**The iOS app stays signed in, and a reminder now says which plant, what
+care, and what to do about it.** Opening the app used to mean signing in
+again whenever more than an hour had passed; the refresh token now lives in
+the device keychain, and the Cognito client keeps it valid for a year. The
+daily reminder email is branded HTML that names the most urgent plant and its
+task, groups the rest, and links each plant to its page; every email the kit
+renders gets the same shell. A push reminder names the plant and the care,
+opens that plant's care section, and on iPhone can be answered with Done or
+Snooze until tomorrow from the notification itself. The App Store listing
+says reminders arrive as push on iPhone. The sign-in change and the
+notification buttons reach people through store builds (0.41.0, build 4100);
+the email and the new reminder words reach everyone with this tag's deploy.
+
+- **The Terraform plan changes one attribute of the Cognito app client (#963).**
+  `module.auth.aws_cognito_user_pool_client.main` updates in place with
+  `refresh_token_validity: 30 => 365` (days), from
+  `infrastructure/modules/auth/main.tf` (ADR 0034). Alongside the usual 19
+  Lambda `GIT_SHA` updates, expect `Plan: 0 to add, 20 to change, 0 to
+destroy.` Anything else means stop. Tokens issued before the apply keep
+  the 30 days they were issued with; the first sign-in after it gets a year.
+  No stored data changes shape.
+  - This is the only `infrastructure/` change since 0.40.0: one file, the
+    attribute and its comment. The AWS provider updates the client in place
+    with `UpdateUserPoolClient`; only `user_pool_id` and `generate_secret`
+    force a replacement, and neither changes. `token_validity_units` keeps
+    `refresh_token = "days"`, so 365 means 365 days. A `must be replaced` on
+    the client, or any change to the user pool itself, means stop.
+  - The deploy workflows are unchanged since 0.40.0, no stored data is
+    migrated, and the Terms of Service text is unchanged, so their effective
+    date stays 0.38.2's (October 2, 2026).
+- **The app-only changes reach people through store builds** (0.41.0, build
+  4100), not through this tag's web deploy. The web deploy carries the code,
+  which does nothing on the website. A device signed in under an older build
+  signs in once more on the first launch of the new one (its refresh token
+  was in the WebView's `sessionStorage`, which the update dropped); after
+  that it stays (#963). The iPhone notification buttons, the badge clearing
+  after a button and the Settings preview line need a build carrying #964;
+  the new reminder words and deep links, and the branded email (#962), reach
+  every installed app and every inbox with this tag's deploy. An iOS build
+  made with `VITE_NATIVE_PUSH_ENABLED=true` and
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED=false` offers push, as build 4001 did.
+
+### Added
+
+- **iOS and Android apps: the app stays signed in (ADR 0034, #963).** Opening the
+  app used to mean signing in again whenever more than an hour had passed:
+  the refresh token lived in the WebView's `sessionStorage`, which ends with
+  the app process, and only the hour-long ID token survived a cold start.
+  The apps now keep the refresh token in the iOS keychain or the Android
+  keystore (`@aparajita/capacitor-secure-storage` 8.0.1, pinned; readable
+  after the device's first unlock, in no backup, not synced), read it back
+  at launch before judging the session, and refresh silently with it. A
+  launch never shows the sign-in screen while that happens, and an
+  ID token the client can see has expired goes straight to the refresh,
+  one round trip fewer. Sign-out removes the token; a refused refresh signs
+  the device out; a reinstall starts fresh. The sign-in screen in the apps
+  says "This device stays signed in until you sign out." instead of showing
+  the website's checkbox. All of it only in a shell whose bridge lists the
+  plugin; a build without it keeps the website's storage model and
+  checkbox. The website is unchanged. All JS combined
+  651.64 → 654.5 kB measured; the budget moves 653 → 674 kB.
+- **The store validator recognizes third-party Capacitor plugins (#963).** Any
+  dependency whose package carries a `capacitor` block is now held to the
+  `docs/mobile.md` plugin table and to the iOS and Android link checks, not
+  only the `@capacitor/*` ones.
+
+### Changed
+
+- **The App Store listing says reminders also arrive as push notifications
+  on iPhone (#961).** Native push passed the device checks in
+  `docs/native-push-setup.md` (section 8) on 2026-10-09 with build 4001, the
+  first build made with `VITE_NATIVE_PUSH_ENABLED=true`, so the description's
+  reminders section and the release notes in
+  `store-assets/metadata/en-US.json` no longer say push is not part of the
+  release, and the App Review notes in `docs/APP-STORE.md` name push and how
+  to reach a reminder. The Google Play copy is unchanged, because Android
+  push is off. Documentation only; no app code changes.
+- **The daily reminder email is branded HTML that says what to do (#962).** Subject
+  and title name the most urgent plant and its task with the true count of the
+  rest (_Water Monstera and 2 more today_ / _Regar Monstera y 2 más hoy_); rows
+  are grouped under _Ready for some catch-up care_, _Due today_, _Coming up_,
+  _Check the due date_ and _Up for grabs_, each with the plant linked, the task and due phrase, and a
+  _Mark done in the app_ button to the plant page; a capped section says _and
+  N more_ with a link to the task list; the footer names the household and
+  links to reminder settings. Push and SMS keep their counts title. The welcome,
+  weekly digest and year recap emails pick up the same branded shell with no
+  copy change.
+- **Every email now carries the brand (#962)**: a Forest header band with the logo
+  (`https://familygreenhouse.net/brand/logo-dark.png`, with alt text and
+  dimensions; the one image an email loads, ADR 0021 amended), the
+  design-token palette stated on both the light and the dark path, the brand
+  faces named first in the font stacks with system fallbacks and nothing
+  fetched, rows as Paper-on-Glass panes, and the terracotta accent only on an
+  honest-failure notice.
+- **The text part is kept (#962).** Every message is `multipart/alternative`; the
+  reminder's text part is the tested numbered list the reply-to-act path is
+  bound to, and the HTML rows carry the same numbers when a reply address is
+  bound.
+- **Checked in the repo (#962).** `renderedEmails.test.ts` renders every email in
+  both languages to `backend/test-output/email/` (git-ignored), checks each
+  for email-HTML validity, size and link parity between the two parts, and
+  keeps the reminder as a committed golden; `emailHtmlChecks.test.ts` is the
+  checker's negative control; `npm run email:preview -w backend` screenshots
+  each in light, dark and phone views. Private plant notes are asserted absent
+  from the reminder, the digest and the up-for-grabs email end to end.
+- `scripts/check-app-links.mjs` accepts a backend-built link to a file under
+  `frontend/public/` and verifies the file exists (#962).
+- **Reminder notifications name the plant and the care, open the task they
+  name, and can be answered from the notification itself (#964).** A push reminder
+  used to read "Plant care reminder: 1 due today" and open the task list. It
+  now reads "Water the Monstera" ("Monstera necesita riego") with when it is
+  due and what to do next ("Due today. Mark it done once you have, or snooze
+  it until tomorrow."), and overdue is stated as a date ("Due 3 days ago"),
+  not a verdict. Several tasks get a count and the first two plant names ("3
+  plants need water. Monstera and Fern and 1 more. 2 overdue and 1 due
+  today."), never a wall. Tapping a one-task reminder opens that plant's care
+  section; several open the due list. On iPhone a one-task reminder carries
+  Done and Snooze until tomorrow as notification buttons (a long-press or
+  pull-down shows them), on the website Chrome and Edge show the same two
+  buttons, and on Android a tap opens the plant while the buttons are not
+  built yet (the system renders FCM notifications). Each button posts to the
+  task's own complete or snooze endpoint with the app's stored session and the
+  occurrence it was about, so a second tap, a tap from two devices, or a tap
+  after someone else did it changes nothing and says so. The app icon count is
+  cleared with the notification after a Done or Snooze. The words live in one
+  module (`services/reminderCopy.ts`), in English and Spanish, with no field
+  that could carry a plant's notes or a person. Settings → Notifications shows
+  one line of what a reminder says. The email reminder has its own entry
+  above. Store note: the iPhone buttons need a build carrying this change;
+  the words and the deep link reach every installed app with the backend
+  deploy.
+
+## [0.40.0] - 2026-10-06
+
+**The public sitter, caretaker, kiosk and plant tag pages now call work that
+is due today "due today" all day, the way the signed-in app does.** Safari no
+longer reports a page you left while it was still loading as an app failure,
+and the pet-safety pages and four posts link the care guides they name.
+Density in Preferences is a segmented control, "every N days" has a stepper,
+and the Household tab, the plant page and the desktop Tasks page show the
+shape of what is coming while they load. The rest is for the iOS app, which
+is not yet in the App Store: Add care task as a native form sheet, the camera
+and photo library on the leaf health check and on the sitter and caretaker
+pages, haptics, and **native push switched on in production for iOS**, so an
+iOS build made with push enabled can deliver reminders to the phone (Android
+stays off). The store builds also move to Capacitor 8.5.2, which fixes a
+critical advisory.
+
+- **The Terraform plan destroys one unused CloudFront cache policy and
+  switches native push on for iOS (#940, #956, #958).** Expect
+  `Plan: 0 to add, 20 to change, 1 to destroy.`
+  - The one destroy is `module.frontend.aws_cloudfront_cache_policy.images`
+    (`family-greenhouse-images-production`, id
+    `ed4acfb8-cf62-4698-9d1b-aef5144915b1`), dropped from
+    `infrastructure/modules/frontend/main.tf`. 0.38.1 kept it for one release
+    so the distribution could stop using it first, and nothing has used it
+    since 0.38.1 deployed (#940).
+  - The 20 in-place updates are the 19 Lambda functions, every one with the
+    usual `GIT_SHA` change, and on `households`, `notifications` and
+    `reminders` also `APNS_AUTH_KEY_SECRET_ID` from `""` to
+    `family-greenhouse/production/apns-auth-key` (#956) and
+    `NATIVE_PUSH_ENABLED` from `"false"` to `"true"` (#958); plus
+    `module.api.aws_iam_role_policy.lambda`, whose one
+    `secretsmanager:GetSecretValue` statement for push names that secret in
+    place of the `apns-disabled` sentinel (#956). `FCM_SERVICE_ACCOUNT_SECRET_ID`
+    stays `""` and the FCM grant stays on its sentinel.
+  - Anything else means stop. These are the only `infrastructure/` changes
+    since 0.39.0 (`environments/production/terraform.tfvars`,
+    `modules/api/main.tf`, `modules/frontend/main.tf` and `variables.tf`). No
+    stored data is migrated, and the Terms of Service text is unchanged, so
+    their effective date stays 0.38.2's (October 2, 2026).
+- **Do not run Deploy to Staging from this release yet (#940).** Staging is
+  still on the layout from before 0.38.1, where its own images policy is in
+  use by two distributions. A staging apply of this code would detach and
+  destroy in one apply, the order that failed 0.38.0. Apply staging once from
+  0.38.2 or later without this change first.
+- **The deploy workflows change only in their pinned action versions
+  (#949):** `configure-aws-credentials` 6.2.4 to 6.3.0 in the production,
+  staging and alert-relay workflows, `codecov-action` 7.0.0 to 7.1.1 and
+  `gradle/actions` 6.3.0 to 6.4.0.
+- **The app-only changes reach people through store builds** (0.40.0, build
+  4000), not through this tag's web deploy. Those builds carry Capacitor
+  8.5.2 for iOS and Android, which fixes GHSA-rvm3-566m-v7fv (critical, in
+  8.5.0: remote content could be loaded at the app origin through the
+  internal HTTP proxy path). An iOS build made with
+  `VITE_NATIVE_PUSH_ENABLED=true` and `VITE_NATIVE_PUSH_ANDROID_ENABLED=false`
+  offers push once this tag's deploy reports `devicePush.ios: true`; the
+  device checks in `docs/native-push-setup.md` (section 8) run against
+  production with the owner's TestFlight build.
+
+### Added
+
+- **Density as a segmented control, and a stepper for "every N days" (#947).**
+  Settings, then Preferences shows Cozy and Compact as one segmented control,
+  as in iOS Settings; it is still a radio group for the keyboard and
+  assistive tech, and the two segments stack at the accessibility text sizes.
+  Add care task and Edit task get − and + beside the "Frequency (days)"
+  field, stopping at 1 and 365; a typed number still works.
+- **Skeletons while pages load (#944).** The Household tab, the plant page and
+  the desktop Tasks page show the shape of what is coming instead of a
+  centered spinner, each announced to screen readers as "Loading…". No tab
+  root shows a spinner while its data loads any more.
+- **Internal links from the pet-safety pages and four posts to the care
+  guides (#945).** 22 of the 28 `/pet-safe/<plant>` pages link their own care
+  guide (the six without a guide of the same name do not). The two
+  pet-safety posts link the safety page of every plant they name, and say
+  which plants have none. The yellow-leaves and overwatering posts link the
+  guides whose own text covers that problem. No verdict, note or citation
+  changed, and the sitemap stays at 88 addresses.
+- **iOS app: Add care task as a native form sheet (#948).** A grouped form
+  with a grabber, medium and large detents, and Cancel and Add in the sheet's
+  own bar, drawn by Swift from the words, choices and starting values the web
+  sends in the app's language. Dismissing never submits: only the sheet's Add
+  button reports values, and the web accepts only a known task kind, a whole
+  number of days from 1 to 365 and a name for a Custom task. A save the
+  server refuses reopens the sheet with what was entered and the reason, and
+  a half-filled sheet survives a trip out of the app. The other eight forms,
+  older app builds and the website keep the web dialog.
+- **iOS and Android apps: the camera and photo library for the leaf health
+  check, the sitter page and the caretaker page (#946).** Each opens the
+  camera or the library natively, as the plant photo already does, instead of
+  the web file picker; the caretaker page asks Take photo or Choose photo in
+  a native sheet, anchored on the button. A refused permission says why and
+  how to turn it on. The website keeps its file inputs. Neither public page
+  gains any data, and a new test holds that a plant's or a task's private
+  notes appear nowhere in the caretaker page's response.
+- **iOS and Android apps: haptics (#944).** A selection tick when the native
+  tab or the Tasks segment changes, a warning pattern when a destructive
+  confirmation appears, and a success pattern once a plant or a task is
+  added, from the server's answer. The website plays none.
+- **iPhone App Store screenshots with real plant photos and the Tasks
+  checklist (#942, #943).** Each demo plant shows a public-domain or CC0
+  photograph from Wikimedia Commons, uploaded by the capture the way a person
+  does; `store-assets/photo-credits.json` records each one's source, author,
+  license and checksum. The Tasks frame shows the checklist from 0.39.0.
+
+### Changed
+
+- **Native push is switched on in production for iOS (#958).**
+  `native_push_enabled` is `true`, so the households, notifications and
+  reminders Lambdas get `NATIVE_PUSH_ENABLED = "true"` and the API reports
+  `devicePush.ios: true` to app builds made with `VITE_NATIVE_PUSH_ENABLED=true`.
+  It went on before the device checks in `docs/native-push-setup.md` because
+  no public build of the app existed yet; only the owner's TestFlight build
+  can register a device. Android stays off. The store listing's reminders
+  line is unchanged until the checks pass. The secret name and the IAM grant
+  came with #956.
+- **iOS-first native push prep (#956).** Production Terraform names the APNs
+  secret, `family-greenhouse/production/apns-auth-key` (a name, not the key;
+  the key material never leaves Secrets Manager), and the one push
+  `GetSecretValue` grant names it too. The store validator allows an iOS-only
+  push build: Android has its own build switch,
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED`, and without it the Android app never
+  offers push, never asks for permission and never loads the plugin, whatever
+  the deployment reports. A build that sets the Android switch without the
+  main one is refused.
+- **The Lighthouse mobile performance floor is 0.80 (#954),** down from 0.85.
+  `/login` scored 0.83 or 0.84 on every CI run since the runner moved to
+  Chrome 154, so the check failed on runner speed rather than on the page. The
+  2026-10-02 control that added a 250 ms busy loop at startup scored 0.75, so
+  the new floor still fails on a real regression. The desktop floor and every
+  other assertion are unchanged.
+- **Dependencies (#949).** stripe 22.5.0 to 22.6.1 (its pinned Stripe API
+  version moves to `2026-08-26.dahlia`; nothing the backend calls changes
+  shape), the AWS SDK Bedrock and Cognito clients, Capacitor iOS and Android
+  8.5.0 to 8.5.2, and lockfile-only moves of brace-expansion, undici and
+  ip-address.
+
+### Fixed
+
+- **The public pages call due-today work "due today" all day (#939).** The
+  sitter page, the sitter brief, the caretaker and kiosk pages and the plant
+  tag page showed the API's instant `overdue` flag, so a task due at 9:00
+  read "Overdue" from 9:01 while the signed-in app said "Today" until
+  midnight. They now read a task's day the way the app does, by calendar day
+  in the browser's zone, and the sitter, caretaker and kiosk pages no longer
+  round elapsed hours into days. An unreadable due date shows no label. The
+  API and its `overdue` field are unchanged.
+- **Safari no longer reports a page you left mid-load as an app failure
+  (#941).** WebKit reports a code chunk a navigation cut short as a failed
+  import, and the route boundary then showed "We couldn't load this page" and
+  sent it to telemetry and Sentry, so every quick tap away from a page still
+  fetching its code counted as a failure. A chunk-load error while the page
+  is being left is no longer reported; every other error, and a failed load on
+  a page that stays, still is.
+- **The Timezone field starts on "UTC" when the browser's zone is a UTC alias
+  (#941),** such as Etc/UTC or GMT, instead of showing the alias for a frame.
+- **Three flaky tests, each fixed at its cause (#941).** The backend test
+  server binds 127.0.0.1 explicitly, so another process holding the same port
+  on loopback can no longer answer its requests, and the suite's retry is
+  removed; the public-pages reflow test waits for each page to settle. Two
+  e2e helpers no longer open the Plants list's "…" menu in place of the plant
+  page's (#946, #948).
+- **Two more e2e checks fixed at their cause (#957).** The accessibility
+  helper waited on an animation promise that Chromium never settles when a
+  menu closes before the next frame, so a test could hang for 90 seconds and
+  pass on retry; it now asks for a frame and reads the animation states
+  again. The 320px checks measured five pages before their code had loaded,
+  so they passed on nothing; with the wait in place, the Import page's
+  visually hidden file input counted as an undersized control, and it is now
+  hidden the way the caretaker and sitter pages hide theirs. The Browse button
+  still opens it.
+
 ## [0.39.0] - 2026-10-04
 
 **On a phone, Plants and Tasks now lead with what needs care today, and every

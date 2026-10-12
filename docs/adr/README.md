@@ -63,6 +63,7 @@ be invisible.
 | [0031](0031-reply-to-act-on-reminder-emails.md)                              | A reminder can be answered by mail, through a hashed per-email reply address that reaches only the tasks that email listed | Proposed |
 | [0032](0032-household-chat-channel-webhooks-sealed-with-kms.md)              | A household chat-channel webhook is the first replayed secret, so it is sealed with KMS                                    | Proposed |
 | [0033](0033-plant-photos-are-served-only-through-short-lived-signed-urls.md) | Plant photos are served only through short-lived signed URLs                                                               | Accepted |
+| [0034](0034-the-app-stays-signed-in.md)                                      | The app stays signed in: the refresh token lives in the device keychain, for a year                                        | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

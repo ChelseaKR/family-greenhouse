@@ -20,7 +20,11 @@ function articleText(sectionId: string, articleId: string): string {
   return article.text;
 }
 
-vi.mock('@/lib/platform', () => ({
+// Partial: the auth store, which the help pages pull in, reads the bridge's
+// plugin headers through this module too (hasNativePlugin), and a strict
+// factory would throw on that export.
+vi.mock('@/lib/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/platform')>()),
   isNativeApp: vi.fn(() => false),
   getNativePlatform: vi.fn(() => 'web'),
 }));

@@ -19,6 +19,8 @@ interface CardProps {
    *    read as one journal page.
    */
   variant?: 'solid' | 'paper' | 'journal' | 'glass';
+  /** A fragment target, for a deep link that lands on one card of a page. */
+  id?: string;
 }
 
 const PADDING_CLASSES = {
@@ -36,9 +38,9 @@ const VARIANT_CLASSES: Record<NonNullable<CardProps['variant']>, string> = {
   glass: 'glass-surface rounded-2xl border backdrop-blur-xs',
 };
 
-export function Card({ children, className, padding = 'md', variant = 'solid' }: CardProps) {
+export function Card({ children, className, padding = 'md', variant = 'solid', id }: CardProps) {
   return (
-    <div className={clsx(VARIANT_CLASSES[variant], PADDING_CLASSES[padding], className)}>
+    <div id={id} className={clsx(VARIANT_CLASSES[variant], PADDING_CLASSES[padding], className)}>
       {children}
     </div>
   );

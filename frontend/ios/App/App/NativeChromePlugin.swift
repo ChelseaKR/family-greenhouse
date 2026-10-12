@@ -27,7 +27,15 @@ import Capacitor
 ///   background, the web closing it). NativePresentModel.swift decides.
 /// - `updatePresented({ token, title?, message? })`: new words for the one
 ///   showing (a count that arrived after it opened).
-/// - `dismissPresented({ token })`: the web closed it; it answers no choice.
+/// - `dismissPresented({ token })`: the web closed it (an alert or a form
+///   sheet); it answers no choice.
+///
+/// Form sheets (web -> native, answered):
+/// - `presentForm({ token, title, message?, cancel, submit, fields })` shows
+///   the form in a native sheet and resolves `{ values }` with the shown
+///   fields' values on its submit button, or `{ values: null }` any other way
+///   (Cancel, a swipe down, the web closing it, another one replacing it).
+///   NativeFormSheetModel.swift decides.
 ///
 /// A screen's own bar tools (web -> native, NativeBarTools.swift):
 /// - `setBarTools({ path, menus, search })`: pull-down menus beside the "+"
@@ -44,6 +52,7 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "present", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updatePresented", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "dismissPresented", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "presentForm", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBarTools", returnType: CAPPluginReturnPromise)
     ]
 
@@ -174,7 +183,29 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         let token = call.getString("token") ?? ""
         DispatchQueue.main.async { [weak self] in
             self?.frame?.dismissPresented(token: token)
+            self?.frame?.dismissForm(token: token)
             call.resolve()
+        }
+    }
+
+    @objc func presentForm(_ call: CAPPluginCall) {
+        guard let token = call.getString("token"), !token.isEmpty else {
+            call.reject("presentForm needs a token", "INVALID")
+            return
+        }
+        let parsed = FormSheetRequest.parse(call.options as? [String: Any] ?? [:])
+        guard let request = parsed.request else {
+            call.reject(parsed.error ?? "invalid form", "INVALID")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let frame = self?.frame else {
+                call.resolve(["values": NSNull()])
+                return
+            }
+            frame.presentForm(request, token: token) { values in
+                call.resolve(["values": values ?? NSNull()])
+            }
         }
     }
 
