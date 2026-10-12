@@ -6,7 +6,7 @@ import { introStart, noteSignedIn, resetNativeIntroStateForTests } from '@/lib/n
 import type { NativeIntroRequest, NativeIntroResult } from '@/config/nativeIntro';
 
 /**
- * The iOS app's signed-out intro over the sign-in screen (ADR 0035): when it
+ * The apps' signed-out intro over the sign-in screen (ADR 0035): when it
  * is asked for, from which page, and what the web does with each answer. The
  * plugin is replaced here; the gate is the real `hasNativeIntro()`, with the
  * platform partially mocked as HelpPage.test.tsx does it, so the header check
@@ -226,10 +226,23 @@ describe('the intro in the iOS app', () => {
   });
 });
 
+describe('the intro in the Android app', () => {
+  it('opens the same way when the bridge lists the plugin, and Create opens sign-up', async () => {
+    bridge.platform = 'android';
+    bridge.listed = ['NativeChrome', 'NativeIntro'];
+    renderLogin();
+    await waitFor(() => expect(presented).toHaveLength(1));
+    expect(presented[0].request.start).toBe('story');
+    await act(async () => presented[0].answer({ choice: 'create' }));
+    expect(await screen.findByText('Register Page')).toBeInTheDocument();
+    expect(introStart()).toBe('final');
+  });
+});
+
 describe('everywhere else, the sign-in screen exactly as before', () => {
   it.each([
     ['the website', 'web' as const, ['NativeIntro']],
-    ['Android', 'android' as const, ['NativeIntro']],
+    ['an Android build without the plugin', 'android' as const, ['NativeChrome']],
     ['an iOS build without the plugin', 'ios' as const, []],
     ['an iOS build listing other plugins only', 'ios' as const, ['NativeChrome', 'SecureStorage']],
   ])('%s: no intro is asked for', async (_name, where, plugins) => {

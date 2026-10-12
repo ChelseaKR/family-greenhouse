@@ -48,12 +48,12 @@ Swift ones built by the Xcode project), and nothing else is listed.
 
 <!-- app-target-plugins:start -->
 
-| Plugin         | What it backs                                                                                                                                                                                                                                                                                                                                                               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NativeChrome` | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below. |
-| `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (`NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; ADR 0035). See "The signed-out intro (iOS)" below.                                                                                     |
-| `NativeReview` | Apple's rating sheet (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`; ADR 0036). The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" below.     |
-| `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                   |
+| Plugin         | What it backs                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NativeChrome` | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below.                             |
+| `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (iOS: `NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; Android: `android/app/src/main/java/net/familygreenhouse/app/intro/`; ADR 0035). See "The signed-out intro (iOS)" and "The signed-out intro (Android)" below. |
+| `NativeReview` | Apple's rating sheet (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`; ADR 0036). The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" below.                                 |
+| `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                                               |
 
 <!-- app-target-plugins:end -->
 
@@ -385,7 +385,7 @@ With no stream URL, chat uses the supported synchronous API endpoint.
 | Launch               | The launch screen stays up until the first page's heading renders, then fades (`SplashScreen.launchAutoHide: false`, released by `nativeShell.ts`; a 5 s fallback armed in `nativeLaunchBoot.ts` means a startup error cannot leave it up). The WebView background is the launch screen's forest green, not white.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Status bar           | The app has no dark theme, so the bar follows the surface under it, not the system appearance: light icons on the launch screen and the drawer, dark icons on the app. iOS declares `UIUserInterfaceStyle` Light; Android's theme is Light with the page's paper background, and the Android frame's Material colors are the brand's light scheme whatever the system appearance (`FgTheme.kt`).                                                                                                                                                                                                                                                                                                                                                                                       |
 | Keyboard             | `@capacitor/keyboard` resizes the iOS WebView above the keyboard (its default `native` mode); Capacitor's SystemBars pads the Android one by the IME inset. `nativeShell.ts` then scrolls the focused field to the middle of what is left. The plugin hides the iOS Prev / Next / Done bar on load with no setting to stop it, so `restoreKeyboardAccessoryBar()` turns it back on at launch.                                                                                                                                                                                                                                                                                                                                                                                          |
-| Signed-out start     | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. On iOS the native intro opens over sign-in (see "The signed-out intro (iOS)"). See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                                                   |
+| Signed-out start     | A signed-out native `/` redirects to `/login` (`App.tsx`), so the shells open on sign-in rather than the marketing landing page, and `main.tsx` does not hydrate the prerendered landing markup the binary still carries. `PricingGrid` renders nothing natively. In both apps the native intro opens over sign-in (see "The signed-out intro (iOS)" and "(Android)"). See the Guideline 4.2 item under "Review-proofing".                                                                                                                                                                                                                                                                                                                                                             |
 | Auth                 | Email/password against our API — no hosted-UI redirect, so no deep-link/custom-scheme handling is needed for login. The refresh token is kept in the device keychain and read back at launch, so the app stays signed in until sign-out (ADR 0034). See "Staying signed in" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Text size            | iOS: WKWebView ignores Dynamic Type, so `useNativeTextSize` reads the preferred size through `@capacitor/text-zoom` on launch and on every return to the foreground, and applies it as the page's text-size adjustment, every size from the smallest to AX5 (about 312%), with no cap: a layout that clips at a large size is fixed by wrapping or scrolling, never by a smaller size (owner decision, 2026-09-18). From AX1 up `<html data-text-size="large">` switches on the `large-text:` variant (index.css), which stacks side-by-side rows and lets the top bar scroll away. `tests/e2e/largest-text.spec.ts` holds the main screens at 312% in English and Spanish. Android's WebView already applies the system font scale.                                                   |
 | Screen readers       | The navigation drawer is announced by name ("Main navigation"), not as an unnamed dialog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -574,14 +574,43 @@ it the whole time.
   reports that pin through every trait, so the intro's dark palette is unused
   while the pin stays in Info.plist.
 - **Fallback.** The web asks for the intro only when the bridge lists
-  `NativeIntro` with `present` and `dismiss`. Android, the website, and an
-  iOS build without the plugin render the sign-in screen exactly as before,
-  and never load the plugin's code.
+  `NativeIntro` with `present` and `dismiss`. The website and an app build
+  without the plugin render the sign-in screen exactly as before, and never
+  load the plugin's code.
 
 `tests/e2e/native-intro.spec.ts` plays a signed-out launch, both doors, the
 relaunch, a sign-out, Spanish, the no-plugin build and the website with the
 shell pretended; `tests/e2e/native-review-hygiene.spec.ts` holds the intro's
 words to the store payment rules.
+
+### The signed-out intro (Android)
+
+The Android app shows the same intro, with the same pages, words, doors and
+rules (when it shows, from which page, what counts as a choice), drawn in
+Jetpack Compose by its own `NativeIntro` plugin (`NativeIntroPlugin.kt`,
+`NativeIntroView.kt`, `NativeIntroModel.kt`, a port of the Swift model with
+JVM tests in `NativeIntroModelTest.kt`). The web side is shared: `hasNativeIntro()`
+accepts Android when the bridge lists the plugin. What differs:
+
+- **Material, not iOS.** A horizontal pager, Skip as a text button, the main
+  door as a filled button and the other as an outlined one. Material Symbols
+  stand in for the SF Symbols in the pictures (a water drop, a suitcase, a
+  check and a link). Titles are the system serif.
+- **Back.** Android back goes to the previous page; on the first page shown
+  (the only page, after a sign-out) it closes the intro with no choice, onto
+  the sign-in form. It never leaves the app while the intro is up.
+- **Over the frame.** The intro covers the whole window, the native frame
+  included, and everything under it is hidden from TalkBack until it closes.
+  The status bar icons are dark on its Paper background.
+- **Accessibility.** Text follows the system font scale (the page scrolls
+  and the picture shrinks at large sizes), titles are headings and each page
+  is a pane TalkBack announces, the dots are one adjustable "Page 2 of 4"
+  element, and with Remove animations on nothing slides or grows. A tick
+  plays on every page change and a confirm on a door.
+- **Light only**, like the rest of the Android app (`FgTheme.kt`).
+- **Reinstall.** The "seen" mark is in `localStorage`; on Android, Auto
+  Backup (`allowBackup`) can restore it with the app's data, and then a
+  reinstall opens on the last page instead of the story.
 
 ### The native frame (Android)
 

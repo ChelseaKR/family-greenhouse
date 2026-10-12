@@ -42,6 +42,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   closes first. Every word still comes from the web's catalogs, in English
   and Spanish. Only in an Android build whose bridge lists the plugin; the
   website, iOS and older Android builds are unchanged.
+- **Android app: the signed-out intro (ADR 0035).** The Android app opens
+  signed-out on the same intro as the iOS app, drawn in Jetpack Compose: the
+  three story pages and "Start with your household" with **Create account**
+  and **I already have an account**, the same words in English and Spanish,
+  and the same rules for when it shows. Back goes to the previous page and,
+  from the first, onto the sign-in form. Text follows the system font size,
+  TalkBack reads titles as headings and the dots as one "Page 2 of 4"
+  control, and Remove animations stops the motion. Only in an Android build
+  whose bridge lists the new `NativeIntro` plugin.
 - **The store validator holds the Android app-target plugins.** Every Kotlin
   class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
   and listed in the app-target table in `docs/mobile.md`.

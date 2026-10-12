@@ -2,42 +2,46 @@ import type { TFunction } from 'i18next';
 import { getNativePlatform, hasNativePlugin } from '@/lib/platform';
 
 /**
- * The signed-out intro in the iOS app (NativeIntro `present`,
- * ios/App/App/NativeIntro*.swift, ADR 0035): a few native pages telling what
- * the app is for, then two doors, "Create account" and "I already have an
- * account". The web owns every word (the en and es catalogs, `auth.intro.*`);
- * Swift owns the pictures, the paging and the motion. The intro signs nobody
+ * The signed-out intro in the apps (NativeIntro `present`, ADR 0035): a few
+ * native pages telling what the app is for, then two doors, "Create account"
+ * and "I already have an account". Drawn in SwiftUI on iOS
+ * (ios/App/App/NativeIntro*.swift) and in Jetpack Compose on Android
+ * (android/app/src/main/java/net/familygreenhouse/app/intro/). The web owns
+ * every word (the en and es catalogs, `auth.intro.*`); the native side owns
+ * the pictures, the paging and the motion. The intro signs nobody
  * in or up: it answers which door was tapped, and the web opens its own
  * sign-up or sign-in screen, the same screens as the website.
  *
  * The rule both sides keep: only a tap on one of the two doors is a choice,
- * and "Create account" only when it was offered. Swift answers
+ * and "Create account" only when it was offered. Both apps answer
  * `{ choice: null }` for every other ending (the web closed it, another
- * replaced it, VoiceOver's escape on the last page), and `introChoice` below
- * accepts nothing else.
+ * replaced it, VoiceOver's escape on the last page, Android back on the
+ * first page shown), and `introChoice` below accepts nothing else.
  */
 
-/** The name the iOS app registers the plugin under (NativeIntroPlugin.swift `jsName`). */
+/** The name both apps register the plugin under (NativeIntroPlugin.swift `jsName`, NativeIntroPlugin.kt `@CapacitorPlugin`). */
 export const NATIVE_INTRO_PLUGIN = 'NativeIntro';
 /** The methods the web needs; both must be listed in the bridge's header. */
 export const NATIVE_INTRO_METHODS = ['present', 'dismiss'];
 
 /**
- * True only inside the iOS app when the bridge lists the NativeIntro plugin
- * with both methods (`Capacitor.PluginHeaders`, read the way the keychain
- * plugin is, ADR 0034). An app built without it, Android, and the website
- * keep the web sign-in screen exactly as before; a plugin's JavaScript is
- * never driven without its native half.
+ * True only inside the iOS or Android app when the bridge lists the
+ * NativeIntro plugin with both methods (`Capacitor.PluginHeaders`, read the
+ * way the keychain plugin is, ADR 0034). An app built without it and the
+ * website keep the web sign-in screen exactly as before; a plugin's
+ * JavaScript is never driven without its native half.
  */
 export function hasNativeIntro(): boolean {
+  const platform = getNativePlatform();
   return (
-    getNativePlatform() === 'ios' && hasNativePlugin(NATIVE_INTRO_PLUGIN, NATIVE_INTRO_METHODS)
+    (platform === 'ios' || platform === 'android') &&
+    hasNativePlugin(NATIVE_INTRO_PLUGIN, NATIVE_INTRO_METHODS)
   );
 }
 
 /**
  * The story pages, in order, then the last page. Each id picks its picture
- * in Swift (`IntroIllustration`): the greenhouse mark, a water drop being
+ * natively (`IntroIllustration` in Swift and Kotlin): the greenhouse mark, a water drop being
  * claimed, a suitcase with a link, the app icon.
  */
 export const INTRO_STORY_PAGES = ['household', 'claim', 'away'] as const;

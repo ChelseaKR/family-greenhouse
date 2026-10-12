@@ -15,10 +15,10 @@ import {
 } from '@/config/nativeIntro';
 
 /**
- * The iOS app's signed-out intro (ADR 0035): the words the web sends Swift,
- * in both languages, what it accepts back, and the field names both sides
- * must agree on. Swift is not compiled in CI, so, as for the native frame
- * and the form sheet, its source is read and held to the web's shapes here.
+ * The apps' signed-out intro (ADR 0035): the words the web sends Swift and
+ * Kotlin, in both languages, what it accepts back, and the field names every
+ * side must agree on. Neither is compiled in CI, so, as for the native frame
+ * and the form sheet, their source is read and held to the web's shapes here.
  */
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 const model = read('ios/App/App/NativeIntroModel.swift');
@@ -26,6 +26,11 @@ const view = read('ios/App/App/NativeIntroView.swift');
 const plugin = read('ios/App/App/NativeIntroPlugin.swift');
 const main = read('ios/App/App/MainViewController.swift');
 const project = read('ios/App/App.xcodeproj/project.pbxproj');
+const kotlinDir = 'android/app/src/main/java/net/familygreenhouse/app/intro';
+const kotlinModel = read(`${kotlinDir}/NativeIntroModel.kt`);
+const kotlinView = read(`${kotlinDir}/NativeIntroView.kt`);
+const kotlinPlugin = read(`${kotlinDir}/NativeIntroPlugin.kt`);
+const mainActivity = read('android/app/src/main/java/net/familygreenhouse/app/MainActivity.kt');
 
 const t = i18n.t.bind(i18n);
 
@@ -278,5 +283,52 @@ describe('Swift reads what the web sends', () => {
     expect(view).toContain('.accessibilityAddTraits(.isHeader)');
     expect(view).toContain('.accessibilityAction(.escape)');
     expect(view).toContain('UISelectionFeedbackGenerator');
+  });
+});
+
+describe('Kotlin reads what the web sends', () => {
+  it('registers the plugin under the name and methods the web checks for', () => {
+    expect(kotlinPlugin).toContain(`@CapacitorPlugin(name = "${NATIVE_INTRO_PLUGIN}")`);
+    const methods = [...kotlinPlugin.matchAll(/@PluginMethod\s+fun (\w+)/g)].map((m) => m[1]);
+    expect(methods.sort()).toEqual([...NATIVE_INTRO_METHODS].sort());
+    expect(mainActivity).toContain('registerPlugin(NativeIntroPlugin::class.java)');
+  });
+
+  it('parses every field of the request by its web name', () => {
+    const request = introRequest(t, { start: 'story', offerCreate: true });
+    const fields = Object.keys({ ...request, token: '' }).filter((f) => f !== 'token');
+    for (const field of fields) expect(kotlinModel, field).toContain(`"${field}"`);
+    expect(kotlinPlugin).toContain('call.getString("token")');
+    for (const pageField of ['id', 'title', 'body'])
+      expect(kotlinModel).toContain(`page["${pageField}"]`);
+    expect(kotlinModel).toContain('STORY("story")');
+    expect(kotlinModel).toContain('FINAL("final")');
+  });
+
+  it('answers the two choices by the names the web accepts', () => {
+    expect(kotlinModel).toContain('CREATE("create")');
+    expect(kotlinModel).toContain('SIGN_IN("signIn")');
+    expect(kotlinPlugin).toContain('put("choice", choice?.wire ?: JSONObject.NULL)');
+  });
+
+  it('draws a picture for every page id the web sends', () => {
+    for (const id of [...INTRO_STORY_PAGES, INTRO_LAST_PAGE]) {
+      expect(kotlinView).toContain(`"${id}" ->`);
+    }
+  });
+
+  it('carries no words of its own: every string on screen comes from the web', () => {
+    const literals = [...kotlinView.matchAll(/Text\(\s*"([^"]*)"/g)].map((m) => m[1]);
+    expect(literals).toEqual([]);
+  });
+
+  it('honors Remove animations, font scale and TalkBack in the view', () => {
+    expect(kotlinView).toContain('ValueAnimator.areAnimatorsEnabled()');
+    expect(kotlinView).toContain('fontScale');
+    expect(kotlinView).toContain('setProgress');
+    expect(kotlinView).toContain('heading()');
+    expect(kotlinView).toContain('paneTitle');
+    expect(kotlinView).toContain('performHapticFeedback');
+    expect(kotlinPlugin).toContain('OnBackPressedCallback');
   });
 });

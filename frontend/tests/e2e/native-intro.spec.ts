@@ -36,16 +36,19 @@ interface IntroCall {
   };
 }
 
-async function pretendToBeTheIosShell(page: Page, opts: { intro: boolean; answer?: Answer }) {
+async function pretendToBeTheIosShell(
+  page: Page,
+  opts: { intro: boolean; answer?: Answer; platform?: 'ios' | 'android' }
+) {
   await page.addInitScript(
-    ({ intro, answer }) => {
+    ({ intro, answer, platform }) => {
       const w = window as unknown as Record<string, unknown>;
       const calls: unknown[] = [];
       w.__introCalls = calls;
-      w.CapacitorCustomPlatform = { name: 'ios', plugins: {} };
+      w.CapacitorCustomPlatform = { name: platform, plugins: {} };
       w.Capacitor = {
         isNativePlatform: () => true,
-        getPlatform: () => 'ios',
+        getPlatform: () => platform,
         PluginHeaders: intro
           ? [
               {
@@ -70,7 +73,7 @@ async function pretendToBeTheIosShell(page: Page, opts: { intro: boolean; answer
         nativeCallback: () => 'callback',
       };
     },
-    { intro: opts.intro, answer: opts.answer ?? 'none' }
+    { intro: opts.intro, answer: opts.answer ?? 'none', platform: opts.platform ?? 'ios' }
   );
 }
 
@@ -195,6 +198,33 @@ test.describe('inside the iOS app, with the intro', () => {
     // Closed with no choice: the sign-in screen stays, in Spanish.
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible();
+  });
+});
+
+test.describe('inside the Android app, with the intro', () => {
+  test('the same story, and "I already have an account" lands on sign-in', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'the Android shell is Chromium (the system WebView)');
+    await pretendToBeTheIosShell(page, { intro: true, answer: 'signIn', platform: 'android' });
+    await page.goto('/');
+    const [call] = await presented(page);
+    expect(call.options.start).toBe('story');
+    expect(call.options.pages?.map((p) => p.id)).toEqual(['household', 'claim', 'away', 'start']);
+    await expect(page).toHaveURL(/\/login$/, { timeout: 15000 });
+    await expect(page.getByLabel(/email/i)).toBeFocused({ timeout: 15000 });
+  });
+
+  test('an Android build without the plugin never asks for it', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'the Android shell is Chromium (the system WebView)');
+    await pretendToBeTheIosShell(page, { intro: false, platform: 'android' });
+    const chunk = watchIntroChunk(page);
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/login$/, { timeout: 15000 });
+    await expect(page.getByRole('link', { name: /sign up free/i })).toBeVisible();
+    expect(await introCalls(page)).toEqual([]);
+    expect(chunk).toEqual([]);
   });
 });
 

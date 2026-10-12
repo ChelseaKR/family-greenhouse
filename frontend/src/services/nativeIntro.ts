@@ -6,8 +6,8 @@ import {
 } from '@/config/nativeIntro';
 
 /**
- * The iOS app's NativeIntro plugin (ios/App/App/NativeIntroPlugin.swift),
- * registered once. Loaded with a dynamic import, and only behind
+ * The apps' NativeIntro plugin (ios/App/App/NativeIntroPlugin.swift and the
+ * Android app's intro/NativeIntroPlugin.kt), registered once. Loaded with a dynamic import, and only behind
  * `hasNativeIntro()`, so the website never downloads it or `@capacitor/core`
  * through it. Never resolve a promise with the plugin itself: it is a proxy
  * that answers every property, `then` included (services/loadNativeChrome.ts).
@@ -24,7 +24,7 @@ let counter = 0;
 /**
  * Shows the intro and resolves what it answered. `onToken` receives its name
  * before it shows, so the caller can close it (`dismissIntro`) if the sign-in
- * screen goes away first. Null when the call failed (Swift refused the
+ * screen goes away first. Null when the call failed (the app refused the
  * request, or the bridge did not answer): the intro was never seen, and the
  * sign-in screen stays.
  */
