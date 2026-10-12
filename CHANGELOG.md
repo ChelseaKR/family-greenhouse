@@ -16,6 +16,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Android app: the native frame (ADR 0037).** The Android app gets what
+  the iOS app's frame does, drawn with Material 3 in Jetpack Compose behind
+  the same `NativeChrome` plugin: a top app bar with the screen's title, the
+  back arrow and the Plants and Tasks menus and search, a navigation bar
+  with Home, Plants, Tasks, Household and More, More and Settings as native
+  lists, confirmations as Material dialogs, choices as modal bottom sheets,
+  and Add care task as a modal bottom sheet. Back goes down a tab's stack,
+  then to Home, then out of the app with predictive back; a web dialog still
+  closes first. Every word still comes from the web's catalogs, in English
+  and Spanish. Only in an Android build whose bridge lists the plugin; the
+  website, iOS and older Android builds are unchanged.
+- **The store validator holds the Android app-target plugins.** Every Kotlin
+  class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
+  and listed in the app-target table in `docs/mobile.md`.
+
 ## [0.42.0] - 2026-10-12
 
 **The iOS app opens signed-out on a native intro instead of a sign-in

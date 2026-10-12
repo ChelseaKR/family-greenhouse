@@ -1,4 +1,6 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 def uploadKeystore = System.getenv('ANDROID_UPLOAD_KEYSTORE')
 def uploadKeystorePassword = System.getenv('ANDROID_UPLOAD_KEYSTORE_PASSWORD')
@@ -33,6 +35,14 @@ android {
             }
         }
     }
+    buildFeatures {
+        compose true
+    }
+    testOptions {
+        // The frame's routing, alert, form-sheet and review rules are plain
+        // Kotlin (no Android types), so they run as local JVM tests.
+        unitTests.returnDefaultValues = true
+    }
     buildTypes {
         release {
             if (uploadKeystore) {
@@ -41,6 +51,13 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        // Matches capacitor.build.gradle's Java 21.
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
     }
 }
 
@@ -56,6 +73,14 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // The native frame, Settings list and sheets (Material 3 in
+    // Jetpack Compose), drawn around and over the one WebView.
+    implementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.activity:activity-compose:$androidxActivityVersion"
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

@@ -237,14 +237,18 @@ describe('hasNativePresent', () => {
     };
   };
 
-  it('is true in the iOS app whose NativeChrome plugin can present', () => {
+  it('is true in either app whose NativeChrome plugin can present', () => {
     shell('ios', [{ name: 'NativeChrome', methods: ['configure', 'update', 'present'] }]);
+    expect(hasNativePresent()).toBe(true);
+    shell('android', [{ name: 'NativeChrome', methods: ['configure', 'update', 'present'] }]);
     expect(hasNativePresent()).toBe(true);
   });
 
-  it('is false on the website, on Android, without the plugin, or with a frame that cannot present', () => {
+  it('is false on the website, without the plugin, or with a frame that cannot present', () => {
     expect(hasNativePresent()).toBe(false);
-    shell('android', [{ name: 'NativeChrome', methods: ['present'] }]);
+    shell('web', [{ name: 'NativeChrome', methods: ['present'] }]);
+    expect(hasNativePresent()).toBe(false);
+    shell('android', [{ name: 'SecureStorage', methods: ['present'] }]);
     expect(hasNativePresent()).toBe(false);
     shell('ios', [{ name: 'Print', methods: ['present'] }]);
     expect(hasNativePresent()).toBe(false);

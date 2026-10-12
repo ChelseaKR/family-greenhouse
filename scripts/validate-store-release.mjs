@@ -236,6 +236,23 @@ const appTargetPlugins = readdirSync(resolve(root, iosAppDir))
     const className = source.match(/@objc\((\w+)\)\s*public class/);
     return jsName && className ? [{ file, jsName: jsName[1], className: className[1] }] : [];
   });
+// The Android app's own plugins (NativeChrome, and the rest as they land):
+// each Kotlin class annotated `@CapacitorPlugin(name = "…")` must be
+// registered by MainActivity.kt before the bridge loads, and named in the
+// same table. The web asks for each one's PluginHeaders entry before driving
+// it, so an unregistered one silently keeps the web's version.
+const androidAppDir = 'frontend/android/app/src/main/java/net/familygreenhouse/app';
+const mainActivity = read(`${androidAppDir}/MainActivity.kt`);
+const androidAppPlugins = readdirSync(resolve(root, androidAppDir), { recursive: true })
+  .filter((file) => String(file).endsWith('.kt'))
+  .flatMap((file) => {
+    const source = read(`${androidAppDir}/${file}`);
+    const jsName = source.match(/@CapacitorPlugin\(\s*name\s*=\s*"([A-Za-z0-9]+)"/);
+    const className = source.match(/@CapacitorPlugin\([^)]*\)\s*class\s+(\w+)/);
+    return jsName && className
+      ? [{ file: String(file), jsName: jsName[1], className: className[1] }]
+      : [];
+  });
 const appPluginTable = mobileDoc.match(
   /<!--\s*app-target-plugins:start\s*-->([\s\S]*?)<!--\s*app-target-plugins:end\s*-->/
 );
@@ -258,9 +275,24 @@ if (!appPluginTable) {
       fail(`the Xcode project does not build ${plugin.file}`);
     }
   }
+  for (const plugin of androidAppPlugins) {
+    if (!documented.includes(plugin.jsName)) {
+      fail(
+        `docs/mobile.md app-target plugin table does not list ${plugin.jsName} (${plugin.file})`
+      );
+    }
+    if (!mainActivity.includes(`registerPlugin(${plugin.className}::class.java)`)) {
+      fail(`MainActivity.kt does not register ${plugin.className} (${plugin.file})`);
+    }
+  }
   for (const name of documented) {
-    if (!appTargetPlugins.some((plugin) => plugin.jsName === name)) {
-      fail(`docs/mobile.md app-target plugin table claims ${name}, which no Swift file declares`);
+    if (
+      !appTargetPlugins.some((plugin) => plugin.jsName === name) &&
+      !androidAppPlugins.some((plugin) => plugin.jsName === name)
+    ) {
+      fail(
+        `docs/mobile.md app-target plugin table claims ${name}, which no Swift or Kotlin file declares`
+      );
     }
   }
 }
