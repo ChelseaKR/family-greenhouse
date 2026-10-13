@@ -298,11 +298,11 @@ occurrence's `expectedNextDue`; ids only) and the labels of two actions,
 **Done** and **Snooze until tomorrow** ("Hecho", "Posponer hasta mañana").
 Where the platform shows them:
 
-| Platform | Buttons                                                                                                                                | What a chosen button does                                                                                                                                                    |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down. | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
-| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                            | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
-| Android  | None: an FCM notification message is rendered by the system, and buttons need a native builder the shell does not have.                | A tap opens the plant. The ids ride in `data` for a future handler.                                                                                                          |
+| Platform | Buttons                                                                                                                                    | What a chosen button does                                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down.     | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
+| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                                | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
+| Android  | Drawn by the app from an FCM data message (`push/ReminderNotifications.kt`), with the labels the backend sent in the recipient's language. | The app opens; `NativePushActionsPlugin.kt` reports `pushAction` with "done" / "snooze" and `nativePush.ts` posts it exactly as for iOS. A tap opens the plant.              |
 
 Every action echoes `expectedNextDue`, so a second tap, a tap from two
 devices, or a tap after someone else did it is a no-op on the server
@@ -506,12 +506,16 @@ either arriving counts as the delivery. Quiet hours suppress it exactly like
 every other channel (`sendToUser`), and the reminder rules — the daily slot,
 the per-channel lease, the overdue decay — are the reminder path's own, so
 native push adds none of its own. A reminder carries the number of tasks it
-names as the app-icon badge (`aps.badge` on iOS, `notification_count` on
-Android); the app clears it when opened. The words, the deep link and the
+names as the app-icon badge (`aps.badge` on iOS, the notification's number
+on Android); the app clears it when opened. The words, the deep link and the
 Done / Snooze actions are described under "What a push notification says"
 above; on iOS a single-task reminder sets `aps.category` to
-`FG_TASK_REMINDER` and carries the task ids as custom keys, and on Android the
-same ids ride in `data`.
+`FG_TASK_REMINDER` and carries the task ids as custom keys. On Android every
+reminder is an FCM **data** message (`kind: fg.reminder.v1`, with the title,
+body, link, badge, task ids and button labels as strings), which FCM never
+draws: the app's `FgMessagingService.kt` draws it, so a single-task reminder
+gets Done and Snooze there too. An Android build without that service would
+show nothing, and none has shipped.
 
 **Why iOS goes to APNs directly.** `@capacitor/push-notifications` gives the
 iOS shell a raw APNs token. FCM cannot send to that without the Firebase iOS

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { pushPayloadOf, type NotificationPayload } from '../../../src/services/notifier.js';
 import { apnsPayload, APNS_REMINDER_CATEGORY } from '../../../src/services/apnsNotifier.js';
-import { messageBody } from '../../../src/services/fcmNotifier.js';
+import { ANDROID_REMINDER_KIND, messageBody } from '../../../src/services/fcmNotifier.js';
 
 const TASK = { taskId: 't1', plantId: 'p1', expectedNextDue: '2026-06-01T08:00:00.000Z' };
 
@@ -123,30 +123,55 @@ describe('apnsPayload', () => {
 });
 
 describe('FCM messageBody', () => {
-  it('carries the task ids as strings in data, beside the deep link', () => {
+  type Body = { message: { data: Record<string, string>; android: Record<string, unknown> } };
+
+  it('is a data message the app draws: words, link, task ids and button labels, all strings', () => {
     const body = messageBody({
       token: 'fcm-token',
       title: 'Water the Monstera',
       body: 'Due today.',
       url: 'https://familygreenhouse.net/plants/p1?task=t1#care',
+      tag: 'reminder-p1',
+      badge: 1,
       task: TASK,
-    }) as { message: { data: Record<string, string>; notification: unknown } };
+      actions: { done: 'Done', snooze: 'Snooze until tomorrow' },
+    }) as Body;
     expect(body.message.data).toEqual({
+      kind: ANDROID_REMINDER_KIND,
+      title: 'Water the Monstera',
+      body: 'Due today.',
       url: 'https://familygreenhouse.net/plants/p1?task=t1#care',
+      tag: 'reminder-p1',
+      badge: '1',
       taskId: 't1',
       plantId: 'p1',
       expectedNextDue: '2026-06-01T08:00:00.000Z',
+      doneLabel: 'Done',
+      snoozeLabel: 'Snooze until tomorrow',
     });
     for (const value of Object.values(body.message.data)) expect(typeof value).toBe('string');
-    // No action buttons: an FCM notification message is rendered by the
-    // system, and the Android shell has no native builder for them.
-    expect(JSON.stringify(body)).not.toContain('actions');
+    // No `notification` block: FCM would draw that itself, without buttons.
+    expect(body.message).not.toHaveProperty('notification');
+    expect(body.message.android).toEqual({ priority: 'HIGH', collapse_key: 'reminder-p1' });
   });
 
-  it('sends no data map at all when there is nothing for the shell to read', () => {
-    const body = messageBody({ token: 'fcm-token', title: 't', body: 'b' }) as {
-      message: Record<string, unknown>;
-    };
-    expect(body.message).not.toHaveProperty('data');
+  it('offers no buttons without a single task, even when labels are passed', () => {
+    const body = messageBody({
+      token: 'fcm-token',
+      title: '2 plants need water',
+      body: 'Monstera and Pothos.',
+      actions: { done: 'Done', snooze: 'Snooze until tomorrow' },
+    }) as Body;
+    expect(body.message.data).toEqual({
+      kind: ANDROID_REMINDER_KIND,
+      title: '2 plants need water',
+      body: 'Monstera and Pothos.',
+    });
+  });
+
+  it('pins the kind the Android app looks for', () => {
+    // frontend/android/.../push/ReminderMessage.kt draws only this kind; a
+    // rename on either side silently shows nothing.
+    expect(ANDROID_REMINDER_KIND).toBe('fg.reminder.v1');
   });
 });

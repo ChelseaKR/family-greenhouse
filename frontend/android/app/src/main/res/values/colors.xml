@@ -5,4 +5,7 @@
          launch screen, both from frontend/src/index.css. -->
     <color name="fgPaper">#F7F8F2</color>
     <color name="fgForest">#173404</color>
+    <!-- The accent Android tints a reminder's small icon and buttons with:
+         the brand's leaf green (push/ReminderNotifications.kt). -->
+    <color name="fg_notification_accent">#3B6D11</color>
 </resources>
