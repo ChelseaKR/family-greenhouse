@@ -18,6 +18,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **iOS app: asks for an App Store rating after care is recorded, and a
+  Rate row (ADR 0036).** Once a person has marked care done three times
+  (in the app or from a notification's Done button), the app asks StoreKit
+  for Apple's own rating sheet, 1.5 seconds after the success toast. Never
+  in the launch that recorded the first of those, never on a sign-in or
+  setup screen, at most once per app version and at least 120 days apart;
+  Apple then shows it at most three times a year and never in TestFlight.
+  Nobody is asked whether they like the app first, and nothing is offered
+  for a rating. Settings → About gains **Rate Family Greenhouse** ("Califica
+  Family Greenhouse"), which opens the App Store's review form. Through a
+  new app-target plugin, `NativeReview`, used only when the bridge lists it,
+  so Android, the website and older builds are unchanged. All JS combined
+  658.61 kB measured, within the 674 kB budget.
 - **Android app: the native frame (ADR 0037).** The Android app gets what
   the iOS app's frame does, drawn with Material 3 in Jetpack Compose behind
   the same `NativeChrome` plugin: a top app bar with the screen's title, the

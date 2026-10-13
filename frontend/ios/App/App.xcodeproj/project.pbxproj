@@ -28,6 +28,7 @@
 		A11E00160000000000000020 /* NativeIntroModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00170000000000000021 /* NativeIntroModel.swift */; };
 		A11E00180000000000000022 /* NativeIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00190000000000000023 /* NativeIntroView.swift */; };
 		A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001B0000000000000025 /* NativeIntroPlugin.swift */; };
+		A11E001C0000000000000026 /* NativeReviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001D0000000000000027 /* NativeReviewPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +56,7 @@
 		A11E00170000000000000021 /* NativeIntroModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroModel.swift; sourceTree = "<group>"; };
 		A11E00190000000000000023 /* NativeIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroView.swift; sourceTree = "<group>"; };
 		A11E001B0000000000000025 /* NativeIntroPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroPlugin.swift; sourceTree = "<group>"; };
+		A11E001D0000000000000027 /* NativeReviewPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReviewPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 				A11E00170000000000000021 /* NativeIntroModel.swift */,
 				A11E00190000000000000023 /* NativeIntroView.swift */,
 				A11E001B0000000000000025 /* NativeIntroPlugin.swift */,
+				A11E001D0000000000000027 /* NativeReviewPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -210,6 +213,7 @@
 				A11E00160000000000000020 /* NativeIntroModel.swift in Sources */,
 				A11E00180000000000000022 /* NativeIntroView.swift in Sources */,
 				A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */,
+				A11E001C0000000000000026 /* NativeReviewPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

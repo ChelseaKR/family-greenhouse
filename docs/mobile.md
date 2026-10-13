@@ -52,6 +52,7 @@ Swift ones built by the Xcode project), and nothing else is listed.
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NativeChrome` | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below. |
 | `NativeIntro`  | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (`NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; ADR 0035). See "The signed-out intro (iOS)" below.                                                                                     |
+| `NativeReview` | Apple's rating sheet (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`; ADR 0036). The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" below.     |
 | `Print`        | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                   |
 
 <!-- app-target-plugins:end -->
@@ -629,6 +630,44 @@ drawer.
   is not the cancel button is a choice, only the form's own submit with every
   shown required field filled reports values, and nothing answers twice
   (`NativeSheetsModel.kt`, `NativeSheetsModelTest.kt`).
+
+### Ratings (iOS)
+
+The iOS app asks for an App Store rating with Apple's own sheet, and only
+after something went well (ADR 0036). The owner, 2026-10-12: ask "at a good
+moment", plus a "Rate" row, with no incentives and no sentiment pre-filter
+(App Review Guideline 5.6.1).
+
+- **When it asks.** `noteCareDone()` (`frontend/src/services/nativeReview.ts`)
+  runs next to the success haptic when the server accepts a care task marked
+  done: on the task list and plant pages, on Today across homes, and from a
+  notification's Done button. The rules are in
+  `frontend/src/lib/reviewPromptState.ts`: three completions since the last
+  ask (or since install), not in the launch that recorded the first of
+  them, never on a sign-in or setup screen, once per app version
+  (`App.getInfo().version`) and at least 120 days apart. The sheet is asked
+  for 1.5 seconds after the success toast, and only if the page is still
+  visible and still allowed. Guest pages (sitter, caretaker, wall display,
+  plant tag) never count.
+- **Apple decides the rest.** `NativeReviewPlugin.swift` hands the request to
+  StoreKit (`AppStore.requestReview(in:)`, iOS 16 and later;
+  `SKStoreReviewController` on iOS 15) on the active scene. StoreKit shows
+  the sheet at most three times in 365 days, never in TestFlight, and never
+  to someone who turned off In-App Ratings and Reviews. With no scene in the
+  foreground the plugin answers `requested: false` and nothing is recorded,
+  so the next completion may try again.
+- **Nobody is screened or rewarded.** There is no "Do you like the app?"
+  question before the sheet, and nothing is offered for a rating.
+- **The Rate row.** Settings → About shows "Rate Family Greenhouse" in the
+  iOS app only. It is a plain link to
+  `https://apps.apple.com/app/id6812185914?action=write-review`; the shell
+  hands any outside link to iOS, which opens the App Store app on the
+  review form. Android and the website do not show it.
+- **Gated on the plugin header.** `hasNativeReview()` is true only on iOS
+  when `Capacitor.PluginHeaders` lists `NativeReview` with `requestReview`
+  (and `App` with `getInfo`), so a build without the plugin, Android and the
+  website record nothing and load nothing. The state is one `localStorage`
+  key, `fg.reviewPrompt`, which iOS deletes with the app.
 
 ### Fresh data, offline and unreachable
 

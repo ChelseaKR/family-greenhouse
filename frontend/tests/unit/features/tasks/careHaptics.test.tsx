@@ -14,6 +14,8 @@ import { server } from '../../../msw/server';
 
 const playHaptic = vi.fn();
 vi.mock('@/services/nativeHaptics', () => ({ playHaptic: (cue: string) => playHaptic(cue) }));
+const noteCareDone = vi.fn();
+vi.mock('@/services/nativeReview', () => ({ noteCareDoneInBackground: () => noteCareDone() }));
 
 const API = 'http://localhost:4000';
 
@@ -41,6 +43,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   playHaptic.mockClear();
+  noteCareDone.mockClear();
   useToastStore.setState({ toasts: [] });
   useAuthStore.setState({
     user: { id: 'u1', email: 'u@example.com', name: 'Me', householdId: 'hh-1' } as never,
@@ -57,6 +60,8 @@ describe('care haptics', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(playHaptic).toHaveBeenCalledExactlyOnceWith('completed');
+    // The same moment counts toward the rating ask (ADR 0036).
+    expect(noteCareDone).toHaveBeenCalledOnce();
   });
 
   it('plays nothing when the server refuses the completion', async () => {
@@ -71,6 +76,7 @@ describe('care haptics', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(playHaptic).not.toHaveBeenCalled();
+    expect(noteCareDone).not.toHaveBeenCalled();
   });
 
   it('plays the snoozed cue once the server accepts a skip', async () => {
@@ -81,5 +87,6 @@ describe('care haptics', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(playHaptic).toHaveBeenCalledExactlyOnceWith('snoozed');
+    expect(noteCareDone).not.toHaveBeenCalled();
   });
 });

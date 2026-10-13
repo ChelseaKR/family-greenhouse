@@ -23,6 +23,9 @@ class MainViewController: CAPBridgeViewController {
         // only when the bridge lists it, so a build without it keeps the web
         // sign-in screen.
         bridge?.registerPluginInstance(NativeIntroPlugin())
+        // Apple's rating sheet (NativeReviewPlugin.swift, ADR 0036). The web
+        // asks for it only when the bridge lists it.
+        bridge?.registerPluginInstance(NativeReviewPlugin())
         observeBackSwipe()
     }
 

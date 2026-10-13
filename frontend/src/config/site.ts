@@ -16,3 +16,12 @@ export const SITE_URL = 'https://familygreenhouse.net';
 export function siteUrl(path = '/'): string {
   return `${SITE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
+
+/**
+ * The iOS app's App Store Connect id, and its "write a review" page. Settings
+ * → About's "Rate Family Greenhouse" row opens it, inside the iOS app only
+ * (ADR 0036): the shell hands an outside link to iOS, which opens the App
+ * Store app on the review form.
+ */
+export const APP_STORE_APP_ID = '6812185914';
+export const APP_STORE_WRITE_REVIEW_URL = `https://apps.apple.com/app/id${APP_STORE_APP_ID}?action=write-review`;

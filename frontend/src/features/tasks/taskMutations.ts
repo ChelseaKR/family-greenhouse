@@ -23,6 +23,7 @@ import { toast } from '@/store/toastStore';
 import { useDoubleCareStore } from '@/store/doubleCareStore';
 import { readDuplicateCare } from './doubleCare';
 import { playHaptic } from '@/services/nativeHaptics';
+import { noteCareDoneInBackground } from '@/services/nativeReview';
 
 export interface CompleteTaskVariables {
   taskId: string;
@@ -181,6 +182,7 @@ export function useCompleteTaskMutation(householdId: string | null) {
         replaceCompletedTaskInCache(value, updatedTask)
       );
       playHaptic('completed');
+      noteCareDoneInBackground();
       toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');
     },
     onError: (err, variables, context) => {
