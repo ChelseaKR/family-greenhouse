@@ -40,7 +40,12 @@
  *      `Dataset`/DCAT type appears.
  *   5. LINKS. Internal links resolve to a route App.tsx declares (and, inside
  *      a content namespace, to a published page); external links go only to
- *      this plant's listing or the ASPCA poison-control page.
+ *      this plant's listing or the ASPCA poison-control page. The one other
+ *      off-site link allowed is the optional paid shop link (ADR 0038): it
+ *      must sit in the `data-plant-shop` block, point exactly where
+ *      plantShopLinks.json and config/affiliateLinks.json say, carry
+ *      rel="sponsored noopener" and a visible "Paid link" label, and appear
+ *      only on a page whose every verdict is a cited "non-toxic".
  *
  * And across pages: every plant the table publishes is prerendered, and no
  * page is prerendered under `/pet-safe/` for a plant it does not publish.
@@ -67,6 +72,36 @@ import { FRONTEND_ROOT, SITE, publicRoutePaths } from './public-routes.mjs';
 
 const DIST = join(FRONTEND_ROOT, 'dist');
 const EN_CATALOG = join(FRONTEND_ROOT, 'src', 'i18n', 'locales', 'en', 'translation.json');
+const AFFILIATE_CONFIG = join(FRONTEND_ROOT, 'src', 'config', 'affiliateLinks.json');
+const PLANT_SHOP_LINKS = join(FRONTEND_ROOT, 'src', 'features', 'plantShop', 'plantShopLinks.json');
+
+/** Must match MERCHANTS, IMPACT_TRACKING_LINK and affiliateHref in src/features/plantShop/plantShop.ts. */
+const MERCHANTS = ['theSill', 'bloomscape'];
+const IMPACT_TRACKING_LINK = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+\/c\/\d+\/\d+\/\d+$/;
+
+/** The shop config and the checked product pages, as the build read them. */
+export function loadPlantShop({
+  config = JSON.parse(readFileSync(AFFILIATE_CONFIG, 'utf8')),
+  links = JSON.parse(readFileSync(PLANT_SHOP_LINKS, 'utf8')).links,
+} = {}) {
+  return { config, links };
+}
+
+/**
+ * The one shop link `slug` may carry, or null — the same answer
+ * resolvePlantShopLink gives in the app: the first merchant with a valid
+ * tracking link and a checked product page for this plant.
+ */
+export function expectedShopHref(slug, { config, links }) {
+  const listed = Object.hasOwn(links, slug) ? links[slug] : [];
+  for (const merchant of MERCHANTS) {
+    const tracking = config[merchant];
+    if (typeof tracking !== 'string' || !IMPACT_TRACKING_LINK.test(tracking)) continue;
+    const entry = listed.find((e) => e.merchant === merchant);
+    if (entry) return { href: `${tracking}?u=${encodeURIComponent(entry.url)}`, merchant };
+  }
+  return null;
+}
 
 /** Must match VERDICT_LABEL_KEY in src/features/petsafe/plantSafetyPages.ts. */
 export const VERDICT_LABEL_KEY = {
@@ -166,6 +201,7 @@ export function checkPlantSafetyPageHtml({
   catalog = readCatalog(),
   routes = declaredRoutes().paths,
   publishedPaths = publicRoutePaths(),
+  shop = loadPlantShop(),
 }) {
   const page = plantPage(entry, aspcaOrigin);
   const where = page.path;
@@ -331,8 +367,37 @@ export function checkPlantSafetyPageHtml({
   // 5. Links.
   const published = new Set(publishedPaths);
   const allowedExternal = new Set([...sources.keys(), aspcaOrigin]);
+  const shopBlocks = main.querySelectorAll('[data-plant-shop]');
+  const shopEligible = ANIMALS.every((animal) => page.claims[animal].state === 'non-toxic');
+  const shopExpected = expectedShopHref(entry.slug, shop);
+  if (shopBlocks.length > 0 && !shopEligible) {
+    fail('carries a paid shop link, but not every verdict on the page is a cited "non-toxic"');
+  }
+  if (shopBlocks.length > 1) fail(`carries ${shopBlocks.length} paid shop blocks, expected one`);
+  for (const block of shopBlocks) {
+    if (block.getAttribute('data-plant-shop') !== entry.slug) {
+      fail(`shop block is for "${block.getAttribute('data-plant-shop')}", not this plant`);
+    }
+    const anchors = block.querySelectorAll('a[href]');
+    if (anchors.length !== 1) fail(`shop block has ${anchors.length} links, expected one`);
+    if (!block.querySelector('[data-chrome="plantShop.paidLink"]')) {
+      fail('shop link has no visible "Paid link" label beside it');
+    }
+    for (const a of anchors) {
+      const rel = new Set((a.getAttribute('rel') ?? '').split(/\s+/));
+      if (!rel.has('sponsored') || !rel.has('noopener')) {
+        fail(`shop link rel is "${a.getAttribute('rel') ?? ''}", expected "sponsored noopener"`);
+      }
+      if (!shopExpected || a.getAttribute('href') !== shopExpected.href) {
+        fail(`shop link points at ${a.getAttribute('href')}, not the configured product page`);
+      } else if (a.getAttribute('data-chrome') !== `plantShop.buy.${shopExpected.merchant}`) {
+        fail(`shop link text is not plantShop.buy.${shopExpected.merchant}`);
+      }
+    }
+  }
   for (const a of main.querySelectorAll('a[href]')) {
     const href = a.getAttribute('href');
+    if (a.closest('[data-plant-shop]')) continue; // checked above
     if (href.startsWith('/')) {
       const path = href.split(/[?#]/)[0];
       if (!matchesRoute(path, routes)) fail(`links ${href}, which no route in App.tsx matches`);

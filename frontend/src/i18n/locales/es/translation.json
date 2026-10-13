@@ -505,6 +505,14 @@
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
     "unknownCta": "Buscar una planta"
   },
+  "plantShop": {
+    "buy": {
+      "theSill": "Comprar esta planta en The Sill",
+      "bloomscape": "Comprar esta planta en Bloomscape"
+    },
+    "paidLink": "Enlace pagado",
+    "disclosure": "Family Greenhouse recibe una comisión si compras a través de este enlace. No cambia nada de lo que dice esta página."
+  },
   "plants": {
     "title": "Plantas",
     "loading": "Cargando plantas…",

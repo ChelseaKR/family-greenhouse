@@ -493,6 +493,14 @@
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
     "unknownCta": "Look up a plant"
   },
+  "plantShop": {
+    "buy": {
+      "theSill": "Buy this plant at The Sill",
+      "bloomscape": "Buy this plant at Bloomscape"
+    },
+    "paidLink": "Paid link",
+    "disclosure": "Family Greenhouse earns a commission if you buy through this link. It changes nothing on this page."
+  },
   "plants": {
     "title": "Plants",
     "loading": "Loading plants…",
