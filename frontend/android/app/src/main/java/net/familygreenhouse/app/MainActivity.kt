@@ -6,6 +6,8 @@ import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import net.familygreenhouse.app.frame.NativeChromePlugin
 import net.familygreenhouse.app.frame.NativeFrameController
+import net.familygreenhouse.app.intro.NativeIntroPlugin
+import net.familygreenhouse.app.review.NativeReviewPlugin
 
 /**
  * Capacitor's bridge activity, plus the plugins that live in this app rather
@@ -23,6 +25,8 @@ class MainActivity : BridgeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(NativeChromePlugin::class.java)
+        registerPlugin(NativeIntroPlugin::class.java)
+        registerPlugin(NativeReviewPlugin::class.java)
 
         // The frame's back callback goes in BEFORE the bridge: callbacks added
         // later win, and @capacitor/app's (added when its plugin loads) must

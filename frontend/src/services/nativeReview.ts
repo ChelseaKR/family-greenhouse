@@ -9,19 +9,20 @@ import {
 } from '@/lib/reviewPromptState';
 
 /**
- * Asks for an App Store rating at a good moment, inside the iOS app only
- * (ADR 0036). The rules are in lib/reviewPromptState.ts; this file is the
+ * Asks for a store rating at a good moment, inside the apps only (ADR 0036):
+ * Apple's rating sheet on iOS, Google Play's in-app review card on Android.
+ * The rules are in lib/reviewPromptState.ts; this file is the
  * wiring: the three places that confirm a care task was marked done (the
  * task list and plant pages, Today across homes, and a notification's Done
  * button) call {@link noteCareDone} next to their success haptic.
  *
  * Gated on the bridge's plugin headers, never on the platform alone: a
  * plugin's JavaScript must never be driven without its native half
- * (lib/platform.ts `hasNativePlugin`, ADR 0034). An iOS build without
- * NativeReview, Android and the website record nothing and ask nothing.
+ * (lib/platform.ts `hasNativePlugin`, ADR 0034). An app build without
+ * NativeReview and the website record nothing and ask nothing.
  */
 
-/** The name the iOS app registers the plugin under (NativeReviewPlugin.swift `jsName`). */
+/** The name both apps register the plugin under (NativeReviewPlugin.swift `jsName`, NativeReviewPlugin.kt `@CapacitorPlugin`). */
 export const NATIVE_REVIEW_PLUGIN = 'NativeReview';
 export const NATIVE_REVIEW_METHODS = ['requestReview'];
 
@@ -32,8 +33,9 @@ export const NATIVE_REVIEW_METHODS = ['requestReview'];
 export const ASK_DELAY_MS = 1500;
 
 export function hasNativeReview(): boolean {
+  const platform = getNativePlatform();
   return (
-    getNativePlatform() === 'ios' &&
+    (platform === 'ios' || platform === 'android') &&
     hasNativePlugin(NATIVE_REVIEW_PLUGIN, NATIVE_REVIEW_METHODS) &&
     // The version comes from @capacitor/app, which every build links; the
     // check keeps a pretended shell without it from driving it anyway.
@@ -69,7 +71,7 @@ let inFlight = false;
 
 /**
  * A care task was marked done and the server accepted it. Counts it, and
- * when the rules allow, asks StoreKit for the rating sheet. Never throws.
+ * when the rules allow, asks the store (StoreKit, or Play) for its rating card. Never throws.
  */
 export async function noteCareDone(overrides: Partial<ReviewDeps> = {}): Promise<ReviewOutcome> {
   const deps = { ...defaultDeps, ...overrides };
@@ -91,7 +93,8 @@ export async function noteCareDone(overrides: Partial<ReviewDeps> = {}): Promise
       const later = { now: deps.now(), launch: deps.launch, path: deps.path(), version };
       if (!deps.visible() || !shouldAskForReview(readReviewState(), later)) return 'counted';
       const requested = await deps.requestReview();
-      // Not handed to StoreKit (the app was in the background, say): nothing
+      // Not handed to the store (the app was in the background, or Play could
+      // not start a flow): nothing
       // was asked, so the next completion may try again.
       if (!requested || !version) return 'not-shown';
       writeReviewState(recordAsked(readReviewState(), { now: later.now, version }));

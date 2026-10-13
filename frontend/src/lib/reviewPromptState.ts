@@ -1,11 +1,13 @@
 /**
- * When the iOS app may ask for an App Store rating (ADR 0036).
+ * When the apps may ask for a store rating (ADR 0036).
  *
- * The ask is Apple's own rating sheet (StoreKit, through the app's
- * NativeReview plugin), and it comes only after something went well: a care
+ * The ask is the store's own rating card (Apple's StoreKit sheet on iOS,
+ * Google Play's in-app review on Android, through the app's NativeReview
+ * plugin), and it comes only after something went well: a care
  * task the person marked done, in the app or from a notification's Done
- * button. Apple decides whether the sheet actually appears and shows it at
- * most three times a year; these rules are ours, and stricter:
+ * button. The store decides whether it actually appears (Apple shows it at
+ * most three times a year; Play keeps its own quota); these rules are ours,
+ * and stricter:
  *
  * - Not before the person has marked care done {@link COMPLETIONS_BEFORE_ASK}
  *   times since the last ask (or since install).
@@ -18,7 +20,8 @@
  * Nobody is asked whether they like the app first, and nothing is offered
  * for a rating (App Review Guideline 5.6.1).
  *
- * The state lives in `localStorage`, which iOS deletes with the app. Every
+ * The state lives in `localStorage`, which goes with the app when it is
+ * deleted (on Android, unless Auto Backup restores it). Every
  * function here is pure over its inputs (the clock, the version, the launch
  * and the path are passed in), so the rules are unit-tested without a shell.
  */
@@ -30,7 +33,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Sign-in and first-run setup. The same list as the iOS edge-swipe policy
- * (MainViewController.swift `BackSwipePolicy`).
+ * (MainViewController.swift `BackSwipePolicy`) and the Android app's
+ * `BackPolicy.kt`.
  */
 export const NO_ASK_PATHS: readonly string[] = [
   '/login',
@@ -47,7 +51,7 @@ export interface ReviewPromptState {
   completions: number;
   /** The launch that recorded the first of those completions. */
   firstLaunch?: string;
-  /** When the app last asked StoreKit for the sheet (ms since epoch). */
+  /** When the app last asked the store for its rating card (ms since epoch). */
   lastAskedAt?: number;
   /** The app version (CFBundleShortVersionString) it last asked in. */
   lastAskedVersion?: string;
@@ -109,7 +113,7 @@ function normalizedPath(path: string): string {
   return path || '/';
 }
 
-/** Whether this moment may ask StoreKit for the rating sheet. */
+/** Whether this moment may ask the store for its rating card. */
 export function shouldAskForReview(state: ReviewPromptState, ctx: AskContext): boolean {
   if (state.completions < COMPLETIONS_BEFORE_ASK) return false;
   if (!state.firstLaunch || state.firstLaunch === ctx.launch) return false;
@@ -124,7 +128,7 @@ export function shouldAskForReview(state: ReviewPromptState, ctx: AskContext): b
   return true;
 }
 
-/** StoreKit was asked: start counting again, and remember when and in which version. */
+/** The store was asked: start counting again, and remember when and in which version. */
 export function recordAsked(
   _state: ReviewPromptState,
   ctx: { now: number; version: string }

@@ -108,12 +108,12 @@ export function LoginPage() {
     defaultValues: { email: confirmState?.email ?? '' },
   });
 
-  // In the iOS app, a signed-out start (a launch, a sign-out, a link that
+  // In the apps, a signed-out start (a launch, a sign-out, a link that
   // needs an account) opens on the native intro, which hands back to this
   // screen or to sign-up, keeping where the person was going (ADR 0035). Not
   // after an explicit ?redirect= or a just-confirmed email: those people
-  // already chose to sign in. Nothing happens on the website, on Android, or
-  // in an app built without it.
+  // already chose to sign in. Nothing happens on the website or in an app
+  // built without it.
   useNativeIntro({
     enabled: !redirectParam && !confirmState?.justConfirmed && !confirmState?.email,
     signupHref,

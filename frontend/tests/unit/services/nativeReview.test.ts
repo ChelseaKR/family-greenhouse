@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -26,6 +28,7 @@ vi.mock('@/lib/platform', async (importOriginal) => {
 
 import {
   ASK_DELAY_MS,
+  NATIVE_REVIEW_METHODS,
   NATIVE_REVIEW_PLUGIN,
   hasNativeReview,
   noteCareDone,
@@ -105,8 +108,10 @@ describe('hasNativeReview: the header gate', () => {
     expect(platform.hasNativePlugin).toHaveBeenCalledWith(NATIVE_REVIEW_PLUGIN, ['requestReview']);
   });
 
-  it('is false on Android even with the same headers', () => {
+  it('is true in the Android app with the same headers, and false there without them', () => {
     pretendShell('android', [REVIEW_HEADER, APP_HEADER]);
+    expect(hasNativeReview()).toBe(true);
+    pretendShell('android', [APP_HEADER]);
     expect(hasNativeReview()).toBe(false);
   });
 
@@ -118,7 +123,7 @@ describe('hasNativeReview: the header gate', () => {
 });
 
 describe('noteCareDone', () => {
-  it('records and asks nothing without the plugin (the website, Android, an older build)', async () => {
+  it('records and asks nothing without the plugin (the website, an older build)', async () => {
     const { made, requestReview } = deps();
     // The real gate, on the website.
     expect(await noteCareDone({ ...made, available: hasNativeReview })).toBe('unavailable');
@@ -236,5 +241,32 @@ describe('noteCareDone', () => {
       },
     });
     await expect(noteCareDone(made)).resolves.toBe('unavailable');
+  });
+});
+
+describe('the native halves answer what the web reads', () => {
+  // Neither is compiled in CI, so their source is held to the web's names.
+  const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+  const swift = read('ios/App/App/NativeReviewPlugin.swift');
+  const kotlin = read(
+    'android/app/src/main/java/net/familygreenhouse/app/review/NativeReviewPlugin.kt'
+  );
+  const mainActivity = read('android/app/src/main/java/net/familygreenhouse/app/MainActivity.kt');
+
+  it('registers under the same name and method on both platforms', () => {
+    expect(swift).toContain(`jsName = "${NATIVE_REVIEW_PLUGIN}"`);
+    expect(kotlin).toContain(`@CapacitorPlugin(name = "${NATIVE_REVIEW_PLUGIN}")`);
+    for (const method of NATIVE_REVIEW_METHODS) {
+      expect(swift).toContain(`CAPPluginMethod(name: "${method}"`);
+      expect(kotlin).toMatch(new RegExp(`@PluginMethod\\s+fun ${method}\\(`));
+    }
+    expect(mainActivity).toContain('registerPlugin(NativeReviewPlugin::class.java)');
+  });
+
+  it('answers { requested } on every path', () => {
+    expect(swift).toContain('call.resolve(["requested": true])');
+    expect(swift).toContain('call.resolve(["requested": false])');
+    expect(kotlin).toContain('put("requested", false)');
+    expect(kotlin).toContain('put("requested", launched.isSuccessful)');
   });
 });

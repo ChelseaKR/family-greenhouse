@@ -1,9 +1,10 @@
 /**
- * When the iOS app's signed-out intro shows, and from which page (ADR 0035).
+ * When the apps' signed-out intro shows, and from which page (ADR 0035).
  *
  * - The whole story once per install: until the person has answered it or
- *   signed in on this install. The mark is in `localStorage`, which iOS
- *   deletes with the app, so a reinstall starts with the story again.
+ *   signed in on this install. The mark is in `localStorage`, which goes
+ *   with the app when it is deleted, so a reinstall starts with the story
+ *   again (on Android, unless Auto Backup restores the app's data).
  * - After that, every signed-out start (a launch, a sign-out) opens on the
  *   last page only: the two doors.
  * - At most once per signed-out stretch: going from sign-in to "Create

@@ -20,9 +20,9 @@ interface NativeIntroOptions {
 }
 
 /**
- * The iOS app's signed-out intro, over the sign-in screen (ADR 0035). Shown
+ * The apps' signed-out intro, over the sign-in screen (ADR 0035). Shown
  * only when the bridge lists the NativeIntro plugin (`hasNativeIntro`); the
- * website, Android and an app built without the plugin render the sign-in
+ * website and an app built without the plugin render the sign-in
  * screen exactly as before and load nothing for it. The intro only reports
  * which door was tapped; the sign-in and sign-up screens, their requests and
  * the session are the web's, unchanged.
