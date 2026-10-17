@@ -18,6 +18,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Plant pages: an optional "Buy this plant" paid link, off by default
+  (ADR 0038).** The `/care/<slug>` guides, and `/pet-safe/<slug>` pages
+  whose every verdict is a cited "non-toxic", can link to a hand-checked
+  product page at The Sill or Bloomscape once an affiliate id is set in
+  `frontend/src/config/affiliateLinks.json`. Each link carries
+  `rel="sponsored noopener"`, a visible "Paid link" label and a one-line
+  disclosure; there is no script or cookie, and it never renders inside
+  the iOS or Android app. The config ships empty, so the site renders
+  exactly as before until a program approves the account.
 - **iOS app: asks for an App Store rating after care is recorded, and a
   Rate row (ADR 0036).** Once a person has marked care done three times
   (in the app or from a notification's Done button), the app asks StoreKit

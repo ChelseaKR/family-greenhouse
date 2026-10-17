@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { buttonStyles } from '@/components/buttonStyles';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { hasCareGuide } from '@/features/care/careGuideSlugs';
+import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
+import { offersShopLink } from '@/features/plantShop/plantShop';
 import {
   ANIMALS,
   POISON_CONTROL_URL,
@@ -135,6 +137,11 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
           {t('plantSafetyPage.aboutBody')}
         </p>
       </section>
+
+      {/* Optional paid link to a shop (ADR 0038), only on a page whose every
+          verdict is a cited "non-toxic": a page telling a reader a plant is
+          toxic to their pet never also offers to sell it to them. */}
+      {offersShopLink(Object.values(page.claims)) && <PlantShopLink slug={page.slug} />}
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
         <section className="mt-12 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">

@@ -13,6 +13,7 @@ import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
+import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { findCareGuide, type CareGuide } from './careGuides';
 import {
   ASPCA_POISON_CONTROL_PHONE,
@@ -409,6 +410,11 @@ export function CareGuidePage() {
           </>
         )}
       </p>
+
+      {/* Optional paid link to a shop (ADR 0038). Placed after the dates and
+          away from the toxicity section, so it never reads as part of the
+          pet answer. Renders nothing unless a program is configured. */}
+      <PlantShopLink slug={guide.slug} />
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
         <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">

@@ -1,0 +1,5 @@
+{
+  "$comment": "Affiliate tracking links for the plant shops, one per merchant. Empty means no affiliate program is active for that merchant, and then no shop link is rendered anywhere: the pages are byte-identical to a build without this feature. When a program approves the account, paste the Impact tracking link base for that merchant here (the part before '?u=', for example https://<brand>.pxf.io/c/<publisher id>/<ad id>/<campaign id>). It is a static publisher identifier, never a per-reader value. See docs/adr/0038-plant-pages-may-carry-a-labeled-paid-link-to-a-plant-shop.md.",
+  "theSill": "",
+  "bloomscape": ""
+}
