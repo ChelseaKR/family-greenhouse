@@ -67,6 +67,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Settings → About's **Rate Family Greenhouse** opens the Google Play
   listing. Only in an Android build whose bridge lists the `NativeReview`
   plugin.
+- **Android app: Done and Snooze on a reminder, like iOS.** Android
+  reminders now arrive as FCM data messages that the app draws itself, so a
+  reminder about one task shows **Done** and **Snooze until tomorrow** in
+  the person's language. A button opens the app, which acts on the task the
+  same way an iOS button does, and an answered reminder is a no-op on the
+  server. Reminders go in a **Care reminders** notification channel. Android
+  push stays off: no Firebase credential is configured, so the backend sends
+  nothing to Android and the app offers nothing until the owner's Firebase
+  steps are done (`docs/native-push-setup.md`).
 - **The store validator holds the Android app-target plugins.** Every Kotlin
   class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
   and listed in the app-target table in `docs/mobile.md`.

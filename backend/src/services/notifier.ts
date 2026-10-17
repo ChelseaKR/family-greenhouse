@@ -339,10 +339,11 @@ async function sendDevicePush(userId: string, payload: PushPayload): Promise<boo
     url: payload.url,
     tag: payload.tag,
     ...(typeof payload.badge === 'number' ? { badge: payload.badge } : {}),
-    // The task the notification's actions act on. The labels are not sent to
-    // a device: iOS shows the titles its registered category carries, and
-    // Android renders no actions (see fcmNotifier.messageBody).
+    // The task the notification's actions act on, and the buttons' labels in
+    // the recipient's language. iOS ignores the labels and shows the titles
+    // its registered category carries; Android draws them (fcmNotifier.messageBody).
     ...(payload.task ? { task: payload.task } : {}),
+    ...(payload.task && payload.actions ? { actions: payload.actions } : {}),
   });
   const ios = devices.filter((device) => device.platform === 'ios');
   const android = devices.filter((device) => device.platform !== 'ios');

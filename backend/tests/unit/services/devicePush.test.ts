@@ -216,7 +216,7 @@ describe('device push — the native_push_enabled switch', () => {
     expect(result.channels.browser).toBe('failed');
   });
 
-  it('carries the reminder badge count to Android as notification_count', async () => {
+  it('carries the reminder badge count to Android as a string in data', async () => {
     withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
     const fetchMock = withFcm({});
 
@@ -226,10 +226,38 @@ describe('device push — the native_push_enabled switch', () => {
       string,
       { body: string },
     ];
-    const body = JSON.parse(init.body) as {
-      message: { android: { notification: { notification_count?: number } } };
-    };
-    expect(body.message.android.notification.notification_count).toBe(3);
+    const body = JSON.parse(init.body) as { message: { data: { badge?: string } } };
+    expect(body.message.data.badge).toBe('3');
+  });
+});
+
+describe('device push — Android buttons', () => {
+  it('sends a one-task reminder to Android with the task ids and the button labels', async () => {
+    withDevices([{ token: 'tok-a', platform: 'android', createdAt: '2026-09-01T00:00:00Z' }]);
+    const fetchMock = withFcm({});
+
+    await sendToUser(RECIPIENT, {
+      ...PAYLOAD,
+      push: {
+        title: 'Water the Monstera',
+        body: 'Due today.',
+        task: { taskId: 't1', plantId: 'p1', expectedNextDue: '2026-09-05T08:00:00.000Z' },
+        actions: { done: 'Hecho', snooze: 'Posponer hasta mañana' },
+      },
+    });
+
+    const [, init] = fetchMock.mock.calls.find(([url]) => url !== TOKEN_URI) as [
+      string,
+      { body: string },
+    ];
+    const body = JSON.parse(init.body) as { message: { data: Record<string, string> } };
+    expect(body.message.data).toMatchObject({
+      title: 'Water the Monstera',
+      taskId: 't1',
+      plantId: 'p1',
+      doneLabel: 'Hecho',
+      snoozeLabel: 'Posponer hasta mañana',
+    });
   });
 });
 
@@ -255,15 +283,19 @@ describe('device push — delivery', () => {
     expect(url).toBe('https://fcm.googleapis.com/v1/projects/greenhouse-test/messages:send');
     expect(init.headers.Authorization).toBe('Bearer fixture-access-token');
     const body = JSON.parse(init.body) as {
-      message: { token: string; notification: { title: string; body: string }; android: unknown };
+      message: { token: string; data: Record<string, string>; android: unknown };
     };
-    expect(body.message.notification).toEqual({
+    // A data message the app draws itself (fcmNotifier.messageBody).
+    expect(body.message).not.toHaveProperty('notification');
+    expect(body.message.data).toMatchObject({
+      kind: 'fg.reminder.v1',
       title: 'Time to water',
       body: 'Your monstera is due.',
+      tag: 'reminder-2026-09-05',
     });
     expect(body.message.android).toEqual({
+      priority: 'HIGH',
       collapse_key: 'reminder-2026-09-05',
-      notification: { tag: 'reminder-2026-09-05' },
     });
     expect(deletedSortKeys()).toEqual([]);
   });

@@ -67,6 +67,21 @@
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_launcher_monochrome" />
 
+        <!-- Native push: reminders arrive as FCM data messages, which this
+             service draws itself, with Done and Snooze for a single task
+             (push/FgMessagingService.kt). It replaces the Capacitor push
+             plugin's own service, which it extends and still calls. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".push.FgMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
