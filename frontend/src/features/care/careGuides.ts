@@ -177,7 +177,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a snake plant, the light it needs, why the leaves go mushy or wrinkled, and how to share its care without drowning it.',
     reviewed: '2026-06-08',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
@@ -190,7 +190,7 @@ export const CARE_GUIDES: CareGuide[] = [
     sections: {
       watering: [
         'Water a snake plant every 2–3 weeks, and only after the soil has dried out completely — not “mostly,” completely, all the way to the bottom of the pot. These are succulents; they store water in those stiff upright leaves and genuinely prefer drought to damp.',
-        'In winter, back off to roughly once a month. The single most useful habit you can build with a snake plant is doing nothing — if you’re not sure whether it needs water, it almost certainly doesn’t.',
+        'In winter, back off to roughly once a month. The single most useful habit you can build with a snake plant is doing nothing — if you’re not sure whether it needs water, it almost certainly doesn’t. An [aloe vera](/care/aloe-vera) on the same windowsill wants the same dry-out between drinks, so the two can share a schedule.',
       ],
       light: [
         'Snake plants are unbothered by light. They’ll handle a dim hallway corner and a bright living-room window equally, which is why they end up in offices and bathrooms where nothing else survives. Bright indirect light makes them grow faster; low light just slows them down.',
@@ -243,7 +243,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a monstera, the light it needs to grow holes (fenestrations), why leaves yellow or brown, and sharing its care at home.',
     reviewed: '2026-06-08',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
@@ -256,7 +256,7 @@ export const CARE_GUIDES: CareGuide[] = [
     sections: {
       watering: [
         'Water a monstera every 1–2 weeks, when the top inch or two of soil has dried out. Like most tropicals it wants a real drink — water until it runs from the drainage holes — and then a dry-down period before the next one. Soggy, never-quite-dry soil is what kills them.',
-        'The interval drifts with the seasons: closer to weekly in bright, warm summer months, closer to every two weeks in winter. Let the soil, not the date, make the call.',
+        'The interval drifts with the seasons: closer to weekly in bright, warm summer months, closer to every two weeks in winter. Let the soil, not the date, make the call. A [bird of paradise](/care/bird-of-paradise) follows a similar summer-to-winter pattern, with a bigger gap between the two.',
       ],
       light: [
         'Bright, indirect light is non-negotiable if you want the famous holes. Those splits — “fenestrations” — only develop when a monstera gets enough light and matures; a plant in a dim corner stays small with plain, solid, heart-shaped leaves and people wonder what they did wrong. The answer is almost always: more light.',
@@ -363,7 +363,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a peace lily, the light it actually wants, why the leaves droop or brown, and whether it’s safe around cats and dogs.',
     reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
     quickFacts: {
@@ -385,7 +385,7 @@ export const CARE_GUIDES: CareGuide[] = [
       problems: [
         'Drooping leaves are usually just thirst — water it and watch it recover. If it droops even when the soil is wet, that’s the opposite problem: overwatering and the start of root rot. Check the soil before you reach for the watering can, because the same wilt has two opposite causes.',
         'Brown leaf tips point to dry air, or to fluoride and salts in tap water. Peace lilies are sensitive to both; switching to filtered or distilled water and nudging up the humidity usually settles it. Snip the brown off at an angle — it won’t turn green again.',
-        'No flowers is almost always a light problem. A peace lily in a dark corner stays leafy and never blooms. Move it somewhere brighter (still indirect) and the white spathes tend to follow.',
+        'No flowers is almost always a light problem. A peace lily in a dark corner stays leafy and never blooms. Move it somewhere brighter (still indirect) and the white spathes tend to follow. If you want a houseplant that keeps flowering for months in bright, indirect light, the [anthurium](/care/anthurium) is the one to read about next.',
       ],
       propagation: [
         'Peace lilies are propagated by division, not cuttings. When the plant has filled its pot, ease it out in spring, find the natural clumps (crowns) in the root ball, and gently pull or cut them apart so each section keeps several leaves and a good share of roots.',
@@ -549,20 +549,21 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
     reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
       water: 'Every 2–3 weeks; soak fully, then let the soil dry out completely',
       light: 'Bright light, including some direct sun',
       difficulty: 'Easy, if you under-water it',
-      toxicity: 'Toxic to cats and dogs if eaten (the leaf, not the inner gel)',
+      toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
       humidity: 'Dry household air is ideal — it hates damp',
     },
     sections: {
       watering: [
         'Water an aloe every 2–3 weeks: soak the soil thoroughly so it runs out the bottom, then leave it completely alone until the soil is bone dry all the way down. This “drench and dry” rhythm mimics the desert downpours it evolved for, and it’s the whole secret to a happy aloe.',
         'In winter, back right off — once a month or even less. Aloe stores water in those plump leaves, so a missed watering is a non-event; a too-frequent one is fatal. Plant it in gritty, fast-draining cactus mix, never ordinary potting soil that stays soggy.',
+        'To check whether it is time, push a finger or a wooden skewer well down into the pot: if anything at all comes up damp, wait. Use a pot with a drainage hole and empty the saucer after every soak, because an aloe sitting in leftover water rots from the roots up. The same drench-and-dry rhythm suits a [jade plant](/care/jade-plant), which is a handy way to keep two succulents on one schedule.',
       ],
       light: [
         'Aloe wants the brightest spot you’ve got — a sunny south or west window is ideal, and it’ll take a few hours of direct sun happily once it’s used to it. In a dim corner it stretches, pales, and flops, with leaves splaying outward instead of standing up.',
@@ -572,6 +573,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'Mushy, translucent, or brown leaves at the base mean overwatering and rot — by far the most common way aloe dies. Stop watering, let it dry out hard, and repot into gritty mix if the soil stays wet. Soft leaves are almost never thirst.',
         'Thin, curled, or puckered leaves are the genuine thirst signal, and it takes real neglect to get there. A proper soak plumps them back up within a few days.',
         'Pale, stretched, flopping growth means not enough light. Aloe leaves should be firm and upright; when they splay out and lean, move it to your sunniest window.',
+        'Brown or reddish patches on leaves that have been moved into stronger sun are sunburn. Move the plant back from the strongest sun a little and step the exposure up more slowly next time.',
       ],
       propagation: [
         'Aloe is propagated from its offsets, the small "pups" that grow around the base of the mother plant. Once a pup is a few inches tall and has some roots of its own, separate it with a clean knife at repotting time.',
@@ -583,7 +585,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: keep one in the kitchen — snapping off a leaf for the cool gel inside really does take the sting out of a minor burn, and that’s a genuinely useful plant to have within reach. Just don’t over-love it; the number-one cause of a dead aloe is a watering schedule meant for a fern.',
-        'Worth being clear on the pet question, because the “medicine plant” reputation misleads people: the soothing gel is fine, but the leaf’s outer layer contains compounds that are toxic to cats and dogs if eaten, causing vomiting and lethargy. Keep the plant itself out of reach. The [free pet-safe checker](/pet-safe) spells out the cats-versus-dogs verdict if you want to double-check.',
+        'Worth being clear on the pet question, because the “medicine plant” reputation misleads people: the ASPCA lists aloe as toxic to cats and dogs, naming saponins and anthraquinones and listing vomiting, lethargy and diarrhea as the signs. Its listing calls the gel edible, but the plant is still on the toxic list, so treat the whole plant as something to keep out of reach. If a pet has eaten some, call your vet or a poison hotline rather than waiting to see what happens. The [aloe vera pet-safety page](/pet-safe/aloe-vera) shows the cat and dog verdicts beside the ASPCA listing, and the [free pet-safe checker](/pet-safe) covers other plants.',
       ],
     },
     faqs: [
@@ -598,6 +600,18 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'Why is my aloe vera flopping over?',
         a: 'Pale, stretched, splaying leaves mean too little light. Aloe wants a bright, sunny window; in a dim spot it stretches and flops. Move it to your sunniest spot and new growth comes in firm and upright.',
+      },
+      {
+        q: 'How do I know when my aloe vera needs water?',
+        a: 'Wait until the soil is dry all the way down, not just on top. Thin, curled or puckered leaves are the real thirst signal, and a soak plumps them up again within a few days. Soft, mushy or translucent leaves mean too much water, never too little.',
+      },
+      {
+        q: 'Does an aloe vera need direct sun?',
+        a: 'It wants the brightest spot you have. A sunny south or west window is ideal, and a few hours of direct sun is fine once the plant is used to it. Step it up gradually if it has been somewhere dim, or the leaves can sunburn.',
+      },
+      {
+        q: 'How do you propagate an aloe vera?',
+        a: 'Use the pups that grow around the base. When a pup is a few inches tall and has roots of its own, separate it with a clean knife, let the cut end dry for a day or two, and pot it in gritty cactus mix. Wait about a week before a light watering. Cut leaves almost always rot instead of rooting.',
       },
     ],
   },
@@ -859,7 +873,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a bird of paradise, how much light it needs indoors, why the leaves split or brown, and whether it is safe around cats and dogs.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
@@ -873,6 +887,7 @@ export const CARE_GUIDES: CareGuide[] = [
       watering: [
         'Water thoroughly every 7–10 days through spring and summer, letting the top inch or two dry out first. These are big plants with big leaves and they genuinely drink — a mature one in a bright room can empty its pot in a week. Water until it runs from the bottom, then let it drain.',
         'In winter, back right off to every two or three weeks. Growth slows, the plant uses far less, and the most common winter death is a summer schedule carried on into December.',
+        'Whatever the season, check the soil before you water rather than trusting the calendar, and let the pot drain fully afterward. A big plant in a big pot dries out slowly, so a heavy pot that still feels damp a few inches down can wait another few days.',
       ],
       light: [
         'Give it the brightest spot you have. Bird of paradise is a full-sun plant outdoors, and indoors it wants a south or west window with a few hours of direct sun. This is not one to tuck into a corner — it will survive there and look progressively worse.',
@@ -882,6 +897,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'Split leaves are normal and not a problem. In the wild the splits let wind through instead of tearing the whole leaf off; indoors they happen from handling, drafts and simple age. A split leaf isn’t damaged, and cutting them off just leaves you with less plant.',
         'Brown, crispy leaf edges usually mean dry air, underwatering, or minerals building up in the soil. Water more thoroughly — a proper flush through the pot, not a sip — and consider filtered water if your tap is hard.',
         'Yellowing lower leaves with damp soil is overwatering, the most likely cause in winter. Yellowing across the whole plant with dry soil means it’s thirsty and probably needs a bigger pot.',
+        'If the leaves are healthy but the plant is outgrowing its pot, with roots pushing out of the drainage hole or the pot drying out within days, repot in spring into a pot one size up. It flowers best when snug, so do not jump to a much bigger pot. If you would rather have a similar tropical look with a clean pet record, the [parlor palm](/care/parlor-palm) is the guide to read next.',
       ],
       propagation: [
         'A mature bird of paradise can be divided. In spring, take it out of its pot and cut or pull apart sections of the root mass that each have a few stems and healthy roots, then pot them in a well-drained mix.',
@@ -893,7 +909,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: buy it for the leaves. Almost every bird of paradise sold as a houseplant is bought by somebody imagining the flower, and most of them will never see one indoors. That’s fine — the foliage alone is the best value-per-pound of any large houseplant.',
-        'Worth being straight about the pet question too, because it comes up constantly and the internet is split: the ASPCA lists Strelitzia reginae as toxic to both cats and dogs. It’s a mild toxicity, mostly from the fruit and seeds, but it is not one of the pet-safe options. If that’s your deciding factor, a parlor palm gives you a similar shape with a clean record.',
+        'Worth being straight about the pet question too, because it comes up constantly and the internet is split: the ASPCA lists Strelitzia reginae as toxic to both cats and dogs. The ASPCA lists mild nausea, vomiting and drowsiness, caused mainly by the fruit and seeds, but it is not one of the pet-safe options. If a pet has eaten some, call your vet or a poison hotline. The [bird of paradise pet-safety page](/pet-safe/bird-of-paradise) shows the verdicts beside the ASPCA listing. If that’s your deciding factor, a parlor palm gives you a similar shape with a clean record.',
       ],
     },
     faqs: [
@@ -909,6 +925,18 @@ export const CARE_GUIDES: CareGuide[] = [
         q: 'Why won’t my bird of paradise flower indoors?',
         a: 'Usually not enough light, or the plant is still too young. They typically need several years of maturity, a snug pot and hours of direct sun to bloom, and many indoor plants never do. Grow it for the leaves and treat a flower as a surprise.',
       },
+      {
+        q: 'How much light does a bird of paradise need indoors?',
+        a: 'As much as you can give it: a south or west window with a few hours of direct sun. It survives in a dim corner but looks progressively worse there, and it will not flower without strong light.',
+      },
+      {
+        q: 'Why are my bird of paradise leaves turning brown?',
+        a: 'Brown, crispy edges usually mean dry air, underwatering or minerals building up in the soil. Water thoroughly until it runs out the bottom, and try filtered water if your tap is hard. Yellow lower leaves with damp soil point to overwatering instead.',
+      },
+      {
+        q: 'Which plant does this guide cover when people say “bird of paradise”?',
+        a: 'Strelitzia reginae, the houseplant with the orange-and-blue flower. The name is also used for a different shrub, Caesalpinia gilliesii, which the ASPCA lists separately and warns against confusing with Strelitzia. The white bird of paradise, Strelitzia nicolai, is a close relative with its own listing status that we have not recorded, so we make no claim about it here.',
+      },
     ],
   },
   {
@@ -921,7 +949,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-19',
     summary:
       'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
     quickFacts: {
@@ -944,6 +972,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'Flowers turning green as they age is normal. Anthurium blooms fade to green before they finish, so a green “flower” is an old one rather than a sick plant. Cut the stem back to the base and let the plant put its energy into the next one.',
         'Yellowing leaves usually mean too much water or a pot that won’t drain. Brown, crispy tips point the other way: dry air, or minerals from hard tap water building up in the mix.',
         'No flowers at all, on a plant with healthy leaves, is a light problem nine times out of ten. The tenth time it’s a plant that needs feeding — a diluted, high-phosphorus feed every few weeks in spring and summer makes a real difference.',
+        'A healthy anthurium in good light can keep producing flowers for months at a time, and each flower stays showy for several weeks before it ages to green. A plant that has been blooming for a long stretch and then pauses is not necessarily in trouble, so check the light and the roots before changing the watering.',
       ],
       propagation: [
         'Anthuriums are usually propagated by division. When repotting, separate offshoots or clumps that each have their own roots and a few leaves, and pot them in a chunky, airy mix like orchid bark blended with potting soil.',
@@ -955,7 +984,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       honestBit: [
         'My take: an anthurium is the best gift plant on this list. It flowers for months, the blooms look almost artificial in a good way, and it survives the sort of care a brand-new plant owner gives. Just don’t put it on a shelf away from the window and then wonder why it stopped performing.',
-        'And be honest about the pet side before it goes anywhere low: the ASPCA lists anthurium as toxic to cats and dogs. It’s the same calcium oxalate irritation as pothos and peace lily — a painful mouth rather than an emergency — but with a plant this vividly colored at coffee-table height, it’s worth deciding where it lives before it arrives.',
+        'And be honest about the pet side before it goes anywhere low: the ASPCA lists anthurium as toxic to cats and dogs. It’s the same calcium oxalate irritation as pothos and peace lily — a painful mouth rather than an emergency — but with a plant this vividly colored at coffee-table height, it’s worth deciding where it lives before it arrives. The ASPCA lists oral irritation, swelling of the mouth, tongue and lips, drooling, vomiting and difficulty swallowing. If a pet has chewed it, call your vet or a poison hotline. The [anthurium pet-safety page](/pet-safe/anthurium) shows the verdicts beside the ASPCA listing. (The listing is for flamingo flower, Anthurium scherzeranum; this guide treats the whole genus with the same caution.)',
       ],
     },
     faqs: [
@@ -964,12 +993,24 @@ export const CARE_GUIDES: CareGuide[] = [
         a: 'Every 7–10 days, when the top inch of soil is dry. Water thoroughly, and always tip out any water left standing in the decorative outer pot — that is the most common way anthuriums are killed.',
       },
       {
-        q: 'Why has my anthurium stopped flowering?',
+        q: 'Why is my anthurium not flowering, or why has it stopped?',
         a: 'Almost always not enough light. Anthuriums stay green and healthy in medium light but stop producing blooms. Move it to bright, indirect light near a window and feed it through spring and summer, and flowers usually return.',
       },
       {
         q: 'Why are my anthurium flowers turning green?',
         a: 'That’s the normal way the bloom ages, not a problem. Each flower fades to green after several weeks. Cut the spent stem back to the base so the plant can put its energy into the next one.',
+      },
+      {
+        q: 'When do anthuriums bloom, and how long do the flowers last?',
+        a: 'In good light an anthurium can flower for months at a time, and each flower lasts several weeks before fading to green. If yours has gone quiet, the usual fix is brighter indirect light, plus a diluted high-phosphorus feed every few weeks in spring and summer.',
+      },
+      {
+        q: 'Why are my anthurium flowers fading or dying?',
+        a: 'A flower that fades to green after several weeks is aging normally. Cut the stem back to the base. If the whole plant is also yellowing or wilting, check whether the pot is standing in water inside a decorative cover, which is the most common cause of decline.',
+      },
+      {
+        q: 'Why are my anthurium leaves turning yellow?',
+        a: 'Usually too much water or a pot that does not drain. Tip out any water in the outer pot after watering and let the top inch dry before the next drink. Brown, crispy tips point the other way: dry air or minerals from hard tap water.',
       },
     ],
   },
