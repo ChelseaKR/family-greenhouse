@@ -226,3 +226,55 @@ describe('CARE_GUIDES content dates', () => {
     expect(drifted.length).toBeGreaterThanOrEqual(6);
   });
 });
+
+/**
+ * The three guides expanded for the queries that reach them (aloe vera,
+ * anthurium, bird of paradise). Pins the pieces a later edit could quietly
+ * drop: the questions people type, the links to each guide's own pet-safety
+ * page, the hotline wording, and an inbound link from a sibling guide.
+ */
+describe('near-page-one guides', () => {
+  const NEAR = {
+    'aloe-vera': [
+      'How do I know when my aloe vera needs water?',
+      'Does an aloe vera need direct sun?',
+    ],
+    anthurium: [
+      'Why is my anthurium not flowering, or why has it stopped?',
+      'When do anthuriums bloom, and how long do the flowers last?',
+      'Why are my anthurium flowers fading or dying?',
+    ],
+    'bird-of-paradise': [
+      'How much light does a bird of paradise need indoors?',
+      'Which plant does this guide cover when people say “bird of paradise”?',
+    ],
+  } as const;
+
+  for (const [slug, questions] of Object.entries(NEAR)) {
+    it(`${slug}: answers the expanded questions and links its pet-safety page`, () => {
+      const g = findCareGuide(slug)!;
+      const asked = g.faqs.map((f) => f.q);
+      for (const q of questions) expect(asked, `${slug}: ${q}`).toContain(q);
+      const pet = g.sections.honestBit.join(' ');
+      expect(pet).toContain(`](/pet-safe/${slug})`);
+      expect(pet).toMatch(/call your vet or a poison hotline/);
+    });
+
+    it(`${slug}: is linked in prose from another guide`, () => {
+      const inbound = CARE_GUIDES.filter(
+        (o) =>
+          o.slug !== slug &&
+          [...Object.values(o.sections).flat(), ...o.faqs.map((f) => f.a)].some((t) =>
+            t.includes(`](/care/${slug})`)
+          )
+      );
+      expect(inbound.length, `${slug} has no inline link from a sibling guide`).toBeGreaterThan(0);
+    });
+  }
+
+  it('never says the aloe gel is fine for pets', () => {
+    const g = findCareGuide('aloe-vera')!;
+    const all = JSON.stringify(g);
+    expect(all).not.toMatch(/gel is fine|not the inner gel/i);
+  });
+});

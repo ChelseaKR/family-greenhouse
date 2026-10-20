@@ -43,11 +43,11 @@ export default function CommonToxicHouseplants() {
       <h3>Aloe vera &rarr; haworthia</h3>
       <p>
         <a href="/care/aloe-vera">Aloe</a> gets recommended as a beginner succulent and a first-aid
-        plant, but it&rsquo;s toxic to cats and dogs &mdash; the gel is fine, the leaf isn&rsquo;t.
-        If you want a small spiky succulent for a sunny sill, a haworthia (the little
-        &ldquo;zebra&rdquo; succulents) gives you the same look and the same drought-loving,
-        hard-to-overthink care, and isn&rsquo;t on the toxic list. You lose the burn-gel trick, but
-        you keep the windowsill aesthetic.
+        plant, but the ASPCA lists it as toxic to cats and dogs, even though it calls the gel
+        edible. Treat the whole plant as something to keep out of reach. If you want a small spiky
+        succulent for a sunny sill, a haworthia (the little &ldquo;zebra&rdquo; succulents) gives
+        you the same look and the same drought-loving, hard-to-overthink care, and isn&rsquo;t on
+        the toxic list. You lose the burn-gel trick, but you keep the windowsill aesthetic.
       </p>
 
       <h3>Snake plant &rarr; cast iron plant</h3>
@@ -115,6 +115,18 @@ export default function CommonToxicHouseplants() {
         What you actually want is the specific verdict: which animal, how bad, and what to do. The
         ASPCA&rsquo;s toxic and non-toxic plant database is the reference vets point to for exactly
         that, because it separates cats from dogs and describes the real effect.
+      </p>
+
+      <h3>Two popular statement plants</h3>
+      <p>
+        The ASPCA lists both the <a href="/care/anthurium">anthurium</a> (as flamingo flower) and
+        the <a href="/care/bird-of-paradise">bird of paradise</a> (Strelitzia reginae) as toxic to
+        cats and dogs. Anthurium contains insoluble calcium oxalates, so chewing it irritates the
+        mouth, while the bird of paradise listing names mild nausea, vomiting and drowsiness, mainly
+        from the fruit and seeds. If a pet has eaten some of either, call your vet or a poison
+        hotline. Each has a page with the verdicts next to the ASPCA listing:{' '}
+        <a href="/pet-safe/anthurium">anthurium</a> and{' '}
+        <a href="/pet-safe/bird-of-paradise">bird of paradise</a>.
       </p>
 
       <h2>Check before you buy</h2>
