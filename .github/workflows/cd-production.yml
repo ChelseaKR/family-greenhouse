@@ -160,7 +160,7 @@ jobs:
         # cache-free; only PR-triggered CI jobs may cache (ci.yml does).
         # setup-node v7 turns package-manager caching on by default, so the
         # cache-free posture now has to be declared explicitly.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -839,7 +839,7 @@ jobs:
         # (terraform, deploy-frontend, deploy-backend) are already cache-free;
         # this was the one holdout. setup-node v7 turns package-manager
         # caching on by default, so cache-free is now declared explicitly.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -948,7 +948,7 @@ jobs:
         # Cache-free for the same reason the smoke-tests job is: this job holds
         # `id-token: write`, and CICD-24 forbids pairing a broad OIDC grant with
         # Actions cache read/write in one job.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -1042,7 +1042,7 @@ jobs:
       - name: Setup Node.js
         # Cache-free: this job holds `id-token: write` (CICD-24). The script has
         # no dependencies, so there is no npm ci.
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
@@ -1108,7 +1108,7 @@ jobs:
           ref: ${{ needs.validate.outputs.version }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
