@@ -629,7 +629,7 @@ export function LandingPage() {
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
         <div className="overflow-hidden bg-paper pt-14">
-          <div className="py-24 sm:py-32 lg:py-36">
+          <div className="py-14 sm:py-32 lg:py-36">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
                 <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
