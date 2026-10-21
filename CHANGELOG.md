@@ -16,6 +16,31 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-10-20
+
+**The landing page now says what Family Greenhouse is and that a new
+household gets 14 days of Garden with no card; the Android app gets the iOS
+app's native surfaces; the iOS app asks for a rating at a good moment.** The
+website changes are copy: the screen a visitor lands on, and three plant
+pages (aloe vera, anthurium, bird of paradise). The app work reaches people
+through store builds (0.43.0, build 4300), not through this tag's web
+deploy, and no Android build has shipped. The rest of the release is
+dependency updates and two internal fixes.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  changed since 0.42.0, so the changes are the Lambda `GIT_SHA`
+  updates: 19 at 0.42.0, so expect `Plan: 0 to add, 19 to change, 0 to destroy.` Anything
+  else means stop. No stored data is migrated and no API contract changes.
+  The Terms of Service text is unchanged, so their effective date stays
+  0.38.2's (October 2, 2026).
+- **The paid plant-shop link ships off.** `frontend/src/config/affiliateLinks.json`
+  is empty in this release, so no page shows a "Buy this plant" link until
+  the owner sets an affiliate id (ADR 0038), and with it empty the plant
+  pages render as they did before the link existed.
+- **Android push stays off.** No Firebase credential is configured, so the
+  backend sends nothing to Android and the app offers nothing until the
+  owner's Firebase steps are done.
+
 ### Added
 
 - **Plant pages: an optional "Buy this plant" paid link, off by default
@@ -79,6 +104,53 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **The store validator holds the Android app-target plugins.** Every Kotlin
   class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
   and listed in the app-target table in `docs/mobile.md`.
+
+### Changed
+
+- **Landing page: what the product is, and the 14-day no-card trial, above
+  the fold (#1001).** The hero eyebrow now reads "Shared plant care and
+  watering reminders" ("Plant care and watering reminders" in hero variant
+  B); the headline and subhead are unchanged, so the A/B test stays valid.
+  The sign-up note under the hero button and the subtitle on the register
+  page now say that a new household starts with 14 days of Garden and no
+  card, then stays on the free plan. That trial already existed (ADR 0027);
+  the page had never mentioned it. Spanish is updated with real
+  translations. On phones the hero's top padding drops from 6rem to 3.5rem,
+  which moves the sign-up button up by about 80px; larger screens are
+  unchanged. No payment, billing or tracking code is touched, and the
+  `landing_cta_click`, `sign_up`, `start_trial` and `purchase` events fire as
+  before.
+- **Plant pages: aloe vera, anthurium and bird of paradise expanded (#1002).**
+  The care guides (`/care/<plant>`) and pet-safety pages
+  (`/pet-safe/<plant>`) now state the signs the ASPCA lists, say to call
+  your vet or a poison hotline, and carry new FAQs and links between the
+  guides and their pet-safety pages. The aloe pages no longer say the gel is
+  fine for pets: the ASPCA calls the gel edible but still lists the plant as
+  toxic, so the copy now says the whole plant stays out of reach (guide,
+  table note and the toxic-houseplants post). The anthurium page states that
+  the listing is for Anthurium scherzeranum, and the bird of paradise page
+  keeps its warning about the different shrub Caesalpinia gilliesii and says
+  no listing is recorded for the white bird of paradise. The care guides have no Spanish yet.
+- **Internal, no user-facing change: the trash test pins its clock (#999).**
+  The "finishes an interrupted restore" test in `trashService.test.ts`
+  depended on the real clock: once real time passed 2026-10-18 12:00 UTC the
+  share link it creates (14-day expiry) outlived the test's day-45 purge and
+  its last assertion failed. It now pins `Date` to the test's start. This is a
+  test change.
+- **Internal, no user-facing change: the release-record baseline (#1000).**
+  `.github/release-record-baseline.txt` and `docs/release-record-gap.md`
+  now record `v0.38.0` and `v0.38.1` as incomplete deploys with no GitHub
+  Release, so the weekly Release record check stops failing for them.
+  `v0.42.0` is deliberately not added; it needs a GitHub Release.
+- **Dependency updates.** `react-router` 8.3.1 → 8.4.0 (#972) and
+  `@sentry/react` 10.70.0 → 10.76.0 (#986) in the frontend;
+  `@aws-sdk/client-sns` 3.1116.0 → 3.1142.0 (#975),
+  `@aws-sdk/client-bedrock-runtime` 3.1135.0 → 3.1142.0 (#980) and
+  `@aws-sdk/client-sesv2` 3.1127.0 → 3.1146.0 (#987) in the backend; Android
+  `kotlinVersion` 2.3.21 → 2.4.20 (#981); and the GitHub Actions
+  `codeql-action` group (#883, #993), `ossf/scorecard-action` 2.4.4 → 2.5.0
+  (#996), `actions/upload-artifact` 7.0.1 → 7.0.2 (#997) and
+  `actions/download-artifact` 8.0.1 → 8.0.2 (#994).
 
 ## [0.42.0] - 2026-10-12
 
