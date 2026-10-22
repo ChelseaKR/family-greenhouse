@@ -224,3 +224,7 @@ payments_enabled = "1"
 # passkey made on familygreenhouse.net works there (and on subdomains).
 passkeys_enabled         = false
 passkey_relying_party_id = "familygreenhouse.net"
+
+# No-card-trial lifecycle emails (ADR 0039): the day-10 and day-14 messages.
+# OFF. Owner steps to turn on are in docs/billing.md, "The trial lifecycle emails".
+trial_lifecycle_emails_enabled = false

@@ -84,7 +84,8 @@ not seen a reason to.
 9. **The household is told in the app, and only there.** `NoCardTrialNotice` shows on the
    dashboard and in Settings → Billing: at the start, what the trial includes, that no card
    is needed and the end date; in the last three days, the date and what changes; after it
-   ends, what changed. No email is sent. A trial ending moves no price, charge or
+   ends, what changed. No email is sent (amended by [ADR 0039](0039-trial-lifecycle-emails.md):
+   two emails, off by default). A trial ending moves no price, charge or
    subscription, so it is not a price change and the price-change notice rules do not apply.
 
 10. **Success is measured from logs that already exist.** No analytics, beacon, pixel or

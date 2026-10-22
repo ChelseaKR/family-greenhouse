@@ -868,8 +868,28 @@ and in Settings → Billing, with every figure read from the plan catalog:
 - **After it ends:** what changed. The dashboard shows it for 7 days; Settings →
   Billing keeps it.
 
-No email is sent about the trial, and a trial ending is not a price change: no
-price, charge or subscription moves.
+By default no email is sent about the trial. With the lifecycle emails switched on
+(below) there are two. A trial ending is not a price change either way: no price,
+charge or subscription moves.
+
+### The trial lifecycle emails
+
+[ADR 0039](adr/0039-trial-lifecycle-emails.md). **Off by default.**
+
+- **Day 10:** "Your Garden trial ends in N days", to the admins of a household whose
+  trial is active and ends in four days or fewer.
+- **Day 14:** "You are back on Seedling, and nothing was deleted", to the admins of a
+  household whose trial ended in the last three days.
+- **Contents:** the end date, plants added and care tasks done during the trial (read
+  from existing rows), what Seedling holds (read from the plan catalog), and that
+  everything already made is kept. A household with no plants is told "You have not
+  added a plant yet." A count that could not be read is omitted, never printed as 0.
+- **Rules:** one-click unsubscribe (category `trial_notices`, preference
+  `trialNotices`), quiet hours, bounce and complaint suppression, once per admin.
+  A household with Stripe state or a running gift gets nothing.
+- **Switch:** `trial_lifecycle_emails_enabled` in Terraform sets
+  `TRIAL_LIFECYCLE_EMAILS_ENABLED=true` on the `digests` Lambda and enables the daily
+  `trial-emails` rule. Owner steps to turn it on are in the pull request that added it.
 
 ### Measuring it without new tracking
 

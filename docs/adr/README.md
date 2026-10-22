@@ -68,6 +68,7 @@ be invisible.
 | [0036](0036-the-ios-app-asks-for-a-rating-after-care-is-recorded.md)         | The iOS app asks for an App Store rating after care is recorded, with Apple's own sheet                                    | Accepted |
 | [0037](0037-the-android-app-gets-the-native-frame-in-kotlin-and-compose.md)  | The Android app gets the native frame, in Kotlin and Jetpack Compose, behind the iOS plugin's interface                    | Accepted |
 | [0038](0038-plant-pages-may-carry-a-labeled-paid-link-to-a-plant-shop.md)    | The public plant pages may carry one labeled paid link to a plant shop, off by default                                     | Proposed |
+| [0039](0039-trial-lifecycle-emails.md)                                       | Two emails at the end of the no-card trial: day 10 and day 14, off by default                                              | Proposed |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

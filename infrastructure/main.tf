@@ -158,16 +158,17 @@ module "api" {
     aws.iam = aws.iam
   }
 
-  environment          = var.environment
-  project_name         = var.project_name
-  cognito_user_pool_id = module.auth.user_pool_id
-  cognito_client_id    = module.auth.client_id
-  passkeys_enabled     = var.passkeys_enabled
-  dynamodb_table_name  = module.database.table_name
-  dynamodb_table_arn   = module.database.table_arn
-  images_bucket_name   = module.frontend.images_bucket_name
-  images_bucket_arn    = module.frontend.images_bucket_arn
-  allowed_origin       = module.frontend.site_url
+  environment                    = var.environment
+  project_name                   = var.project_name
+  cognito_user_pool_id           = module.auth.user_pool_id
+  cognito_client_id              = module.auth.client_id
+  passkeys_enabled               = var.passkeys_enabled
+  trial_lifecycle_emails_enabled = var.trial_lifecycle_emails_enabled
+  dynamodb_table_name            = module.database.table_name
+  dynamodb_table_arn             = module.database.table_arn
+  images_bucket_name             = module.frontend.images_bucket_name
+  images_bucket_arn              = module.frontend.images_bucket_arn
+  allowed_origin                 = module.frontend.site_url
   # Scopes the Lambda role's SES send grant to the verified domain identity
   # (instead of Resource "*") when the email module is provisioned.
   ses_identity_arn = var.domain_name == "" ? "" : module.email[0].identity_arn

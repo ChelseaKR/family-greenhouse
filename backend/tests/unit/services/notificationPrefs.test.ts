@@ -168,6 +168,31 @@ describe('notificationPrefs', () => {
     expect(explicit.weeklyDigest).toBe(true);
   });
 
+  it('trialNotices defaults from the email channel, survives a client that omits it, and unsubscribe turns it off', async () => {
+    const { getPreferences, setPreferences, disableEmailCategory } =
+      await import('../../../src/services/notificationPrefs.js');
+    // Legacy row, email ON: on. Email OFF: off. Explicit opt-out wins.
+    await mockStore({ ...STORED_VERIFIED, trialNotices: undefined, email: true });
+    expect((await getPreferences('user-1')).trialNotices).toBe(true);
+    await mockStore({ ...STORED_VERIFIED, trialNotices: undefined, email: false });
+    expect((await getPreferences('user-1')).trialNotices).toBe(false);
+    await mockStore({ ...STORED_VERIFIED, trialNotices: false, email: true });
+    expect((await getPreferences('user-1')).trialNotices).toBe(false);
+
+    // A client that predates the field does not reset a stored opt-out.
+    await mockStore({ ...STORED_VERIFIED, trialNotices: false });
+    const omitted = await setPreferences({ ...BASE_INPUT, phone: '+15551234567' });
+    expect(omitted.trialNotices).toBe(false);
+
+    // One-click unsubscribe for the new category writes trialNotices: false
+    // and leaves every other switch as it was.
+    const written = await mockStore({ ...STORED_VERIFIED, trialNotices: true, weeklyDigest: true });
+    const updated = await disableEmailCategory('user-1', 'trial_notices');
+    expect(updated.trialNotices).toBe(false);
+    expect(updated.weeklyDigest).toBe(true);
+    expect(written[0]).toMatchObject({ trialNotices: false, weeklyDigest: true });
+  });
+
   it('setPreferences rejects an invalid IANA timezone with a 400', async () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
     const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
