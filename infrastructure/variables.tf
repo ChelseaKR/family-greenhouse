@@ -32,6 +32,12 @@ variable "passkeys_enabled" {
   default     = false
 }
 
+variable "trial_lifecycle_emails_enabled" {
+  description = "Send the two no-card-trial lifecycle emails (ADR 0039): day 10 \"your trial ends in 4 days\" and day 14 \"you are back on Seedling\". OFF by default and in every committed tfvars. When off, TRIAL_LIFECYCLE_EMAILS_ENABLED is not set on the digests Lambda and the daily EventBridge rule is DISABLED; the code also returns immediately without it. Turning it on needs the digests Lambda to have shipped the trialEmails job first (the rule would otherwise run the weekly digest routine)."
+  type        = bool
+  default     = false
+}
+
 variable "passkey_relying_party_id" {
   description = "WebAuthn relying-party ID for passkeys (the site's registrable domain, e.g. familygreenhouse.net). Required when passkeys_enabled."
   type        = string

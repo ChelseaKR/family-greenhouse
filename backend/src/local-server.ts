@@ -524,6 +524,7 @@ interface NotificationPrefsRecord {
   coverageUpdates: boolean;
   careCredit: boolean;
   yearRecap: boolean;
+  trialNotices: boolean;
   emailLocale: '' | 'en' | 'es';
   phoneVerified: boolean;
   updatedAt: string;
@@ -7069,6 +7070,7 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     coverageUpdates: true,
     careCredit: true,
     yearRecap: true,
+    trialNotices: true,
     // '' is "never chosen" — deliberately distinguishable from 'en'.
     emailLocale: '',
     phoneVerified: false,
@@ -7111,6 +7113,7 @@ const prefsSchema = z
     coverageUpdates: z.boolean().optional(),
     careCredit: z.boolean().optional(),
     yearRecap: z.boolean().optional(),
+    trialNotices: z.boolean().optional(),
     emailLocale: z.enum(['', 'en', 'es']).optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
@@ -7251,6 +7254,7 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
     careCredit: body.careCredit ?? current.careCredit,
     yearRecap: body.yearRecap ?? current.yearRecap,
+    trialNotices: body.trialNotices ?? current.trialNotices,
     emailLocale: body.emailLocale ?? current.emailLocale,
     phoneVerified,
     updatedAt: new Date().toISOString(),
@@ -7401,7 +7405,9 @@ app.post('/notifications/email/unsubscribe', unsubscribeSubmitRateLimit, (req, r
       ? 'weeklyDigest'
       : verified.category === 'year_recap'
         ? 'yearRecap'
-        : 'pestAlerts';
+        : verified.category === 'trial_notices'
+          ? 'trialNotices'
+          : 'pestAlerts';
   db.notificationPrefs.set(verified.userId, {
     ...current,
     [field]: false,

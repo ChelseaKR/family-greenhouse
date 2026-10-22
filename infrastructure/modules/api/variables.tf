@@ -515,6 +515,12 @@ variable "posthog_host" {
   default     = ""
 }
 
+variable "trial_lifecycle_emails_enabled" {
+  description = "Turn on the two no-card-trial lifecycle emails (ADR 0039): day 10 \"your trial ends in 4 days\" and day 14 \"you are back on Seedling\". OFF by default and in every committed tfvars. When off, TRIAL_LIFECYCLE_EMAILS_ENABLED is not set on the digests Lambda and the daily EventBridge rule is DISABLED; the code also returns immediately without it. Turning it on needs the digests Lambda to have shipped the trialEmails job first (the rule would otherwise run the weekly digest routine)."
+  type        = bool
+  default     = false
+}
+
 variable "passkeys_enabled" {
   description = "Sets PASSKEYS_ENABLED=1 on the auth Lambda (#671). Wired from the root passkeys_enabled, the same switch that configures the user pool, so the routes and the pool cannot disagree."
   type        = bool
