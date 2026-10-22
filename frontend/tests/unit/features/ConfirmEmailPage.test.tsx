@@ -10,11 +10,17 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import es from '@/i18n/locales/es/translation.json';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
   return { ...actual, track: vi.fn() };
+});
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
 });
 
 const API = 'http://localhost:4000';
@@ -48,6 +54,7 @@ function renderPage(state?: { email?: string; redirect?: string }) {
 
 describe('ConfirmEmailPage', () => {
   beforeEach(() => {
+    vi.mocked(trackGoogleConversion).mockClear();
     sessionStorage.clear();
   });
 
@@ -174,10 +181,14 @@ describe('ConfirmEmailPage', () => {
     // The funnel's "confirmed" stage (docs/analytics.md): fired after Cognito
     // accepted the code, held until the same tab signs in.
     expect(track).toHaveBeenCalledWith('signup_completed');
+    // The GA4 twin of that stage carries no field: no email, no code.
+    expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
+    expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'email_confirmed' });
   });
 
   it('does not report a confirmation the API refused', async () => {
     vi.mocked(track).mockClear();
+    vi.mocked(trackGoogleConversion).mockClear();
     server.use(
       http.post(`${API}/auth/confirm`, () =>
         HttpResponse.json({ message: 'Invalid confirmation code' }, { status: 400 })
@@ -190,6 +201,7 @@ describe('ConfirmEmailPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/invalid confirmation code/i);
     expect(track).not.toHaveBeenCalledWith('signup_completed');
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 
   it('drops a backslash redirect before routing from confirmation to login', async () => {

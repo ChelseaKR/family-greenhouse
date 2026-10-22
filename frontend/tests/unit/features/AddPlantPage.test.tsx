@@ -7,6 +7,7 @@ import { AddPlantPage } from '@/features/plants/AddPlantPage';
 import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
 import { taskService } from '@/services/taskService';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 
 vi.mock('@/services/plantService', async () => {
   const actual =
@@ -61,6 +62,11 @@ vi.mock('@/services/taskService', () => ({
 // jsdom has no real image decoder, so the canvas pipeline never resolves —
 // mock the module to hand the picked file through. The real pipeline
 // (downscale + metadata strip) is covered by tests/unit/utils/imageMetadata.test.ts.
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
+
 vi.mock('@/utils/image', () => ({
   prepareImageForUpload: vi.fn(async (file: Blob) => file),
 }));
@@ -320,6 +326,62 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
     await user.click(screen.getByRole('button', { name: /back in history/i }));
     expect(screen.getByRole('heading', { name: 'Plant detail destination' })).toBeVisible();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AddPlantPage activation event', () => {
+  const plant = {
+    id: 'plant-created',
+    householdId: 'household-1',
+    name: 'Saved Fern',
+    species: null,
+    location: null,
+    spaceId: null,
+    placementNote: null,
+    summerSpaceId: null,
+    winterSpaceId: null,
+    imageUrl: null,
+    notes: null,
+    status: 'active' as const,
+    statusChangedAt: null,
+    tags: [],
+    perenualSpeciesId: null,
+    parentPlantId: null,
+    createdAt: '2026-04-25T00:00:00.000Z',
+    createdBy: 'user-1',
+    updatedAt: '2026-04-25T00:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue(plant);
+  });
+
+  async function addPlant() {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/plant name/i), 'Saved Fern');
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: 'Plant detail destination' });
+  }
+
+  it('sends household_activated, with no plant data, for the first plant', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    await addPlant();
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
+    expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'household_activated' });
+  });
+
+  it('sends nothing for a later plant (negative control: the household already had one)', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([plant]);
+    await addPlant();
+    // The sabotage applied: the page did create a plant, it just was not the first.
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(plantService.getPlants).toHaveBeenCalled();
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 });
 

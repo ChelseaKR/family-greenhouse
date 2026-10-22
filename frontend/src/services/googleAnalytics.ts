@@ -48,9 +48,10 @@
  *    history listener, but that is Google's to change, so the stream setting
  *    must be off; docs/analytics.md lists it as an owner step.
  *  - No user id, no account id, no household id. Besides `page_view`, GA gets
- *    four conversion events and nothing else (`trackGoogleConversion`, and
- *    docs/analytics.md, "Conversion events in GA4"): `sign_up`, `start_trial`,
- *    `purchase` with its plan and price, and `landing_cta_click`. Their
+ *    six funnel events and nothing else (`trackGoogleConversion`, and
+ *    docs/analytics.md, "Conversion events in GA4"): `landing_cta_click`,
+ *    `sign_up`, `email_confirmed`, `household_activated`, `start_trial` and
+ *    `purchase` with its plan and price. Their
  *    parameters are rebuilt here from closed lists and checked shapes, never
  *    passed through, so nothing a person typed and no Stripe id can reach
  *    Google. They exist so paid and organic traffic can be judged on sales;
@@ -353,10 +354,17 @@ const TRIAL_DAYS = 14;
  *   that cadence; when the return cannot say which plan and cadence were
  *   bought, both are left out and the purchase is still counted.
  * - `landing_cta_click`: one of the `LANDING_CTAS` was clicked.
+ * - `email_confirmed`: the confirmation code was accepted by the API
+ *   (ConfirmEmailPage, beside PostHog's `signup_completed`).
+ * - `household_activated`: the household's first plant was saved. That is the
+ *   product's own definition of activation (docs/analytics.md, funnel stage 3,
+ *   PostHog `plant_added` with `ordinal: 'first'`). Neither carries a field.
  */
 export type GoogleConversion =
   | { name: 'sign_up' }
   | { name: 'start_trial' }
+  | { name: 'email_confirmed' }
+  | { name: 'household_activated' }
   | {
       name: 'purchase';
       transactionId: string;
@@ -395,6 +403,10 @@ export function conversionParams(
   switch (conversion.name) {
     case 'sign_up':
       return { method: 'email', page_location: pageLocation };
+    case 'email_confirmed':
+      return { page_location: pageLocation };
+    case 'household_activated':
+      return { page_location: pageLocation };
     case 'start_trial':
       return { trial_plan: 'garden', trial_days: TRIAL_DAYS, page_location: pageLocation };
     case 'landing_cta_click':
