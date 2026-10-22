@@ -597,6 +597,206 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     dogs: 'non-toxic',
     note: 'Non-toxic to cats and dogs per the ASPCA — a good pick for a low shelf or a terrarium within reach of a curious pet. Nothing poisonous in it, though a big mouthful can upset a stomach like any plant.',
   },
+  // ── Read off the live ASPCA listings on 2026-10-21 (one request per plant) ──
+  // Each row below records the listing's own verdicts for cats and dogs. The
+  // listings also state a verdict for horses; this table records cats and dogs.
+  {
+    slug: 'alocasia',
+    commonName: 'Alocasia',
+    scientificName: 'Alocasia',
+    aspcaListing: {
+      title: 'Alocasia',
+      scientificName: 'Alocasia spp.',
+      path: '/toxic-and-non-toxic-plants/alocasia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // No 'elephant ear' alias: ASPCA keeps separate listings for other plants
+    // sold under that name (Colocasia, Caladium), and this row cites only the
+    // Alocasia one.
+    aliases: ['alocasia spp'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists oral irritation, pain and swelling of the mouth, tongue and lips, excessive drooling, vomiting and difficulty swallowing. Peace lily and dieffenbachia carry the same crystals. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'areca-palm',
+    commonName: 'Areca palm',
+    scientificName: 'Dypsis lutescens',
+    aspcaListing: {
+      title: 'Areca Palm',
+      scientificName: 'Dypsis lutescens',
+      path: '/toxic-and-non-toxic-plants/areca-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    //
+    // ⚠️ DELIBERATELY NO BARE 'palm' ALIAS, and no 'cane palm' (a name used for
+    // other palms), for the same reason as the parlor palm row: the sago palm
+    // in this table is severely toxic.
+    aliases: ['dypsis lutescens', 'golden butterfly palm', 'golden feather palm', 'yellow palm'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Do not let that generalise to other palms: the sago palm, sold alongside it, is severely toxic and can be fatal, so check the specific plant rather than the word “palm”.',
+  },
+  {
+    slug: 'corn-plant',
+    commonName: 'Corn plant',
+    scientificName: 'Dracaena fragrans',
+    aspcaListing: {
+      title: 'Corn Plant',
+      scientificName: 'Dracaena fragrans',
+      path: '/toxic-and-non-toxic-plants/corn-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // The listing also uses 'Dracaena' and 'Ribbon Plant' as names. Neither is
+    // an alias here: 'dracaena' already routes to the snake plant row (also
+    // toxic) and 'ribbon plant' to the spider plant row (non-toxic), and a
+    // name must not point at two different plants.
+    aliases: ['dracaena fragrans'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names saponins and lists vomiting (occasionally with blood), depression, loss of appetite and drooling, plus dilated pupils in cats. If your pet has eaten some, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'ponytail-palm',
+    commonName: 'Ponytail palm',
+    scientificName: 'Beaucarnea recurvata',
+    aspcaListing: {
+      title: 'Pony Tail',
+      scientificName: 'Beaucarnea recurvata',
+      path: '/toxic-and-non-toxic-plants/pony-tail',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // No 'bottle palm' alias: that name is used for other plants.
+    aliases: [
+      'beaucarnea recurvata',
+      'beaucarnea',
+      'pony tail',
+      'pony tail plant',
+      'ponytail plant',
+    ],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Despite the name it is not a true palm, and the verdict does not carry over to palms: the sago palm is severely toxic, so check the specific plant.',
+  },
+  {
+    slug: 'begonia',
+    commonName: 'Begonia',
+    scientificName: 'Begonia',
+    aspcaListing: {
+      title: 'Begonia',
+      scientificName: 'Begonia spp.',
+      path: '/toxic-and-non-toxic-plants/begonia',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['begonia spp'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names soluble calcium oxalates and lists vomiting and drooling in dogs and cats. It adds that the most toxic part is underground. If your pet has eaten some, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'cast-iron-plant',
+    commonName: 'Cast iron plant',
+    scientificName: 'Aspidistra elatior',
+    aspcaListing: {
+      title: 'Cast Iron Plant',
+      scientificName: 'Aspidistra elatior',
+      path: '/toxic-and-non-toxic-plants/cast-iron-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['aspidistra', 'aspidistra elatior', 'bar room plant', 'barroom plant', 'iron plant'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA.',
+  },
+  {
+    slug: 'jasmine',
+    commonName: 'Jasmine',
+    scientificName: 'Jasminum',
+    aspcaListing: {
+      title: 'Jasmine',
+      scientificName: 'Jasminum species',
+      path: '/toxic-and-non-toxic-plants/jasmine',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    //
+    // ⚠️ "Jasmine" is a name shared by unrelated plants. ASPCA keeps separate
+    // listings for cape jasmine, confederate jasmine, star jasmine, Madagascar
+    // jasmine and Paraguayan jasmine, and this row cites only the Jasminum
+    // one. Deliberately no alias for any of those: routing their searches here
+    // would answer a question about a different plant with this plant's
+    // verdict. Guarded by tests.
+    aliases: ['jasminum', 'jasminum species'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, for plants in the genus Jasminum. Careful with the name: several unrelated plants are also sold as “jasmine” (cape, star, confederate, Madagascar) and the ASPCA lists each of them separately, so make sure yours is a true Jasminum.',
+  },
+  {
+    slug: 'blue-echeveria',
+    commonName: 'Blue echeveria',
+    scientificName: 'Echeveria glauca',
+    aspcaListing: {
+      title: 'Blue Echeveria',
+      scientificName: 'Echeveria glauca',
+      path: '/toxic-and-non-toxic-plants/blue-echeveria',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // The listing names this one species, so the row does too. The listing's
+    // other names (copper rose, wax rosette, maroon chenille plant) each have
+    // a separate ASPCA listing and are not aliases here.
+    aliases: ['echeveria glauca'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, which lists this one species, Echeveria glauca. Other succulents are not covered by it: jade plant and aloe, sold alongside it, are toxic to both.',
+  },
+  {
+    slug: 'haworthia',
+    commonName: 'Haworthia',
+    scientificName: 'Haworthia',
+    aspcaListing: {
+      title: 'Haworthia',
+      scientificName: 'Haworthia species',
+      path: '/toxic-and-non-toxic-plants/haworthia',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['haworthia species'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. It looks a lot like a small aloe, and aloe IS toxic to both, so make sure you know which one you have.',
+  },
+  {
+    slug: 'burros-tail',
+    commonName: 'Burro’s tail',
+    scientificName: 'Sedum morganianum',
+    aspcaListing: {
+      title: 'Burro’s Tail',
+      scientificName: 'Sedum morganianum',
+      path: '/toxic-and-non-toxic-plants/burros-tail',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // No 'horse's tail' or 'lamb's tail' alias: both names are used for other
+    // plants.
+    aliases: ['burro tail', 'burros tail', 'donkey tail', 'donkeys tail', 'sedum morganianum'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Jade plant, another common succulent, is toxic to both, so check the specific plant rather than the word “succulent”.',
+  },
+  {
+    slug: 'schefflera',
+    commonName: 'Schefflera',
+    scientificName: 'Schefflera',
+    aspcaListing: {
+      title: 'Schefflera',
+      scientificName: 'Schefflera',
+      path: '/toxic-and-non-toxic-plants/schefflera',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // 'umbrella tree' is a listed name but ASPCA also keeps separate
+    // 'Umbrella Tree' and 'Texas Umbrella Tree' listings, so it is not an alias.
+    aliases: ['australian ivy palm', 'octopus tree', 'starleaf'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names calcium oxalate crystals and lists intense burning and irritation of the mouth, lips and tongue, excessive drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline.',
+  },
 ];
 
 /** Normalize a query/name for fuzzy matching: lowercase, strip punctuation,

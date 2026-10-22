@@ -147,8 +147,10 @@ export default function CommonToxicHouseplants() {
         <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
         <a href="/pet-safe/philodendron">philodendron</a>,<a href="/pet-safe/monstera">monstera</a>,{' '}
         <a href="/pet-safe/dieffenbachia">dieffenbachia</a> and
-        <a href="/pet-safe/poinsettia">poinsettia</a>. We have no cited listing recorded for the ZZ
-        plant, so we don&rsquo;t publish a verdict for it.
+        <a href="/pet-safe/poinsettia">poinsettia</a>. The safer swaps have pages too: the{' '}
+        <a href="/pet-safe/haworthia">haworthia</a> and the{' '}
+        <a href="/pet-safe/cast-iron-plant">cast iron plant</a>. We have no cited listing recorded
+        for the ZZ plant, so we don&rsquo;t publish a verdict for it.
       </p>
       <p>
         And once a plant is home, the safe ones still need keeping alive.{' '}

@@ -112,6 +112,50 @@
     "nerve-plant": {
       "content": "sha256-56eb4a31d5c9825bc5110e1975c9abe3537787ccdbcc846b04cf384d4d8cca3e",
       "lastmod": "2026-09-13"
+    },
+    "alocasia": {
+      "content": "sha256-a3ab1bbb9393e8cc25eb6349586f6cc5f06b655b77543ae92cce4d581148d988",
+      "lastmod": "2026-10-22"
+    },
+    "areca-palm": {
+      "content": "sha256-1591c983a41f8475ed63f2978b88da8387d4fd5bf5a516b2b83323f1fff3e6a7",
+      "lastmod": "2026-10-22"
+    },
+    "corn-plant": {
+      "content": "sha256-9634541a380f6e918f7953c01ec571b7136981046f9ab288efc0db543aeb828e",
+      "lastmod": "2026-10-22"
+    },
+    "ponytail-palm": {
+      "content": "sha256-ad9ae6595dbf3f2dfa0e64f42b2b50f9e532c693923a2e0e0dc194927e719442",
+      "lastmod": "2026-10-22"
+    },
+    "begonia": {
+      "content": "sha256-5a01c856116f5b865cc718a26ce8a9d8f33e2338003a4e67c7e286bb284a4bf1",
+      "lastmod": "2026-10-22"
+    },
+    "cast-iron-plant": {
+      "content": "sha256-82602b8385b3ad99f0d3982a8d859b85174733dac257f9fda2438f6046205688",
+      "lastmod": "2026-10-22"
+    },
+    "jasmine": {
+      "content": "sha256-884c3d3efe1ac193acb09b291b3047686b8cda44620c12c5452dd22fed0ed7b9",
+      "lastmod": "2026-10-22"
+    },
+    "blue-echeveria": {
+      "content": "sha256-aa4b58302f5a540b5b6834d2419e49fc8c41840f3be8cc5e0e85b02d7d1dd2f6",
+      "lastmod": "2026-10-22"
+    },
+    "haworthia": {
+      "content": "sha256-e1c4f3ca5cc729326295d9e8c7ef4e57e2b305338fd4f563a1966f1631290886",
+      "lastmod": "2026-10-22"
+    },
+    "burros-tail": {
+      "content": "sha256-bc0a1c67bcfad4c27f8eb0a6d0603ba85ec4c20349d828eaa78351ab8a50ac70",
+      "lastmod": "2026-10-22"
+    },
+    "schefflera": {
+      "content": "sha256-b5decdc32bd3a5e83d7223274b7e684bdadde960aa56e7c397b06301dc0f350c",
+      "lastmod": "2026-10-22"
     }
   }
 }

@@ -123,13 +123,14 @@ export default function PetSafeHardToKill() {
         next to the ASPCA listing it comes from: the{' '}
         <a href="/pet-safe/spider-plant">spider plant</a>,
         <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
+        <a href="/pet-safe/areca-palm">areca palm</a>,{' '}
         <a href="/pet-safe/boston-fern">Boston fern</a>,<a href="/pet-safe/calathea">calathea</a>,{' '}
         <a href="/pet-safe/pothos">pothos</a>, <a href="/pet-safe/snake-plant">snake plant</a>,
         <a href="/pet-safe/peace-lily">peace lily</a>, <a href="/pet-safe/aloe-vera">aloe vera</a>,
         <a href="/pet-safe/philodendron">philodendron</a>,{' '}
         <a href="/pet-safe/jade-plant">jade plant</a> and
-        <a href="/pet-safe/lily">true lilies</a>. The areca palm and the ZZ plant have no page,
-        because we have no cited listing recorded for them.
+        <a href="/pet-safe/lily">true lilies</a>. The ZZ plant has no page, because we have no cited
+        listing recorded for it.
       </p>
 
       <h2>The honest summary</h2>

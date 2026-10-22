@@ -16,6 +16,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **Eleven more plants in the pet-toxicity table, each with the ASPCA listing it
+  was read from.** Alocasia, areca palm, corn plant, ponytail palm, begonia,
+  cast iron plant, jasmine (Jasminum), blue echeveria, haworthia, burro's tail
+  and schefflera were added on 2026-10-21 after reading each plant's own ASPCA
+  page. The table now has 40 plants, 39 with a cited listing, so **39 public
+  `/pet-safe/<slug>` pages are generated** (28 before). Verdicts for cats and
+  dogs are exactly the listing's; the clinical signs in a toxic plant's note are
+  the ones the listing names. Candidates with no listing of their own, or whose
+  listing is ambiguous, were not added.
+
 ## [0.43.0] - 2026-10-20
 
 **The landing page now says what Family Greenhouse is and that a new
