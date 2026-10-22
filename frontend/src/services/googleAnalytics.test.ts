@@ -427,6 +427,8 @@ describe('conversion events', () => {
     const page_location = `${window.location.origin}/settings/billing?utm_source=ads`;
 
     ga.trackGoogleConversion({ name: 'sign_up' });
+    ga.trackGoogleConversion({ name: 'email_confirmed' });
+    ga.trackGoogleConversion({ name: 'household_activated' });
     ga.trackGoogleConversion({ name: 'start_trial' });
     ga.trackGoogleConversion({ name: 'landing_cta_click', cta: 'hero_signup' });
     ga.trackGoogleConversion({
@@ -440,6 +442,8 @@ describe('conversion events', () => {
 
     expect(conversions()).toEqual([
       ['event', 'sign_up', { method: 'email', page_location }],
+      ['event', 'email_confirmed', { page_location }],
+      ['event', 'household_activated', { page_location }],
       ['event', 'start_trial', { trial_plan: 'garden', trial_days: 14, page_location }],
       ['event', 'landing_cta_click', { cta: 'hero_signup', page_location }],
       [
@@ -545,6 +549,68 @@ describe('conversion events', () => {
     ga.trackGoogleConversion({ name: 'purchase', transactionId: ORDER });
     expect(conversions()).toHaveLength(1);
   });
+
+  it('sends email_confirmed and household_activated with no field a caller adds', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    ga.trackGoogleConversion({
+      name: 'email_confirmed',
+      email: 'reader@example.org',
+    } as never);
+    ga.trackGoogleConversion({
+      name: 'household_activated',
+      plantName: 'Fern Gully',
+      householdId: 'hh-123',
+    } as never);
+    expect(conversions()).toEqual([
+      ['event', 'email_confirmed', { page_location }],
+      ['event', 'household_activated', { page_location }],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/reader@|Fern|hh-123/u);
+  });
+
+  it.each(['email_confirmed', 'household_activated'] as const)(
+    'sends %s under no opt-out, and nothing under GPC, DNT or the in-app switch',
+    async (name) => {
+      // Positive control: the same harness sends it with no signal set.
+      const control = await load();
+      control.ga.initGoogleAnalytics();
+      control.ga.trackGoogleConversion({ name });
+      expect(conversions()).toHaveLength(1);
+
+      // Sabotage 1: Global Privacy Control. Assert it applied before trusting
+      // the empty result.
+      delete window.dataLayer;
+      for (const script of gtagScripts()) script.remove();
+      setGpc(true);
+      const gpc = await load();
+      expect(gpc.analytics.analyticsOptedOut()).toBe(true);
+      gpc.ga.initGoogleAnalytics();
+      gpc.ga.trackGoogleConversion({ name });
+      expect(window.dataLayer).toBeUndefined();
+
+      // Sabotage 2: Do Not Track.
+      setGpc(undefined);
+      setDnt('1');
+      const dnt = await load();
+      expect(dnt.analytics.analyticsOptedOut()).toBe(true);
+      dnt.ga.initGoogleAnalytics();
+      dnt.ga.trackGoogleConversion({ name });
+      expect(window.dataLayer).toBeUndefined();
+
+      // Sabotage 3: opting out after load, mid-visit.
+      setDnt(null);
+      const mid = await load();
+      expect(mid.analytics.analyticsOptedOut()).toBe(false);
+      mid.ga.initGoogleAnalytics();
+      mid.analytics.setAnalyticsOptOut(true);
+      expect(mid.analytics.analyticsOptedOut()).toBe(true);
+      const before = conversions().length;
+      mid.ga.trackGoogleConversion({ name });
+      expect(conversions()).toHaveLength(before);
+    }
+  );
 
   it('names a purchase by the first 32 hex characters of a SHA-256, never the id', async () => {
     const { ga } = await load();

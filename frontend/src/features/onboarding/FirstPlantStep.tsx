@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next';
 import { plantService } from '@/services/plantService';
 import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -172,6 +173,8 @@ export function FirstPlantStep({
       // Mirrors AddPlantPage's event so the activation funnel counts a
       // first-run plant and a plant added the long way as the same thing.
       track('plant_added', { ordinal: 'first' });
+      // GA4 `household_activated`; see AddPlantPage. Carries no plant data.
+      trackGoogleConversion({ name: 'household_activated' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(

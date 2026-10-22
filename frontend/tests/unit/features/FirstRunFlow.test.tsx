@@ -9,6 +9,12 @@ import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
 
 const API = 'http://localhost:4000';
 
@@ -117,6 +123,7 @@ beforeEach(() => {
   usePrefsStore.setState({ welcomeSeen: false });
   createdTasks.length = 0;
   appliedTemplates.length = 0;
+  vi.mocked(trackGoogleConversion).mockClear();
 });
 
 afterEach(() => {
@@ -235,6 +242,17 @@ describe('WelcomeFlow activation path', () => {
     // The plant exists, but the run is not over — nothing is marked seen
     // until the user actually leaves.
     expect(usePrefsStore.getState().welcomeSeen).toBe(false);
+    // GA4 activation: once, only after the plant was saved, with no plant data.
+    expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
+    expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'household_activated' });
+  });
+
+  it('sends no activation before a plant is saved (negative control)', async () => {
+    newHouseholdHandlers();
+    renderFirstRun();
+    // The page rendered and is waiting for a plant: the control reached the step.
+    expect(await screen.findByLabelText(/plant name/i)).toBeVisible();
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 
   it('mints a real invite link on the invite step', async () => {

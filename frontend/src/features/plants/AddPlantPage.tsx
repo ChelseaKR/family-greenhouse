@@ -18,6 +18,7 @@ import {
 import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { speciesService } from '@/services/speciesService';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -396,6 +397,9 @@ export function AddPlantPage() {
     },
     onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
+      // GA4 `household_activated`: the first plant is the product's activation
+      // step. No plant name, id or note is sent.
+      if (wasFirstPlant) trackGoogleConversion({ name: 'household_activated' });
       playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
