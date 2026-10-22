@@ -152,7 +152,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
     "vite": "^8.2.2",
-    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.0.0"
   },
   "_size-limit-note-native-fresh-data": "Fresh data, offline notice and pull to refresh: NO limit moves. Measured on one machine with the same flags for both (VITE_API_URL set, no VITE_GA_MEASUREMENT_ID), npm run build then size-limit, against origin/main at b4640dcc (All JS combined 573.60 kB, Initial JS 21.66 kB, CSS 13.00 kB). This branch: All JS combined 575.73 kB (+2.13 kB), Initial JS 22.41 kB (+0.75 kB), CSS 13.03 kB, Vendor 60.19 kB unchanged. The Initial JS cost is ConnectionNotice, services/connectionStatus.ts and useNativeResumeRefresh. They are imported by Layout, which App imports statically, and the notice serves the website too. The pull-to-refresh gesture is its own lazy chunk that only the native shells load (PullToRefresh.tsx), and @capacitor/app is imported dynamically. All JS combined counts both anyway (see _size-limit-note-ios-universal-links). The seven mobile PRs of 2026-09-18 together add about 8.1 kB to All JS combined, which leaves roughly 5 kB of the 587 kB limit once all of them land.",
