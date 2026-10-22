@@ -106,10 +106,11 @@ export default function CommonToxicHouseplants() {
       <h2>The trap in the word &ldquo;toxic&rdquo;</h2>
       <p>
         Notice how much range there is in that one word. A nibbled pothos means a drooly, miserable
-        afternoon and a full recovery. A chewed true lily is a veterinary emergency. A poinsettia
-        &mdash; the plant everyone fears at Christmas &mdash; is barely an upset stomach.
-        &ldquo;Toxic to pets&rdquo; on a label flattens all of that into one scary syllable, which
-        is exactly why people either panic over a safe plant or relax around a dangerous one.
+        afternoon and a full recovery. A chewed true lily is a veterinary emergency. A{' '}
+        <a href="/care/poinsettia">poinsettia</a> &mdash; the plant everyone fears at Christmas
+        &mdash; is barely an upset stomach. &ldquo;Toxic to pets&rdquo; on a label flattens all of
+        that into one scary syllable, which is exactly why people either panic over a safe plant or
+        relax around a dangerous one.
       </p>
       <p>
         What you actually want is the specific verdict: which animal, how bad, and what to do. The

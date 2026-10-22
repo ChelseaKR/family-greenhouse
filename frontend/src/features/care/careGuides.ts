@@ -10,7 +10,7 @@
  * from the species catalog / Perenual, the prose is original. The generator
  * prompt that produces this shape is `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 24 now, still short
+ * architecture could be judged before scaling; there are 28 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -1213,12 +1213,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Boston Fern',
     scientificName: 'Nephrolepis exaltata',
     alsoKnownAs: ['Sword Fern', 'Nephrolepis', 'Boston Sword Fern'],
-    related: ['calathea', 'nerve-plant', 'spider-plant'],
+    related: ['calathea', 'nerve-plant', 'asparagus-fern'],
     metaTitle: 'Boston Fern Care: How Often to Water + Is It Pet-Safe?',
     metaDescription:
       'How often to water a Boston fern, the humidity it needs, why the fronds go brown and shed everywhere, and why it is a genuinely pet-safe choice.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-21',
     summary:
       'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
     quickFacts: {
@@ -1248,7 +1248,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'This is a plant with a short fuse: three or four days late and it starts browning off. That makes it a bad candidate for “whoever gets to it,” and a good candidate for one named owner with a recurring reminder.',
-        'If it does live in a shared house, the honest advice is to put it somewhere the humidity does the work for you — a bright bathroom is the classic answer — so the schedule matters less. A fern in a steamy bathroom forgives a forgetful household in a way that a fern in a heated living room never will.',
+        'If it does live in a shared house, the honest advice is to put it somewhere the humidity does the work for you — a bright bathroom is the classic answer — so the schedule matters less. A fern in a steamy bathroom forgives a forgetful household in a way that a fern in a heated living room never will. If you are comparing it with the feathery [asparagus fern](/care/asparagus-fern), note that they are different plants with different pet-safety listings.',
       ],
       honestBit: [
         'My take: the Boston fern is the plant I most often recommend and most often warn about in the same breath. If pet safety is your hard constraint, it’s one of the best-looking safe options there is. If you also want low effort, it’s the wrong plant, and a spider plant or a parlor palm will serve you better.',
@@ -1337,12 +1337,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Christmas Cactus',
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
-    related: ['orchid', 'jade-plant', 'anthurium'],
+    related: ['orchid', 'jade-plant', 'poinsettia'],
     metaTitle: 'Christmas Cactus Care: Watering + How to Make It Bloom',
     metaDescription:
       'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-21',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1372,7 +1372,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'Christmas cactus is the plant most likely to be inherited. They live for decades and get handed down, which means the one in your house may well have a routine that predates you — worth asking about, because these plants really do settle into a spot.',
-        'The shared-care rule here is a seasonal one: from autumn, don’t move it and don’t leave a light on in its room at night. That’s a request other people in the house cannot possibly guess at, so it needs saying rather than assuming. Once the buds are set, it can come back somewhere everyone can see it.',
+        'The shared-care rule here is a seasonal one: from autumn, don’t move it and don’t leave a light on in its room at night. That’s a request other people in the house cannot possibly guess at, so it needs saying rather than assuming. Once the buds are set, it can come back somewhere everyone can see it. The [poinsettia](/care/poinsettia) is the other seasonal plant that tends to arrive as a gift for the whole house.',
       ],
       honestBit: [
         'My take: the reason your Christmas cactus doesn’t flower is almost never the watering. It’s that its room has a lamp on in the evening. Six weeks of genuinely dark nights in autumn is the whole trick, and it costs nothing.',
@@ -1403,12 +1403,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Parlor Palm',
     scientificName: 'Chamaedorea elegans',
     alsoKnownAs: ['Parlour Palm', 'Neanthe Bella Palm', 'Good Luck Palm', 'Chamaedorea'],
-    related: ['money-tree', 'spider-plant', 'zz-plant'],
+    related: ['money-tree', 'sago-palm', 'zz-plant'],
     metaTitle: 'Parlor Palm Care: Watering, Low Light, and Pet Safety',
     metaDescription:
       'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-21',
     summary:
       'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
     quickFacts: {
@@ -1438,7 +1438,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'A parlor palm is one of the best plants for a household that isn’t very good at plants. It goes over a week without water, it doesn’t need a bright window, and it doesn’t die dramatically when the routine slips — which makes it forgiving of the gap where everybody assumed somebody else had it.',
-        'It’s also a good one for the room the pets live in, precisely because it’s safe. Households often end up with every plant exiled to a high shelf; this is one you can put on the floor and stop thinking about.',
+        'It’s also a good one for the room the pets live in, precisely because it’s safe. Households often end up with every plant exiled to a high shelf; this is one you can put on the floor and stop thinking about. Do not confuse it with the [sago palm](/care/sago-palm), which only looks like a palm and is the opposite for pets.',
       ],
       honestBit: [
         'My take: the parlor palm is the most useful plant on this whole site. It’s the answer to “low light AND pet-safe AND low effort,” which is the combination most people actually need and very few plants satisfy. It isn’t exciting. It’s just right almost every time.',
@@ -1465,12 +1465,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Moth Orchid',
     scientificName: 'Phalaenopsis',
     alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
-    related: ['christmas-cactus', 'anthurium', 'hoya'],
+    related: ['christmas-cactus', 'anthurium', 'african-violet'],
     metaTitle: 'Orchid Care: Watering a Moth Orchid + Reblooming It',
     metaDescription:
       'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-21',
     summary:
       'The supermarket orchid is not a delicate specialist plant — it’s an easy plant that almost everybody waters wrong. Get the watering right and a phalaenopsis will flower for months, rest, and then do it again for years.',
     quickFacts: {
@@ -1500,7 +1500,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'Orchids get given as gifts, and gift plants are the ones that fall between people. Worse, an orchid that has finished flowering looks like it’s finished full stop, so it quietly gets abandoned on a shelf while still perfectly alive.',
-        'The thing worth sharing isn’t the schedule, it’s the fact that a spent orchid is not a dead orchid. Enormous numbers of them are binned in month three by somebody who didn’t know they reflower. And while we’re dispelling things: the ice-cube trick people pass around isn’t a good idea — a proper soak and a full drain is.',
+        'The thing worth sharing isn’t the schedule, it’s the fact that a spent orchid is not a dead orchid. Enormous numbers of them are binned in month three by somebody who didn’t know they reflower. And while we’re dispelling things: the ice-cube trick people pass around isn’t a good idea — a proper soak and a full drain is. An [African violet](/care/african-violet) is the easier flowering plant to start with if the orchid routine feels like too much.',
       ],
       honestBit: [
         'My take: three things fix nearly every orchid problem, and none of them are complicated. Take it out of the decorative pot to water it. Let it drain completely. Put it in an east window. That’s genuinely most of orchid care, and everything else is refinement.',
@@ -1589,12 +1589,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Nerve Plant',
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
-    related: ['calathea', 'boston-fern', 'spider-plant'],
+    related: ['calathea', 'boston-fern', 'african-violet'],
     metaTitle: 'Nerve Plant Care: Why It Keeps Fainting + Pet Safety',
     metaDescription:
       'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-21',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1624,7 +1624,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'A fittonia is a bad plant to share on a rota and a great plant to share as a visible signal, because it announces its own neglect. When it faints, everybody can see it needs water — no note required.',
-        'That said, three to five days is a short leash for a shared household. If nobody in the house is reliable on that timescale, put it in a closed terrarium or a big jar with a lid, where it keeps itself humid and goes weeks without you. That isn’t a compromise; it’s genuinely how these plants grow best indoors.',
+        'That said, three to five days is a short leash for a shared household. If nobody in the house is reliable on that timescale, put it in a closed terrarium or a big jar with a lid, where it keeps itself humid and goes weeks without you. That isn’t a compromise; it’s genuinely how these plants grow best indoors. For a small flowering plant that is more forgiving of a missed day, the [African violet](/care/african-violet) is the other pet-safe windowsill option.',
       ],
       honestBit: [
         'My take: buy a fittonia for a terrarium or a bathroom, not for a shelf in a heated living room. In the right microclimate it’s one of the prettiest and easiest small plants there is. In dry air it’s a slow, sad, crispy-edged disappointment, and no amount of misting will fix that.',
@@ -1643,6 +1643,255 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'Why are my fittonia leaves going brown and crispy at the edges?',
         a: 'Dry air. Fittonias need genuinely high humidity, more than a heated room provides. A terrarium, a covered jar, a bathroom, or grouping it with other plants under a cloche fixes it far more effectively than misting.',
+      },
+    ],
+  },
+  {
+    slug: 'african-violet',
+    commonName: 'African Violet',
+    scientificName: 'Saintpaulia ionantha',
+    alsoKnownAs: ['Saintpaulia', 'African violets'],
+    related: ['nerve-plant', 'orchid', 'spider-plant'],
+    metaTitle: 'African Violet Care: Watering, Light + Pet Safety',
+    metaDescription:
+      'How to water an African violet without spotting the leaves, the light it blooms in, and why the ASPCA lists it as non-toxic to cats and dogs.',
+    reviewed: '2026-10-21',
+    updated: '2026-10-21',
+    summary:
+      'African violets bloom almost all year on a bright windowsill, and they have one rule that matters more than the rest: keep cold water off the leaves. The ASPCA lists the African violet as non-toxic to cats and dogs, so it can sit where a curious pet can reach it.',
+    quickFacts: {
+      water:
+        'When the top of the soil feels dry, about once a week; water the soil, not the leaves',
+      light: 'Bright, indirect light; an east window is ideal',
+      difficulty: 'Easy once you learn the watering trick',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Average to slightly humid; 40–60% is comfortable',
+    },
+    sections: {
+      watering: [
+        'Water an African violet when the top of the soil feels dry, which is usually about once a week. Use room-temperature water and pour it onto the soil, or into a saucer under the pot, and tip out whatever the plant has not taken up after about half an hour.',
+        'Keep water off the leaves. Cold droplets sitting on the fuzzy foliage leave pale rings and spots, and water pooled in the crown at the center of the plant invites rot. If you do splash the leaves, blot them dry before the plant goes back in the light.',
+      ],
+      light: [
+        'Bright, indirect light is what makes an African violet bloom. An east window is close to perfect, and a north or lightly shaded west window works too. A sunny south window needs a sheer curtain, because direct midday sun bleaches and scorches the leaves.',
+        'If yours produces healthy leaves and no flowers, it wants more light. If the leaves lie flat and pale against the pot or crisp at the edges, it is getting too much. A violet that grows evenly is usually in the right place; turn the pot a quarter turn each week so it does not lean.',
+      ],
+      problems: [
+        'Pale rings or spots on the leaves almost always mean cold water landed on them. Use room-temperature water and keep it on the soil, and new leaves will come in clean. Old spotted leaves do not recover, so you can pick them off.',
+        'Soft, mushy leaves and a collapsing crown point to rot from wet soil. African violets have fine roots that suffocate in soggy mix, so use a light, airy potting mix made for them and a pot with a drainage hole. Rot at the crown is hard to reverse.',
+        'Leaves that stay healthy but never bloom are a light problem far more often than a fertilizer problem. Move the plant brighter before you change anything else.',
+      ],
+      propagation: [
+        'African violets propagate from a single leaf. Cut a healthy leaf with an inch or two of stem, set the stem in a light, damp potting mix so the leaf sits just above the surface, and keep it warm and bright. Roots form in a few weeks and tiny plantlets show up at the base of the stem after that.',
+        'Separate the plantlets once they have a few leaves of their own and pot them up individually. The method is slow, usually a couple of months before you see plants, but it is dependable and costs nothing.',
+      ],
+      sharedCare: [
+        'In a shared home, the one rule worth writing on the pot is “water the saucer, not the leaves,” because a well-meaning housemate pouring from the top is how violets end up with leaf spots.',
+        'A violet that needs water roughly once a week fits a simple weekly rota, and it is small enough to move to whoever has the brightest east-facing sill. Because it is cited as non-toxic to cats and dogs, it is also a reasonable choice for a household where the pets have free run of the shelves.',
+      ],
+      honestBit: [
+        'My take: African violets get a reputation as fussy, and it is mostly the watering. Once you stop watering from above, they are close to the easiest flowering plant you can own, and a healthy one will bloom for most of the year with no help from you.',
+        'The ASPCA lists the African violet as non-toxic to cats and dogs, which is why it is one of the few flowering plants I am relaxed about leaving within reach. Cited as non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for African violet](/pet-safe/african-violet) shows the listing, and the [free pet-safe checker](/pet-safe) covers the plants on your own shelves.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an African violet?',
+        a: 'About once a week, whenever the top of the soil feels dry. Water the soil or a saucer under the pot with room-temperature water, and empty the saucer after half an hour. Avoid getting water on the leaves.',
+      },
+      {
+        q: 'Why does my African violet have spots on its leaves?',
+        a: 'Pale rings or spots usually mean cold water splashed onto the leaves. Water the soil instead, use room-temperature water, and the new leaves will grow in clean. The spotted leaves will not recover.',
+      },
+      {
+        q: 'Why is my African violet not blooming?',
+        a: 'Almost always light. African violets bloom in bright, indirect light, such as an east window. Move yours somewhere brighter, out of direct midday sun, and give it a few weeks.',
+      },
+    ],
+  },
+  {
+    slug: 'poinsettia',
+    commonName: 'Poinsettia',
+    scientificName: 'Euphorbia pulcherrima',
+    alsoKnownAs: ['Christmas Flower', 'Christmas Star', 'Euphorbia'],
+    related: ['christmas-cactus', 'anthurium', 'rubber-plant'],
+    metaTitle: 'Poinsettia Care and Pet Safety: Past the Holidays',
+    metaDescription:
+      'How to water a poinsettia, the light it needs, how to keep it alive after the holidays, and what the ASPCA says about poinsettias and cats and dogs.',
+    reviewed: '2026-10-21',
+    updated: '2026-10-21',
+    summary:
+      'A poinsettia is the one houseplant most people bring home in December and lose by February, usually from too much water or a cold drafty doorway. It can last for months with a bright window and a careful hand, and the ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the top inch of soil is dry; then drain fully',
+      light: 'Bright, indirect light, at least six hours a day',
+      difficulty: 'Moderate: easy to keep through winter, hard to rebloom',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); usually mild mouth and stomach irritation',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water a poinsettia when the top inch of the soil is dry, then water until it drains from the bottom and let it drain completely. The most common way to lose one is a pot that sits in water, and the most common cause of that is the decorative foil sleeve it came in. Punch a hole in the foil or take the plant out of it to water.',
+        'A poinsettia wilts when it is too dry and also when its roots are drowning, so check the soil before you add water. If the plant is drooping and the soil is wet, more water is the wrong answer.',
+      ],
+      light: [
+        'Give it bright, indirect light for at least six hours a day, such as a south or west window with a sheer curtain, and keep the leaves from touching cold glass. Keep it away from heat vents, radiators and cold drafts. Anything much below 50°F or a blast from an opening door can make it drop its leaves.',
+        'Comfortable room temperatures, roughly 60–70°F, keep the colored bracts looking good for the longest time. The bracts are modified leaves, and they fade slowly whatever you do.',
+      ],
+      problems: [
+        'Dropping leaves usually come from one of three things: soggy soil, a cold draft, or a sudden move from the store. Check the soil first, then check where the plant is standing, and hold it steady in one good spot.',
+        'Yellowing lower leaves on a plant that has been well cared for are often just age. If the whole plant yellows and the stems are soft at the base, the roots have rotted and the plant is unlikely to recover.',
+        'A sticky white sap from a broken stem is normal for the Euphorbia family. It is a skin and mouth irritant, so keep it away from your face and out of reach of pets.',
+      ],
+      propagation: [
+        'Poinsettias can be rooted from stem cuttings about four to six inches long, taken in late spring or early summer from a plant that has been grown on. Let the milky sap stop flowing, dip the cut end in rooting hormone, and keep the cutting warm and humid. Wear gloves, because the sap irritates skin.',
+        'Getting a plant to color up again is a different job. It needs about 14 hours of uninterrupted darkness every night for several weeks in autumn, and most people find that harder than propagating. Treat a second-year color-up as a bonus rather than the goal.',
+      ],
+      sharedCare: [
+        'A poinsettia usually arrives as a gift for the whole house, so name one person who waters it, because a plant everyone waters is how the pot ends up soggy.',
+        'It is also one to decide about where the pets are, since the ASPCA lists it as toxic to cats and dogs. Put it on a shelf or table the animals do not use, and tell guests who bring one over that it is not a plant to leave at nose height.',
+      ],
+      honestBit: [
+        'My take: treat a poinsettia as a lovely seasonal plant that happens to live through the winter if you are careful, and do not feel bad if it does not survive to next Christmas. Most of the disappointment comes from a pot that sat wet in its foil.',
+        'On pets, the poinsettia’s reputation is worse than the listing suggests. The ASPCA lists it as toxic to cats and dogs, with the milky sap irritating the mouth and stomach, and it is rarely serious. Still keep it out of reach, and if a pet has eaten some and seems unwell, call your vet or a poison hotline. The [pet-safety page for poinsettia](/pet-safe/poinsettia) shows the listing, and the [free pet-safe checker](/pet-safe) covers your other plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a poinsettia?',
+        a: 'When the top inch of soil is dry, usually about once a week in a warm room. Water until it drains from the bottom, let it drain completely, and never leave it standing in the foil sleeve or a full saucer.',
+      },
+      {
+        q: 'Why is my poinsettia dropping its leaves?',
+        a: 'Usually soggy soil, a cold draft, or being moved around. Check that the pot drains, keep it above about 50°F and away from vents and doors, and leave it in one bright spot.',
+      },
+      {
+        q: 'How do I keep a poinsettia after Christmas?',
+        a: 'Keep it in a bright window, water only when the top inch is dry, and keep it warm. The colored bracts fade over several weeks, and the plant itself can stay green for the rest of the year.',
+      },
+    ],
+  },
+  {
+    slug: 'sago-palm',
+    commonName: 'Sago Palm',
+    scientificName: 'Cycas revoluta',
+    alsoKnownAs: ['Cycad', 'Cycas', 'King Sago'],
+    related: ['parlor-palm', 'jade-plant', 'snake-plant'],
+    metaTitle: 'Sago Palm Care and Pet Safety: Watering and Light',
+    metaDescription:
+      'How often to water a sago palm, how much light it needs, why the fronds yellow, and why the ASPCA lists it as toxic to cats and dogs.',
+    reviewed: '2026-10-21',
+    updated: '2026-10-21',
+    summary:
+      'The sago palm is a slow, sturdy plant that is not really a palm, and it is easy to keep alive indoors if you do not overwater it. It is also one of the most dangerous houseplants for pets: the ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Every 2–3 weeks, once the soil has dried out most of the way',
+      light: 'Bright light; a few hours of direct sun is fine',
+      difficulty: 'Easy to keep, very slow to grow',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); severe, a vet emergency if eaten',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water a sago palm only after the soil has dried out most of the way down, which is usually every two to three weeks, and less often in winter. Water thoroughly so it drains from the bottom, then leave it alone. The plant stores water in its swollen trunk and prefers a dry spell to a wet one.',
+        'The trunk is the warning sign. A firm trunk is healthy, and a soft or darkening base means the plant has been sitting wet. Use a gritty, fast-draining mix, such as a cactus mix, and a pot with a drainage hole.',
+      ],
+      light: [
+        'Sago palms like bright light and tolerate a few hours of direct sun, so a south, east or west window suits them. They survive lower light, but growth slows to a crawl, and the fronds become weak.',
+        'If you move a plant that has lived in shade into strong sun, do it gradually over a couple of weeks. Sudden sun can scorch the fronds, and scorched fronds do not turn green again.',
+      ],
+      problems: [
+        'Yellow fronds are most often overwatering, especially in winter, when the plant is barely growing. They can also be a sign of poor light or of nutrient shortage. Check the soil and trunk first, because rot is the problem you cannot undo.',
+        'New growth arrives in a single flush, usually once a year. A sago that stays put for months is not necessarily unhealthy; it is just slow, and it should flush when the days lengthen and it is warm.',
+        'Brown, crispy frond tips are usually dry air or a build-up of minerals from tap water. Trim the brown tips and flush the soil with plain water now and then.',
+      ],
+      propagation: [
+        'The usual method is to remove the small offsets, called pups, that grow at the base of an older plant. Cut or pull a pup away with a bit of root, let the wound dry for a few days, and pot it in a gritty mix. Rooting is slow and not every pup takes.',
+        'Seed is a poor option for a home grower, since the seeds are the most dangerous part of the plant and sprout slowly. Wear gloves and wash your hands after handling either pups or seeds.',
+      ],
+      sharedCare: [
+        'In a shared home, a sago palm needs very little care and very clear information, so the person who owns it should tell every housemate and guest that it is a plant to keep away from pets.',
+        'It is slow, drought-tolerant and easy to forget, which makes the risk too much care rather than too little. Agree on one person to water it every few weeks, and put the pot where no pet can chew a frond.',
+      ],
+      honestBit: [
+        'My take: the sago palm is a handsome, architectural plant, and in a house with a dog or a cat I would not own one. The reason is not subtle.',
+        'The ASPCA lists the sago palm as toxic to cats and dogs, and every part is a risk, especially the seeds, which can cause liver failure and are often fatal even with treatment. If a pet has eaten any of it, treat it as an emergency and call your vet or a poison hotline straight away. The [pet-safety page for sago palm](/pet-safe/sago-palm) shows the listing, and the [free pet-safe checker](/pet-safe) covers other plants in your home.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a sago palm?',
+        a: 'Every two to three weeks, after the soil has dried out most of the way down, and less in winter. Water until it drains, then let it dry. A firm trunk is healthy; a soft base means too much water.',
+      },
+      {
+        q: 'Why are my sago palm fronds turning yellow?',
+        a: 'Overwatering is the most common cause, particularly in winter. Check that the soil dries between waterings and the pot drains. Poor light and low nutrients can also yellow the fronds.',
+      },
+      {
+        q: 'Is a sago palm a real palm?',
+        a: 'No. It is a cycad, an old group of cone-bearing plants, that only looks like a palm. That is why its care is different from a parlor palm, with far less water and much more light.',
+      },
+    ],
+  },
+  {
+    slug: 'asparagus-fern',
+    commonName: 'Asparagus Fern',
+    scientificName: 'Asparagus densiflorus',
+    alsoKnownAs: ['Sprenger Fern', 'Emerald Fern', 'Foxtail Fern'],
+    related: ['boston-fern', 'spider-plant', 'english-ivy'],
+    metaTitle: 'Asparagus Fern Care: Watering + Pet Safety',
+    metaDescription:
+      'How to water an asparagus fern, why it drops needles, the light it wants, and why the ASPCA lists it as toxic to cats and dogs.',
+    reviewed: '2026-10-21',
+    updated: '2026-10-21',
+    summary:
+      'The asparagus fern looks like a soft, feathery fern, but it belongs to the asparagus family, and it is not a true fern. It is easy to grow in a bright room, and the ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Every 5–7 days; keep the soil lightly moist',
+      light: 'Bright, indirect light; tolerates a little direct morning sun',
+      difficulty: 'Easy in bright light, drops needles if it dries out',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); berries and sap can cause illness',
+      humidity: 'Average household humidity is fine; it enjoys a bit more',
+    },
+    sections: {
+      watering: [
+        'Water an asparagus fern about every five to seven days, keeping the soil lightly moist but never soggy. Its thick, fleshy roots store water, so it forgives a late watering better than a true fern does, but it will not tolerate sitting in water.',
+        'In winter, when growth slows, let the top of the soil dry a little more between waterings. If the plant drops needles after a dry spell, water it normally and be patient, because it usually sprouts again from the base.',
+      ],
+      light: [
+        'Bright, indirect light keeps the foliage full and green. A little direct morning sun is fine. Deep shade makes the stems long and thin, and the plant drops more needles.',
+        'Because the plant arches and trails, it looks best on a shelf, a stand or a hanging basket where the stems have room. Turn the pot occasionally so it grows evenly.',
+      ],
+      problems: [
+        'Yellow, dropping needles are usually dryness or a sudden change in light. Check the soil, move the plant to a brighter spot if it has been in shade, and give it a few weeks before you decide it has failed.',
+        'A pot crammed with pale, round, tuberous roots is a plant that needs repotting. If water runs straight through, or roots push up out of the soil, move it into a pot one size up.',
+        'The stems carry small thorns, so wear gloves when you repot or prune. Tiny white or red berries that appear on a mature plant are one more reason to keep it away from pets.',
+      ],
+      propagation: [
+        'The easiest way to make more is by division. Slide the plant out of its pot, and cut or pull the root clump into two or three sections, each with healthy tuberous roots and several shoots. Pot each into fresh mix and keep it evenly moist until it settles.',
+        'Wear gloves, because the thorns and the roots are both tough. Spring is the best time, as the plant is about to put on growth.',
+      ],
+      sharedCare: [
+        'In a shared household, whoever has the plant on their shelf should be the one who waters it, because an asparagus fern that dries out once drops needles over everyone’s floor.',
+        'Its watering rhythm of about once a week suits a shared rota. Because the ASPCA lists it as toxic to cats and dogs, put it somewhere the pets cannot reach, and do not mistake it for a Boston fern, which has a different listing.',
+      ],
+      honestBit: [
+        'My take: people buy an asparagus fern because it looks like a fern and then assume it has a fern’s reputation for being safe around pets. It does not. The two plants look related and are not.',
+        'The ASPCA lists the asparagus fern as toxic to cats and dogs, and eating the berries can cause vomiting, abdominal pain or diarrhea, while repeated skin contact can cause an allergic rash. Keep it out of reach, and call your vet or a poison hotline if a pet has eaten some. The [pet-safety page for asparagus fern](/pet-safe/asparagus-fern) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an asparagus fern?',
+        a: 'About every five to seven days, keeping the soil lightly moist. Its tuberous roots store water, so a late watering is forgiven, but it should not sit in a full saucer.',
+      },
+      {
+        q: 'Why is my asparagus fern dropping needles?',
+        a: 'Usually dry soil, low light, or a sudden change in conditions. Water it normally, put it somewhere bright, and give it a few weeks, because it often regrows from the base.',
+      },
+      {
+        q: 'Is an asparagus fern a true fern?',
+        a: 'No. It belongs to the asparagus family and reproduces by seed and division rather than spores. That is why it is treated separately from a Boston fern.',
       },
     ],
   },
