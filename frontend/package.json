@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.42.0",
+  "version": "0.43.0",
   "description": "Family Greenhouse web app — React + TypeScript + Vite PWA for collaborative household plant care.",
   "license": "Elastic-2.0",
   "type": "module",
@@ -100,7 +100,7 @@
     "@fontsource-variable/instrument-sans": "^5.3.0",
     "@headlessui/react": "^2.0.3",
     "@heroicons/react": "^2.1.3",
-    "@sentry/react": "^10.70.0",
+    "@sentry/react": "^10.76.0",
     "@tanstack/react-query": "^5.101.4",
     "axios": "^1.20.0",
     "clsx": "^2.1.0",

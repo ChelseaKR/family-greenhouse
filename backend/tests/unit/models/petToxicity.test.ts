@@ -90,6 +90,20 @@ describe('pet toxicity catalog integrity', () => {
     }
   });
 
+  it('the aloe, anthurium and bird of paradise notes carry the ASPCA signs and the call-a-vet line', () => {
+    const want: Record<string, RegExp[]> = {
+      'aloe-vera': [/saponins/i, /anthraquinones/i, /vomiting, lethargy and diarrhea/i],
+      anthurium: [/calcium oxalates/i, /difficulty swallowing/i],
+      'bird-of-paradise': [/mild nausea, vomiting and drowsiness/i, /Caesalpinia gilliesii/],
+    };
+    for (const [slug, patterns] of Object.entries(want)) {
+      const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+      for (const re of patterns) expect(e.note, `${slug}: ${re}`).toMatch(re);
+      expect(e.note, `${slug}: hotline line`).toMatch(/call your vet or a poison hotline/);
+      expect(e.note, `${slug}: gel is not called fine`).not.toMatch(/gel inside is fine/i);
+    }
+  });
+
   it('a fully-toxic entry never calls itself non-toxic in its own note', () => {
     // Liability guard: an entry marked toxic must not contain reassuring
     // "non-toxic to cats and dogs" prose. This catches a verdict/prose

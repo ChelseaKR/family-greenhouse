@@ -339,7 +339,7 @@
     "goToRegistration": "Ir al registro",
     "signUpTitle": "Crear una cuenta",
     "registerTitle": "Empieza tu invernadero",
-    "registerSubtitle": "Gratis para un hogar, hasta 3 miembros del hogar y 20 plantas. Sin tarjeta de crédito.",
+    "registerSubtitle": "Gratis para un hogar, hasta 3 miembros del hogar y 20 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
     "nameMin": "El nombre debe tener al menos 2 caracteres",
@@ -2532,21 +2532,21 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "Un diario de plantas para toda la casa",
+        "eyebrow": "Cuidado compartido de plantas y recordatorios de riego",
         "headlinePre": "“Pensé que la habías regado ",
         "headlineEmphasis": "tú",
         "headlinePost": ".”",
         "subhead": "Family Greenhouse es un diario de cuidados compartido para las plantas de tu casa. Todo el hogar ve qué toca hacer y qué ya se hizo, para que el helecho no se riegue dos veces el martes y luego quede olvidado dos semanas."
       },
       "b": {
-        "eyebrow": "Un diario de cuidados para tus plantas",
+        "eyebrow": "Cuidado de plantas y recordatorios de riego",
         "headlinePre": "Mantén viva ",
         "headlineEmphasis": "cada",
         "headlinePost": " planta.",
         "subhead": "Family Greenhouse lleva un calendario de riego y cuidados para cada una de tus plantas, para que ninguna se quede sin agua ni se ahogue. Funciona igual de bien para una persona con unas cuantas macetas en la ventana que para todo un hogar que comparte la regadera."
       },
       "seeHowItWorks": "Mira cómo funciona",
-      "signupNote": "No necesitas tarjeta de crédito: solo un nombre, un correo y una contraseña, y después un código de un solo uso que te mandamos por correo. Unos cinco minutos de principio a fin."
+      "signupNote": "No necesitas tarjeta de crédito. Tu hogar empieza con 14 días de Garden y después sigue en el plan gratuito, salvo que elijas otro. Para registrarte hacen falta un nombre, un correo y una contraseña, y después un código de un solo uso que te mandamos por correo: unos cinco minutos de principio a fin."
     },
     "mockup": {
       "label": "Vista previa del panel de Family Greenhouse con las próximas tareas de cuidado de plantas y la actividad del hogar.",
