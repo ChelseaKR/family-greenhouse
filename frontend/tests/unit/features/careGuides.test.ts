@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_GUIDES, findCareGuide } from '@/features/care/careGuides';
-import { careToxicity } from '@/features/care/careToxicity';
+import { careToxicity, careToxicityFrom } from '@/features/care/careToxicity';
+import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 import { petSafetyLevel } from '@/features/petsafe/petSafeSpecies';
 
 /**
@@ -276,5 +277,90 @@ describe('near-page-one guides', () => {
     const g = findCareGuide('aloe-vera')!;
     const all = JSON.stringify(g);
     expect(all).not.toMatch(/gel is fine|not the inner gel/i);
+  });
+});
+
+/**
+ * The four guides added for the pet-safety search test (2026-10-21). Each is
+ * a plant the curated table already cites with its own ASPCA listing; no
+ * plant without one was added (ZZ plant stays "Unknown"). Pins the pieces the
+ * test is judged on: unique titles and descriptions inside the display
+ * limits, the one-sentence household angle, a cited verdict, and inbound
+ * links from guides that already exist.
+ */
+describe('pet-safety test guides', () => {
+  const TEST_SLUGS = ['african-violet', 'poinsettia', 'sago-palm', 'asparagus-fern'] as const;
+  const guides = TEST_SLUGS.map((slug) => findCareGuide(slug)!);
+
+  it('publishes all four', () => {
+    for (const [i, slug] of TEST_SLUGS.entries()) {
+      expect(guides[i], slug).toBeDefined();
+    }
+  });
+
+  it('has titles under 60 and descriptions under 155 characters, unique across all guides', () => {
+    for (const g of guides) {
+      expect(g.metaTitle.length, g.slug).toBeLessThanOrEqual(60);
+      expect(g.metaDescription.length, g.slug).toBeGreaterThanOrEqual(70);
+      expect(g.metaDescription.length, g.slug).toBeLessThanOrEqual(155);
+    }
+    const titles = CARE_GUIDES.map((g) => g.metaTitle);
+    const descriptions = CARE_GUIDES.map((g) => g.metaDescription);
+    expect(new Set(titles).size).toBe(titles.length);
+    expect(new Set(descriptions).size).toBe(descriptions.length);
+  });
+
+  it('opens the shared-care section with a single household sentence', () => {
+    for (const g of guides) {
+      const first = g.sections.sharedCare[0]!;
+      expect(first, g.slug).toMatch(/^[^.!?]+[.!?]$/);
+      expect(first, g.slug).toMatch(/\b(shared home|household|house|housemate)/i);
+    }
+  });
+
+  it('is fully cited: both animals have a verdict from the plant’s own ASPCA listing', () => {
+    for (const g of guides) {
+      const view = careToxicity(g);
+      expect(view.sourced, g.slug).toBe(true);
+      expect(view.claims.cats.state, g.slug).not.toBe('not-assessed');
+      expect(view.claims.dogs.state, g.slug).not.toBe('not-assessed');
+      expect(view.petSafePath, g.slug).toBe(`/pet-safe/${g.slug}`);
+      // The pet line opens with the cited verdict word.
+      const expected = view.claims.cats.state === 'non-toxic' ? 'safe' : 'toxic';
+      expect(petSafetyLevel(g.quickFacts.toxicity), g.slug).toBe(expected);
+    }
+  });
+
+  it('is linked in prose and in a related list from a guide that existed before', () => {
+    for (const g of guides) {
+      const others = CARE_GUIDES.filter(
+        (o) => o.slug !== g.slug && !TEST_SLUGS.includes(o.slug as never)
+      );
+      const prose = others.filter((o) =>
+        [...Object.values(o.sections).flat(), ...o.faqs.map((f) => f.a)].some((t) =>
+          t.includes(`](/care/${g.slug})`)
+        )
+      );
+      expect(prose.length, `${g.slug}: no inline link from an older guide`).toBeGreaterThan(0);
+      const related = others.filter((o) => o.related.includes(g.slug));
+      expect(related.length, `${g.slug}: not in an older guide’s related list`).toBeGreaterThan(0);
+    }
+  });
+
+  it('negative control: dropping a plant’s listing makes the same check fail', () => {
+    const real = PET_TOXICITY.find((e) => e.slug === 'sago-palm')!;
+    const broken = { ...real, aspcaListing: undefined };
+    // The sabotage landed: the copy of the row has no listing, the real one does.
+    expect(broken.aspcaListing).toBeUndefined();
+    expect(real.aspcaListing).toBeDefined();
+    const sabotaged = PET_TOXICITY.map((e) => (e.slug === 'sago-palm' ? broken : e));
+    const view = careToxicityFrom(findCareGuide('sago-palm')!, sabotaged as never);
+    expect(view.sourced).toBe(false);
+    expect(view.claims.cats.state).toBe('not-assessed');
+  });
+
+  it('negative control: the unsourced guide is still the only one, so nothing was added without a source', () => {
+    const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
+    expect(unsourced).toEqual(['zz-plant']);
   });
 });
