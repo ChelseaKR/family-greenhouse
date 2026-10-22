@@ -164,6 +164,19 @@ describe('per-plant ASPCA listings', () => {
         'lily',
         'poinsettia',
         'sago-palm',
+        // Read off the live ASPCA pages on 2026-10-21 (see 'rows read on
+        // 2026-10-21' below for each verdict and path).
+        'alocasia',
+        'areca-palm',
+        'begonia',
+        'blue-echeveria',
+        'burros-tail',
+        'cast-iron-plant',
+        'corn-plant',
+        'haworthia',
+        'jasmine',
+        'ponytail-palm',
+        'schefflera',
       ].sort()
     );
   });
@@ -687,5 +700,230 @@ describe('verdict modes', () => {
   it('cited: true lily is toxic to cats and, per its listing, non-toxic to dogs', () => {
     const [lily] = lookupToxicity('true lily', 5, 'cited');
     expect(lily).toMatchObject({ slug: 'lily', cats: 'toxic', dogs: 'non-toxic' });
+  });
+});
+
+/**
+ * Each row below was added after reading that plant's own ASPCA page on
+ * 2026-10-21. The expectations are pinned here, not derived from the table, so
+ * editing a verdict or a path in the table fails a test until the listing has
+ * been re-read.
+ */
+describe('rows read on 2026-10-21', () => {
+  const READ: Array<{
+    slug: string;
+    path: string;
+    title: string;
+    listingScientificName: string;
+    cats: 'toxic' | 'non-toxic';
+    dogs: 'toxic' | 'non-toxic';
+  }> = [
+    {
+      slug: 'alocasia',
+      path: 'alocasia',
+      title: 'Alocasia',
+      listingScientificName: 'Alocasia spp.',
+      cats: 'toxic',
+      dogs: 'toxic',
+    },
+    {
+      slug: 'areca-palm',
+      path: 'areca-palm',
+      title: 'Areca Palm',
+      listingScientificName: 'Dypsis lutescens',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'corn-plant',
+      path: 'corn-plant',
+      title: 'Corn Plant',
+      listingScientificName: 'Dracaena fragrans',
+      cats: 'toxic',
+      dogs: 'toxic',
+    },
+    {
+      slug: 'ponytail-palm',
+      path: 'pony-tail',
+      title: 'Pony Tail',
+      listingScientificName: 'Beaucarnea recurvata',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'begonia',
+      path: 'begonia',
+      title: 'Begonia',
+      listingScientificName: 'Begonia spp.',
+      cats: 'toxic',
+      dogs: 'toxic',
+    },
+    {
+      slug: 'cast-iron-plant',
+      path: 'cast-iron-plant',
+      title: 'Cast Iron Plant',
+      listingScientificName: 'Aspidistra elatior',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'jasmine',
+      path: 'jasmine',
+      title: 'Jasmine',
+      listingScientificName: 'Jasminum species',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'blue-echeveria',
+      path: 'blue-echeveria',
+      title: 'Blue Echeveria',
+      listingScientificName: 'Echeveria glauca',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'haworthia',
+      path: 'haworthia',
+      title: 'Haworthia',
+      listingScientificName: 'Haworthia species',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'burros-tail',
+      path: 'burros-tail',
+      title: 'Burro’s Tail',
+      listingScientificName: 'Sedum morganianum',
+      cats: 'non-toxic',
+      dogs: 'non-toxic',
+    },
+    {
+      slug: 'schefflera',
+      path: 'schefflera',
+      title: 'Schefflera',
+      listingScientificName: 'Schefflera',
+      cats: 'toxic',
+      dogs: 'toxic',
+    },
+  ];
+
+  it.each(READ)('$slug records the listing it was read from and its verdicts', (row) => {
+    const entry = PET_TOXICITY.find((e) => e.slug === row.slug);
+    expect(entry, `${row.slug} missing from the catalog`).toBeDefined();
+    expect(entry!.aspcaListing).toEqual({
+      title: row.title,
+      scientificName: row.listingScientificName,
+      path: `/toxic-and-non-toxic-plants/${row.path}`,
+      listed: { cats: row.cats, dogs: row.dogs },
+    });
+    expect(entry!.cats).toBe(row.cats);
+    expect(entry!.dogs).toBe(row.dogs);
+    expect(citedVerdict(entry!, 'cats')).toBe(row.cats);
+    expect(citedVerdict(entry!, 'dogs')).toBe(row.dogs);
+  });
+
+  it('each row resolves by its own name to a cited verdict', () => {
+    for (const row of READ) {
+      const entry = PET_TOXICITY.find((e) => e.slug === row.slug)!;
+      const hit = lookupToxicity(entry.commonName, 5, 'cited').find((m) => m.slug === row.slug);
+      expect(hit, `${row.slug}: not reachable by its common name`).toMatchObject({
+        cats: row.cats,
+        dogs: row.dogs,
+      });
+      expect(hit!.note, `${row.slug}: note withheld`).not.toBeNull();
+    }
+  });
+
+  it('the toxic notes carry the signs the listing states', () => {
+    const want: Record<string, RegExp[]> = {
+      alocasia: [/calcium oxalates/i, /difficulty swallowing/i],
+      'corn-plant': [/saponins/i, /dilated pupils in cats/i],
+      begonia: [/soluble calcium oxalates/i, /underground/i],
+      schefflera: [/calcium oxalate crystals/i, /difficulty swallowing/i],
+    };
+    for (const [slug, patterns] of Object.entries(want)) {
+      const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+      for (const re of patterns) expect(e.note, `${slug}: ${re}`).toMatch(re);
+      expect(e.note, `${slug}: hotline line`).toMatch(/call your vet or a poison hotline/);
+    }
+  });
+
+  it('names that ASPCA lists as separate plants do not reach a new non-toxic row', () => {
+    // Each of these is a different ASPCA listing, which this change did not
+    // read. They must come back as "not in the checker", never as the
+    // verdict of the row that happens to share a word.
+    const nonToxicSlugs = READ.filter((r) => r.cats === 'non-toxic').map((r) => r.slug);
+    for (const query of [
+      'star jasmine',
+      'cape jasmine',
+      'confederate jasmine',
+      'madagascar jasmine',
+      'bottle palm',
+      'cane palm',
+      'copper rose',
+      'wax rosette',
+      'horses tail',
+      'lambs tail',
+    ]) {
+      const slugs = lookupToxicity(query, 20).map((m) => m.slug);
+      for (const slug of nonToxicSlugs) {
+        expect(slugs, `"${query}" reached ${slug}`).not.toContain(slug);
+      }
+    }
+  });
+
+  it('negative control: with a row’s listing removed the verdict is not assessed', () => {
+    for (const row of READ) {
+      const index = PET_TOXICITY.findIndex((e) => e.slug === row.slug);
+      expect(index, `${row.slug} missing`).toBeGreaterThanOrEqual(0);
+      const original = PET_TOXICITY[index]!;
+      const sabotaged: PetToxicityEntry = { ...original };
+      delete sabotaged.aspcaListing;
+      PET_TOXICITY[index] = sabotaged;
+      try {
+        // Prove the sabotage landed before reading anything.
+        expect(
+          PET_TOXICITY[index]!.aspcaListing,
+          `${row.slug}: sabotage did not apply`
+        ).toBeUndefined();
+        expect(original.aspcaListing, `${row.slug}: the control must start cited`).toBeDefined();
+        expect(citedVerdict(PET_TOXICITY[index]!, 'cats')).toBe('unknown');
+        expect(citedVerdict(PET_TOXICITY[index]!, 'dogs')).toBe('unknown');
+        const hit = lookupToxicity(original.commonName, 5, 'cited').find(
+          (m) => m.slug === row.slug
+        );
+        expect(hit, `${row.slug}: not found`).toMatchObject({
+          cats: 'unknown',
+          dogs: 'unknown',
+          note: null,
+        });
+      } finally {
+        PET_TOXICITY[index] = original;
+      }
+      expect(PET_TOXICITY[index], `${row.slug}: not restored`).toBe(original);
+    }
+  });
+
+  it('negative control: a listing that disagrees with the row is not assessed', () => {
+    for (const row of READ) {
+      const index = PET_TOXICITY.findIndex((e) => e.slug === row.slug);
+      const original = PET_TOXICITY[index]!;
+      const flipped = row.cats === 'toxic' ? 'non-toxic' : 'toxic';
+      PET_TOXICITY[index] = {
+        ...original,
+        aspcaListing: { ...original.aspcaListing!, listed: { cats: flipped, dogs: row.dogs } },
+      };
+      try {
+        expect(
+          PET_TOXICITY[index]!.aspcaListing!.listed.cats,
+          `${row.slug}: sabotage did not apply`
+        ).toBe(flipped);
+        expect(citedVerdict(PET_TOXICITY[index]!, 'cats')).toBe('unknown');
+        expect(citedVerdict(PET_TOXICITY[index]!, 'dogs')).toBe(row.dogs);
+      } finally {
+        PET_TOXICITY[index] = original;
+      }
+    }
   });
 });
