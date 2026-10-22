@@ -327,7 +327,7 @@
     "goToRegistration": "Go to registration",
     "signUpTitle": "Sign up",
     "registerTitle": "Start your greenhouse",
-    "registerSubtitle": "Free for one home, up to 3 household members and 20 plants. No credit card.",
+    "registerSubtitle": "Free for one home, up to 3 household members and 20 plants. No credit card. Your household starts with 14 days of Garden.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
     "nameMin": "Name must be at least 2 characters",
@@ -2473,21 +2473,21 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "A garden journal for the whole house",
+        "eyebrow": "Shared plant care and watering reminders",
         "headlinePre": "“I thought ",
         "headlineEmphasis": "you",
         "headlinePost": " watered it.”",
         "subhead": "Family Greenhouse is a shared care journal for the plants in your house. Everyone sees what’s due and what’s already done, so the fern doesn’t get watered twice on Tuesday and then forgotten for two weeks."
       },
       "b": {
-        "eyebrow": "A care journal for your plants",
+        "eyebrow": "Plant care and watering reminders",
         "headlinePre": "Keep ",
         "headlineEmphasis": "every",
         "headlinePost": " plant alive.",
         "subhead": "Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing gets missed or drowned. It works just as well for one person and a windowsill as it does for a whole household sharing the watering can."
       },
       "seeHowItWorks": "See how it works",
-      "signupNote": "No credit card needed — a name, email, and a password, then a one-time code we email you. About five minutes, start to finish."
+      "signupNote": "No credit card needed. Your household starts with 14 days of Garden, then stays on the free plan unless you choose otherwise. Sign-up takes a name, email, and password, then a one-time code we email you: about five minutes, start to finish."
     },
     "mockup": {
       "label": "Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity.",

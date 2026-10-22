@@ -217,6 +217,30 @@ describe('CareGuidePage pet toxicity', () => {
     expect(PET_TOXICITY.find((e) => e.slug === 'pothos')!.aspcaListing).toBeDefined();
   });
 
+  it('negative control: a new guide loses its markup when its listing is removed', () => {
+    const entry = PET_TOXICITY.find((e) => e.slug === 'poinsettia')!;
+    const saved = entry.aspcaListing;
+    const intact = renderGuide('poinsettia');
+    expect(faqNames(intact.container).map((q) => q.name)).toContain(
+      'Is a poinsettia toxic to cats and dogs?'
+    );
+    intact.unmount();
+    try {
+      entry.aspcaListing = undefined;
+      expect(PET_TOXICITY.find((e) => e.slug === 'poinsettia')!.aspcaListing).toBeUndefined();
+      const { container } = renderGuide('poinsettia');
+      expect(
+        section(container).querySelector('[data-claim="cats"]')!.getAttribute('data-state')
+      ).toBe('not-assessed');
+      expect(faqNames(container).map((q) => q.name)).not.toContain(
+        'Is a poinsettia toxic to cats and dogs?'
+      );
+    } finally {
+      entry.aspcaListing = saved;
+    }
+    expect(PET_TOXICITY.find((e) => e.slug === 'poinsettia')!.aspcaListing).toBeDefined();
+  });
+
   it('marks up every FAQ it shows except an unsourced pet answer, and nothing else', () => {
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);

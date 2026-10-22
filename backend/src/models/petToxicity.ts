@@ -150,7 +150,7 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     aliases: ['aloe', 'medicine plant', 'burn plant'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'The gel inside is fine, but the leaf’s outer layer contains saponins and anthraquinones that cause vomiting, lethargy and diarrhea if eaten. Keep the plant out of reach even though aloe gel is a human first-aid staple.',
+    note: 'The ASPCA lists aloe as toxic to both cats and dogs, naming saponins and anthraquinones as the toxic principles and vomiting, lethargy and diarrhea as the signs. Its listing also calls the gel edible, but the plant itself is still listed as toxic, so a pet chewing the leaves is not a harmless nibble. Keep the plant out of reach even though aloe gel is a common household burn remedy, and call your vet or a poison hotline if your pet has eaten some.',
   },
   {
     slug: 'jade-plant',
@@ -415,7 +415,7 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     aliases: ['strelitzia', 'strelitzia reginae', 'bird of paradise flower', 'crane flower'],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the fruit and seeds carry the GI irritants, causing nausea, vomiting and drowsiness. Usually mild, but note that a very different shrub (Caesalpinia gilliesii) is also sold as “bird of paradise” and is harsher, so check which one you have.',
+    note: 'Toxic to cats and dogs per the ASPCA, which names GI irritants and lists mild nausea, vomiting and drowsiness, caused mainly by the fruit and seeds. Indoor plants rarely fruit, but the listing still applies to the plant, so keep it out of reach. A very different shrub (Caesalpinia gilliesii) is also sold as “bird of paradise” and is harsher, so check which one you have. If your pet has eaten some, call your vet or a poison hotline.',
   },
   {
     slug: 'anthurium',
@@ -442,7 +442,7 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     ],
     cats: 'toxic',
     dogs: 'toxic',
-    note: 'Toxic to cats and dogs per the ASPCA — the same insoluble calcium oxalate crystals as peace lily and dieffenbachia, so chewing burns the mouth and causes drooling and trouble swallowing. Despite the “flamingo lily” nickname it is not a true lily, so it will not cause the kidney failure those do.',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists oral irritation, pain and swelling of the mouth, tongue and lips, excessive drooling, vomiting and difficulty swallowing. Peace lily and dieffenbachia carry the same crystals. Despite the “flamingo lily” nickname it is not a true lily, so it will not cause the kidney failure true lilies do. If your pet has chewed it, call your vet or a poison hotline.',
   },
   {
     slug: 'chinese-evergreen',
