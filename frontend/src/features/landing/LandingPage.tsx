@@ -918,6 +918,9 @@ export function LandingPage() {
                   <Link to="/blog" className="text-primary-700 hover:underline">
                     {t('landing.care.readBlog')} <span aria-hidden="true">→</span>
                   </Link>
+                  <Link to="/pet-safe" className="text-primary-700 hover:underline">
+                    {t('landing.care.petSafeChecker')} <span aria-hidden="true">→</span>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -985,6 +988,11 @@ export function LandingPage() {
                 <li>
                   <Link to="/care" className="text-sm text-primary-200 hover:text-white">
                     {t('landing.footer.plantCareGuides')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/pet-safe" className="text-sm text-primary-200 hover:text-white">
+                    {t('landing.footer.petSafeChecker')}
                   </Link>
                 </li>
                 <li>
