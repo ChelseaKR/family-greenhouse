@@ -2697,7 +2697,8 @@
       "body": "Las guías de cuidado te cuentan con honestidad lo que la etiqueta del vivero no dice: cada cuánto necesita agua de verdad, qué te quieren decir las puntas cafés y si es segura cerca de un gato o de un niño curioso. Vale la pena leerlas antes de que la planta llegue a casa.",
       "startWithGuide": "Empieza con una guía",
       "allGuides": "Todas las guías de cuidado (en inglés)",
-      "readBlog": "Lee el blog (en inglés)"
+      "readBlog": "Lee el blog (en inglés)",
+      "petSafeChecker": "Revisa una planta para mascotas"
     },
     "plans": {
       "eyebrow": "Planes",
@@ -2734,6 +2735,7 @@
       "legal": "Aviso legal",
       "contact": "Contacto",
       "plantCareGuides": "Guías de cuidado de plantas",
+      "petSafeChecker": "Verificador de plantas seguras para mascotas",
       "copyright": "© {{year}} Family Greenhouse. Todos los derechos reservados."
     }
   },

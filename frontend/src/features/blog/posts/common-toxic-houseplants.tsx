@@ -74,8 +74,8 @@ export default function CommonToxicHouseplants() {
       <h3>ZZ plant &rarr; parlor palm</h3>
       <p>
         The <a href="/care/zz-plant">ZZ</a> is the &ldquo;I can&rsquo;t keep anything alive&rdquo;
-        plant, and it&rsquo;s toxic to cats and dogs (the reputation overstates it, but it&rsquo;s
-        real). If you want near-indestructible <em>and</em> pet-safe, the{' '}
+        plant, but the ASPCA plant list has no entry for it, so we give no pet verdict for it either
+        way. If you want near-indestructible <em>and</em> pet-safe, the{' '}
         <a href="/care/parlor-palm">parlor palm</a> (Chamaedorea) is the swap: non-toxic, low-light
         tolerant, slow, and forgiving. It&rsquo;s leafier and softer than a ZZ rather than glossy
         and architectural, but it fills the same &ldquo;tough green thing for a dim room&rdquo;

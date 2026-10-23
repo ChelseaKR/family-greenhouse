@@ -2638,7 +2638,8 @@
       "body": "The care guides are honest about the parts the plant-shop label skips: how often it actually needs water, what the brown tips are telling you, and whether it’s safe around a cat or a curious toddler. Worth a read before the plant comes home.",
       "startWithGuide": "Start with a guide",
       "allGuides": "All care guides",
-      "readBlog": "Read the blog"
+      "readBlog": "Read the blog",
+      "petSafeChecker": "Check a plant for pets"
     },
     "plans": {
       "eyebrow": "Plans",
@@ -2675,6 +2676,7 @@
       "legal": "Legal",
       "contact": "Contact",
       "plantCareGuides": "Plant care guides",
+      "petSafeChecker": "Pet-safe plant checker",
       "copyright": "© {{year}} Family Greenhouse. All rights reserved."
     }
   },
