@@ -2408,7 +2408,9 @@
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
     "registerCta": "Crear una cuenta gratuita",
-    "navLink": "Regalar una suscripción"
+    "navLink": "Regalar una suscripción",
+    "unavailableHeading": "Los regalos aún no están disponibles",
+    "unavailableBody": "Todavía no hemos abierto las suscripciones de regalo, así que ahora mismo no hay nada que comprar aquí. Vuelve más tarde; esta página ofrecerá regalos en cuanto estén a la venta."
   },
   "caretaker": {
     "seats": {

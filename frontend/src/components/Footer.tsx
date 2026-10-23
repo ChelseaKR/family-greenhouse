@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { MemorialFrame } from './brand/MemorialFrame';
 import { AnalyticsOptOutToggle } from './AnalyticsOptOutToggle';
 import { isNativeApp } from '@/lib/platform';
+import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
 
 // Labels are catalog keys (#467). Several are shared with the site header and
 // the landing footer, so one word is not translated three different ways.
@@ -45,7 +46,12 @@ export function Footer() {
   const { t } = useTranslation();
   const year = new Date().getFullYear();
   const native = isNativeApp();
-  const links = native ? FOOTER_LINKS.filter((link) => !WEB_ONLY_LINKS.has(link.to)) : FOOTER_LINKS;
+  // The Gift link is shown only while the API says a gift can be bought; with
+  // no gift price ids set, /gift would only explain that gifts are unavailable.
+  const giftsOffered = useGiftAvailability() === 'available';
+  const links = FOOTER_LINKS.filter(
+    (link) => !(native && WEB_ONLY_LINKS.has(link.to)) && (link.to !== '/gift' || giftsOffered)
+  );
   return (
     <footer className="bg-primary-900">
       <div className="mx-auto max-w-7xl px-6 py-10 text-center">

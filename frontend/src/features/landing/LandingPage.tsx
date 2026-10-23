@@ -21,6 +21,7 @@ import {
 import { buttonStyles } from '@/components/buttonStyles';
 import { BrandMark } from '@/components/BrandMark';
 import { PricingGrid } from '@/features/pricing/PricingGrid';
+import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
 import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { MemorialFrame } from '@/components/brand/MemorialFrame';
@@ -494,6 +495,8 @@ function SidebarLeafIcon({ className }: { className?: string }) {
 }
 
 export function LandingPage() {
+  // Gift links appear only while a gift can actually be bought.
+  const giftsOffered = useGiftAvailability() === 'available';
   const { t } = useTranslation();
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
@@ -588,12 +591,14 @@ export function LandingPage() {
             >
               {t('publicShell.pricing')}
             </a>
-            <Link
-              to="/gift"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-            >
-              {t('giftLanding.navLink')}
-            </Link>
+            {giftsOffered && (
+              <Link
+                to="/gift"
+                className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
+              >
+                {t('giftLanding.navLink')}
+              </Link>
+            )}
           </div>
           <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
             <Link
@@ -965,11 +970,13 @@ export function LandingPage() {
                     {t('publicShell.pricing')}
                   </a>
                 </li>
-                <li>
-                  <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
-                    {t('giftLanding.navLink')}
-                  </Link>
-                </li>
+                {giftsOffered && (
+                  <li>
+                    <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
+                      {t('giftLanding.navLink')}
+                    </Link>
+                  </li>
+                )}
               </ul>
             </div>
             <div>
