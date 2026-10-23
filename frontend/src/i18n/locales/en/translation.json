@@ -2008,6 +2008,7 @@
     "openTasks": "Open the task list →"
   },
   "pricing": {
+    "monthlyPriceLine": "Garden is ${{garden}} a month and Greenhouse is ${{greenhouse}} a month, each covering the whole household.",
     "intervalLabel": "Billing interval",
     "intervalMonthly": "Monthly",
     "intervalYearly": "Yearly",

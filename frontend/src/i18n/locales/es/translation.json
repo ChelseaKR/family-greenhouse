@@ -2060,6 +2060,7 @@
     "openTasks": "Abrir la lista de tareas →"
   },
   "pricing": {
+    "monthlyPriceLine": "Garden cuesta ${{garden}} al mes y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",
     "intervalYearly": "Anual",
