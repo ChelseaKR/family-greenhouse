@@ -2349,7 +2349,9 @@
     "signInBody": "Buying a gift charges your own card, so we need an account to send the receipt and code to. It does not need a household of your own — this is the only place gifting works without one.",
     "signInCta": "Sign in",
     "registerCta": "Create a free account",
-    "navLink": "Gift a subscription"
+    "navLink": "Gift a subscription",
+    "unavailableHeading": "Gifts are not available yet",
+    "unavailableBody": "We have not opened gift subscriptions yet, so there is nothing to buy here right now. Check back later; this page will offer gifts as soon as they are for sale."
   },
   "caretaker": {
     "seats": {
