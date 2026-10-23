@@ -277,7 +277,7 @@ describe('a plant page links its own care guide when one exists', () => {
     const linked = PLANT_SAFETY_PAGES.filter((page) => careLinks(page).length > 0);
     // 22 of the 28 published pages had a guide with the same slug when this landed.
     expect(linked.length).toBeGreaterThanOrEqual(20);
-    expect(careLinks(findPlantSafetyPage('lily')!)).toEqual([]);
+    expect(careLinks(findPlantSafetyPage('philodendron')!)).toEqual([]);
   });
 
   it('names the plant in the link text, from the catalog', () => {

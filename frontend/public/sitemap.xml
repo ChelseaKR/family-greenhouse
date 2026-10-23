@@ -23,7 +23,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care</loc>
-    <lastmod>2026-10-21</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -178,7 +178,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/peace-lily</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -196,7 +196,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/aloe-vera</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -244,7 +244,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/jade-plant</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -268,7 +268,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/christmas-cactus</loc>
-    <lastmod>2026-10-21</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -292,7 +292,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care/nerve-plant</loc>
-    <lastmod>2026-10-21</lastmod>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -317,6 +317,36 @@
   <url>
     <loc>https://familygreenhouse.net/care/asparagus-fern</loc>
     <lastmod>2026-10-21</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/haworthia</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/burros-tail</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/blue-echeveria</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/begonia</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/lily</loc>
+    <lastmod>2026-10-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

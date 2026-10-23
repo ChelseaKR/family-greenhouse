@@ -19,12 +19,13 @@ export default function CommonToxicHouseplants() {
 
       <h2>First, the one real emergency</h2>
       <p>
-        Before the swaps, the plant that deserves its own paragraph: true lilies (Lilium) and
-        daylilies (Hemerocallis). For cats these aren&rsquo;t &ldquo;mildly toxic&rdquo; &mdash;
-        even pollen, a chewed leaf, or the water from a vase can cause sudden kidney failure, and
-        it&rsquo;s often fatal without fast treatment. If you have a cat, true lilies simply
-        shouldn&rsquo;t come into the house, cut flowers included. Everything else on this page is
-        the ordinary, recoverable kind of toxic. This one isn&rsquo;t.
+        Before the swaps, the plant that deserves its own paragraph:{' '}
+        <a href="/care/lily">true lilies</a> (Lilium) and daylilies (Hemerocallis). For cats these
+        aren&rsquo;t &ldquo;mildly toxic&rdquo; &mdash; even pollen, a chewed leaf, or the water
+        from a vase can cause sudden kidney failure, and it&rsquo;s often fatal without fast
+        treatment. If you have a cat, true lilies simply shouldn&rsquo;t come into the house, cut
+        flowers included. Everything else on this page is the ordinary, recoverable kind of toxic.
+        This one isn&rsquo;t.
       </p>
 
       <h2>The common toxic ones, and what to buy instead</h2>
@@ -45,9 +46,10 @@ export default function CommonToxicHouseplants() {
         <a href="/care/aloe-vera">Aloe</a> gets recommended as a beginner succulent and a first-aid
         plant, but the ASPCA lists it as toxic to cats and dogs, even though it calls the gel
         edible. Treat the whole plant as something to keep out of reach. If you want a small spiky
-        succulent for a sunny sill, a haworthia (the little &ldquo;zebra&rdquo; succulents) gives
-        you the same look and the same drought-loving, hard-to-overthink care, and isn&rsquo;t on
-        the toxic list. You lose the burn-gel trick, but you keep the windowsill aesthetic.
+        succulent for a sunny sill, a <a href="/care/haworthia">haworthia</a> (the little
+        &ldquo;zebra&rdquo; succulents) gives you the same look and the same drought-loving,
+        hard-to-overthink care, and isn&rsquo;t on the toxic list. You lose the burn-gel trick, but
+        you keep the windowsill aesthetic.
       </p>
 
       <h3>Snake plant &rarr; cast iron plant</h3>
