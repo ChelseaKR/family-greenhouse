@@ -45,7 +45,10 @@ import {
   type PetToxicityEntry,
 } from '../../../../backend/src/models/petToxicity';
 // @ts-expect-error - vanilla ESM build script, deliberately untyped
-import { checkPlantSafetyPageHtml } from '../../../scripts/check-plant-safety-pages.mjs';
+import {
+  checkPlantSafetyPageHtml,
+  readCatalog,
+} from '../../../scripts/check-plant-safety-pages.mjs';
 
 afterEach(cleanup);
 
@@ -121,6 +124,27 @@ describe('negative controls: the gate fails on what it exists to catch', () => {
     expect(html).toContain('data-state="not-assessed"');
     expect(html).not.toContain(entryFor('hoya').note);
     expect(gate(html, blank)).toEqual([]);
+  });
+
+  it('a head description that STATES safety fails, while the one question is allowed', () => {
+    const page = findPlantSafetyPage('hoya')!;
+    const html = documentFor(page);
+    const catalog = readCatalog();
+    const template = catalog['plantSafetyPage.metaDescription']!;
+    expect(template).toContain('poisonous or safe for pets?');
+    const asked = (c: Record<string, string>) =>
+      checkPlantSafetyPageHtml({
+        html,
+        entry: entryFor('hoya'),
+        aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL,
+        catalog: c,
+      }).filter((f: string) => f.includes('asserts safety'));
+    expect(asked(catalog)).toEqual([]);
+    const sabotaged = template.replace('poisonous or safe for pets?', 'safe for pets.');
+    expect(sabotaged).not.toBe(template);
+    expect(
+      asked({ ...catalog, 'plantSafetyPage.metaDescription': sabotaged }).join('\n')
+    ).toContain('plantSafetyPage.metaDescription asserts safety ("safe")');
   });
 
   it('a sentence typed into the template fails the provenance check', () => {

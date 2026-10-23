@@ -456,8 +456,8 @@
     "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
   },
   "plantSafetyPage": {
-    "metaTitle": "Is {{name}} toxic to cats and dogs?",
-    "metaDescription": "What the ASPCA listing says about {{name}} ({{scientificName}}) and pets. Cats: {{cats}}. Dogs: {{dogs}}.",
+    "metaTitle": "Is {{name}} toxic to cats and dogs? ASPCA verdict",
+    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
     "heading": "Is {{name}} toxic to cats and dogs?",
     "verdictsHeading": "The verdicts, with their source",

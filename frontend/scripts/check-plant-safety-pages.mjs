@@ -114,6 +114,15 @@ export const VERDICT_LABEL_KEY = {
 export const SAFETY_WORDING =
   /\bnon[-\s]?toxic\b|\bnontoxic\b|\bnot\s+(?:toxic|poisonous|harmful|dangerous)\b|\bsafe(?:ly|r|st|ty)?\b|\bharmless\b|\bpet[-\s]friendly\b|\bno\s+(?:known\s+)?(?:toxicity|risk|danger)\b/i;
 
+/**
+ * The one question the head description may ask outright. The word "safe"
+ * here is the searcher's own phrasing ("poisonous or safe for pets?"), asked
+ * and not answered: the answer is the two verdict labels after it, which come
+ * from the table. The exemption is this exact question, ending in its question
+ * mark, so rewording it into a statement ("safe for pets.") fails the gate.
+ */
+export const HEAD_QUESTION = /\bpoisonous or safe for pets\?/gi;
+
 /** Wording that makes a toxicity claim in either direction. */
 const TOXICITY_WORDING =
   /toxic|poison|venom|harm|danger|fatal|lethal|kidney|liver|vomit|drool|diarrh|irritat|symptom|swallow|emergenc|oxalate|saponin/i;
@@ -162,13 +171,16 @@ function interpolate(template, values) {
   });
 }
 
+/** Must match headName in src/features/petsafe/plantSafetyPages.ts. */
+const headName = (commonName) => commonName.replace(/\s*\([^)]*\)\s*$/, '');
+
 /** What the head must say, recomposed from the table and the catalog. */
 function expectedHead(entry, page, catalog) {
   const label = (animal) => catalog[VERDICT_LABEL_KEY[page.claims[animal].state]];
   return {
-    title: interpolate(catalog['plantSafetyPage.metaTitle'], { name: entry.commonName }),
+    title: interpolate(catalog['plantSafetyPage.metaTitle'], { name: headName(entry.commonName) }),
     description: interpolate(catalog['plantSafetyPage.metaDescription'], {
-      name: entry.commonName,
+      name: headName(entry.commonName),
       scientificName: entry.scientificName,
       cats: label('cats'),
       dogs: label('dogs'),
@@ -412,7 +424,7 @@ export function checkPlantSafetyPageHtml({
   // 4. Head.
   const head = expectedHead(entry, page, catalog);
   for (const key of ['plantSafetyPage.metaTitle', 'plantSafetyPage.metaDescription']) {
-    const safety = catalog[key]?.match(SAFETY_WORDING);
+    const safety = catalog[key]?.replace(HEAD_QUESTION, '').match(SAFETY_WORDING);
     if (safety) fail(`catalog string ${key} asserts safety ("${safety[0]}") in template copy`);
   }
   const meta = (selector) => doc.querySelector(selector)?.getAttribute('content');
