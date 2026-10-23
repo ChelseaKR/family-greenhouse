@@ -168,7 +168,7 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: 'signs-of-overwatering-and-how-to-fix-it',
-    title: 'Signs of overwatering (and how to fix it)',
+    title: 'How to fix an overwatered plant: signs and a 2-minute check',
     description:
       'An overwatered plant looks exactly like a thirsty one, which is why people keep watering it. How to tell them apart in two minutes, what to do about root rot, and the shared-household version nobody warns you about.',
     metaDescription:

@@ -162,6 +162,18 @@ export const PLANT_PAGE_PREFIX = '/pet-safe/';
 /** The poison-control line the emergency note links, from the table module. */
 export const POISON_CONTROL_URL = ASPCA_ANIMAL_POISON_CONTROL_URL;
 
+/**
+ * The plant's name as the head spells it: the table's `commonName` without a
+ * trailing disambiguation in parentheses ("Orchid (Phalaenopsis)" -> "Orchid").
+ * The scientific name follows in the description, and the longest title has to
+ * fit a SERP's ~60 characters. Both head catalogs (en and es) take it as `{{name}}`,
+ * so the Spanish head drops the parenthetical too. The build gate recomposes it
+ * the same way.
+ */
+export function headName(commonName: string): string {
+  return commonName.replace(/\s*\([^)]*\)\s*$/, '');
+}
+
 type Translate = (key: string, options?: Record<string, string>) => string;
 
 /**
@@ -175,9 +187,9 @@ type Translate = (key: string, options?: Record<string, string>) => string;
  */
 export function plantSafetyMeta(page: PlantSafetyPage, t: Translate): MetaTags {
   const url = siteUrl(`${PLANT_PAGE_PREFIX}${page.slug}`);
-  const title = t('plantSafetyPage.metaTitle', { name: page.commonName });
+  const title = t('plantSafetyPage.metaTitle', { name: headName(page.commonName) });
   const description = t('plantSafetyPage.metaDescription', {
-    name: page.commonName,
+    name: headName(page.commonName),
     scientificName: page.scientificName,
     cats: t(VERDICT_LABEL_KEY[page.claims.cats.state]),
     dogs: t(VERDICT_LABEL_KEY[page.claims.dogs.state]),
