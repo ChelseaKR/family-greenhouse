@@ -492,7 +492,7 @@
     "emergencyHeading": "Si tu mascota pudo haberse comido un trozo",
     "emergencyBody": "Llama ya a una línea de toxicología para mascotas, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas.",
     "hotline": {
-      "aspca": "ASPCA Animal Poison Control Center: (888) 426-4435",
+      "aspca": "ASPCA Poison Control: (888) 426-4435",
       "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
     },
     "hotlineFee": {

@@ -480,7 +480,7 @@
     "emergencyHeading": "If your pet may have eaten some",
     "emergencyBody": "Call a pet poison hotline now, or your vet or an emergency clinic. Don’t wait to see whether symptoms appear.",
     "hotline": {
-      "aspca": "ASPCA Animal Poison Control Center: (888) 426-4435",
+      "aspca": "ASPCA Poison Control: (888) 426-4435",
       "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
     },
     "hotlineFee": {

@@ -411,7 +411,7 @@ describe('the emergency aside', () => {
       </MemoryRouter>
     );
     expect(
-      screen.getByRole('link', { name: 'ASPCA Animal Poison Control Center: (888) 426-4435' })
+      screen.getByRole('link', { name: 'ASPCA Poison Control: (888) 426-4435' })
     ).toHaveAttribute('href', `tel:+1${ASPCA_DIGITS}`);
     expect(
       screen.getByRole('link', { name: 'Pet Poison Helpline: (855) 764-7661' })
@@ -518,7 +518,7 @@ describe('the emergency aside', () => {
       const out = sabotage(
         html,
         '</article>',
-        `<p><a href="tel:+1${ASPCA_DIGITS}" data-chrome="plantSafetyPage.hotline.aspca">ASPCA Animal Poison Control Center: (888) 426-4435</a></p></article>`
+        `<p><a href="tel:+1${ASPCA_DIGITS}" data-chrome="plantSafetyPage.hotline.aspca">ASPCA Poison Control: (888) 426-4435</a></p></article>`
       );
       expect(failuresFor(out)).toContain(`dials tel:+1${ASPCA_DIGITS} outside the emergency aside`);
     });
