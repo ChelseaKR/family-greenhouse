@@ -489,9 +489,18 @@
       "dogs": "Esta página no tiene un veredicto con fuente para perros, así que no afirma nada en ningún sentido. Considéralo desconocido y mantén la planta fuera del alcance de tu perro hasta consultarlo con tu veterinario."
     },
     "noteHeading": "Lo que añade nuestra tabla",
-    "emergencyHeading": "Si tu mascota ya se ha comido un trozo",
-    "emergencyBody": "No esperes a ver si aparecen síntomas. Llama a tu veterinario o a",
-    "poisonControlLink": "ASPCA Animal Poison Control",
+    "emergencyHeading": "Si tu mascota pudo haberse comido un trozo",
+    "emergencyBody": "Llama ya a una línea de toxicología para mascotas, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas.",
+    "hotline": {
+      "aspca": "ASPCA Animal Poison Control Center: (888) 426-4435",
+      "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
+    },
+    "hotlineFee": {
+      "aspca": "Según su página, puede cobrarse una tarifa de consulta («A consultation fee may apply»).",
+      "petPoisonHelpline": "Según su página, se cobra una tarifa de 99 USD por incidente («$99 incident fee applies»)."
+    },
+    "hotlinesChecked": "Números y tarifas tal como los indicaba la página de cada servicio el 23 de octubre de 2026.",
+    "emergencyListingNote": "Los veredictos de esta página vienen de la lista de plantas de la ASPCA, que no dice nada sobre cuánto comió tu mascota. Una línea de toxicología o tu veterinario pueden valorarlo contigo.",
     "aboutHeading": "Cómo se hace esta página",
     "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
     "careGuideLink": "Guía de cuidados: {{name}} (riego, luz y problemas comunes)",

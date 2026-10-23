@@ -5,6 +5,7 @@ import {
 } from '../../../../backend/src/models/petToxicity';
 import { SITE_URL, siteUrl } from '@/config/site';
 import type { MetaTags } from '@/config/seo';
+import { ASPCA_POISON_CONTROL_TEL, PET_POISON_HELPLINE_TEL } from './petVerdict';
 
 /**
  * The data behind `/pet-safe/<slug>`: one page per plant in the curated
@@ -159,8 +160,27 @@ export const VERDICT_LABEL_KEY: Record<ClaimState, string> = {
 
 export const PLANT_PAGE_PREFIX = '/pet-safe/';
 
-/** The poison-control line the emergency note links, from the table module. */
-export const POISON_CONTROL_URL = ASPCA_ANIMAL_POISON_CONTROL_URL;
+/**
+ * The two pet poison hotlines the emergency aside lists, in order, with the
+ * catalog keys for their link text (name and number) and their fee sentence.
+ * Numbers and fee wording were read off each service's own page on 2026-10-23
+ * (see plantNames.ts). Must match POISON_HOTLINES in
+ * scripts/check-plant-safety-pages.mjs, which checks the built pages.
+ */
+export const POISON_HOTLINES = [
+  {
+    id: 'aspca',
+    tel: ASPCA_POISON_CONTROL_TEL,
+    callKey: 'plantSafetyPage.hotline.aspca',
+    feeKey: 'plantSafetyPage.hotlineFee.aspca',
+  },
+  {
+    id: 'petPoisonHelpline',
+    tel: PET_POISON_HELPLINE_TEL,
+    callKey: 'plantSafetyPage.hotline.petPoisonHelpline',
+    feeKey: 'plantSafetyPage.hotlineFee.petPoisonHelpline',
+  },
+] as const;
 
 /**
  * The plant's name as the head spells it: the table's `commonName` without a
