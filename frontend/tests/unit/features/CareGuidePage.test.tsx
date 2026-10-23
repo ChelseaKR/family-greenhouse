@@ -241,6 +241,33 @@ describe('CareGuidePage pet toxicity', () => {
     expect(PET_TOXICITY.find((e) => e.slug === 'poinsettia')!.aspcaListing).toBeDefined();
   });
 
+  it('renders the lily guide’s two different verdicts, and a negative control removes them', () => {
+    const entry = PET_TOXICITY.find((e) => e.slug === 'lily')!;
+    const saved = entry.aspcaListing;
+    const intact = renderGuide('lily');
+    const claim = (c: HTMLElement, animal: string) =>
+      section(c).querySelector(`[data-claim="${animal}"]`)!.getAttribute('data-state');
+    expect(claim(intact.container, 'cats')).toBe('toxic');
+    expect(claim(intact.container, 'dogs')).toBe('non-toxic');
+    expect(faqNames(intact.container).map((q) => q.name)).toContain(
+      'Is a true lily toxic to cats and dogs?'
+    );
+    intact.unmount();
+    try {
+      entry.aspcaListing = undefined;
+      expect(PET_TOXICITY.find((e) => e.slug === 'lily')!.aspcaListing).toBeUndefined();
+      const { container } = renderGuide('lily');
+      expect(claim(container, 'cats')).toBe('not-assessed');
+      expect(claim(container, 'dogs')).toBe('not-assessed');
+      expect(faqNames(container).map((q) => q.name)).not.toContain(
+        'Is a true lily toxic to cats and dogs?'
+      );
+    } finally {
+      entry.aspcaListing = saved;
+    }
+    expect(PET_TOXICITY.find((e) => e.slug === 'lily')!.aspcaListing).toBeDefined();
+  });
+
   it('marks up every FAQ it shows except an unsourced pet answer, and nothing else', () => {
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);

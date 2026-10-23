@@ -93,9 +93,9 @@ export const POSTS: BlogPost[] = [
     slug: 'pet-safe-houseplants-that-are-hard-to-kill',
     title: 'Pet-safe houseplants that are genuinely hard to kill',
     description:
-      '“Pet-safe” and “hard to kill” knock out most of the plants the listicles name — pothos, ZZ, snake plant, aloe are all toxic. Here’s the shorter, honest list that clears both bars, ranked by how much neglect it forgives.',
+      '“Pet-safe” and “hard to kill” knock out most of the plants the listicles name — pothos, snake plant and aloe are all toxic. Here’s the shorter, honest list that clears both bars, ranked by how much neglect it forgives.',
     metaDescription:
-      'Pothos, ZZ, snake plant and aloe are all toxic. Here is the shorter, honest list of plants that clear both bars, ranked by how much neglect they forgive.',
+      'Pothos, snake plant and aloe are all toxic. Here is the shorter, honest list of plants that clear both bars, ranked by how much neglect they forgive.',
     date: '2026-06-15',
     readingMinutes: 6,
     Component: PetSafeHardToKill,

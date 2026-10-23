@@ -10,7 +10,7 @@
  * from the species catalog / Perenual, the prose is original. The generator
  * prompt that produces this shape is `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 28 now, still short
+ * architecture could be judged before scaling; there are 33 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -358,12 +358,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Peace Lily',
     scientificName: 'Spathiphyllum',
     alsoKnownAs: ['Spath', 'Closet Plant', 'White Sail Plant'],
-    related: ['anthurium', 'chinese-evergreen', 'calathea'],
+    related: ['anthurium', 'chinese-evergreen', 'lily'],
     metaTitle: 'Peace Lily Care: How Often to Water + Are They Toxic?',
     metaDescription:
       'How often to water a peace lily, the light it actually wants, why the leaves droop or brown, and whether it’s safe around cats and dogs.',
     reviewed: '2026-06-17',
-    updated: '2026-10-19',
+    updated: '2026-10-22',
     summary:
       'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
     quickFacts: {
@@ -380,7 +380,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       light: [
         'Medium to bright, indirect light is the sweet spot. The peace lily earns its reputation as a low-light plant because it survives a dim corner, but “survives” and “flowers” are different things: in low light it stays green and healthy but rarely produces the white blooms people buy it for.',
-        'Keep it out of direct sun, which scorches the broad leaves into brown patches. A few feet back from a bright window, or beside a north or east one, gives you the best shot at flowers without burning the foliage.',
+        'Keep it out of direct sun, which scorches the broad leaves into brown patches. A few feet back from a bright window, or beside a north or east one, gives you the best shot at flowers without burning the foliage. Despite the name it is not a true lily; for the plant that is, see the [lily](/care/lily) guide.',
       ],
       problems: [
         'Drooping leaves are usually just thirst — water it and watch it recover. If it droops even when the soil is wet, that’s the opposite problem: overwatering and the start of root rot. Check the soil before you reach for the watering can, because the same wilt has two opposite causes.',
@@ -544,12 +544,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Aloe Vera',
     scientificName: 'Aloe vera',
     alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
-    related: ['jade-plant', 'snake-plant', 'christmas-cactus'],
+    related: ['jade-plant', 'snake-plant', 'haworthia'],
     metaTitle: 'Aloe Vera Care: How Often to Water + Is It Pet-Safe?',
     metaDescription:
       'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
     reviewed: '2026-06-17',
-    updated: '2026-10-19',
+    updated: '2026-10-22',
     summary:
       'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
@@ -567,7 +567,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       light: [
         'Aloe wants the brightest spot you’ve got — a sunny south or west window is ideal, and it’ll take a few hours of direct sun happily once it’s used to it. In a dim corner it stretches, pales, and flops, with leaves splaying outward instead of standing up.',
-        'If you move it from indoors into strong outdoor sun suddenly, it can sunburn (brown or reddish patches). Step it up gradually over a week or two. Indoors, a bright windowsill is hard to beat.',
+        'If you move it from indoors into strong outdoor sun suddenly, it can sunburn (brown or reddish patches). Step it up gradually over a week or two. Indoors, a bright windowsill is hard to beat. A smaller rosette that looks like a miniature aloe, the [haworthia](/care/haworthia), wants a gentler east or west window.',
       ],
       problems: [
         'Mushy, translucent, or brown leaves at the base mean overwatering and rot — by far the most common way aloe dies. Stop watering, let it dry out hard, and repot into gritty mix if the soil stays wet. Soft leaves are almost never thirst.',
@@ -1081,12 +1081,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Jade Plant',
     scientificName: 'Crassula ovata',
     alsoKnownAs: ['Money Plant', 'Lucky Plant', 'Friendship Tree', 'Crassula'],
-    related: ['aloe-vera', 'christmas-cactus', 'snake-plant'],
+    related: ['aloe-vera', 'burros-tail', 'snake-plant'],
     metaTitle: 'Jade Plant Care: How Often to Water (Less Than You Think)',
     metaDescription:
       'How often to water a jade plant, the light it needs, why the leaves drop or wrinkle, and why it is not a pet-safe choice.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-22',
     summary:
       'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
     quickFacts: {
@@ -1103,7 +1103,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       light: [
         'Jade wants real light — several hours of direct sun a day if you can manage it. A south or west windowsill is ideal. Good light keeps the growth compact and can bring out a red blush on the leaf edges, which is a sign of a happy plant rather than a stressed one.',
-        'In low light it stretches: long floppy stems, widely spaced leaves, and a plant that leans toward the window until it eventually tips over. If yours has gone lanky, that’s a light problem, and no amount of water or feeding will fix it.',
+        'In low light it stretches: long floppy stems, widely spaced leaves, and a plant that leans toward the window until it eventually tips over. If yours has gone lanky, that’s a light problem, and no amount of water or feeding will fix it. Two smaller succulents with their own guides, the [burro’s tail](/care/burros-tail) and the [blue echeveria](/care/blue-echeveria), want the same bright window.',
       ],
       problems: [
         'Leaves dropping at the slightest touch is the classic overwatering signal, and so are soft, yellowing, translucent leaves at the base. Stop watering entirely, let it dry out hard, and it usually recovers — jade is remarkably resilient once the soil is dry again.',
@@ -1337,12 +1337,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Christmas Cactus',
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
-    related: ['orchid', 'jade-plant', 'poinsettia'],
+    related: ['blue-echeveria', 'jade-plant', 'poinsettia'],
     metaTitle: 'Christmas Cactus Care: Watering + How to Make It Bloom',
     metaDescription:
       'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
     reviewed: '2026-09-02',
-    updated: '2026-10-21',
+    updated: '2026-10-22',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1589,12 +1589,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Nerve Plant',
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
-    related: ['calathea', 'boston-fern', 'african-violet'],
+    related: ['calathea', 'begonia', 'african-violet'],
     metaTitle: 'Nerve Plant Care: Why It Keeps Fainting + Pet Safety',
     metaDescription:
       'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
     reviewed: '2026-09-02',
-    updated: '2026-10-21',
+    updated: '2026-10-22',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1611,7 +1611,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       light: [
         'Medium, indirect light. Fittonia grows on the rainforest floor and burns in direct sun, so a north or east window, or a shaded spot in a brighter room, is what it wants. Under a desk lamp or a grow light works well too.',
-        'Too little light makes it leggy and washes out the pink or white veining that is the entire point of the plant. If yours has gone sparse and dull, move it somewhere brighter but keep it out of the sun beam.',
+        'Too little light makes it leggy and washes out the pink or white veining that is the entire point of the plant. If yours has gone sparse and dull, move it somewhere brighter but keep it out of the sun beam. Another plant that wants humid air and gentle light, the [begonia](/care/begonia), has its own guide.',
       ],
       problems: [
         'A collapsed, flat plant means it’s thirsty. Water it thoroughly and check again in a few hours. If it doesn’t stand back up after a good soak, look at the roots — sitting wet causes rot, which produces exactly the same wilting.',
@@ -1892,6 +1892,318 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'Is an asparagus fern a true fern?',
         a: 'No. It belongs to the asparagus family and reproduces by seed and division rather than spores. That is why it is treated separately from a Boston fern.',
+      },
+    ],
+  },
+  {
+    slug: 'haworthia',
+    commonName: 'Haworthia',
+    scientificName: 'Haworthia',
+    alsoKnownAs: ['Haworthia species'],
+    related: ['aloe-vera', 'jade-plant', 'snake-plant'],
+    metaTitle: 'Haworthia Care: Watering, Light + Pet Safety',
+    metaDescription:
+      'How often to water a haworthia, the light it wants, why it stretches or shrivels, and why the ASPCA lists it as non-toxic to cats and dogs.',
+    reviewed: '2026-10-22',
+    updated: '2026-10-22',
+    summary:
+      'Haworthia is a small, slow rosette of thick, pointed leaves that looks like a miniature aloe and asks for even less. It wants a bright window, a fast-draining mix and a dry spell between waterings. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water:
+        'Weekly in summer if the mix drains well, less in winter; let it dry between waterings',
+      light: 'An east or west window with a few hours of direct light a day, or plant lights',
+      difficulty: 'Easy: wet soil is the main way to lose one',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'No figure in the extension source; average household air is what it is grown in',
+    },
+    sections: {
+      watering: [
+        'Water a haworthia and then let the potting mix dry before you water again. University of Wisconsin–Madison Extension says that in a well-drained mix a haworthia can be watered weekly in the summer, and less often in winter. The roots dislike staying wet, and prolonged wet soil can lead to root rot.',
+        'Drainage matters as much as the schedule. Use a pot with a drainage hole and a mix that drains quickly: the same source suggests blending commercial potting mix with equal parts perlite, aquarium gravel, poultry grit or pumice, and advises against sand. When you repot, which it puts at every two to three years, choose a pot about the same volume as the root system.',
+      ],
+      light: [
+        'The extension guidance is an east or west window with a few hours of direct light each day. A south window can also work if the sun is filtered, and haworthias grow well under plant lights.',
+        'Too little light shows up as leaves that stretch out and lose color. If your plant is getting longer and paler instead of staying a tight rosette, it wants a brighter spot.',
+      ],
+      problems: [
+        'Root rot is the serious one. It follows poor drainage or too much water, and the signs the extension source lists are growth that stops and leaves that shrivel. A shriveled haworthia in wet soil needs less water, not more, so check the roots before you reach for the can.',
+        'Mealybugs, which look like small cottony masses in the joints of leaves and stems, can be picked off by hand or treated with rubbing alcohol on a cotton swab. Stretched, pale growth means the light is too low.',
+        'Temperature is forgiving. The Wisconsin source gives an optimum of 75 to 90°F and says a haworthia can tolerate temperatures into the low 40s °F as long as the soil is not continuously wet.',
+      ],
+      propagation: [
+        'Most haworthias grow in a cluster, producing small new plants, called offsets, from the base. These offsets are the easy way to make more.',
+        'The Wisconsin source also describes leaf propagation: cut a mature leaf with a little stem tissue and let the wound dry before you pot it. Seed is possible but slow, so offsets are the practical method.',
+      ],
+      sharedCare: [
+        'In a shared home, a haworthia suits a household where watering is one person’s weekly job, since several people each adding a splash is how a succulent ends up in wet soil.',
+        'The ASPCA lists it as non-toxic to cats and dogs. It looks like a small [aloe vera](/care/aloe-vera), though, and the ASPCA lists aloe as toxic to cats and dogs, so check which plant you actually own before you tell a housemate it is fine to leave on the floor.',
+      ],
+      honestBit: [
+        'My take: a haworthia is a good first succulent for a bright desk or sill, and a bad one for anyone who waters on a schedule without looking at the soil.',
+        'The ASPCA lists haworthia (Haworthia species) as non-toxic to cats and dogs. That listing covers haworthia, not the aloe it resembles. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for haworthia](/pet-safe/haworthia) shows the listing, and the [free pet-safe checker](/pet-safe) covers your other plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a haworthia?',
+        a: 'In a well-drained mix, about weekly in summer and less in winter, and always after the mix has dried. University of Wisconsin–Madison Extension gives that range and warns that prolonged wet soil leads to root rot.',
+      },
+      {
+        q: 'Why is my haworthia stretching or losing color?',
+        a: 'Usually too little light. Move it to an east or west window with a few hours of direct light a day, or put it under a plant light.',
+      },
+      {
+        q: 'What is the difference between a haworthia and a small aloe?',
+        a: 'They look alike from a distance, but they are different plants with different ASPCA listings. If yours is an aloe, read the aloe vera guide instead.',
+      },
+    ],
+  },
+  {
+    slug: 'burros-tail',
+    commonName: 'Burro’s Tail',
+    scientificName: 'Sedum morganianum',
+    alsoKnownAs: ['Donkey’s Tail', 'Sedum morganianum'],
+    related: ['jade-plant', 'aloe-vera', 'christmas-cactus'],
+    metaTitle: 'Burro’s Tail Care: Watering, Light + Pet Safety',
+    metaDescription:
+      'How to water burro’s tail, the light it needs, why the leaves fall off, and why the ASPCA lists it as non-toxic to cats and dogs.',
+    reviewed: '2026-10-22',
+    updated: '2026-10-22',
+    summary:
+      'Burro’s tail is a succulent with long, trailing stems of plump, blue-green leaves, grown in a hanging pot. It wants sun and a long dry spell, and its leaves fall off at a touch. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Let the soil dry out between waterings; water less in winter',
+      light: 'A sunny windowsill with at least partial sun',
+      difficulty: 'Easy to grow, easy to damage: the leaves break off when handled',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'No figure in the sources; it is a drought-tolerant succulent',
+    },
+    sections: {
+      watering: [
+        'North Carolina State Extension’s plant database says to let the soil dry out between waterings, to use tepid water, and to water less in winter. The plant is drought-tolerant because its leaves store water.',
+        'It needs a well-drained mix and does not tolerate wet or poorly drained conditions. South Dakota State University Extension’s general succulent advice is the same cycle: water until it runs from the drainage hole, let every drop drain away, and wait until the soil is completely dry before watering again.',
+      ],
+      light: [
+        'The North Carolina source recommends high light indoors, such as a windowsill with at least partial sun. For succulents in general, South Dakota State University Extension recommends at least six to eight hours of light, from a south or west window or from a plant light.',
+        'If the stems get long and lanky with wide gaps between leaves, the plant is not getting enough light. Rotate the pot now and then so one side does not lean toward the window.',
+      ],
+      problems: [
+        'Dropped leaves are usually handling, not disease. North Carolina State Extension says the leaves are quite delicate, do not tolerate heavy foot traffic and will break off if manipulated. Hang or place the pot where nobody has to brush past it.',
+        'Mushy, yellowing leaves point to too much water. The same source lists no serious disease or insect problems apart from occasional slugs and snails outdoors, and it says to avoid wet or poorly drained conditions. Mealybugs, which look like small cottony masses, are a general succulent pest and can be treated with rubbing alcohol.',
+        'It is a warm-climate plant. The North Carolina source lists USDA zones 10 and 11 and says it tolerates temperatures down to 40°F outdoors, so keep it indoors in a cold climate.',
+      ],
+      propagation: [
+        'This is one of the easy plants to multiply. North Carolina State Extension says cuttings and dropped leaves root easily, and lists division, leaf cuttings and stem cuttings as methods.',
+        'That makes the fallen leaves worth keeping. Set them on a well-drained succulent mix and leave them to root, rather than sweeping them away.',
+      ],
+      sharedCare: [
+        'In a shared household, a burro’s tail needs a house rule about handling, because the leaves are delicate and fall off whenever someone brushes past or moves the pot.',
+        'The ASPCA lists it as non-toxic to cats and dogs. Do not let that carry over to the [jade plant](/care/jade-plant), another common succulent, which the ASPCA lists as toxic to cats and dogs. A long trailing stem at paw height is also an invitation to bat, and a fallen leaf on the floor is easy to miss.',
+      ],
+      honestBit: [
+        'My take: burro’s tail looks right hung where nobody touches it, and it punishes the person who moves it every week to get a better photo.',
+        'The ASPCA lists burro’s tail (Sedum morganianum) as non-toxic to cats and dogs. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for burro’s tail](/pet-safe/burros-tail) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a burro’s tail?',
+        a: 'When the soil has dried out completely, and less in winter. North Carolina State Extension’s advice is to let the soil dry between waterings, and it gives no fixed number of days.',
+      },
+      {
+        q: 'Why do the leaves fall off my burro’s tail?',
+        a: 'Most often because it was touched or moved. The leaves are delicate and break off when manipulated. Wet soil and poor drainage are the other causes to rule out.',
+      },
+      {
+        q: 'Can I grow a new burro’s tail from the leaves that fell?',
+        a: 'Yes. North Carolina State Extension says cuttings and dropped leaves root easily, so keep them on a well-drained succulent mix.',
+      },
+    ],
+  },
+  {
+    slug: 'blue-echeveria',
+    commonName: 'Blue Echeveria',
+    scientificName: 'Echeveria glauca',
+    alsoKnownAs: ['Echeveria glauca'],
+    related: ['jade-plant', 'aloe-vera', 'christmas-cactus'],
+    metaTitle: 'Blue Echeveria Care: Watering, Light + Pet Safety',
+    metaDescription:
+      'How to water a blue echeveria, the light it needs, why it stretches, and why the ASPCA lists this species as non-toxic to cats and dogs.',
+    reviewed: '2026-10-22',
+    updated: '2026-10-22',
+    summary:
+      'Blue echeveria is a tight rosette of blue-gray leaves that holds its shape in strong light and loses it in weak light. It rots in wet soil and stretches in a dim room. The ASPCA lists this species as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Water thoroughly, then let the soil dry completely; about weekly or less',
+      light: 'Full sun, six or more hours, or a south or west window with a plant light',
+      difficulty: 'Moderate: it needs more light than most houseplants',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'No figure in the sources; it is a dry-air succulent',
+    },
+    sections: {
+      watering: [
+        'North Carolina State Extension’s plant database says not to over-water these plants, to prevent root rot, and to plant them in conditions with good drainage that are occasionally dry. South Dakota State University Extension’s general succulent rule fits: water until it runs from the drainage hole, let every drop drain away, then wait until the soil is completely dry.',
+        'South Dakota State puts the frequency for indoor succulents at once a week or less, depending on how quickly the soil dries, and says to water less in fall and winter. Overwatering is one of the most common ways they die.',
+      ],
+      light: [
+        'The North Carolina source lists full sun, meaning six or more hours of direct sun a day, or partial shade with two to six hours. South Dakota State recommends at least six to eight hours of light for succulents indoors, from a southern or western window, with artificial light to make up a shortfall.',
+        'A rosette that opens out and grows long and lanky is asking for more light. Rotate the pot often so it does not lean.',
+      ],
+      problems: [
+        'Soft, mushy, yellowing leaves mean the roots are wet. Cut back on water, make sure the pot drains, and use a mix that drains faster than regular potting soil: South Dakota State suggests one part potting soil to one part coarse sand, pumice or perlite.',
+        'The two sources differ on feeding. North Carolina State says not to over-water or fertilize these plants. South Dakota State says succulents can be fed in spring and summer, every three to four waterings, with a water-soluble fertilizer at half the label rate. If you are unsure, feed less rather than more.',
+        'Mealybugs look like small cottony masses in the joints of leaves and stems, and rubbing alcohol treats them. The North Carolina source lists no significant disease or insect problems.',
+      ],
+      propagation: [
+        'North Carolina State Extension says the plant readily makes offsets that can be propagated when they are large enough, and lists division, leaf cuttings, stem cuttings, root cuttings and seed as methods.',
+        'The practical method indoors is to wait until an offset is big enough to handle, then pot it in a well-drained succulent mix.',
+      ],
+      sharedCare: [
+        'In a shared household, a blue echeveria is a plant for the sunniest sill and one named waterer, because it wants a long dry spell that a helpful housemate with a watering can will interrupt.',
+        'The ASPCA lists this species, Echeveria glauca, as non-toxic to cats and dogs. It is a listing for one species, so do not read it as a verdict on succulents in general: the ASPCA lists the [jade plant](/care/jade-plant) and aloe as toxic to cats and dogs.',
+      ],
+      honestBit: [
+        'My take: echeveria is a plant for a window that gets real sun. In a dim room it slowly turns into a stretched, pale version of itself, and no schedule fixes that.',
+        'The ASPCA lists blue echeveria (Echeveria glauca) as non-toxic to cats and dogs. The listing names this one species, so a differently named echeveria needs its own check. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for blue echeveria](/pet-safe/blue-echeveria) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a blue echeveria?',
+        a: 'About once a week or less, and after the soil has dried completely, not before. Water less in fall and winter. South Dakota State University Extension gives that range for indoor succulents.',
+      },
+      {
+        q: 'How much light does a blue echeveria need indoors?',
+        a: 'A lot: six or more hours of direct sun, or a south or west window with a plant light. In less light the rosette stretches and loses its shape.',
+      },
+      {
+        q: 'Can a blue echeveria live outdoors?',
+        a: 'In a warm climate. North Carolina State Extension lists USDA zones 9 through 12 and says it will not survive a hard frost.',
+      },
+    ],
+  },
+  {
+    slug: 'begonia',
+    commonName: 'Begonia',
+    scientificName: 'Begonia',
+    alsoKnownAs: ['Begonia spp.', 'Rex Begonia', 'Cane Begonia', 'Wax Begonia'],
+    related: ['nerve-plant', 'african-violet', 'calathea'],
+    metaTitle: 'Begonia Care: Watering, Light + Pet Safety',
+    metaDescription:
+      'How to water a houseplant begonia, the light and humidity it wants, why leaves go bad, and why the ASPCA lists it as toxic to cats and dogs.',
+    reviewed: '2026-10-22',
+    updated: '2026-10-22',
+    summary:
+      'Begonia is a large genus, and the ones sold as houseplants range from striped rex leaves to cane-stemmed angel wings and wax begonias in bloom. They agree on a bright spot without hot sun, evenly moist soil and humid air. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Keep evenly moist, drying a little between waterings; less in winter',
+      light: 'A bright spot away from hot direct sun; early morning sun is fine',
+      difficulty: 'Moderate: humidity and watering both need attention',
+      toxicity:
+        'Toxic to cats and dogs (per the ASPCA); vomiting and drooling; the most toxic part is underground',
+      humidity: 'Humid air; spray the air around it rather than misting the leaves',
+    },
+    sections: {
+      watering: [
+        'Clemson Cooperative Extension’s advice for indoor begonias is to keep the soil evenly moist, allowing it to dry a little between waterings, to reduce water in winter, and never to let the pot sit in a saucer of water. University of Minnesota Extension adds that begonias are highly susceptible to root rot, and that by the time the symptoms show it is usually too late to cure.',
+        'Water at the base of the plant when you can. Minnesota Extension recommends it to avoid fungal leaf diseases.',
+      ],
+      light: [
+        'The two extension sources agree on the principle and differ on the amount. Clemson puts flowering begonias in a bright spot that gets some direct sun, such as early morning sun in an east window, and puts foliage begonias such as rex types in a bright spot away from direct sun. University of Minnesota Extension says begonias prefer shade over direct sun, tolerate morning sun, and should avoid afternoon sun.',
+        'The sensible reading is that rex and other foliage types want the gentler end of that range, and flowering types can take a little morning sun.',
+      ],
+      problems: [
+        'Humidity is the common trouble indoors. Clemson says a humid environment is needed but misting is not recommended, and advises spraying the surrounding air instead. For foliage begonias it gives a temperature of 66 to 73°F, with nights not dropping below 55°F.',
+        'The pests Clemson lists are mealybugs, whiteflies and spider mites, and it says diseases are an infrequent problem in the home. Minnesota Extension names powdery mildew and says good air circulation helps prevent leaf diseases.',
+        'Feed with a balanced liquid fertilizer at half strength on alternate waterings, as Clemson advises, and repot in spring.',
+      ],
+      propagation: [
+        'University of Minnesota Extension says begonias are easily propagated by cuttings in about three to four weeks. Take a 2 to 3 inch section, strip the lower leaves, stand it in water until roots form, then pot it.',
+        'Clemson adds that a begonia that has become pot-bound can be divided when you repot it in spring.',
+      ],
+      sharedCare: [
+        'In a shared household, a begonia needs one person who watches the soil and the humidity, because the two things it dislikes are opposites: soggy soil and dry air.',
+        'Because the ASPCA lists it as toxic to cats and dogs, keep the pot where the animals do not dig or chew. The ASPCA says the most toxic part is underground, which is a reason to keep a pet out of the soil as well as off the leaves.',
+      ],
+      honestBit: [
+        'My take: begonia is a name for hundreds of plants, and the advice on a tag for one type is not always right for another. Find out whether yours is a rex, a cane or a wax begonia before you copy a schedule.',
+        'The ASPCA lists begonia (Begonia spp.) as toxic to cats and dogs. It names soluble calcium oxalates, lists vomiting and drooling in dogs and cats, mentions kidney failure in grazing animals, and says the most toxic part is underground. University of Minnesota Extension also calls begonias toxic to cats and dogs. If a pet has eaten some, call your vet or a poison hotline. The [pet-safety page for begonia](/pet-safe/begonia) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a begonia?',
+        a: 'When the top of the soil has dried slightly, keeping it evenly moist and never soggy, and less in winter. Clemson Cooperative Extension gives that rule for indoor begonias.',
+      },
+      {
+        q: 'Why are my begonia’s leaf edges turning brown?',
+        a: 'Dry air is the usual suspect, since begonias need a humid environment. Clemson advises spraying the air around the plant rather than misting the leaves. Uneven watering is the other thing to check.',
+      },
+      {
+        q: 'Which kinds of begonia does this guide cover?',
+        a: 'The common houseplant types: rex and other foliage begonias, cane-stemmed begonias and wax begonias. Tuberous begonias are grown from tubers that are dug up and stored in the fall, so their care is different.',
+      },
+    ],
+  },
+  {
+    slug: 'lily',
+    commonName: 'True Lily',
+    scientificName: 'Lilium',
+    alsoKnownAs: ['Easter Lily', 'Lilium longiflorum'],
+    related: ['peace-lily', 'anthurium', 'orchid'],
+    metaTitle: 'Lily Care: Easter Lily Indoors + Cat Safety',
+    metaDescription:
+      'How to keep a potted Easter lily indoors, what to do after it blooms, and why the ASPCA lists lilies as toxic to cats and non-toxic to dogs.',
+    reviewed: '2026-10-22',
+    updated: '2026-10-22',
+    summary:
+      'A potted Easter lily is a gift plant that blooms once indoors for a few weeks, then goes outdoors if you want to keep it. Care is simple. The risk is not: the ASPCA lists lilies as toxic to cats and non-toxic to dogs, and a lily is dangerous to a cat.',
+    quickFacts: {
+      water: 'When the soil surface feels dry; water until it drains, then empty the cover',
+      light: 'Bright light, out of direct sun',
+      difficulty: 'Easy to keep for a few weeks; keeping one for years means planting it outdoors',
+      toxicity:
+        'Cats: toxic (per the ASPCA); kidney failure, and a cat that touches any part needs a vet at once. Dogs: non-toxic',
+      humidity: 'Not covered by the extension sources; keep it away from drafts and heat vents',
+    },
+    sections: {
+      watering: [
+        'Iowa State University Extension says to water an Easter lily when the soil surface becomes dry to the touch, and to water until it flows out the bottom of the pot, then let it drain before it goes back into its decorative cover. Nebraska Extension in Lancaster County says the same: wait until the soil feels dry to the touch before watering, and do not overwater.',
+        'A pot wrapped in decorative foil is easy to leave standing in water, so lift it out and let it drain each time.',
+      ],
+      light: [
+        'Both extension sources want bright light without direct sun. Iowa State gives daytime temperatures of 65 to 70°F with slightly cooler nights, and Nebraska gives 65 to 75°F by day. Keep the plant away from drafts and from drying heat sources such as appliances and heating ducts.',
+        'Nebraska adds that removing the yellow anthers, the pollen-bearing pods in the center of each flower, prolongs the life of the blossoms. Iowa State says to do it before the pollen starts to shed, which also prevents the pollen staining the petals.',
+      ],
+      problems: [
+        'The extension sources cover how to keep the plant, not what goes wrong with it. The thing to know about a lily in a house is the risk to a cat, set out in the pet section below.',
+        'Remove flowers as they wither. Iowa State says that after flowering the plant can be discarded or saved and planted outdoors in the perennial garden.',
+      ],
+      propagation: [
+        'The sources do not describe making more plants from a pot. They describe what to do after the bloom if you want to keep the plant: Nebraska says to plant the Easter lily outdoors as soon as the ground can be worked, in a sunny site with well-drained soil, with the top of the bulb 6 inches below the surface.',
+        'Do not cut the stem back until it dies down in the fall, and after the soil surface freezes in late fall, mulch it and leave the mulch until new growth begins in spring.',
+      ],
+      sharedCare: [
+        'In a shared household, a lily needs everyone to know it is a danger to the cat, because a bouquet or a pot that a housemate brings home as a gift is exactly how it arrives.',
+        'Because the ASPCA lists it as toxic to cats, do not keep it in a home with a cat, and tell visitors who bring flowers. The ASPCA lists it as non-toxic to dogs. A [peace lily](/care/peace-lily) is a different plant with its own listing, so look it up on its own page.',
+      ],
+      honestBit: [
+        'My take: if you share your home with a cat, do not bring in an Easter lily, however well it would do on your table. There is no care tip that makes it a safe plant for a cat.',
+        'The ASPCA lists lily (Lilium species) as toxic to cats and non-toxic to dogs, with kidney failure as the sign for cats. Its separate listing for Easter lily (Lilium longiflorum) names vomiting, inappetence, lethargy and kidney failure in cats, says death is possible, and says cats are the species known to be affected. Purdue University’s veterinary college says the entire lily plant is toxic to cats, including the pollen and the water in a vase, that early signs can appear within minutes up to 12 hours, and that kidney failure develops within 24 to 72 hours. If a cat has had any contact, call your vet or a poison hotline immediately. For dogs, the ASPCA lists lily as non-toxic, and Purdue, quoting the FDA, says a dog may have minor stomach upset but does not develop kidney failure. The [pet-safety page for lily](/pet-safe/lily) shows the listing, and the [free pet-safe checker](/pet-safe) covers your other plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an Easter lily?',
+        a: 'When the soil surface feels dry to the touch, then until water runs out of the bottom, letting it drain before it goes back in its cover. Do not overwater. That is the advice of Iowa State University Extension and Nebraska Extension.',
+      },
+      {
+        q: 'What do I do with an Easter lily after it blooms?',
+        a: 'Remove the spent flowers, then either discard it or plant it outdoors in a sunny, well-drained spot as soon as the ground can be worked. Do not cut the stem back until it dies down in the fall.',
+      },
+      {
+        q: 'Is a peace lily or a calla lily a true lily?',
+        a: 'No. A peace lily is a different plant with its own care guide and its own ASPCA listing. This guide covers the true lily, the genus Lilium.',
       },
     ],
   },

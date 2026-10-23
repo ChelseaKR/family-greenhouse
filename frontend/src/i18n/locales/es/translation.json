@@ -2060,6 +2060,7 @@
     "openTasks": "Abrir la lista de tareas →"
   },
   "pricing": {
+    "monthlyPriceLine": "Garden cuesta ${{garden}} al mes y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",
     "intervalYearly": "Anual",
@@ -2408,7 +2409,9 @@
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
     "registerCta": "Crear una cuenta gratuita",
-    "navLink": "Regalar una suscripción"
+    "navLink": "Regalar una suscripción",
+    "unavailableHeading": "Los regalos aún no están disponibles",
+    "unavailableBody": "Todavía no hemos abierto las suscripciones de regalo, así que ahora mismo no hay nada que comprar aquí. Vuelve más tarde; esta página ofrecerá regalos en cuanto estén a la venta."
   },
   "caretaker": {
     "seats": {
@@ -2697,7 +2700,8 @@
       "body": "Las guías de cuidado te cuentan con honestidad lo que la etiqueta del vivero no dice: cada cuánto necesita agua de verdad, qué te quieren decir las puntas cafés y si es segura cerca de un gato o de un niño curioso. Vale la pena leerlas antes de que la planta llegue a casa.",
       "startWithGuide": "Empieza con una guía",
       "allGuides": "Todas las guías de cuidado (en inglés)",
-      "readBlog": "Lee el blog (en inglés)"
+      "readBlog": "Lee el blog (en inglés)",
+      "petSafeChecker": "Revisa una planta para mascotas"
     },
     "plans": {
       "eyebrow": "Planes",
@@ -2734,6 +2738,7 @@
       "legal": "Aviso legal",
       "contact": "Contacto",
       "plantCareGuides": "Guías de cuidado de plantas",
+      "petSafeChecker": "Verificador de plantas seguras para mascotas",
       "copyright": "© {{year}} Family Greenhouse. Todos los derechos reservados."
     }
   },

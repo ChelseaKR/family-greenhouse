@@ -16,6 +16,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **The Gift link and the `/gift` page no longer advertise gifts that cannot be
+  bought.** Production has no gift price ids yet, so a signed-in buyer who
+  pressed "Buy gift" got a `GIFT_NOT_CONFIGURED` error. The footer, the landing
+  page header and footer and the pricing page now show the Gift link only when
+  `GET /billing/plans` says a gift tier is available (the same check the
+  checkout route runs), and `/gift` says "Gifts are not available yet" instead
+  of the steps and the sign-in prompt. When the price ids are set the link and
+  the page come back with no further change. Nothing in the billing code
+  changed.
+
 - **The gate now preflights the iOS and Android projects for store rejections.**
   A `greenlight` step in `npm run verify` and the `Lint` job runs Greenlight
   v0.2.0 (pinned by commit and module hash, built once with `go install`) as

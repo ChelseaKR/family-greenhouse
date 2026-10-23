@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { isNativeApp } from '@/lib/platform';
 import { billingService } from '@/services/billingService';
 import { PaidPlanGrid } from './PaidPlanGrid';
+import { PLAN_PRICES, offeredPrices } from './planPrices';
 
 /**
  * Public plan surface.
@@ -55,6 +56,49 @@ interface PricingGridProps {
   publishedFooter?: React.ReactNode;
 }
 
+/**
+ * The monthly prices, in words, while the catalog is still on its way.
+ *
+ * Why this exists: the grid below is filled from `GET /billing/plans`, so the
+ * prerendered /pricing HTML (written at build time) and the first paint held
+ * a spinner and no dollar amount at all. A crawler that runs no JavaScript,
+ * and a person who has not waited for the request, read a pricing page with
+ * no price on it (measured on the live page, 2026-10-23: no `$` in the body
+ * text, while the JSON-LD carried 4.99).
+ *
+ * Where the number comes from: `PLAN_PRICES`, the mirror of
+ * `backend/src/models/plans.ts` that the /pricing structured data already
+ * uses and that `planPrices.test.ts` holds equal to the backend catalog. A
+ * cadence the catalog has withdrawn (annual, lifetime) is never named, because
+ * `offeredPrices` leaves it out.
+ *
+ * Why it is safe: it renders only here, inside `PublishedPlanCatalog`, which
+ * is only reached when the repository hold is off, and only while the query is
+ * in flight. The moment the API answers, this line is gone: the amounts come
+ * from the response, and an unavailable or failed catalog renders the
+ * fail-closed notice with no amount on screen. It is also the markup the
+ * client's first render produces, so hydration matches.
+ */
+function LoadingPriceLine() {
+  const { t } = useTranslation();
+  const monthly = (id: 'garden' | 'greenhouse') => {
+    const plan = PLAN_PRICES.find((candidate) => candidate.id === id);
+    const offer = plan && offeredPrices(plan).find((o) => o.interval === 'month');
+    return offer ? offer.amount.toFixed(2) : null;
+  };
+  const garden = monthly('garden');
+  const greenhouse = monthly('greenhouse');
+  if (garden === null || greenhouse === null) return null;
+  return (
+    <p
+      data-testid="plan-price-line"
+      className="mx-auto mt-10 max-w-2xl text-center text-base leading-7 text-gray-800"
+    >
+      {t('pricing.monthlyPriceLine', { garden, greenhouse })}
+    </p>
+  );
+}
+
 function PublishedPlanCatalog({ publishedFooter }: PricingGridProps) {
   const { t } = useTranslation();
   const plansQuery = useQuery({
@@ -64,9 +108,12 @@ function PublishedPlanCatalog({ publishedFooter }: PricingGridProps) {
 
   if (plansQuery.isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
+      <>
+        <LoadingPriceLine />
+        <div className="flex justify-center py-12">
+          <LoadingSpinner size="lg" />
+        </div>
+      </>
     );
   }
 
