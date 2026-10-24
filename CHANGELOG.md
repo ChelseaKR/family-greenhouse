@@ -16,38 +16,65 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-10-24
+
+**The free Seedling plan is now 8 plants and 2 people; households created
+before 2026-10-24 00:00 Pacific keep 20 and 3.** A new household can add its
+first plant with one tap, from the first run or from an empty dashboard, and a
+free household planning a trip is shown what Garden adds. The eight most-seen
+pet-safety pages quote their ASPCA listing and a second extension source. The
+Terms of Service changed (the free limits), so their effective date is this
+release's.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  or `.github/` changed since 0.44.0, so the changes are the 19 Lambda
+  `GIT_SHA` updates: expect `Plan: 0 to add, 19 to change, 0 to destroy.`
+  Anything else means stop. No stored data is migrated: the limits rule reads
+  each household row's own `createdAt`.
+- **The limits cutoff is already in the past when this ships.** The cutoff
+  is fixed at 2026-10-24 00:00 Pacific (`SEEDLING_LIMITS_CUT_AT`), so a free
+  household created earlier today, before the deploy, gets 8 and 2 once this
+  release is live. Tag it today; a later tag widens that window.
+- **The Terms effective date is October 24, 2026 (release 0.45.0).** The
+  Terms text changed in #1044 (the free limits), so
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** No native iOS or Android code changed. The next store upload
+  is 0.45.0, build 4500.
+
 ### Added
 
-- **The houseplant shortcut on an empty dashboard.** A household with no
+- **The houseplant shortcut on an empty dashboard (#1043).** A household with no
   plants now sees the same one-tap common-houseplant grid in the dashboard's
   "Your plants" card, with a link to the full Add Plant page beside it. It
   shows only to a member of the household and only on a settled empty read.
   GA4 `first_plant_added` reports these taps as `dashboard_empty`.
 
-- **Pick a common houseplant in the first run.** The first screen after
+- **Pick a common houseplant in the first run (#1041).** The first screen after
   creating a household now opens with ten common houseplants from the care
   guides. One tap saves the plant with its scientific name as the species and
   a watering reminder at the low end of its guide's range, starting one
   interval out. The typed form, the full Add Plant page and Skip are all still
   there. Plant names are in English and Spanish. Measured before this: 37 of
   43 households had never added a plant.
-- **"Going away?" on the sitter-link form.** A free household that types a
+- **"Going away?" on the sitter-link form (#1041).** A free household that types a
   link longer than its plan allows, already has its one live link, or arrives
   from the dashboard is shown what Garden adds for a trip (longer and more
   links, the printable brief, sitter photos, the return recap) with the
   catalog's monthly price and a button to Settings → Billing. A member gets
   the existing ask-an-admin button, and the apps show no price. The free
   7-day link is never blocked: the prompt offers to set the length back.
-- **"Going away soon?" on the dashboard.** A dismissible card that leads to
+- **"Going away soon?" on the dashboard (#1041).** A dismissible card that leads to
   the sitter-link form, shown when the household has plants and no live link.
-- **GA4 `first_plant_added`**, beside `household_activated`, with only how
+- **GA4 `first_plant_added` (#1041)**, beside `household_activated`, with only how
   the first plant was added (`common_plant`, `typed` or `full_form`). Same
   consent rules as every other GA4 event.
 
 ### Changed
 
 - **The free Seedling plan is 8 plants and 2 people, and existing households
-  keep 20 and 3.** The owner's decision of 2026-10-23 (ADR 0040), after the
+  keep 20 and 3 (#1044).** The owner's decision of 2026-10-23 (ADR 0040), after the
   outside households turned out to hold 5 to 9 plants with one or two people.
   A household whose row was created before `SEEDLING_LIMITS_CUT_AT`
   (2026-10-24 00:00 Pacific) keeps 20 plants and 3 members while it is on
@@ -62,9 +89,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   household's own caps, and a refused join tells the joiner to ask the person
   who invited them. Every public statement of the free limits (landing, sign-up,
   pricing, FAQ, help, blog, care guides, page metadata, the social card, and
-  the Terms) says 8 and 2 in English and Spanish. The Terms text changed, so
-  its effective date is `UNRELEASED` until the release that ships it. Garden
-  and Greenhouse are unchanged.
+  the Terms) says 8 and 2 in English and Spanish. The Terms text changed, and
+  takes effect with this release. Garden and Greenhouse are unchanged.
+- **The eight most-seen pet-safety pages go deeper (#1042).** Aloe vera,
+  snake plant, peace lily, spider plant, pothos, Christmas cactus, monstera
+  and bird of paradise now quote their ASPCA listing's toxic principles and
+  clinical signs word for word, show a horse verdict where the listing states
+  one, add NC State Extension's Plant Toolbox as a second source, list similar
+  plants with cited non-toxic verdicts and related plants with their own
+  verdicts, and answer common questions in an FAQ. Everything new comes from
+  the pet-toxicity table, and a build check rebuilds each element from it. A
+  second source can only agree with an ASPCA non-toxic verdict, never supply
+  one. The hotline box stays first.
 
 ## [0.44.0] - 2026-10-23
 
