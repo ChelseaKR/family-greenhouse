@@ -615,6 +615,48 @@ describe('conversion events', () => {
     }
   );
 
+  it('sends first_plant_added with only how the plant was added', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    for (const method of ga.FIRST_PLANT_METHODS) {
+      ga.trackGoogleConversion({
+        name: 'first_plant_added',
+        method,
+        slug: 'snake-plant',
+        plantName: 'Fern Gully',
+      } as never);
+    }
+    expect(conversions()).toEqual([
+      ['event', 'first_plant_added', { method: 'common_plant', page_location }],
+      ['event', 'first_plant_added', { method: 'typed', page_location }],
+      ['event', 'first_plant_added', { method: 'full_form', page_location }],
+      ['event', 'first_plant_added', { method: 'dashboard_empty', page_location }],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/snake|Fern/u);
+  });
+
+  it('drops a first_plant_added whose method is not on the closed list (negative control)', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    // Positive control first, so an empty result below means the check, not
+    // a harness that sends nothing.
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
+    expect(conversions()).toHaveLength(1);
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'Snake plant' } as never);
+    ga.trackGoogleConversion({ name: 'first_plant_added' } as never);
+    expect(conversions()).toHaveLength(1);
+  });
+
+  it('sends no first_plant_added under Global Privacy Control', async () => {
+    setGpc(true);
+    const { ga, analytics } = await load();
+    expect(analytics.analyticsOptedOut()).toBe(true);
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'common_plant' });
+    expect(window.dataLayer).toBeUndefined();
+  });
+
   it('names a purchase by the first 32 hex characters of a SHA-256, never the id', async () => {
     const { ga } = await load();
     const id = await ga.gaTransactionId('sub_1ABC');

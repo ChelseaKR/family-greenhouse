@@ -21,6 +21,12 @@ import { findPlantSafetyPage, plantSafetyMeta } from './plantSafetyPages';
  *   - `data-field="scientificName"` — a table field, verbatim;
  *   - `data-chrome="<catalog key>"` — template copy from the i18n catalog.
  *
+ * A detailed page (its listing records `detailsRead`) adds quoted listing and
+ * extension fields, a horse verdict where the listing states one, similar and
+ * related plants with their own verdicts, and an FAQ, each under its own
+ * `data-claim` kind that the gate recomposes from the table (assertion 7 in
+ * the gate's header).
+ *
  * (The body lives in PlantSafetyArticle.tsx, so this module exports only the
  * route component `App.tsx` lazy-loads.) The page opens with the emergency
  * aside (two poison hotlines, each a `tel:` link with its fee in its own

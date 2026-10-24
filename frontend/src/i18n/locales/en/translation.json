@@ -258,6 +258,24 @@
       "createdWithStartingPoint": "{{name}} is in, with a watering reminder every {{days}} days to start.",
       "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
     },
+    "picker": {
+      "heading": "Pick a common houseplant",
+      "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
+      "saving": "Adding your plant…",
+      "somethingElse": "Something else? Type its name",
+      "plants": {
+        "pothos": "Pothos",
+        "snake-plant": "Snake plant",
+        "monstera": "Monstera",
+        "spider-plant": "Spider plant",
+        "peace-lily": "Peace lily",
+        "zz-plant": "ZZ plant",
+        "aloe-vera": "Aloe vera",
+        "orchid": "Moth orchid",
+        "fiddle-leaf-fig": "Fiddle leaf fig",
+        "jade-plant": "Jade plant"
+      }
+    },
     "invite": {
       "title": "Share the care",
       "description": "This is the part a single-user plant tracker can't do. Everyone in your household sees the same plants and the same schedule — whoever is around does the watering and marks it done, so nobody has to nag and nobody has to ask whether it got done.",
@@ -271,6 +289,16 @@
       "solo": "It's just me for now",
       "finish": "Go to my dashboard"
     }
+  },
+  "dashboardEmpty": {
+    "somethingElse": "Something else? Add any plant, with photos and details"
+  },
+  "goingAwaySoon": {
+    "title": "Going away soon?",
+    "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",
+    "action": "Set up a sitter link",
+    "notNow": "Not now",
+    "dismissAria": "Hide the going-away card for 30 days"
   },
   "nav": {
     "chat": "Chat",
@@ -464,7 +492,8 @@
     "verdictsHeading": "The verdicts, with their source",
     "animal": {
       "cats": "Cats",
-      "dogs": "Dogs"
+      "dogs": "Dogs",
+      "horses": "Horses"
     },
     "verdict": {
       "toxic": "Toxic",
@@ -501,7 +530,54 @@
     "signupCta": "Set up reminders",
     "unknownTitle": "No cited verdict for this plant",
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
-    "unknownCta": "Look up a plant"
+    "unknownCta": "Look up a plant",
+    "listingHeading": "What the ASPCA listing says",
+    "listingIntro": "Quoted word for word from this plant’s own ASPCA listing.",
+    "listingField": {
+      "toxicPrinciples": "Toxic principles",
+      "clinicalSigns": "Clinical signs",
+      "listingNote": "Also on the listing"
+    },
+    "listCaveat": "The ASPCA’s plant list also says this about every plant on it: “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+    "listCitation": "ASPCA, “Toxic and Non-Toxic Plants”",
+    "extensionHeading": "What a university extension adds",
+    "extensionIntro": "A second, independent source for the same plant, quoted word for word.",
+    "extensionField": {
+      "poisonSeverity": "Poison severity",
+      "poisonSymptoms": "Poison symptoms",
+      "poisonToxicPrinciple": "Toxic principle"
+    },
+    "extensionCaveat": "The toolbox gives one severity rating for the whole plant, for people as well as pets, and it is not a measure of how much is too much. Whatever the rating, call a poison hotline or your vet if your pet has eaten some.",
+    "extensionTagsLabel": "Its page tags the plant for:",
+    "extensionTagsNote": "This page relies on the ASPCA verdict above. A tag from this second source is shown only where it says the same thing.",
+    "extensionCitation": "{{publisher}}, “{{title}}” ({{database}})",
+    "alternativesHeading": {
+      "toxic": "Similar plants to consider instead",
+      "other": "Similar plants to consider too"
+    },
+    "alternativesIntro": "Picked for a similar look or the same kind of spot. Each name opens that plant’s own page, with its ASPCA verdicts and source.",
+    "relatedHeading": "Related plants to look up",
+    "relatedIntro": "Plants people often mix up with this one or look up next. Each name opens that plant’s own page.",
+    "linkedAnimal": {
+      "cats": "Cats:",
+      "dogs": "Dogs:",
+      "horses": "Horses:"
+    },
+    "faqHeading": "Questions people ask",
+    "faq": {
+      "animal": {
+        "cats": "cats",
+        "dogs": "dogs",
+        "horses": "horses"
+      },
+      "question": "Is {{name}} toxic to {{animal}}?",
+      "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
+      "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerDetails": "Its listing gives the toxic principles as “{{principles}}” and the clinical signs as “{{signs}}”.",
+      "answerAnyPlant": "Its plant list also says that “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+      "whatToDoQuestion": "What should I do if my pet ate some {{name}}?",
+      "whatToDoAnswer": "Call ASPCA Poison Control at (888) 426-4435 or the Pet Poison Helpline at (855) 764-7661, or call your vet or an emergency clinic, now. Don’t wait to see whether symptoms appear. The ASPCA says a consultation fee may apply, and the Pet Poison Helpline says a $99 incident fee applies."
+    }
   },
   "plantShop": {
     "buy": {
@@ -1229,6 +1305,27 @@
       "sharedBy": "Shared by {{name}}",
       "anotherMember": "another member",
       "revokeNotYours": "Only its creator or an admin can revoke this"
+    },
+    "goingAway": {
+      "titleEntry": "Going away?",
+      "titleLonger_one": "Away for more than {{count}} day?",
+      "titleLonger_other": "Away for more than {{count}} days?",
+      "titleSecond": "Need a second sitter link?",
+      "freeNow_one": "On the free plan, a sitter link lasts up to {{days}} days, and one can be live at a time.",
+      "freeNow_other": "On the free plan, a sitter link lasts up to {{days}} days, and {{count}} can be live at a time.",
+      "gardenAdds": "Garden adds, for the whole household:",
+      "gardenAddsPrice": "Garden is {{price}} a month for the whole household. It adds:",
+      "lineLinks_one": "Sitter links of up to {{days}} days, with {{count}} live at a time",
+      "lineLinks_other": "Sitter links of up to {{days}} days, with up to {{count}} live at once",
+      "lineBrief": "A printable care brief for your sitter, with each plant’s latest photo and your house rules",
+      "linePhotos": "Photos from your sitter while you’re away, added to each plant’s timeline",
+      "lineRecap": "A recap of what happened, waiting when you get back",
+      "upgrade": "Upgrade to Garden for {{price}} a month",
+      "useFree_one": "Use {{count}} day instead",
+      "useFree_other": "Use {{count}} days instead",
+      "keepFree_one": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFree_other": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFreeSecond": "Your current link keeps working. To make a new one on the free plan, revoke the current one first."
     },
     "sitterGaps": {
       "heading": "Before you go: your sitter can only read what you wrote down.",

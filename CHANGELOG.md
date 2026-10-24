@@ -16,6 +16,36 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **The houseplant shortcut on an empty dashboard.** A household with no
+  plants now sees the same one-tap common-houseplant grid in the dashboard's
+  "Your plants" card, with a link to the full Add Plant page beside it. It
+  shows only to a member of the household and only on a settled empty read.
+  GA4 `first_plant_added` reports these taps as `dashboard_empty`.
+
+- **Pick a common houseplant in the first run.** The first screen after
+  creating a household now opens with ten common houseplants from the care
+  guides. One tap saves the plant with its scientific name as the species and
+  a watering reminder at the low end of its guide's range, starting one
+  interval out. The typed form, the full Add Plant page and Skip are all still
+  there. Plant names are in English and Spanish. Measured before this: 37 of
+  43 households had never added a plant.
+- **"Going away?" on the sitter-link form.** A free household that types a
+  link longer than its plan allows, already has its one live link, or arrives
+  from the dashboard is shown what Garden adds for a trip (longer and more
+  links, the printable brief, sitter photos, the return recap) with the
+  catalog's monthly price and a button to Settings → Billing. A member gets
+  the existing ask-an-admin button, and the apps show no price. The free
+  7-day link is never blocked: the prompt offers to set the length back.
+- **"Going away soon?" on the dashboard.** A dismissible card that leads to
+  the sitter-link form, shown when the household has plants and no live link.
+- **GA4 `first_plant_added`**, beside `household_activated`, with only how
+  the first plant was added (`common_plant`, `typed` or `full_form`). Same
+  consent rules as every other GA4 event.
+
+### Changed
+
 - **The free Seedling plan is 8 plants and 2 people, and existing households
   keep 20 and 3.** The owner's decision of 2026-10-23 (ADR 0040), after the
   outside households turned out to hold 5 to 9 plants with one or two people.

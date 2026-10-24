@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,6 +47,10 @@ export function HouseholdPage() {
   // user.householdId is only the Cognito-claim default.
   const { householdId, householdQuery } = useActiveHousehold();
   const queryClient = useQueryClient();
+  // `?away=1` is the dashboard's "Going away soon?" card (GoingAwaySoonCard):
+  // open on the sitter-link form, with the trip offer for a free household.
+  const [searchParams] = useSearchParams();
+  const awayEntry = searchParams.get('away') === '1';
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -69,6 +73,15 @@ export function HouseholdPage() {
       (hh) => householdService.getHousehold(hh)
     )
   );
+
+  // React Router does not scroll to a fragment on its own, and the form sits
+  // below the members card, so the dashboard's link would otherwise land on
+  // the top of the page. Once, when the section exists.
+  const householdLoaded = household !== undefined;
+  useEffect(() => {
+    if (!awayEntry || !householdLoaded) return;
+    document.getElementById('sitter-links')?.scrollIntoView?.({ block: 'start' });
+  }, [awayEntry, householdLoaded]);
 
   const createInviteMutation = useMutation({
     mutationFn: () => householdService.createInvite(householdId!),
@@ -315,8 +328,12 @@ export function HouseholdPage() {
           at from the vacation form below (#480) — the moment they declare a
           trip is the moment to reach this form. Keep the id if this moves. */}
       {householdId && (
-        <div id="sitter-links" className="scroll-mt-4">
-          <SitterLinksCard householdId={householdId} members={household.members} />
+        <div id="sitter-links" className="scroll-mt-24 lg:scroll-mt-4">
+          <SitterLinksCard
+            householdId={householdId}
+            members={household.members}
+            showAwayOffer={awayEntry}
+          />
         </div>
       )}
 

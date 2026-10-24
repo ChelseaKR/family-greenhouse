@@ -46,6 +46,17 @@
  *      plantShopLinks.json and config/affiliateLinks.json say, carry
  *      rel="sponsored noopener" and a visible "Paid link" label, and appear
  *      only on a page whose every verdict is a cited "non-toxic".
+ *   7. DETAIL. On a page whose listing records `detailsRead`
+ *      (pet-toxicity-table.mjs `plantDetails()`): a horse verdict appears
+ *      only where cited, under the same rule as cats and dogs; every quoted
+ *      listing and extension field is the table's text, in order, beside its
+ *      source; an extension "non-toxic" tag appears only where the ASPCA
+ *      verdict for that animal is a cited "non-toxic"; every linked plant is
+ *      named by its own entry and shown with its own cited verdicts, and an
+ *      "alternative" is only a plant whose own page cites "non-toxic" for
+ *      cats and dogs; the FAQ, visible and as FAQPage JSON-LD, is exactly the
+ *      one plantFaq() composes from the table and catalog. On any other page
+ *      none of these elements may appear.
  *   6. EMERGENCY. The page opens with one `<aside data-plant-emergency>`: no
  *      text in `<main>` comes before it, so it precedes the verdicts on every
  *      page, "Not assessed" ones included. It lists both POISON_HOTLINES in
@@ -72,7 +83,10 @@ import {
   NOT_ASSESSED,
   PLANT_PAGE_PREFIX,
   loadPetToxicityTable,
+  plantDetails,
+  plantFaq,
   plantPage,
+  publishedPagesBySlug,
   publishedPlantPages,
 } from './pet-toxicity-table.mjs';
 import { FRONTEND_ROOT, SITE, publicRoutePaths } from './public-routes.mjs';
@@ -146,6 +160,18 @@ export const TOXICITY_WORDING_ALLOWED = {
     'sends a reader to a poison hotline, their vet or an emergency clinic; names no effect',
   'plantSafetyPage.hotline.aspca': 'the name and number of the ASPCA hotline it dials',
   'plantSafetyPage.hotline.petPoisonHelpline': 'the name and number of the hotline it dials',
+  'plantSafetyPage.listingField.toxicPrinciples':
+    'the label of a quoted ASPCA listing field; the value beside it is the table text',
+  'plantSafetyPage.extensionField.poisonSeverity':
+    'the label of a quoted extension field; the value beside it is the table text',
+  'plantSafetyPage.extensionField.poisonSymptoms':
+    'the label of a quoted extension field; the value beside it is the table text',
+  'plantSafetyPage.extensionField.poisonToxicPrinciple':
+    'the label of a quoted extension field; the value beside it is the table text',
+  'plantSafetyPage.listCaveat':
+    'quotes the ASPCA plant list on every plant, linked beside it; names no plant',
+  'plantSafetyPage.extensionCaveat':
+    'says the rating is not a dose guide and sends a reader to a hotline or vet; names no effect',
 };
 
 /**
@@ -274,7 +300,22 @@ export function checkEmergencyAside(main, window) {
   return failures;
 }
 
-const CLAIM_KINDS = new Set(['verdict', 'citation', 'note']);
+const CLAIM_KINDS = new Set([
+  'verdict',
+  'citation',
+  'note',
+  'listing-field',
+  'list-citation',
+  'extension-field',
+  'extension-tag',
+  'extension-citation',
+  'linked-plant',
+  'linked-verdict',
+  'faq-question',
+  'faq-answer',
+]);
+/** Claim kinds that exist only on a detailed page. */
+const DETAIL_CLAIMS = [...CLAIM_KINDS].filter((k) => !['verdict', 'citation', 'note'].includes(k));
 const FIELDS = new Set(['scientificName', 'commonName']);
 const FORBIDDEN_JSONLD_TYPES = /^(?:Dataset|DataCatalog|DataDownload|DataFeed|dcat:.*)$/;
 const CONTENT_NAMESPACES = ['/blog/', '/care/', '/help/', PLANT_PAGE_PREFIX];
@@ -333,6 +374,244 @@ function citedSources(page) {
   return sources;
 }
 
+const texts = (els) => [...els].map((el) => squash(el.textContent));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Assertion 7 over one page's `<main>`. Returns failure messages without the
+ * page prefix. `details` and `faq` are what the table and catalog allow
+ * (plantDetails / plantFaq); null details means no detail element may appear.
+ */
+export function checkDetails({ main, entry, page, details, faq, catalog, table }) {
+  const failures = [];
+  const fail = (message) => failures.push(message);
+  const label = (state) => catalog[VERDICT_LABEL_KEY[state]];
+  const pages = publishedPagesBySlug(table);
+
+  // Horses: shown only where cited, with its citation beside it.
+  const horseVerdicts = main.querySelectorAll('[data-claim="verdict"][data-animal="horses"]');
+  const horses = details?.horses ?? { state: NOT_ASSESSED };
+  if (horses.state === NOT_ASSESSED) {
+    for (const el of horseVerdicts) {
+      fail(
+        `${el.getAttribute('data-state') === 'non-toxic' ? 'ASSERTS SAFETY' : 'shows a verdict'} ` +
+          `for horses ("${squash(el.textContent)}"), but the table cites no horse verdict for ${entry.slug}`
+      );
+    }
+  } else if (horseVerdicts.length !== 1) {
+    fail(`expected one horses verdict, found ${horseVerdicts.length}`);
+  } else {
+    const el = horseVerdicts[0];
+    if (
+      el.getAttribute('data-state') !== horses.state ||
+      squash(el.textContent) !== label(horses.state)
+    ) {
+      fail(`shows horses as "${squash(el.textContent)}", but the table cites ${horses.state}`);
+    }
+    const group = el.closest('[data-claim-group="horses"]');
+    const beside = group ? [...group.querySelectorAll('a[data-claim="citation"]')] : [];
+    if (!beside.some((a) => a.getAttribute('href') === horses.source.url)) {
+      fail(`the horses verdict has no citation beside it linking ${horses.source.url}`);
+    }
+  }
+
+  if (!details) {
+    for (const kind of DETAIL_CLAIMS) {
+      if (main.querySelector(`[data-claim="${kind}"]`)) {
+        fail(`carries data-claim="${kind}", but the table records no details for ${entry.slug}`);
+      }
+    }
+    return failures;
+  }
+
+  // Quoted ASPCA listing fields, in order, beside the listing.
+  const listingEls = main.querySelectorAll('[data-claim="listing-field"]');
+  const shownListing = [...listingEls].map((el) => [
+    el.getAttribute('data-listing-field'),
+    squash(el.textContent),
+  ]);
+  if (
+    !same(
+      shownListing,
+      details.listing.map((f) => [f.field, f.value])
+    )
+  ) {
+    fail(`quoted listing fields ${JSON.stringify(shownListing)} are not the table's`);
+  }
+  if (listingEls.length > 0) {
+    const section = listingEls[0].closest('section');
+    const cited = section ? [...section.querySelectorAll('a[data-claim="citation"]')] : [];
+    const urls = ANIMALS.map((a) => page.claims[a])
+      .filter((c) => c.state !== NOT_ASSESSED)
+      .map((c) => c.source.url);
+    if (!urls.every((url) => cited.some((a) => a.getAttribute('href') === url))) {
+      fail('the quoted listing fields have no citation beside them');
+    }
+  }
+  const listCitations = main.querySelectorAll('[data-claim="list-citation"]');
+  if (listCitations.length !== 1) {
+    fail(`expected the ASPCA plant list cited once, found ${listCitations.length}`);
+  } else {
+    const a = listCitations[0];
+    if (a.tagName !== 'A' || a.getAttribute('href') !== table.plantListUrl) {
+      fail(`the plant list citation links ${a.getAttribute('href')}, not ${table.plantListUrl}`);
+    }
+    if (squash(a.textContent) !== squash(catalog['plantSafetyPage.listCitation'])) {
+      fail(`the plant list citation reads "${squash(a.textContent)}"`);
+    }
+    const caveat = a.parentElement?.querySelector('[data-chrome="plantSafetyPage.listCaveat"]');
+    if (!caveat) fail('the plant list citation is not beside the line it supports');
+  }
+
+  // Extension source.
+  const ext = details.extension;
+  const extFields = [...main.querySelectorAll('[data-claim="extension-field"]')].map((el) => [
+    el.getAttribute('data-extension-field'),
+    squash(el.textContent),
+  ]);
+  if (!same(extFields, ext ? ext.fields.map((f) => [f.field, f.value]) : [])) {
+    fail(`quoted extension fields ${JSON.stringify(extFields)} are not the table's`);
+  }
+  for (const el of main.querySelectorAll('[data-claim="extension-tag"]')) {
+    const animal = el.getAttribute('data-animal');
+    const aspca = animal === 'horses' ? horses : page.claims[animal];
+    if (aspca?.state !== 'non-toxic') {
+      fail(
+        `ASSERTS SAFETY for ${animal} from a second source ("${squash(el.textContent)}"), but the ` +
+          `ASPCA verdict for ${animal} is not a cited "non-toxic"`
+      );
+    }
+  }
+  const tags = [...main.querySelectorAll('[data-claim="extension-tag"]')].map((el) => [
+    el.getAttribute('data-animal'),
+    el.getAttribute('data-state'),
+    squash(el.textContent),
+  ]);
+  if (
+    !same(
+      tags,
+      (ext?.tags ?? []).map((a) => [a, 'non-toxic', label('non-toxic')])
+    )
+  ) {
+    fail(`extension tags ${JSON.stringify(tags)} are not the ones the table allows`);
+  }
+  const extCitations = main.querySelectorAll('[data-claim="extension-citation"]');
+  if (!ext && extCitations.length > 0) fail('cites an extension source the table does not record');
+  if (ext) {
+    if (extCitations.length !== 1)
+      fail(`expected the extension source cited once, found ${extCitations.length}`);
+    else {
+      const a = extCitations[0];
+      const expected = interpolate(catalog['plantSafetyPage.extensionCitation'], {
+        publisher: ext.publisher,
+        title: ext.title,
+        database: ext.database,
+      });
+      if (a.tagName !== 'A' || a.getAttribute('href') !== ext.url) {
+        fail(`the extension citation links ${a.getAttribute('href')}, not ${ext.url}`);
+      }
+      if (squash(a.textContent) !== squash(expected)) {
+        fail(`the extension citation reads "${squash(a.textContent)}", expected "${expected}"`);
+      }
+    }
+  }
+
+  // Linked plants: named by their own entry, with their own cited verdicts.
+  const sectionSlugs = (id) =>
+    [...main.querySelectorAll(`#${id}`)].flatMap((h) =>
+      [...(h.closest('section')?.querySelectorAll('[data-linked-plant]') ?? [])].map((li) =>
+        li.getAttribute('data-linked-plant')
+      )
+    );
+  if (
+    !same(
+      sectionSlugs('plant-safety-alternatives'),
+      details.alternatives.map((p) => p.slug)
+    )
+  ) {
+    fail(
+      `lists alternatives ${JSON.stringify(sectionSlugs('plant-safety-alternatives'))}; the table ` +
+        `allows ${JSON.stringify(details.alternatives.map((p) => p.slug))}`
+    );
+  }
+  if (
+    !same(
+      sectionSlugs('plant-safety-related'),
+      details.related.map((p) => p.slug)
+    )
+  ) {
+    fail(
+      `lists related plants ${JSON.stringify(sectionSlugs('plant-safety-related'))}, not the table's`
+    );
+  }
+  for (const li of main.querySelectorAll('[data-linked-plant]')) {
+    const slug = li.getAttribute('data-linked-plant');
+    const target = pages.get(slug);
+    if (!target) {
+      fail(`links plant "${slug}", which has no published page`);
+      continue;
+    }
+    if (li.closest('section')?.querySelector('#plant-safety-alternatives')) {
+      if (!ANIMALS.every((a) => target.claims[a].state === 'non-toxic')) {
+        fail(
+          `ASSERTS SAFETY by offering ${slug} as an alternative without a cited "non-toxic" for cats and dogs`
+        );
+      }
+    }
+    const links = li.querySelectorAll('[data-claim="linked-plant"]');
+    if (links.length !== 1) fail(`${slug}: expected one link, found ${links.length}`);
+    else {
+      const a = links[0];
+      if (a.getAttribute('href') !== `${PLANT_PAGE_PREFIX}${slug}`) {
+        fail(`${slug}: links ${a.getAttribute('href')}`);
+      }
+      if (squash(a.textContent) !== squash(target.entry.commonName)) {
+        fail(
+          `${slug}: named "${squash(a.textContent)}", its entry says "${target.entry.commonName}"`
+        );
+      }
+    }
+    const verdicts = [...li.querySelectorAll('[data-claim="linked-verdict"]')].map((el) => [
+      el.getAttribute('data-animal'),
+      el.getAttribute('data-state'),
+      squash(el.textContent),
+    ]);
+    const expected = ANIMALS.map((a) => [a, target.claims[a].state, label(target.claims[a].state)]);
+    if (!same(verdicts, expected)) {
+      fail(
+        `${slug}: shows verdicts ${JSON.stringify(verdicts)}, its own page cites ${JSON.stringify(expected)}`
+      );
+    }
+  }
+  for (const el of main.querySelectorAll(
+    '[data-claim="linked-verdict"], [data-claim="linked-plant"]'
+  )) {
+    if (!el.closest('[data-linked-plant]'))
+      fail('a linked-plant claim sits outside a linked plant');
+  }
+
+  // FAQ.
+  const questions = main.querySelectorAll('[data-claim="faq-question"]');
+  const answers = main.querySelectorAll('[data-claim="faq-answer"]');
+  if (
+    !same(
+      texts(questions),
+      faq.map((i) => squash(i.question))
+    )
+  ) {
+    fail(`FAQ questions ${JSON.stringify(texts(questions))} are not the composed ones`);
+  }
+  if (
+    !same(
+      texts(answers),
+      faq.map((i) => squash(i.answer))
+    )
+  ) {
+    fail('FAQ answers differ from the ones the table and catalog compose');
+  }
+  return failures;
+}
+
 /**
  * Check one prerendered plant page. Returns a list of failures (empty = pass).
  *
@@ -345,12 +624,15 @@ export function checkPlantSafetyPageHtml({
   html,
   entry,
   aspcaOrigin,
+  table = loadPetToxicityTable(),
   catalog = readCatalog(),
   routes = declaredRoutes().paths,
   publishedPaths = publicRoutePaths(),
   shop = loadPlantShop(),
 }) {
   const page = plantPage(entry, aspcaOrigin);
+  const details = plantDetails(entry, { ...table, aspcaOrigin });
+  const faq = plantFaq(entry, details, catalog, aspcaOrigin);
   const where = page.path;
   const failures = [];
   const fail = (message) => failures.push(`${where}: ${message}`);
@@ -514,6 +796,8 @@ export function checkPlantSafetyPageHtml({
   // 5. Links.
   const published = new Set(publishedPaths);
   const allowedExternal = new Set([...sources.keys(), aspcaOrigin]);
+  if (details) allowedExternal.add(table.plantListUrl);
+  if (details?.extension) allowedExternal.add(details.extension.url);
   const shopBlocks = main.querySelectorAll('[data-plant-shop]');
   const shopEligible = ANIMALS.every((animal) => page.claims[animal].state === 'non-toxic');
   const shopExpected = expectedShopHref(entry.slug, shop);
@@ -558,6 +842,11 @@ export function checkPlantSafetyPageHtml({
     }
   }
 
+  // 7. Detail sections.
+  for (const message of checkDetails({ main, entry, page, details, faq, catalog, table })) {
+    fail(message);
+  }
+
   // 6. Emergency aside.
   for (const message of checkEmergencyAside(main, window)) fail(message);
 
@@ -595,7 +884,11 @@ export function checkPlantSafetyPageHtml({
       fail('a JSON-LD block does not parse');
     }
   }
-  const validated = new Set([head.title, head.description]);
+  const validated = new Set([
+    head.title,
+    head.description,
+    ...faq.flatMap((item) => [item.question, item.answer]),
+  ]);
   const visit = (node) => {
     if (typeof node === 'string') {
       // URLs are compared structurally below (canonical, citations); their
@@ -632,8 +925,28 @@ export function checkPlantSafetyPageHtml({
       .flat()
       .map((c) => c?.url)
       .sort();
-    if (JSON.stringify(cited) !== JSON.stringify([...sources.keys()].sort())) {
-      fail(`JSON-LD citations ${JSON.stringify(cited)} are not the page's listings`);
+    const expectedCited = [
+      ...sources.keys(),
+      ...(details?.extension ? [details.extension.url] : []),
+    ];
+    if (JSON.stringify(cited) !== JSON.stringify(expectedCited.sort())) {
+      fail(`JSON-LD citations ${JSON.stringify(cited)} are not the page's sources`);
+    }
+  }
+  const faqNodes = graph.filter((node) => node?.['@type'] === 'FAQPage');
+  if (faq.length === 0 && faqNodes.length > 0)
+    fail('JSON-LD has a FAQPage, but the page has no FAQ');
+  if (faq.length > 0) {
+    if (faqNodes.length !== 1) fail(`expected one FAQPage in JSON-LD, found ${faqNodes.length}`);
+    else {
+      const published = [faqNodes[0].mainEntity ?? []].flat().map((q) => ({
+        question: q?.name,
+        answer: q?.acceptedAnswer?.text,
+      }));
+      const expected = faq.map(({ question, answer }) => ({ question, answer }));
+      if (JSON.stringify(published) !== JSON.stringify(expected)) {
+        fail('JSON-LD FAQPage differs from the FAQ the table and catalog compose');
+      }
     }
   }
 
@@ -671,6 +984,7 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
         html: readFileSync(file, 'utf8'),
         entry: page.entry,
         aspcaOrigin: table.aspcaOrigin,
+        table,
         catalog,
         routes,
         publishedPaths,
