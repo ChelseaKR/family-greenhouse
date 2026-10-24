@@ -26,6 +26,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the page come back with no further change. Nothing in the billing code
   changed.
 
+- **The gate now preflights the iOS and Android projects for store rejections.**
+  A `greenlight` step in `npm run verify` and the `Lint` job runs Greenlight
+  v0.2.0 (pinned by commit and module hash, built once with `go install`) as
+  `preflight frontend/ios` and `playscan frontend/android` with `--exit-code`,
+  so a CRITICAL or HIGH finding fails the build. It scans the two app projects
+  only, never the repo root, where it reads test files and worktrees and
+  reported false positives. Each run re-scans temp copies seeded with a missing
+  privacy manifest, a removed baseline and a restricted `READ_SMS` permission to
+  prove the step can fail. If the scanner cannot be built locally the gate says
+  `SKIPPED: greenlight not installed` and does not count the step as passed; in
+  CI a skip fails. One verified false positive is baselined, with its reason, in
+  `frontend/ios/.greenlight.yml`: `import StoreKit` in the rating-sheet plugin
+  matched the in-app-purchase rule, and the app sells nothing through Apple.
+
 - **Eleven more plants in the pet-toxicity table, each with the ASPCA listing it
   was read from.** Alocasia, areca palm, corn plant, ponytail palm, begonia,
   cast iron plant, jasmine (Jasminum), blue echeveria, haworthia, burro's tail

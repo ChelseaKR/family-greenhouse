@@ -55,6 +55,7 @@
     "reads:check": "npm run reads:check --workspaces --if-present",
     "entitlements:check": "npm run entitlements:check --workspace backend",
     "mobile:validate": "node scripts/validate-store-release.mjs",
+    "greenlight:check": "node scripts/check-greenlight.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "audit:check": "node scripts/check-audit.mjs",
     "deps:check": "node scripts/check-dependency-freshness.mjs",

@@ -42,7 +42,10 @@ Auto-gates that run but are **not** in the ruleset's required list (honest note)
 typecheck + `test:coverage` + `i18n:check` + `reads:check` +
 `observability:check` + `npm audit --omit=dev --audit-level=high` + the
 bare-marker, silenced-gates and docs-testing guards + the figures, API-spec,
-sitemap and brand checks — the local mirror of the CI gates that
+sitemap and brand checks + the Greenlight store preflight (a local skip when the
+scanner cannot be built is printed as `SKIPPED: greenlight not installed` and is
+not counted as a pass; in CI it is a step of the required `Lint` job, where a skip
+fails) — the local mirror of the CI gates that
 have no browser/cloud dependency. It runs `vitest run --coverage` in both
 workspaces, so the coverage floors in `frontend/vitest.config.ts` and
 `backend/vitest.config.ts` fail locally exactly where `Test Frontend` /
