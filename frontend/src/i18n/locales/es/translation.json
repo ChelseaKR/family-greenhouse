@@ -342,6 +342,7 @@
     "registerSubtitle": "Gratis para un hogar, hasta 3 miembros del hogar y 20 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
+    "showPassword": "Mostrar contraseña",
     "nameMin": "El nombre debe tener al menos 2 caracteres",
     "nameMax": "El nombre debe tener 100 caracteres o menos",
     "passwordMin": "La contraseña debe tener al menos 12 caracteres",
@@ -2544,11 +2545,11 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "Cuidado compartido de plantas y recordatorios de riego",
-        "headlinePre": "“Pensé que la habías regado ",
-        "headlineEmphasis": "tú",
-        "headlinePost": ".”",
-        "subhead": "Family Greenhouse es un diario de cuidados compartido para las plantas de tu casa. Todo el hogar ve qué toca hacer y qué ya se hizo, para que el helecho no se riegue dos veces el martes y luego quede olvidado dos semanas."
+        "eyebrow": "Recordatorios de riego y un registro de cuidados compartido",
+        "headlinePre": "Cuidado de plantas para ",
+        "headlineEmphasis": "todo",
+        "headlinePost": " tu hogar.",
+        "subhead": "Se acabó el “pensé que la habías regado tú”. Todos en casa ven qué toca hacer y qué ya se hizo, y los recordatorios llegan por correo o en el navegador."
       },
       "b": {
         "eyebrow": "Cuidado de plantas y recordatorios de riego",
@@ -2557,8 +2558,7 @@
         "headlinePost": " planta.",
         "subhead": "Family Greenhouse lleva un calendario de riego y cuidados para cada una de tus plantas, para que ninguna se quede sin agua ni se ahogue. Funciona igual de bien para una persona con unas cuantas macetas en la ventana que para todo un hogar que comparte la regadera."
       },
-      "seeHowItWorks": "Mira cómo funciona",
-      "signupNote": "No necesitas tarjeta de crédito. Tu hogar empieza con 14 días de Garden y después sigue en el plan gratuito, salvo que elijas otro. Para registrarte hacen falta un nombre, un correo y una contraseña, y después un código de un solo uso que te mandamos por correo: unos cinco minutos de principio a fin."
+      "signupNote": "Sin tarjeta de crédito. Tu hogar tiene 14 días de Garden y después sigue gratis para hasta 3 personas y 20 plantas. Confirmarás tu correo con un código que te enviamos."
     },
     "mockup": {
       "label": "Vista previa del panel de Family Greenhouse con las próximas tareas de cuidado de plantas y la actividad del hogar.",

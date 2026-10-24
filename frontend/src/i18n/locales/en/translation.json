@@ -330,6 +330,7 @@
     "registerSubtitle": "Free for one home, up to 3 household members and 20 plants. No credit card. Your household starts with 14 days of Garden.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
+    "showPassword": "Show password",
     "nameMin": "Name must be at least 2 characters",
     "nameMax": "Name must be 100 characters or fewer",
     "passwordMin": "Password must be at least 12 characters",
@@ -2485,11 +2486,11 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "Shared plant care and watering reminders",
-        "headlinePre": "“I thought ",
-        "headlineEmphasis": "you",
-        "headlinePost": " watered it.”",
-        "subhead": "Family Greenhouse is a shared care journal for the plants in your house. Everyone sees what’s due and what’s already done, so the fern doesn’t get watered twice on Tuesday and then forgotten for two weeks."
+        "eyebrow": "Watering reminders and a shared care log",
+        "headlinePre": "Plant care for your ",
+        "headlineEmphasis": "whole",
+        "headlinePost": " household.",
+        "subhead": "No more “I thought you watered it.” Everyone at home sees what’s due and what’s already done, and reminders arrive by email or in the browser."
       },
       "b": {
         "eyebrow": "Plant care and watering reminders",
@@ -2498,8 +2499,7 @@
         "headlinePost": " plant alive.",
         "subhead": "Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing gets missed or drowned. It works just as well for one person and a windowsill as it does for a whole household sharing the watering can."
       },
-      "seeHowItWorks": "See how it works",
-      "signupNote": "No credit card needed. Your household starts with 14 days of Garden, then stays on the free plan unless you choose otherwise. Sign-up takes a name, email, and password, then a one-time code we email you: about five minutes, start to finish."
+      "signupNote": "No credit card. Your home gets 14 days of Garden, then stays free for up to 3 people and 20 plants. You’ll confirm your email with a code we send."
     },
     "mockup": {
       "label": "Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity.",
