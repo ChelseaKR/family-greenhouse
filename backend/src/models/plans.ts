@@ -21,6 +21,8 @@
  * cannot do is add. Nothing is reduced, deleted, or hidden (ADR 0014, and the
  * Terms' "nothing is deleted when a plan changes").
  */
+import { appStoreState, type AppStoreSubscription } from './appStore.js';
+
 export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 
 /**
@@ -585,6 +587,14 @@ export interface EntitlementSubscription {
    * caps. Absent means no household row was read.
    */
   householdCreatedAt?: string | null;
+  /**
+   * The household's App Store subscription (ADR 0041), as recorded from
+   * Apple's signed transactions and notifications. Written only by
+   * services/appStoreBilling.ts, never by a Stripe path, and absent on every
+   * household that never bought in the iPhone app. Read only through
+   * `appStoreState`.
+   */
+  appStore?: Partial<AppStoreSubscription> | null;
 }
 
 /**
@@ -689,6 +699,10 @@ export function noCardTrialState(
   // `getMeteredPlanId` spend a paid gift month at the free tier's allowances
   // and the trial notice claim allowances the household does not have.
   if (giftState(sub, now) === 'active') return 'none';
+  // An App Store subscription owns the household's entitlement the way
+  // Stripe state does (ADR 0041), active or not: a household that bought in
+  // the app and let it lapse is not handed the free trial back.
+  if (appStoreState(sub, now) !== 'none') return 'none';
   const endsAt = Date.parse(sub.noCardTrialEndsAt);
   if (!Number.isFinite(endsAt)) return 'none';
   return now.getTime() < endsAt ? 'active' : 'ended';
@@ -743,6 +757,28 @@ function withGift(resolved: Plan, sub: EntitlementSubscription, now: Date): Plan
   return planRank(resolved.id) >= planRank(gifted.id) ? resolved : gifted;
 }
 
+// ---------------------------------------------------------------------------
+// App Store subscriptions (ADR 0041)
+// ---------------------------------------------------------------------------
+
+/**
+ * Raise `resolved` to the App Store tier while Apple's subscription runs.
+ * Never lowers it. Stripe and Apple are two ways to pay for the same
+ * entitlement, and this resolver is the one place both are read: a household
+ * paying through both (which the purchase guards refuse, but which a race or
+ * a household joining another could still produce) gets the stronger tier,
+ * never a sum and never the weaker one.
+ *
+ * Applied under the lifetime floor and the gift, like a Stripe subscription:
+ * Apple's billing retry and grace period are already folded into
+ * `expiresAt`, so there is no status to read here.
+ */
+function withAppStore(resolved: Plan, sub: EntitlementSubscription, now: Date): Plan {
+  if (appStoreState(sub, now) !== 'active') return resolved;
+  const bought = getPlan(sub.appStore?.planId);
+  return planRank(resolved.id) >= planRank(bought.id) ? resolved : bought;
+}
+
 /**
  * The tier whose monthly allowances a household SPENDS against: identify
  * (`identifyBudget.allowanceForPlan`), leaf-health (`resolveMonthlyCap`) and
@@ -774,7 +810,11 @@ export function getMeteredPlanId(sub: EntitlementSubscription, now: Date = new D
  * to.
  */
 export function getEntitledPlan(sub: EntitlementSubscription, now: Date = new Date()): Plan {
-  const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
+  const subscribed = withAppStore(
+    entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling,
+    sub,
+    now
+  );
   return withSeedlingGrandfather(
     withNoCardTrial(
       withGift(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now),
@@ -829,7 +869,10 @@ export function getEntitledPlanForIssuedGrant(
   // period to carry a grant through, because the trial has no card to fail, so
   // at day 14 an issued grant falls back exactly as it does when a cancelled
   // subscription reaches its period end and `planId` is reset to Seedling.
-  const floored = withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
+  const floored = withLifetimeFloor(
+    withAppStore(getPlan(sub.planId), sub, now),
+    sub.lifetimePlanId
+  );
   return withSeedlingGrandfather(
     withNoCardTrial(withGift(floored, sub, now), sub, now),
     sub.householdCreatedAt

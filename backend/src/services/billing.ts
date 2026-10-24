@@ -33,6 +33,7 @@ import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSub
 import { grantGiftPurchase } from './giftCodes.js';
 import { assertPriceMatchesCatalog } from './stripePrices.js';
 import { recordBillingTransition } from './householdAudit.js';
+import { readAppStoreSubscription, type AppStoreSubscription } from '../models/appStore.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -70,6 +71,15 @@ export interface HouseholdSubscription {
    * so it survives as the household's entitlement floor.
    */
   lifetimePlanId?: PlanId;
+  /**
+   * The household's App Store subscription, bought in the iPhone app (ADR
+   * 0041). Written only by services/appStoreBilling.ts from Apple's signed
+   * transactions and notifications; no Stripe path writes or clears it
+   * (`SubscriptionWriteField` excludes it). Entitlement reads it through
+   * `appStoreState` in models/appStore.ts. Published as is by GET
+   * /billing/me: it carries no transaction id.
+   */
+  appStore?: AppStoreSubscription;
   /**
    * True once the household has cancelled but the paid period has not yet
    * elapsed. Stripe does not delete a cancelled subscription immediately — it
@@ -238,6 +248,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
+    appStore: readAppStoreSubscription(item.appStore),
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
     pendingCheckoutSessionId: item.pendingCheckoutSessionId as string | undefined,
@@ -263,6 +274,7 @@ export async function getHouseholdSubscription(
     status: state.status,
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
+    appStore: state.appStore,
     cancelAtPeriodEnd: state.cancelAtPeriodEnd,
     // Derived here, at the one boundary where the internal row becomes the
     // published shape, so there is a single place that decides what a client
@@ -309,6 +321,7 @@ type SubscriptionWriteField =
   | Exclude<
       keyof HouseholdSubscription,
       | 'trialAvailable'
+      | 'appStore'
       | 'noCardTrialEndsAt'
       | 'giftPlanId'
       | 'giftEndsAt'
