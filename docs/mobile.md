@@ -875,8 +875,10 @@ route a price or a purchase prompt could take into the app was closed:
   aren't available in the app."
 
 Each has a test from both sides (in the app: absent; on the website:
-unchanged). Left as is on purpose: the Terms page's "Paid Garden and
-Greenhouse plans are available on the web" (legal text, owner decision).
+unchanged). The Terms page (legal text, owner decision) is the one exception:
+since the In-App Purchase change it says "Paid plans are available on our
+website and, on iPhone, through Apple In-App Purchase. Purchases made through
+Apple are billed and managed by Apple under Apple's terms."
 
 ## In-App Purchase (ADR 0041)
 
@@ -934,10 +936,10 @@ can fail with `SKInternalErrorDomain Code=3`. It is Apple's bug, not this
 code's; the app reports "The purchase didn't finish." Test purchases on a
 device or in Sandbox instead.
 
-**Before submitting a build with purchases on**, also: the Terms page's "Paid
-Garden and Greenhouse plans are available on the web" sentence is shown inside
-the app and needs the owner's wording for the App Store build (legal text);
-the App Review notes should say how to reach Settings → Plan with the reviewer
+**Before submitting a build with purchases on**, also: the Terms page, which
+is shown inside the app, now names Apple In-App Purchase in the owner's
+wording, and that release must be deployed first so the page the reviewer
+opens already says it; the App Review notes should say how to reach Settings → Plan with the reviewer
 account. The owner steps for App Store Connect are kept outside the repository.
 
 ## Push notifications

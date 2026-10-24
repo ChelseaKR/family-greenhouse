@@ -82,7 +82,7 @@
       },
       "planStatus": {
         "heading": "Plan status",
-        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a household’s first paid subscription starts with a 14-day free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a household’s first paid subscription starts with a 14-day free trial. Paid plans are available on our website and, on iPhone, through Apple In-App Purchase. Purchases made through Apple are billed and managed by Apple under Apple's terms. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
       },
       "trial": {
         "heading": "Free trials",
