@@ -337,9 +337,17 @@ export type LandingCta = (typeof LANDING_CTAS)[number];
 /**
  * How a household's first plant was added, for `first_plant_added`:
  * `common_plant` is a tap on the first run's houseplant shortcut, `typed` is
- * the first run's name form, and `full_form` is the Add Plant page.
+ * the first run's name form, `full_form` is the Add Plant page, and
+ * `dashboard_empty` is a tap on the same shortcut in the dashboard's empty
+ * "Your plants" card, which is where a household that skipped the first run
+ * meets it.
  */
-export const FIRST_PLANT_METHODS = ['common_plant', 'typed', 'full_form'] as const;
+export const FIRST_PLANT_METHODS = [
+  'common_plant',
+  'typed',
+  'full_form',
+  'dashboard_empty',
+] as const;
 export type FirstPlantMethod = (typeof FIRST_PLANT_METHODS)[number];
 
 /** The paid tiers and cadences a `purchase` can name. */

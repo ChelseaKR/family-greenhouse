@@ -35,6 +35,8 @@ import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
+import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
+import { CommonPlantPicker } from '@/features/onboarding/CommonPlantPicker';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
 import { MoveDayCard } from './MoveDayCard';
@@ -73,6 +75,12 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
+  // Who may add a plant: any member of the active household, admin or not
+  // (POST /plants has no admin check). A role we could not resolve is not
+  // permission, so the one-tap picker waits for it; the plain "Add your first
+  // plant" link stays either way and the server still decides.
+  const role = useActiveHouseholdRole();
+  const canAddPlants = role === 'admin' || role === 'member';
 
   const {
     data: upcomingTasks,
@@ -335,6 +343,28 @@ export function DashboardPage() {
           <PlantGridSkeleton count={8} />
         ) : plantsError ? (
           <Alert variant="error">{getErrorMessage(plantsError)}</Alert>
+        ) : plants && plants.length === 0 && householdId && canAddPlants ? (
+          // A household that skipped (or predates) the first run lands here
+          // with nothing in it: 37 of 43 on 2026-10-23. The same one-tap
+          // houseplant shortcut the first run opens with, so the first plant
+          // is a tap away here too. Shown only for a settled empty read: a
+          // failed one is the error above, and a loading one the skeleton.
+          <div data-testid="dashboard-empty-picker">
+            <CommonPlantPicker
+              householdId={householdId}
+              onAdded={() => undefined}
+              method="dashboard_empty"
+              headingAs="h3"
+            />
+            <p className="mt-5 text-sm text-gray-600">
+              <Link
+                to="/plants/new"
+                className="font-medium text-primary-700 underline underline-offset-2 hover:text-primary-800"
+              >
+                {t('dashboardEmpty.somethingElse')}
+              </Link>
+            </p>
+          </div>
         ) : !plants || plants.length === 0 ? (
           <EmptyState
             title="Let's add your first plant"

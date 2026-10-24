@@ -631,6 +631,7 @@ describe('conversion events', () => {
       ['event', 'first_plant_added', { method: 'common_plant', page_location }],
       ['event', 'first_plant_added', { method: 'typed', page_location }],
       ['event', 'first_plant_added', { method: 'full_form', page_location }],
+      ['event', 'first_plant_added', { method: 'dashboard_empty', page_location }],
     ]);
     expect(JSON.stringify(conversions())).not.toMatch(/snake|Fern/u);
   });
