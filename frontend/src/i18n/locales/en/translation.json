@@ -464,7 +464,8 @@
     "verdictsHeading": "The verdicts, with their source",
     "animal": {
       "cats": "Cats",
-      "dogs": "Dogs"
+      "dogs": "Dogs",
+      "horses": "Horses"
     },
     "verdict": {
       "toxic": "Toxic",
@@ -501,7 +502,54 @@
     "signupCta": "Set up reminders",
     "unknownTitle": "No cited verdict for this plant",
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
-    "unknownCta": "Look up a plant"
+    "unknownCta": "Look up a plant",
+    "listingHeading": "What the ASPCA listing says",
+    "listingIntro": "Quoted word for word from this plant’s own ASPCA listing.",
+    "listingField": {
+      "toxicPrinciples": "Toxic principles",
+      "clinicalSigns": "Clinical signs",
+      "listingNote": "Also on the listing"
+    },
+    "listCaveat": "The ASPCA’s plant list also says this about every plant on it: “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+    "listCitation": "ASPCA, “Toxic and Non-Toxic Plants”",
+    "extensionHeading": "What a university extension adds",
+    "extensionIntro": "A second, independent source for the same plant, quoted word for word.",
+    "extensionField": {
+      "poisonSeverity": "Poison severity",
+      "poisonSymptoms": "Poison symptoms",
+      "poisonToxicPrinciple": "Toxic principle"
+    },
+    "extensionCaveat": "The toolbox gives one severity rating for the whole plant, for people as well as pets, and it is not a measure of how much is too much. Whatever the rating, call a poison hotline or your vet if your pet has eaten some.",
+    "extensionTagsLabel": "Its page tags the plant for:",
+    "extensionTagsNote": "This page relies on the ASPCA verdict above. A tag from this second source is shown only where it says the same thing.",
+    "extensionCitation": "{{publisher}}, “{{title}}” ({{database}})",
+    "alternativesHeading": {
+      "toxic": "Similar plants to consider instead",
+      "other": "Similar plants to consider too"
+    },
+    "alternativesIntro": "Picked for a similar look or the same kind of spot. Each name opens that plant’s own page, with its ASPCA verdicts and source.",
+    "relatedHeading": "Related plants to look up",
+    "relatedIntro": "Plants people often mix up with this one or look up next. Each name opens that plant’s own page.",
+    "linkedAnimal": {
+      "cats": "Cats:",
+      "dogs": "Dogs:",
+      "horses": "Horses:"
+    },
+    "faqHeading": "Questions people ask",
+    "faq": {
+      "animal": {
+        "cats": "cats",
+        "dogs": "dogs",
+        "horses": "horses"
+      },
+      "question": "Is {{name}} toxic to {{animal}}?",
+      "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
+      "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerDetails": "Its listing gives the toxic principles as “{{principles}}” and the clinical signs as “{{signs}}”.",
+      "answerAnyPlant": "Its plant list also says that “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+      "whatToDoQuestion": "What should I do if my pet ate some {{name}}?",
+      "whatToDoAnswer": "Call ASPCA Poison Control at (888) 426-4435 or the Pet Poison Helpline at (855) 764-7661, or call your vet or an emergency clinic, now. Don’t wait to see whether symptoms appear. The ASPCA says a consultation fee may apply, and the Pet Poison Helpline says a $99 incident fee applies."
+    }
   },
   "plantShop": {
     "buy": {

@@ -476,7 +476,8 @@
     "verdictsHeading": "Los veredictos, con su fuente",
     "animal": {
       "cats": "Gatos",
-      "dogs": "Perros"
+      "dogs": "Perros",
+      "horses": "Caballos"
     },
     "verdict": {
       "toxic": "Tóxica",
@@ -513,7 +514,54 @@
     "signupCta": "Configurar recordatorios",
     "unknownTitle": "No hay un veredicto con fuente para esta planta",
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
-    "unknownCta": "Buscar una planta"
+    "unknownCta": "Buscar una planta",
+    "listingHeading": "Lo que dice la ficha de la ASPCA",
+    "listingIntro": "Citado palabra por palabra de la ficha de la ASPCA de esta planta (en inglés).",
+    "listingField": {
+      "toxicPrinciples": "Principios tóxicos",
+      "clinicalSigns": "Signos clínicos",
+      "listingNote": "También en la ficha"
+    },
+    "listCaveat": "La lista de plantas de la ASPCA también dice esto de todas las plantas que incluye: «the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats» (comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos).",
+    "listCitation": "ASPCA, «Toxic and Non-Toxic Plants»",
+    "extensionHeading": "Lo que añade una extensión universitaria",
+    "extensionIntro": "Una segunda fuente independiente sobre la misma planta, citada palabra por palabra (en inglés).",
+    "extensionField": {
+      "poisonSeverity": "Gravedad de la intoxicación",
+      "poisonSymptoms": "Síntomas de intoxicación",
+      "poisonToxicPrinciple": "Principio tóxico"
+    },
+    "extensionCaveat": "La base de datos da una sola calificación de gravedad para toda la planta, tanto para personas como para mascotas, y no indica cuánta cantidad es demasiada. Sea cual sea la calificación, llama a una línea de toxicología o a tu veterinario si tu mascota se ha comido un trozo.",
+    "extensionTagsLabel": "Su página etiqueta la planta para:",
+    "extensionTagsNote": "Esta página se basa en el veredicto de la ASPCA de arriba. Una etiqueta de esta segunda fuente solo aparece cuando dice lo mismo.",
+    "extensionCitation": "{{publisher}}, «{{title}}» ({{database}})",
+    "alternativesHeading": {
+      "toxic": "Plantas parecidas para elegir en su lugar",
+      "other": "Plantas parecidas que también puedes considerar"
+    },
+    "alternativesIntro": "Elegidas por su aspecto parecido o porque van en el mismo tipo de lugar. Cada nombre abre la página de esa planta, con sus veredictos de la ASPCA y su fuente.",
+    "relatedHeading": "Plantas relacionadas para consultar",
+    "relatedIntro": "Plantas que la gente suele confundir con esta o consultar después. Cada nombre abre la página de esa planta.",
+    "linkedAnimal": {
+      "cats": "Gatos:",
+      "dogs": "Perros:",
+      "horses": "Caballos:"
+    },
+    "faqHeading": "Preguntas frecuentes",
+    "faq": {
+      "animal": {
+        "cats": "gatos",
+        "dogs": "perros",
+        "horses": "caballos"
+      },
+      "question": "¿La planta {{name}} es tóxica para {{animal}}?",
+      "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
+      "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
+      "answerDetails": "Su ficha indica como principios tóxicos «{{principles}}» y como signos clínicos «{{signs}}».",
+      "answerAnyPlant": "Su lista de plantas también dice que comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos.",
+      "whatToDoQuestion": "¿Qué hago si mi mascota se comió un trozo de {{name}}?",
+      "whatToDoAnswer": "Llama ya a ASPCA Poison Control al (888) 426-4435 o a Pet Poison Helpline al (855) 764-7661, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas. La ASPCA indica que puede cobrarse una tarifa de consulta, y Pet Poison Helpline indica que cobra una tarifa de 99 USD por incidente."
+    }
   },
   "plantShop": {
     "buy": {
