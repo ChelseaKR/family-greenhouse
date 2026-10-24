@@ -3131,6 +3131,64 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  # --- Apple In-App Purchase (ADR 0041; 404 until APP_STORE_BILLING_ENABLED=1) ---
+  /billing/app-store/purchase-intent:
+    post:
+      summary: Before Apple's purchase sheet opens, refuse a second way to pay and return the App Store product id and the household's appAccountToken (admin only)
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId]
+              properties:
+                planId: { type: string, enum: [garden, greenhouse] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >-
+            The household already pays through another route. `details.code` is
+            STRIPE_SUBSCRIPTION_ACTIVE, APP_STORE_SUBSCRIPTION_ACTIVE or
+            PLAN_ALREADY_INCLUDED.
+  /billing/app-store/transactions:
+    post:
+      summary: Post StoreKit 2 signed transactions (after a purchase, a restore, or a transaction update); each is verified against Apple Root CA G3 before it is recorded
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signedTransactions]
+              properties:
+                signedTransactions:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: string }
+                signedRenewalInfos:
+                  type: array
+                  maxItems: 10
+                  items: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /billing/app-store/notifications:
+    post:
+      summary: App Store Server Notifications v2 receiver (the body's signedPayload JWS is verified against Apple Root CA G3)
+      tags: [Billing]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # --- API Keys (Greenhouse plan only) ---
   /api-keys:
     get:

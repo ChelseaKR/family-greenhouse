@@ -32,6 +32,9 @@ import {
   type GiftRedeemErrorCode,
 } from '../../services/giftSubscriptions.js';
 import { listGiftPurchases } from '../../services/giftCodes.js';
+import { appStoreBlocksWebCheckout } from '../../services/appStoreBilling.js';
+import * as appStore from './appStore.js';
+import { appStoreState } from '../../models/appStore.js';
 import {
   getEntitledPlan,
   getPlan,
@@ -93,6 +96,9 @@ type CheckoutInput = z.infer<typeof checkoutSchema>;
  * message it may show verbatim.
  */
 export const CHECKOUT_PENDING = 'CHECKOUT_PENDING';
+
+/** `details.code` on the 409 for a web plan checkout by a household that pays Apple. */
+export const APP_STORE_SUBSCRIBED = 'APP_STORE_SUBSCRIBED';
 
 // Body of POST /billing/top-up/checkout. There is exactly one pack, so the
 // body carries nothing but the per-click idempotency key; `{}` and a missing
@@ -217,6 +223,9 @@ export const getCurrentSubscription = createHandler(
       ...(usage ? { usage } : {}),
       usageDetail,
       identifyCredits,
+      // The App Store subscription (ADR 0041), with its state decided by the
+      // server's clock like the trial's and the gift's. `null`: none recorded.
+      appStore: sub.appStore ? { ...sub.appStore, state: appStoreState(sub, now) } : null,
       noCardTrial:
         trialState === 'none' || !noCardTrialEndsAt
           ? null
@@ -245,6 +254,15 @@ export const checkout = createHandler(
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<CheckoutInput>;
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // A household paying Apple in the iPhone app is never sold a second
+    // subscription here (ADR 0041). Read whatever the App Store switch says.
+    if (await appStoreBlocksWebCheckout(user.householdId!)) {
+      throw createHttpError(
+        409,
+        'Your household pays for its plan through the App Store. Change or cancel it in your iPhone’s subscription settings.',
+        { expose: true, details: { code: APP_STORE_SUBSCRIBED } }
+      );
+    }
     try {
       const session = await billing.createCheckoutSession({
         householdId: user.householdId!,
@@ -633,4 +651,8 @@ export const handler = createRouter({
   'GET /billing/gift/purchases': giftPurchases,
   'POST /billing/portal': portal,
   'POST /billing/webhook': webhook,
+  // Apple In-App Purchase (ADR 0041); 404 while APP_STORE_BILLING_ENABLED is off.
+  'POST /billing/app-store/purchase-intent': appStore.purchaseIntent,
+  'POST /billing/app-store/transactions': appStore.postTransactions,
+  'POST /billing/app-store/notifications': appStore.notifications,
 });

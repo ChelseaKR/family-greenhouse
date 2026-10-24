@@ -41,6 +41,12 @@ const GiftSubscriptionCard = lazy(() =>
     default: m.GiftSubscriptionCard,
   }))
 );
+// Lazy: Apple In-App Purchase (ADR 0041) renders only inside the iPhone app
+// with purchases switched on, so no website visit ever loads it.
+const AppStorePlans = lazy(() =>
+  import('@/features/billing/AppStorePlans').then((m) => ({ default: m.AppStorePlans }))
+);
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { isNativeApp } from '@/lib/platform';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
@@ -100,6 +106,9 @@ export function BillingSettings() {
   // Native retains its existing read-only notice. The repository commercial
   // hold now makes the web surface read-only as well.
   const native = isNativeApp();
+  // The iPhone app with App Store purchases on (ADR 0041): Apple's purchase
+  // sheet replaces the neutral "not available in the app" line.
+  const appStoreInApp = native && appStorePurchasesAvailable();
 
   const householdId = useActiveHouseholdId();
   const isAdmin = useIsHouseholdAdmin();
@@ -549,9 +558,10 @@ export function BillingSettings() {
             {t('settings.billing.freeCapsGrandfathered', grandfathered)}
           </p>
         )}
-        {native && (
-          <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
-        )}
+        {native &&
+          (appStoreInApp ? null : (
+            <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+          ))}
         {!paymentsAvailable && (
           <p className="mt-4 text-sm text-gray-600">{t('settings.billing.noActionAvailable')}</p>
         )}
@@ -575,6 +585,30 @@ export function BillingSettings() {
           </div>
         )}
       </Card>
+
+      {/* On the website, a household paying Apple (ADR 0041) is told where its
+          plan is managed; the plan checkout below refuses it with a 409. */}
+      {!native && subQuery.data?.appStore?.state === 'active' && (
+        <Alert variant="info">
+          <p data-testid="billed-by-app-store">
+            {t('appStore.webBilledByApple', {
+              plan:
+                plans.find((p) => p.id === subQuery.data?.appStore?.planId)?.name ??
+                subQuery.data.appStore.planId,
+            })}
+          </p>
+        </Alert>
+      )}
+
+      {appStoreInApp && (
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <AppStorePlans
+            subscription={subQuery.data}
+            isAdmin={isAdmin}
+            planNames={Object.fromEntries(plans.map((p) => [p.id, p.name]))}
+          />
+        </Suspense>
+      )}
 
       {showTopUp && topUpOffer && (
         <div>

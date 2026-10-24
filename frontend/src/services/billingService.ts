@@ -203,6 +203,21 @@ export interface SubscriptionState {
    *  or an undated one an operator edited by hand. Absent from older
    *  backends too. See `StaleCheckout` for what it does and does not prove. */
   staleCheckout?: StaleCheckout;
+  /** The household's App Store subscription, bought in the iPhone app (ADR
+   *  0041). `state` is decided by the server's clock. `null` when none was
+   *  ever recorded; absent from older backends. */
+  appStore?: AppStoreSubscriptionView | null;
+}
+
+/** `SubscriptionState.appStore` as GET /billing/me publishes it. */
+export interface AppStoreSubscriptionView {
+  planId: Exclude<PlanId, 'seedling'>;
+  productId: string;
+  expiresAt: string;
+  willRenew?: boolean;
+  revoked?: boolean;
+  environment: string;
+  state: 'active' | 'ended';
 }
 
 /**
@@ -255,6 +270,13 @@ export function effectivePlanId(subscription?: SubscriptionState | null): PlanId
     (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < (PLAN_RANK[subscription.gift.planId] ?? 0)
   ) {
     effective = subscription.gift.planId;
+  }
+  // A running App Store subscription raises it the same way (ADR 0041).
+  if (
+    subscription.appStore?.state === 'active' &&
+    (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < (PLAN_RANK[subscription.appStore.planId] ?? 0)
+  ) {
+    effective = subscription.appStore.planId;
   }
   if (
     subscription.noCardTrial?.state === 'active' &&

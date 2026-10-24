@@ -259,6 +259,7 @@ module "api" {
   stripe_price_id_gift_greenhouse_month = var.stripe_price_id_gift_greenhouse_month
   stripe_automatic_tax_enabled          = var.stripe_automatic_tax_enabled
   payments_enabled                      = var.payments_enabled
+  app_store_billing_enabled             = var.app_store_billing_enabled
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is

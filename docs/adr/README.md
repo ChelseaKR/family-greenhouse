@@ -70,6 +70,7 @@ be invisible.
 | [0038](0038-plant-pages-may-carry-a-labeled-paid-link-to-a-plant-shop.md)    | The public plant pages may carry one labeled paid link to a plant shop, off by default                                     | Proposed |
 | [0039](0039-trial-lifecycle-emails.md)                                       | Two emails at the end of the no-card trial: day 10 and day 14, off by default                                              | Proposed |
 | [0040](0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md)    | The free plan is cut to 8 plants and 2 people, and households created before the cut keep 20 and 3                         | Accepted |
+| [0041](0041-apple-in-app-purchase-in-the-iphone-app.md)                      | Apple In-App Purchase in the iPhone app, beside Stripe, off by default                                                     | Proposed |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

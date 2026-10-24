@@ -2955,5 +2955,36 @@
       "cats": "The ASPCA’s list gives no verdict on {{name}} for cats, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "dogs": "The ASPCA’s list gives no verdict on {{name}} for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}})."
     }
+  },
+  "appStore": {
+    "title": "Plans",
+    "description": "Subscribe with your Apple ID. One plan covers everyone in this household.",
+    "perMonth": "{{price}} a month",
+    "subscribe": "Subscribe to {{plan}}",
+    "restore": "Restore purchases",
+    "manage": "Manage subscription",
+    "adminOnly": "Only a household admin can change the plan.",
+    "loading": "Loading App Store prices…",
+    "productsUnavailable": "App Store prices aren’t available right now. Try again later.",
+    "activeRenews": "{{plan}} through the App Store. Renews {{date}}.",
+    "activeEnds": "{{plan}} through the App Store. Ends {{date}}.",
+    "alreadyPaid": "This household already has a paid plan.",
+    "alreadyIncluded": "This household already has {{plan}}.",
+    "purchased": "Thank you. {{plan}} is on for this household.",
+    "pending": "The purchase is waiting for approval. The plan turns on once the App Store confirms it.",
+    "failed": "The purchase didn’t finish. Try again in a moment.",
+    "unavailable": "Purchases aren’t available in the app right now.",
+    "restored": "Restored. {{plan}} is on for this household.",
+    "nothingToRestore": "No App Store subscription was found for this Apple ID.",
+    "restoreFailed": "Couldn’t reach the App Store. Try again in a moment.",
+    "linkedElsewhere": "This Apple ID’s subscription belongs to another household.",
+    "otherSubscription": "This household already has an App Store subscription from another Apple ID.",
+    "refusedActive": "This household already has an App Store subscription. Use Manage subscription to change it.",
+    "disclosure": "Payment is charged to your Apple ID when you confirm. The subscription renews automatically each month at the price shown unless you cancel at least 24 hours before the period ends. Manage or cancel it in your Apple ID’s subscription settings.",
+    "terms": "Terms of Use",
+    "privacy": "Privacy Policy",
+    "lockedSeePlans": "See plans",
+    "lockedMember": "A household admin can change the plan in Settings.",
+    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions)."
   }
 }

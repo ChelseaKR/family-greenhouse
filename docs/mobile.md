@@ -53,6 +53,7 @@ Swift ones built by the Xcode project), and nothing else is listed.
 | `NativeChrome`      | iOS: Apple's tab bar, navigation bar, alerts, action sheets and form sheets around the one web view (`NativeChromePlugin.swift` and `NativeFrame*.swift`). Android: Material 3's top app bar, navigation bar, dialogs and bottom sheets (`android/app/src/main/java/net/familygreenhouse/app/frame/`). See "The native frame (iOS)" and "The native frame (Android)" below.                                                                                                                       |
 | `NativeIntro`       | The signed-out intro: native pages that say what the app is for, then "Create account" and "I already have an account", over the web's sign-in screen (iOS: `NativeIntroPlugin.swift`, `NativeIntroView.swift`, `NativeIntroModel.swift`; Android: `android/app/src/main/java/net/familygreenhouse/app/intro/`; ADR 0035). See "The signed-out intro (iOS)" and "The signed-out intro (Android)" below.                                                                                           |
 | `NativeReview`      | The store's rating card: Apple's sheet on iOS (`NativeReviewPlugin.swift`, `AppStore.requestReview(in:)`), Google Play's in-app review on Android (`review/NativeReviewPlugin.kt`); ADR 0036. The web asks for it after care has been marked done three times, never on a first launch or a setup screen, once per app version and at least 120 days apart (`frontend/src/lib/reviewPromptState.ts`, `frontend/src/services/nativeReview.ts`). See "Ratings (iOS)" and "Ratings (Android)" below. |
+| `NativePurchases`   | iOS only: Apple In-App Purchase with StoreKit 2 (`NativePurchasesPlugin.swift`, ADR 0041): App Store products and prices, the purchase sheet, current entitlements, Restore purchases, finishing a transaction after the server answered, Apple's Manage Subscriptions sheet, and `Transaction.updates` as a `transaction` event. The web drives it only when the build sets `VITE_APP_STORE_PURCHASES=true`. See "In-App Purchase" below.                                                        |
 | `NativePushActions` | Android only: a tap, or the Done and Snooze buttons the app draws on a single-task reminder (`push/ReminderNotifications.kt`, from the FCM data message `push/FgMessagingService.kt` receives), reported to the web as `pushAction` with the same ids iOS uses (`push/NativePushActionsPlugin.kt`). See docs/notifications.md, "What a push notification says".                                                                                                                                   |
 | `Print`             | The iOS print sheet (`PrintPlugin.swift`). WKWebView drops `window.print()`, so the print buttons on the plant passport, plant tags, sitter brief and caretaker report call `frontend/src/services/nativePrint.ts`: AirPrint, or Share to save or send a PDF. Android has no counterpart yet, and its WebView drops `window.print()` too.                                                                                                                                                         |
 
@@ -876,6 +877,68 @@ route a price or a purchase prompt could take into the app was closed:
 Each has a test from both sides (in the app: absent; on the website:
 unchanged). Left as is on purpose: the Terms page's "Paid Garden and
 Greenhouse plans are available on the web" (legal text, owner decision).
+
+## In-App Purchase (ADR 0041)
+
+The owner chose Apple In-App Purchase for the iPhone app on 2026-10-24. It is
+built and **off by default**: every rule in "Store payment rules" above still
+holds for a build without the switch below, which is every build until the
+owner steps are done. Google Play Billing is not built.
+
+**Three switches, all off by default.**
+
+1. Server: `APP_STORE_BILLING_ENABLED` must be exactly `"1"` (Terraform
+   `app_store_billing_enabled`) and payments must be available. Otherwise the
+   three `/billing/app-store/*` routes answer 404.
+2. Build: `VITE_APP_STORE_PURCHASES=true` in the local
+   `.env.mobile.production`. The template keeps it `false`, and
+   `scripts/validate-store-release.mjs` fails a template that does not.
+3. Binary: the iOS app registers `NativePurchases`
+   (`ios/App/App/NativePurchasesPlugin.swift`, StoreKit 2, in the app target
+   like NativeReview). The web reads it from the bridge's plugin headers.
+
+**With all three on.** Settings → Plan shows the App Store card
+(`features/billing/AppStorePlans.tsx`): Garden and Greenhouse at StoreKit's
+own `displayPrice`, Apple's purchase sheet, Restore purchases, Apple's Manage
+Subscriptions sheet, the auto-renewal terms and links to the Terms of Use and
+Privacy Policy (Guideline 3.1.2). The neutral "Plan changes aren't available in
+the app." line gives way to it. `LockedFeature` names the plan (no price) and
+sends an admin to Settings → Plan; a member reads "A household admin can change
+the plan in Settings." The catalog's prices are still never rendered in the
+app, and nothing in it names the website or Stripe. A household that already
+pays another way sees "This household already has a paid plan." and no buttons.
+
+**How a purchase flows.** The app asks `POST /billing/app-store/purchase-intent`
+(admin only), which refuses a second way to pay for the same home and returns
+the product id and the household's `appAccountToken`. StoreKit's sheet stamps
+that token into the transaction. The app posts the signed transaction to
+`POST /billing/app-store/transactions`, and finishes it only after the server
+answered. At launch, and on every `Transaction.updates` event, the app posts
+what StoreKit holds (`hooks/useAppStoreTransactionSync.ts`). Apple's App Store
+Server Notifications v2 reach `POST /billing/app-store/notifications`. The
+server verifies every JWS against Apple Root CA G3 before reading it. ADR 0041
+has the entitlement and double-billing rules.
+
+**Testing locally.** `ios/App/App/FamilyGreenhouse.storekit` is a StoreKit
+configuration with both products. In Xcode, Product → Scheme → Edit Scheme →
+Run → Options → StoreKit Configuration, pick it; purchases then run against
+Xcode's local store with no App Store Connect setup. Transactions from it are
+signed by Xcode, not Apple, so the server refuses them (by design); the local
+store exercises the sheet, Restore purchases, Ask to Buy, refunds and renewals
+on the app side. End-to-end server verification needs Sandbox: a TestFlight
+build, or a Sandbox Apple Account on a device, against an environment with the
+server switch on.
+
+**Known simulator bug.** On the iOS 26.5 simulator, StoreKit Testing purchases
+can fail with `SKInternalErrorDomain Code=3`. It is Apple's bug, not this
+code's; the app reports "The purchase didn't finish." Test purchases on a
+device or in Sandbox instead.
+
+**Before submitting a build with purchases on**, also: the Terms page's "Paid
+Garden and Greenhouse plans are available on the web" sentence is shown inside
+the app and needs the owner's wording for the App Store build (legal text);
+the App Review notes should say how to reach Settings → Plan with the reviewer
+account. The owner steps for App Store Connect are kept outside the repository.
 
 ## Push notifications
 

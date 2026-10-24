@@ -3019,5 +3019,36 @@
       "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
     }
+  },
+  "appStore": {
+    "title": "Planes",
+    "description": "Suscríbete con tu Apple ID. Un plan cubre a todas las personas de este hogar.",
+    "perMonth": "{{price}} al mes",
+    "subscribe": "Suscribirse a {{plan}}",
+    "restore": "Restaurar compras",
+    "manage": "Gestionar suscripción",
+    "adminOnly": "Solo un administrador del hogar puede cambiar el plan.",
+    "loading": "Cargando los precios del App Store…",
+    "productsUnavailable": "Los precios del App Store no están disponibles ahora. Inténtalo más tarde.",
+    "activeRenews": "{{plan}} a través del App Store. Se renueva el {{date}}.",
+    "activeEnds": "{{plan}} a través del App Store. Termina el {{date}}.",
+    "alreadyPaid": "Este hogar ya tiene un plan de pago.",
+    "alreadyIncluded": "Este hogar ya tiene {{plan}}.",
+    "purchased": "Gracias. {{plan}} está activo en este hogar.",
+    "pending": "La compra está esperando aprobación. El plan se activa cuando el App Store la confirme.",
+    "failed": "La compra no se completó. Inténtalo de nuevo en un momento.",
+    "unavailable": "Las compras no están disponibles en la app ahora mismo.",
+    "restored": "Restaurado. {{plan}} está activo en este hogar.",
+    "nothingToRestore": "No se encontró ninguna suscripción del App Store para este Apple ID.",
+    "restoreFailed": "No se pudo conectar con el App Store. Inténtalo de nuevo en un momento.",
+    "linkedElsewhere": "La suscripción de este Apple ID pertenece a otro hogar.",
+    "otherSubscription": "Este hogar ya tiene una suscripción del App Store de otro Apple ID.",
+    "refusedActive": "Este hogar ya tiene una suscripción del App Store. Usa Gestionar suscripción para cambiarla.",
+    "disclosure": "El pago se carga a tu Apple ID al confirmar. La suscripción se renueva automáticamente cada mes al precio indicado salvo que la canceles al menos 24 horas antes de que termine el periodo. Gestiónala o cancélala en los ajustes de suscripciones de tu Apple ID.",
+    "terms": "Condiciones de uso",
+    "privacy": "Política de privacidad",
+    "lockedSeePlans": "Ver planes",
+    "lockedMember": "Un administrador del hogar puede cambiar el plan en Ajustes.",
+    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones)."
   }
 }

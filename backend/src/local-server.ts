@@ -6923,6 +6923,26 @@ app.post('/billing/webhook', (req, res) => {
   res.json({ received: true });
 });
 
+// Apple In-App Purchase (ADR 0041). Local dev has no App Store and keeps the
+// switch off, so all three answer what production answers with
+// APP_STORE_BILLING_ENABLED unset: 404. Xcode's local StoreKit testing runs
+// against the app alone (docs/mobile.md, "In-App Purchase").
+app.post(
+  '/billing/app-store/purchase-intent',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (_req, res) => {
+    res.status(404).json({ message: 'Not found' });
+  }
+);
+app.post('/billing/app-store/transactions', authMiddleware, requireHousehold, (_req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+app.post('/billing/app-store/notifications', (_req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+
 // ============ CHAT ============
 
 // Mirrors sendMessageSchema in handlers/chat/handler.ts. The mock has no
