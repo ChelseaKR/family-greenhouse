@@ -7,12 +7,16 @@ import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { offersShopLink } from '@/features/plantShop/plantShop';
 import {
   ANIMALS,
+  ASPCA_PLANT_LIST_URL,
   POISON_HOTLINES,
   VERDICT_LABEL_KEY,
   citedSources,
-  type Animal,
+  plantSafetyDetails,
+  plantSafetyFaq,
   type AnimalClaim,
+  type AnyAnimal,
   type CitedSource,
+  type PlantSafetyDetails,
   type PlantSafetyPage,
 } from './plantSafetyPages';
 
@@ -26,6 +30,8 @@ const LINK = 'text-primary-700 underline hover:text-primary-800';
 
 export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
   const { t } = useTranslation();
+  const details = plantSafetyDetails(page);
+  const faq = plantSafetyFaq(page, details, t);
 
   return (
     <article data-plant-safety={page.slug}>
@@ -69,6 +75,9 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
           {ANIMALS.map((animal) => (
             <VerdictRow key={animal} animal={animal} claim={page.claims[animal]} />
           ))}
+          {details && details.horses.state !== 'not-assessed' && (
+            <VerdictRow animal="horses" claim={details.horses} />
+          )}
         </dl>
       </section>
 
@@ -88,6 +97,10 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
         </section>
       )}
 
+      {details && <ListingDetails page={page} details={details} />}
+
+      {details?.extension && <ExtensionDetailsSection details={details} />}
+
       {hasCareGuide(page.slug) && (
         <p className="mt-8">
           <Link
@@ -98,6 +111,52 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
             {t('plantSafetyPage.careGuideLink', { name: page.commonName })}
           </Link>
         </p>
+      )}
+
+      {details && details.alternatives.length > 0 && (
+        <LinkedPlants
+          id="plant-safety-alternatives"
+          headingKey={
+            details.anyToxic
+              ? 'plantSafetyPage.alternativesHeading.toxic'
+              : 'plantSafetyPage.alternativesHeading.other'
+          }
+          introKey="plantSafetyPage.alternativesIntro"
+          pages={details.alternatives}
+        />
+      )}
+
+      {details && details.related.length > 0 && (
+        <LinkedPlants
+          id="plant-safety-related"
+          headingKey="plantSafetyPage.relatedHeading"
+          introKey="plantSafetyPage.relatedIntro"
+          pages={details.related}
+        />
+      )}
+
+      {faq.length > 0 && (
+        <section aria-labelledby="plant-safety-faq" className="mt-10">
+          <h2
+            id="plant-safety-faq"
+            data-chrome="plantSafetyPage.faqHeading"
+            className="font-serif text-2xl tracking-tight text-ink"
+          >
+            {t('plantSafetyPage.faqHeading')}
+          </h2>
+          <dl className="mt-4 space-y-5">
+            {faq.map((item) => (
+              <div key={item.id}>
+                <dt data-claim="faq-question" data-faq={item.id} className="font-medium text-ink">
+                  {item.question}
+                </dt>
+                <dd data-claim="faq-answer" data-faq={item.id} className="mt-1 text-gray-800">
+                  {item.answer}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       )}
 
       <section aria-labelledby="plant-safety-about" className="mt-10">
@@ -184,7 +243,215 @@ export function EmergencyAside() {
   );
 }
 
-function VerdictRow({ animal, claim }: { animal: Animal; claim: AnimalClaim }) {
+/**
+ * The plant's own ASPCA listing, quoted: its toxic principles, clinical signs
+ * and any further line, each verbatim from the table, then the list-wide line
+ * the ASPCA prints for every plant, each beside its source.
+ */
+function ListingDetails({ page, details }: { page: PlantSafetyPage; details: PlantSafetyDetails }) {
+  const { t } = useTranslation();
+
+  return (
+    <section aria-labelledby="plant-safety-listing" className="mt-10">
+      <h2
+        id="plant-safety-listing"
+        data-chrome="plantSafetyPage.listingHeading"
+        className="font-serif text-xl tracking-tight text-ink"
+      >
+        {t('plantSafetyPage.listingHeading')}
+      </h2>
+      {details.listing.length > 0 && (
+        <>
+          <p data-chrome="plantSafetyPage.listingIntro" className="mt-2 text-sm text-gray-600">
+            {t('plantSafetyPage.listingIntro')}
+          </p>
+          <dl className="mt-3 space-y-3">
+            {details.listing.map(({ field, value }) => (
+              <div key={field}>
+                <dt
+                  data-chrome={`plantSafetyPage.listingField.${field}`}
+                  className="text-xs font-medium uppercase tracking-wide text-primary-800"
+                >
+                  {t(`plantSafetyPage.listingField.${field}`)}
+                </dt>
+                <dd data-claim="listing-field" data-listing-field={field} className="text-gray-800">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <SourceLine sources={citedSources(page)} />
+        </>
+      )}
+      <p className="mt-4 text-sm text-gray-700">
+        <span data-chrome="plantSafetyPage.listCaveat">{t('plantSafetyPage.listCaveat')}</span>{' '}
+        <a
+          href={ASPCA_PLANT_LIST_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-claim="list-citation"
+          className={LINK}
+        >
+          {t('plantSafetyPage.listCitation')}
+        </a>
+      </p>
+    </section>
+  );
+}
+
+/**
+ * A university extension's page for the same plant, quoted, as a second
+ * source. Its "non-toxic" tags appear only where the ASPCA verdict above
+ * already says the same (see plantSafetyDetailsFrom).
+ */
+function ExtensionDetailsSection({ details }: { details: PlantSafetyDetails }) {
+  const { t } = useTranslation();
+  const ext = details.extension!;
+
+  return (
+    <section aria-labelledby="plant-safety-extension" className="mt-10">
+      <h2
+        id="plant-safety-extension"
+        data-chrome="plantSafetyPage.extensionHeading"
+        className="font-serif text-xl tracking-tight text-ink"
+      >
+        {t('plantSafetyPage.extensionHeading')}
+      </h2>
+      <p data-chrome="plantSafetyPage.extensionIntro" className="mt-2 text-sm text-gray-600">
+        {t('plantSafetyPage.extensionIntro')}
+      </p>
+      {ext.fields.length > 0 && (
+        <>
+          <dl className="mt-3 space-y-3">
+            {ext.fields.map(({ field, value }) => (
+              <div key={field}>
+                <dt
+                  data-chrome={`plantSafetyPage.extensionField.${field}`}
+                  className="text-xs font-medium uppercase tracking-wide text-primary-800"
+                >
+                  {t(`plantSafetyPage.extensionField.${field}`)}
+                </dt>
+                <dd
+                  data-claim="extension-field"
+                  data-extension-field={field}
+                  className="text-gray-800"
+                >
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p data-chrome="plantSafetyPage.extensionCaveat" className="mt-3 text-sm text-gray-700">
+            {t('plantSafetyPage.extensionCaveat')}
+          </p>
+        </>
+      )}
+      {ext.tags.length > 0 && (
+        <>
+          <p
+            data-chrome="plantSafetyPage.extensionTagsLabel"
+            className="mt-3 text-sm text-gray-700"
+          >
+            {t('plantSafetyPage.extensionTagsLabel')}
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-gray-800">
+            {ext.tags.map((animal) => (
+              <li key={animal}>
+                <span data-chrome={`plantSafetyPage.linkedAnimal.${animal}`}>
+                  {t(`plantSafetyPage.linkedAnimal.${animal}`)}
+                </span>{' '}
+                <span data-claim="extension-tag" data-animal={animal} data-state="non-toxic">
+                  {t(VERDICT_LABEL_KEY['non-toxic'])}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p data-chrome="plantSafetyPage.extensionTagsNote" className="mt-2 text-sm text-gray-600">
+            {t('plantSafetyPage.extensionTagsNote')}
+          </p>
+        </>
+      )}
+      <p className="mt-2 text-sm text-gray-700">
+        <span data-chrome="plantSafetyPage.sourceLabel">{t('plantSafetyPage.sourceLabel')}</span>{' '}
+        <a
+          href={ext.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-claim="extension-citation"
+          className={LINK}
+        >
+          {t('plantSafetyPage.extensionCitation', {
+            publisher: ext.publisher,
+            title: ext.title,
+            database: ext.database,
+          })}
+        </a>
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Other plant pages, each named by its own table entry and shown with that
+ * page's own cited cat and dog verdicts, so a link never vouches for a plant
+ * on this page's authority.
+ */
+function LinkedPlants({
+  id,
+  headingKey,
+  introKey,
+  pages,
+}: {
+  id: string;
+  headingKey: string;
+  introKey: string;
+  pages: PlantSafetyPage[];
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <section aria-labelledby={id} className="mt-10">
+      <h2 id={id} data-chrome={headingKey} className="font-serif text-xl tracking-tight text-ink">
+        {t(headingKey)}
+      </h2>
+      <p data-chrome={introKey} className="mt-2 text-sm text-gray-600">
+        {t(introKey)}
+      </p>
+      <ul className="mt-3 space-y-2">
+        {pages.map((target) => (
+          <li key={target.slug} data-linked-plant={target.slug} className="text-gray-800">
+            <Link
+              to={`/pet-safe/${target.slug}`}
+              data-claim="linked-plant"
+              data-target={target.slug}
+              className={`${LINK} font-medium`}
+            >
+              {target.commonName}
+            </Link>{' '}
+            {ANIMALS.map((animal) => (
+              <span key={animal} className="ml-2 text-sm">
+                {' '}
+                <span data-chrome={`plantSafetyPage.linkedAnimal.${animal}`}>
+                  {t(`plantSafetyPage.linkedAnimal.${animal}`)}
+                </span>{' '}
+                <span
+                  data-claim="linked-verdict"
+                  data-target={target.slug}
+                  data-animal={animal}
+                  data-state={target.claims[animal].state}
+                >
+                  {t(VERDICT_LABEL_KEY[target.claims[animal].state])}
+                </span>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function VerdictRow({ animal, claim }: { animal: AnyAnimal; claim: AnimalClaim }) {
   const { t } = useTranslation();
 
   return (
