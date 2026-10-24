@@ -370,7 +370,10 @@ export function CareGuidePage() {
             Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
             the right person in your household. Free for up to 20 plants, no card.
           </p>
-          <Link to="/register" className={`${buttonStyles()} shrink-0`}>
+          <Link
+            to="/register"
+            className={`${buttonStyles()} shrink-0 text-center max-sm:whitespace-normal`}
+          >
             Get watering reminders for your {sentenceName(guide.commonName)}
           </Link>
         </aside>
