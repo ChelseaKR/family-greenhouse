@@ -514,6 +514,9 @@ describe('conversion events', () => {
     ],
     ['a plan with no cadence or value', { name: 'purchase', transactionId: ORDER, plan: 'garden' }],
     ['an unlisted control', { name: 'landing_cta_click', cta: 'reader@example.org' }],
+    // The hero's "See how it works" link was removed so the hero has one call
+    // to action; its old value must not keep counting as a landing click.
+    ['the retired hero link', { name: 'landing_cta_click', cta: 'hero_how_it_works' }],
     ['an unlisted event', { name: 'login' }],
   ])('drops %s whole', async (_label, conversion) => {
     const { ga } = await load();

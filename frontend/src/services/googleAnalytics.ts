@@ -324,11 +324,13 @@ export function trackGooglePageView(
 
 /**
  * The landing-page controls whose clicks are counted: the sign-up buttons in
- * the header and the hero, and the hero's "see how it works" link. A click on
- * one is the first sign that an arriving visitor did anything at all, which
- * is the step the funnel loses most people at (docs/analytics.md).
+ * the header and the hero. A click on one is the first sign that an arriving
+ * visitor did anything at all, which is the step the funnel loses most people
+ * at (docs/analytics.md). The hero's "see how it works" link was removed on
+ * 2026-10-23 so the hero has one call to action. GA4 rows from before then
+ * may still carry `hero_how_it_works`.
  */
-export const LANDING_CTAS = ['nav_signup', 'hero_signup', 'hero_how_it_works'] as const;
+export const LANDING_CTAS = ['nav_signup', 'hero_signup'] as const;
 export type LandingCta = (typeof LANDING_CTAS)[number];
 
 /** The paid tiers and cadences a `purchase` can name. */

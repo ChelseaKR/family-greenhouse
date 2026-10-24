@@ -269,7 +269,9 @@ describe('ConfirmEmailPage', () => {
     await user.type(screen.getByLabelText(/nombre completo/i), 'Ada Lovelace');
     await user.type(screen.getByLabelText(/correo electrónico/i), 'ada@example.com');
     await user.type(screen.getByLabelText(/^contraseña\s*\*?$/i), 'Password1234');
-    await user.type(screen.getByLabelText(/confirmar contraseña/i), 'Password1234');
+    // One password field; the toggle beside it is in Spanish too.
+    expect(screen.queryByLabelText(/confirmar contraseña/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /mostrar contraseña/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /crear una cuenta/i }));
 
     expect(await screen.findByRole('heading', { name: /confirma tu correo/i })).toBeInTheDocument();
