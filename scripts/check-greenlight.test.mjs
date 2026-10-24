@@ -42,7 +42,7 @@ test('a moved tag (different commit) is refused', () => {
 
 test('different module bytes (different h1) are refused', () => {
   assert.throws(
-    () => assertPinnedModule({ ...GOOD, Sum: 'h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' }),
+    () => assertPinnedModule({ ...GOOD, Sum: `h1:${'A'.repeat(43)}=` }),
     IntegrityError
   );
 });
