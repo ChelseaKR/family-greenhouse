@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { CARE_GUIDES } from '@/features/care/careGuides';
+import { sentenceName } from '@/features/care/plantNames';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 
 /**
@@ -303,6 +304,40 @@ describe('CareGuidePage structure', () => {
         container.ownerDocument.querySelector('link[rel="canonical"]')?.getAttribute('href'),
         guide.slug
       ).toBe(`https://familygreenhouse.net/care/${guide.slug}`);
+      unmount();
+    }
+  });
+});
+
+/**
+ * The answer and the one call to action sit above the summary. Searchers ask
+ * "how often to water <plant>", and the water line used to come after a
+ * paragraph of personality; the sign-up link came after the FAQ.
+ */
+describe('CareGuidePage answer and call to action', () => {
+  it('puts the at-a-glance answer, then one plant-named reminder link, before the summary', () => {
+    for (const guide of CARE_GUIDES) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const glance = container.querySelector(`aside[aria-label="${guide.commonName} at a glance"]`);
+      const cta = container.querySelector('[data-testid="care-cta"]');
+      const summary = [...container.querySelectorAll('p')].find(
+        (p) => p.textContent === guide.summary
+      );
+      expect(glance, guide.slug).not.toBeNull();
+      expect(cta, guide.slug).not.toBeNull();
+      expect(summary, guide.slug).toBeDefined();
+      expect(glance!.textContent, guide.slug).toContain(guide.quickFacts.water);
+      const follows = (a: Node, b: Node) =>
+        Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(follows(glance!, cta!), guide.slug).toBe(true);
+      expect(follows(cta!, summary!), guide.slug).toBe(true);
+
+      // The site header's own sign-up link is chrome; the page body has one.
+      const registers = container.querySelectorAll('main a[href="/register"]');
+      expect(registers.length, guide.slug).toBe(1);
+      expect(registers[0]!.textContent, guide.slug).toBe(
+        `Get watering reminders for your ${sentenceName(guide.commonName)}`
+      );
       unmount();
     }
   });

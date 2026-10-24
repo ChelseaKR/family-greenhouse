@@ -121,7 +121,7 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
       {PUBLIC_REGISTRATION_AVAILABLE && (
         <section className="mt-12 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
           <h2 data-chrome="plantSafetyPage.signupTitle" className="font-serif text-xl text-ink">
-            {t('plantSafetyPage.signupTitle')}
+            {t('plantSafetyPage.signupTitle', { name: page.commonName })}
           </h2>
           <p data-chrome="plantSafetyPage.signupBody" className="mt-2 text-sm text-gray-600">
             {t('plantSafetyPage.signupBody')}
