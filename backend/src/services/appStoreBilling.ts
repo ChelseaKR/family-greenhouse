@@ -9,7 +9,7 @@ import {
   type AppStoreSubscription,
   type AppStoreTransaction,
 } from '../models/appStore.js';
-import { getPlan, planRank, giftState, type PlanId } from '../models/plans.js';
+import { isPlanId, planRank, giftState, type PlanId } from '../models/plans.js';
 import {
   APP_STORE_APP_APPLE_ID,
   APP_STORE_BUNDLE_ID,
@@ -372,11 +372,17 @@ export async function purchaseRefusal(
   const sub = await getHouseholdSubscription(householdId);
   if (hasLiveStripeSubscription(sub)) return 'STRIPE_SUBSCRIPTION_ACTIVE';
   if (appStoreState(sub, now) === 'active') return 'APP_STORE_SUBSCRIPTION_ACTIVE';
-  const wanted = planRank(getPlan(planId).id);
-  if (sub.lifetimePlanId && planRank(getPlan(sub.lifetimePlanId).id) >= wanted) {
+  // The tier being bought, compared with what a lifetime purchase or a
+  // running gift already covers: ranks of named tiers, not entitlement.
+  const wanted = planRank(planId);
+  if (isPlanId(sub.lifetimePlanId) && planRank(sub.lifetimePlanId) >= wanted) {
     return 'PLAN_ALREADY_INCLUDED';
   }
-  if (giftState(sub, now) === 'active' && planRank(getPlan(sub.giftPlanId).id) >= wanted) {
+  if (
+    giftState(sub, now) === 'active' &&
+    isPlanId(sub.giftPlanId) &&
+    planRank(sub.giftPlanId) >= wanted
+  ) {
     return 'PLAN_ALREADY_INCLUDED';
   }
   return null;
