@@ -25,6 +25,7 @@
  *   - **Escaping** is `renderEmail`'s: every interpolated value, including the
  *     recipient's name, goes through `escapeHtml` there.
  */
+import { CHECKOUT_TRIAL_END_MIN_LEAD_MS } from '../models/checkoutTrial.js';
 import { PLANS } from '../models/plans.js';
 import { t, formatCount, type EmailLocale } from './email/catalog.js';
 import { appUrl, settingsUrl } from './email/links.js';
@@ -87,7 +88,11 @@ interface Phrases {
   limitTools: string;
   overPlants: string;
   overMembers: string;
-  keepGarden: string;
+  /** Day 10, while a checkout can still defer the first charge to `{{date}}`. */
+  keepGardenUntil: string;
+  /** Day 10 sent too late for that (inside Stripe's minimum), and day 14. */
+  keepGardenNow: string;
+  gardenBack: string;
   nothingToDo: string;
   cta: string;
   reply: string;
@@ -141,8 +146,12 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'You have {{count}} active plants, more than Seedling’s {{limit}}. They all stay. Adding another is paused until you have fewer than {{limit}}.',
     overMembers:
       'Your household has {{count}} people, more than Seedling’s {{limit}}. They all stay. New people cannot join until there is room.',
-    keepGarden:
-      'If you would like to keep Garden, it is {{price}} a month. You can start it any time in Settings, under Billing.',
+    keepGardenUntil:
+      'If you would like to keep Garden, it is {{price}} a month. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings, under Billing.',
+    keepGardenNow:
+      'If you would like to keep Garden, it is {{price}} a month, and the first charge is the day you start it. You can start it in Settings, under Billing.',
+    gardenBack:
+      'If you would like Garden back, it is {{price}} a month, and the first charge is the day you start it. You can start it any time in Settings, under Billing.',
     nothingToDo: 'If you would rather stay on Seedling, there is nothing you need to do.',
     cta: 'See plans in Settings',
     reply: 'Questions? Reply to this email and a person will read it.',
@@ -196,8 +205,12 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'Tienes {{count}} plantas activas, más que las {{limit}} de Seedling. Todas se quedan. No podrás añadir otra hasta tener menos de {{limit}}.',
     overMembers:
       'Tu hogar tiene {{count}} personas, más que las {{limit}} de Seedling. Todas se quedan. Las personas nuevas no pueden unirse hasta que haya sitio.',
-    keepGarden:
-      'Si quieres conservar Garden, cuesta {{price}} al mes. Puedes empezarlo cuando quieras en Ajustes, en Facturación.',
+    keepGardenUntil:
+      'Si quieres conservar Garden, cuesta {{price}} al mes. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes, en Facturación.',
+    keepGardenNow:
+      'Si quieres conservar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes, en Facturación.',
+    gardenBack:
+      'Si quieres recuperar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes, en Facturación.',
     nothingToDo: 'Si prefieres quedarte en Seedling, no tienes que hacer nada.',
     cta: 'Ver los planes en Ajustes',
     reply: '¿Preguntas? Responde a este correo y lo leerá una persona.',
@@ -317,6 +330,28 @@ function limitBlocks(ctx: TrialEmailContext, p: Phrases, withOver: boolean): Ema
   return blocks;
 }
 
+/**
+ * The one sentence that names the price, and the first charge it would bring.
+ *
+ * No stacked trials (owner decision, 2026-10-23): a household that starts
+ * Garden during its no-card trial is first charged when that trial ends, not
+ * 14 days after checkout, and one that starts it after the trial is charged
+ * that day. The cutoff is the last moment a checkout can still defer the
+ * charge (`CHECKOUT_TRIAL_END_MIN_LEAD_MS` before the end, the rule
+ * `checkoutTrialFor` applies). It is printed as a calendar date and the copy
+ * says "before" it, so a reader in any zone who acts before that date is
+ * inside the window.
+ */
+function keepGardenLine(ctx: TrialEmailContext, p: Phrases, price: string, date: string): string {
+  if (ctx.kind === 'trial_day14') return fill(p.gardenBack, { price });
+  const cutoffMs = Date.parse(ctx.endsAt) - CHECKOUT_TRIAL_END_MIN_LEAD_MS;
+  if (!Number.isFinite(cutoffMs) || ctx.now.getTime() >= cutoffMs) {
+    return fill(p.keepGardenNow, { price });
+  }
+  const cutoff = formatEndDate(ctx.locale, new Date(cutoffMs).toISOString(), ctx.timeZone);
+  return fill(p.keepGardenUntil, { price, date, cutoff });
+}
+
 export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTrialEmail {
   const { kind, locale } = ctx;
   const p = PHRASES[locale];
@@ -358,7 +393,7 @@ export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTria
   }
 
   blocks.push({ kind: 'divider' });
-  blocks.push({ kind: 'text', text: fill(p.keepGarden, { price }) });
+  blocks.push({ kind: 'text', text: keepGardenLine(ctx, p, price, date) });
   blocks.push({ kind: 'text', text: p.nothingToDo });
   blocks.push({ kind: 'button', label: p.cta, href: appUrl('/settings/billing') });
   blocks.push({ kind: 'text', text: p.reply, tone: 'muted' });

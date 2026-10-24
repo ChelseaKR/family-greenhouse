@@ -31,6 +31,7 @@ import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isPaymentLapsed, paymentFailedCopy } from '@/features/billing/paymentFailing';
 import { useReportPlanPurchase } from '@/features/billing/reportPlanPurchase';
+import { changePlanDescription } from './changePlanDescription';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
 // resolved and giftSubscriptions is on the offer, so it costs nothing on
@@ -587,7 +588,7 @@ export function BillingSettings() {
         <Card>
           <CardHeader
             title={t('settings.billing.changePlanTitle')}
-            description={t(changePlanDescriptionKey)}
+            description={changePlanDescription(t, subQuery.data, changePlanDescriptionKey)}
           />
           {/* Fail closed, for the same reason `hasLiveSubscription` does: with
               the subscription read unsettled we do not know what the household

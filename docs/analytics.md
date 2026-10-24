@@ -347,8 +347,8 @@ page view, and carries the same scrubbed `page_location`.
   two validated enums of that checkout. Nothing is stored on the device for
   this. GA never sees that query string (`gaQuery` keeps only `utm_*`).
 - **`value`** is the catalog price for that plan and cadence. On a
-  first subscription Stripe starts a 14-day card trial, so the first charge
-  comes after the trial: `value` is the price the buyer committed to, not money
+  first subscription Stripe usually starts a trial (14 days, or the rest of
+  a running no-card trial), so the first charge comes after the trial: `value` is the price the buyer committed to, not money
   taken that day. Renewals are not reported.
 - **Key events:** `purchase`, `sign_up` and `start_trial` are marked as key
   events on the property (Admin API, 2026-09-18). `landing_cta_click` is not a

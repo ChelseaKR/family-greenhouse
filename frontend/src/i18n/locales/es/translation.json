@@ -430,7 +430,7 @@
     "reactivationQuestion": "¿Se puede reactivar la facturación automáticamente?",
     "reactivationAnswer": "No. La reactivación requiere una decisión de estado con fecha, cambios revisados en el código y la infraestructura, verificación fuera de producción y un despliegue aprobado por separado.",
     "trialQuestion": "¿Cómo funciona la prueba gratuita?",
-    "trialAnswer": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Plántula y conserva todo lo que haya añadido; cada cuenta tiene una. Aparte, la primera suscripción de pago de un hogar empieza con una prueba de 14 días: no se te cobra hasta que termina, y cancelar antes no cuesta nada. Esa prueba es una sola por hogar, así que un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse.",
+    "trialAnswer": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Plántula y conserva todo lo que haya añadido; cada cuenta tiene una. Si eliges un plan de pago durante esos 14 días, añades una tarjeta en el proceso de pago y el primer cobro es el día en que terminan los días gratis, no 14 días después: las pruebas no se suman. Si lo eliges en los dos últimos días, o cuando ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo los días gratis tiene en su lugar una prueba de 14 días en su primera suscripción de pago, sin ningún cobro hasta que termina. Un hogar que ya ha tenido una prueba se cobra cuando vuelve a suscribirse, y cancelar antes del primer cobro no cuesta nada.",
     "changeQuestion": "¿Puedo cambiar o cancelar más adelante?",
     "changeAnswer": "Sí. Los cambios de plan y la cancelación se gestionan desde Ajustes → Facturación, que abre el portal de nuestro proveedor de pagos. Al cancelar, tu hogar vuelve al plan gratuito Plántula al final del periodo pagado.",
     "whereQuestion": "¿Dónde se compra?",
@@ -441,7 +441,7 @@
     "householdQuestion": "¿Cada persona de mi hogar necesita su propio plan?",
     "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta tres personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
     "cardQuestion": "¿Necesito tarjeta de crédito?",
-    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta antes de que empiece la prueba de la suscripción; cuando hay prueba, no se cobra nada hasta que terminan sus 14 días. La prueba de la suscripción es una sola por hogar, así que un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse."
+    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta. Si a los 14 días gratis de tu hogar les quedan más de dos días, el primer cobro es el día en que terminan; un hogar que nunca ha tenido una prueba tiene 14 días antes del primer cobro; en cualquier otro caso, la tarjeta se cobra en el momento del pago."
   },
   "petSafeSignup": {
     "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
@@ -1678,9 +1678,11 @@
       "adminOnlyBilling": "Solo una persona administradora del hogar puede gestionar la facturación.",
       "adminOnlyPlan": "Solo una persona administradora del hogar puede cambiar el plan.",
       "changePlanTitle": "Cambiar de plan",
-      "changePlanDescription": "Las mejoras se aplican de inmediato. La primera suscripción de pago de un hogar empieza con una prueba gratuita de 14 días; la prueba es una sola por hogar, así que una suscripción posterior se cobra de inmediato.",
+      "changePlanDescription": "Las mejoras se aplican de inmediato. Las pruebas gratuitas son una sola por hogar y no se suman: un hogar en su prueba gratuita de Garden recibe el primer cobro cuando termina esa prueba, uno que nunca ha tenido una prueba tiene 14 días antes del primer cobro, y uno que ya la tuvo se cobra de inmediato.",
       "changePlanDescriptionTrial": "Las mejoras se aplican de inmediato. Este hogar todavía no ha usado su prueba gratuita de 14 días, así que una suscripción nueva empieza con ella y no se cobra nada hasta que termine.",
-      "changePlanDescriptionTrialUsed": "Las mejoras se aplican de inmediato. Este hogar ya ha usado su prueba gratuita de 14 días —es una sola por hogar—, así que una suscripción nueva se cobra de inmediato en lugar de después de 14 días gratis.",
+      "changePlanDescriptionTrialUsed": "Las mejoras se aplican de inmediato. Este hogar ya tuvo su prueba gratuita —hay una por hogar—, así que una suscripción nueva se cobra de inmediato.",
+      "changePlanDescriptionTrialUntil": "Las mejoras se aplican de inmediato. Añade una tarjeta ahora; tu primer cobro será el {{date}}, el día en que termina la prueba gratuita de Garden de este hogar. No se cobra nada antes de esa fecha, y cancelar antes no cuesta nada.",
+      "changePlanDescriptionTrialEndingSoon": "Las mejoras se aplican de inmediato. La prueba gratuita de Garden de este hogar termina el {{date}}, demasiado pronto para pasar el primer cobro a ese día, así que una suscripción nueva se cobra al empezarla.",
       "currentPlanNote": "Este es tu plan actual.",
       "cancelToReturn": "Cancela en el portal de facturación para volver a Plántula.",
       "usePortalToSwitch": "Usa “Gestionar suscripción” arriba para cambiar a {{plan}}.",
@@ -2092,7 +2094,7 @@
     "featureEverythingGarden": "Todo lo de Jardín",
     "featureApiAccess": "Acceso a la API para automatizar",
     "featureImportExport": "Importación, exportación y calendario (CSV, JSON, .ics)",
-    "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Aparte, la primera suscripción de pago de un hogar empieza con una prueba de 14 días: el proceso de pago pide una tarjeta por adelantado, no se te cobra hasta que pasan los 14 días y cancelar antes no cuesta nada. La prueba de la suscripción es una sola por hogar: un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse.",
+    "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Si eliges un plan de pago durante esos días, el proceso de pago pide una tarjeta, pero el primer cobro es el día en que terminan, no 14 días después; si quedan dos días o menos, o ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo esos días tiene en su lugar una prueba de 14 días en su primera suscripción de pago. Las pruebas son una sola por hogar, y cancelar antes del primer cobro no cuesta nada.",
     "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Facturación. En esta página no se compra nada.",
     "giftNote": "¿Es para regalar?",
     "whyHeading": "Por qué un plan de pago",
@@ -2716,7 +2718,7 @@
       "eyebrow": "Planes",
       "open": {
         "title": "Un solo plan cubre todo el hogar",
-        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 personas y 20 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 personas y 20 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
         "footerNote": "Las condiciones de la prueba, la cancelación y los cambios de plan se explican en detalle en la",
         "footerLink": "página de planes"
       },
@@ -2777,7 +2779,7 @@
       "heldClosed": "Los planes de pago están en pausa"
     },
     "lede": {
-      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
+      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta, y un plan de pago se puede cancelar cuando quieras.",
       "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
       "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
     },
@@ -2788,7 +2790,7 @@
         "heldClosed": "Estado de los planes — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
         "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 3 personas y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
         "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
       }

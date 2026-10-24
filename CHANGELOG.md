@@ -16,6 +16,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **Free trials no longer stack.** A household on its 14-day no-card Garden
+  trial that starts a paid plan used to get 14 more free days on top, so its
+  first charge could come 28 days after it signed up. Its Stripe trial now ends
+  on the no-card trial's end date: it adds a card at checkout and is first
+  charged that day. With less than 48 hours 30 minutes of the no-card trial
+  left (Stripe's minimum for a trial end, plus the life of the checkout), or
+  after it has ended, checkout charges at once. A household that never had the
+  no-card trial keeps the 14-day card trial on its first subscription.
+  `GET /billing/me` adds `checkoutTrialEndsAt`, and Settings → Billing says
+  "Add a card now; your first charge is on {date}". The pricing FAQ, the
+  pricing and landing pages, the help article and the Terms (Free trials, Plan
+  status, Refunds) say the same in English and Spanish. The Terms text changed,
+  so its effective date is `UNRELEASED` until the release that ships it.
+
+- **The day-10 and day-14 trial emails are on in production.**
+  `trial_lifecycle_emails_enabled = true` in the production tfvars sets
+  `TRIAL_LIFECYCLE_EMAILS_ENABLED` on the `digests` Lambda and turns the daily
+  `trial-emails` rule from `DISABLED` to `ENABLED`. The day-10 email now names
+  the first charge the same way checkout does: start Garden before the cutoff
+  date and the first charge is the trial's end date; later, or after the trial,
+  it is the day you start. The digests build must contain the `trialEmails` job
+  (0.44.0) before this is applied.
+
 - **The Gift link and the `/gift` page no longer advertise gifts that cannot be
   bought.** Production has no gift price ids yet, so a signed-in buyer who
   pressed "Buy gift" got a `GIFT_NOT_CONFIGURED` error. The footer, the landing

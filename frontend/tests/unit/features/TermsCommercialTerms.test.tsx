@@ -247,62 +247,66 @@ describe('terms: a failed payment keeps the plan while the card is retried (#593
 
 describe('terms: the trial length is the one the backend actually asks Stripe for', () => {
   /**
-   * The 14 days on the Terms page is not a house number — it is
-   * `trial_period_days` on every subscription Checkout session we create. The
-   * two live in different workspaces, so nothing else notices when one moves.
-   * Read the backend source as text rather than importing it: this test only
-   * needs the literal the service ships, and a text read costs no cross-
-   * workspace module resolution.
+   * The 14 days on the Terms page is not a house number — it is the card
+   * trial `checkoutTrialFor` hands every first subscription Checkout session.
+   * The two live in different workspaces, so nothing else notices when one
+   * moves. Read the backend source as text rather than importing it: this
+   * test only needs the literal the service ships, and a text read costs no
+   * cross-workspace module resolution.
    */
-  const billingPath = ['../backend/src/services/billing.ts', 'backend/src/services/billing.ts']
+  const rulePath = ['../backend/src/models/checkoutTrial.ts', 'backend/src/models/checkoutTrial.ts']
     .map((candidate) => resolve(process.cwd(), candidate))
     .find(existsSync);
-  const billingSource = billingPath === undefined ? '' : readFileSync(billingPath, 'utf8');
+  const ruleSource = rulePath === undefined ? '' : readFileSync(rulePath, 'utf8');
 
-  it('takes its number from services/billing.ts, in both locales', () => {
+  it('takes its number from models/checkoutTrial.ts, in both locales', () => {
     // A path that did not resolve is a failed read, not "no trial" — say so
     // rather than passing on an empty string.
-    expect(billingPath, 'could not locate backend/src/services/billing.ts').toBeDefined();
-    // The value is written either as a literal or through a named constant
-    // (`trial_period_days: TRIAL_PERIOD_DAYS`). Follow the indirection rather
-    // than matching only digits: a constant that this test could not resolve
-    // is a failed read, and must fail loudly instead of reading as "no trial".
-    const setting = billingSource.match(/trial_period_days:\s*([A-Za-z0-9_]+)/);
-    expect(setting, 'trial_period_days is no longer set in services/billing.ts').not.toBeNull();
-    const token = setting![1];
-    const days = /^\d+$/.test(token)
-      ? token
-      : billingSource.match(new RegExp(`\\b${token}\\s*=\\s*(\\d+)`))?.[1];
-    expect(
-      days,
-      `trial_period_days is set to \`${token}\`, whose value was not found`
-    ).toBeDefined();
+    expect(rulePath, 'could not locate backend/src/models/checkoutTrial.ts').toBeDefined();
+    const days = ruleSource.match(/\bTRIAL_PERIOD_DAYS\s*=\s*(\d+)/)?.[1];
+    expect(days, 'TRIAL_PERIOD_DAYS was not found in models/checkoutTrial.ts').toBeDefined();
+    expect(ruleSource, 'the card trial no longer uses TRIAL_PERIOD_DAYS').toMatch(
+      /kind:\s*'card_trial',\s*days:\s*TRIAL_PERIOD_DAYS/
+    );
 
     expect(enLegal.legal.terms.trial.intro).toContain(`${days}-day free trial`);
-    expect(enLegal.legal.terms.trial.ending).toContain(`When the ${days} days are up`);
     expect(esLegal.legal.terms.trial.intro).toContain(`prueba gratuita de ${days} días`);
-    expect(esLegal.legal.terms.trial.ending).toContain(`Cuando pasan los ${days} días`);
   });
 
   /**
    * The trial is once per HOUSEHOLD, not once per subscription:
-   * `createCheckoutSession` omits `trial_period_days` entirely when
-   * `trialConsumedAt` is set, and that marker is deliberately never cleared by
-   * cancellation. A household that resubscribes is therefore charged at
-   * checkout with no free period. The Terms are what a paying household is
-   * held to, so they must not promise a trial to someone who will not get one.
+   * `checkoutTrialFor` gives no trial at all when `trialConsumedAt` is set,
+   * and that marker is deliberately never cleared by cancellation. A
+   * household that resubscribes is therefore charged at checkout with no free
+   * period. The Terms are what a paying household is held to, so they must
+   * not promise a trial to someone who will not get one.
    */
   it('does not promise a trial the backend withholds from a returning household', () => {
-    expect(billingPath, 'could not locate backend/src/services/billing.ts').toBeDefined();
+    expect(rulePath, 'could not locate backend/src/models/checkoutTrial.ts').toBeDefined();
     expect(
-      billingSource,
+      ruleSource,
       'the trial is no longer gated on trialConsumedAt — re-read the Terms trial section against the new rule'
-    ).toMatch(/trialConsumedAt\s*\?\s*\{\}\s*:\s*\{\s*trial_period_days/);
+    ).toMatch(/if \(row\.trialConsumedAt\) return \{ kind: 'none' \};/);
 
     // Neither locale may claim the trial applies to every new subscription.
     expect(enLegal.legal.terms.trial.intro).toContain('first paid subscription');
     expect(enLegal.legal.terms.trial.intro).toMatch(/once per household/i);
     expect(esLegal.legal.terms.trial.intro).toContain('primera suscripción de pago');
     expect(esLegal.legal.terms.trial.intro).toMatch(/una sola por hogar/i);
+  });
+
+  /**
+   * No stacked trials (owner decision 2026-10-23): a household on its no-card
+   * trial that subscribes gets a Stripe trial ending on the no-card trial's
+   * end date, not 14 more days. The Terms must say the two do not add up, and
+   * must not say the first charge always comes after 14 days.
+   */
+  it('says the no-card trial and the subscription trial do not add up', () => {
+    expect(ruleSource).toMatch(/kind:\s*'until_no_card_trial_end'/);
+    expect(enLegal.legal.terms.trial.intro).toMatch(/never add up/);
+    expect(enLegal.legal.terms.trial.intro).toMatch(/charged at checkout, with no trial/);
+    expect(esLegal.legal.terms.trial.intro).toMatch(/nunca se suman/);
+    expect(enLegal.legal.terms.trial.ending).not.toMatch(/14 days are up/);
+    expect(esLegal.legal.terms.trial.ending).not.toMatch(/pasan los 14 días/);
   });
 });
