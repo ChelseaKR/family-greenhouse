@@ -18,6 +18,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **The houseplant shortcut on an empty dashboard.** A household with no
+  plants now sees the same one-tap common-houseplant grid in the dashboard's
+  "Your plants" card, with a link to the full Add Plant page beside it. It
+  shows only to a member of the household and only on a settled empty read.
+  GA4 `first_plant_added` reports these taps as `dashboard_empty`.
+
 - **Pick a common houseplant in the first run.** The first screen after
   creating a household now opens with ten common houseplants from the care
   guides. One tap saves the plant with its scientific name as the species and

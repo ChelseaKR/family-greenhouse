@@ -5,7 +5,7 @@ import clsx from 'clsx';
 import { plantService } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
 import { track } from '@/services/analytics';
-import { trackGoogleConversion } from '@/services/googleAnalytics';
+import { trackGoogleConversion, type FirstPlantMethod } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Alert } from '@/components/Alert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -22,6 +22,10 @@ interface CommonPlantPickerProps {
   disabled?: boolean;
   /** Lets the step disable its typed form while a tap is saving. */
   onPendingChange?: (pending: boolean) => void;
+  /** Where the tap happened, for GA4 `first_plant_added`. */
+  method?: Extract<FirstPlantMethod, 'common_plant' | 'dashboard_empty'>;
+  /** The heading's level, so it nests under whatever surface hosts it. */
+  headingAs?: 'h2' | 'h3';
 }
 
 /**
@@ -49,6 +53,8 @@ export function CommonPlantPicker({
   onAdded,
   disabled = false,
   onPendingChange,
+  method = 'common_plant',
+  headingAs: Heading = 'h2',
 }: CommonPlantPickerProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -83,7 +89,7 @@ export function CommonPlantPicker({
       // the funnel counts a tapped plant and a typed one as the same step.
       track('plant_added', { ordinal: 'first' });
       trackGoogleConversion({ name: 'household_activated' });
-      trackGoogleConversion({ name: 'first_plant_added', method: 'common_plant' });
+      trackGoogleConversion({ name: 'first_plant_added', method });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       if (scheduleFailed) {
@@ -106,9 +112,9 @@ export function CommonPlantPicker({
 
   return (
     <section aria-labelledby={headingId} className="mt-6">
-      <h2 id={headingId} className="text-base font-semibold text-ink">
+      <Heading id={headingId} className="text-base font-semibold text-ink">
         {t('firstRun.picker.heading')}
-      </h2>
+      </Heading>
       <p id={hintId} className="mt-1 text-sm text-gray-600">
         {t('firstRun.picker.hint')}
       </p>

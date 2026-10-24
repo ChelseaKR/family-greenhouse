@@ -302,6 +302,9 @@
       "finish": "Ir a mi panel"
     }
   },
+  "dashboardEmpty": {
+    "somethingElse": "¿Otra planta? Añádela con fotos y más detalles"
+  },
   "goingAwaySoon": {
     "title": "¿Te vas pronto?",
     "body": "Crea un enlace de cuidador para que alguien de confianza vea qué plantas necesitan cuidados mientras no estás. Caduca solo y puedes desactivarlo cuando quieras.",

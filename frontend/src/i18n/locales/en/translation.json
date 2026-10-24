@@ -290,6 +290,9 @@
       "finish": "Go to my dashboard"
     }
   },
+  "dashboardEmpty": {
+    "somethingElse": "Something else? Add any plant, with photos and details"
+  },
   "goingAwaySoon": {
     "title": "Going away soon?",
     "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",
