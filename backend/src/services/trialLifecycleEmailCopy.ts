@@ -30,6 +30,7 @@ import { t, formatCount, type EmailLocale } from './email/catalog.js';
 import { appUrl, settingsUrl } from './email/links.js';
 import { renderEmail, type EmailBlock } from './email/template.js';
 import type { CountRead, TrialFacts } from './trialLifecycleFacts.js';
+import { withSeedlingGrandfather } from '../models/plans.js';
 
 export type TrialEmailKind = 'trial_day10' | 'trial_day14';
 
@@ -46,6 +47,12 @@ export interface TrialEmailContext {
   facts: TrialFacts;
   /** One-click unsubscribe URL, or null when it could not be minted. */
   unsubscribeUrl: string | null;
+  /**
+   * The household row's `createdAt`. A household created before the
+   * 2026-10-23 Seedling cut falls back to 20 plants and 3 members, not 8 and
+   * 2 (ADR 0040), and the email must name the caps it will actually have.
+   */
+  householdCreatedAt?: string | null;
 }
 
 export interface ComposedTrialEmail {
@@ -273,11 +280,12 @@ function factBlocks(ctx: TrialEmailContext, p: Phrases): EmailBlock[] {
   return blocks;
 }
 
-/** What Seedling holds, from the catalog. */
+/** What Seedling holds for THIS household: the catalog, or its grandfathered caps. */
 function limitBlocks(ctx: TrialEmailContext, p: Phrases, withOver: boolean): EmailBlock[] {
   const { locale, facts } = ctx;
-  const plantLimit = PLANS.seedling.limits.plants;
-  const memberLimit = PLANS.seedling.limits.members;
+  const seedling = withSeedlingGrandfather(PLANS.seedling, ctx.householdCreatedAt);
+  const plantLimit = seedling.limits.plants;
+  const memberLimit = seedling.limits.members;
   const blocks: EmailBlock[] = [];
   if (plantLimit !== null) {
     blocks.push({

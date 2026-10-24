@@ -544,7 +544,7 @@ export function LandingPage() {
                   '@type': 'Offer',
                   price: '0',
                   priceCurrency: 'USD',
-                  description: 'Free for one home, up to 3 household members and 20 plants',
+                  description: 'Free for one home, up to 2 household members and 8 plants',
                 },
               }
             : {}),

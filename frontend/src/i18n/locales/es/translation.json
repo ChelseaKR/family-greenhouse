@@ -367,7 +367,7 @@
     "goToRegistration": "Ir al registro",
     "signUpTitle": "Crear una cuenta",
     "registerTitle": "Empieza tu invernadero",
-    "registerSubtitle": "Gratis para un hogar, hasta 3 miembros del hogar y 20 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
+    "registerSubtitle": "Gratis para un hogar, hasta 2 miembros del hogar y 8 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
     "showPassword": "Mostrar contraseña",
@@ -451,7 +451,7 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "¿Puedo crear una cuenta?",
-    "freeAccountAnswer": "Sí. Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas, sin tarjeta de crédito.",
+    "freeAccountAnswer": "Sí. Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas, sin tarjeta de crédito.",
     "headingHeld": "Qué sigue disponible",
     "headingOpen": "Preguntas frecuentes",
     "paidOfferQuestion": "¿Es esta una oferta de pago?",
@@ -468,7 +468,7 @@
     "dataAnswerHeld": "Las plantas, los registros del hogar, las tareas y el historial de cuidados siguen disponibles dentro de los límites del plan actual. La pausa no elimina datos.",
     "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas, los miembros y los hogares existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite. La exportación y tu historial de cuidados nunca dependen del plan.",
     "householdQuestion": "¿Cada persona de mi hogar necesita su propio plan?",
-    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta tres personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
+    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta dos personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
     "cardQuestion": "¿Necesito tarjeta de crédito?",
     "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta antes de que empiece la prueba de la suscripción; cuando hay prueba, no se cobra nada hasta que terminan sus 14 días. La prueba de la suscripción es una sola por hogar, así que un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse."
   },
@@ -538,7 +538,7 @@
     "breadcrumbHome": "Inicio",
     "breadcrumbHub": "Mascotas y plantas",
     "signupTitle": "Recibe recordatorios de riego para tu {{name}}",
-    "signupBody": "Family Greenhouse sigue el calendario de riego de cada planta y avisa a la persona indicada de tu hogar. Gratis hasta 20 plantas, sin tarjeta.",
+    "signupBody": "Family Greenhouse sigue el calendario de riego de cada planta y avisa a la persona indicada de tu hogar. Gratis hasta 8 plantas, sin tarjeta.",
     "signupCta": "Configurar recordatorios",
     "unknownTitle": "No hay un veredicto con fuente para esta planta",
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
@@ -1838,6 +1838,7 @@
       "plantsUsageUnlimited": "{{n}} plantas · sin límite",
       "plantsCountUnavailable": "Plantas — uso no disponible",
       "membersUsageUnlimited": "{{n}} miembros · sin límite",
+      "freeCapsGrandfathered": "Este hogar se creó antes de que cambiara el plan gratuito, así que conserva los límites gratuitos con los que se registró: {{plants}} plantas y {{members}} personas. Los hogares creados desde entonces tienen {{newPlants}} plantas y {{newMembers}} personas.",
       "membersCountUnavailable": "Miembros — uso no disponible",
       "checkoutPendingTitle": "Pago recibido: estamos terminando",
       "checkoutPendingBody": "Tu pago se ha realizado. Tu plan se actualizará aquí en cuanto lo confirme nuestro proveedor de pagos, normalmente en unos segundos. No vuelvas a pasar por la caja: una segunda compra iniciaría una segunda suscripción y te cobraría dos veces.",
@@ -2224,7 +2225,7 @@
     "featureSitterBasic": "1 enlace de cuidador a la vez, hasta 7 días",
     "featureAnalytics30": "30 días de estadísticas",
     "whyCoordinateTitle": "Para el hogar que necesita coordinarse",
-    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, tres personas, veinte plantas. Jardín es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
+    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, dos personas, ocho plantas. Jardín es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
     "whyHomesTitle": "Para quienes ayudan en más de un hogar",
     "whyHomesBody": "Invernadero es muchos hogares, muchas manos: forma parte de todos los hogares que cuidas —tu casa, la de tus padres, el alquiler— y añade acceso a la API para automatizar."
   },
@@ -2294,6 +2295,16 @@
       "away_kit": "El Kit de Viaje: enlaces de cuidador más largos, la guía de traspaso y el resumen de vuelta",
       "garden_plan": "El plan Garden",
       "greenhouse_plan": "El plan Greenhouse"
+    }
+  },
+  "planCap": {
+    "plants": {
+      "title": "Espacio para más plantas",
+      "body": "Tu plan admite {{max}} plantas activas y este hogar tiene {{n}}. Todas las plantas se quedan y puedes seguir editándolas; solo añadir otra tiene que esperar a que haya sitio. Archivar una planta que ya no cuidas libera un hueco, o un plan con más espacio quita el límite."
+    },
+    "members": {
+      "title": "Espacio para más personas",
+      "body": "Tu plan admite {{max}} personas y este hogar tiene {{n}}. Todas se quedan; una persona nueva podrá unirse cuando haya sitio. Quita a alguien que ya no ayude, o un plan con más espacio quita el límite."
     }
   },
   "awayRecap": {
@@ -2642,7 +2653,7 @@
   "landing": {
     "meta": {
       "title": "Family Greenhouse — Cuidado de plantas compartido y recordatorios de riego",
-      "descriptionOpen": "Comparte con tu hogar los calendarios de riego, los recordatorios, los registros de cuidado y las tareas de tus plantas. Family Greenhouse es gratis para un hogar, hasta 3 personas y 20 plantas.",
+      "descriptionOpen": "Comparte con tu hogar los calendarios de riego, los recordatorios, los registros de cuidado y las tareas de tus plantas. Family Greenhouse es gratis para un hogar, hasta 2 personas y 8 plantas.",
       "descriptionClosed": "Un diario de cuidados compartido para los calendarios de riego, los recordatorios, las tareas y los registros de cuidado de las plantas de tu hogar. Si ya tienes cuenta, puedes seguir iniciando sesión."
     },
     "nav": {
@@ -2664,7 +2675,7 @@
         "headlinePost": " planta.",
         "subhead": "Family Greenhouse lleva un calendario de riego y cuidados para cada una de tus plantas, para que ninguna se quede sin agua ni se ahogue. Funciona igual de bien para una persona con unas cuantas macetas en la ventana que para todo un hogar que comparte la regadera."
       },
-      "signupNote": "Sin tarjeta de crédito. Tu hogar tiene 14 días de Garden y después sigue gratis para hasta 3 personas y 20 plantas. Confirmarás tu correo con un código que te enviamos."
+      "signupNote": "Sin tarjeta de crédito. Tu hogar tiene 14 días de Garden y después sigue gratis para hasta 2 personas y 8 plantas. Confirmarás tu correo con un código que te enviamos."
     },
     "mockup": {
       "label": "Vista previa del panel de Family Greenhouse con las próximas tareas de cuidado de plantas y la actividad del hogar.",
@@ -2694,14 +2705,14 @@
     "facts": {
       "free": {
         "value": "Gratis",
-        "label": "Hasta 20 plantas, sin tarjeta de crédito"
+        "label": "Hasta 8 plantas, sin tarjeta de crédito"
       },
       "existing": {
         "value": "Cuentas existentes",
         "label": "Puedes seguir iniciando sesión y consultando tus datos de cuidado"
       },
       "people": {
-        "value": "3 personas",
+        "value": "2 personas",
         "label": "Comparten un hogar gratis; sin límite con Garden"
       },
       "minutes": {
@@ -2822,7 +2833,7 @@
       "eyebrow": "Planes",
       "open": {
         "title": "Un solo plan cubre todo el hogar",
-        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 personas y 20 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 2 personas y 8 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
         "footerNote": "Las condiciones de la prueba, la cancelación y los cambios de plan se explican en detalle en la",
         "footerLink": "página de planes"
       },
@@ -2834,7 +2845,7 @@
       },
       "held": {
         "title": "Empieza gratis; los planes de pago están en pausa",
-        "description": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas, sin tarjeta de crédito. Los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
+        "description": "Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas, sin tarjeta de crédito. Los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
         "footerNote": "Lee el",
         "footerLink": "aviso completo sobre el estado de los planes"
       },
@@ -2883,8 +2894,8 @@
       "heldClosed": "Los planes de pago están en pausa"
     },
     "lede": {
-      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
-      "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
+      "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
       "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
     },
     "meta": {
@@ -2894,8 +2905,8 @@
         "heldClosed": "Estado de los planes — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
-        "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 3 personas y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 2 personas y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
         "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
       }
     }

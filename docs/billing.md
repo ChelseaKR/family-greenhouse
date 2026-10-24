@@ -23,7 +23,7 @@ Source of truth: `backend/src/models/plans.ts`.
 
 | Plan       | Monthly | Plants cap | Members cap | Notes                                 |
 | ---------- | ------- | ---------- | ----------- | ------------------------------------- |
-| Seedling   | Free    | 20         | 3           | Default for every new household       |
+| Seedling   | Free    | 8          | 2           | Default for every new household       |
 | Garden     | $4.99   | 200        | Unlimited   | 14-day free trial, once per household |
 | Greenhouse | $9.99   | 5000       | Unlimited   | 14-day free trial, once per household |
 
@@ -34,11 +34,15 @@ and let the gate tell you what this table should say.
 
 The tiers are drawn on **homes and hands**, not collection size
 ([ADR 0014](adr/0014-plans-drawn-on-homes-and-hands.md)). `plans.ts` states the
-reasoning at each limit: Seedling's 20 plants are deliberate generosity, because
-plant rows cost nothing and "generosity here buys member #2 — the metric that
-matters"; its cap of 3 members is where the charge lands, "at the fourth hand …
-never at the second". Members are uncapped on both paid tiers, so the members
-column is a free-tier boundary rather than a paid-tier ceiling.
+reasoning at each limit. Seedling was 20 plants and 3 members, set generously to
+buy member #2; on 2026-10-23 the owner cut it to 8 plants and 2 members
+([ADR 0040](adr/0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md))
+after the real households turned out to hold 5 to 9 plants with one or two
+people, so the old caps were limits nobody met. A household created before
+`SEEDLING_LIMITS_CUT_AT` keeps 20 plants and 3 members while it is on Seedling
+(`withSeedlingGrandfather`, read off the row's own `createdAt`, so nothing was
+backfilled). Members are uncapped on both paid tiers, so the members column is a
+free-tier boundary rather than a paid-tier ceiling.
 
 > **Superseded note, kept because it was load-bearing advice.** This paragraph
 > used to say Seedling's member cap was "deliberately the same as Garden's, not

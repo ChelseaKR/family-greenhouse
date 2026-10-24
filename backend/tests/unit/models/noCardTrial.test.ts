@@ -71,8 +71,9 @@ describe('no-card trial: runs for 14 days, then falls back on its own', () => {
   it('resolves to Seedling from the end instant on', () => {
     const plan = getEntitledPlan(trial, at(ENDS));
     expect(plan.id).toBe('seedling');
-    expect(limitOf(plan, 'plants')).toBe(20);
-    expect(limitOf(plan, 'members')).toBe(3);
+    // The fixture row carries no createdAt, so the current caps apply (ADR 0040).
+    expect(limitOf(plan, 'plants')).toBe(8);
+    expect(limitOf(plan, 'members')).toBe(2);
     expect(featureOf(plan, 'chat')).toBe(false);
     expect(featureOf(plan, 'plantTags')).toBe(false);
   });
