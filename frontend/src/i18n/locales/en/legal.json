@@ -97,7 +97,7 @@
       },
       "cancellation": {
         "heading": "Cancelling",
-        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. Cancelling is not available inside the mobile apps.",
+        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. If you subscribed through Apple In-App Purchase on iPhone, cancel in your iPhone's Settings under your Apple Account > Subscriptions; Apple handles that cancellation and any refund.",
         "when": "Cancelling does not cut you off on the spot. It takes effect at the end of the period you have already paid for: until that date the household keeps the plan, its caps, and every paid feature, and the billing page shows the date. After it, the household moves to the free Seedling plan.",
         "whatRemains": "Moving to the free plan deletes nothing. Every plant, photo, member, and record of care stays, and stays readable and editable; tasks keep being created and reminders keep arriving. What changes is that you cannot add plants or members while the household is over a free-plan cap, the monthly plant-identification allowance returns to the free plan’s, the AI care assistant needs Garden or above, API keys need Greenhouse, and plant-sitter links return to the free plan’s limit of one live link of up to seven days, with the task list but not the printable plant-care brief."
       },
