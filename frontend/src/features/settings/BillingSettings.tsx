@@ -46,7 +46,7 @@ const GiftSubscriptionCard = lazy(() =>
 const AppStorePlans = lazy(() =>
   import('@/features/billing/AppStorePlans').then((m) => ({ default: m.AppStorePlans }))
 );
-import { appStorePurchasesAvailable } from '@/services/appStorePurchases';
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { isNativeApp } from '@/lib/platform';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';

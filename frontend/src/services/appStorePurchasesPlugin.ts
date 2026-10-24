@@ -1,5 +1,5 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import { NATIVE_PURCHASES_PLUGIN } from '@/services/appStorePurchases';
+import { NATIVE_PURCHASES_PLUGIN } from '@/services/appStoreAvailability';
 
 /**
  * The iOS app's NativePurchases plugin (ios/App/App/NativePurchasesPlugin.swift,

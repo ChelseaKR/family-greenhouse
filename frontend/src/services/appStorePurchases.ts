@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 import { api } from './api';
-import { getNativePlatform, hasNativePlugin } from '@/lib/platform';
+import { appStorePurchasesAvailable } from './appStoreAvailability';
 import type { AppStoreSubscriptionView, PlanId } from './billingService';
 import type { SignedTransaction, StoreProduct } from './appStorePurchasesPlugin';
 
@@ -24,17 +24,6 @@ import type { SignedTransaction, StoreProduct } from './appStorePurchasesPlugin'
  * Stripe (App Review Guideline 3.1.1).
  */
 
-/** The name the iOS app registers the plugin under (NativePurchasesPlugin.swift `jsName`). */
-export const NATIVE_PURCHASES_PLUGIN = 'NativePurchases';
-export const NATIVE_PURCHASES_METHODS = [
-  'getProducts',
-  'purchase',
-  'currentEntitlements',
-  'restore',
-  'finish',
-  'manageSubscriptions',
-];
-
 export type PaidPlanId = Exclude<PlanId, 'seedling'>;
 
 /**
@@ -48,19 +37,15 @@ export const APP_STORE_PRODUCT_IDS: Record<PaidPlanId, string> = {
   greenhouse: 'net.familygreenhouse.app.greenhouse.monthly',
 };
 
-/** Build switch: off unless the store build sets it to exactly "true". */
-export function appStorePurchasesEnabled(): boolean {
-  return import.meta.env.VITE_APP_STORE_PURCHASES === 'true';
-}
-
-/** Both switches, and the iPhone app. Never true on the website or Android. */
-export function appStorePurchasesAvailable(): boolean {
-  return (
-    appStorePurchasesEnabled() &&
-    getNativePlatform() === 'ios' &&
-    hasNativePlugin(NATIVE_PURCHASES_PLUGIN, NATIVE_PURCHASES_METHODS)
-  );
-}
+// Where purchases are offered at all lives in its own small module, so the
+// entry chunk (App, LockedFeature, BillingSettings ask it) does not carry the
+// purchase flow. Re-exported here for callers that already load this one.
+export {
+  NATIVE_PURCHASES_PLUGIN,
+  NATIVE_PURCHASES_METHODS,
+  appStorePurchasesAvailable,
+  appStorePurchasesEnabled,
+} from './appStoreAvailability';
 
 const loadPlugin = () => import('@/services/appStorePurchasesPlugin');
 

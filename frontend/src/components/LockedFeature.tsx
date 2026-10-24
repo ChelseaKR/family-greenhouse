@@ -10,7 +10,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
 import { isNativeApp } from '@/lib/platform';
-import { appStorePurchasesAvailable } from '@/services/appStorePurchases';
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { useAuthStore } from '@/store/authStore';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { householdService } from '@/services/householdService';
