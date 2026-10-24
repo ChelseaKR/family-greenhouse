@@ -16,6 +16,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **The Terms of Service say paid plans can be bought on iPhone through Apple
+  In-App Purchase.** The Plan status section now reads, in the owner's wording:
+  "Paid plans are available on our website and, on iPhone, through Apple
+  In-App Purchase. Purchases made through Apple are billed and managed by Apple
+  under Apple's terms." It replaces "Paid plans are not sold inside the mobile
+  apps", which would be false once the App Store build sells Garden and
+  Greenhouse (ADR 0041). The Spanish Terms carry the same change. No price
+  changed. In-App Purchase itself stays off until its three switches are
+  turned on. The Terms text changed, so its effective date is `UNRELEASED`
+  until the release that ships it.
+
 ## [0.45.0] - 2026-10-24
 
 **The free Seedling plan is now 8 plants and 2 people; households created

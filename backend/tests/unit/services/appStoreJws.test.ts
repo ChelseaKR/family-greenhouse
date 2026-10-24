@@ -13,14 +13,16 @@ import {
 } from '../../../src/services/appStoreJws.js';
 import { makeChain, signJws, type ChainFixture } from '../../support/appleJwsFixture.js';
 
-// Now, so the freshly made chain is valid at the signing time.
-const NOW = Date.now();
+// Taken after the chains exist: a certificate is valid only from the second
+// it was made, so a time read before a slow makeChain() can predate it.
+let NOW: number;
 
 let chain: ChainFixture;
 let other: ChainFixture;
 beforeAll(() => {
   chain = makeChain();
   other = makeChain();
+  NOW = Date.now();
 }, 30_000);
 
 const trust = () => ({ trustedRootsPem: [chain.rootPem] });
