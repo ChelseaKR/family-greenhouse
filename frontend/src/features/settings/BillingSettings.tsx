@@ -317,6 +317,21 @@ export function BillingSettings() {
   // Three states, and `unknown` gets a sentence of its own rather than
   // borrowing either of the definite ones; see `resolveTrialOffer`.
   const trialOffer = resolveTrialOffer(subQuery.data);
+  // A running no-card Garden trial (ADR 0027). The household is ON Seedling
+  // (`planId`, which every purchase guard below keeps reading) but is USING
+  // Garden, and the plan grid used to mark Seedling "Current plan" with a
+  // "Switch to Garden" button under the tier the household already had. On
+  // the one screen a trial household opens to decide whether to pay, that
+  // read as "the trial did not start". The grid now marks Garden with the
+  // trial's end date and offers to keep it. The server publishes
+  // `noCardTrial` only when no Stripe state owns the household, so this never
+  // relabels a paying or card-trialing household.
+  const noCardTrialActive =
+    subQuery.data?.noCardTrial?.state === 'active' && planRead.planId === 'seedling';
+  const noCardTrialEnds =
+    noCardTrialActive && subQuery.data?.noCardTrial
+      ? formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' })
+      : null;
   const changePlanDescriptionKey =
     trialOffer === 'available'
       ? 'settings.billing.changePlanDescriptionTrial'
@@ -481,10 +496,10 @@ export function BillingSettings() {
               ? t('settings.billing.currentPlanTrial', { plan: planRead.planName })
               : paymentFailing
                 ? t('settings.billing.currentPlanUnpaid', { plan: planRead.planName })
-                : subQuery.data?.noCardTrial?.state === 'active'
+                : noCardTrialEnds
                   ? t('settings.billing.noCardTrial.currentPlan', {
                       plan: planRead.planName,
-                      date: formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' }),
+                      date: noCardTrialEnds,
                     })
                   : t('settings.billing.currentPlan', { plan: planRead.planName })}
           </p>
@@ -601,7 +616,12 @@ export function BillingSettings() {
           ) : planRead.status !== 'ready' ? null : (
             <PaidPlanGrid
               plans={plans}
-              currentPlanId={planRead.planId ?? undefined}
+              currentPlanId={noCardTrialEnds ? 'garden' : (planRead.planId ?? undefined)}
+              currentPlanBadge={
+                noCardTrialEnds
+                  ? t('settings.billing.noCardTrial.planBadge', { date: noCardTrialEnds })
+                  : undefined
+              }
               renderCta={(plan, interval, price) => (
                 <>
                   {/* "$X ÷ N members = $Y each" from the live price and the
@@ -628,6 +648,7 @@ export function BillingSettings() {
                     t,
                     isPending: checkoutMutation.isPending,
                     pendingPlanId: checkoutMutation.variables?.planId,
+                    trialPlanId: noCardTrialEnds ? 'garden' : undefined,
                     onSelect: () =>
                       checkoutMutation.mutate({
                         planId: plan.id as 'garden' | 'greenhouse',
@@ -664,6 +685,7 @@ function renderPlanCta({
   awaitingEntitlement,
   isPending,
   pendingPlanId,
+  trialPlanId,
   onSelect,
   t,
 }: {
@@ -683,6 +705,9 @@ function renderPlanCta({
   awaitingEntitlement: boolean;
   isPending: boolean;
   pendingPlanId?: string;
+  /** The tier a running no-card trial lends the household. Its button reads
+   *  "Keep …" rather than "Switch to …", because the household already has it. */
+  trialPlanId?: PlanId;
   onSelect: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
@@ -750,7 +775,9 @@ function renderPlanCta({
         ? currentPlanId === plan.id
           ? t('settings.billing.convertToLifetime', { plan: plan.name })
           : t('settings.billing.buyLifetime', { plan: plan.name })
-        : t('settings.billing.switchTo', { plan: plan.name })}
+        : trialPlanId === plan.id
+          ? t('settings.billing.noCardTrial.keepPlan', { plan: plan.name })
+          : t('settings.billing.switchTo', { plan: plan.name })}
     </Button>
   );
 }

@@ -1674,7 +1674,11 @@
         "changeAnalytics": "Analytics show the last {{days}} days. Older history is kept, not deleted.",
         "subscribeReplaces": "Choosing a paid plan replaces this trial with a subscription, which goes through checkout and needs a card.",
         "billingLink": "Plans and billing",
-        "currentPlan": "Your household is on the free {{plan}} plan and trying Garden until {{date}}."
+        "currentPlan": "Your household is trying Garden free until {{date}}. After that it moves to the free {{plan}} plan unless an admin chooses a paid plan.",
+        "keepGarden": "Keep Garden for {{price}} a month",
+        "getGardenBack": "Get Garden back for {{price}} a month",
+        "planBadge": "Trying free until {{date}}",
+        "keepPlan": "Keep {{plan}}"
       },
       "splitLine": "{{total}} ÷ {{n}} members = {{each}} each",
       "splitLineApprox": "{{total}} ÷ {{n}} members ≈ {{each}} each",
