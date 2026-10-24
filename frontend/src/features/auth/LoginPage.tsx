@@ -1,8 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -25,18 +23,26 @@ import { safeAppRedirect } from './safeRedirect';
 import { readMfaErrorCode, submitCode, submitCredentials, type SignInState } from './signInFlow';
 import { TotpChallengeForm } from './TotpChallengeForm';
 import { useNativeIntro } from './useNativeIntro';
+import type { LoginFormData } from './loginSchema';
 
-// Built per-render from the active locale so validation messages are
-// translated (zod resolves the message at schema-construction time, so the
-// schema has to be rebuilt when the language changes — not defined at module
-// load when no `t` exists yet).
-const makeLoginSchema = (t: TFunction) =>
-  z.object({
-    email: z.string().email(t('auth.invalidEmail')),
-    password: z.string().min(1, t('auth.passwordRequired')),
-  });
+// The zod schema is loaded on demand (see loginSchema.ts): a static import put
+// ~36 kB of zod on the /login critical path, ahead of the first paint. The
+// promise is cached, so the module is fetched once; `prefetchLoginSchema`
+// starts that fetch when either field is first focused, so a submit rarely waits.
+let loginSchemaModule: Promise<typeof import('./loginSchema')> | null = null;
+const loadLoginSchema = () => (loginSchemaModule ??= import('./loginSchema'));
+const prefetchLoginSchema = () => {
+  void loadLoginSchema();
+};
 
-type LoginFormData = z.infer<ReturnType<typeof makeLoginSchema>>;
+// Rebuilt when the locale changes so validation messages are translated.
+const makeLazyLoginResolver = (t: TFunction): Resolver<LoginFormData> => {
+  let resolver: Promise<Resolver<LoginFormData>> | null = null;
+  return async (values, context, options) => {
+    resolver ??= loadLoginSchema().then((m) => m.makeLoginResolver(t));
+    return (await resolver)(values, context, options);
+  };
+};
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -89,7 +95,7 @@ export function LoginPage() {
   const from = safeRedirect ?? safeStateFrom ?? '/dashboard';
   const signupHref =
     from !== '/dashboard' ? `/register?redirect=${encodeURIComponent(from)}` : '/register';
-  const loginSchema = useMemo(() => makeLoginSchema(t), [t]);
+  const loginResolver = useMemo(() => makeLazyLoginResolver(t), [t]);
 
   // After email confirmation the confirm page sends the user here with their
   // email + a justConfirmed flag (Cognito confirmSignUp issues no tokens, so a
@@ -104,7 +110,7 @@ export function LoginPage() {
     setFocus,
     formState: { errors },
   } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
+    resolver: loginResolver,
     defaultValues: { email: confirmState?.email ?? '' },
   });
 
@@ -261,6 +267,7 @@ export function LoginPage() {
           autoComplete="email"
           required
           error={errors.email?.message}
+          onFocus={prefetchLoginSchema}
           {...register('email')}
         />
 
@@ -270,6 +277,7 @@ export function LoginPage() {
           autoComplete="current-password"
           required
           error={errors.password?.message}
+          onFocus={prefetchLoginSchema}
           {...register('password')}
         />
 
