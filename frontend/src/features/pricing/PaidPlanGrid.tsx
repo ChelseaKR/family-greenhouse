@@ -108,6 +108,9 @@ interface PaidPlanGridProps {
   plans: Plan[];
   /** Household's current tier, when known. Renders a "current plan" marker. */
   currentPlanId?: PlanId;
+  /** Replaces the marker's "Current plan" text, for a tier the household is
+   *  using without being on it (a running no-card trial, ADR 0027). */
+  currentPlanBadge?: string;
   /**
    * Rendered as each tier's call to action. Public pricing passes a link to
    * registration; Settings passes a checkout button. Returning null hides the
@@ -130,7 +133,12 @@ interface PaidPlanGridProps {
  * unavailable rather than free — a blank annual id is a valid partial launch
  * (see environments/*.tfvars), and "$0" would be a lie.
  */
-export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridProps) {
+export function PaidPlanGrid({
+  plans,
+  currentPlanId,
+  currentPlanBadge,
+  renderCta,
+}: PaidPlanGridProps) {
   const { t } = useTranslation();
   const offered = useMemo(() => INTERVALS.filter((i) => intervalIsOffered(plans, i.id)), [plans]);
   // Default to the first cadence actually on sale, so a monthly-only launch
@@ -198,7 +206,7 @@ export function PaidPlanGrid({ plans, currentPlanId, renderCta }: PaidPlanGridPr
                 <h3 className="font-serif text-2xl tracking-tight text-ink">{plan.name}</h3>
                 {isCurrent && (
                   <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-800">
-                    {t('pricing.currentPlanBadge')}
+                    {currentPlanBadge ?? t('pricing.currentPlanBadge')}
                   </span>
                 )}
               </div>

@@ -1717,7 +1717,11 @@
         "changeAnalytics": "Las estadísticas muestran los últimos {{days}} días. El historial anterior se conserva, no se elimina.",
         "subscribeReplaces": "Elegir un plan de pago sustituye esta prueba por una suscripción, que pasa por el proceso de pago y pide una tarjeta.",
         "billingLink": "Planes y facturación",
-        "currentPlan": "Tu hogar está en el plan gratuito {{plan}} y probando Jardín hasta el {{date}}."
+        "currentPlan": "Tu hogar está probando Jardín gratis hasta el {{date}}. Después pasa al plan gratuito {{plan}}, salvo que un administrador elija un plan de pago.",
+        "keepGarden": "Quédate con Jardín por {{price}} al mes",
+        "getGardenBack": "Recupera Jardín por {{price}} al mes",
+        "planBadge": "Prueba gratis hasta el {{date}}",
+        "keepPlan": "Quedarse con {{plan}}"
       },
       "splitLine": "{{total}} ÷ {{n}} miembros = {{each}} cada uno",
       "splitLineApprox": "{{total}} ÷ {{n}} miembros ≈ {{each}} cada uno",

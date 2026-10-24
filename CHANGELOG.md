@@ -16,6 +16,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **A household on the no-card Garden trial is shown Garden, and its price,
+  where it decides.** Settings → Billing used to mark Seedling "Current plan"
+  with a "Switch to Garden" button under the tier the household was already
+  using, and its plan line led with "the free Seedling plan". The grid now
+  marks Garden "Trying free until {date}" with a "Keep Garden" button, and the
+  plan line leads with the trial. On the web, the dashboard trial notice now
+  gives a household admin a "Keep Garden for $4.99 a month" button (or "Get
+  Garden back" after the trial), using the catalog's price; members, the apps
+  and a catalog with no published price get the plain link as before.
 - **The Gift link and the `/gift` page no longer advertise gifts that cannot be
   bought.** Production has no gift price ids yet, so a signed-in buyer who
   pressed "Buy gift" got a `GIFT_NOT_CONFIGURED` error. The footer, the landing
