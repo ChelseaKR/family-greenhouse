@@ -399,7 +399,10 @@ export function AddPlantPage() {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       // GA4 `household_activated`: the first plant is the product's activation
       // step. No plant name, id or note is sent.
-      if (wasFirstPlant) trackGoogleConversion({ name: 'household_activated' });
+      if (wasFirstPlant) {
+        trackGoogleConversion({ name: 'household_activated' });
+        trackGoogleConversion({ name: 'first_plant_added', method: 'full_form' });
+      }
       playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });

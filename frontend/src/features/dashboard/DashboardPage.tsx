@@ -39,6 +39,7 @@ import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
 import { MoveDayCard } from './MoveDayCard';
 import { SharedCarePulse } from './SharedCarePulse';
+import { GoingAwaySoonCard } from './GoingAwaySoonCard';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
@@ -370,6 +371,10 @@ export function DashboardPage() {
           </div>
         )}
       </Card>
+
+      {/* Going away soon? — a way into sitter links; hides itself when one is
+          live, when there are no plants, or for 30 days after "Not now". */}
+      <GoingAwaySoonCard />
 
       {/* Seasonal Move Day — renders only when a list exists */}
       <MoveDayCard />

@@ -258,6 +258,24 @@
       "createdWithStartingPoint": "{{name}} is in, with a watering reminder every {{days}} days to start.",
       "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
     },
+    "picker": {
+      "heading": "Pick a common houseplant",
+      "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
+      "saving": "Adding your plant…",
+      "somethingElse": "Something else? Type its name",
+      "plants": {
+        "pothos": "Pothos",
+        "snake-plant": "Snake plant",
+        "monstera": "Monstera",
+        "spider-plant": "Spider plant",
+        "peace-lily": "Peace lily",
+        "zz-plant": "ZZ plant",
+        "aloe-vera": "Aloe vera",
+        "orchid": "Moth orchid",
+        "fiddle-leaf-fig": "Fiddle leaf fig",
+        "jade-plant": "Jade plant"
+      }
+    },
     "invite": {
       "title": "Share the care",
       "description": "This is the part a single-user plant tracker can't do. Everyone in your household sees the same plants and the same schedule — whoever is around does the watering and marks it done, so nobody has to nag and nobody has to ask whether it got done.",
@@ -271,6 +289,13 @@
       "solo": "It's just me for now",
       "finish": "Go to my dashboard"
     }
+  },
+  "goingAwaySoon": {
+    "title": "Going away soon?",
+    "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",
+    "action": "Set up a sitter link",
+    "notNow": "Not now",
+    "dismissAria": "Hide the going-away card for 30 days"
   },
   "nav": {
     "chat": "Chat",
@@ -1229,6 +1254,27 @@
       "sharedBy": "Shared by {{name}}",
       "anotherMember": "another member",
       "revokeNotYours": "Only its creator or an admin can revoke this"
+    },
+    "goingAway": {
+      "titleEntry": "Going away?",
+      "titleLonger_one": "Away for more than {{count}} day?",
+      "titleLonger_other": "Away for more than {{count}} days?",
+      "titleSecond": "Need a second sitter link?",
+      "freeNow_one": "On the free plan, a sitter link lasts up to {{days}} days, and one can be live at a time.",
+      "freeNow_other": "On the free plan, a sitter link lasts up to {{days}} days, and {{count}} can be live at a time.",
+      "gardenAdds": "Garden adds, for the whole household:",
+      "gardenAddsPrice": "Garden is {{price}} a month for the whole household. It adds:",
+      "lineLinks_one": "Sitter links of up to {{days}} days, with {{count}} live at a time",
+      "lineLinks_other": "Sitter links of up to {{days}} days, with up to {{count}} live at once",
+      "lineBrief": "A printable care brief for your sitter, with each plant’s latest photo and your house rules",
+      "linePhotos": "Photos from your sitter while you’re away, added to each plant’s timeline",
+      "lineRecap": "A recap of what happened, waiting when you get back",
+      "upgrade": "Upgrade to Garden for {{price}} a month",
+      "useFree_one": "Use {{count}} day instead",
+      "useFree_other": "Use {{count}} days instead",
+      "keepFree_one": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFree_other": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFreeSecond": "Your current link keeps working. To make a new one on the free plan, revoke the current one first."
     },
     "sitterGaps": {
       "heading": "Before you go: your sitter can only read what you wrote down.",
