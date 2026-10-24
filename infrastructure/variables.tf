@@ -631,6 +631,19 @@ variable "payments_enabled" {
   }
 }
 
+# Apple In-App Purchase for the iPhone app (ADR 0041). Defaults closed, like
+# payments_enabled: turning it on is a reviewed per-environment tfvars change.
+variable "app_store_billing_enabled" {
+  description = "Set to the exact string \"1\" to open Apple In-App Purchase for the iPhone app (the /billing/app-store/* routes). Requires payments_enabled = \"1\" to take effect."
+  type        = string
+  default     = "0"
+
+  validation {
+    condition     = contains(["0", "1"], var.app_store_billing_enabled)
+    error_message = "app_store_billing_enabled must be exactly \"0\" or \"1\". The backend compares it to the literal string \"1\"."
+  }
+}
+
 # Manual confirmation gate: Stripe price ids look identical in test and live
 # mode, so Terraform can't verify stripe_price_id_* actually match the mode of
 # stripe_secret_key. This must be deliberately flipped to true (see the check
