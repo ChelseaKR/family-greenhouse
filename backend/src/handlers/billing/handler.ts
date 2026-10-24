@@ -203,7 +203,11 @@ export const getCurrentSubscription = createHandler(
     // whether the household is on the trial. `null` means there is no no-card
     // trial to describe: the household never had one, or Stripe owns its
     // entitlement.
-    const { noCardTrialEndsAt, giftPlanId, giftEndsAt, giftSource, ...published } = sub;
+    const { noCardTrialEndsAt, giftPlanId, giftEndsAt, giftSource, ...unpublished } = sub;
+    // `householdCreatedAt` is read only to resolve the grandfathered free caps
+    // (ADR 0040). What it decides is already in `usage`, so it is not echoed:
+    // `undefined` is dropped when the body is serialized.
+    const published = { ...unpublished, householdCreatedAt: undefined };
     const trialState = noCardTrialState(sub, now);
     // A redeemed gift (ADR 0028) goes out the same way: the server's clock
     // decides its state. `null` means there is no gift to describe.

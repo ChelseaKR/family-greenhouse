@@ -52,10 +52,11 @@ describe('plan catalog (ADR 0014: the line is homes and hands)', () => {
   });
 
   it('pins the re-cut limits the handlers enforce', () => {
+    // 8 plants and 2 members since the 2026-10-23 cut (ADR 0040).
     expect(PLANS.seedling.limits).toEqual({
       homes: 1,
-      members: 3,
-      plants: 20,
+      members: 2,
+      plants: 8,
       tags: 0,
       analyticsHistoryDays: 30,
       sitterLinkMaxDays: 7,
@@ -238,7 +239,7 @@ describe('plan catalog (ADR 0014: the line is homes and hands)', () => {
 
 describe('the accessors every gate uses', () => {
   it('limitOf reads the named cap', () => {
-    expect(limitOf(PLANS.seedling, 'members')).toBe(3);
+    expect(limitOf(PLANS.seedling, 'members')).toBe(2);
     expect(limitOf(PLANS.garden, 'members')).toBeNull();
     expect(limitOf(PLANS.greenhouse, 'homes')).toBeNull();
   });
@@ -354,7 +355,7 @@ describe('planSummary (what the client receives)', () => {
   });
 
   it('keeps the legacy maxPlants / maxMembers fields, with null for unlimited', () => {
-    expect(planSummary(PLANS.seedling)).toMatchObject({ maxPlants: 20, maxMembers: 3 });
+    expect(planSummary(PLANS.seedling)).toMatchObject({ maxPlants: 8, maxMembers: 2 });
     expect(planSummary(PLANS.garden)).toMatchObject({ maxPlants: 200, maxMembers: null });
     expect(planSummary(PLANS.greenhouse)).toMatchObject({ maxPlants: 5000, maxMembers: null });
   });

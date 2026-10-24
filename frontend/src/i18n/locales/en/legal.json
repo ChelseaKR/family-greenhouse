@@ -67,7 +67,7 @@
         "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
         "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
         "notice": "<strong>No mid-period cuts to what you paid for.</strong> We do not reduce a paid plan’s features or usage limits during a period you have already paid for. Free-plan limits can change, and have. Bug fixes and improvements ship continuously.",
-        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 3 people and 20 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
+        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 2 people and 8 plants. A household created before October 24, 2026 keeps the free limits it signed up with, 3 people and 20 plants, for as long as it is on Seedling. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
       },
       "fromYou": {
         "heading": "What we expect from you",

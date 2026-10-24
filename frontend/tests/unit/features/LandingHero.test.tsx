@@ -91,7 +91,7 @@ describe('landing hero', () => {
     const text = heroColumn().textContent ?? '';
     expect(text).toMatch(/no credit card/i);
     expect(text).toMatch(/14 days of Garden/);
-    expect(text).toMatch(/3 people and 20 plants/);
+    expect(text).toMatch(/2 people and 8 plants/);
     // The emailed code is still named, so nobody is surprised by it mid-flow.
     expect(text).toMatch(/code we send/i);
     expect(text).not.toMatch(/five minutes/i);

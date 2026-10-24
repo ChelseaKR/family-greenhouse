@@ -70,6 +70,7 @@ import {
   atCap,
   limitOf,
   strongestPlan,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from './models/plans.js';
 import type { EntitlementSubscription, Plan } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
@@ -1165,6 +1166,9 @@ function subscriptionOf(householdId: string | null | undefined): EntitlementSubs
     noCardTrialEndsAt: h?.noCardTrialEndsAt,
     giftPlanId: h?.giftPlanId,
     giftEndsAt: h?.giftEndsAt,
+    // Same attribute production reads (`billing.getHouseholdSubscription`):
+    // a household created before the 2026-10-23 cut keeps the old free caps.
+    householdCreatedAt: h ? (h.createdAt ?? HOUSEHOLD_CREATED_AT_UNKNOWN) : undefined,
   };
 }
 
@@ -3515,7 +3519,7 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
   const existingMembers = membersOf(invite.householdId);
   if (atCap(existingMembers.length, limitOf(plan, 'members'))) {
     return res.status(402).json({
-      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`,
+      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members. Ask the person who invited you to make room for you.`,
     });
   }
 

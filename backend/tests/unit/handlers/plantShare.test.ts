@@ -424,7 +424,7 @@ describe('plants handler — propagation + shares', () => {
       });
       const res = (await acceptSharedPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(402);
-      expect(res.body).toMatch(/Seedling plan is limited to 20 plants/);
+      expect(res.body).toMatch(/Seedling plan is limited to 8 plants/);
     });
 
     it('requires authentication (401 without claims)', async () => {

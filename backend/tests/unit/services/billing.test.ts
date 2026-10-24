@@ -2911,6 +2911,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
     });
   });
 
@@ -2936,6 +2938,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
     });
     expect(JSON.stringify(published)).not.toContain('cs_private_pending');
   });
@@ -2960,6 +2964,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
       staleCheckout: { startedAt },
     });
     expect(JSON.stringify(published)).not.toContain('cs_private_abandoned');

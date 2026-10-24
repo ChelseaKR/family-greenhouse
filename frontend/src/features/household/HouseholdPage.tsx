@@ -37,6 +37,7 @@ import { AutoHandoffCard } from './AutoHandoffCard';
 import { HouseholdTimeZoneCard } from './HouseholdTimeZoneCard';
 import { LeaveHouseholdCard } from './LeaveHouseholdCard';
 import { HouseholdAuditCard } from './HouseholdAuditCard';
+import { PlanCapPrompt } from '@/features/billing/PlanCapPrompt';
 
 export function HouseholdPage() {
   useDocumentTitle('Household');
@@ -177,6 +178,10 @@ export function HouseholdPage() {
             title="Invite members"
             description="Generate an invite link to add family members to your household"
           />
+
+          {/* At the member cap an invite can be sent but not accepted, so say
+              so here, with the way forward, before anyone shares a link. */}
+          <PlanCapPrompt cap="members" className="mb-4" />
 
           {/* Friendly nudge when the caller is the only member — the
               household-as-single-user state is the one we most want to

@@ -28,6 +28,7 @@ import { AskToUpgrade } from '@/components/LockedFeature';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
+import { grandfatheredFreeCaps } from '@/features/billing/planCaps';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isPaymentLapsed, paymentFailedCopy } from '@/features/billing/paymentFailing';
 import { useReportPlanPurchase } from '@/features/billing/reportPlanPurchase';
@@ -244,6 +245,10 @@ export function BillingSettings() {
   // didn't load: the card says so instead of staying silent, because silence
   // here reads as "you're fine".
   const limits = evaluatePlanLimits(usage);
+  // A household created before the 2026-10-23 Seedling cut keeps 20 plants
+  // and 3 people (ADR 0040). Its meters already show those caps; this says why
+  // they differ from the plan list below.
+  const grandfathered = grandfatheredFreeCaps(subQuery.data, plansQuery.data?.plans);
   // A live recurring subscription must be changed in the portal, never by a
   // second purchase. Mirrors the server-side guard that returns 409.
   // Mirrors the server guard, including its fail-closed treatment of an
@@ -539,6 +544,11 @@ export function BillingSettings() {
           </Alert>
         )}
         {usage && <UsageMeters usage={usage} limits={limits} />}
+        {grandfathered && (
+          <p className="mt-3 text-sm text-gray-600" data-testid="free-caps-grandfathered">
+            {t('settings.billing.freeCapsGrandfathered', grandfathered)}
+          </p>
+        )}
         {native && (
           <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
         )}

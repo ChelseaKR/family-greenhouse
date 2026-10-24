@@ -197,14 +197,18 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Seedling',
     description: 'A couple and their plants',
     monthlyPrice: 0,
-    // Deliberately complete, not crippled. 20 plants (up from 10): plant rows
-    // cost nothing, and generosity here buys member #2 — the metric that
-    // matters. Three members: charge at the fourth hand, for what a
-    // coordinating household then needs, never at the second.
+    // Complete, not crippled: every core care feature is here. The caps were
+    // 20 plants and 3 members, set generously to buy member #2. The owner cut
+    // them to 8 and 2 on 2026-10-23 (ADR 0040), after measuring real use: the
+    // outside households held 5, 6 and 9 plants with one or two people, so 20
+    // and 3 were limits nobody met, and Garden had no reason to exist for a
+    // household that size. Two members still lets a couple share at $0; the
+    // charge lands at the third hand. Households created before the cut keep
+    // 20 and 3 (`GRANDFATHERED_SEEDLING_CAPS`, below).
     limits: {
       homes: 1,
-      members: 3,
-      plants: 20,
+      members: 2,
+      plants: 8,
       tags: 0,
       analyticsHistoryDays: 30,
       // One live sitter link, a week long: the task list for a weekend away.
@@ -301,6 +305,95 @@ export const PLANS: Record<PlanId, Plan> = {
     withdrawnIntervals: ['year'],
   },
 };
+
+// ---------------------------------------------------------------------------
+// Seedling caps before the 2026-10-23 cut (ADR 0040)
+// ---------------------------------------------------------------------------
+
+/**
+ * The moment the free caps changed from 20 plants / 3 members to 8 / 2.
+ *
+ * A household whose METADATA row was created before this instant keeps the
+ * old caps for as long as it is on Seedling, whichever way it got there
+ * (never paid, a no-card trial that ended, a cancelled subscription). It is
+ * compared with the row's own `createdAt`, which `createHousehold` has always
+ * written, so no production row has to be backfilled or migrated: the rule is
+ * a read-time comparison, exactly like the no-card trial's end date.
+ *
+ * Set to midnight Pacific on the day after the owner's decision. It must be at
+ * or before the deploy that ships it (a household created between this instant
+ * and that deploy was shown "20 plants" at sign-up, keeps everything it adds,
+ * but would be held to 8 for new growth). It must also stay in the PAST, which
+ * a unit test enforces: a future cutoff would grandfather every household a
+ * test creates today and turn the suite red on the day it passes.
+ */
+export const SEEDLING_LIMITS_CUT_AT = '2026-10-24T07:00:00.000Z';
+
+/** The Seedling caps a household created before `SEEDLING_LIMITS_CUT_AT` keeps. */
+export const GRANDFATHERED_SEEDLING_CAPS: Readonly<Pick<PlanLimits, 'plants' | 'members'>> = {
+  plants: 20,
+  members: 3,
+};
+
+/**
+ * What `getHouseholdSubscription` reports as `householdCreatedAt` for a
+ * household row that exists but carries no readable `createdAt`.
+ *
+ * Every row `createHousehold` writes has one, so this should never be seen.
+ * If it is, the row was written by something older than this rule, and the
+ * safe reading of "we cannot tell when this household was created" is "before
+ * the cut": a wrong guess that way costs a dozen free plant rows, which cost
+ * nothing to serve; a wrong guess the other way breaks a limit a real
+ * household was promised.
+ */
+export const HOUSEHOLD_CREATED_AT_UNKNOWN = 'unknown';
+
+/**
+ * True when a household created at `householdCreatedAt` keeps the
+ * pre-2026-10-23 Seedling caps.
+ *
+ *   - absent (`undefined`/`null`): no household row was read, so there is no
+ *     household to grandfather — the current caps apply. Every cap gate reads
+ *     its subscription through `getHouseholdSubscription`, which always sets
+ *     the field for a row that exists.
+ *   - a string that does not parse (including `HOUSEHOLD_CREATED_AT_UNKNOWN`):
+ *     grandfathered, for the reason given on that constant.
+ *   - otherwise: grandfathered iff strictly before `SEEDLING_LIMITS_CUT_AT`.
+ */
+export function seedlingCapsGrandfathered(householdCreatedAt: string | null | undefined): boolean {
+  if (householdCreatedAt === undefined || householdCreatedAt === null) return false;
+  const createdMs = Date.parse(householdCreatedAt);
+  if (!Number.isFinite(createdMs)) return true;
+  return createdMs < Date.parse(SEEDLING_LIMITS_CUT_AT);
+}
+
+/**
+ * Seedling as a grandfathered household holds it: the same row, the same id,
+ * features and allowances, with only the two caps that were cut put back.
+ * Built once so every grandfathered resolution returns the same object.
+ */
+const GRANDFATHERED_SEEDLING: Plan = Object.freeze({
+  ...PLANS.seedling,
+  limits: Object.freeze({ ...PLANS.seedling.limits, ...GRANDFATHERED_SEEDLING_CAPS }),
+});
+
+/**
+ * `plan`, with the pre-cut Seedling caps restored when it is Seedling and the
+ * household predates the cut. Every other tier passes through untouched, so a
+ * grandfathered household that upgrades gets exactly the paid tier, and one
+ * that falls back to Seedling later gets its old caps back.
+ *
+ * Applied LAST by both entitlement resolvers, after the lifetime floor, gift
+ * and trial have had their say, so it only ever acts on the answer "this
+ * household is on the free tier".
+ */
+export function withSeedlingGrandfather(
+  plan: Plan,
+  householdCreatedAt: string | null | undefined
+): Plan {
+  if (plan.id !== 'seedling') return plan;
+  return seedlingCapsGrandfathered(householdCreatedAt) ? GRANDFATHERED_SEEDLING : plan;
+}
 
 /** True when the tier includes the household toolkit (double-care, drift). */
 export function hasHouseholdToolkit(plan: Plan): boolean {
@@ -485,6 +578,13 @@ export interface EntitlementSubscription {
    */
   giftPlanId?: string | null;
   giftEndsAt?: string | null;
+  /**
+   * When the household row was created, ISO 8601 (or
+   * `HOUSEHOLD_CREATED_AT_UNKNOWN`). Read only by `withSeedlingGrandfather`:
+   * a household created before `SEEDLING_LIMITS_CUT_AT` keeps the old free
+   * caps. Absent means no household row was read.
+   */
+  householdCreatedAt?: string | null;
 }
 
 /**
@@ -675,10 +775,13 @@ export function getMeteredPlanId(sub: EntitlementSubscription, now: Date = new D
  */
 export function getEntitledPlan(sub: EntitlementSubscription, now: Date = new Date()): Plan {
   const subscribed = entitlementIsCurrent(sub.status) ? getPlan(sub.planId) : PLANS.seedling;
-  return withNoCardTrial(
-    withGift(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now),
-    sub,
-    now
+  return withSeedlingGrandfather(
+    withNoCardTrial(
+      withGift(withLifetimeFloor(subscribed, sub.lifetimePlanId), sub, now),
+      sub,
+      now
+    ),
+    sub.householdCreatedAt
   );
 }
 
@@ -727,7 +830,10 @@ export function getEntitledPlanForIssuedGrant(
   // at day 14 an issued grant falls back exactly as it does when a cancelled
   // subscription reaches its period end and `planId` is reset to Seedling.
   const floored = withLifetimeFloor(getPlan(sub.planId), sub.lifetimePlanId);
-  return withNoCardTrial(withGift(floored, sub, now), sub, now);
+  return withSeedlingGrandfather(
+    withNoCardTrial(withGift(floored, sub, now), sub, now),
+    sub.householdCreatedAt
+  );
 }
 
 /** True iff `id` names a real plan in the catalog. */

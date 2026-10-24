@@ -16,6 +16,26 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **The free Seedling plan is 8 plants and 2 people, and existing households
+  keep 20 and 3.** The owner's decision of 2026-10-23 (ADR 0040), after the
+  outside households turned out to hold 5 to 9 plants with one or two people.
+  A household whose row was created before `SEEDLING_LIMITS_CUT_AT`
+  (2026-10-24 00:00 Pacific) keeps 20 plants and 3 members while it is on
+  Seedling; the rule compares the row's own `createdAt` on read, so no
+  production row is migrated. As before, a cap only blocks the next add:
+  nothing is removed, hidden or locked, and every plant stays editable. At the
+  cap, the Add Plant page and the Household page's invite section now show the
+  locked-feature card before the form, with the count, the free way to make
+  room, and Garden at its catalog price ($4.99 a month) through the existing
+  checkout; the apps show no price. Settings → Billing tells a grandfathered
+  household why its meters say 20 and 3, the billing and trial emails name the
+  household's own caps, and a refused join tells the joiner to ask the person
+  who invited them. Every public statement of the free limits (landing, sign-up,
+  pricing, FAQ, help, blog, care guides, page metadata, the social card, and
+  the Terms) says 8 and 2 in English and Spanish. The Terms text changed, so
+  its effective date is `UNRELEASED` until the release that ships it. Garden
+  and Greenhouse are unchanged.
+
 ## [0.44.0] - 2026-10-23
 
 **The landing page names the product, sign-up asks for the password once,

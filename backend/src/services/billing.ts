@@ -14,6 +14,7 @@ import {
   planRank,
   PLANS,
   isIntervalWithdrawn,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
@@ -176,6 +177,15 @@ export interface HouseholdSubscription {
    * can back up on its own.
    */
   staleCheckout?: { startedAt: string };
+  /**
+   * The household row's `createdAt`, or `HOUSEHOLD_CREATED_AT_UNKNOWN` for a
+   * row that exists without a readable one. Read only by entitlement
+   * (`withSeedlingGrandfather` in models/plans.ts): a household created before
+   * the 2026-10-23 Seedling cut keeps 20 plants and 3 members (ADR 0040).
+   * Never written through here (`SubscriptionWriteField` excludes it) and
+   * never published by GET /billing/me, which publishes the resulting caps.
+   */
+  householdCreatedAt?: string;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -237,6 +247,8 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     giftPlanId: isPlanId(item.giftPlanId) ? item.giftPlanId : undefined,
     giftEndsAt: item.giftEndsAt as string | undefined,
     giftSource: item.giftSource === 'referral' ? 'referral' : undefined,
+    householdCreatedAt:
+      typeof item.createdAt === 'string' ? item.createdAt : HOUSEHOLD_CREATED_AT_UNKNOWN,
   };
 }
 
@@ -266,6 +278,7 @@ export async function getHouseholdSubscription(
     // what a client learns about an abandoned checkout — see
     // `HouseholdSubscription.staleCheckout`.
     staleCheckout: staleCheckoutMarker(state),
+    householdCreatedAt: state.householdCreatedAt,
   };
 }
 
@@ -301,6 +314,7 @@ type SubscriptionWriteField =
       | 'giftEndsAt'
       | 'giftSource'
       | 'staleCheckout'
+      | 'householdCreatedAt'
     >
   | 'pendingStripeCancellationId'
   // The pending-checkout marker is CLEARED through here (null → REMOVE) so

@@ -327,7 +327,7 @@
     "goToRegistration": "Go to registration",
     "signUpTitle": "Sign up",
     "registerTitle": "Start your greenhouse",
-    "registerSubtitle": "Free for one home, up to 3 household members and 20 plants. No credit card. Your household starts with 14 days of Garden.",
+    "registerSubtitle": "Free for one home, up to 2 household members and 8 plants. No credit card. Your household starts with 14 days of Garden.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
     "showPassword": "Show password",
@@ -411,7 +411,7 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "Can I create an account?",
-    "freeAccountAnswer": "Yes. Free accounts include one home, up to 3 household members and 20 plants, with no credit card.",
+    "freeAccountAnswer": "Yes. Free accounts include one home, up to 2 household members and 8 plants, with no credit card.",
     "headingHeld": "What remains available",
     "headingOpen": "Common questions",
     "paidOfferQuestion": "Is this a paid offer?",
@@ -428,7 +428,7 @@
     "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
     "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants, members and homes stay readable and editable — only adding more is blocked until you are back under the limit. Export and your care history are never behind a plan.",
     "householdQuestion": "Does everyone in my household need their own plan?",
-    "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it. A free home holds up to three people; Garden and Greenhouse homes have no member limit.",
+    "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it. A free home holds up to two people; Garden and Greenhouse homes have no member limit.",
     "cardQuestion": "Do I need a credit card?",
     "cardAnswer": "Not for a free account, and not for the 14 days of Garden a new household starts with: neither asks for a card. Starting a paid plan goes through our payment provider's checkout, which collects a card before the subscription’s trial begins; where a trial applies, nothing is charged until its 14 days end. The subscription trial is once per household, so a household that has had one before is charged when it subscribes again."
   },
@@ -497,7 +497,7 @@
     "breadcrumbHome": "Home",
     "breadcrumbHub": "Pets and plants",
     "signupTitle": "Get watering reminders for your {{name}}",
-    "signupBody": "Family Greenhouse tracks each plant’s watering schedule and reminds the right person in your household. Free for up to 20 plants, no card needed.",
+    "signupBody": "Family Greenhouse tracks each plant’s watering schedule and reminds the right person in your household. Free for up to 8 plants, no card needed.",
     "signupCta": "Set up reminders",
     "unknownTitle": "No cited verdict for this plant",
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
@@ -1692,6 +1692,7 @@
       "plantsUsageUnlimited": "{{n}} plants · no limit",
       "plantsCountUnavailable": "Plants — usage unavailable",
       "membersUsageUnlimited": "{{n}} members · no limit",
+      "freeCapsGrandfathered": "This household was created before the free plan changed, so it keeps the free limits it signed up with: {{plants}} plants and {{members}} people. Households created since then get {{newPlants}} plants and {{newMembers}} people.",
       "membersCountUnavailable": "Members — usage unavailable",
       "checkoutPendingTitle": "Payment received — finishing up",
       "checkoutPendingBody": "Your payment went through. Your plan updates here as soon as our payment provider confirms it, which usually takes a few seconds. Please do not check out again — a second purchase would start a second subscription and charge you twice.",
@@ -2070,7 +2071,7 @@
     "featureSitterBasic": "1 sitter link at a time, up to 7 days",
     "featureAnalytics30": "30 days of analytics",
     "whyCoordinateTitle": "For the household that has to coordinate",
-    "whyCoordinateBody": "Free is a couple and their plants: one home, three people, twenty plants. Garden is for a home where more people share the watering — unlimited members, the whole care history in your analytics, and the assistant.",
+    "whyCoordinateBody": "Free is a couple and their plants: one home, two people, eight plants. Garden is for a home where more people share the watering — unlimited members, the whole care history in your analytics, and the assistant.",
     "whyHomesTitle": "For the people who help at more than one home",
     "whyHomesBody": "Greenhouse is many homes, many hands: belong to every household you look after — your place, your parents’, the rental — and take on API access for automation."
   },
@@ -2134,6 +2135,16 @@
       "away_kit": "The Away Kit — longer sitter links, the handoff brief and the return recap",
       "garden_plan": "The Garden plan",
       "greenhouse_plan": "The Greenhouse plan"
+    }
+  },
+  "planCap": {
+    "plants": {
+      "title": "Room for more plants",
+      "body": "Your plan holds {{max}} active plants, and this household has {{n}}. Every plant stays and can still be edited; only adding another waits for room. Archiving a plant you no longer care for frees a slot, or a plan with more room lifts the limit."
+    },
+    "members": {
+      "title": "Room for more people",
+      "body": "Your plan holds {{max}} people, and this household has {{n}}. Everyone stays; a new person can join once there is room. Remove someone who no longer helps, or a plan with more room lifts the limit."
     }
   },
   "awayRecap": {
@@ -2481,7 +2492,7 @@
   "landing": {
     "meta": {
       "title": "Family Greenhouse — Shared Plant Care & Watering Reminders",
-      "descriptionOpen": "Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.",
+      "descriptionOpen": "Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 2 people and 8 plants.",
       "descriptionClosed": "A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in."
     },
     "nav": {
@@ -2503,7 +2514,7 @@
         "headlinePost": " plant alive.",
         "subhead": "Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing gets missed or drowned. It works just as well for one person and a windowsill as it does for a whole household sharing the watering can."
       },
-      "signupNote": "No credit card. Your home gets 14 days of Garden, then stays free for up to 3 people and 20 plants. You’ll confirm your email with a code we send."
+      "signupNote": "No credit card. Your home gets 14 days of Garden, then stays free for up to 2 people and 8 plants. You’ll confirm your email with a code we send."
     },
     "mockup": {
       "label": "Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity.",
@@ -2533,14 +2544,14 @@
     "facts": {
       "free": {
         "value": "Free",
-        "label": "Up to 20 plants — no credit card"
+        "label": "Up to 8 plants — no credit card"
       },
       "existing": {
         "value": "Existing accounts",
         "label": "Sign-in and stored care data remain available"
       },
       "people": {
-        "value": "3 people",
+        "value": "2 people",
         "label": "Share one home free — unlimited on Garden"
       },
       "minutes": {
@@ -2661,7 +2672,7 @@
       "eyebrow": "Plans",
       "open": {
         "title": "One plan covers the whole household",
-        "description": "Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 3 people and 20 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
+        "description": "Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 2 people and 8 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
         "footerNote": "Trial terms, cancellation, and how plan changes work are covered in full on the",
         "footerLink": "plans page"
       },
@@ -2673,7 +2684,7 @@
       },
       "held": {
         "title": "Start free; paid plans are paused",
-        "description": "Free accounts include one home, up to 3 household members and 20 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.",
+        "description": "Free accounts include one home, up to 2 household members and 8 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.",
         "footerNote": "Read the full",
         "footerLink": "plan-status notice"
       },
@@ -2722,8 +2733,8 @@
       "heldClosed": "Paid plans are paused"
     },
     "lede": {
-      "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.",
-      "heldOpen": "Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+      "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.",
+      "heldOpen": "Free accounts include one home, up to 2 household members and 8 plants. Paid plans, purchases, and plan changes remain paused.",
       "heldClosed": "New account registration, paid plans, purchases, and plan changes are currently paused."
     },
     "meta": {
@@ -2733,8 +2744,8 @@
         "heldClosed": "Plan status — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
-        "heldOpen": "Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
+        "heldOpen": "Create a free Family Greenhouse account for one home, up to 2 people and 8 plants. Paid plans, purchases, and plan changes remain paused.",
         "heldClosed": "Paid plans, purchases, plan changes, and new account registration are paused."
       }
     }
