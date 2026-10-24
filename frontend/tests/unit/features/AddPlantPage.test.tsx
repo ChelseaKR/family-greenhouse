@@ -367,12 +367,14 @@ describe('AddPlantPage activation event', () => {
     await screen.findByRole('heading', { name: 'Plant detail destination' });
   }
 
-  it('sends household_activated, with no plant data, for the first plant', async () => {
+  it('sends household_activated and first_plant_added, with no plant data, for the first plant', async () => {
     vi.mocked(plantService.getPlants).mockResolvedValue([]);
     await addPlant();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
-    expect(trackGoogleConversion).toHaveBeenCalledTimes(1);
-    expect(trackGoogleConversion).toHaveBeenCalledWith({ name: 'household_activated' });
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'full_form' }],
+    ]);
   });
 
   it('sends nothing for a later plant (negative control: the household already had one)', async () => {
