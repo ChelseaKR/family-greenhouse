@@ -16,7 +16,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
-## [0.44.0] - 2026-10-24
+## [0.44.0] - 2026-10-23
 
 **The landing page names the product, sign-up asks for the password once,
 and a household on the no-card trial sees Garden as its plan.** Nine new care
