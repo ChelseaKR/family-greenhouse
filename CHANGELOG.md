@@ -16,17 +16,120 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
-- **A household on the no-card Garden trial is shown Garden, and its price,
-  where it decides.** Settings → Billing used to mark Seedling "Current plan"
-  with a "Switch to Garden" button under the tier the household was already
-  using, and its plan line led with "the free Seedling plan". The grid now
-  marks Garden "Trying free until {date}" with a "Keep Garden" button, and the
-  plan line leads with the trial. On the web, the dashboard trial notice now
-  gives a household admin a "Keep Garden for $4.99 a month" button (or "Get
-  Garden back" after the trial), using the catalog's price; members, the apps
-  and a catalog with no published price get the plain link as before.
+## [0.44.0] - 2026-10-24
+
+**The landing page names the product, sign-up asks for the password once,
+and a household on the no-card trial sees Garden as its plan.** Nine new care
+guides and eleven more plants in the pet-toxicity table (39
+`/pet-safe/<plant>` pages, 28 before), each verdict read from its own ASPCA
+listing; every pet-safety page now opens with both poison hotlines, and care
+guides open with the answer. The pricing page prints both monthly prices
+before the plans load, the Gift link is hidden while no gift can be bought,
+and sign-in loads faster on phones. A security update to `zod` (GHSA-mrhx-c7xc-m3w5) ships
+in the frontend and the backend. The no-card trial emails ship switched off.
+
+- **The Terraform plan is not the usual one.** Three PRs changed
+  `infrastructure/` since 0.43.0. Expect `Plan: 3 to add, 21 to change, 0 to
+destroy.`: the 3 adds are the trial-emails EventBridge rule (created
+  `DISABLED`), its target and its Lambda permission (#1008); the 21 changes
+  are the 19 Lambda `GIT_SHA` updates, the Lambda dead-letter queue policy
+  (which now names the new rule, #1008) and the `spa-router` CloudFront
+  function (nine new `/care/<plant>` paths, #1007, #1022). Anything else means
+  stop. No stored data is migrated and no API contract changes. The Terms of
+  Service text is unchanged, so their effective date stays 0.38.2's
+  (October 2, 2026).
+- **The trial lifecycle emails ship off.** `trial_lifecycle_emails_enabled`
+  is `false` in the production tfvars, so the digests Lambda gets no
+  `TRIAL_LIFECYCLE_EMAILS_ENABLED` variable and the daily rule never fires.
+  The owner steps to turn it on are in `docs/billing.md`, "The trial
+  lifecycle emails".
+- **The website gets every change at this tag; the apps get them only with
+  a store build.** No native iOS or Android code changed (the only file under
+  `frontend/ios` or `frontend/android` is the new `.greenlight.yml` scanner
+  baseline, #1033). The next store upload is 0.44.0, build 4400.
+
+### Added
+
+- **Nine cited pet-safety care guides (#1007, #1022).** African violet,
+  poinsettia, sago palm and asparagus fern (#1007), then haworthia, burro's
+  tail, blue echeveria, begonia and lily (#1022), each at `/care/<plant>`
+  with its own title and description, links from older guides and the
+  sitemap. Care facts come from the extension pages named in each pull
+  request; the pet verdicts come only from the pet-toxicity table. Lily is
+  the first guide whose cat and dog verdicts differ. Jasmine has no guide,
+  because its sources are not extension pages.
+- **Eleven more plants in the pet-toxicity table, each with the ASPCA listing it
+  was read from (#1011).** Alocasia, areca palm, corn plant, ponytail palm, begonia,
+  cast iron plant, jasmine (Jasminum), blue echeveria, haworthia, burro's tail
+  and schefflera were added on 2026-10-21 after reading each plant's own ASPCA
+  page. The table now has 40 plants, 39 with a cited listing, so **39 public
+  `/pet-safe/<slug>` pages are generated** (28 before). Verdicts for cats and
+  dogs are exactly the listing's; the clinical signs in a toxic plant's note are
+  the ones the listing names. Candidates with no listing of their own, or whose
+  listing is ambiguous, were not added.
+- **Trial lifecycle emails, off by default (#1008, ADR 0039).** A new
+  household's no-card Garden trial can send two emails: on day 10, "your
+  trial ends in 4 days", and on day 14, "you are back on Seedling, nothing was
+  deleted". The counts in them come from rows the app already stores. Each
+  has a one-click unsubscribe (`trial_notices`) and follows the existing
+  quiet-hours, suppression and send-once rules. This amends ADR 0027
+  decision 9. Nothing is sent in this release; see the note above.
+- **Two more sign-up steps reach Google Analytics (#1012).** `email_confirmed`
+  and `household_activated` go through the same consent check as the other
+  conversion events and carry nothing beyond the scrubbed page address. The
+  privacy page (English and Spanish) and `docs/analytics.md` now list six
+  steps.
+
+### Changed
+
+- **Landing page: the headline names the product, and the hero has one
+  sign-up button (#1035).** The headline now reads "Plant care for your whole
+  household.", and the "I thought you watered it." quote moves into the
+  subhead. The "See how it works" link is gone, and with it the
+  `hero_how_it_works` Google Analytics value. The note beside the button now
+  says there is no card, 14 days of Garden, the free plan's limits and the
+  emailed code, instead of listing the form's fields. The hero sits higher on
+  small phones. Spanish is updated.
+- **Sign-up asks for the password once (#1035).** The register form drops
+  "Confirm password" for a "Show password" toggle; the end-to-end register
+  test and the post-deploy smoke now fill one field. A new test runs the real
+  form with the real Google Analytics module: one `sign_up` on success, none
+  on a refusal and none under Global Privacy Control.
+- **A household on the no-card Garden trial is shown Garden, and its price
+  (#1038).** Settings → Billing used to mark Seedling "Current plan" with a
+  "Switch to Garden" button under the tier the household was already using,
+  and its plan line led with "the free Seedling plan". The grid now marks
+  Garden "Trying free until {date}" with a "Keep Garden" button, and the plan
+  line leads with the trial. On the web, the dashboard trial notice now gives
+  a household admin a "Keep Garden for $4.99 a month" button (or "Get Garden
+  back" after the trial), using the catalog's price; members, the apps and a
+  catalog with no published price get the plain link as before. The checks
+  that decide what a household can buy are unchanged.
+- **Care guides open with the answer (#1036).** On every `/care/<plant>`
+  page the water, light and pets facts now follow the heading, ahead of the
+  summary paragraph, and the page's one sign-up link moves from below the FAQ
+  to just under them, reading "Get watering reminders for your <plant>". On
+  `/pet-safe/<plant>` the hotlines and verdicts stay first, and the sign-up
+  box now names the plant and offers watering reminders, in English and
+  Spanish. The ZZ plant page lists "Zuzu plant" as its other name instead of
+  "ZZ".
+- **Every pet-safety page opens with both poison hotlines (#1034).** The
+  emergency box now comes first on `/pet-safe/<plant>`, ahead of the
+  verdicts, and on the unknown-plant view. It lists ASPCA Poison Control,
+  (888) 426-4435, and Pet Poison Helpline, (855) 764-7661, as tap-to-call
+  links, each with its fee in its own words ("A consultation fee may apply."
+  and "$99 incident fee applies."), the date both pages were read
+  (October 23, 2026), and a note that the ASPCA plant list says nothing about
+  how much a pet ate. Spanish is updated. A build check fails if anything
+  comes before the box, if a number and its link disagree, or if a paid link
+  appears inside it.
+- **Search titles for the overwatering post and the pet-safety pages (#1024).**
+  The overwatering post is now titled "How to fix an overwatered plant: signs
+  and a 2-minute check"; no care advice changed. Pet-safety pages are titled
+  "Is {name} toxic to cats and dogs? ASPCA verdict" and their description asks
+  "poisonous or safe for pets?" before giving the table's own verdict.
 - **The Gift link and the `/gift` page no longer advertise gifts that cannot be
-  bought.** Production has no gift price ids yet, so a signed-in buyer who
+  bought (#1023).** Production has no gift price ids yet, so a signed-in buyer who
   pressed "Buy gift" got a `GIFT_NOT_CONFIGURED` error. The footer, the landing
   page header and footer and the pricing page now show the Gift link only when
   `GET /billing/plans` says a gift tier is available (the same check the
@@ -34,8 +137,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   of the steps and the sign-in prompt. When the price ids are set the link and
   the page come back with no further change. Nothing in the billing code
   changed.
-
-- **The gate now preflights the iOS and Android projects for store rejections.**
+- **Sign-in loads faster on phones (#1037).** The sign-in form now loads its
+  validation code when a field is first focused instead of before the page
+  paints. The `zod` update below had pushed the mobile `/login` load past the
+  4.3-second Lighthouse limit; the rules and messages are unchanged.
+- **The gate now preflights the iOS and Android projects for store rejections (#1033).**
   A `greenlight` step in `npm run verify` and the `Lint` job runs Greenlight
   v0.2.0 (pinned by commit and module hash, built once with `go install`) as
   `preflight frontend/ios` and `playscan frontend/android` with `--exit-code`,
@@ -48,16 +154,41 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   CI a skip fails. One verified false positive is baselined, with its reason, in
   `frontend/ios/.greenlight.yml`: `import StoreKit` in the rating-sheet plugin
   matched the in-app-purchase rule, and the app sells nothing through Apple.
+- **Internal, no user-facing change: Dependabot reads the root lockfile
+  (#1013), and the root lockfile is back in sync with `size-limit` 14
+  (#1021).** After #990 left the root `package-lock.json` on `size-limit`
+  13, `npm ci` failed; #1021 moves `size-limit` and `@size-limit/file` to
+  14.2.0 together.
+- **Dependency updates.** `@sentry/react` 10.76.0 → 10.76.2 (#1020) and
+  `size-limit` 13.1.1 → 14.2.0 (#990, development only) in the frontend; the
+  `aws-sdk` group, twelve packages to 3.1147.0 (#1017), and
+  `@middy/http-json-body-parser` 7.7.2 → 7.9.2 (#1018) in the backend; and
+  the GitHub Action `zizmorcore/zizmor-action` 0.6.4 → 0.7.1 (#1016).
 
-- **Eleven more plants in the pet-toxicity table, each with the ASPCA listing it
-  was read from.** Alocasia, areca palm, corn plant, ponytail palm, begonia,
-  cast iron plant, jasmine (Jasminum), blue echeveria, haworthia, burro's tail
-  and schefflera were added on 2026-10-21 after reading each plant's own ASPCA
-  page. The table now has 40 plants, 39 with a cited listing, so **39 public
-  `/pet-safe/<slug>` pages are generated** (28 before). Verdicts for cats and
-  dogs are exactly the listing's; the clinical signs in a toxic plant's note are
-  the ones the listing names. Candidates with no listing of their own, or whose
-  listing is ambiguous, were not added.
+### Fixed
+
+- **The pricing page shows the monthly prices before the plans load (#1026).**
+  The plan grid is filled from the plans API, so the prerendered page and the
+  first paint showed a spinner and no price, while the page's structured data
+  said 4.99. A line with both monthly prices now shows while the plans load
+  and is removed when the API answers. If the plans are unavailable or fail to
+  load, the page still shows only the status notice.
+- **Two blog posts no longer say the ZZ plant is toxic (#1025).** The ASPCA
+  plant list has no ZZ plant entry, so its care page and the checker say
+  Unknown (ADR 0011); the posts and the post listing now say there is no
+  verdict. A new test fails if any post states a verdict for a plant the
+  table cannot cite. The home page now links to the pet-safety checker.
+
+### Security
+
+- **`zod` 4.6.7 in the frontend and the backend (#1028).** Clears
+  GHSA-mrhx-c7xc-m3w5 (high), which covers `zod` below 4.6.6 and is in the
+  production dependencies of both. The `zod` 3.25.76 nested under
+  `chromium-bidi` is a development dependency.
+- **`vite` 8.3.5, development only (#1014).** Clears GHSA-587h-7wmj-h5pm,
+  GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and three Vite file-serving
+  advisories from `npm audit`. `vite` is development tooling, and the
+  built site does not include it.
 
 ## [0.43.0] - 2026-10-20
 
