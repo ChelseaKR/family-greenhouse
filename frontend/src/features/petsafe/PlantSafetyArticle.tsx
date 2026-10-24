@@ -7,7 +7,7 @@ import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { offersShopLink } from '@/features/plantShop/plantShop';
 import {
   ANIMALS,
-  POISON_CONTROL_URL,
+  POISON_HOTLINES,
   VERDICT_LABEL_KEY,
   citedSources,
   type Animal,
@@ -29,10 +29,12 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
 
   return (
     <article data-plant-safety={page.slug}>
+      <EmergencyAside />
+
       <Link
         to="/pet-safe"
         data-chrome="plantSafetyPage.checkAnother"
-        className="text-sm font-medium text-primary-700 hover:underline"
+        className="mt-8 inline-block text-sm font-medium text-primary-700 hover:underline"
       >
         {t('plantSafetyPage.checkAnother')}
       </Link>
@@ -98,33 +100,6 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
         </p>
       )}
 
-      <aside
-        aria-labelledby="plant-safety-emergency"
-        className="mt-10 rounded-xl border border-primary-200 bg-primary-50/60 p-5"
-      >
-        <h2
-          id="plant-safety-emergency"
-          data-chrome="plantSafetyPage.emergencyHeading"
-          className="font-serif text-lg text-ink"
-        >
-          {t('plantSafetyPage.emergencyHeading')}
-        </h2>
-        <p className="mt-2 text-sm text-gray-700">
-          <span data-chrome="plantSafetyPage.emergencyBody">
-            {t('plantSafetyPage.emergencyBody')}
-          </span>{' '}
-          <a
-            href={POISON_CONTROL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-chrome="plantSafetyPage.poisonControlLink"
-            className={LINK}
-          >
-            {t('plantSafetyPage.poisonControlLink')}
-          </a>
-        </p>
-      </aside>
-
       <section aria-labelledby="plant-safety-about" className="mt-10">
         <h2
           id="plant-safety-about"
@@ -159,6 +134,53 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
         </section>
       )}
     </article>
+  );
+}
+
+/**
+ * What to do if the pet may already have eaten some, first on every page:
+ * toxic, non-toxic and "Not assessed" alike, since a listing says nothing about
+ * how much was eaten. Two hotlines, each a `tel:` link whose visible text is
+ * the number, then its fee in its own words. This block is unmonetized: no
+ * affiliate, sponsored or paid link may ever sit in it (the build gate fails on
+ * one); any such link belongs below it, after the verdicts.
+ */
+export function EmergencyAside() {
+  const { t } = useTranslation();
+
+  return (
+    <aside
+      aria-labelledby="plant-safety-emergency"
+      data-plant-emergency=""
+      className="rounded-xl border border-primary-200 bg-primary-50/60 p-5"
+    >
+      <h2
+        id="plant-safety-emergency"
+        data-chrome="plantSafetyPage.emergencyHeading"
+        className="font-serif text-lg text-ink"
+      >
+        {t('plantSafetyPage.emergencyHeading')}
+      </h2>
+      <p data-chrome="plantSafetyPage.emergencyBody" className="mt-2 text-sm text-gray-700">
+        {t('plantSafetyPage.emergencyBody')}
+      </p>
+      <ul className="mt-3 space-y-2 text-sm text-gray-700">
+        {POISON_HOTLINES.map((hotline) => (
+          <li key={hotline.id} data-hotline={hotline.id}>
+            <a href={hotline.tel} data-chrome={hotline.callKey} className={`${LINK} font-medium`}>
+              {t(hotline.callKey)}
+            </a>{' '}
+            <span data-chrome={hotline.feeKey}>{t(hotline.feeKey)}</span>
+          </li>
+        ))}
+      </ul>
+      <p data-chrome="plantSafetyPage.hotlinesChecked" className="mt-3 text-sm text-gray-600">
+        {t('plantSafetyPage.hotlinesChecked')}
+      </p>
+      <p data-chrome="plantSafetyPage.emergencyListingNote" className="mt-2 text-sm text-gray-700">
+        {t('plantSafetyPage.emergencyListingNote')}
+      </p>
+    </aside>
   );
 }
 

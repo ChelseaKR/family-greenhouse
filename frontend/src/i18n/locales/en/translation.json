@@ -477,9 +477,18 @@
       "dogs": "This page has no cited verdict for dogs, so it makes no claim either way. Treat it as unknown and keep the plant out of a dog’s reach until you have checked with your vet."
     },
     "noteHeading": "What our table adds",
-    "emergencyHeading": "If your pet has already eaten some",
-    "emergencyBody": "Don’t wait to see whether symptoms appear. Call your vet, or",
-    "poisonControlLink": "ASPCA Animal Poison Control",
+    "emergencyHeading": "If your pet may have eaten some",
+    "emergencyBody": "Call a pet poison hotline now, or your vet or an emergency clinic. Don’t wait to see whether symptoms appear.",
+    "hotline": {
+      "aspca": "ASPCA Poison Control: (888) 426-4435",
+      "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
+    },
+    "hotlineFee": {
+      "aspca": "Its page says: “A consultation fee may apply.”",
+      "petPoisonHelpline": "Its page says: “$99 incident fee applies.”"
+    },
+    "hotlinesChecked": "Numbers and fees as each service’s own page stated them on October 23, 2026.",
+    "emergencyListingNote": "The verdicts on this page come from the ASPCA plant list, which says nothing about how much your pet ate. A hotline or your vet can weigh that with you.",
     "aboutHeading": "How this page is made",
     "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing.",
     "careGuideLink": "{{name}} care guide: watering, light and common problems",

@@ -46,6 +46,13 @@
  *      plantShopLinks.json and config/affiliateLinks.json say, carry
  *      rel="sponsored noopener" and a visible "Paid link" label, and appear
  *      only on a page whose every verdict is a cited "non-toxic".
+ *   6. EMERGENCY. The page opens with one `<aside data-plant-emergency>`: no
+ *      text in `<main>` comes before it, so it precedes the verdicts on every
+ *      page, "Not assessed" ones included. It lists both POISON_HOTLINES in
+ *      order, each a `tel:` link whose visible digits are the dialed number
+ *      and whose text and fee sentence are the hotline's catalog strings. Its
+ *      only links are those two; nothing in it is affiliate, sponsored or paid.
+ *      `tel:` links anywhere else on the page fail.
  *
  * And across pages: every plant the table publishes is prerendered, and no
  * page is prerendered under `/pet-safe/` for a plant it does not publish.
@@ -135,9 +142,137 @@ const TOXICITY_WORDING =
 export const TOXICITY_WORDING_ALLOWED = {
   'plantSafetyPage.heading': 'the question the page answers; the plant name is interpolated',
   'plantSafetyPage.metaTitle': 'the same question, as the title',
-  'plantSafetyPage.emergencyBody': 'sends a reader to their vet or poison control; names no effect',
-  'plantSafetyPage.poisonControlLink': 'the name of the ASPCA service it links',
+  'plantSafetyPage.emergencyBody':
+    'sends a reader to a poison hotline, their vet or an emergency clinic; names no effect',
+  'plantSafetyPage.hotline.aspca': 'the name and number of the ASPCA hotline it dials',
+  'plantSafetyPage.hotline.petPoisonHelpline': 'the name and number of the hotline it dials',
 };
+
+/**
+ * The emergency aside's hotlines, in order. Must match POISON_HOTLINES in
+ * src/features/petsafe/plantSafetyPages.ts (a unit test compares them).
+ */
+export const POISON_HOTLINES = [
+  {
+    id: 'aspca',
+    tel: 'tel:+18884264435',
+    callKey: 'plantSafetyPage.hotline.aspca',
+    feeKey: 'plantSafetyPage.hotlineFee.aspca',
+  },
+  {
+    id: 'petPoisonHelpline',
+    tel: 'tel:+18557647661',
+    callKey: 'plantSafetyPage.hotline.petPoisonHelpline',
+    feeKey: 'plantSafetyPage.hotlineFee.petPoisonHelpline',
+  },
+];
+
+/** Catalog strings the emergency aside must carry besides the hotlines. */
+export const EMERGENCY_KEYS = [
+  'plantSafetyPage.emergencyHeading',
+  'plantSafetyPage.emergencyBody',
+  'plantSafetyPage.hotlinesChecked',
+  'plantSafetyPage.emergencyListingNote',
+];
+
+/** Markers of a monetized link or block; none may appear inside the emergency aside. */
+const MONETIZED_MARKERS = /affiliate|sponsor|paid link|commission|\?tag=|utm_|\/c\/\d+\/\d+\/\d+/i;
+
+/** The digits a tel: href dials, without the leading +1. */
+const telDigits = (href) =>
+  href
+    .replace(/^tel:/, '')
+    .replace(/\D/g, '')
+    .replace(/^1(?=\d{10}$)/, '');
+
+/**
+ * Check the emergency aside of one page's `<main>` (assertion 6). Returns
+ * failure messages without the page prefix.
+ */
+export function checkEmergencyAside(main, window) {
+  const failures = [];
+  const asides = main.querySelectorAll('aside[data-plant-emergency]');
+  if (asides.length !== 1) {
+    failures.push(`expected one <aside data-plant-emergency>, found ${asides.length}`);
+    return failures;
+  }
+  const aside = asides[0];
+
+  const walker = main.ownerDocument.createTreeWalker(main, window.NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!squash(node.textContent)) continue;
+    if (!aside.contains(node)) {
+      failures.push(
+        `the emergency aside is not first: "${squash(node.textContent).slice(0, 80)}" comes before it`
+      );
+    }
+    break;
+  }
+  for (const verdict of main.querySelectorAll('[data-claim="verdict"]')) {
+    if (!(aside.compareDocumentPosition(verdict) & window.Node.DOCUMENT_POSITION_FOLLOWING)) {
+      failures.push('a verdict comes before the emergency aside');
+    }
+  }
+
+  for (const key of EMERGENCY_KEYS) {
+    if (aside.querySelectorAll(`[data-chrome="${key}"]`).length !== 1) {
+      failures.push(`the emergency aside does not carry ${key} once`);
+    }
+  }
+
+  const telLinks = [...aside.querySelectorAll('a[href^="tel:"]')];
+  const shown = telLinks.map((a) => a.getAttribute('href'));
+  const expected = POISON_HOTLINES.map((h) => h.tel);
+  if (JSON.stringify(shown) !== JSON.stringify(expected)) {
+    failures.push(
+      `the emergency aside dials ${JSON.stringify(shown)}, expected ${JSON.stringify(expected)}`
+    );
+  }
+  for (const hotline of POISON_HOTLINES) {
+    const link = telLinks.find((a) => a.getAttribute('href') === hotline.tel);
+    if (!link) continue;
+    if (link.getAttribute('data-chrome') !== hotline.callKey) {
+      failures.push(`the ${hotline.id} link text is not ${hotline.callKey}`);
+    }
+    const visible = squash(link.textContent).replace(/\D/g, '');
+    if (!visible.endsWith(telDigits(hotline.tel))) {
+      failures.push(
+        `the ${hotline.id} link dials ${hotline.tel} but shows "${squash(link.textContent)}"`
+      );
+    }
+    const item = link.closest('li') ?? aside;
+    if (item.querySelectorAll(`[data-chrome="${hotline.feeKey}"]`).length !== 1) {
+      failures.push(`the ${hotline.id} hotline has no fee sentence (${hotline.feeKey}) beside it`);
+    }
+  }
+
+  for (const a of aside.querySelectorAll('a')) {
+    const href = a.getAttribute('href') ?? '';
+    if (!href.startsWith('tel:')) failures.push(`the emergency aside links ${href || '(no href)'}`);
+  }
+  for (const el of [aside, ...aside.querySelectorAll('*')]) {
+    const rel = el.getAttribute('rel') ?? '';
+    const attrs = [...el.attributes].map((attr) => `${attr.name}=${attr.value}`).join(' ');
+    if (
+      /\bsponsored\b/.test(rel) ||
+      el.hasAttribute('data-plant-shop') ||
+      MONETIZED_MARKERS.test(attrs)
+    ) {
+      failures.push(
+        `the emergency aside carries a monetized element (${el.outerHTML.slice(0, 100)})`
+      );
+    }
+  }
+  const text = squash(aside.textContent);
+  const monetized = text.match(MONETIZED_MARKERS);
+  if (monetized) failures.push(`the emergency aside reads as monetized ("${monetized[0]}")`);
+
+  for (const a of main.querySelectorAll('a[href^="tel:"]')) {
+    if (!aside.contains(a))
+      failures.push(`dials ${a.getAttribute('href')} outside the emergency aside`);
+  }
+  return failures;
+}
 
 const CLAIM_KINDS = new Set(['verdict', 'citation', 'note']);
 const FIELDS = new Set(['scientificName', 'commonName']);
@@ -416,10 +551,15 @@ export function checkPlantSafetyPageHtml({
       else if (CONTENT_NAMESPACES.some((ns) => path.startsWith(ns)) && !published.has(path)) {
         fail(`links ${href}, which is not a published page`);
       }
+    } else if (href.startsWith('tel:')) {
+      continue; // checked by checkEmergencyAside
     } else if (!allowedExternal.has(href)) {
       fail(`links off-site to ${href}, which is neither this plant's listing nor poison control`);
     }
   }
+
+  // 6. Emergency aside.
+  for (const message of checkEmergencyAside(main, window)) fail(message);
 
   // 4. Head.
   const head = expectedHead(entry, page, catalog);
