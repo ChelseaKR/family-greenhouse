@@ -481,13 +481,13 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'zz-plant',
     commonName: 'ZZ Plant',
     scientificName: 'Zamioculcas zamiifolia',
-    alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'ZZ'],
+    alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'Zuzu Plant'],
     related: ['snake-plant', 'chinese-evergreen', 'parlor-palm'],
     metaTitle: 'ZZ Plant Care: How Often to Water (Almost Never)',
     metaDescription:
       'How often to water a ZZ plant, the light it tolerates, why the stems go yellow or mushy, and how to grow a new one by division.',
     reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    updated: '2026-10-23',
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {

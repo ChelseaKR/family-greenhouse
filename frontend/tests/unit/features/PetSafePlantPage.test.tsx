@@ -104,7 +104,15 @@ describe('every published plant page passes the build gate as rendered', () => {
       );
     }
     expect(screen.getByText(entryFor('hoya').note)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Get started' })).toHaveAttribute('href', '/register');
+    expect(screen.getByRole('link', { name: 'Set up reminders' })).toHaveAttribute(
+      'href',
+      '/register'
+    );
+    expect(
+      screen.getByRole('heading', {
+        name: `Get watering reminders for your ${entryFor('hoya').commonName}`,
+      })
+    ).toBeInTheDocument();
   });
 });
 

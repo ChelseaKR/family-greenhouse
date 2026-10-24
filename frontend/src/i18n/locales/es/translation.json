@@ -507,9 +507,9 @@
     "checkAnother": "Buscar otra planta",
     "breadcrumbHome": "Inicio",
     "breadcrumbHub": "Mascotas y plantas",
-    "signupTitle": "Que todo el hogar esté al tanto de tus plantas",
-    "signupBody": "Family Greenhouse reúne cada planta, sus cuidados y quién se encarga de ella en un solo lugar compartido. Puedes empezar gratis y sin tarjeta.",
-    "signupCta": "Empezar",
+    "signupTitle": "Recibe recordatorios de riego para tu {{name}}",
+    "signupBody": "Family Greenhouse sigue el calendario de riego de cada planta y avisa a la persona indicada de tu hogar. Gratis hasta 20 plantas, sin tarjeta.",
+    "signupCta": "Configurar recordatorios",
     "unknownTitle": "No hay un veredicto con fuente para esta planta",
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
     "unknownCta": "Buscar una planta"

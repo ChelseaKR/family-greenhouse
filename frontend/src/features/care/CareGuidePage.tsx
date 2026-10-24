@@ -310,12 +310,15 @@ export function CareGuidePage() {
         </p>
       </header>
 
-      <p className="prose-fg lead">{guide.summary}</p>
-
       {/* At-a-glance facts, styled as the back of a seed packet:
             parchment ground, a dashed inner frame like a cut line, and a
             hand-drawn icon per fact. The icons mark topics only — the
-            fact text carries the actual answer. */}
+            fact text carries the actual answer.
+
+            They come straight after the heading because they ARE the
+            answer: the searched question is "how often to water <plant>",
+            and the water line used to sit below the summary paragraph,
+            under the fold on a phone. */}
       <aside
         aria-label={`${guide.commonName} at a glance`}
         className="mt-8 rounded-xl border border-primary-200 bg-parchment/70 shadow-journal"
@@ -353,6 +356,30 @@ export function CareGuidePage() {
           </dl>
         </div>
       </aside>
+
+      {/* The page's one call to action, directly under the answer it follows
+          from. It sat at the very bottom, after the FAQ and the dates, where
+          the near-100% bounce of these pages meant almost nobody reached it. */}
+      {PUBLIC_REGISTRATION_AVAILABLE && (
+        <aside
+          aria-label="Watering reminders"
+          data-testid="care-cta"
+          className="mt-6 flex flex-col items-start gap-3 rounded-xl border border-primary-200 bg-primary-50 p-5 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p className="text-sm text-gray-700">
+            Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
+            the right person in your household. Free for up to 20 plants, no card.
+          </p>
+          <Link
+            to="/register"
+            className={`${buttonStyles()} shrink-0 text-center max-sm:whitespace-normal`}
+          >
+            Get watering reminders for your {sentenceName(guide.commonName)}
+          </Link>
+        </aside>
+      )}
+
+      <p className="prose-fg lead mt-10">{guide.summary}</p>
 
       <article className="prose-fg mt-12">
         <h2>How often to water {nameInSentence(guide.commonName)}</h2>
@@ -415,22 +442,6 @@ export function CareGuidePage() {
           away from the toxicity section, so it never reads as part of the
           pet answer. Renders nothing unless a program is configured. */}
       <PlantShopLink slug={guide.slug} />
-
-      {PUBLIC_REGISTRATION_AVAILABLE && (
-        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-          <p className="font-serif text-xl text-ink">Stop guessing when you watered it</p>
-          <p className="mt-2 text-sm text-gray-600">
-            Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
-            the right person — so “I thought you watered it” stops being a thing. Free for up to 20
-            plants, no card.
-          </p>
-          <div className="mt-4">
-            <Link to="/register" className={buttonStyles()}>
-              Add your {sentenceName(guide.commonName)}
-            </Link>
-          </div>
-        </aside>
-      )}
 
       {related.length > 0 && (
         <section className="mt-16">
