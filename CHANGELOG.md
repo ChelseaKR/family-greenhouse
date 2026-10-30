@@ -42,6 +42,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **Production opens Apple In-App Purchase.**
+  `infrastructure/environments/production/terraform.tfvars` sets
+  `app_store_billing_enabled = "1"`, so at the next production tag the billing
+  Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and the three
+  `/billing/app-store/*` routes stop answering 404. This is packet step 12,
+  merged only after the staging Sandbox purchase, restore and cancel (step 11)
+  passed. No secret, workflow or code change is involved; Apple's signed data
+  is verified against the pinned Apple Root CA - G3 (ADR 0041). Setting it back
+  to `"0"` and shipping a tag closes the routes again, and a recorded
+  subscription keeps its entitlement.
 - **Staging opens Apple In-App Purchase, ahead of production.**
   `infrastructure/environments/staging/terraform.tfvars` sets
   `app_store_billing_enabled = "1"`, so after the next manual cd-staging run
