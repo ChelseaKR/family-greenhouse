@@ -117,6 +117,10 @@
         "oneTime": "Las compras únicas se tratan igual. Un paquete de identificaciones de plantas se cobra una sola vez y sus identificaciones caducan 12 meses después de la compra; cancelar una suscripción ni las reembolsa ni te las quita, y si el hogar desaparece, cuando su última persona miembro elimina su cuenta, lo que quede sin usar desaparece con él. La compra de por vida de Garden, ya retirada, fue un pago único que conserva su plan de forma permanente.",
         "statutory": "Nada de esto elimina los derechos que ya te otorgue la ley del lugar donde vives. Si la ley de tu país o región te da derecho a desistir de una compra y a que te devuelvan el dinero, ese derecho se aplica diga lo que diga esta sección."
       },
+      "applePurchases": {
+        "heading": "Compras realizadas a través de Apple",
+        "body": "Si la suscripción se contrata en la app de iPhone mediante la compra dentro de la app de Apple (In-App Purchase), no hay prueba gratuita: Apple cobra en el momento de confirmar, y la compra pone fin a cualquier prueba de Garden sin tarjeta. Apple factura, renueva y vuelve a intentar los pagos fallidos, y gestiona los cambios de precio, los reembolsos y las cancelaciones según los términos de Apple; las secciones anteriores sobre tarjetas, pagos fallidos, cambios de precio y reembolsos se aplican solo a las suscripciones contratadas en nuestro sitio web. Eliminar la cuenta no cancela una suscripción de Apple; primero hay que cancelarla en la Configuración del iPhone."
+      },
       "limitations": {
         "heading": "Limitaciones",
         "asIs": "El servicio se ofrece “tal cual”. Aspiramos a una alta disponibilidad, pero no prometemos cero interrupciones, cero pérdida de datos ni que todas las funciones funcionen en todos los navegadores en todo momento. Nuestra responsabilidad se limita al importe que nos hayas pagado en los 12 meses anteriores.",

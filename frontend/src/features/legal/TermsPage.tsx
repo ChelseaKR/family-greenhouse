@@ -166,6 +166,21 @@ export function TermsPage() {
       <p>{t('legal.terms.refunds.oneTime')}</p>
       <p>{t('legal.terms.refunds.statutory')}</p>
 
+      {/*
+        Apple In-App Purchase (ADR 0041). Placed after Refunds because it
+        says "the sections above" do not apply to an Apple subscription.
+        Each claim is the code: the App Store products have no introductory
+        offer (`introductoryOffer: null` in FamilyGreenhouse.storekit, ADR
+        0041), so Apple charges at purchase; `noCardTrialState` in
+        models/plans.ts returns `none` once any App Store subscription is on
+        the row, so buying ends the no-card trial; and account deletion
+        cancels only a Stripe subscription
+        (`accountCleanup.cancelAbandonedHouseholdSubscription`), because an
+        Apple subscription can only be cancelled by the subscriber.
+      */}
+      <h2>{t('legal.terms.applePurchases.heading')}</h2>
+      <p>{t('legal.terms.applePurchases.body')}</p>
+
       <h2>{t('legal.terms.limitations.heading')}</h2>
       <p>{t('legal.terms.limitations.asIs')}</p>
       <p>{t('legal.terms.limitations.advice')}</p>

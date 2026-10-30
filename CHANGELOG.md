@@ -56,6 +56,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   has the `trialEmails` job, so the switch takes effect when the release that
   carries this change is deployed.
 
+- **The Terms of Service say what is different about a purchase made through
+  Apple.** A new section, "Purchases made through Apple", follows Refunds: a
+  subscription bought in the iPhone app has no free trial (the App Store
+  products have no introductory offer), Apple charges when the purchase is
+  confirmed, and buying ends any no-card Garden trial; Apple bills, renews,
+  retries failed payments, and handles price changes, refunds and
+  cancellations, so the card, failed-payment, price-change and refund sections
+  apply only to subscriptions bought on the website; and deleting an account
+  does not cancel an Apple subscription. The Spanish Terms carry the same
+  section. No price changed and In-App Purchase stays off. The Terms text
+  changed, so its effective date is `UNRELEASED` until the release that ships
+  it.
+
 ## [0.45.0] - 2026-10-24
 
 **The free Seedling plan is now 8 plants and 2 people; households created
