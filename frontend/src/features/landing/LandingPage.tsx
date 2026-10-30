@@ -568,7 +568,7 @@ export function LandingPage() {
       <header className="absolute inset-x-0 top-0 z-50">
         <nav className="flex items-center justify-between gap-3 px-4 py-5 sm:p-6 lg:px-8 max-w-7xl mx-auto">
           <div className="flex lg:flex-1 items-center gap-2 min-w-0">
-            <Link to="/" aria-label={t('publicShell.homeLabel')}>
+            <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
               <BrandMark variant="wordmark" size="sm" compactOnMobile />
             </Link>
             {IS_BETA && (
@@ -947,7 +947,7 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
             <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-              <Link to="/" aria-label={t('publicShell.homeLabel')}>
+              <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
                 <BrandMark variant="wordmark" tone="light" />
               </Link>
               <p className="mt-4 text-sm text-primary-200">{t('landing.footer.tagline')}</p>
