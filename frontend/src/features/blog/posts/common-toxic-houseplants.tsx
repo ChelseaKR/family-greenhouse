@@ -19,12 +19,13 @@ export default function CommonToxicHouseplants() {
 
       <h2>First, the one real emergency</h2>
       <p>
-        Before the swaps, the plant that deserves its own paragraph: true lilies (Lilium) and
-        daylilies (Hemerocallis). For cats these aren&rsquo;t &ldquo;mildly toxic&rdquo; &mdash;
-        even pollen, a chewed leaf, or the water from a vase can cause sudden kidney failure, and
-        it&rsquo;s often fatal without fast treatment. If you have a cat, true lilies simply
-        shouldn&rsquo;t come into the house, cut flowers included. Everything else on this page is
-        the ordinary, recoverable kind of toxic. This one isn&rsquo;t.
+        Before the swaps, the plant that deserves its own paragraph:{' '}
+        <a href="/care/lily">true lilies</a> (Lilium) and daylilies (Hemerocallis). For cats these
+        aren&rsquo;t &ldquo;mildly toxic&rdquo; &mdash; even pollen, a chewed leaf, or the water
+        from a vase can cause sudden kidney failure, and it&rsquo;s often fatal without fast
+        treatment. If you have a cat, true lilies simply shouldn&rsquo;t come into the house, cut
+        flowers included. Everything else on this page is the ordinary, recoverable kind of toxic.
+        This one isn&rsquo;t.
       </p>
 
       <h2>The common toxic ones, and what to buy instead</h2>
@@ -45,9 +46,10 @@ export default function CommonToxicHouseplants() {
         <a href="/care/aloe-vera">Aloe</a> gets recommended as a beginner succulent and a first-aid
         plant, but the ASPCA lists it as toxic to cats and dogs, even though it calls the gel
         edible. Treat the whole plant as something to keep out of reach. If you want a small spiky
-        succulent for a sunny sill, a haworthia (the little &ldquo;zebra&rdquo; succulents) gives
-        you the same look and the same drought-loving, hard-to-overthink care, and isn&rsquo;t on
-        the toxic list. You lose the burn-gel trick, but you keep the windowsill aesthetic.
+        succulent for a sunny sill, a <a href="/care/haworthia">haworthia</a> (the little
+        &ldquo;zebra&rdquo; succulents) gives you the same look and the same drought-loving,
+        hard-to-overthink care, and isn&rsquo;t on the toxic list. You lose the burn-gel trick, but
+        you keep the windowsill aesthetic.
       </p>
 
       <h3>Snake plant &rarr; cast iron plant</h3>
@@ -74,8 +76,8 @@ export default function CommonToxicHouseplants() {
       <h3>ZZ plant &rarr; parlor palm</h3>
       <p>
         The <a href="/care/zz-plant">ZZ</a> is the &ldquo;I can&rsquo;t keep anything alive&rdquo;
-        plant, and it&rsquo;s toxic to cats and dogs (the reputation overstates it, but it&rsquo;s
-        real). If you want near-indestructible <em>and</em> pet-safe, the{' '}
+        plant, but the ASPCA plant list has no entry for it, so we give no pet verdict for it either
+        way. If you want near-indestructible <em>and</em> pet-safe, the{' '}
         <a href="/care/parlor-palm">parlor palm</a> (Chamaedorea) is the swap: non-toxic, low-light
         tolerant, slow, and forgiving. It&rsquo;s leafier and softer than a ZZ rather than glossy
         and architectural, but it fills the same &ldquo;tough green thing for a dim room&rdquo;
@@ -106,10 +108,11 @@ export default function CommonToxicHouseplants() {
       <h2>The trap in the word &ldquo;toxic&rdquo;</h2>
       <p>
         Notice how much range there is in that one word. A nibbled pothos means a drooly, miserable
-        afternoon and a full recovery. A chewed true lily is a veterinary emergency. A poinsettia
-        &mdash; the plant everyone fears at Christmas &mdash; is barely an upset stomach.
-        &ldquo;Toxic to pets&rdquo; on a label flattens all of that into one scary syllable, which
-        is exactly why people either panic over a safe plant or relax around a dangerous one.
+        afternoon and a full recovery. A chewed true lily is a veterinary emergency. A{' '}
+        <a href="/care/poinsettia">poinsettia</a> &mdash; the plant everyone fears at Christmas
+        &mdash; is barely an upset stomach. &ldquo;Toxic to pets&rdquo; on a label flattens all of
+        that into one scary syllable, which is exactly why people either panic over a safe plant or
+        relax around a dangerous one.
       </p>
       <p>
         What you actually want is the specific verdict: which animal, how bad, and what to do. The
@@ -147,8 +150,10 @@ export default function CommonToxicHouseplants() {
         <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
         <a href="/pet-safe/philodendron">philodendron</a>,<a href="/pet-safe/monstera">monstera</a>,{' '}
         <a href="/pet-safe/dieffenbachia">dieffenbachia</a> and
-        <a href="/pet-safe/poinsettia">poinsettia</a>. We have no cited listing recorded for the ZZ
-        plant, so we don&rsquo;t publish a verdict for it.
+        <a href="/pet-safe/poinsettia">poinsettia</a>. The safer swaps have pages too: the{' '}
+        <a href="/pet-safe/haworthia">haworthia</a> and the{' '}
+        <a href="/pet-safe/cast-iron-plant">cast iron plant</a>. We have no cited listing recorded
+        for the ZZ plant, so we don&rsquo;t publish a verdict for it.
       </p>
       <p>
         And once a plant is home, the safe ones still need keeping alive.{' '}

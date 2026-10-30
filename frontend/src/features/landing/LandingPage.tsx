@@ -21,6 +21,7 @@ import {
 import { buttonStyles } from '@/components/buttonStyles';
 import { BrandMark } from '@/components/BrandMark';
 import { PricingGrid } from '@/features/pricing/PricingGrid';
+import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
 import { IS_BETA, BETA_BADGE } from '@/lib/betaMode';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { MemorialFrame } from '@/components/brand/MemorialFrame';
@@ -64,14 +65,13 @@ const HERO_COPY_KEY: Record<Variant, string> = {
 // Sets expectations right next to the primary CTA instead of a scroll away
 // in the product-facts band (paid-acquisition readiness review, §4 note 4:
 // "'No credit card' is one scroll below the fold... not literally next to
-// the primary CTA button"). Also names the actual signup steps up front —
-// full name, email, a password, then an emailed confirmation code — so a
-// cold paid-traffic visitor isn't surprised mid-flow, which the same review
-// flagged as "the most likely place a paid-traffic visitor abandons" (§4
-// note 1). Reuses the "five minutes" figure already stated in the Setup
-// section below rather than inventing a new one. Not part of the hero A/B
-// test (HERO_COPY_KEY above): this renders identically under both variants.
-// Copy: `landing.hero.signupNote`.
+// the primary CTA button"). It still names the emailed confirmation code, so
+// a cold visitor isn't surprised mid-flow (same review, §4 note 1). It no
+// longer lists every field or says sign-up takes "about five minutes, start
+// to finish": that figure is the Setup section's signup-to-first-task time,
+// and quoting it beside the button described sign-up as a chore. Not part of
+// the hero A/B test (HERO_COPY_KEY above): it renders the same under both
+// variants. Copy: `landing.hero.signupNote`.
 
 // Each entry's copy is `landing.features.<id>.name` / `.description`.
 const features = [
@@ -494,6 +494,8 @@ function SidebarLeafIcon({ className }: { className?: string }) {
 }
 
 export function LandingPage() {
+  // Gift links appear only while a gift can actually be bought.
+  const giftsOffered = useGiftAvailability() === 'available';
   const { t } = useTranslation();
   // A/B test of the hero framing (control vs solo-first). Bucketing is
   // stable per browser; see lib/experiment.ts.
@@ -542,7 +544,7 @@ export function LandingPage() {
                   '@type': 'Offer',
                   price: '0',
                   priceCurrency: 'USD',
-                  description: 'Free for one home, up to 3 household members and 20 plants',
+                  description: 'Free for one home, up to 2 household members and 8 plants',
                 },
               }
             : {}),
@@ -588,12 +590,14 @@ export function LandingPage() {
             >
               {t('publicShell.pricing')}
             </a>
-            <Link
-              to="/gift"
-              className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
-            >
-              {t('giftLanding.navLink')}
-            </Link>
+            {giftsOffered && (
+              <Link
+                to="/gift"
+                className="text-sm font-semibold text-ink hover:text-primary-700 transition-colors"
+              >
+                {t('giftLanding.navLink')}
+              </Link>
+            )}
           </div>
           <div className="flex shrink-0 justify-end items-center gap-x-3 sm:gap-x-6 lg:flex-1">
             <Link
@@ -629,11 +633,11 @@ export function LandingPage() {
           overflow-hidden wrapper crops it). Below lg it stays the
           stacked, centered layout. */}
         <div className="overflow-hidden bg-paper pt-14">
-          <div className="py-14 sm:py-32 lg:py-36">
+          <div className="py-10 sm:py-32 lg:py-36">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="grid grid-cols-1 items-center lg:grid-cols-2 lg:gap-x-16">
                 <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:max-w-xl lg:text-left">
-                  <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-6">
+                  <p className="text-xs uppercase tracking-[0.22em] text-primary-700 font-semibold mb-4 sm:mb-6">
                     {t(`${hero}.eyebrow`)}
                   </p>
                   {/* `sm:leading-none` pins the ≥sm line-height to 1. Under Tailwind v3
@@ -643,7 +647,7 @@ export function LandingPage() {
                     a 1.0 ratio from `sm` up. v4 composes leading through
                     `--tw-leading`, which makes `leading-[1.05]` win at every
                     breakpoint — pinning keeps the shipped rendering unchanged. */}
-                  <h1 className="font-serif text-5xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
+                  <h1 className="font-serif text-4xl tracking-tight text-ink sm:text-7xl lg:text-6xl xl:text-7xl leading-[1.05] sm:leading-none">
                     {t(`${hero}.headlinePre`)}
                     <span className="italic text-primary-700">{t(`${hero}.headlineEmphasis`)}</span>
                     {t(`${hero}.headlinePost`)}
@@ -651,13 +655,18 @@ export function LandingPage() {
                   <div className="mt-4 flex justify-center lg:justify-start">
                     <TitleUnderline className="h-4 w-56 text-primary-600" />
                   </div>
-                  <p className="mt-6 text-lg leading-8 text-gray-700">{t(`${hero}.subhead`)}</p>
-                  <div className="mt-10 flex items-center justify-center gap-x-6 lg:justify-start">
-                    {/* The hero's two controls are counted in GA4 as
-                      `landing_cta_click`: the arrival step is where the funnel
-                      loses most visitors (docs/analytics.md), and a click here
-                      is the first sign a visitor did anything. */}
-                    {PUBLIC_REGISTRATION_AVAILABLE && (
+                  <p className="mt-5 sm:mt-6 text-lg leading-8 text-gray-700">
+                    {t(`${hero}.subhead`)}
+                  </p>
+                  {/* One call to action in the hero: sign up. GA4 counts it as
+                    `landing_cta_click` (docs/analytics.md). Over the 90 days
+                    to 2026-10-23, 33 sessions landed on this page, one
+                    clicked through and none signed up. The hero used to offer
+                    a second "See how it works" scroll link beside the button.
+                    Two equal choices split the one decision this page needs,
+                    and the features are one scroll away regardless. */}
+                  {PUBLIC_REGISTRATION_AVAILABLE && (
+                    <div className="mt-8 sm:mt-10 flex justify-center lg:justify-start">
                       <Link
                         to="/register"
                         className={buttonStyles({ size: 'lg' })}
@@ -667,20 +676,8 @@ export function LandingPage() {
                       >
                         {t('auth.signUpFree')}
                       </Link>
-                    )}
-                    <a
-                      href="#features"
-                      className="text-sm font-semibold leading-6 text-ink flex items-center gap-1 hover:text-primary-700 transition-colors"
-                      onClick={() =>
-                        trackGoogleConversion({
-                          name: 'landing_cta_click',
-                          cta: 'hero_how_it_works',
-                        })
-                      }
-                    >
-                      {t('landing.hero.seeHowItWorks')} <span aria-hidden="true">→</span>
-                    </a>
-                  </div>
+                    </div>
+                  )}
                   {PUBLIC_REGISTRATION_AVAILABLE && (
                     <p className="mt-4 text-sm text-gray-600">{t('landing.hero.signupNote')}</p>
                   )}
@@ -913,6 +910,9 @@ export function LandingPage() {
                   <Link to="/blog" className="text-primary-700 hover:underline">
                     {t('landing.care.readBlog')} <span aria-hidden="true">→</span>
                   </Link>
+                  <Link to="/pet-safe" className="text-primary-700 hover:underline">
+                    {t('landing.care.petSafeChecker')} <span aria-hidden="true">→</span>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -965,11 +965,13 @@ export function LandingPage() {
                     {t('publicShell.pricing')}
                   </a>
                 </li>
-                <li>
-                  <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
-                    {t('giftLanding.navLink')}
-                  </Link>
-                </li>
+                {giftsOffered && (
+                  <li>
+                    <Link to="/gift" className="text-sm text-primary-200 hover:text-white">
+                      {t('giftLanding.navLink')}
+                    </Link>
+                  </li>
+                )}
               </ul>
             </div>
             <div>
@@ -978,6 +980,11 @@ export function LandingPage() {
                 <li>
                   <Link to="/care" className="text-sm text-primary-200 hover:text-white">
                     {t('landing.footer.plantCareGuides')}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/pet-safe" className="text-sm text-primary-200 hover:text-white">
+                    {t('landing.footer.petSafeChecker')}
                   </Link>
                 </li>
                 <li>

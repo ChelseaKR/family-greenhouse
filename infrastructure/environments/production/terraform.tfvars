@@ -224,3 +224,12 @@ payments_enabled = "1"
 # passkey made on familygreenhouse.net works there (and on subdomains).
 passkeys_enabled         = false
 passkey_relying_party_id = "familygreenhouse.net"
+
+# No-card-trial lifecycle emails (ADR 0039): the day-10 and day-14 messages.
+# ON by the owner's decision of 2026-10-23. This sets
+# TRIAL_LIFECYCLE_EMAILS_ENABLED=true on the digests Lambda and turns the daily
+# trial-emails rule from DISABLED to ENABLED. The deployed digests build must
+# already contain the trialEmails job (0.44.0 or later): an older build reads
+# the rule's input as the weekly digest. See docs/billing.md, "The trial
+# lifecycle emails". Set back to false to stop them; send markers are kept.
+trial_lifecycle_emails_enabled = true

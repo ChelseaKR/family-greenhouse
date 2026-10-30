@@ -87,9 +87,10 @@ describe('help content', () => {
   it('answers "the household is full" with the caps the catalog actually enforces', () => {
     const article = articleText('households', 'household-full');
 
-    // backend/src/models/plans.ts: seedling members 3, garden and greenhouse
-    // UNLIMITED. The retired numbers must not come back.
-    expect(article).toMatch(/three people/i);
+    // backend/src/models/plans.ts: seedling members 2 (3 for a household
+    // created before the ADR 0040 cut), garden and greenhouse UNLIMITED. The
+    // retired numbers must not come back.
+    expect(article).toMatch(/holds two people, or three for a household created before/i);
     expect(article).not.toMatch(/\b6 on (Seedling|Garden)\b/i);
     expect(article).not.toMatch(/\b50 on Greenhouse\b/i);
     expect(article).toMatch(/no member limit/i);
@@ -100,7 +101,7 @@ describe('help content', () => {
     expect(article).not.toMatch(/move to Greenhouse/i);
 
     // The free cap here must agree with the one the billing topic states.
-    expect(articleText('billing', 'whats-free')).toMatch(/up to 3 members/i);
+    expect(articleText('billing', 'whats-free')).toMatch(/up to 2 members/i);
   });
 
   // Not a stale number this time, but a privacy assurance a household acts on,

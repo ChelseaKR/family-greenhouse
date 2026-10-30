@@ -573,6 +573,16 @@ if (templateValues.get('VITE_NATIVE_PUSH_ANDROID_ENABLED') !== 'false') {
       'docs/native-push-setup.md are done'
   );
 }
+// Apple In-App Purchase (ADR 0041) is turned on per build, like push: the
+// template every release env is copied from keeps it off, so a build sells
+// through the App Store only when someone set it deliberately.
+if (templateValues.get('VITE_APP_STORE_PURCHASES') !== 'false') {
+  fail(
+    `${envExamplePath} must set VITE_APP_STORE_PURCHASES=false; App Store purchases are ` +
+      'turned on per build, in the local .env.mobile.production, once the App Store Connect ' +
+      'products and the server switch are in place (docs/mobile.md, "In-App Purchase")'
+  );
+}
 
 // "Native push UI must remain hidden for this release" used to be a warn()
 // string, and warn() never touches the exit code (#469, #470) — a requirement

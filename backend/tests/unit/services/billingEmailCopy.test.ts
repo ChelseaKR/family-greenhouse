@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 // asserted was broken (see "links somewhere that exists" below).
 import { declaredRoutes, matchesRoute } from '../../../../scripts/check-app-links.mjs';
 import type { BillingNotice } from '../../../src/models/billingNotices.js';
-import { getPlan } from '../../../src/models/plans.js';
+import { getPlan, withSeedlingGrandfather } from '../../../src/models/plans.js';
 import {
   composeAccountDeletionEmail,
   composeBillingEmail,
@@ -359,8 +359,14 @@ describe('cancellation', () => {
   it('names the tier the household actually holds now, not a guess', () => {
     const { text } = composeBillingEmail(complete, ctx('en', { currentPlan: getPlan('seedling') }));
     expect(text).toContain('Your household is on the Seedling plan');
-    expect(text).toContain('20 plants and 3 members');
+    expect(text).toContain('8 plants and 2 members');
     expect(text).toContain('You will not be charged again');
+  });
+
+  it('names a grandfathered household its own caps, 20 and 3 (ADR 0040)', () => {
+    const plan = withSeedlingGrandfather(getPlan('seedling'), '2026-09-20T12:00:00.000Z');
+    const { text } = composeBillingEmail(complete, ctx('en', { currentPlan: plan }));
+    expect(text).toContain('20 plants and 3 members');
   });
 
   it('says nothing about a plan when the plan is not supplied', () => {

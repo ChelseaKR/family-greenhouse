@@ -357,7 +357,7 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap,
+dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap, trialNotices,
 emailLocale, memberJoined, taskUpForGrabs, coverageUpdates, careCredit,
 updatedAt
 ```
@@ -370,6 +370,11 @@ January summary. Like `weeklyDigest`, all of them are optional in the PUT body
 and default-on at read time _only when `email` is on_, so a row written before
 they existed is not silently opted into new mail it never accepted, and an
 older client that omits them keeps the stored value instead of resetting it.
+
+`trialNotices` gates the two no-card-trial emails (ADR 0039, off unless the
+`TRIAL_LIFECYCLE_EMAILS_ENABLED` flag is on). It follows the same default as
+`yearRecap` and is switched off by the one-click unsubscribe link in those emails;
+it is not in the PUT body yet.
 
 `emailLocale` is the exception to that pattern: it defaults to `''`, not to a
 language, because "never chosen" has to stay distinguishable from a choice.

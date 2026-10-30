@@ -427,6 +427,8 @@ describe('conversion events', () => {
     const page_location = `${window.location.origin}/settings/billing?utm_source=ads`;
 
     ga.trackGoogleConversion({ name: 'sign_up' });
+    ga.trackGoogleConversion({ name: 'email_confirmed' });
+    ga.trackGoogleConversion({ name: 'household_activated' });
     ga.trackGoogleConversion({ name: 'start_trial' });
     ga.trackGoogleConversion({ name: 'landing_cta_click', cta: 'hero_signup' });
     ga.trackGoogleConversion({
@@ -440,6 +442,8 @@ describe('conversion events', () => {
 
     expect(conversions()).toEqual([
       ['event', 'sign_up', { method: 'email', page_location }],
+      ['event', 'email_confirmed', { page_location }],
+      ['event', 'household_activated', { page_location }],
       ['event', 'start_trial', { trial_plan: 'garden', trial_days: 14, page_location }],
       ['event', 'landing_cta_click', { cta: 'hero_signup', page_location }],
       [
@@ -510,6 +514,9 @@ describe('conversion events', () => {
     ],
     ['a plan with no cadence or value', { name: 'purchase', transactionId: ORDER, plan: 'garden' }],
     ['an unlisted control', { name: 'landing_cta_click', cta: 'reader@example.org' }],
+    // The hero's "See how it works" link was removed so the hero has one call
+    // to action; its old value must not keep counting as a landing click.
+    ['the retired hero link', { name: 'landing_cta_click', cta: 'hero_how_it_works' }],
     ['an unlisted event', { name: 'login' }],
   ])('drops %s whole', async (_label, conversion) => {
     const { ga } = await load();
@@ -544,6 +551,110 @@ describe('conversion events', () => {
     analytics.setAnalyticsOptOut(true);
     ga.trackGoogleConversion({ name: 'purchase', transactionId: ORDER });
     expect(conversions()).toHaveLength(1);
+  });
+
+  it('sends email_confirmed and household_activated with no field a caller adds', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    ga.trackGoogleConversion({
+      name: 'email_confirmed',
+      email: 'reader@example.org',
+    } as never);
+    ga.trackGoogleConversion({
+      name: 'household_activated',
+      plantName: 'Fern Gully',
+      householdId: 'hh-123',
+    } as never);
+    expect(conversions()).toEqual([
+      ['event', 'email_confirmed', { page_location }],
+      ['event', 'household_activated', { page_location }],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/reader@|Fern|hh-123/u);
+  });
+
+  it.each(['email_confirmed', 'household_activated'] as const)(
+    'sends %s under no opt-out, and nothing under GPC, DNT or the in-app switch',
+    async (name) => {
+      // Positive control: the same harness sends it with no signal set.
+      const control = await load();
+      control.ga.initGoogleAnalytics();
+      control.ga.trackGoogleConversion({ name });
+      expect(conversions()).toHaveLength(1);
+
+      // Sabotage 1: Global Privacy Control. Assert it applied before trusting
+      // the empty result.
+      delete window.dataLayer;
+      for (const script of gtagScripts()) script.remove();
+      setGpc(true);
+      const gpc = await load();
+      expect(gpc.analytics.analyticsOptedOut()).toBe(true);
+      gpc.ga.initGoogleAnalytics();
+      gpc.ga.trackGoogleConversion({ name });
+      expect(window.dataLayer).toBeUndefined();
+
+      // Sabotage 2: Do Not Track.
+      setGpc(undefined);
+      setDnt('1');
+      const dnt = await load();
+      expect(dnt.analytics.analyticsOptedOut()).toBe(true);
+      dnt.ga.initGoogleAnalytics();
+      dnt.ga.trackGoogleConversion({ name });
+      expect(window.dataLayer).toBeUndefined();
+
+      // Sabotage 3: opting out after load, mid-visit.
+      setDnt(null);
+      const mid = await load();
+      expect(mid.analytics.analyticsOptedOut()).toBe(false);
+      mid.ga.initGoogleAnalytics();
+      mid.analytics.setAnalyticsOptOut(true);
+      expect(mid.analytics.analyticsOptedOut()).toBe(true);
+      const before = conversions().length;
+      mid.ga.trackGoogleConversion({ name });
+      expect(conversions()).toHaveLength(before);
+    }
+  );
+
+  it('sends first_plant_added with only how the plant was added', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    for (const method of ga.FIRST_PLANT_METHODS) {
+      ga.trackGoogleConversion({
+        name: 'first_plant_added',
+        method,
+        slug: 'snake-plant',
+        plantName: 'Fern Gully',
+      } as never);
+    }
+    expect(conversions()).toEqual([
+      ['event', 'first_plant_added', { method: 'common_plant', page_location }],
+      ['event', 'first_plant_added', { method: 'typed', page_location }],
+      ['event', 'first_plant_added', { method: 'full_form', page_location }],
+      ['event', 'first_plant_added', { method: 'dashboard_empty', page_location }],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/snake|Fern/u);
+  });
+
+  it('drops a first_plant_added whose method is not on the closed list (negative control)', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    // Positive control first, so an empty result below means the check, not
+    // a harness that sends nothing.
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
+    expect(conversions()).toHaveLength(1);
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'Snake plant' } as never);
+    ga.trackGoogleConversion({ name: 'first_plant_added' } as never);
+    expect(conversions()).toHaveLength(1);
+  });
+
+  it('sends no first_plant_added under Global Privacy Control', async () => {
+    setGpc(true);
+    const { ga, analytics } = await load();
+    expect(analytics.analyticsOptedOut()).toBe(true);
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion({ name: 'first_plant_added', method: 'common_plant' });
+    expect(window.dataLayer).toBeUndefined();
   });
 
   it('names a purchase by the first 32 hex characters of a SHA-256, never the id', async () => {

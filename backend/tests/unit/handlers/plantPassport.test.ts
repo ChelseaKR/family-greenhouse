@@ -542,15 +542,15 @@ describe('plant passport handlers', () => {
         const billing = await import('../../../src/services/billing.js');
         vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce({ planId: 'seedling' });
         vi.mocked(plantService.createPlant).mockRejectedValueOnce(
-          Object.assign(new Error('Plant limit of 20 reached'), { name: 'PlanLimitError' })
+          Object.assign(new Error('Plant limit of 8 reached'), { name: 'PlanLimitError' })
         );
 
         const res = await call(importSharedPassport, importEvent());
 
         expect(res.statusCode).toBe(402);
-        expect(res.body).toMatch(/Seedling plan is limited to 20 plants/);
+        expect(res.body).toMatch(/Seedling plan is limited to 8 plants/);
         // The cap is passed to createPlant, not re-implemented here.
-        expect(vi.mocked(plantService.createPlant).mock.calls[0][3]).toBe(20);
+        expect(vi.mocked(plantService.createPlant).mock.calls[0][3]).toBe(8);
         expect(passport.releasePassportImport).toHaveBeenCalledWith('hh-1', CODE);
         expect(passport.recordPassportImport).not.toHaveBeenCalled();
       });

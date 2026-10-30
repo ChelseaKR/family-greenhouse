@@ -48,9 +48,11 @@
  *    history listener, but that is Google's to change, so the stream setting
  *    must be off; docs/analytics.md lists it as an owner step.
  *  - No user id, no account id, no household id. Besides `page_view`, GA gets
- *    four conversion events and nothing else (`trackGoogleConversion`, and
- *    docs/analytics.md, "Conversion events in GA4"): `sign_up`, `start_trial`,
- *    `purchase` with its plan and price, and `landing_cta_click`. Their
+ *    seven funnel events and nothing else (`trackGoogleConversion`, and
+ *    docs/analytics.md, "Conversion events in GA4"): `landing_cta_click`,
+ *    `sign_up`, `email_confirmed`, `household_activated`, `first_plant_added`
+ *    with how it was added, `start_trial` and `purchase` with its plan and
+ *    price. Their
  *    parameters are rebuilt here from closed lists and checked shapes, never
  *    passed through, so nothing a person typed and no Stripe id can reach
  *    Google. They exist so paid and organic traffic can be judged on sales;
@@ -323,12 +325,30 @@ export function trackGooglePageView(
 
 /**
  * The landing-page controls whose clicks are counted: the sign-up buttons in
- * the header and the hero, and the hero's "see how it works" link. A click on
- * one is the first sign that an arriving visitor did anything at all, which
- * is the step the funnel loses most people at (docs/analytics.md).
+ * the header and the hero. A click on one is the first sign that an arriving
+ * visitor did anything at all, which is the step the funnel loses most people
+ * at (docs/analytics.md). The hero's "see how it works" link was removed on
+ * 2026-10-23 so the hero has one call to action. GA4 rows from before then
+ * may still carry `hero_how_it_works`.
  */
-export const LANDING_CTAS = ['nav_signup', 'hero_signup', 'hero_how_it_works'] as const;
+export const LANDING_CTAS = ['nav_signup', 'hero_signup'] as const;
 export type LandingCta = (typeof LANDING_CTAS)[number];
+
+/**
+ * How a household's first plant was added, for `first_plant_added`:
+ * `common_plant` is a tap on the first run's houseplant shortcut, `typed` is
+ * the first run's name form, `full_form` is the Add Plant page, and
+ * `dashboard_empty` is a tap on the same shortcut in the dashboard's empty
+ * "Your plants" card, which is where a household that skipped the first run
+ * meets it.
+ */
+export const FIRST_PLANT_METHODS = [
+  'common_plant',
+  'typed',
+  'full_form',
+  'dashboard_empty',
+] as const;
+export type FirstPlantMethod = (typeof FIRST_PLANT_METHODS)[number];
 
 /** The paid tiers and cadences a `purchase` can name. */
 const PURCHASABLE_PLANS = ['garden', 'greenhouse'] as const;
@@ -353,10 +373,22 @@ const TRIAL_DAYS = 14;
  *   that cadence; when the return cannot say which plan and cadence were
  *   bought, both are left out and the purchase is still counted.
  * - `landing_cta_click`: one of the `LANDING_CTAS` was clicked.
+ * - `email_confirmed`: the confirmation code was accepted by the API
+ *   (ConfirmEmailPage, beside PostHog's `signup_completed`).
+ * - `household_activated`: the household's first plant was saved. That is the
+ *   product's own definition of activation (docs/analytics.md, funnel stage 3,
+ *   PostHog `plant_added` with `ordinal: 'first'`). Neither carries a field.
+ * - `first_plant_added`: the same moment, fired beside `household_activated`,
+ *   carrying only HOW the plant was added (`FIRST_PLANT_METHODS`), so the
+ *   first run's houseplant shortcut can be judged against typing a name.
+ *   Never which plant: the slug of a tapped plant is not sent.
  */
 export type GoogleConversion =
   | { name: 'sign_up' }
   | { name: 'start_trial' }
+  | { name: 'email_confirmed' }
+  | { name: 'household_activated' }
+  | { name: 'first_plant_added'; method: FirstPlantMethod }
   | {
       name: 'purchase';
       transactionId: string;
@@ -395,6 +427,14 @@ export function conversionParams(
   switch (conversion.name) {
     case 'sign_up':
       return { method: 'email', page_location: pageLocation };
+    case 'email_confirmed':
+      return { page_location: pageLocation };
+    case 'household_activated':
+      return { page_location: pageLocation };
+    case 'first_plant_added':
+      return (FIRST_PLANT_METHODS as readonly string[]).includes(conversion.method)
+        ? { method: conversion.method, page_location: pageLocation }
+        : null;
     case 'start_trial':
       return { trial_plan: 'garden', trial_days: TRIAL_DAYS, page_location: pageLocation };
     case 'landing_cta_click':
