@@ -35,11 +35,15 @@ interface PrefsState {
    *  dismissal hides it on this device for 30 days without changing any
    *  household data or another member's experience. */
   sharedCarePulseDismissedUntil: Record<string, string>;
+  /** Per-household snooze for the dashboard's "Going away soon?" card, by
+   *  the same rule: this device only, 30 days, no household data changed. */
+  goingAwayDismissedUntil: Record<string, string>;
   setDensity: (d: Density) => void;
   setLanguage: (l: LangCode) => void;
   setWelcomeSeen: (v: boolean) => void;
   setDnd: (start: string, end: string) => void;
   dismissSharedCarePulse: (householdId: string, until: string) => void;
+  dismissGoingAway: (householdId: string, until: string) => void;
 }
 
 export const usePrefsStore = create<PrefsState>()(
@@ -53,6 +57,7 @@ export const usePrefsStore = create<PrefsState>()(
       dndStart: '',
       dndEnd: '',
       sharedCarePulseDismissedUntil: {},
+      goingAwayDismissedUntil: {},
       setDensity: (density) => set({ density }),
       setLanguage: (language) => {
         // Order matters. `changeLanguage` first so the stored preference,
@@ -76,6 +81,13 @@ export const usePrefsStore = create<PrefsState>()(
         set((state) => ({
           sharedCarePulseDismissedUntil: {
             ...state.sharedCarePulseDismissedUntil,
+            [householdId]: until,
+          },
+        })),
+      dismissGoingAway: (householdId, until) =>
+        set((state) => ({
+          goingAwayDismissedUntil: {
+            ...state.goingAwayDismissedUntil,
             [householdId]: until,
           },
         })),

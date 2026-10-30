@@ -172,7 +172,7 @@ export const POSTS: BlogPost[] = [
     description:
       'An overwatered plant looks exactly like a thirsty one, which is why people keep watering it. How to tell them apart in two minutes, what to do about root rot, and the shared-household version nobody warns you about.',
     metaDescription:
-      'An overwatered plant looks exactly like a thirsty one. How to tell them apart in two minutes, what to do about root rot, and how to stop it recurring.',
+      'Overwatering causes soft yellow lower leaves and wilting in wet soil, so it looks like thirst. How to tell in two minutes and fix an overwatered plant.',
     date: '2026-07-29',
     readingMinutes: 6,
     Component: SignsOfOverwatering,

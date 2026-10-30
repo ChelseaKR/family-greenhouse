@@ -100,8 +100,35 @@ describe('day 14', () => {
     expect(email.text).toContain('No card was on file, and nothing was charged');
   });
   it('states an over-cap household keeps everything, with its own counts', () => {
+    // Created after the 2026-10-23 cut: Seedling's caps are 8 and 2 (ADR 0040).
     const over = composeTrialLifecycleEmail(
-      ctx({ kind: 'trial_day14', facts: { ...FACTS, plantsNow: ok(31), membersNow: ok(5) } })
+      ctx({
+        kind: 'trial_day14',
+        householdCreatedAt: '2026-11-02T10:00:00.000Z',
+        facts: { ...FACTS, plantsNow: ok(9), membersNow: ok(3) },
+      })
+    );
+    expect(over.text).toContain('Seedling holds up to 8 active plants');
+    expect(over.text).toContain('You have 9 active plants, more than Seedling’s 8. They all stay.');
+    expect(over.text).toContain(
+      'Your household has 3 people, more than Seedling’s 2. They all stay.'
+    );
+    expect(email.text).not.toContain('more than Seedling');
+  });
+  it('names the grandfathered caps to a household created before the cut (ADR 0040)', () => {
+    const facts = { ...FACTS, plantsNow: ok(9), membersNow: ok(3) };
+    const before = composeTrialLifecycleEmail(
+      ctx({ kind: 'trial_day14', householdCreatedAt: '2026-10-01T10:00:00.000Z', facts })
+    );
+    // 9 plants and 3 people are inside 20 and 3: nothing is over.
+    expect(before.text).toContain('Seedling holds up to 20 active plants');
+    expect(before.text).not.toContain('more than Seedling');
+    const over = composeTrialLifecycleEmail(
+      ctx({
+        kind: 'trial_day14',
+        householdCreatedAt: '2026-10-01T10:00:00.000Z',
+        facts: { ...FACTS, plantsNow: ok(31), membersNow: ok(5) },
+      })
     );
     expect(over.text).toContain(
       'You have 31 active plants, more than Seedling’s 20. They all stay.'
@@ -109,7 +136,6 @@ describe('day 14', () => {
     expect(over.text).toContain(
       'Your household has 5 people, more than Seedling’s 3. They all stay.'
     );
-    expect(email.text).not.toContain('more than Seedling');
   });
   it('does not claim an over-cap state it could not read', () => {
     const unknown = composeTrialLifecycleEmail(
@@ -123,6 +149,45 @@ describe('day 14', () => {
       })
     );
     expect(unknown.text).not.toContain('more than Seedling');
+  });
+});
+
+/**
+ * No stacked trials (owner decision 2026-10-23): checkout during the no-card
+ * trial ends the Stripe trial on the no-card end date, so the email names that
+ * date as the first charge, never "14 more days".
+ */
+describe('the first charge matches checkout (no stacked trials)', () => {
+  it('day 10 names the trial end as the first charge, with the last day to start it', () => {
+    const email = composeTrialLifecycleEmail(ctx());
+    // ENDS is 2026-10-15T10:00Z; minus 48h30m is 2026-10-13T09:30Z, which is
+    // October 13 in Los Angeles.
+    expect(email.text).toContain(
+      'If you start it before October 13, 2026, you add a card then, and your first charge would be on October 15, 2026, the day the trial ends.'
+    );
+    expect(email.text).not.toMatch(/14 (more|free) days|another 14/i);
+  });
+
+  it('day 10 sent inside the minimum lead says the charge is the day you start', () => {
+    const late = composeTrialLifecycleEmail(ctx({ now: new Date('2026-10-14T00:00:00.000Z') }));
+    expect(late.text).toContain('the first charge is the day you start it');
+    expect(late.text).not.toContain('your first charge would be on');
+  });
+
+  it('day 14 says the first charge is the day Garden starts', () => {
+    const email = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14' }));
+    expect(email.text).toContain('If you would like Garden back');
+    expect(email.text).toContain('the first charge is the day you start it');
+    expect(email.text).not.toContain('your first charge would be on');
+  });
+
+  it('says the same in Spanish', () => {
+    const d10 = composeTrialLifecycleEmail(ctx({ locale: 'es' }));
+    expect(d10.text).toContain(
+      'Si lo empiezas antes del 13 de octubre de 2026, añades una tarjeta en ese momento y el primer cobro sería el 15 de octubre de 2026'
+    );
+    const d14 = composeTrialLifecycleEmail(ctx({ locale: 'es', kind: 'trial_day14' }));
+    expect(d14.text).toContain('el primer cobro es el día en que lo empiezas');
   });
 });
 

@@ -31,6 +31,14 @@ export interface CareGuide {
   metaTitle: string;
   metaDescription: string;
   /**
+   * The visible H1 and the Article `headline`, when a guide's searchers ask
+   * something narrower than "<Name> care". Set only where Search Console
+   * shows the page earning impressions for that question (2026-10-29: "how
+   * often to water zz plant" was 96 of the ZZ page's 120 impressions at
+   * positions 5-40). Defaults to `<commonName> care`.
+   */
+  heading?: string;
+  /**
    * ISO date a human last checked this guide's FACTS against source data —
    * the review discipline the module header demands, especially for
    * `quickFacts.water` and `quickFacts.toxicity`. Feeds `datePublished`.
@@ -107,11 +115,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Epipremnum aureum',
     alsoKnownAs: ['Devil’s Ivy', 'Golden Pothos', 'Money Plant'],
     related: ['heartleaf-philodendron', 'hoya', 'english-ivy'],
-    metaTitle: 'Pothos Care: How Often to Water (and Not Kill It)',
+    metaTitle: 'How Often to Water a Pothos: Every 7–10 Days',
+    heading: 'Pothos care: how often to water it',
     metaDescription:
-      'How often to water a pothos, how much light it needs, why the leaves go yellow, and how to keep one alive in a shared home.',
+      'Water a pothos every 7–10 days, when the top inch of soil is dry, and about every two weeks in winter or low light. Plus why the leaves go yellow.',
     reviewed: '2026-06-08',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'Pothos is the plant people mean when they say “I can’t keep anything alive, except this one.” It’s forgiving, fast-growing, and tells you clearly when something’s wrong — if you know what to look for.',
     quickFacts: {
@@ -173,11 +182,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Dracaena trifasciata',
     alsoKnownAs: ['Sansevieria', 'Mother-in-Law’s Tongue'],
     related: ['zz-plant', 'aloe-vera', 'jade-plant'],
-    metaTitle: 'Snake Plant Care: How Often to Water It (Hint: Less)',
+    metaTitle: 'How to Care for a Snake Plant: Water Every 2–3 Weeks',
+    heading: 'How to care for a snake plant',
     metaDescription:
-      'How often to water a snake plant, the light it needs, why the leaves go mushy or wrinkled, and how to share its care without drowning it.',
+      'Water a snake plant every 2–3 weeks, only once the soil is completely dry. It takes low to bright, indirect light; mushy leaves mean too much water.',
     reviewed: '2026-06-08',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
@@ -239,11 +249,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Swiss Cheese Plant', 'Split-Leaf Philodendron'],
     related: ['heartleaf-philodendron', 'fiddle-leaf-fig', 'bird-of-paradise'],
-    metaTitle: 'Monstera Care: How Often to Water + Why No Leaf Holes',
+    metaTitle: 'How Often to Water a Monstera + Why No Leaf Holes',
+    heading: 'Monstera care: how often to water it',
     metaDescription:
-      'How often to water a monstera, the light it needs to grow holes (fenestrations), why leaves yellow or brown, and sharing its care at home.',
+      'Water a monstera every 1–2 weeks, when the top 1–2 inches of soil are dry. The light it needs to grow leaf holes, and why leaves yellow or brown.',
     reviewed: '2026-06-08',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
@@ -301,13 +312,14 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Chlorophytum comosum',
     alsoKnownAs: ['Airplane Plant', 'Ribbon Plant', 'Spider Ivy'],
     related: ['parlor-palm', 'boston-fern', 'hoya'],
-    metaTitle: 'Spider Plant Care: How Often to Water + Why Brown Tips',
+    metaTitle: 'Spider Plant Care: How Often to Water It + Brown Tips',
+    heading: 'Spider plant care: how often to water it',
     metaDescription:
-      'How often to water a spider plant, the light it likes, why the leaf tips go brown, and what to do with all the babies it keeps making.',
+      'Water a spider plant about once a week, when the top inch of soil is dry, and every 10–14 days in winter. Why the leaf tips go brown, and the babies.',
     reviewed: '2026-06-12',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
-      'The spider plant forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
+      'Water a spider plant about once a week, when the top inch of soil is dry. It forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
     quickFacts: {
       water: 'About once a week, when the top inch of soil is dry; less in winter',
       light: 'Bright, indirect light is ideal; tolerates moderate light',
@@ -481,13 +493,14 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'zz-plant',
     commonName: 'ZZ Plant',
     scientificName: 'Zamioculcas zamiifolia',
-    alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'ZZ'],
+    alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'Zuzu Plant'],
     related: ['snake-plant', 'chinese-evergreen', 'parlor-palm'],
-    metaTitle: 'ZZ Plant Care: How Often to Water (Almost Never)',
+    metaTitle: 'How Often to Water a ZZ Plant: Every 2–3 Weeks',
+    heading: 'ZZ plant care: how often to water it',
     metaDescription:
-      'How often to water a ZZ plant, the light it tolerates, why the stems go yellow or mushy, and how to grow a new one by division.',
+      'Water a ZZ plant every 2–3 weeks, once the soil is completely dry, and about once a month in winter. Plus the light it takes and why stems go mushy.',
     reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {
@@ -545,13 +558,14 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Aloe vera',
     alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
     related: ['jade-plant', 'snake-plant', 'haworthia'],
-    metaTitle: 'Aloe Vera Care: How Often to Water + Is It Pet-Safe?',
+    metaTitle: 'How Often to Water Aloe Vera: Every 2–3 Weeks',
+    heading: 'Aloe vera care: how often to water it',
     metaDescription:
-      'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
+      'Water aloe vera every 2–3 weeks: soak it, then let the soil dry out completely. Once a month or less in winter. Plus light, and why leaves go mushy.',
     reviewed: '2026-06-17',
-    updated: '2026-10-22',
+    updated: '2026-10-29',
     summary:
-      'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
+      'Water aloe vera every 2–3 weeks, and only once the soil has dried out completely. It is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
       water: 'Every 2–3 weeks; soak fully, then let the soil dry out completely',
       light: 'Bright light, including some direct sun',
@@ -869,11 +883,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Strelitzia reginae',
     alsoKnownAs: ['Crane Flower', 'Strelitzia', 'Bird of Paradise Flower'],
     related: ['monstera', 'fiddle-leaf-fig', 'money-tree'],
-    metaTitle: 'Bird of Paradise Care: How Often to Water + Is It Pet-Safe?',
+    metaTitle: 'Bird of Paradise Plant Care: Watering, Light + Blooms',
+    heading: 'Bird of paradise plant care',
     metaDescription:
-      'How often to water a bird of paradise, how much light it needs indoors, why the leaves split or brown, and whether it is safe around cats and dogs.',
+      'Water a bird of paradise plant every 7–10 days in summer and every 2–3 weeks in winter. The light it needs indoors, and why it may never bloom there.',
     reviewed: '2026-09-02',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
@@ -945,11 +960,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Anthurium andraeanum',
     alsoKnownAs: ['Flamingo Flower', 'Flamingo Lily', 'Painter’s Palette', 'Tail Flower'],
     related: ['peace-lily', 'orchid', 'christmas-cactus'],
-    metaTitle: 'Anthurium Care: Watering + Why It Stopped Flowering',
+    metaTitle: 'Anthurium Not Flowering? Why, Plus Watering and Light',
+    heading: 'Anthurium care: why it stops flowering',
     metaDescription:
-      'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
+      'An anthurium with healthy leaves and no flowers nearly always needs brighter, indirect light. Why old blooms turn green, and watering every 7–10 days.',
     reviewed: '2026-09-02',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
     quickFacts: {
@@ -1149,10 +1165,11 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Common Ivy', 'Hedera', 'Needlepoint Ivy', 'Glacier Ivy'],
     related: ['pothos', 'hoya', 'boston-fern'],
     metaTitle: 'English Ivy Indoor Care: Watering, Light, and Pet Safety',
+    heading: 'English ivy care indoors',
     metaDescription:
-      'How often to water English ivy indoors, the cool bright conditions it prefers, how to deal with spider mites, and why it is not pet-safe.',
+      'English ivy indoors wants a cool, bright room and water every 5–10 days, kept lightly moist. How to beat spider mites, and why it is not pet-safe.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants cool, bright and humid, and in a warm dry living room it gets spider mites and sulks.',
     quickFacts: {
@@ -2211,4 +2228,9 @@ export const CARE_GUIDES: CareGuide[] = [
 
 export function findCareGuide(slug: string): CareGuide | undefined {
   return CARE_GUIDES.find((g) => g.slug === slug);
+}
+
+/** The guide's visible H1, which is also its Article `headline`. */
+export function careGuideHeading(guide: CareGuide): string {
+  return guide.heading ?? `${guide.commonName} care`;
 }

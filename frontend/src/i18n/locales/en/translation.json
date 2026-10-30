@@ -258,6 +258,24 @@
       "createdWithStartingPoint": "{{name}} is in, with a watering reminder every {{days}} days to start.",
       "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
     },
+    "picker": {
+      "heading": "Pick a common houseplant",
+      "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
+      "saving": "Adding your plant…",
+      "somethingElse": "Something else? Type its name",
+      "plants": {
+        "pothos": "Pothos",
+        "snake-plant": "Snake plant",
+        "monstera": "Monstera",
+        "spider-plant": "Spider plant",
+        "peace-lily": "Peace lily",
+        "zz-plant": "ZZ plant",
+        "aloe-vera": "Aloe vera",
+        "orchid": "Moth orchid",
+        "fiddle-leaf-fig": "Fiddle leaf fig",
+        "jade-plant": "Jade plant"
+      }
+    },
     "invite": {
       "title": "Share the care",
       "description": "This is the part a single-user plant tracker can't do. Everyone in your household sees the same plants and the same schedule — whoever is around does the watering and marks it done, so nobody has to nag and nobody has to ask whether it got done.",
@@ -271,6 +289,16 @@
       "solo": "It's just me for now",
       "finish": "Go to my dashboard"
     }
+  },
+  "dashboardEmpty": {
+    "somethingElse": "Something else? Add any plant, with photos and details"
+  },
+  "goingAwaySoon": {
+    "title": "Going away soon?",
+    "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",
+    "action": "Set up a sitter link",
+    "notNow": "Not now",
+    "dismissAria": "Hide the going-away card for 30 days"
   },
   "nav": {
     "chat": "Chat",
@@ -327,9 +355,10 @@
     "goToRegistration": "Go to registration",
     "signUpTitle": "Sign up",
     "registerTitle": "Start your greenhouse",
-    "registerSubtitle": "Free for one home, up to 3 household members and 20 plants. No credit card. Your household starts with 14 days of Garden.",
+    "registerSubtitle": "Free for one home, up to 2 household members and 8 plants. No credit card. Your household starts with 14 days of Garden.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
+    "showPassword": "Show password",
     "nameMin": "Name must be at least 2 characters",
     "nameMax": "Name must be 100 characters or fewer",
     "passwordMin": "Password must be at least 12 characters",
@@ -410,7 +439,7 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "Can I create an account?",
-    "freeAccountAnswer": "Yes. Free accounts include one home, up to 3 household members and 20 plants, with no credit card.",
+    "freeAccountAnswer": "Yes. Free accounts include one home, up to 2 household members and 8 plants, with no credit card.",
     "headingHeld": "What remains available",
     "headingOpen": "Common questions",
     "paidOfferQuestion": "Is this a paid offer?",
@@ -418,7 +447,7 @@
     "reactivationQuestion": "Can billing be reactivated automatically?",
     "reactivationAnswer": "No. Reactivation requires a dated status decision, reviewed source and infrastructure changes, non-production verification, and a separately approved deployment.",
     "trialQuestion": "How does the trial work?",
-    "trialAnswer": "A new household starts with 14 days of Garden that need no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own, keeping everything it added; each account gets one. Separately, a household’s first paid subscription begins with a 14-day trial: you are not charged until it ends, and cancelling before then costs nothing. That trial is once per household, so a household that has had one before is charged when it subscribes again.",
+    "trialAnswer": "A new household starts with 14 days of Garden that need no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own, keeping everything it added; each account gets one. If you choose a paid plan during those 14 days, you add a card at checkout and your first charge is on the day the free days end, not 14 days later: the trials do not add up. Choose it in the last two days, or after the free days have ended, and the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead, with nothing charged until it ends. A household that has had a trial before is charged when it subscribes again, and canceling before the first charge costs nothing.",
     "changeQuestion": "Can I change or cancel later?",
     "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Billing, which opens our payment provider's portal. Cancelling returns your household to the free Seedling tier at the end of the paid period.",
     "whereQuestion": "Where do I buy?",
@@ -427,9 +456,9 @@
     "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
     "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants, members and homes stay readable and editable — only adding more is blocked until you are back under the limit. Export and your care history are never behind a plan.",
     "householdQuestion": "Does everyone in my household need their own plan?",
-    "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it. A free home holds up to three people; Garden and Greenhouse homes have no member limit.",
+    "householdAnswer": "No. One plan covers the whole household. A household admin holds the subscription, and every member shares the same plants, tasks, and care history under it. A free home holds up to two people; Garden and Greenhouse homes have no member limit.",
     "cardQuestion": "Do I need a credit card?",
-    "cardAnswer": "Not for a free account, and not for the 14 days of Garden a new household starts with: neither asks for a card. Starting a paid plan goes through our payment provider's checkout, which collects a card before the subscription’s trial begins; where a trial applies, nothing is charged until its 14 days end. The subscription trial is once per household, so a household that has had one before is charged when it subscribes again."
+    "cardAnswer": "Not for a free account, and not for the 14 days of Garden a new household starts with: neither asks for a card. Starting a paid plan goes through our payment provider's checkout, which collects a card. If your household’s 14 free days have more than two days left, the first charge is on the day they end; a household that has never had a trial gets 14 days before its first charge; otherwise the card is charged at checkout."
   },
   "petSafeSignup": {
     "title": "Keeping a pet-safe home is easier when everyone’s on the same page",
@@ -457,13 +486,14 @@
   },
   "plantSafetyPage": {
     "metaTitle": "Is {{name}} toxic to cats and dogs? ASPCA verdict",
-    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Cats: {{cats}}. Dogs: {{dogs}}.",
+    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
-    "heading": "Is {{name}} toxic to cats and dogs?",
+    "heading": "Is {{questionName}} toxic to cats and dogs?",
     "verdictsHeading": "The verdicts, with their source",
     "animal": {
       "cats": "Cats",
-      "dogs": "Dogs"
+      "dogs": "Dogs",
+      "horses": "Horses"
     },
     "verdict": {
       "toxic": "Toxic",
@@ -477,21 +507,83 @@
       "dogs": "This page has no cited verdict for dogs, so it makes no claim either way. Treat it as unknown and keep the plant out of a dog’s reach until you have checked with your vet."
     },
     "noteHeading": "What our table adds",
-    "emergencyHeading": "If your pet has already eaten some",
-    "emergencyBody": "Don’t wait to see whether symptoms appear. Call your vet, or",
-    "poisonControlLink": "ASPCA Animal Poison Control",
+    "emergencyHeading": "If your pet may have eaten some",
+    "emergencyBody": "Call a pet poison hotline now, or your vet or an emergency clinic. Don’t wait to see whether symptoms appear.",
+    "hotline": {
+      "aspca": "ASPCA Poison Control: (888) 426-4435",
+      "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
+    },
+    "hotlineFee": {
+      "aspca": "Its page says: “A consultation fee may apply.”",
+      "petPoisonHelpline": "Its page says: “$99 incident fee applies.”"
+    },
+    "hotlinesChecked": "Numbers and fees as each service’s own page stated them on October 23, 2026.",
+    "emergencyListingNote": "The verdicts on this page come from the ASPCA plant list, which says nothing about how much your pet ate. A hotline or your vet can weigh that with you.",
     "aboutHeading": "How this page is made",
     "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing.",
     "careGuideLink": "{{name}} care guide: watering, light and common problems",
     "checkAnother": "Look up another plant",
     "breadcrumbHome": "Home",
     "breadcrumbHub": "Pets and plants",
-    "signupTitle": "Keep the whole household on the same page about your plants",
-    "signupBody": "Family Greenhouse keeps every plant, its care, and who is looking after it in one shared place. Free to start, no card needed.",
-    "signupCta": "Get started",
+    "signupTitle": "Get watering reminders for your {{name}}",
+    "signupBody": "Family Greenhouse tracks each plant’s watering schedule and reminds the right person in your household. Free for up to 8 plants, no card needed.",
+    "signupCta": "Set up reminders",
     "unknownTitle": "No cited verdict for this plant",
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
-    "unknownCta": "Look up a plant"
+    "unknownCta": "Look up a plant",
+    "listingHeading": "What the ASPCA listing says",
+    "listingIntro": "Quoted word for word from this plant’s own ASPCA listing.",
+    "listingField": {
+      "additionalCommonNames": "Other names on the listing",
+      "family": "Plant family",
+      "toxicPrinciples": "Toxic principles",
+      "clinicalSigns": "Clinical signs",
+      "listingNote": "Also on the listing",
+      "listingAdvice": "What the listing says to do"
+    },
+    "listCaveat": "The ASPCA’s plant list also says this about every plant on it: “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+    "listCitation": "ASPCA, “Toxic and Non-Toxic Plants”",
+    "extensionHeading": "What a university extension adds",
+    "extensionIntro": "A second, independent source for the same plant, quoted word for word.",
+    "extensionField": {
+      "poisonSeverity": "Poison severity",
+      "poisonSymptoms": "Poison symptoms",
+      "poisonToxicPrinciple": "Toxic principle",
+      "poisonPart": "Poisonous parts"
+    },
+    "extensionCaveat": "The toolbox gives one severity rating for the whole plant, for people as well as pets, and it is not a measure of how much is too much. Whatever the rating, call a poison hotline or your vet if your pet has eaten some.",
+    "extensionTagsLabel": "Its page tags the plant for:",
+    "extensionTagsNote": "This page relies on the ASPCA verdict above. A tag from this second source is shown only where it says the same thing.",
+    "extensionCitation": "{{publisher}}, “{{title}}” ({{database}})",
+    "alternativesHeading": {
+      "toxic": "Similar plants to consider instead",
+      "other": "Similar plants to consider too"
+    },
+    "alternativesIntro": "Picked for a similar look or the same kind of spot. Each name opens that plant’s own page, with its ASPCA verdicts and source.",
+    "relatedHeading": "Related plants to look up",
+    "relatedIntro": "Plants people often mix up with this one or look up next. Each name opens that plant’s own page.",
+    "linkedAnimal": {
+      "cats": "Cats:",
+      "dogs": "Dogs:",
+      "horses": "Horses:"
+    },
+    "faqHeading": "Questions people ask",
+    "faq": {
+      "animal": {
+        "cats": "cats",
+        "dogs": "dogs",
+        "horses": "horses"
+      },
+      "question": "Is {{name}} toxic to {{animal}}?",
+      "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
+      "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerDetails": "Its listing gives the toxic principles as “{{principles}}” and the clinical signs as “{{signs}}”.",
+      "answerAnyPlant": "Its plant list also says that “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+      "partsQuestion": "Which parts of {{name}} are poisonous?",
+      "partsAnswer": "{{publisher}}’s {{database}} lists these parts of the plant as poisonous: {{parts}}. It gives that list under “Poisonous to Humans”, and the ASPCA verdicts on this page are the ones for pets.",
+      "whatToDoQuestion": "What should I do if my pet ate some {{name}}?",
+      "whatToDoAnswer": "Call ASPCA Poison Control at (888) 426-4435 or the Pet Poison Helpline at (855) 764-7661, or call your vet or an emergency clinic, now. Don’t wait to see whether symptoms appear. The ASPCA says a consultation fee may apply, and the Pet Poison Helpline says a $99 incident fee applies."
+    }
   },
   "plantShop": {
     "buy": {
@@ -1220,6 +1312,27 @@
       "anotherMember": "another member",
       "revokeNotYours": "Only its creator or an admin can revoke this"
     },
+    "goingAway": {
+      "titleEntry": "Going away?",
+      "titleLonger_one": "Away for more than {{count}} day?",
+      "titleLonger_other": "Away for more than {{count}} days?",
+      "titleSecond": "Need a second sitter link?",
+      "freeNow_one": "On the free plan, a sitter link lasts up to {{days}} days, and one can be live at a time.",
+      "freeNow_other": "On the free plan, a sitter link lasts up to {{days}} days, and {{count}} can be live at a time.",
+      "gardenAdds": "Garden adds, for the whole household:",
+      "gardenAddsPrice": "Garden is {{price}} a month for the whole household. It adds:",
+      "lineLinks_one": "Sitter links of up to {{days}} days, with {{count}} live at a time",
+      "lineLinks_other": "Sitter links of up to {{days}} days, with up to {{count}} live at once",
+      "lineBrief": "A printable care brief for your sitter, with each plant’s latest photo and your house rules",
+      "linePhotos": "Photos from your sitter while you’re away, added to each plant’s timeline",
+      "lineRecap": "A recap of what happened, waiting when you get back",
+      "upgrade": "Upgrade to Garden for {{price}} a month",
+      "useFree_one": "Use {{count}} day instead",
+      "useFree_other": "Use {{count}} days instead",
+      "keepFree_one": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFree_other": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
+      "keepFreeSecond": "Your current link keeps working. To make a new one on the free plan, revoke the current one first."
+    },
     "sitterGaps": {
       "heading": "Before you go: your sitter can only read what you wrote down.",
       "noCareNote_one": "{{count}} plant has no watering note — your sitter will be guessing:",
@@ -1625,9 +1738,11 @@
       "adminOnlyBilling": "Only a household admin can manage billing.",
       "adminOnlyPlan": "Only a household admin can change the plan.",
       "changePlanTitle": "Change plan",
-      "changePlanDescription": "Upgrades take effect immediately. A household’s first paid subscription starts with a 14-day free trial; the trial is once per household, so a later one is charged straight away.",
+      "changePlanDescription": "Upgrades take effect immediately. Free trials are once per household and do not stack: a household on its free Garden trial is first charged when that trial ends, one that has never had a trial gets 14 days before its first charge, and one that has had a trial is charged straight away.",
       "changePlanDescriptionTrial": "Upgrades take effect immediately. This household has not used its 14-day free trial yet, so a new subscription starts with it and nothing is charged until it ends.",
-      "changePlanDescriptionTrialUsed": "Upgrades take effect immediately. This household has already used its 14-day free trial — it is once per household — so a new subscription is charged straight away rather than after 14 free days.",
+      "changePlanDescriptionTrialUsed": "Upgrades take effect immediately. This household has already had its free trial — there is one per household — so a new subscription is charged straight away.",
+      "changePlanDescriptionTrialUntil": "Upgrades take effect immediately. Add a card now; your first charge is on {{date}}, the day this household’s free Garden trial ends. Nothing is charged before then, and canceling before then costs nothing.",
+      "changePlanDescriptionTrialEndingSoon": "Upgrades take effect immediately. This household’s free Garden trial ends on {{date}}, too soon to move the first charge to that day, so a new subscription is charged when you start it.",
       "currentPlanNote": "This is your current plan.",
       "cancelToReturn": "Cancel in the billing portal to return to Seedling.",
       "usePortalToSwitch": "Use “Manage subscription” above to switch to {{plan}}.",
@@ -1664,7 +1779,11 @@
         "changeAnalytics": "Analytics show the last {{days}} days. Older history is kept, not deleted.",
         "subscribeReplaces": "Choosing a paid plan replaces this trial with a subscription, which goes through checkout and needs a card.",
         "billingLink": "Plans and billing",
-        "currentPlan": "Your household is on the free {{plan}} plan and trying Garden until {{date}}."
+        "currentPlan": "Your household is trying Garden free until {{date}}. After that it moves to the free {{plan}} plan unless an admin chooses a paid plan.",
+        "keepGarden": "Keep Garden for {{price}} a month",
+        "getGardenBack": "Get Garden back for {{price}} a month",
+        "planBadge": "Trying free until {{date}}",
+        "keepPlan": "Keep {{plan}}"
       },
       "splitLine": "{{total}} ÷ {{n}} members = {{each}} each",
       "splitLineApprox": "{{total}} ÷ {{n}} members ≈ {{each}} each",
@@ -1678,6 +1797,7 @@
       "plantsUsageUnlimited": "{{n}} plants · no limit",
       "plantsCountUnavailable": "Plants — usage unavailable",
       "membersUsageUnlimited": "{{n}} members · no limit",
+      "freeCapsGrandfathered": "This household was created before the free plan changed, so it keeps the free limits it signed up with: {{plants}} plants and {{members}} people. Households created since then get {{newPlants}} plants and {{newMembers}} people.",
       "membersCountUnavailable": "Members — usage unavailable",
       "checkoutPendingTitle": "Payment received — finishing up",
       "checkoutPendingBody": "Your payment went through. Your plan updates here as soon as our payment provider confirms it, which usually takes a few seconds. Please do not check out again — a second purchase would start a second subscription and charge you twice.",
@@ -2031,7 +2151,7 @@
     "featureEverythingGarden": "Everything in Garden",
     "featureApiAccess": "API access for automation",
     "featureImportExport": "Import, export and calendar feed (CSV, JSON, .ics)",
-    "trialNote": "A new household starts with 14 days of Garden, no card needed, then moves to the free plan on its own. Separately, a household’s first paid subscription begins with a 14-day trial: checkout collects a card up front, you are not charged until the 14 days are up, and cancelling before then costs nothing. The subscription trial is once per household: a household that has had one before is charged when it subscribes again.",
+    "trialNote": "A new household starts with 14 days of Garden, no card needed, then moves to the free plan on its own. Choose a paid plan during those days and checkout collects a card, but your first charge is on the day they end, not 14 days later; with two days or fewer left, or after they end, the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead. Trials are once per household, and canceling before the first charge costs nothing.",
     "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
     "giftNote": "Buying this for someone else?",
     "whyHeading": "Why a paid plan",
@@ -2056,7 +2176,7 @@
     "featureSitterBasic": "1 sitter link at a time, up to 7 days",
     "featureAnalytics30": "30 days of analytics",
     "whyCoordinateTitle": "For the household that has to coordinate",
-    "whyCoordinateBody": "Free is a couple and their plants: one home, three people, twenty plants. Garden is for a home where more people share the watering — unlimited members, the whole care history in your analytics, and the assistant.",
+    "whyCoordinateBody": "Free is a couple and their plants: one home, two people, eight plants. Garden is for a home where more people share the watering — unlimited members, the whole care history in your analytics, and the assistant.",
     "whyHomesTitle": "For the people who help at more than one home",
     "whyHomesBody": "Greenhouse is many homes, many hands: belong to every household you look after — your place, your parents’, the rental — and take on API access for automation."
   },
@@ -2120,6 +2240,16 @@
       "away_kit": "The Away Kit — longer sitter links, the handoff brief and the return recap",
       "garden_plan": "The Garden plan",
       "greenhouse_plan": "The Greenhouse plan"
+    }
+  },
+  "planCap": {
+    "plants": {
+      "title": "Room for more plants",
+      "body": "Your plan holds {{max}} active plants, and this household has {{n}}. Every plant stays and can still be edited; only adding another waits for room. Archiving a plant you no longer care for frees a slot, or a plan with more room lifts the limit."
+    },
+    "members": {
+      "title": "Room for more people",
+      "body": "Your plan holds {{max}} people, and this household has {{n}}. Everyone stays; a new person can join once there is room. Remove someone who no longer helps, or a plan with more room lifts the limit."
     }
   },
   "awayRecap": {
@@ -2467,7 +2597,7 @@
   "landing": {
     "meta": {
       "title": "Family Greenhouse — Shared Plant Care & Watering Reminders",
-      "descriptionOpen": "Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 3 people and 20 plants.",
+      "descriptionOpen": "Share plant watering schedules, reminders, care logs, and tasks with your household. Family Greenhouse is free for one home, up to 2 people and 8 plants.",
       "descriptionClosed": "A shared care journal for household plant watering schedules, reminders, tasks, and care logs. Existing account holders can still sign in."
     },
     "nav": {
@@ -2476,11 +2606,11 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "Shared plant care and watering reminders",
-        "headlinePre": "“I thought ",
-        "headlineEmphasis": "you",
-        "headlinePost": " watered it.”",
-        "subhead": "Family Greenhouse is a shared care journal for the plants in your house. Everyone sees what’s due and what’s already done, so the fern doesn’t get watered twice on Tuesday and then forgotten for two weeks."
+        "eyebrow": "Watering reminders and a shared care log",
+        "headlinePre": "Plant care for your ",
+        "headlineEmphasis": "whole",
+        "headlinePost": " household.",
+        "subhead": "No more “I thought you watered it.” Everyone at home sees what’s due and what’s already done, and reminders arrive by email or in the browser."
       },
       "b": {
         "eyebrow": "Plant care and watering reminders",
@@ -2489,8 +2619,7 @@
         "headlinePost": " plant alive.",
         "subhead": "Family Greenhouse keeps a watering and care schedule for every plant you own, so nothing gets missed or drowned. It works just as well for one person and a windowsill as it does for a whole household sharing the watering can."
       },
-      "seeHowItWorks": "See how it works",
-      "signupNote": "No credit card needed. Your household starts with 14 days of Garden, then stays on the free plan unless you choose otherwise. Sign-up takes a name, email, and password, then a one-time code we email you: about five minutes, start to finish."
+      "signupNote": "No credit card. Your home gets 14 days of Garden, then stays free for up to 2 people and 8 plants. You’ll confirm your email with a code we send."
     },
     "mockup": {
       "label": "Preview of the Family Greenhouse dashboard showing upcoming plant-care tasks and household activity.",
@@ -2520,14 +2649,14 @@
     "facts": {
       "free": {
         "value": "Free",
-        "label": "Up to 20 plants — no credit card"
+        "label": "Up to 8 plants — no credit card"
       },
       "existing": {
         "value": "Existing accounts",
         "label": "Sign-in and stored care data remain available"
       },
       "people": {
-        "value": "3 people",
+        "value": "2 people",
         "label": "Share one home free — unlimited on Garden"
       },
       "minutes": {
@@ -2648,7 +2777,7 @@
       "eyebrow": "Plans",
       "open": {
         "title": "One plan covers the whole household",
-        "description": "Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 3 people and 20 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
+        "description": "Family Greenhouse is priced per household, not per person. Free is a couple and their plants: one home, up to 2 people and 8 plants, no credit card. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A new household starts with 14 days of Garden free, with no card.",
         "footerNote": "Trial terms, cancellation, and how plan changes work are covered in full on the",
         "footerLink": "plans page"
       },
@@ -2660,7 +2789,7 @@
       },
       "held": {
         "title": "Start free; paid plans are paused",
-        "description": "Free accounts include one home, up to 3 household members and 20 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.",
+        "description": "Free accounts include one home, up to 2 household members and 8 plants, with no credit card. Paid plans, purchases, and plan changes remain unavailable.",
         "footerNote": "Read the full",
         "footerLink": "plan-status notice"
       },
@@ -2709,8 +2838,8 @@
       "heldClosed": "Paid plans are paused"
     },
     "lede": {
-      "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A household’s first paid subscription begins with a 14-day trial you can cancel any time.",
-      "heldOpen": "Free accounts include one home, up to 3 household members and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+      "open": "Everyone you live with shares one plant list, one schedule, and one bill. Free is a couple and their plants: one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate, Greenhouse for many homes and many hands. A new household starts with 14 days of Garden free, with no card, and a paid plan can be canceled any time.",
+      "heldOpen": "Free accounts include one home, up to 2 household members and 8 plants. Paid plans, purchases, and plan changes remain paused.",
       "heldClosed": "New account registration, paid plans, purchases, and plan changes are currently paused."
     },
     "meta": {
@@ -2720,8 +2849,8 @@
         "heldClosed": "Plan status — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 3 household members and 20 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A household’s first paid subscription begins with a 14-day trial.",
-        "heldOpen": "Create a free Family Greenhouse account for one home, up to 3 people and 20 plants. Paid plans, purchases, and plan changes remain paused.",
+        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A new household starts with 14 days of Garden free, with no card.",
+        "heldOpen": "Create a free Family Greenhouse account for one home, up to 2 people and 8 plants. Paid plans, purchases, and plan changes remain paused.",
         "heldClosed": "Paid plans, purchases, plan changes, and new account registration are paused."
       }
     }
@@ -2834,5 +2963,36 @@
       "cats": "The ASPCA’s list gives no verdict on {{name}} for cats, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "dogs": "The ASPCA’s list gives no verdict on {{name}} for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}})."
     }
+  },
+  "appStore": {
+    "title": "Plans",
+    "description": "Subscribe with your Apple ID. One plan covers everyone in this household.",
+    "perMonth": "{{price}} a month",
+    "subscribe": "Subscribe to {{plan}}",
+    "restore": "Restore purchases",
+    "manage": "Manage subscription",
+    "adminOnly": "Only a household admin can change the plan.",
+    "loading": "Loading App Store prices…",
+    "productsUnavailable": "App Store prices aren’t available right now. Try again later.",
+    "activeRenews": "{{plan}} through the App Store. Renews {{date}}.",
+    "activeEnds": "{{plan}} through the App Store. Ends {{date}}.",
+    "alreadyPaid": "This household already has a paid plan.",
+    "alreadyIncluded": "This household already has {{plan}}.",
+    "purchased": "Thank you. {{plan}} is on for this household.",
+    "pending": "The purchase is waiting for approval. The plan turns on once the App Store confirms it.",
+    "failed": "The purchase didn’t finish. Try again in a moment.",
+    "unavailable": "Purchases aren’t available in the app right now.",
+    "restored": "Restored. {{plan}} is on for this household.",
+    "nothingToRestore": "No App Store subscription was found for this Apple ID.",
+    "restoreFailed": "Couldn’t reach the App Store. Try again in a moment.",
+    "linkedElsewhere": "This Apple ID’s subscription belongs to another household.",
+    "otherSubscription": "This household already has an App Store subscription from another Apple ID.",
+    "refusedActive": "This household already has an App Store subscription. Use Manage subscription to change it.",
+    "disclosure": "Payment is charged to your Apple ID when you confirm. The subscription renews automatically each month at the price shown unless you cancel at least 24 hours before the period ends. Manage or cancel it in your Apple ID’s subscription settings.",
+    "terms": "Terms of Use",
+    "privacy": "Privacy Policy",
+    "lockedSeePlans": "See plans",
+    "lockedMember": "A household admin can change the plan in Settings.",
+    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions)."
   }
 }

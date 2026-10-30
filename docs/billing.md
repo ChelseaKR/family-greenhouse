@@ -21,11 +21,11 @@ purchase.
 
 Source of truth: `backend/src/models/plans.ts`.
 
-| Plan       | Monthly | Plants cap | Members cap | Notes                                 |
-| ---------- | ------- | ---------- | ----------- | ------------------------------------- |
-| Seedling   | Free    | 20         | 3           | Default for every new household       |
-| Garden     | $4.99   | 200        | Unlimited   | 14-day free trial, once per household |
-| Greenhouse | $9.99   | 5000       | Unlimited   | 14-day free trial, once per household |
+| Plan       | Monthly | Plants cap | Members cap | Notes                                      |
+| ---------- | ------- | ---------- | ----------- | ------------------------------------------ |
+| Seedling   | Free    | 8          | 2           | Default for every new household            |
+| Garden     | $4.99   | 200        | Unlimited   | Free trial once per household, no stacking |
+| Greenhouse | $9.99   | 5000       | Unlimited   | Free trial once per household, no stacking |
 
 `scripts/check-doc-figures.mjs` re-derives all six cap figures above from
 `plans.ts` on every `npm run verify`, and fails both when a number is wrong and
@@ -34,11 +34,15 @@ and let the gate tell you what this table should say.
 
 The tiers are drawn on **homes and hands**, not collection size
 ([ADR 0014](adr/0014-plans-drawn-on-homes-and-hands.md)). `plans.ts` states the
-reasoning at each limit: Seedling's 20 plants are deliberate generosity, because
-plant rows cost nothing and "generosity here buys member #2 — the metric that
-matters"; its cap of 3 members is where the charge lands, "at the fourth hand …
-never at the second". Members are uncapped on both paid tiers, so the members
-column is a free-tier boundary rather than a paid-tier ceiling.
+reasoning at each limit. Seedling was 20 plants and 3 members, set generously to
+buy member #2; on 2026-10-23 the owner cut it to 8 plants and 2 members
+([ADR 0040](adr/0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md))
+after the real households turned out to hold 5 to 9 plants with one or two
+people, so the old caps were limits nobody met. A household created before
+`SEEDLING_LIMITS_CUT_AT` keeps 20 plants and 3 members while it is on Seedling
+(`withSeedlingGrandfather`, read off the row's own `createdAt`, so nothing was
+backfilled). Members are uncapped on both paid tiers, so the members column is a
+free-tier boundary rather than a paid-tier ceiling.
 
 > **Superseded note, kept because it was load-bearing advice.** This paragraph
 > used to say Seedling's member cap was "deliberately the same as Garden's, not
@@ -441,10 +445,28 @@ deltaForStripeEvent(event): SubscriptionDelta | null      // pure: webhook event
 applyStripeEvent(event): Promise                          // calls deltaForStripeEvent then writes
 ```
 
-### The free trial is once per household
+### The free trial is once per household, and does not stack
+
+`checkoutTrialFor` (`backend/src/models/checkoutTrial.ts`) decides what a new
+subscription checkout gets before its first charge, and both
+`createCheckoutSession` and `GET /billing/me` call it on the same row:
+
+| The household                                                       | Checkout gets                                           | `GET /billing/me`                                        |
+| ------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
+| has `trialConsumedAt` (had a card trial)                            | no trial, charged at checkout                           | `trialAvailable: false`                                  |
+| is on its no-card trial, ending at least 48 h 30 min from now       | `subscription_data.trial_end` = the no-card trial's end | `trialAvailable: true`, `checkoutTrialEndsAt` = that end |
+| had a no-card trial that has ended, or ends sooner than 48 h 30 min | no trial, charged at checkout                           | `trialAvailable: false`                                  |
+| never had a no-card trial                                           | `trial_period_days: 14`                                 | `trialAvailable: true`, no date                          |
+
+The no-stacking rows are the owner's decision of 2026-10-23: a household that
+had 14 card-free days and then subscribes is first charged when those days end
+("add a card now; your first charge is on {date}"), not 14 days after checkout.
+Stripe refuses a Checkout `trial_end` less than 48 hours out; the extra 30
+minutes is the Session's own lifetime, so the date stays valid until the
+Session expires.
 
 `subscription_data.trial_period_days` is set only when the household has no
-`trialConsumedAt` on its metadata row. That marker is written write-once by the
+`trialConsumedAt` on its metadata row and no no-card trial. That marker is written write-once by the
 webhook the first time Stripe confirms a trial (a `trialing` subscription, a
 subscription carrying trial dates, or a subscription-mode Session that required
 no payment) and is never cleared by cancellation. Re-subscribing after
@@ -833,9 +855,13 @@ to Seedling on its own. Nothing is charged, and no card is asked for to start it
   features, the care assistant included, but `getMeteredPlanId` hands identify,
   leaf-health and chat Seedling's allowances. The worst case is worked in
   `evals/UNIT-ECONOMICS.md` §4a.
-- **Subscribing during the trial** goes through checkout unchanged: a household
-  that has not consumed the card trial still gets `trial_period_days: 14`, and
-  once Stripe state exists the no-card trial is no longer consulted.
+- **Subscribing during the trial** goes through checkout, and the
+  subscription's Stripe trial ends on the no-card trial's end date
+  (`subscription_data.trial_end`), so the first charge is that day, not 14 days
+  later. With less than 48 hours 30 minutes left, or after the trial, the
+  checkout has no trial and charges at once. See "The free trial is once per
+  household, and does not stack". Once Stripe state exists the no-card trial is
+  no longer consulted for entitlement.
 
 ### What a trial household keeps at day 14
 
@@ -874,12 +900,17 @@ charge or subscription moves.
 
 ### The trial lifecycle emails
 
-[ADR 0039](adr/0039-trial-lifecycle-emails.md). **Off by default.**
+[ADR 0039](adr/0039-trial-lifecycle-emails.md). **Off by default; on in
+production** (owner decision 2026-10-23, `infrastructure/environments/production/terraform.tfvars`).
 
 - **Day 10:** "Your Garden trial ends in N days", to the admins of a household whose
   trial is active and ends in four days or fewer.
 - **Day 14:** "You are back on Seedling, and nothing was deleted", to the admins of a
   household whose trial ended in the last three days.
+- **First charge:** the day-10 email says a household that starts Garden before the
+  checkout cutoff (the end minus 48 h 30 min, printed as a date) adds a card then
+  and is first charged on the trial's end date; started later, or after the
+  trial (day 14), the first charge is the day it starts. Same rule as checkout.
 - **Contents:** the end date, plants added and care tasks done during the trial (read
   from existing rows), what Seedling holds (read from the plan catalog), and that
   everything already made is kept. A household with no plants is told "You have not
@@ -994,6 +1025,65 @@ a subscription month earns because it is metered the same way.
   trial while the gift still runs. The billing page shows the gift's end date
   beside the plan grid; refusing that checkout, or starting the subscription
   when the gift ends, is a follow-up decision.
+
+## Apple In-App Purchase (ADR 0041)
+
+The iPhone app can sell Garden and Greenhouse through the App Store, beside
+Stripe on the website. It is off by default (`APP_STORE_BILLING_ENABLED`,
+Terraform `app_store_billing_enabled`, and the app build's
+`VITE_APP_STORE_PURCHASES`); the decision record is
+`docs/adr/0041-apple-in-app-purchase-in-the-iphone-app.md` and the app side is
+in `docs/mobile.md`, "In-App Purchase".
+
+**One source of truth.** The household METADATA row. Apple's state is the
+`appStore` map on it (`planId`, `productId`, `expiresAt`, `willRenew`,
+`revoked`, `environment`), written only by `services/appStoreBilling.ts` from
+Apple-signed data and never by a Stripe path (`SubscriptionWriteField`
+excludes it). `getEntitledPlan` raises a household to the App Store tier while
+`appStoreState` is `active`, under the lifetime floor and gifts, exactly as a
+Stripe plan. GET /billing/me publishes `appStore` with a server-clock `state`
+and never the original transaction id. A running App Store subscription also
+ends the no-card trial's metering, like Stripe state.
+
+**Products.** One subscription group, "Family Greenhouse plans":
+`net.familygreenhouse.app.garden.monthly` ($4.99) and
+`net.familygreenhouse.app.greenhouse.monthly` ($9.99), monthly, no
+introductory offer. `models/appStore.ts` maps them to tiers.
+
+**Routes.**
+
+| Route                                     | Auth                | Does                                                                                                                                                                                                 |
+| ----------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /billing/app-store/purchase-intent` | admin               | Refuses a second way to pay (409 `STRIPE_SUBSCRIPTION_ACTIVE`, `APP_STORE_SUBSCRIPTION_ACTIVE`, `PLAN_ALREADY_INCLUDED`), else returns the product id and the household's `appAccountToken`.         |
+| `POST /billing/app-store/transactions`    | member              | Verifies and applies StoreKit signed transactions (purchase, restore, launch sync, updates). Per-transaction outcome; `APP_STORE_LINKED_ELSEWHERE` when a subscription belongs to another household. |
+| `POST /billing/app-store/notifications`   | none (Apple-signed) | App Store Server Notifications v2. 200 when handled or unplaceable, 400 when the JWS does not verify, 500 on a storage failure (Apple retries).                                                      |
+
+All three answer 404 while the switch is off.
+
+**Verification.** `services/appStoreJws.ts` checks the `x5c` chain against the
+pinned Apple Root CA - G3, Apple's two marker extensions, validity at
+`signedDate`, and the ES256 signature, with `node:crypto` only. Bundle id
+`net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox are accepted (App Review buys in Sandbox);
+`APP_STORE_ENVIRONMENTS` narrows it.
+
+**Not paying twice.** The purchase intent refuses a household with a live
+Stripe subscription, an active App Store subscription, or a lifetime or gift
+that covers the tier. `POST /billing/checkout` refuses a web plan checkout
+(409 `APP_STORE_SUBSCRIBED`) while an App Store subscription is active,
+whatever the switch says, and Settings → Plan on the website says the plan is
+billed through the App Store. A second Apple subscription on the same home is
+refused while the first is live; both that and a household found paying
+Stripe and Apple at once are logged (`app_store_second_subscription_on_household`,
+`app_store_and_stripe_both_live`) for a manual refund.
+
+**Rows.** `APPSTORE_TOKEN#<uuid>` (token to household) and
+`APPSTORE_TXN#<originalTransactionId>` (subscription to household, written
+once). On the household row: `appStore`, `appStoreAccountToken`,
+`appStoreOriginalTransactionId`, `appStoreSignedDate`.
+
+**Refunds.** Apple decides them. A `REFUND` or `REVOKE` notification sets the
+revocation date and access ends there; `REFUND_REVERSED` restores it. Nothing
+here calls the App Store Server API.
 
 ## Refer-a-friend
 
@@ -1118,17 +1208,17 @@ loaded by `frontend/src/i18n/legalCatalog.ts`, not the startup
 description of behaviour in this repo, not a policy written ahead of it — so a
 change to any row below is a change to the Terms as well, in **both** locales.
 
-| Terms section       | The behaviour it describes                                                                                                                                                                                                                | Where it lives                                                                                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                                              | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate                                       |
-| Free trials         | 14 days on a household's FIRST paid subscription only, card collected at checkout, first charge at trial end, trial-end date shown on the billing page; a household that already consumed its trial gets none and is charged at checkout  | `services/billing.ts` (`TRIAL_PERIOD_DAYS`, gated on `trialConsumedAt`; `trialAvailable` on `GET /billing/me`), `BillingSettings.tsx` `trialEnds`                    |
-| Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                                                | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                                                                 |
-| Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                  | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                                        |
-| Price changes       | A new price applies to new subscriptions only; a live subscription is never moved onto a different price, and a change that would move one is emailed to the household's admins 14 days ahead                                             | `line_items: [{ price: priceId }]` set once at checkout and never updated; § _Price changes_ below; § _Setup checklist_ above ("do not archive those Stripe prices") |
-| One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                               | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                                   |
-| Gifts               | **Not yet in the Terms.** A gift is a third one-time purchase with rules the `oneTime` sentence does not cover: redeemable within 365 days, runs from redemption, not refundable, cannot be applied to a subscribed household (ADR 0028)  | `models/giftSubscriptions.ts`, `services/giftSubscriptions.ts`; the Terms sentence is the owner's to write, in both locales                                          |
-| Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                                      |
-| Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                                       |
+| Terms section       | The behaviour it describes                                                                                                                                                                                                                                                                                                                            | Where it lives                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan status         | Monthly only for new subscriptions; annual and Garden lifetime withdrawn but still renewing for existing households; admin-only; not sold in the mobile apps                                                                                                                                                                                          | `models/plans.ts` (`withdrawnIntervals`, `isIntervalOffered`), `requireAdmin` on checkout, `BillingSettings.tsx` `native` gate                                          |
+| Free trials         | No-card trial households are first charged when the no-card trial ends (never 14 more days), or at checkout inside the last 48 h 30 min or after it; otherwise 14 days on a FIRST paid subscription only; card collected at checkout; trial-end date shown on the billing page; a household that already consumed a card trial is charged at checkout | `models/checkoutTrial.ts` (`checkoutTrialFor`, `TRIAL_PERIOD_DAYS`); `trialAvailable` and `checkoutTrialEndsAt` on `GET /billing/me`; `BillingSettings.tsx` `trialEnds` |
+| Automatic renewal   | Renews until cancelled, charged to the card on file, at the price the subscription runs at                                                                                                                                                                                                                                                            | Stripe subscription against the tier's price id; the plan catalog never migrates a live subscription                                                                    |
+| Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                                                                                                                              | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                                           |
+| Price changes       | A new price applies to new subscriptions only; a live subscription is never moved onto a different price, and a change that would move one is emailed to the household's admins 14 days ahead                                                                                                                                                         | `line_items: [{ price: priceId }]` set once at checkout and never updated; § _Price changes_ below; § _Setup checklist_ above ("do not archive those Stripe prices")    |
+| One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                                                                                                                                           | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                                      |
+| Gifts               | **Not yet in the Terms.** A gift is a third one-time purchase with rules the `oneTime` sentence does not cover: redeemable within 365 days, runs from redemption, not refundable, cannot be applied to a subscribed household (ADR 0028)                                                                                                              | `models/giftSubscriptions.ts`, `services/giftSubscriptions.ts`; the Terms sentence is the owner's to write, in both locales                                             |
+| Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion                                                                                                             | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                                         |
+| Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                                                                                                                            | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                                          |
 
 ### Price changes, and the notice nothing sends
 
@@ -1264,7 +1354,7 @@ thing than a policy a reader might hope for:
 - **cancelling stops the next charge and returns nothing already taken** — the
   household keeps the plan to the end of the period it paid for, then drops to
   Seedling. That is `cancel_at_period_end` through the Stripe portal;
-- **the 14-day trial is what makes the first charge avoidable**, and the
+- **a subscription's free trial is what makes the first charge avoidable**, and the
   Terms say so rather than offering a refund in its place;
 - **nothing in the service issues a refund on its own** — no path in
   `backend/src` calls Stripe's refund API, and

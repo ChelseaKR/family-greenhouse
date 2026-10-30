@@ -305,6 +305,31 @@ jobs:
         # pattern as check-no-bare-markers.mjs (CICD-27).
         run: npm run mobile:validate
 
+      - name: Setup Go (builds the pinned greenlight scanner)
+        # Only to `go install` greenlight once (scripts/check-greenlight.mjs);
+        # nothing else in this repo is Go. 1.24 is the `go` line in
+        # greenlight's own go.mod, and the script builds with GOTOOLCHAIN=local
+        # so a newer toolchain is never fetched behind this pin.
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: App Store and Play Store preflight on the native projects
+        # greenlight v0.2.0, pinned by commit and module hash in
+        # scripts/check-greenlight.mjs: `preflight frontend/ios` and `playscan
+        # frontend/android`, each with --exit-code (CRITICAL or HIGH fails),
+        # plus three seeded-violation controls that prove the scanner can fail.
+        # Static: no account, no network at scan time, no upload.
+        #
+        # A missing scanner here is a FAILURE, not a skip: `CI` is set, and the
+        # script refuses to report a preflight that did not run as a pass.
+        #
+        # Also a step in `npm run verify` (scripts/gate-steps.mjs) so local
+        # pre-push and CI run the identical check — the same both-places
+        # pattern as check-no-bare-markers.mjs (CICD-27).
+        run: npm run greenlight:check
+
       - name: Catalog gates (key parity, placeholder parity, plural categories, TODO markers, BCP-47, UTF-8)
         # STANDARDS/INTERNATIONALIZATION-STANDARD.md §4 G1/G3/G5/G6 —
         # shared with `npm run verify` (frontend `i18n:check`) so local == CI.

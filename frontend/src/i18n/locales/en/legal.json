@@ -51,7 +51,7 @@
     },
     "terms": {
       "metaTitle": "Terms — Family Greenhouse",
-      "metaDescription": "Family Greenhouse's terms of service: the 14-day free trial, billing, cancellation, and refunds, and what's expected of you and from us.",
+      "metaDescription": "Family Greenhouse's terms of service: free trials, billing, cancellation, and refunds, and what's expected of you and from us.",
       "title": "Terms of Service",
       "lead": "These terms govern your use of Family Greenhouse. We’ve kept them readable. If anything is unclear, email <helloLink>{{helloEmail}}</helloLink> and we’ll explain.",
       "agreement": {
@@ -67,7 +67,7 @@
         "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
         "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
         "notice": "<strong>No mid-period cuts to what you paid for.</strong> We do not reduce a paid plan’s features or usage limits during a period you have already paid for. Free-plan limits can change, and have. Bug fixes and improvements ship continuously.",
-        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 3 people and 20 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
+        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 2 people and 8 plants. A household created before October 24, 2026 keeps the free limits it signed up with, 3 people and 20 plants, for as long as it is on Seedling. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
       },
       "fromYou": {
         "heading": "What we expect from you",
@@ -82,12 +82,12 @@
       },
       "planStatus": {
         "heading": "Plan status",
-        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>, and a household’s first paid subscription starts with a 14-day free trial. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>; the free trials that can come before a first charge are set out under <em>Free trials</em> below. Paid plans are available on our website and, on iPhone, through Apple In-App Purchase. Purchases made through Apple are billed and managed by Apple under Apple's terms. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
       },
       "trial": {
         "heading": "Free trials",
-        "intro": "A household’s first paid subscription starts with a 14-day free trial. Checkout collects a card before the trial begins, and nothing is charged while it runs; the billing page shows the date the trial ends. The trial is once per household: if your household has already used it, starting a subscription again charges the card at checkout, with no trial.",
-        "ending": "When the 14 days are up, the first payment is taken automatically and the subscription starts. To stop that, cancel before the trial ends — see <em>Cancelling</em> below. Cancelling during a trial costs nothing: the household keeps the paid features until the trial’s last day, then moves to the free Seedling plan."
+        "intro": "A new household starts with 14 days of Garden that need no card; nothing is charged, and when they end the household moves to the free Seedling plan on its own. A household that subscribes during those 14 days adds a card at checkout and is first charged on the day they end: its subscription’s trial lasts only for what is left of the 14 days, so the two never add up. If two days or fewer are left, or the 14 days have ended, the card is charged at checkout, with no trial. A household that never had those 14 days gets a 14-day free trial on its first paid subscription instead; checkout collects a card before it begins, and nothing is charged while it runs. Either way, the billing page shows the date the trial ends. Trials are once per household: if your household has already had a subscription trial, starting a subscription again charges the card at checkout, with no trial.",
+        "ending": "When the trial ends, the first payment is taken automatically and the subscription starts. To stop that, cancel before the trial ends — see <em>Cancelling</em> below. Cancelling during a trial costs nothing: the household keeps the paid features until the trial’s last day, then moves to the free Seedling plan."
       },
       "renewal": {
         "heading": "Automatic renewal",
@@ -97,7 +97,7 @@
       },
       "cancellation": {
         "heading": "Cancelling",
-        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. Cancelling is not available inside the mobile apps.",
+        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. If you subscribed through Apple In-App Purchase on iPhone, cancel in your iPhone's Settings under your Apple Account > Subscriptions; Apple handles that cancellation and any refund.",
         "when": "Cancelling does not cut you off on the spot. It takes effect at the end of the period you have already paid for: until that date the household keeps the plan, its caps, and every paid feature, and the billing page shows the date. After it, the household moves to the free Seedling plan.",
         "whatRemains": "Moving to the free plan deletes nothing. Every plant, photo, member, and record of care stays, and stays readable and editable; tasks keep being created and reminders keep arriving. What changes is that you cannot add plants or members while the household is over a free-plan cap, the monthly plant-identification allowance returns to the free plan’s, the AI care assistant needs Garden or above, API keys need Greenhouse, and plant-sitter links return to the free plan’s limit of one live link of up to seven days, with the task list but not the printable plant-care brief."
       },
@@ -112,10 +112,14 @@
       },
       "refunds": {
         "heading": "Refunds",
-        "cancelling": "Cancelling stops the next charge; it does not return a charge already made. The household keeps its plan, and every paid feature, until the end of the period it has already paid for, and then moves to the free Seedling plan. Because a household’s first paid subscription starts with a 14-day free trial, the first charge is avoidable — cancel before the trial ends and nothing is taken, and the billing page shows that date.",
+        "cancelling": "Cancelling stops the next charge; it does not return a charge already made. The household keeps its plan, and every paid feature, until the end of the period it has already paid for, and then moves to the free Seedling plan. Where a subscription starts with a free trial, the first charge is avoidable — cancel before the trial ends and nothing is taken, and the billing page shows that date.",
         "policy": "Beyond that we do not publish a refund window, and nothing in the service issues a refund on its own. If a charge looks wrong — a duplicate, an amount you do not recognise, a renewal after you cancelled — email <supportLink>{{supportEmail}}</supportLink> with the date and the amount, and we will investigate it and put right what we got wrong. Anything else is considered case by case. We would rather you asked than assumed the answer is no.",
         "oneTime": "One-time purchases are treated the same way. A pack of plant identifications is charged once and its identifications expire 12 months after the purchase; cancelling a subscription neither refunds them nor takes them away, and if the household itself is erased, when its last member deletes their account, anything unused goes with it. The withdrawn Garden lifetime purchase was a single payment that keeps its plan permanently.",
         "statutory": "None of this removes a right the law where you live already gives you. Where local law grants a right to cancel a purchase and be repaid, that right applies whatever this section says."
+      },
+      "applePurchases": {
+        "heading": "Purchases made through Apple",
+        "body": "If you subscribe in the iPhone app through Apple In-App Purchase, there is no free trial: Apple charges when you confirm, and buying ends any no-card Garden trial. Apple bills, renews, retries failed payments, and handles price changes, refunds and cancellations under Apple's terms; the sections above on cards, failed payments, price changes and refunds apply only to subscriptions bought on our website. Deleting your account does not cancel an Apple subscription; cancel it first in your iPhone's Settings."
       },
       "limitations": {
         "heading": "Limitations",

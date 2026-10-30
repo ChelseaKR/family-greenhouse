@@ -84,6 +84,8 @@ export interface TrialEmailDue {
   endsAt: string;
   /** Start of the trial, derived from the end and the trial length. */
   startedAt: string;
+  /** The household row's `createdAt`, for the free caps the email names. */
+  householdCreatedAt?: string | null;
 }
 
 /**
@@ -102,7 +104,11 @@ export function trialEmailDue(
   const endsAtMs = Date.parse(sub.noCardTrialEndsAt);
   if (!Number.isFinite(endsAtMs)) return null;
   const startedAt = new Date(endsAtMs - NO_CARD_TRIAL_DAYS * DAY_MS).toISOString();
-  const base = { endsAt: sub.noCardTrialEndsAt, startedAt };
+  const base = {
+    endsAt: sub.noCardTrialEndsAt,
+    startedAt,
+    householdCreatedAt: sub.householdCreatedAt,
+  };
   if (state === 'active') {
     return endsAtMs - now.getTime() <= DAY10_DAYS_BEFORE_END * DAY_MS
       ? { kind: 'trial_day10', ...base }
@@ -288,6 +294,7 @@ async function sendToRecipient(
       timeZone: prefs.timezone || 'UTC',
       facts,
       unsubscribeUrl: unsubscribe,
+      householdCreatedAt: due.householdCreatedAt,
     });
     const acceptance = await emailNotifier.sendEmailAccepted({
       to: member.email,

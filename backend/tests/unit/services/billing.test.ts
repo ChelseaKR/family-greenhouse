@@ -2230,7 +2230,7 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
       householdId: 'hh-1',
       customerEmail: 'a@b.test',
       planId: 'garden',
-      interval,
+      interval: 'month',
       successUrl: 's',
       cancelUrl: 'c',
     });
@@ -2488,7 +2488,7 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
       householdId: 'hh-1',
       customerEmail: 'a@b.test',
       planId: 'garden',
-      interval,
+      interval: 'month',
       successUrl: 's',
       cancelUrl: 'c',
     });
@@ -2911,6 +2911,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
     });
   });
 
@@ -2936,6 +2938,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
     });
     expect(JSON.stringify(published)).not.toContain('cs_private_pending');
   });
@@ -2960,6 +2964,8 @@ describe('getHouseholdSubscription', () => {
       status: undefined,
       currentPeriodEnd: undefined,
       trialAvailable: true,
+      // The fixture row carries no createdAt (ADR 0040).
+      householdCreatedAt: 'unknown',
       staleCheckout: { startedAt },
     });
     expect(JSON.stringify(published)).not.toContain('cs_private_abandoned');
@@ -3118,6 +3124,178 @@ describe('the free trial is once per household, not once per checkout', () => {
     const params = await checkoutWithRow(RESUBSCRIBING_ROW);
     expect(params.subscription_data?.trial_period_days).toBeUndefined();
     expect(await trialAvailableFor(RESUBSCRIBING_ROW)).toBe(false);
+  });
+});
+
+/**
+ * Owner decision 2026-10-23: no stacked trials. A household on the 14-day
+ * no-card Garden trial (ADR 0027) that checks out gets a Stripe trial that
+ * ends on the no-card trial's end date — "add a card now; your first charge
+ * is on {date}" — not 14 more days. Three cases, one per test group:
+ *
+ *   1. no-card trial still running, ends far enough ahead → `trial_end` on it
+ *   2. no-card trial ended, or ends inside Stripe's 48-hour minimum (plus the
+ *      Session's life) → charged at checkout, no trial
+ *   3. never had a no-card trial → the 14-day card trial, unchanged
+ */
+describe('no stacked trials: checkout after the no-card trial (2026-10-23)', () => {
+  const NOW = new Date('2026-11-01T12:00:00.000Z');
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
+    sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
+    seedCatalogPrices();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type SubscriptionData = { trial_period_days?: number; trial_end?: number };
+
+  async function checkoutWithRow(Item: Record<string, unknown> | undefined) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item });
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await createCheckoutSession({
+      householdId: 'hh-1',
+      customerEmail: 'a@b.test',
+      planId: 'garden',
+      interval: 'month',
+      successUrl: 's',
+      cancelUrl: 'c',
+    });
+    return sessionsCreate.mock.calls[0][0] as {
+      mode: string;
+      subscription_data?: SubscriptionData;
+    };
+  }
+
+  async function publishedFor(Item: Record<string, unknown>) {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item });
+    const { getHouseholdSubscription } = await import('../../../src/services/billing.js');
+    return getHouseholdSubscription('hh-1');
+  }
+
+  /** A household on its no-card trial, which ends `endsInMs` after NOW. */
+  function noCardRow(endsInMs: number) {
+    return {
+      planId: 'seedling' as const,
+      noCardTrialEndsAt: new Date(NOW.getTime() + endsInMs).toISOString(),
+    };
+  }
+
+  describe('case 1: the no-card trial is still running', () => {
+    it('ends the Stripe trial on the no-card trial end date, not 14 days from checkout', async () => {
+      const row = noCardRow(9 * DAY);
+      const params = await checkoutWithRow(row);
+      expect(params.subscription_data?.trial_end).toBe(
+        Math.floor(Date.parse(row.noCardTrialEndsAt) / 1000)
+      );
+      expect(params.subscription_data?.trial_period_days).toBeUndefined();
+    });
+
+    it('never puts the first charge later than the no-card trial end (the stacked 28 days)', async () => {
+      const row = noCardRow(13 * DAY);
+      const params = await checkoutWithRow(row);
+      // No 14 days on top: the only trial parameter is the pinned end.
+      expect(params.subscription_data?.trial_period_days).toBeUndefined();
+      expect(params.subscription_data?.trial_end).toEqual(expect.any(Number));
+      const firstChargeMs = (params.subscription_data?.trial_end ?? Infinity) * 1000;
+      expect(firstChargeMs).toBeLessThanOrEqual(Date.parse(row.noCardTrialEndsAt));
+      expect(firstChargeMs).toBeLessThan(NOW.getTime() + 14 * DAY);
+    });
+
+    it('publishes the same date the checkout will use, so the copy names the real first charge', async () => {
+      const row = noCardRow(9 * DAY);
+      const sub = await publishedFor(row);
+      expect(sub.trialAvailable).toBe(true);
+      expect(sub.checkoutTrialEndsAt).toBe(row.noCardTrialEndsAt);
+    });
+
+    it('accepts an end exactly at the minimum lead (48 hours plus the Session lifetime)', async () => {
+      const { CHECKOUT_TRIAL_END_MIN_LEAD_MS } = await import('../../../src/services/billing.js');
+      expect(CHECKOUT_TRIAL_END_MIN_LEAD_MS).toBe(48 * HOUR + 30 * 60 * 1000);
+      const row = noCardRow(CHECKOUT_TRIAL_END_MIN_LEAD_MS);
+      const params = await checkoutWithRow(row);
+      expect(params.subscription_data?.trial_end).toBe(
+        Math.floor(Date.parse(row.noCardTrialEndsAt) / 1000)
+      );
+    });
+  });
+
+  describe('case 2: the no-card trial has ended, or ends too soon for Stripe', () => {
+    it.each([
+      ['ended a week ago', -7 * DAY],
+      ['ended a second ago', -1000],
+      ['ends in one hour', HOUR],
+      ['ends in 48 hours, inside the Session margin', 48 * HOUR],
+      ['ends one second short of the minimum lead', 48 * HOUR + 30 * 60 * 1000 - 1000],
+    ])('charges at checkout with no trial when it %s', async (_label, endsInMs) => {
+      const row = noCardRow(endsInMs);
+      const params = await checkoutWithRow(row);
+      expect(params.mode).toBe('subscription');
+      expect(params.subscription_data).toBeDefined();
+      expect(params.subscription_data?.trial_period_days).toBeUndefined();
+      expect(params.subscription_data?.trial_end).toBeUndefined();
+    });
+
+    it('publishes trialAvailable=false and no first-charge date', async () => {
+      const sub = await publishedFor(noCardRow(-3 * DAY));
+      expect(sub.trialAvailable).toBe(false);
+      expect(sub).not.toHaveProperty('checkoutTrialEndsAt');
+    });
+
+    it('still gives no trial to a household that also consumed a card trial', async () => {
+      const params = await checkoutWithRow({
+        ...noCardRow(9 * DAY),
+        trialConsumedAt: '2026-10-25T00:00:00.000Z',
+        stripeCustomerId: 'cus_1',
+        subscriptionStatus: 'canceled',
+      });
+      expect(params.subscription_data?.trial_period_days).toBeUndefined();
+      expect(params.subscription_data?.trial_end).toBeUndefined();
+    });
+  });
+
+  describe('case 3: the household never had a no-card trial', () => {
+    it('keeps the 14-day card trial', async () => {
+      const params = await checkoutWithRow({ planId: 'seedling' });
+      expect(params.subscription_data?.trial_period_days).toBe(14);
+      expect(params.subscription_data?.trial_end).toBeUndefined();
+    });
+
+    it('keeps the 14-day card trial for a household with no metadata row', async () => {
+      const params = await checkoutWithRow(undefined);
+      expect(params.subscription_data?.trial_period_days).toBe(14);
+      expect(params.subscription_data?.trial_end).toBeUndefined();
+    });
+
+    it('publishes trialAvailable=true with no first-charge date (the 14 days apply)', async () => {
+      const sub = await publishedFor({ planId: 'seedling' });
+      expect(sub.trialAvailable).toBe(true);
+      expect(sub).not.toHaveProperty('checkoutTrialEndsAt');
+    });
+  });
+
+  describe('checkoutTrialFor (pure)', () => {
+    it('reads an unparseable no-card end the way noCardTrialState does: as absent', async () => {
+      const { checkoutTrialFor } = await import('../../../src/services/billing.js');
+      expect(checkoutTrialFor({ noCardTrialEndsAt: 'not-a-date' }, NOW)).toEqual({
+        kind: 'card_trial',
+        days: 14,
+      });
+    });
   });
 });
 
