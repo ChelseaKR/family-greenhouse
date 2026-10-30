@@ -16,20 +16,67 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-10-29
+
+**Free trials no longer stack, and the day-10 and day-14 trial emails go out
+in production.** A household on the 14-day no-card Garden trial that starts a
+paid plan is first charged on the trial's own end date, not 14 days later. The
+Terms of Service now cover buying through Apple In-App Purchase on iPhone, and
+the In-App Purchase code ships with every switch off. The Terms text changed
+(#1048, #1050, #1051), so their effective date is this release's.
+
+- **The Terraform plan is larger than usual.** `infrastructure/` changed since
+  0.45.0: the three `/billing/app-store/*` API routes are new (they answer 404
+  while `app_store_billing_enabled` is "0", as it is in production), the
+  `billing` Lambda gets `APP_STORE_BILLING_ENABLED = "0"`, the `digests` Lambda
+  gets `TRIAL_LIFECYCLE_EMAILS_ENABLED`, and the daily `trial-emails` rule goes
+  from `DISABLED` to `ENABLED`. Expect 3 routes to add and the 19 Lambda
+  updates plus the one rule change, with nothing destroyed. No stored data is
+  migrated.
+- **The trial emails start with this deploy.** At the first daily run, a
+  trial ending in 4 days or fewer gets the day-10 email and a trial that ended
+  in the last 3 days gets the day-14 email; older trials are not mailed. Set
+  `trial_lifecycle_emails_enabled = false` and deploy again to stop them.
+- **The Terms effective date is October 29, 2026 (release 0.46.0).**
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The iPhone app gains the `NativePurchases` StoreKit plugin
+  (#1047), unused while the build's `VITE_APP_STORE_PURCHASES` is false. The
+  next store upload is 0.46.0, build 4600.
+
+### Added
+
+- **Apple In-App Purchase for Garden and Greenhouse in the iPhone app, off by
+  default (#1047).** Garden ($4.99 a month) and Greenhouse ($9.99 a month) can
+  be bought through Apple beside Stripe on the website (ADR 0041). Nothing
+  changes for anyone until three switches are on: `app_store_billing_enabled`
+  in Terraform (the `/billing/app-store/purchase-intent`, `/transactions` and
+  `/notifications` routes answer 404 until it is "1"), the build's
+  `VITE_APP_STORE_PURCHASES`, and the `NativePurchases` plugin, which every
+  build now registers. Apple's state lives on the household row, written only
+  from Apple-signed data verified against Apple's pinned root, and the
+  entitlement is the stronger of Stripe and Apple. A household with a live
+  Stripe subscription cannot buy through Apple, and web checkout refuses a
+  household with an active App Store subscription. Not built: Google Play
+  Billing, annual App Store products and introductory offers.
+
 ### Changed
 
 - **The Terms of Service say paid plans can be bought on iPhone through Apple
-  In-App Purchase.** The Plan status section now reads, in the owner's wording:
+  In-App Purchase (#1048).** The Plan status section now reads, in the owner's wording:
   "Paid plans are available on our website and, on iPhone, through Apple
   In-App Purchase. Purchases made through Apple are billed and managed by Apple
   under Apple's terms." It replaces "Paid plans are not sold inside the mobile
   apps", which would be false once the App Store build sells Garden and
   Greenhouse (ADR 0041). The Spanish Terms carry the same change. No price
   changed. In-App Purchase itself stays off until its three switches are
-  turned on. The Terms text changed, so its effective date is `UNRELEASED`
-  until the release that ships it.
+  turned on. The cancellation section now says that a subscription bought
+  through Apple is cancelled in the iPhone's Settings, under the Apple Account's
+  Subscriptions, and that Apple handles that cancellation and any refund. The
+  Terms text changed, and takes effect with this release.
 
-- **Free trials no longer stack.** A household on its 14-day no-card Garden
+- **Free trials no longer stack (#1050).** A household on its 14-day no-card Garden
   trial that starts a paid plan used to get 14 more free days on top, so its
   first charge could come 28 days after it signed up. Its Stripe trial now ends
   on the no-card trial's end date: it adds a card at checkout and is first
@@ -44,20 +91,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   "Add a card now; your first charge is on {date}". The pricing FAQ, the
   pricing and landing pages, the help article and the Terms (Free trials, Plan
   status, Refunds) say the same in English and Spanish. The Terms text changed,
-  so its effective date is `UNRELEASED` until the release that ships it.
+  and takes effect with this release.
 
-- **The day-10 and day-14 trial emails are on in production.**
+- **The day-10 and day-14 trial emails are on in production (#1050).**
   `trial_lifecycle_emails_enabled = true` in the production tfvars sets
   `TRIAL_LIFECYCLE_EMAILS_ENABLED` on the `digests` Lambda and turns the daily
   `trial-emails` rule from `DISABLED` to `ENABLED`. The day-10 email now names
   the first charge the same way checkout does: start Garden before the cutoff
   date and the first charge is the trial's end date; later, or after the trial,
-  it is the day you start. Production already runs 0.45.0, whose digests build
-  has the `trialEmails` job, so the switch takes effect when the release that
-  carries this change is deployed.
+  it is the day you start. Production runs 0.45.0, whose digests build has the
+  `trialEmails` job, and the switch takes effect when this release's Terraform
+  apply runs.
 
 - **The Terms of Service say what is different about a purchase made through
-  Apple.** A new section, "Purchases made through Apple", follows Refunds: a
+  Apple (#1051).** A new section, "Purchases made through Apple", follows Refunds: a
   subscription bought in the iPhone app has no free trial (the App Store
   products have no introductory offer), Apple charges when the purchase is
   confirmed, and buying ends any no-card Garden trial; Apple bills, renews,
@@ -66,8 +113,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   apply only to subscriptions bought on the website; and deleting an account
   does not cancel an Apple subscription. The Spanish Terms carry the same
   section. No price changed and In-App Purchase stays off. The Terms text
-  changed, so its effective date is `UNRELEASED` until the release that ships
-  it.
+  changed, and takes effect with this release.
 
 ## [0.45.0] - 2026-10-24
 
