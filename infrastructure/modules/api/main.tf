@@ -534,6 +534,7 @@ locals {
     STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH = var.stripe_price_id_gift_greenhouse_month
     STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                      = var.payments_enabled
+    APP_STORE_BILLING_ENABLED             = var.app_store_billing_enabled
     POSTHOG_KEY                           = var.posthog_key
     POSTHOG_HOST                          = var.posthog_host
   }
@@ -1330,6 +1331,14 @@ locals {
     "GET /billing/gift/purchases"   = { group = "billing", auth = "jwt" }
     "POST /billing/portal"          = { group = "billing", auth = "jwt" }
     "POST /billing/webhook"         = { group = "billing", auth = "none" }
+
+    # Apple In-App Purchase (ADR 0041). 404 until app_store_billing_enabled is
+    # "1". The notifications route is public: Apple signs its body (a JWS the
+    # handler verifies against Apple's pinned root), the way Stripe signs the
+    # webhook.
+    "POST /billing/app-store/purchase-intent" = { group = "billing", auth = "jwt" }
+    "POST /billing/app-store/transactions"    = { group = "billing", auth = "jwt" }
+    "POST /billing/app-store/notifications"   = { group = "billing", auth = "none" }
 
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }

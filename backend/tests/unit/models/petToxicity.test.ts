@@ -927,3 +927,173 @@ describe('rows read on 2026-10-21', () => {
     }
   });
 });
+
+/**
+ * Listing details, horse verdicts and extension sources, read off the live
+ * ASPCA listings and NC State Extension's Plant Toolbox on 2026-10-24 for the
+ * eight /pet-safe pages with the most Search Console impressions, and re-read
+ * on 2026-10-29, when the other names, family, advice line and poison parts
+ * were added. The page
+ * quotes these fields word for word, so this pins them: an edit here is a
+ * re-read of the source, not a copy edit.
+ */
+describe('listing details read on 2026-10-29', () => {
+  const ADVICE =
+    'If you suspect your pet may have ingested a potentially toxic substance, call the ASPCA Poison Control at (888) 426-4435 or contact your local veterinarian as soon as possible.';
+  const CAOX =
+    'Oral irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, vomiting, difficulty swallowing.';
+  const DETAILS: Record<
+    string,
+    {
+      horses?: 'toxic' | 'non-toxic';
+      toxicPrinciples?: string;
+      clinicalSigns?: string;
+      listingNote?: string;
+      additionalCommonNames?: string;
+      family: string;
+      ncsuPath: string;
+      poisonSeverity?: string;
+      poisonPart?: string;
+      tagged?: Array<'cats' | 'dogs' | 'horses'>;
+    }
+  > = {
+    pothos: {
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      additionalCommonNames: "Pothos, Devil's Ivy, Taro Vine, Ivy Arum",
+      family: 'Araceae',
+      ncsuPath: 'epipremnum-aureum',
+      poisonSeverity: 'Medium',
+      poisonPart: 'Flowers, Fruits, Leaves, Roots, Seeds, Stems',
+    },
+    monstera: {
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      additionalCommonNames: 'Cutleaf Philodendron, Hurricane Plant, Ceriman, Mexican Breadfruit',
+      family: 'Araceae',
+      ncsuPath: 'monstera-deliciosa',
+      poisonSeverity: 'Low',
+      poisonPart: 'Bark, Flowers, Fruits, Leaves, Roots, Seeds, Stems',
+    },
+    'snake-plant': {
+      toxicPrinciples: 'Saponins',
+      clinicalSigns: 'Nausea, vomiting, diarrhea.',
+      additionalCommonNames: "Golden Bird's Nest, Mother-in-Law’s Tongue, Good Luck Plant",
+      family: 'Agavaceae',
+      ncsuPath: 'dracaena-trifasciata',
+      poisonSeverity: 'Low',
+      poisonPart: 'Flowers, Fruits, Leaves, Roots, Sap/Juice, Stems',
+    },
+    'spider-plant': {
+      additionalCommonNames: 'Ribbon Plant, Anthericum, Spider Ivy',
+      family: 'Asparagaceae',
+      ncsuPath: 'chlorophytum-comosum',
+      tagged: ['cats', 'dogs', 'horses'],
+    },
+    'peace-lily': {
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      additionalCommonNames: 'Mauna Loa Peace Lily',
+      family: 'Araceae',
+      ncsuPath: 'spathiphyllum',
+      poisonSeverity: 'Medium',
+      poisonPart: 'Leaves',
+    },
+    'aloe-vera': {
+      horses: 'toxic',
+      toxicPrinciples: 'Saponins, anthraquinones',
+      clinicalSigns: 'Vomiting (not horses), lethargy, diarrhea. The gel is considered edible.',
+      family: 'Liliaceae',
+      ncsuPath: 'aloe-vera',
+      poisonSeverity: 'Low',
+      poisonPart: 'Leaves',
+    },
+    'christmas-cactus': {
+      horses: 'non-toxic',
+      additionalCommonNames: 'Easter Cactus',
+      family: 'Cactaceae',
+      ncsuPath: 'schlumbergera',
+      tagged: ['cats', 'dogs'],
+    },
+    'bird-of-paradise': {
+      horses: 'toxic',
+      toxicPrinciples: 'GI irritants',
+      clinicalSigns: 'Mild nausea, vomiting, drowsiness; caused mainly by fruit and seeds',
+      listingNote:
+        'Should not be confused with Caesalpinia or Poinciana gilliesii, which is also known as Bird of Paradise and is more toxic.',
+      additionalCommonNames: "Crane Flower, Bird's Tongue Flower",
+      family: 'Strelitziaceae',
+      ncsuPath: 'strelitzia-reginae',
+      poisonSeverity: 'Low',
+    },
+  };
+
+  it('only these eight entries record details', () => {
+    expect(
+      PET_TOXICITY.filter((e) => e.aspcaListing?.detailsRead !== undefined)
+        .map((e) => e.slug)
+        .sort()
+    ).toEqual(Object.keys(DETAILS).sort());
+  });
+
+  it.each(Object.entries(DETAILS))('%s records what its sources say', (slug, row) => {
+    const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+    const listing = e.aspcaListing!;
+    expect(listing.detailsRead).toBe('2026-10-29');
+    expect(listing.toxicPrinciples).toBe(row.toxicPrinciples);
+    expect(listing.clinicalSigns).toBe(row.clinicalSigns);
+    expect(listing.listingNote).toBe(row.listingNote);
+    expect(listing.additionalCommonNames).toBe(row.additionalCommonNames);
+    expect(listing.family).toBe(row.family);
+    expect(listing.listed.horses).toBe(row.horses);
+    expect(e.horses).toBe(row.horses);
+    const ext = e.extensionSource!;
+    expect(ext.url).toBe(`https://plants.ces.ncsu.edu/plants/${row.ncsuPath}/`);
+    expect(ext.read).toBe('2026-10-29');
+    expect(ext.poisonSeverity).toBe(row.poisonSeverity);
+    expect(ext.poisonPart).toBe(row.poisonPart);
+    expect(Object.keys(ext.tagged ?? {}).sort()).toEqual([...(row.tagged ?? [])].sort());
+  });
+
+  it('a toxic listing quotes its principles and signs; a non-toxic one quotes neither', () => {
+    for (const slug of Object.keys(DETAILS)) {
+      const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+      const toxic = e.cats === 'toxic' || e.dogs === 'toxic';
+      expect(Boolean(e.aspcaListing!.toxicPrinciples), slug).toBe(toxic);
+      expect(Boolean(e.aspcaListing!.clinicalSigns), slug).toBe(toxic);
+      // The advice line is printed only on toxic listings, word for word.
+      expect(e.aspcaListing!.listingAdvice, slug).toBe(toxic ? ADVICE : undefined);
+      // Poison parts are never recorded on a plant the ASPCA calls non-toxic.
+      if (!toxic) expect(e.extensionSource?.poisonPart, slug).toBeUndefined();
+    }
+  });
+
+  it('no extension source tags "non-toxic" an animal the ASPCA listing calls toxic', () => {
+    for (const e of PET_TOXICITY) {
+      for (const [animal, tag] of Object.entries(e.extensionSource?.tagged ?? {})) {
+        expect(tag).toBe('non-toxic');
+        expect(
+          e.aspcaListing?.listed[animal as 'cats' | 'dogs' | 'horses'],
+          `${e.slug}.${animal}`
+        ).not.toBe('toxic');
+      }
+    }
+  });
+
+  it('every alternative is an entry the ASPCA cites as non-toxic for cats and dogs', () => {
+    for (const e of PET_TOXICITY) {
+      for (const slug of e.alternatives ?? []) {
+        const alt = PET_TOXICITY.find((x) => x.slug === slug);
+        expect(alt, `${e.slug} -> ${slug}`).toBeDefined();
+        expect(citedVerdict(alt!, 'cats'), `${e.slug} -> ${slug}`).toBe('non-toxic');
+        expect(citedVerdict(alt!, 'dogs'), `${e.slug} -> ${slug}`).toBe('non-toxic');
+      }
+      for (const slug of e.related ?? []) {
+        expect(
+          PET_TOXICITY.find((x) => x.slug === slug)?.aspcaListing,
+          `${e.slug} -> ${slug}`
+        ).toBeDefined();
+      }
+    }
+  });
+});

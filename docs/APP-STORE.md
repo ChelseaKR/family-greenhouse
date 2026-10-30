@@ -464,9 +464,10 @@ each item it raised, re-verified today:
    "See plans" link, the trial notice's checkout line, the archive restore's
    "upgrade" wording, and the "Upgrade …" sentences in the server's plan
    refusals no longer appear in the app (`docs/mobile.md`, "Store payment
-   rules"). One wording is left on purpose: the Terms page (a legal text)
-   says paid plans "are available on the web" and are "not sold inside the
-   mobile apps".
+   rules"). The Terms page (a legal text) is the one exception: it says
+   "Paid plans are available on our website and, on iPhone, through Apple
+   In-App Purchase. Purchases made through Apple are billed and managed by
+   Apple under Apple's terms." (the owner's wording for ADR 0041).
 
 ## Sources checked while writing this
 

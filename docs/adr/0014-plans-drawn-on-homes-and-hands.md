@@ -11,6 +11,10 @@
 (the catalog, in code), `backend/src/services/homesGate.ts` (the one per-user cap),
 `docs/multi-household.md` (what "a home" is).
 
+> **Amended 2026-10-23 by [ADR 0040](0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md):**
+> Seedling's caps are now 8 plants and 2 members. A household created before the cut keeps the
+> 20 and 3 this ADR set. Everything else here stands.
+
 ## Context
 
 Paid plans went live on 2026-09-01. Two days later the paid-feature ideation

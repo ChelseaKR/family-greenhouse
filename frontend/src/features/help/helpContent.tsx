@@ -19,8 +19,9 @@ import { Link } from 'react-router';
  *
  * Deliberately NOT documented here, and why:
  *
- * - Trial state in Settings. Subscriptions really are created with a 14-day
- *   trial (`trial_period_days: 14` in backend/src/services/billing.ts), so the
+ * - Trial state in Settings. Subscriptions really are created with a trial
+ *   (`checkoutTrialFor` in backend/src/models/checkoutTrial.ts: 14 days, or
+ *   the rest of a running no-card trial), so the
  *   trial itself is safe to describe. How it is *displayed* is not: on main,
  *   `checkout.session.completed` writes a hardcoded `status: 'active'` for a
  *   subscription whose real status is `trialing`, and whichever Stripe event
@@ -205,14 +206,15 @@ export const HELP_SECTIONS: HelpSection[] = [
               caring for frees a slot immediately, and keeps all of its history.
             </p>
             <p>
-              The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on
+              The caps are 8 plants on the free Seedling plan, 200 on Garden and 5,000 on
               Greenhouse. Nothing is ever deleted for being over a cap; you just can&rsquo;t add
               more until you are back under it. A household that was already above a cap when it
-              changed keeps every plant it has.
+              changed keeps every plant it has, and a household created before October 24, 2026
+              keeps the earlier free cap of 20 plants.
             </p>
           </>
         ),
-        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has.',
+        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 8 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has, and a household created before October 24, 2026 keeps the earlier free cap of 20 plants.',
       },
       {
         id: 'plant-died',
@@ -734,14 +736,15 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Someone can’t join — it says the household is full.',
         a: (
           <p>
-            The free <strong>Seedling</strong> plan holds three people. <strong>Garden</strong> and{' '}
-            <strong>Greenhouse</strong> have no member limit at all, so Garden — the cheaper of the
-            two — is the tier that lifts this. The cap is checked at the moment someone joins, and
-            it only ever blocks a new join: if you are already over it, everyone you have stays, and
-            stays editable. Either remove a member you no longer need, or move to Garden.
+            The free <strong>Seedling</strong> plan holds two people, or three for a household
+            created before October 24, 2026. <strong>Garden</strong> and <strong>Greenhouse</strong>{' '}
+            have no member limit at all, so Garden — the cheaper of the two — is the tier that lifts
+            this. The cap is checked at the moment someone joins, and it only ever blocks a new
+            join: if you are already over it, everyone you have stays, and stays editable. Either
+            remove a member you no longer need, or move to Garden.
           </p>
         ),
-        text: 'The free Seedling plan holds three people. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
+        text: 'The free Seedling plan holds two people, or three for a household created before October 24, 2026. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
       },
       {
         id: 'multiple-households',
@@ -906,10 +909,10 @@ export const HELP_SECTIONS: HelpSection[] = [
           <>
             <p>
               The free <strong>Seedling</strong> plan is a real plan, not a trial: a couple and
-              their plants &mdash; one home, up to 3 members and 20 plants, with no card required
-              and no expiry. It includes plants and photos, unlimited tasks and reminders, invites
-              and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the
-              last 30 days of analytics, the calendar feed, data export, and leaf-health checks each
+              their plants &mdash; one home, up to 2 members and 8 plants, with no card required and
+              no expiry. It includes plants and photos, unlimited tasks and reminders, invites and
+              task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last
+              30 days of analytics, the calendar feed, data export, and leaf-health checks each
               month.
             </p>
             <p>
@@ -923,7 +926,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 3 members and 20 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
+        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 2 members and 8 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
       },
       {
         id: 'who-can-buy',
@@ -967,10 +970,14 @@ export const HELP_SECTIONS: HelpSection[] = [
               one such trial.
             </p>
             <p>
-              Separately, a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
-              <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
-              begins when the trial ends unless you cancel before then. Cancelling during the trial
-              leaves you on the free Seedling plan.
+              If you choose a paid plan during those 14 days, checkout collects a card and your{' '}
+              <strong>first charge is on the day the 14 days end</strong>: the trials do not add up.
+              With two days or fewer left, or after the 14 days have ended, the first charge is the
+              day you subscribe. A household that never had those 14 days gets a{' '}
+              <strong>14-day free trial</strong> on its <strong>first</strong> paid subscription
+              instead; checkout collects a card up front, and billing begins when the trial ends
+              unless you cancel before then. Canceling during a trial leaves you on the free
+              Seedling plan.
             </p>
             <p>
               The trial is <strong>once per household</strong>, not once per subscription. If your
@@ -980,7 +987,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: "Yes, two kinds. Every new household starts with 14 days of Garden with no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own. Nothing you added is deleted: anything over Seedling's limits stays and can still be edited, and only adding more waits. Identifications, leaf-health checks and the care assistant use the free plan's monthly allowances during those 14 days, and each account gets one such trial. Separately, a household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
+        text: "Yes, two kinds. Every new household starts with 14 days of Garden with no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own. Nothing you added is deleted: anything over Seedling's limits stays and can still be edited, and only adding more waits. Identifications, leaf-health checks and the care assistant use the free plan's monthly allowances during those 14 days, and each account gets one such trial. If you choose a paid plan during those 14 days, checkout collects a card and your first charge is on the day the 14 days end: the trials do not add up. With two days or fewer left, or after the 14 days have ended, the first charge is the day you subscribe. A household that never had those 14 days gets a 14-day free trial on its first paid subscription instead; checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Canceling during a trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
       },
       {
         id: 'cancel',
