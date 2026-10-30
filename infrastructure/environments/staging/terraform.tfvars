@@ -87,3 +87,14 @@ stripe_automatic_tax_enabled = ""
 # mode before production is ever considered. Production has its own value and
 # is unaffected by this.
 payments_enabled = "1"
+
+# Apple In-App Purchase for the iPhone app (ADR 0041). Open here FIRST, the way
+# payments_enabled was: the owner buys Garden with a Sandbox Apple Account from
+# a build pointed at this API, then restores and cancels it, before production
+# is changed. It sets APP_STORE_BILLING_ENABLED = "1" on the billing Lambda, so
+# the three /billing/app-store/* routes stop answering 404. It needs
+# payments_enabled = "1" above and commercialHoldActive = false, both already
+# true. No secret is involved: Apple's signed transactions and notifications
+# are verified against the pinned Apple Root CA - G3. Set back to "0" and apply
+# to close the routes again; a recorded subscription keeps its entitlement.
+app_store_billing_enabled = "1"

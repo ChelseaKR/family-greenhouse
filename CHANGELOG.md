@@ -42,6 +42,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **Staging opens Apple In-App Purchase, ahead of production.**
+  `infrastructure/environments/staging/terraform.tfvars` sets
+  `app_store_billing_enabled = "1"`, so after the next manual cd-staging run
+  the staging billing Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and the
+  three `/billing/app-store/*` routes stop answering 404 there. This is packet
+  step 11: a Sandbox purchase, restore and cancel against staging before
+  production is touched. Production's tfvars is unchanged, and no secret is
+  added, because Apple's signed data is verified against the pinned Apple
+  Root CA - G3 (ADR 0041).
 - **Third Search Console pass: three more care guides lead with the answer,
   and four near-page-one guides get links from related guides.** Search
   Console page and query data for the 28 days to 2026-10-29 had the heartleaf
