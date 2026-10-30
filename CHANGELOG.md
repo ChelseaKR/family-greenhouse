@@ -16,6 +16,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **`npm run mobile:release` no longer builds an unsigned Android bundle
+  without saying so.** It used to print "Unsigned Android release bundle
+  built" every time, signed or not, and Gradle builds an unsigned AAB without
+  failing when any `ANDROID_UPLOAD_*` variable is missing. The build now stops
+  before it starts when a signing variable is missing or the keystore file
+  does not exist. `ALLOW_UNSIGNED_RELEASE=1` allows an unsigned local smoke
+  build. After `bundleRelease` it checks the AAB with `jarsigner -verify` and
+  matches the signer's certificate to the configured key alias. It prints
+  whether the bundle is signed and with which alias, and fails on an unsigned
+  or wrongly signed bundle. Secret values are never printed
+  (`scripts/check-android-release-signing.mjs`).
+
 ## [0.46.0] - 2026-10-29
 
 **Free trials no longer stack, and the day-10 and day-14 trial emails go out
