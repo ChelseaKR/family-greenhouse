@@ -652,8 +652,8 @@ test.describe('public registration smoke', () => {
     await page.goto('/register');
     await page.getByLabel(/full name/i).fill('Public Signup Smoke');
     await page.getByLabel(/email address/i).fill(email);
-    await page.locator('input[autocomplete="new-password"]').first().fill(PASSWORD);
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill(PASSWORD);
+    // One password field: the form no longer asks for it twice.
+    await page.locator('input[autocomplete="new-password"]').fill(PASSWORD);
 
     const signupResponsePromise = page.waitForResponse((response) => {
       const request = response.request();

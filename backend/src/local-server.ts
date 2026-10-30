@@ -70,6 +70,7 @@ import {
   atCap,
   limitOf,
   strongestPlan,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from './models/plans.js';
 import type { EntitlementSubscription, Plan } from './models/plans.js';
 // From models/, NOT services/kioskService.js: that module imports
@@ -524,6 +525,7 @@ interface NotificationPrefsRecord {
   coverageUpdates: boolean;
   careCredit: boolean;
   yearRecap: boolean;
+  trialNotices: boolean;
   emailLocale: '' | 'en' | 'es';
   phoneVerified: boolean;
   updatedAt: string;
@@ -1164,6 +1166,9 @@ function subscriptionOf(householdId: string | null | undefined): EntitlementSubs
     noCardTrialEndsAt: h?.noCardTrialEndsAt,
     giftPlanId: h?.giftPlanId,
     giftEndsAt: h?.giftEndsAt,
+    // Same attribute production reads (`billing.getHouseholdSubscription`):
+    // a household created before the 2026-10-23 cut keeps the old free caps.
+    householdCreatedAt: h ? (h.createdAt ?? HOUSEHOLD_CREATED_AT_UNKNOWN) : undefined,
   };
 }
 
@@ -3514,7 +3519,7 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
   const existingMembers = membersOf(invite.householdId);
   if (atCap(existingMembers.length, limitOf(plan, 'members'))) {
     return res.status(402).json({
-      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`,
+      message: `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members. Ask the person who invited you to make room for you.`,
     });
   }
 
@@ -6918,6 +6923,26 @@ app.post('/billing/webhook', (req, res) => {
   res.json({ received: true });
 });
 
+// Apple In-App Purchase (ADR 0041). Local dev has no App Store and keeps the
+// switch off, so all three answer what production answers with
+// APP_STORE_BILLING_ENABLED unset: 404. Xcode's local StoreKit testing runs
+// against the app alone (docs/mobile.md, "In-App Purchase").
+app.post(
+  '/billing/app-store/purchase-intent',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (_req, res) => {
+    res.status(404).json({ message: 'Not found' });
+  }
+);
+app.post('/billing/app-store/transactions', authMiddleware, requireHousehold, (_req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+app.post('/billing/app-store/notifications', (_req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+
 // ============ CHAT ============
 
 // Mirrors sendMessageSchema in handlers/chat/handler.ts. The mock has no
@@ -7069,6 +7094,7 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     coverageUpdates: true,
     careCredit: true,
     yearRecap: true,
+    trialNotices: true,
     // '' is "never chosen" — deliberately distinguishable from 'en'.
     emailLocale: '',
     phoneVerified: false,
@@ -7111,6 +7137,7 @@ const prefsSchema = z
     coverageUpdates: z.boolean().optional(),
     careCredit: z.boolean().optional(),
     yearRecap: z.boolean().optional(),
+    trialNotices: z.boolean().optional(),
     emailLocale: z.enum(['', 'en', 'es']).optional(),
   })
   .refine((prefs) => Boolean(prefs.dndStart) === Boolean(prefs.dndEnd), {
@@ -7251,6 +7278,7 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     coverageUpdates: body.coverageUpdates ?? current.coverageUpdates,
     careCredit: body.careCredit ?? current.careCredit,
     yearRecap: body.yearRecap ?? current.yearRecap,
+    trialNotices: body.trialNotices ?? current.trialNotices,
     emailLocale: body.emailLocale ?? current.emailLocale,
     phoneVerified,
     updatedAt: new Date().toISOString(),
@@ -7401,7 +7429,9 @@ app.post('/notifications/email/unsubscribe', unsubscribeSubmitRateLimit, (req, r
       ? 'weeklyDigest'
       : verified.category === 'year_recap'
         ? 'yearRecap'
-        : 'pestAlerts';
+        : verified.category === 'trial_notices'
+          ? 'trialNotices'
+          : 'pestAlerts';
   db.notificationPrefs.set(verified.userId, {
     ...current,
     [field]: false,

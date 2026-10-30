@@ -80,7 +80,23 @@ const LISTING_PATH = /^\/toxic-and-non-toxic-plants\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * means the loader broke, and the silent version of that failure is a sitemap
  * that quietly stops advertising every plant page.
  */
-export function loadPetToxicityTable(source = readFileSync(TABLE_PATH, 'utf8')) {
+let cachedTable = null;
+
+/**
+ * Transpile and evaluate the table. With no argument it reads TABLE_PATH once
+ * per process and reuses the result: the page gate needs the whole table per
+ * page (to resolve similar and related plants), and transpiling it per call
+ * made a 39-page check spend most of its time in the TypeScript compiler.
+ */
+export function loadPetToxicityTable(source) {
+  if (source === undefined) {
+    cachedTable ??= evaluateTable(readFileSync(TABLE_PATH, 'utf8'));
+    return cachedTable;
+  }
+  return evaluateTable(source);
+}
+
+function evaluateTable(source) {
   const ts = require('typescript');
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -95,7 +111,12 @@ export function loadPetToxicityTable(source = readFileSync(TABLE_PATH, 'utf8')) 
 
   const module = { exports: {} };
   runInNewContext(outputText, { module, exports: module.exports }, { filename: TABLE_PATH });
-  const { PET_TOXICITY, ASPCA_ANIMAL_POISON_CONTROL_URL } = module.exports;
+  const {
+    PET_TOXICITY,
+    ASPCA_ANIMAL_POISON_CONTROL_URL,
+    ASPCA_PLANT_LIST_URL,
+    EXTENSION_SOURCE_ORIGINS,
+  } = module.exports;
 
   if (!Array.isArray(PET_TOXICITY) || PET_TOXICITY.length === 0) {
     throw new Error(`${TABLE_PATH} evaluated to no PET_TOXICITY entries.`);
@@ -103,7 +124,18 @@ export function loadPetToxicityTable(source = readFileSync(TABLE_PATH, 'utf8')) 
   if (typeof ASPCA_ANIMAL_POISON_CONTROL_URL !== 'string' || !ASPCA_ANIMAL_POISON_CONTROL_URL) {
     throw new Error(`${TABLE_PATH} does not export ASPCA_ANIMAL_POISON_CONTROL_URL.`);
   }
-  return { entries: PET_TOXICITY, aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL };
+  if (typeof ASPCA_PLANT_LIST_URL !== 'string' || !ASPCA_PLANT_LIST_URL.startsWith('https://')) {
+    throw new Error(`${TABLE_PATH} does not export ASPCA_PLANT_LIST_URL.`);
+  }
+  if (!Array.isArray(EXTENSION_SOURCE_ORIGINS) || EXTENSION_SOURCE_ORIGINS.length === 0) {
+    throw new Error(`${TABLE_PATH} does not export EXTENSION_SOURCE_ORIGINS.`);
+  }
+  return {
+    entries: PET_TOXICITY,
+    aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL,
+    plantListUrl: ASPCA_PLANT_LIST_URL,
+    extensionOrigins: [...EXTENSION_SOURCE_ORIGINS],
+  };
 }
 
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
@@ -170,6 +202,231 @@ export function publishedPlantPages(table = loadPetToxicityTable()) {
     .filter((page) => page.published);
 }
 
+/**
+ * Animals a page shows only where the plant's own listing states a verdict.
+ * They use claimFor() unchanged, so the same double-entry rule holds; they are
+ * kept out of ANIMALS so they never decide whether a page is published, whether
+ * its note shows, or whether it may carry a shop link.
+ */
+export const OPTIONAL_ANIMALS = ['horses'];
+
+/** Fields of an ASPCA listing a detailed page quotes, in display order. */
+export const LISTING_FIELDS = [
+  'additionalCommonNames',
+  'family',
+  'toxicPrinciples',
+  'clinicalSigns',
+  'listingNote',
+  'listingAdvice',
+];
+
+/** Fields of an extension source a detailed page quotes, in display order. */
+export const EXTENSION_FIELDS = [
+  'poisonSeverity',
+  'poisonSymptoms',
+  'poisonToxicPrinciple',
+  'poisonPart',
+];
+
+const ALL_ANIMALS = [...ANIMALS, ...OPTIONAL_ANIMALS];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const squashText = (value) => String(value).replace(/\s+/g, ' ').trim();
+
+/**
+ * What a detailed page shows beyond its verdicts, derived from the table alone.
+ * Must match plantSafetyDetails() in src/features/petsafe/plantSafetyPages.ts
+ * (tests/unit/features/plantSafetyPages.test.ts compares them on every entry).
+ *
+ * A page is "detailed" only when its listing records `detailsRead`. Then:
+ *   - `horses`: the horse claim, shown only when cited (claimFor rule);
+ *   - `listing`: the listing's quoted fields that are non-blank text;
+ *   - `extension`: the extension source, only when it is well formed and its
+ *     URL sits under an allowed origin; `tags` keeps an animal only where
+ *     the ASPCA claim for that animal is a cited "non-toxic";
+ *   - `alternatives`: listed slugs whose own pages cite "non-toxic" for both
+ *     cats and dogs; anything else is dropped;
+ *   - `related`: listed slugs that are published, not this page, and not
+ *     already an alternative.
+ * Returns null for a page that is not detailed.
+ */
+export function plantDetails(entry, table) {
+  const page = plantPage(entry, table.aspcaOrigin);
+  const listing = listingOf(entry);
+  if (
+    !page.published ||
+    !listing ||
+    !text(listing.detailsRead) ||
+    !ISO_DATE.test(listing.detailsRead)
+  ) {
+    return null;
+  }
+
+  const horses = claimFor(entry, 'horses', table.aspcaOrigin);
+  const listingFields = LISTING_FIELDS.filter((f) => text(listing[f])).map((f) => ({
+    field: f,
+    value: squashText(listing[f]),
+  }));
+
+  let extension = null;
+  const ext = entry.extensionSource;
+  if (
+    ext !== null &&
+    typeof ext === 'object' &&
+    ['publisher', 'title', 'database', 'read'].every((f) => text(ext[f])) &&
+    typeof ext.url === 'string' &&
+    /^https:\/\/\S+$/.test(ext.url) &&
+    table.extensionOrigins.some(
+      (origin) => ext.url.startsWith(origin) && ext.url.length > origin.length
+    )
+  ) {
+    const tagged = ext.tagged !== null && typeof ext.tagged === 'object' ? ext.tagged : {};
+    extension = {
+      publisher: ext.publisher,
+      title: ext.title,
+      database: ext.database,
+      url: ext.url,
+      fields: EXTENSION_FIELDS.filter((f) => text(ext[f])).map((f) => ({
+        field: f,
+        value: squashText(ext[f]),
+      })),
+      tags: ALL_ANIMALS.filter(
+        (animal) =>
+          tagged[animal] === 'non-toxic' &&
+          claimFor(entry, animal, table.aspcaOrigin).state === 'non-toxic'
+      ),
+    };
+    if (extension.fields.length === 0 && extension.tags.length === 0) extension = null;
+  }
+
+  const pages = publishedPagesBySlug(table);
+  const slugs = (value) => (Array.isArray(value) ? value.filter((s) => typeof s === 'string') : []);
+  const alternatives = [];
+  for (const slug of slugs(entry.alternatives)) {
+    const target = pages.get(slug);
+    if (!target || slug === entry.slug || alternatives.includes(target)) continue;
+    if (ANIMALS.every((a) => target.claims[a].state === 'non-toxic')) alternatives.push(target);
+  }
+  const related = [];
+  for (const slug of slugs(entry.related)) {
+    const target = pages.get(slug);
+    if (
+      !target ||
+      slug === entry.slug ||
+      alternatives.includes(target) ||
+      related.includes(target)
+    ) {
+      continue;
+    }
+    related.push(target);
+  }
+
+  return {
+    horses,
+    listing: listingFields,
+    extension,
+    alternatives,
+    related,
+    anyToxic: ANIMALS.some((a) => page.claims[a].state === 'toxic'),
+  };
+}
+
+const pagesBySlug = new WeakMap();
+
+/** Published pages keyed by slug, computed once per table entries array. */
+export function publishedPagesBySlug(table) {
+  let pages = pagesBySlug.get(table.entries);
+  if (!pages) {
+    pages = new Map(publishedPlantPages(table).map((p) => [p.slug, p]));
+    pagesBySlug.set(table.entries, pages);
+  }
+  return pages;
+}
+
+/**
+ * The plant's name mid-question: `sentenceName(headName(commonName))` from
+ * src/features/care/plantNames.ts and plantSafetyPages.ts ("aloe vera",
+ * "Christmas cactus"). Must match both.
+ */
+export function faqName(commonName) {
+  const KEEP_CASE = new Set(['African', 'English', 'Chinese', 'Boston', 'Christmas']);
+  return commonName
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .split(' ')
+    .map((w) => (KEEP_CASE.has(w) || /^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase()))
+    .join(' ');
+}
+
+function fill(template, values) {
+  if (typeof template !== 'string') throw new Error('FAQ catalog string is missing');
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
+    if (!(name in values)) throw new Error(`FAQ placeholder {{${name}}} has no value`);
+    return values[name];
+  });
+}
+
+/**
+ * The FAQ a detailed page prints and publishes as FAQPage, composed from the
+ * table and a flattened catalog (`a.b.c` keys). One question per cited animal
+ * (cats, dogs, then horses when cited), then which parts are poisonous (only
+ * with a quoted "Poison Part" and a cited "toxic" for cats or dogs), then what
+ * to do. Must match
+ * plantSafetyFaq() in src/features/petsafe/plantSafetyPages.ts.
+ */
+export function plantFaq(entry, details, catalog, aspcaOrigin) {
+  if (!details) return [];
+  const name = faqName(entry.commonName);
+  const listing = Object.fromEntries(details.listing.map((f) => [f.field, f.value]));
+  const items = [];
+  for (const animal of ALL_ANIMALS) {
+    const claim = animal === 'horses' ? details.horses : claimFor(entry, animal, aspcaOrigin);
+    if (claim.state === NOT_ASSESSED) continue;
+    const animalWord = catalog[`plantSafetyPage.faq.animal.${animal}`];
+    const lead = fill(
+      catalog[
+        claim.state === 'toxic'
+          ? 'plantSafetyPage.faq.answerToxic'
+          : 'plantSafetyPage.faq.answerNonToxic'
+      ],
+      { title: claim.source.title, scientificName: claim.source.scientificName, animal: animalWord }
+    );
+    const parts = [lead];
+    if (claim.state === 'toxic' && listing.toxicPrinciples && listing.clinicalSigns) {
+      parts.push(
+        fill(catalog['plantSafetyPage.faq.answerDetails'], {
+          principles: listing.toxicPrinciples,
+          signs: listing.clinicalSigns.replace(/\.$/, ''),
+        })
+      );
+    }
+    if (claim.state === 'non-toxic' && ANIMALS.includes(animal)) {
+      parts.push(catalog['plantSafetyPage.faq.answerAnyPlant']);
+    }
+    items.push({
+      id: animal,
+      question: fill(catalog['plantSafetyPage.faq.question'], { name, animal: animalWord }),
+      answer: parts.join(' '),
+    });
+  }
+  const parts = details.extension?.fields.find((f) => f.field === 'poisonPart')?.value;
+  if (details.anyToxic && parts) {
+    items.push({
+      id: 'parts',
+      question: fill(catalog['plantSafetyPage.faq.partsQuestion'], { name }),
+      answer: fill(catalog['plantSafetyPage.faq.partsAnswer'], {
+        publisher: details.extension.publisher,
+        database: details.extension.database,
+        parts,
+      }),
+    });
+  }
+  items.push({
+    id: 'whatToDo',
+    question: fill(catalog['plantSafetyPage.faq.whatToDoQuestion'], { name }),
+    answer: catalog['plantSafetyPage.faq.whatToDoAnswer'],
+  });
+  return items;
+}
+
 /** JSON with object keys sorted at every depth, so a digest cannot depend on key order. */
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -189,8 +446,34 @@ function canonicalJson(value) {
  * the digest does. Aliases are left out because the page does not show them.
  */
 export function pageContentDigest(entry) {
-  const { slug, commonName, scientificName, cats, dogs, note, aspcaListing } = entry;
-  const shown = { slug, commonName, scientificName, cats, dogs, note, aspcaListing };
+  const {
+    slug,
+    commonName,
+    scientificName,
+    cats,
+    dogs,
+    note,
+    aspcaListing,
+    horses,
+    extensionSource,
+    alternatives,
+    related,
+  } = entry;
+  // The last four are left out of the digest when absent (canonicalJson drops
+  // undefined keys), so adding them to some entries moves only those pages' dates.
+  const shown = {
+    slug,
+    commonName,
+    scientificName,
+    cats,
+    dogs,
+    note,
+    aspcaListing,
+    horses,
+    extensionSource,
+    alternatives,
+    related,
+  };
   return `sha256-${createHash('sha256').update(canonicalJson(shown)).digest('hex')}`;
 }
 

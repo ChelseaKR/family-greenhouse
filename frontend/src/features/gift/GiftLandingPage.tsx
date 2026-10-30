@@ -12,6 +12,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { CommercialHoldNotice } from '@/components/CommercialHoldNotice';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
+import { useGiftAvailability } from './useGiftAvailability';
 import { useAuthStore } from '@/store/authStore';
 import { isNativeApp } from '@/lib/platform';
 import { formatCurrency, formatDate } from '@/i18n/format';
@@ -78,6 +79,7 @@ export function GiftLandingPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [searchParams] = useSearchParams();
   const returnedFromPurchase = searchParams.get('status') === 'success';
+  const availability = useGiftAvailability();
 
   useMetaTags({
     title: 'Send a Family Greenhouse gift subscription',
@@ -91,6 +93,33 @@ export function GiftLandingPage() {
   // payment rules" in docs/mobile.md).
   if (native) {
     return <Navigate to="/settings/billing" replace />;
+  }
+
+  // No gift price is configured (the payments gate is handled further down by
+  // the commercial-hold notice): say so plainly instead
+  // of showing steps and a sign-in prompt that lead to a checkout the API
+  // refuses with 400 GIFT_NOT_CONFIGURED. Waiting on the catalog shows the
+  // spinner; a catalog that cannot be read is treated as unavailable.
+  if (availability === 'loading' || availability === 'unavailable') {
+    return (
+      <PublicShell>
+        <PageIntro eyebrow={t('giftLanding.eyebrow')} title={t('giftLanding.title')} />
+        <div className="mt-10" data-testid="gift-landing-unavailable">
+          {availability === 'loading' ? (
+            <div className="flex justify-center py-12">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : (
+            <Card variant="paper">
+              <CardHeader
+                title={t('giftLanding.unavailableHeading')}
+                description={t('giftLanding.unavailableBody')}
+              />
+            </Card>
+          )}
+        </div>
+      </PublicShell>
+    );
   }
 
   return (

@@ -32,6 +32,12 @@ variable "passkeys_enabled" {
   default     = false
 }
 
+variable "trial_lifecycle_emails_enabled" {
+  description = "Send the two no-card-trial lifecycle emails (ADR 0039): day 10 \"your trial ends in 4 days\" and day 14 \"you are back on Seedling\". OFF by default and in every committed tfvars. When off, TRIAL_LIFECYCLE_EMAILS_ENABLED is not set on the digests Lambda and the daily EventBridge rule is DISABLED; the code also returns immediately without it. Turning it on needs the digests Lambda to have shipped the trialEmails job first (the rule would otherwise run the weekly digest routine)."
+  type        = bool
+  default     = false
+}
+
 variable "passkey_relying_party_id" {
   description = "WebAuthn relying-party ID for passkeys (the site's registrable domain, e.g. familygreenhouse.net). Required when passkeys_enabled."
   type        = string
@@ -622,6 +628,19 @@ variable "payments_enabled" {
   validation {
     condition     = contains(["0", "1"], var.payments_enabled)
     error_message = "payments_enabled must be exactly \"0\" or \"1\". The backend compares this to the literal string \"1\"; near-misses such as \"true\", \"01\", or a padded value silently disable payments."
+  }
+}
+
+# Apple In-App Purchase for the iPhone app (ADR 0041). Defaults closed, like
+# payments_enabled: turning it on is a reviewed per-environment tfvars change.
+variable "app_store_billing_enabled" {
+  description = "Set to the exact string \"1\" to open Apple In-App Purchase for the iPhone app (the /billing/app-store/* routes). Requires payments_enabled = \"1\" to take effect."
+  type        = string
+  default     = "0"
+
+  validation {
+    condition     = contains(["0", "1"], var.app_store_billing_enabled)
+    error_message = "app_store_billing_enabled must be exactly \"0\" or \"1\". The backend compares it to the literal string \"1\"."
   }
 }
 

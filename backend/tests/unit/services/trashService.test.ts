@@ -398,6 +398,14 @@ describe('restoreEntry (plant)', () => {
   });
 
   it('finishes an interrupted restore on the next attempt, from a trash, or from the purge', async () => {
+    // The share link expires 14 days after the real clock, while this
+    // timeline runs from the fixed T0 out to day 45. Pin the clock to T0 so
+    // the share's expiry is the same on every date this test runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     const trash = await import('../../../src/services/trashService.js');
     const seeded = await seedFurnishedPlant();
     const before = liveRows();

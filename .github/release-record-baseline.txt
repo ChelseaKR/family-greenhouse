@@ -6,7 +6,9 @@
 # silently: a v* tag that is not listed here and has no GitHub Release after the
 # grace period fails the release-record check. Every line here is a release
 # record the owner still owes, and the correct edit to this file is a deletion
-# after the release is published — never an addition.
+# after the release is published. The one exception to "never an addition" is a
+# tag whose production deploy did not complete; it may be added with its reason
+# in docs/release-record-gap.md (see "Tags added after the first measurement").
 #
 # Blank lines and lines starting with `#` are ignored.
 
@@ -48,3 +50,8 @@ v0.26.0
 v0.27.0
 v0.28.0
 v0.29.0
+
+# Added 2026-10-20. Neither deploy concluded successfully; v0.38.2 is the first
+# complete deploy of these changes. See docs/release-record-gap.md.
+v0.38.0
+v0.38.1

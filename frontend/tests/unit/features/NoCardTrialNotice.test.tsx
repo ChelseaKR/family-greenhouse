@@ -28,6 +28,8 @@ vi.mock('@/services/billingService', async () => {
   };
 });
 vi.mock('@/hooks/useActiveHouseholdId', () => ({ useActiveHouseholdId: () => 'hh-1' }));
+const isAdmin = vi.fn(() => false);
+vi.mock('@/hooks/useActiveHouseholdRole', () => ({ useIsHouseholdAdmin: () => isAdmin() }));
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -328,5 +330,111 @@ describe('NoCardTrialNotice inside the native (Capacitor) shells', () => {
       '/settings/billing'
     );
     expect(screen.queryByRole('link', { name: 'Plans and billing' })).not.toBeInTheDocument();
+  });
+});
+
+/** The catalog as the API publishes it with payments on: Garden carries its price. */
+const PRICED_PLANS = CATALOG.plans.map((plan) =>
+  plan.id === 'garden' ? { ...plan, monthlyPrice: 4.99 } : { ...plan, monthlyPrice: 0 }
+) as Plan[];
+
+function renderView(
+  sub: SubscriptionState,
+  {
+    placement = 'dashboard',
+    canBuy = true,
+    plans = PRICED_PLANS,
+  }: {
+    placement?: NoCardTrialPlacement;
+    canBuy?: boolean;
+    plans?: Plan[];
+  } = {}
+) {
+  return render(
+    <MemoryRouter>
+      <NoCardTrialNoticeView
+        placement={placement}
+        subscription={sub}
+        plans={plans}
+        canBuy={canBuy}
+      />
+    </MemoryRouter>
+  );
+}
+
+describe('NoCardTrialNotice: what keeping Garden costs, on the dashboard', () => {
+  afterEach(() => isAdmin.mockReturnValue(false));
+
+  it('offers an admin Garden at its catalog price while the trial runs and after it ends', () => {
+    renderView(trialEndingIn(11 * DAY, 'active'));
+    expect(screen.getByRole('link', { name: 'Keep Garden for $4.99 a month' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+    // The plain link stays beside it.
+    expect(screen.getByRole('link', { name: 'Plans and billing' })).toBeInTheDocument();
+    cleanup();
+
+    renderView(trialEndingIn(2 * DAY, 'active'));
+    expect(screen.getByRole('link', { name: 'Keep Garden for $4.99 a month' })).toBeInTheDocument();
+    cleanup();
+
+    renderView(trialEndingIn(-DAY, 'ended'));
+    expect(screen.getByRole('link', { name: 'Get Garden back for $4.99 a month' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+  });
+
+  it('names no price to a member, on Plan status, or when the catalog published none', () => {
+    const sub = trialEndingIn(11 * DAY, 'active');
+    renderView(sub, { canBuy: false });
+    expect(screen.queryByRole('link', { name: /a month/ })).not.toBeInTheDocument();
+    cleanup();
+
+    // Settings → Billing has the plan grid directly below the notice.
+    renderView(sub, { placement: 'billing' });
+    expect(screen.queryByRole('link', { name: /a month/ })).not.toBeInTheDocument();
+    cleanup();
+
+    // Payments paused: the API withholds every price, and no amount is guessed.
+    renderView(sub, { plans: CATALOG.plans });
+    expect(screen.queryByRole('link', { name: /a month/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Plans and billing' })).toBeInTheDocument();
+  });
+
+  it('the dashboard notice offers it only to an admin, with payments on', async () => {
+    vi.mocked(billingService.listPlans).mockResolvedValue({ ...CATALOG, plans: PRICED_PLANS });
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(
+      trialEndingIn(11 * DAY, 'active')
+    );
+    isAdmin.mockReturnValue(true);
+    renderNotice('dashboard');
+    expect(
+      await screen.findByRole('link', { name: 'Keep Garden for $4.99 a month' })
+    ).toBeInTheDocument();
+    cleanup();
+
+    vi.mocked(billingService.listPlans).mockResolvedValue({
+      ...CATALOG,
+      paymentsAvailable: false,
+      plans: PRICED_PLANS,
+    });
+    renderNotice('dashboard');
+    expect(await screen.findByRole('link', { name: 'Plans and billing' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /a month/ })).not.toBeInTheDocument();
+  });
+
+  it('is never shown inside the apps (Guideline 3.1.1)', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      renderView(trialEndingIn(2 * DAY, 'active'));
+      expect(screen.queryByRole('link', { name: /a month/ })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
   });
 });

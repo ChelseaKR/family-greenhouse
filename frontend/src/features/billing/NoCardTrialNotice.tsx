@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { Alert } from '@/components/Alert';
+import { buttonStyles } from '@/components/buttonStyles';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
-import { formatDate } from '@/i18n/format';
+import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
+import { formatCurrency, formatDate } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
 import {
   billingService,
@@ -57,11 +59,15 @@ export function NoCardTrialNotice({ placement }: { placement: NoCardTrialPlaceme
     staleTime: 60_000,
   });
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: billingService.listPlans });
+  // Only an admin can buy a plan (POST /billing/checkout is admin-only), and
+  // only while the API says payments are on. A member keeps the plain link.
+  const isAdmin = useIsHouseholdAdmin();
   return (
     <NoCardTrialNoticeView
       placement={placement}
       subscription={subscriptionQuery.data}
       plans={plansQuery.data?.plans}
+      canBuy={isAdmin && plansQuery.data?.paymentsAvailable === true}
     />
   );
 }
@@ -76,10 +82,13 @@ export function NoCardTrialNoticeView({
   placement,
   subscription,
   plans,
+  canBuy = false,
 }: {
   placement: NoCardTrialPlacement;
   subscription: SubscriptionState | null | undefined;
   plans: Plan[] | undefined;
+  /** The viewer may start a plan checkout: an admin, with payments on. */
+  canBuy?: boolean;
 }) {
   const { t } = useTranslation();
   // Inside the apps the notice says what the trial is and what changes when it
@@ -95,6 +104,21 @@ export function NoCardTrialNoticeView({
   const seedling = limitsOf(plans, 'seedling');
   const garden = limitsOf(plans, 'garden');
   const key = (name: string) => `settings.billing.noCardTrial.${name}`;
+
+  // The one place a trial household is shown what keeping Garden costs, on
+  // the screen it sees most. Before this the dashboard notice only said
+  // "Plans and billing", so the price stayed two screens away at the moment
+  // the household was deciding. Web and admin only: the apps sell nothing
+  // (Guideline 3.1.1) and a member cannot check out. The amount is the
+  // catalog's, never a constant, and with no published price there is no
+  // button rather than a guessed one.
+  const gardenMonthly = plans?.find((plan) => plan.id === 'garden')?.monthlyPrice;
+  const keepGardenLabel =
+    placement === 'dashboard' && !native && canBuy && isCount(gardenMonthly) && gardenMonthly > 0
+      ? t(key(kind === 'ended' ? 'getGardenBack' : 'keepGarden'), {
+          price: formatCurrency(gardenMonthly),
+        })
+      : null;
 
   const includes =
     seedling &&
@@ -154,6 +178,13 @@ export function NoCardTrialNoticeView({
         )}
         {placement === 'billing' && kind !== 'ended' && !native && (
           <p>{t(key('subscribeReplaces'))}</p>
+        )}
+        {keepGardenLabel && (
+          <p>
+            <Link to="/settings/billing" className={buttonStyles({ size: 'sm' })}>
+              {keepGardenLabel}
+            </Link>
+          </p>
         )}
         {placement === 'dashboard' && (
           <p>

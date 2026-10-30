@@ -39,7 +39,7 @@ export default function YellowLeaves() {
         The most likely answer, and the most common one overall: too much water, or a pot that
         can&rsquo;t drain. Check the weight of the pot and whether there&rsquo;s a drainage hole
         before you do anything else. Full walkthrough in{' '}
-        <a href="/blog/signs-of-overwatering-and-how-to-fix-it">the overwatering post</a>.
+        <a href="/blog/signs-of-overwatering-and-how-to-fix-it">how to fix overwatering</a>.
       </p>
 
       <h3>Yellow going to brown and crispy, especially at edges and tips, soil dry</h3>

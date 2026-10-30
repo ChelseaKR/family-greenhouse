@@ -270,6 +270,24 @@
       "createdWithStartingPoint": "{{name}} ya está, con un recordatorio de riego cada {{days}} días para empezar.",
       "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página."
     },
+    "picker": {
+      "heading": "Elige una planta de interior común",
+      "hint": "Con un toque la añadimos con un recordatorio de riego para empezar. Puedes cambiarlo cuando quieras.",
+      "saving": "Añadiendo tu planta…",
+      "somethingElse": "¿Otra planta? Escribe su nombre",
+      "plants": {
+        "pothos": "Poto",
+        "snake-plant": "Sansevieria",
+        "monstera": "Costilla de Adán",
+        "spider-plant": "Cinta",
+        "peace-lily": "Espatifilo",
+        "zz-plant": "Zamioculca",
+        "aloe-vera": "Aloe vera",
+        "orchid": "Orquídea mariposa",
+        "fiddle-leaf-fig": "Ficus lira",
+        "jade-plant": "Árbol de jade"
+      }
+    },
     "invite": {
       "title": "Comparte el cuidado",
       "description": "Esto es lo que un registro de plantas para una sola persona no puede hacer. Todo el hogar ve las mismas plantas y el mismo calendario: quien esté en casa riega y lo marca como hecho, así nadie tiene que insistir ni preguntar si ya se hizo.",
@@ -283,6 +301,16 @@
       "solo": "De momento soy la única persona",
       "finish": "Ir a mi panel"
     }
+  },
+  "dashboardEmpty": {
+    "somethingElse": "¿Otra planta? Añádela con fotos y más detalles"
+  },
+  "goingAwaySoon": {
+    "title": "¿Te vas pronto?",
+    "body": "Crea un enlace de cuidador para que alguien de confianza vea qué plantas necesitan cuidados mientras no estás. Caduca solo y puedes desactivarlo cuando quieras.",
+    "action": "Crear un enlace de cuidador",
+    "notNow": "Ahora no",
+    "dismissAria": "Ocultar la tarjeta de viaje durante 30 días"
   },
   "nav": {
     "chat": "Chat",
@@ -339,9 +367,10 @@
     "goToRegistration": "Ir al registro",
     "signUpTitle": "Crear una cuenta",
     "registerTitle": "Empieza tu invernadero",
-    "registerSubtitle": "Gratis para un hogar, hasta 3 miembros del hogar y 20 plantas. Sin tarjeta de crédito.",
+    "registerSubtitle": "Gratis para un hogar, hasta 2 miembros del hogar y 8 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
+    "showPassword": "Mostrar contraseña",
     "nameMin": "El nombre debe tener al menos 2 caracteres",
     "nameMax": "El nombre debe tener 100 caracteres o menos",
     "passwordMin": "La contraseña debe tener al menos 12 caracteres",
@@ -422,7 +451,7 @@
   },
   "pricingStatus": {
     "freeAccountQuestion": "¿Puedo crear una cuenta?",
-    "freeAccountAnswer": "Sí. Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas, sin tarjeta de crédito.",
+    "freeAccountAnswer": "Sí. Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas, sin tarjeta de crédito.",
     "headingHeld": "Qué sigue disponible",
     "headingOpen": "Preguntas frecuentes",
     "paidOfferQuestion": "¿Es esta una oferta de pago?",
@@ -430,7 +459,7 @@
     "reactivationQuestion": "¿Se puede reactivar la facturación automáticamente?",
     "reactivationAnswer": "No. La reactivación requiere una decisión de estado con fecha, cambios revisados en el código y la infraestructura, verificación fuera de producción y un despliegue aprobado por separado.",
     "trialQuestion": "¿Cómo funciona la prueba gratuita?",
-    "trialAnswer": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Plántula y conserva todo lo que haya añadido; cada cuenta tiene una. Aparte, la primera suscripción de pago de un hogar empieza con una prueba de 14 días: no se te cobra hasta que termina, y cancelar antes no cuesta nada. Esa prueba es una sola por hogar, así que un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse.",
+    "trialAnswer": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Plántula y conserva todo lo que haya añadido; cada cuenta tiene una. Si eliges un plan de pago durante esos 14 días, añades una tarjeta en el proceso de pago y el primer cobro es el día en que terminan los días gratis, no 14 días después: las pruebas no se suman. Si lo eliges en los dos últimos días, o cuando ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo los días gratis tiene en su lugar una prueba de 14 días en su primera suscripción de pago, sin ningún cobro hasta que termina. Un hogar que ya ha tenido una prueba se cobra cuando vuelve a suscribirse, y cancelar antes del primer cobro no cuesta nada.",
     "changeQuestion": "¿Puedo cambiar o cancelar más adelante?",
     "changeAnswer": "Sí. Los cambios de plan y la cancelación se gestionan desde Ajustes → Facturación, que abre el portal de nuestro proveedor de pagos. Al cancelar, tu hogar vuelve al plan gratuito Plántula al final del periodo pagado.",
     "whereQuestion": "¿Dónde se compra?",
@@ -439,9 +468,9 @@
     "dataAnswerHeld": "Las plantas, los registros del hogar, las tareas y el historial de cuidados siguen disponibles dentro de los límites del plan actual. La pausa no elimina datos.",
     "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas, los miembros y los hogares existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite. La exportación y tu historial de cuidados nunca dependen del plan.",
     "householdQuestion": "¿Cada persona de mi hogar necesita su propio plan?",
-    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta tres personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
+    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta dos personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
     "cardQuestion": "¿Necesito tarjeta de crédito?",
-    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta antes de que empiece la prueba de la suscripción; cuando hay prueba, no se cobra nada hasta que terminan sus 14 días. La prueba de la suscripción es una sola por hogar, así que un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse."
+    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta. Si a los 14 días gratis de tu hogar les quedan más de dos días, el primer cobro es el día en que terminan; un hogar que nunca ha tenido una prueba tiene 14 días antes del primer cobro; en cualquier otro caso, la tarjeta se cobra en el momento del pago."
   },
   "petSafeSignup": {
     "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
@@ -469,13 +498,14 @@
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
-    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas. Gatos: {{cats}}. Perros: {{dogs}}.",
+    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
-    "heading": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
     "verdictsHeading": "Los veredictos, con su fuente",
     "animal": {
       "cats": "Gatos",
-      "dogs": "Perros"
+      "dogs": "Perros",
+      "horses": "Caballos"
     },
     "verdict": {
       "toxic": "Tóxica",
@@ -489,21 +519,83 @@
       "dogs": "Esta página no tiene un veredicto con fuente para perros, así que no afirma nada en ningún sentido. Considéralo desconocido y mantén la planta fuera del alcance de tu perro hasta consultarlo con tu veterinario."
     },
     "noteHeading": "Lo que añade nuestra tabla",
-    "emergencyHeading": "Si tu mascota ya se ha comido un trozo",
-    "emergencyBody": "No esperes a ver si aparecen síntomas. Llama a tu veterinario o a",
-    "poisonControlLink": "ASPCA Animal Poison Control",
+    "emergencyHeading": "Si tu mascota pudo haberse comido un trozo",
+    "emergencyBody": "Llama ya a una línea de toxicología para mascotas, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas.",
+    "hotline": {
+      "aspca": "ASPCA Poison Control: (888) 426-4435",
+      "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
+    },
+    "hotlineFee": {
+      "aspca": "Según su página, puede cobrarse una tarifa de consulta («A consultation fee may apply»).",
+      "petPoisonHelpline": "Según su página, se cobra una tarifa de 99 USD por incidente («$99 incident fee applies»)."
+    },
+    "hotlinesChecked": "Números y tarifas tal como los indicaba la página de cada servicio el 23 de octubre de 2026.",
+    "emergencyListingNote": "Los veredictos de esta página vienen de la lista de plantas de la ASPCA, que no dice nada sobre cuánto comió tu mascota. Una línea de toxicología o tu veterinario pueden valorarlo contigo.",
     "aboutHeading": "Cómo se hace esta página",
     "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
     "careGuideLink": "Guía de cuidados: {{name}} (riego, luz y problemas comunes)",
     "checkAnother": "Buscar otra planta",
     "breadcrumbHome": "Inicio",
     "breadcrumbHub": "Mascotas y plantas",
-    "signupTitle": "Que todo el hogar esté al tanto de tus plantas",
-    "signupBody": "Family Greenhouse reúne cada planta, sus cuidados y quién se encarga de ella en un solo lugar compartido. Puedes empezar gratis y sin tarjeta.",
-    "signupCta": "Empezar",
+    "signupTitle": "Recibe recordatorios de riego para tu {{name}}",
+    "signupBody": "Family Greenhouse sigue el calendario de riego de cada planta y avisa a la persona indicada de tu hogar. Gratis hasta 8 plantas, sin tarjeta.",
+    "signupCta": "Configurar recordatorios",
     "unknownTitle": "No hay un veredicto con fuente para esta planta",
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
-    "unknownCta": "Buscar una planta"
+    "unknownCta": "Buscar una planta",
+    "listingHeading": "Lo que dice la ficha de la ASPCA",
+    "listingIntro": "Citado palabra por palabra de la ficha de la ASPCA de esta planta (en inglés).",
+    "listingField": {
+      "additionalCommonNames": "Otros nombres en la ficha",
+      "family": "Familia botánica",
+      "toxicPrinciples": "Principios tóxicos",
+      "clinicalSigns": "Signos clínicos",
+      "listingNote": "También en la ficha",
+      "listingAdvice": "Lo que la ficha indica hacer"
+    },
+    "listCaveat": "La lista de plantas de la ASPCA también dice esto de todas las plantas que incluye: «the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats» (comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos).",
+    "listCitation": "ASPCA, «Toxic and Non-Toxic Plants»",
+    "extensionHeading": "Lo que añade una extensión universitaria",
+    "extensionIntro": "Una segunda fuente independiente sobre la misma planta, citada palabra por palabra (en inglés).",
+    "extensionField": {
+      "poisonSeverity": "Gravedad de la intoxicación",
+      "poisonSymptoms": "Síntomas de intoxicación",
+      "poisonToxicPrinciple": "Principio tóxico",
+      "poisonPart": "Partes venenosas"
+    },
+    "extensionCaveat": "La base de datos da una sola calificación de gravedad para toda la planta, tanto para personas como para mascotas, y no indica cuánta cantidad es demasiada. Sea cual sea la calificación, llama a una línea de toxicología o a tu veterinario si tu mascota se ha comido un trozo.",
+    "extensionTagsLabel": "Su página etiqueta la planta para:",
+    "extensionTagsNote": "Esta página se basa en el veredicto de la ASPCA de arriba. Una etiqueta de esta segunda fuente solo aparece cuando dice lo mismo.",
+    "extensionCitation": "{{publisher}}, «{{title}}» ({{database}})",
+    "alternativesHeading": {
+      "toxic": "Plantas parecidas para elegir en su lugar",
+      "other": "Plantas parecidas que también puedes considerar"
+    },
+    "alternativesIntro": "Elegidas por su aspecto parecido o porque van en el mismo tipo de lugar. Cada nombre abre la página de esa planta, con sus veredictos de la ASPCA y su fuente.",
+    "relatedHeading": "Plantas relacionadas para consultar",
+    "relatedIntro": "Plantas que la gente suele confundir con esta o consultar después. Cada nombre abre la página de esa planta.",
+    "linkedAnimal": {
+      "cats": "Gatos:",
+      "dogs": "Perros:",
+      "horses": "Caballos:"
+    },
+    "faqHeading": "Preguntas frecuentes",
+    "faq": {
+      "animal": {
+        "cats": "gatos",
+        "dogs": "perros",
+        "horses": "caballos"
+      },
+      "question": "¿La planta {{name}} es tóxica para {{animal}}?",
+      "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
+      "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
+      "answerDetails": "Su ficha indica como principios tóxicos «{{principles}}» y como signos clínicos «{{signs}}».",
+      "answerAnyPlant": "Su lista de plantas también dice que comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos.",
+      "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
+      "partsAnswer": "La base de datos {{database}} de {{publisher}} indica como venenosas estas partes de la planta: {{parts}}. Da esa lista bajo «Poisonous to Humans» (venenosa para personas), y los veredictos de la ASPCA en esta página son los que valen para mascotas.",
+      "whatToDoQuestion": "¿Qué hago si mi mascota se comió un trozo de {{name}}?",
+      "whatToDoAnswer": "Llama ya a ASPCA Poison Control al (888) 426-4435 o a Pet Poison Helpline al (855) 764-7661, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas. La ASPCA indica que puede cobrarse una tarifa de consulta, y Pet Poison Helpline indica que cobra una tarifa de 99 USD por incidente."
+    }
   },
   "plantShop": {
     "buy": {
@@ -1258,6 +1350,32 @@
       "anotherMember": "otro miembro",
       "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
     },
+    "goingAway": {
+      "titleEntry": "¿Te vas de viaje?",
+      "titleLonger_one": "¿Te vas más de {{count}} día?",
+      "titleLonger_many": "¿Te vas más de {{count}} días?",
+      "titleLonger_other": "¿Te vas más de {{count}} días?",
+      "titleSecond": "¿Necesitas un segundo enlace de cuidador?",
+      "freeNow_one": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y solo puede haber uno activo a la vez.",
+      "freeNow_many": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y puede haber {{count}} activos a la vez.",
+      "freeNow_other": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y puede haber {{count}} activos a la vez.",
+      "gardenAdds": "Jardín añade, para todo el hogar:",
+      "gardenAddsPrice": "Jardín cuesta {{price}} al mes para todo el hogar. Añade:",
+      "lineLinks_one": "Enlaces de cuidador de hasta {{days}} días, con {{count}} activo a la vez",
+      "lineLinks_many": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
+      "lineLinks_other": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
+      "lineBrief": "Una guía de cuidados imprimible para tu cuidador, con la foto más reciente de cada planta y tus reglas de la casa",
+      "linePhotos": "Fotos de tu cuidador mientras estás fuera, que se suman a la cronología de cada planta",
+      "lineRecap": "Un resumen de lo que pasó, listo para cuando vuelvas",
+      "upgrade": "Pasa a Jardín por {{price}} al mes",
+      "useFree_one": "Usar {{count}} día",
+      "useFree_many": "Usar {{count}} días",
+      "useFree_other": "Usar {{count}} días",
+      "keepFree_one": "Tu enlace gratuito de {{count}} día sigue siendo tuyo. No necesitas cambiar de plan para crearlo.",
+      "keepFree_many": "Tu enlace gratuito de {{count}} días sigue siendo tuyo. No necesitas cambiar de plan para crearlo.",
+      "keepFree_other": "Tu enlace gratuito de {{count}} días sigue siendo tuyo. No necesitas cambiar de plan para crearlo.",
+      "keepFreeSecond": "Tu enlace actual sigue funcionando. Para crear otro en el plan gratuito, desactiva primero el actual."
+    },
     "sitterGaps": {
       "heading": "Antes de irte: tu cuidador solo puede leer lo que hayas escrito.",
       "noCareNote_one": "{{count}} planta no tiene nota de riego; tu cuidador tendrá que adivinar:",
@@ -1669,9 +1787,11 @@
       "adminOnlyBilling": "Solo una persona administradora del hogar puede gestionar la facturación.",
       "adminOnlyPlan": "Solo una persona administradora del hogar puede cambiar el plan.",
       "changePlanTitle": "Cambiar de plan",
-      "changePlanDescription": "Las mejoras se aplican de inmediato. La primera suscripción de pago de un hogar empieza con una prueba gratuita de 14 días; la prueba es una sola por hogar, así que una suscripción posterior se cobra de inmediato.",
+      "changePlanDescription": "Las mejoras se aplican de inmediato. Las pruebas gratuitas son una sola por hogar y no se suman: un hogar en su prueba gratuita de Garden recibe el primer cobro cuando termina esa prueba, uno que nunca ha tenido una prueba tiene 14 días antes del primer cobro, y uno que ya la tuvo se cobra de inmediato.",
       "changePlanDescriptionTrial": "Las mejoras se aplican de inmediato. Este hogar todavía no ha usado su prueba gratuita de 14 días, así que una suscripción nueva empieza con ella y no se cobra nada hasta que termine.",
-      "changePlanDescriptionTrialUsed": "Las mejoras se aplican de inmediato. Este hogar ya ha usado su prueba gratuita de 14 días —es una sola por hogar—, así que una suscripción nueva se cobra de inmediato en lugar de después de 14 días gratis.",
+      "changePlanDescriptionTrialUsed": "Las mejoras se aplican de inmediato. Este hogar ya tuvo su prueba gratuita —hay una por hogar—, así que una suscripción nueva se cobra de inmediato.",
+      "changePlanDescriptionTrialUntil": "Las mejoras se aplican de inmediato. Añade una tarjeta ahora; tu primer cobro será el {{date}}, el día en que termina la prueba gratuita de Garden de este hogar. No se cobra nada antes de esa fecha, y cancelar antes no cuesta nada.",
+      "changePlanDescriptionTrialEndingSoon": "Las mejoras se aplican de inmediato. La prueba gratuita de Garden de este hogar termina el {{date}}, demasiado pronto para pasar el primer cobro a ese día, así que una suscripción nueva se cobra al empezarla.",
       "currentPlanNote": "Este es tu plan actual.",
       "cancelToReturn": "Cancela en el portal de facturación para volver a Plántula.",
       "usePortalToSwitch": "Usa “Gestionar suscripción” arriba para cambiar a {{plan}}.",
@@ -1708,7 +1828,11 @@
         "changeAnalytics": "Las estadísticas muestran los últimos {{days}} días. El historial anterior se conserva, no se elimina.",
         "subscribeReplaces": "Elegir un plan de pago sustituye esta prueba por una suscripción, que pasa por el proceso de pago y pide una tarjeta.",
         "billingLink": "Planes y facturación",
-        "currentPlan": "Tu hogar está en el plan gratuito {{plan}} y probando Jardín hasta el {{date}}."
+        "currentPlan": "Tu hogar está probando Jardín gratis hasta el {{date}}. Después pasa al plan gratuito {{plan}}, salvo que un administrador elija un plan de pago.",
+        "keepGarden": "Quédate con Jardín por {{price}} al mes",
+        "getGardenBack": "Recupera Jardín por {{price}} al mes",
+        "planBadge": "Prueba gratis hasta el {{date}}",
+        "keepPlan": "Quedarse con {{plan}}"
       },
       "splitLine": "{{total}} ÷ {{n}} miembros = {{each}} cada uno",
       "splitLineApprox": "{{total}} ÷ {{n}} miembros ≈ {{each}} cada uno",
@@ -1722,6 +1846,7 @@
       "plantsUsageUnlimited": "{{n}} plantas · sin límite",
       "plantsCountUnavailable": "Plantas — uso no disponible",
       "membersUsageUnlimited": "{{n}} miembros · sin límite",
+      "freeCapsGrandfathered": "Este hogar se creó antes de que cambiara el plan gratuito, así que conserva los límites gratuitos con los que se registró: {{plants}} plantas y {{members}} personas. Los hogares creados desde entonces tienen {{newPlants}} plantas y {{newMembers}} personas.",
       "membersCountUnavailable": "Miembros — uso no disponible",
       "checkoutPendingTitle": "Pago recibido: estamos terminando",
       "checkoutPendingBody": "Tu pago se ha realizado. Tu plan se actualizará aquí en cuanto lo confirme nuestro proveedor de pagos, normalmente en unos segundos. No vuelvas a pasar por la caja: una segunda compra iniciaría una segunda suscripción y te cobraría dos veces.",
@@ -2060,6 +2185,7 @@
     "openTasks": "Abrir la lista de tareas →"
   },
   "pricing": {
+    "monthlyPriceLine": "Garden cuesta ${{garden}} al mes y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",
     "intervalYearly": "Anual",
@@ -2082,7 +2208,7 @@
     "featureEverythingGarden": "Todo lo de Jardín",
     "featureApiAccess": "Acceso a la API para automatizar",
     "featureImportExport": "Importación, exportación y calendario (CSV, JSON, .ics)",
-    "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Aparte, la primera suscripción de pago de un hogar empieza con una prueba de 14 días: el proceso de pago pide una tarjeta por adelantado, no se te cobra hasta que pasan los 14 días y cancelar antes no cuesta nada. La prueba de la suscripción es una sola por hogar: un hogar que ya ha tenido una se cobra cuando vuelve a suscribirse.",
+    "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Si eliges un plan de pago durante esos días, el proceso de pago pide una tarjeta, pero el primer cobro es el día en que terminan, no 14 días después; si quedan dos días o menos, o ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo esos días tiene en su lugar una prueba de 14 días en su primera suscripción de pago. Las pruebas son una sola por hogar, y cancelar antes del primer cobro no cuesta nada.",
     "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Facturación. En esta página no se compra nada.",
     "giftNote": "¿Es para regalar?",
     "whyHeading": "Por qué un plan de pago",
@@ -2107,7 +2233,7 @@
     "featureSitterBasic": "1 enlace de cuidador a la vez, hasta 7 días",
     "featureAnalytics30": "30 días de estadísticas",
     "whyCoordinateTitle": "Para el hogar que necesita coordinarse",
-    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, tres personas, veinte plantas. Jardín es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
+    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, dos personas, ocho plantas. Jardín es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
     "whyHomesTitle": "Para quienes ayudan en más de un hogar",
     "whyHomesBody": "Invernadero es muchos hogares, muchas manos: forma parte de todos los hogares que cuidas —tu casa, la de tus padres, el alquiler— y añade acceso a la API para automatizar."
   },
@@ -2177,6 +2303,16 @@
       "away_kit": "El Kit de Viaje: enlaces de cuidador más largos, la guía de traspaso y el resumen de vuelta",
       "garden_plan": "El plan Garden",
       "greenhouse_plan": "El plan Greenhouse"
+    }
+  },
+  "planCap": {
+    "plants": {
+      "title": "Espacio para más plantas",
+      "body": "Tu plan admite {{max}} plantas activas y este hogar tiene {{n}}. Todas las plantas se quedan y puedes seguir editándolas; solo añadir otra tiene que esperar a que haya sitio. Archivar una planta que ya no cuidas libera un hueco, o un plan con más espacio quita el límite."
+    },
+    "members": {
+      "title": "Espacio para más personas",
+      "body": "Tu plan admite {{max}} personas y este hogar tiene {{n}}. Todas se quedan; una persona nueva podrá unirse cuando haya sitio. Quita a alguien que ya no ayude, o un plan con más espacio quita el límite."
     }
   },
   "awayRecap": {
@@ -2408,7 +2544,9 @@
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
     "registerCta": "Crear una cuenta gratuita",
-    "navLink": "Regalar una suscripción"
+    "navLink": "Regalar una suscripción",
+    "unavailableHeading": "Los regalos aún no están disponibles",
+    "unavailableBody": "Todavía no hemos abierto las suscripciones de regalo, así que ahora mismo no hay nada que comprar aquí. Vuelve más tarde; esta página ofrecerá regalos en cuanto estén a la venta."
   },
   "caretaker": {
     "seats": {
@@ -2523,7 +2661,7 @@
   "landing": {
     "meta": {
       "title": "Family Greenhouse — Cuidado de plantas compartido y recordatorios de riego",
-      "descriptionOpen": "Comparte con tu hogar los calendarios de riego, los recordatorios, los registros de cuidado y las tareas de tus plantas. Family Greenhouse es gratis para un hogar, hasta 3 personas y 20 plantas.",
+      "descriptionOpen": "Comparte con tu hogar los calendarios de riego, los recordatorios, los registros de cuidado y las tareas de tus plantas. Family Greenhouse es gratis para un hogar, hasta 2 personas y 8 plantas.",
       "descriptionClosed": "Un diario de cuidados compartido para los calendarios de riego, los recordatorios, las tareas y los registros de cuidado de las plantas de tu hogar. Si ya tienes cuenta, puedes seguir iniciando sesión."
     },
     "nav": {
@@ -2532,21 +2670,20 @@
     },
     "hero": {
       "a": {
-        "eyebrow": "Un diario de plantas para toda la casa",
-        "headlinePre": "“Pensé que la habías regado ",
-        "headlineEmphasis": "tú",
-        "headlinePost": ".”",
-        "subhead": "Family Greenhouse es un diario de cuidados compartido para las plantas de tu casa. Todo el hogar ve qué toca hacer y qué ya se hizo, para que el helecho no se riegue dos veces el martes y luego quede olvidado dos semanas."
+        "eyebrow": "Recordatorios de riego y un registro de cuidados compartido",
+        "headlinePre": "Cuidado de plantas para ",
+        "headlineEmphasis": "todo",
+        "headlinePost": " tu hogar.",
+        "subhead": "Se acabó el “pensé que la habías regado tú”. Todos en casa ven qué toca hacer y qué ya se hizo, y los recordatorios llegan por correo o en el navegador."
       },
       "b": {
-        "eyebrow": "Un diario de cuidados para tus plantas",
+        "eyebrow": "Cuidado de plantas y recordatorios de riego",
         "headlinePre": "Mantén viva ",
         "headlineEmphasis": "cada",
         "headlinePost": " planta.",
         "subhead": "Family Greenhouse lleva un calendario de riego y cuidados para cada una de tus plantas, para que ninguna se quede sin agua ni se ahogue. Funciona igual de bien para una persona con unas cuantas macetas en la ventana que para todo un hogar que comparte la regadera."
       },
-      "seeHowItWorks": "Mira cómo funciona",
-      "signupNote": "No necesitas tarjeta de crédito: solo un nombre, un correo y una contraseña, y después un código de un solo uso que te mandamos por correo. Unos cinco minutos de principio a fin."
+      "signupNote": "Sin tarjeta de crédito. Tu hogar tiene 14 días de Garden y después sigue gratis para hasta 2 personas y 8 plantas. Confirmarás tu correo con un código que te enviamos."
     },
     "mockup": {
       "label": "Vista previa del panel de Family Greenhouse con las próximas tareas de cuidado de plantas y la actividad del hogar.",
@@ -2576,14 +2713,14 @@
     "facts": {
       "free": {
         "value": "Gratis",
-        "label": "Hasta 20 plantas, sin tarjeta de crédito"
+        "label": "Hasta 8 plantas, sin tarjeta de crédito"
       },
       "existing": {
         "value": "Cuentas existentes",
         "label": "Puedes seguir iniciando sesión y consultando tus datos de cuidado"
       },
       "people": {
-        "value": "3 personas",
+        "value": "2 personas",
         "label": "Comparten un hogar gratis; sin límite con Garden"
       },
       "minutes": {
@@ -2697,13 +2834,14 @@
       "body": "Las guías de cuidado te cuentan con honestidad lo que la etiqueta del vivero no dice: cada cuánto necesita agua de verdad, qué te quieren decir las puntas cafés y si es segura cerca de un gato o de un niño curioso. Vale la pena leerlas antes de que la planta llegue a casa.",
       "startWithGuide": "Empieza con una guía",
       "allGuides": "Todas las guías de cuidado (en inglés)",
-      "readBlog": "Lee el blog (en inglés)"
+      "readBlog": "Lee el blog (en inglés)",
+      "petSafeChecker": "Revisa una planta para mascotas"
     },
     "plans": {
       "eyebrow": "Planes",
       "open": {
         "title": "Un solo plan cubre todo el hogar",
-        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 personas y 20 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
+        "description": "Family Greenhouse se cobra por hogar, no por persona. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 2 personas y 8 plantas, sin tarjeta de crédito. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
         "footerNote": "Las condiciones de la prueba, la cancelación y los cambios de plan se explican en detalle en la",
         "footerLink": "página de planes"
       },
@@ -2715,7 +2853,7 @@
       },
       "held": {
         "title": "Empieza gratis; los planes de pago están en pausa",
-        "description": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas, sin tarjeta de crédito. Los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
+        "description": "Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas, sin tarjeta de crédito. Los planes de pago, las compras y los cambios de plan siguen sin estar disponibles.",
         "footerNote": "Lee el",
         "footerLink": "aviso completo sobre el estado de los planes"
       },
@@ -2734,6 +2872,7 @@
       "legal": "Aviso legal",
       "contact": "Contacto",
       "plantCareGuides": "Guías de cuidado de plantas",
+      "petSafeChecker": "Verificador de plantas seguras para mascotas",
       "copyright": "© {{year}} Family Greenhouse. Todos los derechos reservados."
     }
   },
@@ -2763,8 +2902,8 @@
       "heldClosed": "Los planes de pago están en pausa"
     },
     "lede": {
-      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días que puedes cancelar cuando quieras.",
-      "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 3 miembros del hogar y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+      "open": "Todas las personas con las que vives comparten una lista de plantas, un calendario y una sola factura. El plan gratuito es para una pareja y sus plantas: un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta, y un plan de pago se puede cancelar cuando quieras.",
+      "heldOpen": "Las cuentas gratuitas incluyen un hogar, hasta 2 miembros del hogar y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
       "heldClosed": "Por ahora están en pausa el registro de cuentas nuevas, los planes de pago, las compras y los cambios de plan."
     },
     "meta": {
@@ -2774,8 +2913,8 @@
         "heldClosed": "Estado de los planes — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 3 miembros del hogar y 20 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. La primera suscripción de pago de un hogar empieza con una prueba de 14 días.",
-        "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 3 personas y 20 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
+        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
+        "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 2 personas y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
         "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
       }
     }
@@ -2888,5 +3027,36 @@
       "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
     }
+  },
+  "appStore": {
+    "title": "Planes",
+    "description": "Suscríbete con tu Apple ID. Un plan cubre a todas las personas de este hogar.",
+    "perMonth": "{{price}} al mes",
+    "subscribe": "Suscribirse a {{plan}}",
+    "restore": "Restaurar compras",
+    "manage": "Gestionar suscripción",
+    "adminOnly": "Solo un administrador del hogar puede cambiar el plan.",
+    "loading": "Cargando los precios del App Store…",
+    "productsUnavailable": "Los precios del App Store no están disponibles ahora. Inténtalo más tarde.",
+    "activeRenews": "{{plan}} a través del App Store. Se renueva el {{date}}.",
+    "activeEnds": "{{plan}} a través del App Store. Termina el {{date}}.",
+    "alreadyPaid": "Este hogar ya tiene un plan de pago.",
+    "alreadyIncluded": "Este hogar ya tiene {{plan}}.",
+    "purchased": "Gracias. {{plan}} está activo en este hogar.",
+    "pending": "La compra está esperando aprobación. El plan se activa cuando el App Store la confirme.",
+    "failed": "La compra no se completó. Inténtalo de nuevo en un momento.",
+    "unavailable": "Las compras no están disponibles en la app ahora mismo.",
+    "restored": "Restaurado. {{plan}} está activo en este hogar.",
+    "nothingToRestore": "No se encontró ninguna suscripción del App Store para este Apple ID.",
+    "restoreFailed": "No se pudo conectar con el App Store. Inténtalo de nuevo en un momento.",
+    "linkedElsewhere": "La suscripción de este Apple ID pertenece a otro hogar.",
+    "otherSubscription": "Este hogar ya tiene una suscripción del App Store de otro Apple ID.",
+    "refusedActive": "Este hogar ya tiene una suscripción del App Store. Usa Gestionar suscripción para cambiarla.",
+    "disclosure": "El pago se carga a tu Apple ID al confirmar. La suscripción se renueva automáticamente cada mes al precio indicado salvo que la canceles al menos 24 horas antes de que termine el periodo. Gestiónala o cancélala en los ajustes de suscripciones de tu Apple ID.",
+    "terms": "Condiciones de uso",
+    "privacy": "Política de privacidad",
+    "lockedSeePlans": "Ver planes",
+    "lockedMember": "Un administrador del hogar puede cambiar el plan en Ajustes.",
+    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones)."
   }
 }

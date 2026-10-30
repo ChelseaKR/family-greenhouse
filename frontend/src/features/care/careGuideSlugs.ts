@@ -31,6 +31,15 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'orchid',
   'hoya',
   'nerve-plant',
+  'african-violet',
+  'poinsettia',
+  'sago-palm',
+  'asparagus-fern',
+  'haworthia',
+  'burros-tail',
+  'blue-echeveria',
+  'begonia',
+  'lily',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */
