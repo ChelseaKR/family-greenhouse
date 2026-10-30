@@ -49,7 +49,8 @@
  *    must be off; docs/analytics.md lists it as an owner step.
  *  - No user id, no account id, no household id. Besides `page_view`, GA gets
  *    seven funnel events and nothing else (`trackGoogleConversion`, and
- *    docs/analytics.md, "Conversion events in GA4"): `landing_cta_click`,
+ *    docs/analytics.md, "Conversion events in GA4"): `landing_cta_click`
+ *    with which sign-up link and, on a content page, which plant page,
  *    `sign_up`, `email_confirmed`, `household_activated`, `first_plant_added`
  *    with how it was added, `start_trial` and `purchase` with its plan and
  *    price. Their
@@ -75,6 +76,7 @@
 import { isNativeApp } from '@/lib/platform';
 import { analyticsOptedOut, setAnalyticsOptOut } from '@/services/analytics';
 import { normalizeTelemetryRoute } from '@/services/frontendTelemetry';
+import { CARE_GUIDE_SLUGS } from '@/features/care/careGuideSlugs';
 
 const MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]{4,20}$/;
 const GTAG_SRC = 'https://www.googletagmanager.com/gtag/js';
@@ -335,18 +337,62 @@ export const LANDING_CTAS = ['nav_signup', 'hero_signup'] as const;
 export type LandingCta = (typeof LANDING_CTAS)[number];
 
 /**
+ * The other sign-up links, on the content pages search actually sends people
+ * to (2026-10-30 audit): which kind of page the click happened on, where on
+ * that page, and which plant the page was about. They are sent as
+ * `landing_cta_click` too, but under their own parameters (`cta_source`,
+ * `cta_placement`, `cta_plant`) and never under `cta`, so a content click can
+ * never be counted as one of the home page's two buttons.
+ *
+ * - `cta_source`: `care_guide` (`/care/<slug>`), `pet_safe`
+ *   (`/pet-safe/<slug>`), `blog` (`/blog/<slug>`) or `other` (any other page
+ *   that shows the shared header).
+ * - `cta_placement`: `header` (the shared header's "Try the app" link),
+ *   `glance` (the care guide's link inside its "At a glance" water row) or
+ *   `body` (the page's own sign-up box).
+ * - `cta_plant`: the page's plant slug, sent only when it is one of the
+ *   published care-guide slugs. Anything else is left out, so the parameter
+ *   can only ever carry one of our own page names.
+ */
+export const CONTENT_CTA_SOURCES = ['care_guide', 'pet_safe', 'blog', 'other'] as const;
+export type ContentCtaSource = (typeof CONTENT_CTA_SOURCES)[number];
+export const CONTENT_CTA_PLACEMENTS = ['header', 'glance', 'body'] as const;
+export type ContentCtaPlacement = (typeof CONTENT_CTA_PLACEMENTS)[number];
+
+/**
+ * Which kind of page a pathname is, and its plant when it has a published
+ * care guide, for a content-page sign-up click. Used by the shared header,
+ * which does not otherwise know what page it sits on.
+ */
+export function contentCtaContext(pathname: string): {
+  source: ContentCtaSource;
+  plant?: string;
+} {
+  const [first, second, ...rest] = pathname.split(/[?#]/u, 1)[0]!.split('/').filter(Boolean);
+  if (!second || rest.length > 0 || !SLUG_PATTERN.test(second)) return { source: 'other' };
+  const plant = CARE_GUIDE_SLUGS.has(second) ? second : undefined;
+  if (first === 'care') return plant ? { source: 'care_guide', plant } : { source: 'other' };
+  if (first === 'pet-safe') return plant ? { source: 'pet_safe', plant } : { source: 'pet_safe' };
+  if (first === 'blog') return { source: 'blog' };
+  return { source: 'other' };
+}
+
+/**
  * How a household's first plant was added, for `first_plant_added`:
  * `common_plant` is a tap on the first run's houseplant shortcut, `typed` is
  * the first run's name form, `full_form` is the Add Plant page, and
  * `dashboard_empty` is a tap on the same shortcut in the dashboard's empty
  * "Your plants" card, which is where a household that skipped the first run
- * meets it.
+ * meets it. `guide_handoff` is a tap, in the first run, on the plant whose
+ * care guide the visitor signed up from (`/register?plant=<slug>`); which
+ * plant it was is still not sent.
  */
 export const FIRST_PLANT_METHODS = [
   'common_plant',
   'typed',
   'full_form',
   'dashboard_empty',
+  'guide_handoff',
 ] as const;
 export type FirstPlantMethod = (typeof FIRST_PLANT_METHODS)[number];
 
@@ -372,7 +418,9 @@ const TRIAL_DAYS = 14;
  *   (`gaTransactionId`), never a Stripe id. `value` is the plan's price for
  *   that cadence; when the return cannot say which plan and cadence were
  *   bought, both are left out and the purchase is still counted.
- * - `landing_cta_click`: one of the `LANDING_CTAS` was clicked.
+ * - `landing_cta_click`: one of the `LANDING_CTAS` was clicked, or a sign-up
+ *   link on a content page (`CONTENT_CTA_SOURCES`), which carries
+ *   `cta_source`, `cta_placement` and, for a published plant, `cta_plant`.
  * - `email_confirmed`: the confirmation code was accepted by the API
  *   (ConfirmEmailPage, beside PostHog's `signup_completed`).
  * - `household_activated`: the household's first plant was saved. That is the
@@ -396,7 +444,13 @@ export type GoogleConversion =
       interval?: PurchaseInterval;
       value?: number;
     }
-  | { name: 'landing_cta_click'; cta: LandingCta };
+  | { name: 'landing_cta_click'; cta: LandingCta }
+  | {
+      name: 'landing_cta_click';
+      source: ContentCtaSource;
+      placement: ContentCtaPlacement;
+      plant?: string;
+    };
 
 const TRANSACTION_ID_PATTERN = /^[0-9a-f]{32}$/u;
 
@@ -437,10 +491,33 @@ export function conversionParams(
         : null;
     case 'start_trial':
       return { trial_plan: 'garden', trial_days: TRIAL_DAYS, page_location: pageLocation };
-    case 'landing_cta_click':
-      return (LANDING_CTAS as readonly string[]).includes(conversion.cta)
-        ? { cta: conversion.cta, page_location: pageLocation }
-        : null;
+    case 'landing_cta_click': {
+      // One shape or the other, never both: a click that claims to be a home
+      // page button AND a content-page link is malformed and dropped whole.
+      if ('cta' in conversion && 'source' in conversion) return null;
+      if ('cta' in conversion) {
+        return (LANDING_CTAS as readonly string[]).includes(conversion.cta)
+          ? { cta: conversion.cta, page_location: pageLocation }
+          : null;
+      }
+      if (
+        !(CONTENT_CTA_SOURCES as readonly string[]).includes(conversion.source) ||
+        !(CONTENT_CTA_PLACEMENTS as readonly string[]).includes(conversion.placement)
+      ) {
+        return null;
+      }
+      const params: Record<string, unknown> = {
+        cta_source: conversion.source,
+        cta_placement: conversion.placement,
+        page_location: pageLocation,
+      };
+      // Only one of our own published slugs; anything else is left out, not
+      // passed through.
+      if (typeof conversion.plant === 'string' && CARE_GUIDE_SLUGS.has(conversion.plant)) {
+        params.cta_plant = conversion.plant;
+      }
+      return params;
+    }
     case 'purchase': {
       if (!TRANSACTION_ID_PATTERN.test(conversion.transactionId)) return null;
       const params: Record<string, unknown> = {

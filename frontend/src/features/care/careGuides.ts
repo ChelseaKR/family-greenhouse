@@ -434,11 +434,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Philodendron hederaceum',
     alsoKnownAs: ['Sweetheart Plant', 'Philodendron', 'Philodendron scandens'],
     related: ['pothos', 'monstera', 'hoya'],
-    metaTitle: 'Heartleaf Philodendron Care: Watering, Light + Toxicity',
+    metaTitle: 'Heartleaf Philodendron Care: Water Every 7–10 Days',
+    heading: 'Heartleaf philodendron care: how often to water it',
     metaDescription:
-      'How often to water a heartleaf philodendron, the light it likes, why the leaves yellow or go leggy, and whether it’s safe around pets.',
+      'Water a heartleaf philodendron every 7–10 days, when the top inch of soil is dry. It copes with lower light, and it’s toxic to cats and dogs if chewed.',
     reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    updated: '2026-10-30',
     summary:
       'The heartleaf philodendron is the plant people confuse with pothos, and for good reason — same trailing habit, same near-indestructible temperament, same forgiving nature. It’s one of the genuinely easy ones, and a great vine for a beginner who wants something prettier than they had to work for.',
     quickFacts: {
@@ -1299,11 +1300,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Pachira aquatica',
     alsoKnownAs: ['Pachira', 'Guiana Chestnut', 'Malabar Chestnut', 'Braided Money Tree'],
     related: ['parlor-palm', 'rubber-plant', 'calathea'],
-    metaTitle: 'Money Tree (Pachira) Care: Watering, Light, and Pet Safety',
+    metaTitle: 'Money Tree Care: Pet-Safe, Water Every 1–2 Weeks',
+    heading: 'Money tree care: watering and pet safety',
     metaDescription:
-      'How often to water a money tree, the light it needs, why the leaves go yellow or drop, and why Pachira aquatica is one of the pet-safe options.',
+      'The ASPCA lists the money tree as non-toxic to cats and dogs. Water it every 1–2 weeks, when the top 2 inches of soil are dry, in bright, indirect light.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-30',
     summary:
       'The braided money tree is a genuinely good houseplant hiding behind a gimmicky presentation. It’s easy, it’s forgiving, and — unusually for a plant this size — the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1315,7 +1317,7 @@ export const CARE_GUIDES: CareGuide[] = [
     },
     sections: {
       watering: [
-        'Water every one to two weeks, once the top two inches of soil are dry. Water thoroughly until it drains, then leave it alone until it’s dry again. Pachira stores water in that swollen trunk base, so it handles a missed week far better than a doubled-up one.',
+        'Water every one to two weeks, once the top two inches of soil are dry. Water thoroughly until it drains, then leave it alone until it’s dry again. Pachira stores water in that swollen trunk base, so it handles a missed week far better than a doubled-up one. That’s about the same rhythm as a [monstera](/care/monstera).',
         'In winter, stretch it out — every two to three weeks is plenty. The commonest money tree death is a well-meaning fortnightly routine kept identical all year, which is about right in July and much too much in January.',
       ],
       light: [
@@ -1432,7 +1434,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
     reviewed: '2026-09-02',
-    updated: '2026-10-21',
+    updated: '2026-10-30',
     summary:
       'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
     quickFacts: {
@@ -1448,8 +1450,8 @@ export const CARE_GUIDES: CareGuide[] = [
         'In a low-light spot, or in winter, stretch it to every two weeks or more. A dim corner plus a damp pot is the combination that kills them; if it’s somewhere dark, it needs water noticeably less often than you’d think.',
       ],
       light: [
-        'Low to medium indirect light. This is a genuine low-light plant — it grows in the understorey of Central American rainforest and never sees direct sun there. A north window, an interior corner, or a shaded spot in a brighter room all work.',
-        'Direct sun scorches the fronds and turns them a bleached yellow-green, so the one mistake to avoid is putting it on a sunny windowsill because it looks tropical. Shade isn’t a compromise for this plant; it’s the preference.',
+        'Low to medium indirect light. This is a genuine low-light plant — it grows in the understorey of Central American rainforest and never sees direct sun there. A north window, an interior corner, or a shaded spot in a brighter room all work. If your spot is dimmer still, or you’d rather water less often, a [ZZ plant](/care/zz-plant) copes with low light and goes 2–3 weeks between waterings.',
+        'Direct sun scorches the fronds and turns them a bleached yellow-green, so the one mistake to avoid is putting it on a sunny windowsill because it looks tropical. Shade isn’t a compromise for this plant; it’s the preference. If a sunny spot is what you have, a [bird of paradise](/care/bird-of-paradise) wants exactly that.',
       ],
       problems: [
         'Brown, crispy frond tips are the most common complaint and usually mean dry air, though hard tap water and inconsistent watering both contribute. Trim the brown off with scissors if it bothers you, raise the humidity, and judge by the new growth.',
@@ -1616,11 +1618,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
     related: ['calathea', 'begonia', 'african-violet'],
-    metaTitle: 'Nerve Plant Care: Why It Keeps Fainting + Pet Safety',
+    metaTitle: 'Nerve Plant Care: Water Every 3–5 Days, Keep It Moist',
+    heading: 'Nerve plant care: how often to water it',
     metaDescription:
-      'How often to water a fittonia, why it collapses dramatically and recovers, the humidity it needs, and why nerve plants are non-toxic to cats and dogs.',
+      'Water a nerve plant every 3–5 days and keep the soil lightly moist. It faints when thirsty and revives within hours, and it’s non-toxic to cats and dogs.',
     reviewed: '2026-09-02',
-    updated: '2026-10-22',
+    updated: '2026-10-30',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1807,7 +1810,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a sago palm, how much light it needs, why the fronds yellow, and why the ASPCA lists it as toxic to cats and dogs.',
     reviewed: '2026-10-21',
-    updated: '2026-10-21',
+    updated: '2026-10-30',
     summary:
       'The sago palm is a slow, sturdy plant that is not really a palm, and it is easy to keep alive indoors if you do not overwater it. It is also one of the most dangerous houseplants for pets: the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
@@ -1819,7 +1822,7 @@ export const CARE_GUIDES: CareGuide[] = [
     },
     sections: {
       watering: [
-        'Water a sago palm only after the soil has dried out most of the way down, which is usually every two to three weeks, and less often in winter. Water thoroughly so it drains from the bottom, then leave it alone. The plant stores water in its swollen trunk and prefers a dry spell to a wet one.',
+        'Water a sago palm only after the soil has dried out most of the way down, which is usually every two to three weeks, and less often in winter. Water thoroughly so it drains from the bottom, then leave it alone. The plant stores water in its swollen trunk and prefers a dry spell to a wet one. That’s the same every-two-to-three-weeks rhythm as [aloe vera](/care/aloe-vera).',
         'The trunk is the warning sign. A firm trunk is healthy, and a soft or darkening base means the plant has been sitting wet. Use a gritty, fast-draining mix, such as a cactus mix, and a pot with a drainage hole.',
       ],
       light: [

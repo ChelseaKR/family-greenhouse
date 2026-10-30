@@ -615,6 +615,126 @@ describe('conversion events', () => {
     }
   );
 
+  it('sends a content-page sign-up click under its own parameters, never `cta`', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    ga.trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'care_guide',
+      placement: 'glance',
+      plant: 'zz-plant',
+    });
+    ga.trackGoogleConversion({ name: 'landing_cta_click', source: 'blog', placement: 'body' });
+    // A plant that is not one of our published guides is left out, not sent.
+    ga.trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'pet_safe',
+      placement: 'body',
+      plant: 'reader@example.org',
+    });
+    // A click carrying both shapes is malformed and dropped whole, so a
+    // content click can never be counted as a home page button.
+    ga.trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'other',
+      placement: 'header',
+      cta: 'hero_signup',
+      email: 'reader@example.org',
+    } as never);
+    expect(conversions()).toEqual([
+      [
+        'event',
+        'landing_cta_click',
+        {
+          cta_source: 'care_guide',
+          cta_placement: 'glance',
+          page_location,
+          cta_plant: 'zz-plant',
+        },
+      ],
+      ['event', 'landing_cta_click', { cta_source: 'blog', cta_placement: 'body', page_location }],
+      [
+        'event',
+        'landing_cta_click',
+        { cta_source: 'pet_safe', cta_placement: 'body', page_location },
+      ],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/reader@|hero_signup/u);
+  });
+
+  it.each([
+    ['an unlisted page type', { name: 'landing_cta_click', source: 'checkout', placement: 'body' }],
+    ['an unlisted placement', { name: 'landing_cta_click', source: 'blog', placement: 'footer' }],
+    ['no placement', { name: 'landing_cta_click', source: 'blog' }],
+  ])('drops a content-page click with %s whole', async (_label, conversion) => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    ga.trackGoogleConversion(conversion as never);
+    expect(conversions()).toEqual([]);
+  });
+
+  it('sends a content-page click under no opt-out, and nothing under GPC, DNT or the in-app switch', async () => {
+    const click = {
+      name: 'landing_cta_click',
+      source: 'care_guide',
+      placement: 'body',
+      plant: 'monstera',
+    } as const;
+    // Positive control: the same harness sends it with no signal set.
+    const control = await load();
+    control.ga.initGoogleAnalytics();
+    control.ga.trackGoogleConversion(click);
+    expect(conversions()).toHaveLength(1);
+
+    delete window.dataLayer;
+    for (const script of gtagScripts()) script.remove();
+    setGpc(true);
+    const gpc = await load();
+    expect(gpc.analytics.analyticsOptedOut()).toBe(true);
+    gpc.ga.initGoogleAnalytics();
+    gpc.ga.trackGoogleConversion(click);
+    expect(window.dataLayer).toBeUndefined();
+
+    setGpc(undefined);
+    setDnt('1');
+    const dnt = await load();
+    expect(dnt.analytics.analyticsOptedOut()).toBe(true);
+    dnt.ga.initGoogleAnalytics();
+    dnt.ga.trackGoogleConversion(click);
+    expect(window.dataLayer).toBeUndefined();
+
+    setDnt(null);
+    const mid = await load();
+    mid.ga.initGoogleAnalytics();
+    mid.analytics.setAnalyticsOptOut(true);
+    const before = conversions().length;
+    mid.ga.trackGoogleConversion(click);
+    expect(conversions()).toHaveLength(before);
+  });
+
+  it('names the page type and plant of a content page from its path', async () => {
+    const { ga } = await load();
+    expect(ga.contentCtaContext('/care/zz-plant')).toEqual({
+      source: 'care_guide',
+      plant: 'zz-plant',
+    });
+    expect(ga.contentCtaContext('/care')).toEqual({ source: 'other' });
+    expect(ga.contentCtaContext('/care/not-a-guide')).toEqual({ source: 'other' });
+    expect(ga.contentCtaContext('/pet-safe/peace-lily')).toEqual({
+      source: 'pet_safe',
+      plant: 'peace-lily',
+    });
+    // A pet-safety page with no care guide: the page type, no plant.
+    expect(ga.contentCtaContext('/pet-safe/wax-plant')).toEqual({ source: 'pet_safe' });
+    expect(ga.contentCtaContext('/blog/how-to-remember-to-water-plants')).toEqual({
+      source: 'blog',
+    });
+    expect(ga.contentCtaContext('/pricing')).toEqual({ source: 'other' });
+    expect(ga.contentCtaContext('/care/zz-plant/extra')).toEqual({ source: 'other' });
+    expect(ga.contentCtaContext('/care/ZZ%20plant')).toEqual({ source: 'other' });
+  });
+
   it('sends first_plant_added with only how the plant was added', async () => {
     const { ga } = await load();
     ga.initGoogleAnalytics();
@@ -632,6 +752,7 @@ describe('conversion events', () => {
       ['event', 'first_plant_added', { method: 'typed', page_location }],
       ['event', 'first_plant_added', { method: 'full_form', page_location }],
       ['event', 'first_plant_added', { method: 'dashboard_empty', page_location }],
+      ['event', 'first_plant_added', { method: 'guide_handoff', page_location }],
     ]);
     expect(JSON.stringify(conversions())).not.toMatch(/snake|Fern/u);
   });
