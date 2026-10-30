@@ -263,6 +263,7 @@
       "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
       "saving": "Adding your plant…",
       "somethingElse": "Something else? Type its name",
+      "fromGuide": "You came from our {{name}} care guide, so it's first. One tap adds it with a reminder to check the soil every {{days}} days.",
       "plants": {
         "pothos": "Pothos",
         "snake-plant": "Snake plant",

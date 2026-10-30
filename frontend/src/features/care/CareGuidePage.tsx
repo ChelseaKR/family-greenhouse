@@ -14,6 +14,8 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
+import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { careGuideHeading, findCareGuide, type CareGuide } from './careGuides';
 import {
   ASPCA_POISON_CONTROL_PHONE,
@@ -282,6 +284,18 @@ export function CareGuidePage() {
     .map((relatedSlug) => findCareGuide(relatedSlug))
     .filter((g): g is CareGuide => g !== undefined);
 
+  // Both sign-up links carry the plant to the first run when it can offer it
+  // (features/onboarding/guidePlantHandoff), and both are counted in GA4
+  // under the content-page parameters, never the home page's `cta`.
+  const registerHref = registerHrefForPlant(guide.slug);
+  const trackCareCta = (placement: 'glance' | 'body') =>
+    trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'care_guide',
+      placement,
+      plant: guide.slug,
+    });
+
   return (
     <PublicShell width="article">
       <Link
@@ -350,6 +364,23 @@ export function CareGuidePage() {
                     {label}
                   </dt>
                   <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
+                  {/* A link to the reminder right beside the answer it is
+                      about, so it is on the first screen of a phone and a
+                      laptop. The sign-up box below sat just under the fold
+                      on both (2026-10-30 audit: y=900 against a 664px phone
+                      screen, 778 against 768 on a laptop). */}
+                  {label === 'Water' && PUBLIC_REGISTRATION_AVAILABLE && (
+                    <dd className="mt-1 text-sm">
+                      <Link
+                        to={registerHref}
+                        data-testid="care-glance-cta"
+                        className="inline-flex min-h-touch items-center font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800"
+                        onClick={() => trackCareCta('glance')}
+                      >
+                        Remind me to water my {sentenceName(guide.commonName)} →
+                      </Link>
+                    </dd>
+                  )}
                 </div>
               </div>
             ))}
@@ -371,8 +402,9 @@ export function CareGuidePage() {
             the right person in your household. Free for up to 8 plants, no card.
           </p>
           <Link
-            to="/register"
+            to={registerHref}
             className={`${buttonStyles()} shrink-0 text-center max-sm:whitespace-normal`}
+            onClick={() => trackCareCta('body')}
           >
             Get watering reminders for your {sentenceName(guide.commonName)}
           </Link>

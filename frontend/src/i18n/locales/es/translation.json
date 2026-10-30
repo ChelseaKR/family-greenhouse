@@ -275,6 +275,7 @@
       "hint": "Con un toque la añadimos con un recordatorio de riego para empezar. Puedes cambiarlo cuando quieras.",
       "saving": "Añadiendo tu planta…",
       "somethingElse": "¿Otra planta? Escribe su nombre",
+      "fromGuide": "Vienes de nuestra guía de cuidados de {{name}}, así que aparece primero. Con un toque la añadimos con un recordatorio para revisar la tierra cada {{days}} días.",
       "plants": {
         "pothos": "Poto",
         "snake-plant": "Sansevieria",

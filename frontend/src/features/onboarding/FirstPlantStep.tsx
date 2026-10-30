@@ -17,6 +17,7 @@ import { EmptyPlants } from '@/components/illustrations/EmptyPlants';
 import { toast } from '@/store/toastStore';
 import type { FirstRunVariant } from './firstRunModel';
 import { CommonPlantPicker } from './CommonPlantPicker';
+import { clearPendingGuidePlant, getPendingGuidePlant } from './guidePlantHandoff';
 
 const makeFirstPlantSchema = (t: TFunction) =>
   z.object({
@@ -109,6 +110,14 @@ export function FirstPlantStep({
   // explicitly declining a reminder, which stays a real option.
   const [waterEveryDays, setWaterEveryDays] = useState<number | null>(DEFAULT_WATER_DAYS);
   const schema = useMemo(() => makeFirstPlantSchema(t), [t]);
+  // The plant from the care guide this visitor signed up from, if any. Read
+  // once; it is cleared as soon as the step is left by any route, so it is
+  // offered in this first run and nowhere else.
+  const [guidePlant] = useState(getPendingGuidePlant);
+  const leave = (next: () => void) => () => {
+    clearPendingGuidePlant();
+    next();
+  };
 
   const {
     register,
@@ -198,7 +207,7 @@ export function FirstPlantStep({
             : t('firstRun.plant.created', { name: plant.name })
       );
       if (scheduleFailed) toast.info(t('firstRun.plant.scheduleFailed', { name: plant.name }));
-      onAdded();
+      leave(onAdded)();
     },
     onError: (err) => setError(getErrorMessage(err)),
   });
@@ -224,7 +233,8 @@ export function FirstPlantStep({
 
       <CommonPlantPicker
         householdId={householdId}
-        onAdded={onAdded}
+        onAdded={leave(onAdded)}
+        suggested={guidePlant}
         disabled={mutation.isPending}
         onPendingChange={setPickerPending}
       />
@@ -288,7 +298,7 @@ export function FirstPlantStep({
           >
             {t('firstRun.plant.submit')}
           </Button>
-          <Button type="button" variant="secondary" onClick={onSkip}>
+          <Button type="button" variant="secondary" onClick={leave(onSkip)}>
             {t('firstRun.skip')}
           </Button>
         </div>
@@ -297,7 +307,7 @@ export function FirstPlantStep({
       <p className="mt-5 text-center text-sm text-gray-600">
         <button
           type="button"
-          onClick={onWantsFullForm}
+          onClick={leave(onWantsFullForm)}
           className="min-h-touch font-medium text-primary-700 underline underline-offset-2 hover:text-primary-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           {t('firstRun.plant.fullForm')}
