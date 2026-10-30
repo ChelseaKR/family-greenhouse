@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Search titles answer the question people searched.** From 90 days of
+  Search Console data (2026-07-31 to 2026-10-28), the ZZ plant, monstera,
+  snake plant and English ivy care guides get titles, descriptions and H1s
+  that lead with what searchers asked ("how often to water zz plant" was 96
+  impressions at position 10 with no clicks). Every answer is the guide's own
+  "At a glance" line. Care guides take an optional `heading`, which is both
+  the H1 and the Article headline. The overwatering post's description says
+  overwatering causes yellow leaves, which the post already states. No plant
+  facts change.
+
 ## [0.46.0] - 2026-10-29
 
 **Free trials no longer stack, and the day-10 and day-14 trial emails go out

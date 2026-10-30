@@ -31,6 +31,14 @@ export interface CareGuide {
   metaTitle: string;
   metaDescription: string;
   /**
+   * The visible H1 and the Article `headline`, when a guide's searchers ask
+   * something narrower than "<Name> care". Set only where Search Console
+   * shows the page earning impressions for that question (2026-10-29: "how
+   * often to water zz plant" was 96 of the ZZ page's 120 impressions at
+   * positions 5-40). Defaults to `<commonName> care`.
+   */
+  heading?: string;
+  /**
    * ISO date a human last checked this guide's FACTS against source data —
    * the review discipline the module header demands, especially for
    * `quickFacts.water` and `quickFacts.toxicity`. Feeds `datePublished`.
@@ -173,11 +181,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Dracaena trifasciata',
     alsoKnownAs: ['Sansevieria', 'Mother-in-Law’s Tongue'],
     related: ['zz-plant', 'aloe-vera', 'jade-plant'],
-    metaTitle: 'Snake Plant Care: How Often to Water It (Hint: Less)',
+    metaTitle: 'How to Care for a Snake Plant: Water Every 2–3 Weeks',
+    heading: 'How to care for a snake plant',
     metaDescription:
-      'How often to water a snake plant, the light it needs, why the leaves go mushy or wrinkled, and how to share its care without drowning it.',
+      'Water a snake plant every 2–3 weeks, only once the soil is completely dry. It takes low to bright, indirect light; mushy leaves mean too much water.',
     reviewed: '2026-06-08',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
@@ -239,11 +248,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Swiss Cheese Plant', 'Split-Leaf Philodendron'],
     related: ['heartleaf-philodendron', 'fiddle-leaf-fig', 'bird-of-paradise'],
-    metaTitle: 'Monstera Care: How Often to Water + Why No Leaf Holes',
+    metaTitle: 'How Often to Water a Monstera + Why No Leaf Holes',
+    heading: 'Monstera care: how often to water it',
     metaDescription:
-      'How often to water a monstera, the light it needs to grow holes (fenestrations), why leaves yellow or brown, and sharing its care at home.',
+      'Water a monstera every 1–2 weeks, when the top 1–2 inches of soil are dry. The light it needs to grow leaf holes, and why leaves yellow or brown.',
     reviewed: '2026-06-08',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
@@ -483,11 +493,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Zamioculcas zamiifolia',
     alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'Zuzu Plant'],
     related: ['snake-plant', 'chinese-evergreen', 'parlor-palm'],
-    metaTitle: 'ZZ Plant Care: How Often to Water (Almost Never)',
+    metaTitle: 'How Often to Water a ZZ Plant: Every 2–3 Weeks',
+    heading: 'ZZ plant care: how often to water it',
     metaDescription:
-      'How often to water a ZZ plant, the light it tolerates, why the stems go yellow or mushy, and how to grow a new one by division.',
+      'Water a ZZ plant every 2–3 weeks, once the soil is completely dry, and about once a month in winter. Plus the light it takes and why stems go mushy.',
     reviewed: '2026-06-17',
-    updated: '2026-10-23',
+    updated: '2026-10-29',
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {
@@ -1149,10 +1160,11 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Common Ivy', 'Hedera', 'Needlepoint Ivy', 'Glacier Ivy'],
     related: ['pothos', 'hoya', 'boston-fern'],
     metaTitle: 'English Ivy Indoor Care: Watering, Light, and Pet Safety',
+    heading: 'English ivy care indoors',
     metaDescription:
-      'How often to water English ivy indoors, the cool bright conditions it prefers, how to deal with spider mites, and why it is not pet-safe.',
+      'English ivy indoors wants a cool, bright room and water every 5–10 days, kept lightly moist. How to beat spider mites, and why it is not pet-safe.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants cool, bright and humid, and in a warm dry living room it gets spider mites and sulks.',
     quickFacts: {
@@ -2211,4 +2223,9 @@ export const CARE_GUIDES: CareGuide[] = [
 
 export function findCareGuide(slug: string): CareGuide | undefined {
   return CARE_GUIDES.find((g) => g.slug === slug);
+}
+
+/** The guide's visible H1, which is also its Article `headline`. */
+export function careGuideHeading(guide: CareGuide): string {
+  return guide.heading ?? `${guide.commonName} care`;
 }

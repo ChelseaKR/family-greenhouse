@@ -342,3 +342,35 @@ describe('CareGuidePage answer and call to action', () => {
     }
   });
 });
+
+describe('CareGuidePage heading', () => {
+  /**
+   * `heading` is set only where Search Console showed a narrower question
+   * than "<Name> care" (2026-10-29). Google asks that the Article headline
+   * match the visible one, so the two must move together.
+   */
+  it('renders a guide’s heading as the H1 and the Article headline', () => {
+    const headed = CARE_GUIDES.filter((g) => g.heading);
+    expect(headed.map((g) => g.slug)).toContain('zz-plant');
+    for (const guide of [...headed, CARE_GUIDES.find((g) => !g.heading)!]) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const expected = guide.heading ?? `${guide.commonName} care`;
+      expect(screen.getByRole('heading', { level: 1 }).textContent, guide.slug).toBe(expected);
+      const script = container.ownerDocument.querySelector('script[type="application/ld+json"]');
+      const graph = JSON.parse(script!.textContent!)['@graph'] as {
+        '@type': string;
+        headline?: string;
+      }[];
+      expect(graph.find((node) => node['@type'] === 'Article')!.headline, guide.slug).toBe(
+        expected
+      );
+      unmount();
+    }
+  });
+
+  it('keeps every heading about the plant it is on', () => {
+    for (const guide of CARE_GUIDES.filter((g) => g.heading)) {
+      expect(guide.heading!.toLowerCase(), guide.slug).toContain(guide.commonName.toLowerCase());
+    }
+  });
+});

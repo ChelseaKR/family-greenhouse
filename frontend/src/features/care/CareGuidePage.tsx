@@ -14,7 +14,7 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
-import { findCareGuide, type CareGuide } from './careGuides';
+import { careGuideHeading, findCareGuide, type CareGuide } from './careGuides';
 import {
   ASPCA_POISON_CONTROL_PHONE,
   careToxicity,
@@ -210,7 +210,7 @@ export function CareGuidePage() {
                 // Was "<Name> Care Guide" while the visible H1 reads
                 // "<Name> care" and the metaTitle a third thing. Google asks
                 // that headline match the visible headline.
-                headline: `${guide.commonName} care`,
+                headline: careGuideHeading(guide),
                 description: guide.metaDescription,
                 // See the note in BlogPost.tsx — `image` is required for the
                 // Article rich result and all 24 guides omitted it.
@@ -297,7 +297,7 @@ export function CareGuidePage() {
           Plant care guide
         </p>
         <h1 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl">
-          {guide.commonName} care
+          {careGuideHeading(guide)}
         </h1>
         <p className="mt-2 text-lg italic text-gray-600">
           {guide.scientificName}
