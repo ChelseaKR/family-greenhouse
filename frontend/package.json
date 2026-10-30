@@ -145,7 +145,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
     "jest-axe": "^11.0.0",
-    "msw": "^2.15.0",
+    "msw": "^3.0.3",
     "postcss": "^8.5.28",
     "size-limit": "^14.2.0",
     "tailwindcss": "^4.3.3",

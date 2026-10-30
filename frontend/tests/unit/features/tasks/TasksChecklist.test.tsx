@@ -558,7 +558,7 @@ describe('Tasks on a phone ("Checklist")', () => {
     expect(await screen.findByRole('group', { name: 'Filtros de tareas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mis tareas' })).toBeInTheDocument();
     expect(screen.getByText('El trabajo de hoy')).toBeInTheDocument();
-    expect(screen.getByText('7 tareas mostradas.')).toBeInTheDocument();
+    expect(await screen.findByText('7 tareas mostradas.')).toBeInTheDocument();
     expect(screen.getAllByText('Regar').length).toBeGreaterThan(0);
     expect(screen.getAllByText('3 días de retraso').length).toBe(1);
     expect(screen.queryByText('Water')).toBeNull();
