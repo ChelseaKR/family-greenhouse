@@ -61,6 +61,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Xcode Cloud builds no longer fail before they start.** Every push to
+  `main` failed at "Could not resolve package dependencies", because the
+  Capacitor plugins that `CapApp-SPM` resolves live in `node_modules`, which a
+  fresh clone does not have. `frontend/ios/App/ci_scripts/ci_post_clone.sh`
+  now installs Node 22, runs `npm ci`, makes the production web build from
+  the committed public values in `.env.mobile.production.example` (with iOS
+  push on, as in local release builds) and runs `npx cap sync ios`, after the
+  same `--production` validation as `npm run mobile:release`. The iOS
+  project's `Package.resolved` is now committed too: Xcode Cloud resolves
+  packages with automatic resolution off and stops without it. Internal, no
+  user-facing change.
 - **`npm run mobile:release` no longer builds an unsigned Android bundle
   without saying so.** It used to print "Unsigned Android release bundle
   built" every time, signed or not, and Gradle builds an unsigned AAB without
