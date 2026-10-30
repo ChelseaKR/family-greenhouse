@@ -546,9 +546,12 @@
     "listingHeading": "Lo que dice la ficha de la ASPCA",
     "listingIntro": "Citado palabra por palabra de la ficha de la ASPCA de esta planta (en inglés).",
     "listingField": {
+      "additionalCommonNames": "Otros nombres en la ficha",
+      "family": "Familia botánica",
       "toxicPrinciples": "Principios tóxicos",
       "clinicalSigns": "Signos clínicos",
-      "listingNote": "También en la ficha"
+      "listingNote": "También en la ficha",
+      "listingAdvice": "Lo que la ficha indica hacer"
     },
     "listCaveat": "La lista de plantas de la ASPCA también dice esto de todas las plantas que incluye: «the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats» (comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos).",
     "listCitation": "ASPCA, «Toxic and Non-Toxic Plants»",
@@ -557,7 +560,8 @@
     "extensionField": {
       "poisonSeverity": "Gravedad de la intoxicación",
       "poisonSymptoms": "Síntomas de intoxicación",
-      "poisonToxicPrinciple": "Principio tóxico"
+      "poisonToxicPrinciple": "Principio tóxico",
+      "poisonPart": "Partes venenosas"
     },
     "extensionCaveat": "La base de datos da una sola calificación de gravedad para toda la planta, tanto para personas como para mascotas, y no indica cuánta cantidad es demasiada. Sea cual sea la calificación, llama a una línea de toxicología o a tu veterinario si tu mascota se ha comido un trozo.",
     "extensionTagsLabel": "Su página etiqueta la planta para:",
@@ -587,6 +591,8 @@
       "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
       "answerDetails": "Su ficha indica como principios tóxicos «{{principles}}» y como signos clínicos «{{signs}}».",
       "answerAnyPlant": "Su lista de plantas también dice que comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos.",
+      "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
+      "partsAnswer": "La base de datos {{database}} de {{publisher}} indica como venenosas estas partes de la planta: {{parts}}. Da esa lista bajo «Poisonous to Humans» (venenosa para personas), y los veredictos de la ASPCA en esta página son los que valen para mascotas.",
       "whatToDoQuestion": "¿Qué hago si mi mascota se comió un trozo de {{name}}?",
       "whatToDoAnswer": "Llama ya a ASPCA Poison Control al (888) 426-4435 o a Pet Poison Helpline al (855) 764-7661, o a tu veterinario o a una clínica de urgencias. No esperes a ver si aparecen síntomas. La ASPCA indica que puede cobrarse una tarifa de consulta, y Pet Poison Helpline indica que cobra una tarifa de 99 USD por incidente."
     }

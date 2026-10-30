@@ -16,6 +16,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **The eight most-seen pet-safety pages quote more of their own sources.**
+  Each plant's ASPCA listing now also gives its other common names and plant
+  family, and the six toxic ones quote the listing's own line on what to do
+  (the hotline box still comes first). NC State Extension's "Poison Part"
+  values (which parts of the plant are poisonous) are quoted where its page
+  gives them, and those five pages answer "Which parts of … are poisonous?"
+  in their FAQ. Every value was re-read off the live pages on 2026-10-29.
+
 ### Changed
 
 - **Search titles answer the question people searched.** From 90 days of
@@ -38,6 +48,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   violet" keeps its capital, and each description says the page gives the
   numbers to call if a pet ate some. Verdicts, their ASPCA sources and the
   155-character budget are unchanged.
+
+### Fixed
+
+- **`npm run mobile:release` no longer builds an unsigned Android bundle
+  without saying so.** It used to print "Unsigned Android release bundle
+  built" every time, signed or not, and Gradle builds an unsigned AAB without
+  failing when any `ANDROID_UPLOAD_*` variable is missing. The build now stops
+  before it starts when a signing variable is missing or the keystore file
+  does not exist. `ALLOW_UNSIGNED_RELEASE=1` allows an unsigned local smoke
+  build. After `bundleRelease` it checks the AAB with `jarsigner -verify` and
+  matches the signer's certificate to the configured key alias. It prints
+  whether the bundle is signed and with which alias, and fails on an unsigned
+  or wrongly signed bundle. Secret values are never printed
+  (`scripts/check-android-release-signing.mjs`).
 
 ## [0.46.0] - 2026-10-29
 

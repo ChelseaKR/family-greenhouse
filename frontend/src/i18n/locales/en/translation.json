@@ -534,9 +534,12 @@
     "listingHeading": "What the ASPCA listing says",
     "listingIntro": "Quoted word for word from this plant’s own ASPCA listing.",
     "listingField": {
+      "additionalCommonNames": "Other names on the listing",
+      "family": "Plant family",
       "toxicPrinciples": "Toxic principles",
       "clinicalSigns": "Clinical signs",
-      "listingNote": "Also on the listing"
+      "listingNote": "Also on the listing",
+      "listingAdvice": "What the listing says to do"
     },
     "listCaveat": "The ASPCA’s plant list also says this about every plant on it: “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
     "listCitation": "ASPCA, “Toxic and Non-Toxic Plants”",
@@ -545,7 +548,8 @@
     "extensionField": {
       "poisonSeverity": "Poison severity",
       "poisonSymptoms": "Poison symptoms",
-      "poisonToxicPrinciple": "Toxic principle"
+      "poisonToxicPrinciple": "Toxic principle",
+      "poisonPart": "Poisonous parts"
     },
     "extensionCaveat": "The toolbox gives one severity rating for the whole plant, for people as well as pets, and it is not a measure of how much is too much. Whatever the rating, call a poison hotline or your vet if your pet has eaten some.",
     "extensionTagsLabel": "Its page tags the plant for:",
@@ -575,6 +579,8 @@
       "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
       "answerDetails": "Its listing gives the toxic principles as “{{principles}}” and the clinical signs as “{{signs}}”.",
       "answerAnyPlant": "Its plant list also says that “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+      "partsQuestion": "Which parts of {{name}} are poisonous?",
+      "partsAnswer": "{{publisher}}’s {{database}} lists these parts of the plant as poisonous: {{parts}}. It gives that list under “Poisonous to Humans”, and the ASPCA verdicts on this page are the ones for pets.",
       "whatToDoQuestion": "What should I do if my pet ate some {{name}}?",
       "whatToDoAnswer": "Call ASPCA Poison Control at (888) 426-4435 or the Pet Poison Helpline at (855) 764-7661, or call your vet or an emergency clinic, now. Don’t wait to see whether symptoms appear. The ASPCA says a consultation fee may apply, and the Pet Poison Helpline says a $99 incident fee applies."
     }
