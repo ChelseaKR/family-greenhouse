@@ -18,6 +18,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Every sign-up link on the content pages is counted, and a care guide's
+  plant is carried into the first run.** The care guide's sign-up box, the
+  pet-safety page's, the blog post's and the shared header's "Try the app"
+  link now send GA4 `landing_cta_click`, as the home page's two buttons
+  already did. They use their own parameters (`cta_source`, `cta_placement`,
+  `cta_plant`) and never the home page's `cta`, and they pass through the
+  same consent, Global Privacy Control and Do Not Track checks. Care guides
+  also get a "Remind me to water my …" link inside the "At a glance" water
+  row, so a sign-up link is on the first screen of a phone and a laptop. A
+  guide or pet-safety link for one of the first run's ten one-tap plants goes
+  to `/register?plant=<slug>`. The first run then lists that plant first and
+  says why. Nothing is added until the person taps it, and the sign-up steps
+  are unchanged. Unknown values are ignored and never shown.
+
 - **The eight most-seen pet-safety pages quote more of their own sources.**
   Each plant's ASPCA listing now also gives its other common names and plant
   family, and the six toxic ones quote the listing's own line on what to do
