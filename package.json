@@ -116,10 +116,10 @@
     "esbuild": "^0.28.2",
     "js-yaml": "^4.3.2",
     "uuid": "^14.0.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "eslint-plugin-react": {
       "eslint": "$eslint"
     },
