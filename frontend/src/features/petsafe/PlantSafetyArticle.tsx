@@ -4,6 +4,8 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { hasCareGuide } from '@/features/care/careGuideSlugs';
 import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
+import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { offersShopLink } from '@/features/plantShop/plantShop';
 import {
   ANIMALS,
@@ -187,7 +189,19 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
             {t('plantSafetyPage.signupBody')}
           </p>
           <div className="mt-4">
-            <Link to="/register" data-chrome="plantSafetyPage.signupCta" className={buttonStyles()}>
+            <Link
+              to={registerHrefForPlant(page.slug)}
+              data-chrome="plantSafetyPage.signupCta"
+              className={buttonStyles()}
+              onClick={() =>
+                trackGoogleConversion({
+                  name: 'landing_cta_click',
+                  source: 'pet_safe',
+                  placement: 'body',
+                  plant: page.slug,
+                })
+              }
+            >
               {t('plantSafetyPage.signupCta')}
             </Link>
           </div>

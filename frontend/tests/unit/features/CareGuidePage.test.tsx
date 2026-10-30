@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { CARE_GUIDES } from '@/features/care/careGuides';
 import { sentenceName } from '@/features/care/plantNames';
+import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 
 /**
@@ -332,10 +333,19 @@ describe('CareGuidePage answer and call to action', () => {
       expect(follows(glance!, cta!), guide.slug).toBe(true);
       expect(follows(cta!, summary!), guide.slug).toBe(true);
 
-      // The site header's own sign-up link is chrome; the page body has one.
-      const registers = container.querySelectorAll('main a[href="/register"]');
-      expect(registers.length, guide.slug).toBe(1);
+      // The site header's own sign-up link is chrome. The page body has two,
+      // both to the same place: one beside the water answer, one in the box.
+      const href = registerHrefForPlant(guide.slug);
+      const registers = container.querySelectorAll('main a[href^="/register"]');
+      expect(
+        [...registers].map((a) => a.getAttribute('href')),
+        guide.slug
+      ).toEqual([href, href]);
       expect(registers[0]!.textContent, guide.slug).toBe(
+        `Remind me to water my ${sentenceName(guide.commonName)} →`
+      );
+      expect(glance!.contains(registers[0]!), guide.slug).toBe(true);
+      expect(registers[1]!.textContent, guide.slug).toBe(
         `Get watering reminders for your ${sentenceName(guide.commonName)}`
       );
       unmount();
@@ -371,6 +381,25 @@ describe('CareGuidePage heading', () => {
   it('keeps every heading about the plant it is on', () => {
     for (const guide of CARE_GUIDES.filter((g) => g.heading)) {
       expect(guide.heading!.toLowerCase(), guide.slug).toContain(guide.commonName.toLowerCase());
+    }
+  });
+});
+
+describe('CareGuidePage sign-up links carry the plant', () => {
+  it('sends a first-run plant to /register?plant=<slug>, and any other plant to /register', () => {
+    for (const [slug, expected] of [
+      ['zz-plant', '/register?plant=zz-plant'],
+      ['monstera', '/register?plant=monstera'],
+      ['aloe-vera', '/register?plant=aloe-vera'],
+      // Not one of the first run's one-tap plants: nothing to carry.
+      ['bird-of-paradise', '/register'],
+    ] as const) {
+      const { container, unmount } = renderGuide(slug);
+      const hrefs = [...container.querySelectorAll('main a[href^="/register"]')].map((a) =>
+        a.getAttribute('href')
+      );
+      expect(hrefs, slug).toEqual([expected, expected]);
+      unmount();
     }
   });
 });

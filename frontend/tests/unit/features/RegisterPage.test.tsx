@@ -8,6 +8,7 @@ import { track } from '@/services/analytics';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 import { getPendingReferralCode } from '@/features/referrals/pendingReferralCode';
+import { getPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
@@ -29,6 +30,26 @@ describe('RegisterPage', () => {
       </MemoryRouter>
     );
   }
+
+  it('keeps a care guide’s plant for the first run, and leaves the form unchanged', () => {
+    sessionStorage.clear();
+    const { container } = renderPage('/register?plant=zz-plant');
+    expect(getPendingGuidePlant()?.slug).toBe('zz-plant');
+    // The same three fields: the sign-up steps themselves do not change.
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    expect(container.textContent).not.toContain('zz-plant');
+    sessionStorage.clear();
+  });
+
+  it('ignores a plant value that is not one of the first run’s plants', () => {
+    sessionStorage.clear();
+    const { container } = renderPage(
+      `/register?plant=${encodeURIComponent('<img src=x onerror=alert(1)>')}`
+    );
+    expect(getPendingGuidePlant()).toBeUndefined();
+    expect(sessionStorage.getItem('fg.pendingGuidePlant')).toBeNull();
+    expect(container.innerHTML).not.toContain('onerror');
+  });
 
   it('renders the free-account signup form and existing-account sign-in', () => {
     renderPage();

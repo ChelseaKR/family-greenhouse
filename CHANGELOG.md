@@ -18,6 +18,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Every sign-up link on the content pages is counted, and a care guide's
+  plant is carried into the first run.** The care guide's sign-up box, the
+  pet-safety page's, the blog post's and the shared header's "Try the app"
+  link now send GA4 `landing_cta_click`, as the home page's two buttons
+  already did. They use their own parameters (`cta_source`, `cta_placement`,
+  `cta_plant`) and never the home page's `cta`, and they pass through the
+  same consent, Global Privacy Control and Do Not Track checks. Care guides
+  also get a "Remind me to water my …" link inside the "At a glance" water
+  row, so a sign-up link is on the first screen of a phone and a laptop. A
+  guide or pet-safety link for one of the first run's ten one-tap plants goes
+  to `/register?plant=<slug>`. The first run then lists that plant first and
+  says why. Nothing is added until the person taps it, and the sign-up steps
+  are unchanged. Unknown values are ignored and never shown.
+
 - **The eight most-seen pet-safety pages quote more of their own sources.**
   Each plant's ASPCA listing now also gives its other common names and plant
   family, and the six toxic ones quote the listing's own line on what to do
@@ -28,6 +42,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **Third Search Console pass: three more care guides lead with the answer,
+  and four near-page-one guides get links from related guides.** Search
+  Console page and query data for the 28 days to 2026-10-29 had the heartleaf
+  philodendron (position 14), money tree (10, and 6 in the last 7 days) and
+  nerve plant (8) guides near page one without the answer-first title. Their
+  titles, descriptions and H1s now lead with each guide's own "At a glance"
+  watering line, and the money tree's with its ASPCA pet-safety verdict,
+  which is what its searchers asked. The ZZ plant, monstera, bird of paradise
+  and aloe vera guides, already retitled by the first two passes and being
+  measured until 2026-11-27, are unchanged. They gain one inline link each
+  from the money tree, parlor palm and sago palm guides, where the linked
+  plant shares the watering rhythm or suits the spot being described. No
+  plant facts change.
 - **Search titles answer the question people searched.** From 90 days of
   Search Console data (2026-07-31 to 2026-10-28), the ZZ plant, monstera,
   snake plant and English ivy care guides get titles, descriptions and H1s
@@ -61,6 +88,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Xcode Cloud builds no longer fail before they start.** Every push to
+  `main` failed at "Could not resolve package dependencies", because the
+  Capacitor plugins that `CapApp-SPM` resolves live in `node_modules`, which a
+  fresh clone does not have. `frontend/ios/App/ci_scripts/ci_post_clone.sh`
+  now installs Node 22, runs `npm ci`, makes the production web build from
+  the committed public values in `.env.mobile.production.example` (with iOS
+  push on, as in local release builds) and runs `npx cap sync ios`, after the
+  same `--production` validation as `npm run mobile:release`. The iOS
+  project's `Package.resolved` is now committed too: Xcode Cloud resolves
+  packages with automatic resolution off and stops without it. Internal, no
+  user-facing change.
 - **`npm run mobile:release` no longer builds an unsigned Android bundle
   without saying so.** It used to print "Unsigned Android release bundle
   built" every time, signed or not, and Gradle builds an unsigned AAB without
