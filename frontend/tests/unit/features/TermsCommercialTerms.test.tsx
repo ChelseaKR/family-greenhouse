@@ -81,6 +81,7 @@ const SECTIONS = [
   'priceChanges',
   'oneTimePurchases',
   'refunds',
+  'applePurchases',
 ] as const;
 
 describe('terms: the commercial sections render', () => {
@@ -308,5 +309,53 @@ describe('terms: the trial length is the one the backend actually asks Stripe fo
     expect(esLegal.legal.terms.trial.intro).toMatch(/nunca se suman/);
     expect(enLegal.legal.terms.trial.ending).not.toMatch(/14 days are up/);
     expect(esLegal.legal.terms.trial.ending).not.toMatch(/pasan los 14 días/);
+  });
+});
+
+describe('terms: an Apple purchase is described as the App Store build sells it (ADR 0041)', () => {
+  /**
+   * "Purchases made through Apple" says there is no free trial in the app and
+   * that the sections above it apply to website subscriptions only. The first
+   * claim holds only while the App Store products carry no introductory
+   * offer, and the second only while the section follows the ones it names.
+   */
+  const storekitPath = [
+    '../frontend/ios/App/App/FamilyGreenhouse.storekit',
+    'ios/App/App/FamilyGreenhouse.storekit',
+    'frontend/ios/App/App/FamilyGreenhouse.storekit',
+  ]
+    .map((candidate) => resolve(process.cwd(), candidate))
+    .find(existsSync);
+
+  it('has no introductory offer on any App Store product', () => {
+    expect(storekitPath, 'could not locate FamilyGreenhouse.storekit').toBeDefined();
+    const config = JSON.parse(readFileSync(storekitPath!, 'utf8')) as {
+      subscriptionGroups: { subscriptions: { introductoryOffer: unknown }[] }[];
+    };
+    const subscriptions = config.subscriptionGroups.flatMap((group) => group.subscriptions);
+    expect(subscriptions.length).toBeGreaterThan(0);
+    for (const subscription of subscriptions) {
+      expect(
+        subscription.introductoryOffer,
+        'an App Store product now has an introductory offer — the Terms say an Apple purchase has no free trial'
+      ).toBeNull();
+    }
+  });
+
+  it.each([
+    ['English', renderEnglish, enLegal.legal.terms],
+    ['Spanish', renderSpanish, esLegal.legal.terms],
+  ])('%s places the Apple section after the sections it calls "above"', (_l, renderPage, terms) => {
+    const headings = [...renderPage().container.querySelectorAll('h2')].map((h) => h.textContent);
+    const apple = headings.indexOf(terms.applePurchases.heading);
+    expect(apple).toBeGreaterThan(-1);
+    for (const section of ['trial', 'renewal', 'priceChanges', 'refunds'] as const) {
+      expect(headings.indexOf(terms[section].heading)).toBeLessThan(apple);
+    }
+  });
+
+  it('says in both locales that an Apple purchase has no free trial', () => {
+    expect(enLegal.legal.terms.applePurchases.body).toContain('there is no free trial');
+    expect(esLegal.legal.terms.applePurchases.body).toContain('no hay prueba gratuita');
   });
 });
