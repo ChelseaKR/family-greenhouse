@@ -15,4 +15,5 @@ ext {
     cordovaAndroidVersion = '14.0.1'
     composeBomVersion = '2026.03.01'
     playReviewVersion = '2.0.2'
+    firebaseMessagingVersion = '25.0.1'
 }

@@ -28,9 +28,11 @@ import { AskToUpgrade } from '@/components/LockedFeature';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
 import { SplitTheBill } from '@/features/pricing/SplitTheBill';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
+import { grandfatheredFreeCaps } from '@/features/billing/planCaps';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isPaymentLapsed, paymentFailedCopy } from '@/features/billing/paymentFailing';
 import { useReportPlanPurchase } from '@/features/billing/reportPlanPurchase';
+import { changePlanDescription } from './changePlanDescription';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
 // resolved and giftSubscriptions is on the offer, so it costs nothing on
@@ -40,6 +42,12 @@ const GiftSubscriptionCard = lazy(() =>
     default: m.GiftSubscriptionCard,
   }))
 );
+// Lazy: Apple In-App Purchase (ADR 0041) renders only inside the iPhone app
+// with purchases switched on, so no website visit ever loads it.
+const AppStorePlans = lazy(() =>
+  import('@/features/billing/AppStorePlans').then((m) => ({ default: m.AppStorePlans }))
+);
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { isNativeApp } from '@/lib/platform';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/features/legal/contacts';
 import { COMMERCIAL_HOLD_ACTIVE, COMMERCIAL_HOLD_EFFECTIVE_DATE } from '@/config/commercialStatus';
@@ -99,6 +107,9 @@ export function BillingSettings() {
   // Native retains its existing read-only notice. The repository commercial
   // hold now makes the web surface read-only as well.
   const native = isNativeApp();
+  // The iPhone app with App Store purchases on (ADR 0041): Apple's purchase
+  // sheet replaces the neutral "not available in the app" line.
+  const appStoreInApp = native && appStorePurchasesAvailable();
 
   const householdId = useActiveHouseholdId();
   const isAdmin = useIsHouseholdAdmin();
@@ -244,6 +255,10 @@ export function BillingSettings() {
   // didn't load: the card says so instead of staying silent, because silence
   // here reads as "you're fine".
   const limits = evaluatePlanLimits(usage);
+  // A household created before the 2026-10-23 Seedling cut keeps 20 plants
+  // and 3 people (ADR 0040). Its meters already show those caps; this says why
+  // they differ from the plan list below.
+  const grandfathered = grandfatheredFreeCaps(subQuery.data, plansQuery.data?.plans);
   // A live recurring subscription must be changed in the portal, never by a
   // second purchase. Mirrors the server-side guard that returns 409.
   // Mirrors the server guard, including its fail-closed treatment of an
@@ -317,6 +332,21 @@ export function BillingSettings() {
   // Three states, and `unknown` gets a sentence of its own rather than
   // borrowing either of the definite ones; see `resolveTrialOffer`.
   const trialOffer = resolveTrialOffer(subQuery.data);
+  // A running no-card Garden trial (ADR 0027). The household is ON Seedling
+  // (`planId`, which every purchase guard below keeps reading) but is USING
+  // Garden, and the plan grid used to mark Seedling "Current plan" with a
+  // "Switch to Garden" button under the tier the household already had. On
+  // the one screen a trial household opens to decide whether to pay, that
+  // read as "the trial did not start". The grid now marks Garden with the
+  // trial's end date and offers to keep it. The server publishes
+  // `noCardTrial` only when no Stripe state owns the household, so this never
+  // relabels a paying or card-trialing household.
+  const noCardTrialActive =
+    subQuery.data?.noCardTrial?.state === 'active' && planRead.planId === 'seedling';
+  const noCardTrialEnds =
+    noCardTrialActive && subQuery.data?.noCardTrial
+      ? formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' })
+      : null;
   const changePlanDescriptionKey =
     trialOffer === 'available'
       ? 'settings.billing.changePlanDescriptionTrial'
@@ -481,10 +511,10 @@ export function BillingSettings() {
               ? t('settings.billing.currentPlanTrial', { plan: planRead.planName })
               : paymentFailing
                 ? t('settings.billing.currentPlanUnpaid', { plan: planRead.planName })
-                : subQuery.data?.noCardTrial?.state === 'active'
+                : noCardTrialEnds
                   ? t('settings.billing.noCardTrial.currentPlan', {
                       plan: planRead.planName,
-                      date: formatDate(subQuery.data.noCardTrial.endsAt, { month: 'long' }),
+                      date: noCardTrialEnds,
                     })
                   : t('settings.billing.currentPlan', { plan: planRead.planName })}
           </p>
@@ -524,9 +554,15 @@ export function BillingSettings() {
           </Alert>
         )}
         {usage && <UsageMeters usage={usage} limits={limits} />}
-        {native && (
-          <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+        {grandfathered && (
+          <p className="mt-3 text-sm text-gray-600" data-testid="free-caps-grandfathered">
+            {t('settings.billing.freeCapsGrandfathered', grandfathered)}
+          </p>
         )}
+        {native &&
+          (appStoreInApp ? null : (
+            <p className="mt-4 text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+          ))}
         {!paymentsAvailable && (
           <p className="mt-4 text-sm text-gray-600">{t('settings.billing.noActionAvailable')}</p>
         )}
@@ -550,6 +586,30 @@ export function BillingSettings() {
           </div>
         )}
       </Card>
+
+      {/* On the website, a household paying Apple (ADR 0041) is told where its
+          plan is managed; the plan checkout below refuses it with a 409. */}
+      {!native && subQuery.data?.appStore?.state === 'active' && (
+        <Alert variant="info">
+          <p data-testid="billed-by-app-store">
+            {t('appStore.webBilledByApple', {
+              plan:
+                plans.find((p) => p.id === subQuery.data?.appStore?.planId)?.name ??
+                subQuery.data.appStore.planId,
+            })}
+          </p>
+        </Alert>
+      )}
+
+      {appStoreInApp && (
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <AppStorePlans
+            subscription={subQuery.data}
+            isAdmin={isAdmin}
+            planNames={Object.fromEntries(plans.map((p) => [p.id, p.name]))}
+          />
+        </Suspense>
+      )}
 
       {showTopUp && topUpOffer && (
         <div>
@@ -587,7 +647,7 @@ export function BillingSettings() {
         <Card>
           <CardHeader
             title={t('settings.billing.changePlanTitle')}
-            description={t(changePlanDescriptionKey)}
+            description={changePlanDescription(t, subQuery.data, changePlanDescriptionKey)}
           />
           {/* Fail closed, for the same reason `hasLiveSubscription` does: with
               the subscription read unsettled we do not know what the household
@@ -601,7 +661,12 @@ export function BillingSettings() {
           ) : planRead.status !== 'ready' ? null : (
             <PaidPlanGrid
               plans={plans}
-              currentPlanId={planRead.planId ?? undefined}
+              currentPlanId={noCardTrialEnds ? 'garden' : (planRead.planId ?? undefined)}
+              currentPlanBadge={
+                noCardTrialEnds
+                  ? t('settings.billing.noCardTrial.planBadge', { date: noCardTrialEnds })
+                  : undefined
+              }
               renderCta={(plan, interval, price) => (
                 <>
                   {/* "$X ÷ N members = $Y each" from the live price and the
@@ -628,6 +693,7 @@ export function BillingSettings() {
                     t,
                     isPending: checkoutMutation.isPending,
                     pendingPlanId: checkoutMutation.variables?.planId,
+                    trialPlanId: noCardTrialEnds ? 'garden' : undefined,
                     onSelect: () =>
                       checkoutMutation.mutate({
                         planId: plan.id as 'garden' | 'greenhouse',
@@ -664,6 +730,7 @@ function renderPlanCta({
   awaitingEntitlement,
   isPending,
   pendingPlanId,
+  trialPlanId,
   onSelect,
   t,
 }: {
@@ -683,6 +750,9 @@ function renderPlanCta({
   awaitingEntitlement: boolean;
   isPending: boolean;
   pendingPlanId?: string;
+  /** The tier a running no-card trial lends the household. Its button reads
+   *  "Keep …" rather than "Switch to …", because the household already has it. */
+  trialPlanId?: PlanId;
   onSelect: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
@@ -750,7 +820,9 @@ function renderPlanCta({
         ? currentPlanId === plan.id
           ? t('settings.billing.convertToLifetime', { plan: plan.name })
           : t('settings.billing.buyLifetime', { plan: plan.name })
-        : t('settings.billing.switchTo', { plan: plan.name })}
+        : trialPlanId === plan.id
+          ? t('settings.billing.noCardTrial.keepPlan', { plan: plan.name })
+          : t('settings.billing.switchTo', { plan: plan.name })}
     </Button>
   );
 }

@@ -21,6 +21,14 @@ set +a
 cd "$REPO_ROOT"
 node scripts/validate-store-release.mjs --production
 
+BUILD_ANDROID=false
+if [[ -n "${JAVA_HOME:-}" && -x "$FRONTEND_DIR/android/gradlew" ]]; then
+  BUILD_ANDROID=true
+  # Fails before the slow web build when any ANDROID_UPLOAD_* variable is
+  # missing, unless ALLOW_UNSIGNED_RELEASE=1 opts into an unsigned smoke build.
+  node scripts/check-android-release-signing.mjs preflight
+fi
+
 cd "$FRONTEND_DIR"
 MOBILE_STORE_BUILD=true npm run build
 # vite-plugin-pwa may emit Workbox maps independently of Vite's build flag.
@@ -32,14 +40,17 @@ node scripts/validate-store-release.mjs --production --synced
 
 echo "Production web assets are validated and synchronized into both native projects."
 
-if [[ -n "${JAVA_HOME:-}" && -x "$FRONTEND_DIR/android/gradlew" ]]; then
+if [[ "$BUILD_ANDROID" == true ]]; then
   (
     cd "$FRONTEND_DIR/android"
     ./gradlew bundleRelease
   )
-  echo "Unsigned Android release bundle built. Use the upload keystore to sign it before Play upload."
+  # Prints whether the AAB is signed and with which key alias, checked with
+  # jarsigner -verify; fails on an unsigned bundle unless explicitly allowed.
+  node scripts/check-android-release-signing.mjs verify \
+    "$FRONTEND_DIR/android/app/build/outputs/bundle/release/app-release.aab"
 else
   echo "JAVA_HOME is not set; skipped Android bundleRelease."
 fi
 
-echo "Next: sign the Android AAB and archive the iOS app in Xcode."
+echo "Next: upload the verified Android AAB to Play and archive the iOS app in Xcode."

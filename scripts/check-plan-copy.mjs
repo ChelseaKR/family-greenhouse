@@ -2,7 +2,7 @@
 /**
  * Re-derive the free plan's caps wherever public copy states them.
  *
- * The Seedling caps — one home, 3 members, 20 plants — are the most-repeated
+ * The Seedling caps — one home, 2 members, 8 plants — are the most-repeated
  * numbers in the product. They appear in the page metadata, the PWA manifest,
  * the SEO catalog, the landing page, the care index, the blog footer CTA and
  * inside two blog posts: fifteen statements across eight files, every one of
@@ -19,6 +19,9 @@
  * stale while real cards were being charged, which is why
  * `scripts/check-doc-figures.mjs` re-derives that table. This is the same
  * remedy pointed at the copy a prospective customer reads first.
+ *
+ * They moved again on 2026-10-23: ADR 0040 cut Seedling to 8 plants and
+ * 2 members, and this gate is what found every sentence that had to follow.
  *
  * Every check fails in BOTH directions, exactly as check-doc-figures does: a
  * cap that moves in `plans.ts` fails here, and so does a sentence that is

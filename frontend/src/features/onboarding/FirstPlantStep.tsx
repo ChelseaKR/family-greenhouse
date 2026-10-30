@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next';
 import { plantService } from '@/services/plantService';
 import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -15,6 +16,7 @@ import { Alert } from '@/components/Alert';
 import { EmptyPlants } from '@/components/illustrations/EmptyPlants';
 import { toast } from '@/store/toastStore';
 import type { FirstRunVariant } from './firstRunModel';
+import { CommonPlantPicker } from './CommonPlantPicker';
 
 const makeFirstPlantSchema = (t: TFunction) =>
   z.object({
@@ -81,6 +83,11 @@ interface FirstPlantStepProps {
  * For a `joiner` the same step is the moment they put something of their own
  * into a shared household, which is the point at which they stop being a
  * spectator of someone else's plants.
+ *
+ * The fastest path comes first (2026-10-23): a grid of common houseplants,
+ * where one tap saves the plant with a watering reminder (CommonPlantPicker).
+ * The name form below it is the "something else" path and is unchanged, and
+ * the full Add Plant page is still one link away. Skip is still a real skip.
  */
 export function FirstPlantStep({
   headingId,
@@ -94,6 +101,9 @@ export function FirstPlantStep({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  // A tap in the picker and a submit of the form must not both create a
+  // plant, so each disables the other while it is saving.
+  const [pickerPending, setPickerPending] = useState(false);
   const [applySchedule, setApplySchedule] = useState(true);
   // Only consulted when no curated bundle matched. `null` is the user
   // explicitly declining a reminder, which stays a real option.
@@ -172,6 +182,9 @@ export function FirstPlantStep({
       // Mirrors AddPlantPage's event so the activation funnel counts a
       // first-run plant and a plant added the long way as the same thing.
       track('plant_added', { ordinal: 'first' });
+      // GA4 `household_activated`; see AddPlantPage. Carries no plant data.
+      trackGoogleConversion({ name: 'household_activated' });
+      trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(
@@ -209,8 +222,19 @@ export function FirstPlantStep({
         </p>
       </div>
 
+      <CommonPlantPicker
+        householdId={householdId}
+        onAdded={onAdded}
+        disabled={mutation.isPending}
+        onPendingChange={setPickerPending}
+      />
+
+      <h2 className="mt-8 border-t border-dew/50 pt-6 text-base font-semibold text-ink">
+        {t('firstRun.picker.somethingElse')}
+      </h2>
+
       {error && (
-        <Alert variant="error" className="mt-6">
+        <Alert variant="error" className="mt-4">
           {error}
         </Alert>
       )}
@@ -220,7 +244,7 @@ export function FirstPlantStep({
           setError(null);
           mutation.mutate(data);
         })}
-        className="mt-6 space-y-5"
+        className="mt-4 space-y-5"
         noValidate
       >
         <Input
@@ -255,7 +279,13 @@ export function FirstPlantStep({
         />
 
         <div className="flex flex-col gap-3 sm:flex-row-reverse sm:items-center sm:justify-start">
-          <Button type="submit" size="lg" isLoading={mutation.isPending} className="sm:min-w-44">
+          <Button
+            type="submit"
+            size="lg"
+            isLoading={mutation.isPending}
+            disabled={pickerPending}
+            className="sm:min-w-44"
+          >
             {t('firstRun.plant.submit')}
           </Button>
           <Button type="button" variant="secondary" onClick={onSkip}>

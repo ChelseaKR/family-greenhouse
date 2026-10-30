@@ -1474,7 +1474,7 @@ describe('households handler', () => {
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
     expect(res.statusCode).toBe(402);
-    expect(res.body).toMatch(/Seedling plan, limited to 3 members/);
+    expect(res.body).toMatch(/Seedling plan, limited to 2 members/);
     expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
   });
 
@@ -1610,7 +1610,7 @@ describe('households handler', () => {
         'user-2',
         'Bob',
         'b@b.com',
-        3
+        2
       );
     }
   );

@@ -166,6 +166,7 @@ const en: Catalog = {
   'unsub.category.weekly_digest': 'the weekly digest',
   'unsub.category.year_recap': 'the year in review',
   'unsub.category.pest_alerts': 'pest season heads-ups',
+  'unsub.category.trial_notices': 'the emails about your free Garden trial ending',
   'unsub.confirmBody':
     'This turns off {{category}}. Your other Family Greenhouse emails are not affected, and you can turn it back on any time in your settings.',
   'unsub.confirmButton': 'Turn these emails off',
@@ -313,6 +314,7 @@ const es: Catalog = {
   'unsub.category.weekly_digest': 'el resumen semanal',
   'unsub.category.year_recap': 'el resumen del año',
   'unsub.category.pest_alerts': 'los avisos de plagas',
+  'unsub.category.trial_notices': 'los correos sobre el fin de tu prueba gratuita de Garden',
   'unsub.confirmBody':
     'Esto desactiva {{category}}. El resto de correos de Family Greenhouse no cambian, y puedes volver a activarlo cuando quieras desde tus ajustes.',
   'unsub.confirmButton': 'Desactivar estos correos',
