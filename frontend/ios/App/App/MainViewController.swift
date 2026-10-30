@@ -26,6 +26,10 @@ class MainViewController: CAPBridgeViewController {
         // Apple's rating sheet (NativeReviewPlugin.swift, ADR 0036). The web
         // asks for it only when the bridge lists it.
         bridge?.registerPluginInstance(NativeReviewPlugin())
+        // Apple In-App Purchase (NativePurchasesPlugin.swift, ADR 0041). The
+        // web uses it only when the build turns purchases on and the bridge
+        // lists it.
+        bridge?.registerPluginInstance(NativePurchasesPlugin())
         observeBackSwipe()
     }
 

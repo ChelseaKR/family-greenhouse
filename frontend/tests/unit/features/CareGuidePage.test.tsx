@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { CARE_GUIDES } from '@/features/care/careGuides';
+import { sentenceName } from '@/features/care/plantNames';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 
 /**
@@ -217,6 +218,57 @@ describe('CareGuidePage pet toxicity', () => {
     expect(PET_TOXICITY.find((e) => e.slug === 'pothos')!.aspcaListing).toBeDefined();
   });
 
+  it('negative control: a new guide loses its markup when its listing is removed', () => {
+    const entry = PET_TOXICITY.find((e) => e.slug === 'poinsettia')!;
+    const saved = entry.aspcaListing;
+    const intact = renderGuide('poinsettia');
+    expect(faqNames(intact.container).map((q) => q.name)).toContain(
+      'Is a poinsettia toxic to cats and dogs?'
+    );
+    intact.unmount();
+    try {
+      entry.aspcaListing = undefined;
+      expect(PET_TOXICITY.find((e) => e.slug === 'poinsettia')!.aspcaListing).toBeUndefined();
+      const { container } = renderGuide('poinsettia');
+      expect(
+        section(container).querySelector('[data-claim="cats"]')!.getAttribute('data-state')
+      ).toBe('not-assessed');
+      expect(faqNames(container).map((q) => q.name)).not.toContain(
+        'Is a poinsettia toxic to cats and dogs?'
+      );
+    } finally {
+      entry.aspcaListing = saved;
+    }
+    expect(PET_TOXICITY.find((e) => e.slug === 'poinsettia')!.aspcaListing).toBeDefined();
+  });
+
+  it('renders the lily guide’s two different verdicts, and a negative control removes them', () => {
+    const entry = PET_TOXICITY.find((e) => e.slug === 'lily')!;
+    const saved = entry.aspcaListing;
+    const intact = renderGuide('lily');
+    const claim = (c: HTMLElement, animal: string) =>
+      section(c).querySelector(`[data-claim="${animal}"]`)!.getAttribute('data-state');
+    expect(claim(intact.container, 'cats')).toBe('toxic');
+    expect(claim(intact.container, 'dogs')).toBe('non-toxic');
+    expect(faqNames(intact.container).map((q) => q.name)).toContain(
+      'Is a true lily toxic to cats and dogs?'
+    );
+    intact.unmount();
+    try {
+      entry.aspcaListing = undefined;
+      expect(PET_TOXICITY.find((e) => e.slug === 'lily')!.aspcaListing).toBeUndefined();
+      const { container } = renderGuide('lily');
+      expect(claim(container, 'cats')).toBe('not-assessed');
+      expect(claim(container, 'dogs')).toBe('not-assessed');
+      expect(faqNames(container).map((q) => q.name)).not.toContain(
+        'Is a true lily toxic to cats and dogs?'
+      );
+    } finally {
+      entry.aspcaListing = saved;
+    }
+    expect(PET_TOXICITY.find((e) => e.slug === 'lily')!.aspcaListing).toBeDefined();
+  });
+
   it('marks up every FAQ it shows except an unsourced pet answer, and nothing else', () => {
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);
@@ -253,6 +305,72 @@ describe('CareGuidePage structure', () => {
         guide.slug
       ).toBe(`https://familygreenhouse.net/care/${guide.slug}`);
       unmount();
+    }
+  });
+});
+
+/**
+ * The answer and the one call to action sit above the summary. Searchers ask
+ * "how often to water <plant>", and the water line used to come after a
+ * paragraph of personality; the sign-up link came after the FAQ.
+ */
+describe('CareGuidePage answer and call to action', () => {
+  it('puts the at-a-glance answer, then one plant-named reminder link, before the summary', () => {
+    for (const guide of CARE_GUIDES) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const glance = container.querySelector(`aside[aria-label="${guide.commonName} at a glance"]`);
+      const cta = container.querySelector('[data-testid="care-cta"]');
+      const summary = [...container.querySelectorAll('p')].find(
+        (p) => p.textContent === guide.summary
+      );
+      expect(glance, guide.slug).not.toBeNull();
+      expect(cta, guide.slug).not.toBeNull();
+      expect(summary, guide.slug).toBeDefined();
+      expect(glance!.textContent, guide.slug).toContain(guide.quickFacts.water);
+      const follows = (a: Node, b: Node) =>
+        Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(follows(glance!, cta!), guide.slug).toBe(true);
+      expect(follows(cta!, summary!), guide.slug).toBe(true);
+
+      // The site header's own sign-up link is chrome; the page body has one.
+      const registers = container.querySelectorAll('main a[href="/register"]');
+      expect(registers.length, guide.slug).toBe(1);
+      expect(registers[0]!.textContent, guide.slug).toBe(
+        `Get watering reminders for your ${sentenceName(guide.commonName)}`
+      );
+      unmount();
+    }
+  });
+});
+
+describe('CareGuidePage heading', () => {
+  /**
+   * `heading` is set only where Search Console showed a narrower question
+   * than "<Name> care" (2026-10-29). Google asks that the Article headline
+   * match the visible one, so the two must move together.
+   */
+  it('renders a guide’s heading as the H1 and the Article headline', () => {
+    const headed = CARE_GUIDES.filter((g) => g.heading);
+    expect(headed.map((g) => g.slug)).toContain('zz-plant');
+    for (const guide of [...headed, CARE_GUIDES.find((g) => !g.heading)!]) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const expected = guide.heading ?? `${guide.commonName} care`;
+      expect(screen.getByRole('heading', { level: 1 }).textContent, guide.slug).toBe(expected);
+      const script = container.ownerDocument.querySelector('script[type="application/ld+json"]');
+      const graph = JSON.parse(script!.textContent!)['@graph'] as {
+        '@type': string;
+        headline?: string;
+      }[];
+      expect(graph.find((node) => node['@type'] === 'Article')!.headline, guide.slug).toBe(
+        expected
+      );
+      unmount();
+    }
+  });
+
+  it('keeps every heading about the plant it is on', () => {
+    for (const guide of CARE_GUIDES.filter((g) => g.heading)) {
+      expect(guide.heading!.toLowerCase(), guide.slug).toContain(guide.commonName.toLowerCase());
     }
   });
 });

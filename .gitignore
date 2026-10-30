@@ -27,6 +27,9 @@ build/
 .next/
 out/
 
+# Pinned third-party tool binaries built by the gate (scripts/check-greenlight.mjs).
+.tools/
+
 # Environment files
 .env
 .env.local

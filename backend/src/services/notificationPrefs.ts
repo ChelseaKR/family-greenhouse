@@ -65,6 +65,12 @@ export interface NotificationPreferences {
    */
   yearRecap: boolean;
   /**
+   * The two emails about the no-card Garden trial ending (ADR 0039): day 10
+   * and day 14. Defaults ON whenever email is on, like `yearRecap`; one-click
+   * unsubscribe in those emails turns it off.
+   */
+  trialNotices: boolean;
+  /**
    * Language outbound email is written in: `'en'`, `'es'`, or `''` for
    * "never chosen".
    *
@@ -125,6 +131,7 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   coverageUpdates: true,
   careCredit: true,
   yearRecap: true, // same rule as weeklyDigest
+  trialNotices: true, // same rule as weeklyDigest
   emailLocale: '', // never guessed; '' means "nobody has told us"
   phoneVerified: false,
 };
@@ -180,6 +187,8 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     // Those users were receiving the recap on `email` alone, so default-on
     // preserves what they already had.
     yearRecap: item.yearRecap === undefined ? Boolean(item.email) : Boolean(item.yearRecap),
+    trialNotices:
+      item.trialNotices === undefined ? Boolean(item.email) : Boolean(item.trialNotices),
     emailLocale: normalizeEmailLocale(item.emailLocale),
     phoneVerified: Boolean(item.phoneVerified),
     updatedAt: (item.updatedAt as string) ?? '',
@@ -252,11 +261,13 @@ export type PreferencesInput = Omit<
   | 'phoneVerified'
   | 'weeklyDigest'
   | 'yearRecap'
+  | 'trialNotices'
   | 'emailLocale'
   | HouseholdEmailPrefKey
 > & {
   weeklyDigest?: boolean;
   yearRecap?: boolean;
+  trialNotices?: boolean;
   /** Optional so a client that predates the field cannot wipe a stored
    *  language by round-tripping a payload that never carried it. */
   emailLocale?: '' | 'en' | 'es';
@@ -299,6 +310,7 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
     weeklyDigest: prefs.weeklyDigest ?? existing.weeklyDigest,
     ...householdEmailPrefs,
     yearRecap: prefs.yearRecap ?? existing.yearRecap,
+    trialNotices: prefs.trialNotices ?? existing.trialNotices,
     emailLocale: normalizeEmailLocale(prefs.emailLocale ?? existing.emailLocale),
     phoneVerified,
     timezone,
@@ -477,6 +489,7 @@ const CATEGORY_FIELD = {
   weekly_digest: 'weeklyDigest',
   year_recap: 'yearRecap',
   pest_alerts: 'pestAlerts',
+  trial_notices: 'trialNotices',
 } as const;
 
 export type UnsubscribableCategory = keyof typeof CATEGORY_FIELD;

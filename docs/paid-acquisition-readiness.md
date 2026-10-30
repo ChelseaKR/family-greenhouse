@@ -83,7 +83,7 @@ Four concrete briefs. Each names the real screenshot to take, the hook, and the 
 
 - **What's shown:** The three-step "How It Works" sequence already on the landing page (add plants → invite household → split the work), or a simple screen-recording GIF of the Add Plant flow.
 - **Hook line:** _"Add a plant. Get a schedule. Never wonder again."_
-- **Supporting line:** "Free for one home, up to 3 people and 20 plants. About five minutes to set up."
+- **Supporting line:** "Free for one home, up to 2 people and 8 plants. About five minutes to set up."
 - **CTA:** "Sign up free"
 - **Format:** Best as a short (6–10s) screen-capture video ad; static carousel as a fallback.
 
@@ -93,7 +93,7 @@ Four concrete briefs. Each names the real screenshot to take, the hook, and the 
 
 Four variants, one per keyword theme from §1. Character-counted against Google's limits (headlines ≤ 30 chars, descriptions ≤ 90 chars) — every string below was verified with a length check before being written here, not eyeballed.
 
-All prices are read from `backend/src/models/plans.ts` at the time of writing: Seedling is free (1 home / 3 members / 20 plants), Garden is **$4.99/mo** (annual and lifetime cadences are currently withdrawn from sale per `withdrawnIntervals` — **do not advertise an annual or lifetime price**, only the monthly figure is actually being sold today).
+All prices are read from `backend/src/models/plans.ts` at the time of writing: Seedling is free (1 home / 2 members / 8 plants; households created before 2026-10-24 keep 3 / 20, ADR 0040), Garden is **$4.99/mo** (annual and lifetime cadences are currently withdrawn from sale per `withdrawnIntervals` — **do not advertise an annual or lifetime price**, only the monthly figure is actually being sold today).
 
 ### Variant A — Household / shared reminders
 
@@ -101,7 +101,7 @@ All prices are read from `backend/src/models/plans.ts` at the time of writing: S
 - H2: `Free, No Card Needed` (20)
 - H3: `Reminders Everyone Sees` (23)
 - D1: `Reminders, tasks, and a shared log for your whole household. Free to start.` (75)
-- D2: `Up to 20 plants, 3 people, no card needed. Garden plan adds more for $4.99/mo.` (78)
+- D2: `Up to 8 plants, 2 people, no card needed. Garden plan adds more for $4.99/mo.` (77)
 
 ### Variant B — Vacation / sitter coordination
 
@@ -122,10 +122,10 @@ All prices are read from `backend/src/models/plans.ts` at the time of writing: S
 ### Variant D — Free tier / beginner onboarding
 
 - H1: `Plant Care, Made Easy` (21)
-- H2: `Free for 3 People` (17)
+- H2: `Free for 2 People` (17)
 - H3: `Start in 5 Minutes` (18)
 - D1: `Add a plant, invite your household, done in about five minutes. Free to start.` (78)
-- D2: `Free for 1 home, 3 people, 20 plants. Garden plan unlocks more for $4.99/mo.` (76)
+- D2: `Free for 1 home, 2 people, 8 plants. Garden plan unlocks more for $4.99/mo.` (75)
 
 **Ad-to-landing-page match** (Quality Score, and honesty): Variant C should route to `/pet-safe`, not the homepage — that page already exists, is free, no-signup, and answers the ad's promise in one screen. Variants A, B, D route to `/` (the homepage carries the signup CTA and full pricing). See §4.
 
@@ -140,7 +140,7 @@ Reviewed `frontend/src/features/landing/LandingPage.tsx` as a first-time visitor
 - Price and free-tier limits are accurate and match `plans.ts` exactly (checked the "product facts" band, the `SoftwareApplication` JSON-LD `offers`, and the meta description against the catalog — no drift).
 - No fabricated numbers — the file's own comment notes a prior "50,000+ Happy Plants" claim was removed as fabricated; nothing similar has crept back in.
 - Full pricing is visible on the same page (`#pricing` anchor renders `PricingGrid`, which fails closed to a status notice rather than ever showing a stale/wrong price) — a cold visitor doesn't have to hunt for cost.
-- Free vs. paid is represented honestly: the product facts band, the JSON-LD offer, and the plan grid all agree on "free for 1 home, 3 people, 20 plants," and nothing implies the paid tiers unlock something they don't.
+- Free vs. paid is represented honestly: the product facts band, the JSON-LD offer, and the plan grid all agree on "free for 1 home, 2 people, 8 plants," and nothing implies the paid tiers unlock something they don't.
 
 ### Fixed in this pass
 

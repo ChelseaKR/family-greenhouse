@@ -9,6 +9,12 @@ import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
+
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
 
 const API = 'http://localhost:4000';
 
@@ -117,6 +123,7 @@ beforeEach(() => {
   usePrefsStore.setState({ welcomeSeen: false });
   createdTasks.length = 0;
   appliedTemplates.length = 0;
+  vi.mocked(trackGoogleConversion).mockClear();
 });
 
 afterEach(() => {
@@ -235,6 +242,20 @@ describe('WelcomeFlow activation path', () => {
     // The plant exists, but the run is not over — nothing is marked seen
     // until the user actually leaves.
     expect(usePrefsStore.getState().welcomeSeen).toBe(false);
+    // GA4 activation: once, only after the plant was saved, with no plant data;
+    // `first_plant_added` beside it names only the path taken.
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'typed' }],
+    ]);
+  });
+
+  it('sends no activation before a plant is saved (negative control)', async () => {
+    newHouseholdHandlers();
+    renderFirstRun();
+    // The page rendered and is waiting for a plant: the control reached the step.
+    expect(await screen.findByLabelText(/plant name/i)).toBeVisible();
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 
   it('mints a real invite link on the invite step', async () => {
@@ -529,5 +550,108 @@ describe('WelcomeFlow always leaves with a schedule (#477)', () => {
 
     expect(appliedTemplates).toEqual(['tropical-houseplant']);
     expect(createdTasks).toEqual([]);
+  });
+});
+
+/**
+ * The houseplant shortcut (2026-10-23): one tap saves a real plant and starts
+ * its watering reminder, in the empty household the first run exists for.
+ */
+describe('WelcomeFlow common-plant shortcut', () => {
+  function capturePlants(status = 200) {
+    const created: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${API}/plants`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        created.push(body);
+        return status === 200
+          ? HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' })
+          : HttpResponse.json({ message: 'The plant could not be saved.' }, { status });
+      })
+    );
+    return created;
+  }
+
+  it('adds a tapped plant with its species and a reminder from its care guide', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    const before = Date.now();
+    await user.click(await screen.findByRole('button', { name: 'Snake plant' }));
+
+    expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
+    expect(created).toEqual([{ name: 'Snake plant', species: 'Dracaena trifasciata' }]);
+    // The guide says every 2–3 weeks: the reminder starts at the low end, one
+    // interval out, never due today.
+    expect(createdTasks).toHaveLength(1);
+    expect(createdTasks[0]).toMatchObject({ plantId: 'p-new', type: 'water', frequency: 14 });
+    const dueInDays = (Date.parse(String(createdTasks[0].nextDue)) - before) / 86_400_000;
+    expect(dueInDays).toBeGreaterThan(13.9);
+    expect(dueInDays).toBeLessThan(14.1);
+    // No curated template: the guide is the source, not the broad bundle.
+    expect(appliedTemplates).toEqual([]);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'common_plant' }],
+    ]);
+  });
+
+  it('is offered beside the typed form and Skip, so it is never the only way on', async () => {
+    newHouseholdHandlers();
+    renderFirstRun();
+
+    const group = await screen.findByRole('heading', { name: /pick a common houseplant/i });
+    expect(group).toBeVisible();
+    expect(screen.getAllByRole('button', { name: /^(pothos|monstera|jade plant)$/i })).toHaveLength(
+      3
+    );
+    expect(screen.getByRole('heading', { name: /something else/i })).toBeVisible();
+    expect(screen.getByLabelText(/plant name/i)).toBeVisible();
+    expect(screen.getByRole('button', { name: /skip for now/i })).toBeEnabled();
+  });
+
+  it('sends nothing and stays on the step when the plant could not be saved (negative control)', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers();
+    const created = capturePlants(500);
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'Pothos' }));
+
+    // The control reached the server: a create was attempted and refused.
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(await screen.findByText('The plant could not be saved.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: /add your first plant/i })).toBeVisible();
+    expect(createdTasks).toEqual([]);
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
+    // And the picker is usable again for a retry.
+    expect(screen.getByRole('button', { name: 'Pothos' })).toBeEnabled();
+  });
+
+  it('still saves the plant and moves on when only the reminder fails', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers();
+    const created = capturePlants();
+    server.use(http.post(`${API}/tasks`, () => new HttpResponse(null, { status: 500 })));
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'Monstera' }));
+
+    expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
+    expect(created).toEqual([{ name: 'Monstera', species: 'Monstera deliciosa' }]);
+  });
+
+  it('is never shown to an established member, whose dashboard is untouched (negative control)', async () => {
+    newHouseholdHandlers({ plants: [{ id: 'p1', name: 'Pothos' }] });
+    const created = capturePlants();
+    renderFirstRun();
+
+    // The control applied: the gate ran and sent this person on.
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: /pick a common houseplant/i })).toBeNull();
+    expect(created).toEqual([]);
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
   });
 });

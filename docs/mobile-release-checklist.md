@@ -7,10 +7,21 @@
 - [x] Account deletion (`/account`, reachable before household setup), AI
       response reporting (`ReportResponseControl` on every assistant answer),
       and the camera/photo purpose strings in `Info.plist` are implemented.
-- [ ] Native purchase guards. `BillingSettings` and `/pricing` are gated;
-      `LockedFeature` is not, so `/chat` shows a Seedling household a
-      subscription price and an upgrade call to action inside the app. See
-      `docs/mobile.md`, "Store payment rules".
+- [x] Native purchase guards. `BillingSettings`, `/pricing` and
+      `LockedFeature` are gated (#804): `/chat` on Seedling shows what the
+      feature is with no price and no ask inside the app, held by
+      `tests/unit/components/LockedFeature.test.tsx`. With App Store
+      purchases on (ADR 0041), the only price in the app is StoreKit's, held
+      by `tests/unit/features/AppStorePlans.test.tsx`. See `docs/mobile.md`,
+      "Store payment rules" and "In-App Purchase".
+- [ ] In-App Purchase, if this build sells through the App Store: the App
+      Store Connect subscription group and both products exist and are
+      attached to the version, the server switch is on in production, the
+      App Store Server Notifications v2 URL is set for Production and
+      Sandbox, the build was made with `VITE_APP_STORE_PURCHASES=true`, a
+      Sandbox purchase and a restore were checked on a device, and the Terms
+      wording for the app is the owner's. Leave unchecked for a build
+      without purchases.
 - [x] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send: 11
       data types, with `NSPrivacyTracking` false. The shells run the same web
       bundle, so they post `/telemetry/product` (Product Interaction, keyed to
@@ -102,6 +113,7 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 npm run mobile:release -- frontend/.env.mobile.production
 ```
 
+- [ ] Confirm the build ended with "Signed Android release bundle built" and your key alias. It fails, rather than printing that line, when the bundle is unsigned or signed by another key.
 - [ ] Upload the signed AAB to Play internal testing, then the required closed test.
 - [ ] Archive in Xcode, generate the privacy report, validate, and upload to internal TestFlight.
 - [ ] Re-run login, token refresh, plant/task CRUD, camera and library uploads, chat reporting, offline recovery, and deletion from the uploaded builds.

@@ -43,6 +43,10 @@ export const WORKSPACES = ['frontend', 'backend'];
  * @property {string} [workspace] Workspace to run it in; omitted = repo root.
  * @property {number}  weight    Scheduler cost; 0 = start immediately.
  * @property {string}  why       What this step catches, for the failure report.
+ * @property {boolean} [skippable] The step may exit 78 to say "could not run
+ *                                 here". The runner reports SKIP and does NOT
+ *                                 count it as passed. Any other step exiting
+ *                                 78 fails like any other non-zero exit.
  */
 
 /** @type {GateStep[]} */
@@ -267,6 +271,13 @@ export const STEPS = [
     script: 'mobile:validate',
     weight: 0,
     why: 'native version parity, store listing metadata, and the store-build config',
+  },
+  {
+    id: 'greenlight',
+    script: 'greenlight:check',
+    weight: 0,
+    skippable: true,
+    why: 'App Store and Play Store rejection risks in frontend/ios and frontend/android (pinned greenlight, CRITICAL/HIGH fail); exits 78 = SKIP, not passed, when the scanner cannot be built locally, and a CI skip fails',
   },
   {
     id: 'well-known:check',
