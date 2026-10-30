@@ -324,10 +324,9 @@ describe('detail rules fail closed', () => {
   it('a blank quoted field is left out rather than shown empty', () => {
     const entry = DETAILED_FIXTURE('snake-plant');
     (entry.aspcaListing as Record<string, unknown>).clinicalSigns = '  ';
-    expect(pageDetails(entry)!.listing.map((f) => f.field)).toEqual(['toxicPrinciples']);
-    expect(gateDetails(entry).listing.map((f: { field: string }) => f.field)).toEqual([
-      'toxicPrinciples',
-    ]);
+    const expected = ['additionalCommonNames', 'family', 'toxicPrinciples', 'listingAdvice'];
+    expect(pageDetails(entry)!.listing.map((f) => f.field)).toEqual(expected);
+    expect(gateDetails(entry).listing.map((f: { field: string }) => f.field)).toEqual(expected);
   });
 });
 
@@ -345,19 +344,50 @@ describe('the page details and FAQ agree with the gate', () => {
     expect(faq).toEqual(plantFaq(entry, gate, catalog, ASPCA_ANIMAL_POISON_CONTROL_URL));
   });
 
-  it('asks the searched question per cited animal, then what to do', () => {
+  it('asks the searched question per cited animal, then which parts, then what to do', () => {
     const page = findPlantSafetyPage('peace-lily')!;
     const faq = plantSafetyFaq(page, plantSafetyDetails(page), t);
     expect(faq.map((i) => i.question)).toEqual([
       'Is peace lily toxic to cats?',
       'Is peace lily toxic to dogs?',
+      'Which parts of peace lily are poisonous?',
       'What should I do if my pet ate some peace lily?',
     ]);
+    expect(faq[2]!.answer).toBe(
+      'NC State Extension’s North Carolina Extension Gardener Plant Toolbox lists these parts ' +
+        'of the plant as poisonous: Leaves. It gives that list under “Poisonous to Humans”, and ' +
+        'the ASPCA verdicts on this page are the ones for pets.'
+    );
     expect(faq[1]!.answer).toBe(
       'Yes. The ASPCA lists Peace Lily (Spathiphyllum) as toxic to dogs. Its listing gives the ' +
         'toxic principles as “Insoluble calcium oxalates” and the clinical signs as “Oral ' +
         'irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, ' +
         'vomiting, difficulty swallowing”.'
     );
+  });
+
+  it('asks which parts only with a quoted "Poison Part" on a page the ASPCA cites as toxic', () => {
+    const asked = (entry: LooseEntry) => {
+      const page = toPlantSafetyPage(entry)!;
+      const mine = plantSafetyFaq(page, pageDetails(entry), t).map((i) => i.id);
+      const gate = plantFaq(
+        entry,
+        gateDetails(entry),
+        catalog,
+        ASPCA_ANIMAL_POISON_CONTROL_URL
+      ).map((i: { id: string }) => i.id);
+      expect(mine).toEqual(gate);
+      return mine.includes('parts');
+    };
+    expect(asked(DETAILED_FIXTURE('pothos'))).toBe(true);
+    // Bird of paradise's extension page gives no "Poison Part", so no question.
+    expect(asked(DETAILED_FIXTURE('bird-of-paradise'))).toBe(false);
+    const blank = DETAILED_FIXTURE('pothos');
+    (blank.extensionSource as Record<string, unknown>).poisonPart = ' ';
+    expect(asked(blank)).toBe(false);
+    // A "Poison Part" on a plant the ASPCA lists as non-toxic is never turned into a question.
+    const safe = DETAILED_FIXTURE('spider-plant');
+    (safe.extensionSource as Record<string, unknown>).poisonPart = 'Leaves';
+    expect(asked(safe)).toBe(false);
   });
 });

@@ -113,6 +113,7 @@ export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 npm run mobile:release -- frontend/.env.mobile.production
 ```
 
+- [ ] Confirm the build ended with "Signed Android release bundle built" and your key alias. It fails, rather than printing that line, when the bundle is unsigned or signed by another key.
 - [ ] Upload the signed AAB to Play internal testing, then the required closed test.
 - [ ] Archive in Xcode, generate the privacy report, validate, and upload to internal TestFlight.
 - [ ] Re-run login, token refresh, plant/task CRUD, camera and library uploads, chat reporting, offline recovery, and deletion from the uploaded builds.

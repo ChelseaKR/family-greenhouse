@@ -168,7 +168,14 @@ export function citedSources(page: PlantSafetyPage): CitedSource[] {
 // ---------------------------------------------------------------------------
 
 /** Fields of an ASPCA listing a detailed page quotes, in display order. */
-export const LISTING_FIELDS = ['toxicPrinciples', 'clinicalSigns', 'listingNote'] as const;
+export const LISTING_FIELDS = [
+  'additionalCommonNames',
+  'family',
+  'toxicPrinciples',
+  'clinicalSigns',
+  'listingNote',
+  'listingAdvice',
+] as const;
 export type ListingField = (typeof LISTING_FIELDS)[number];
 
 /** Fields of an extension source a detailed page quotes, in display order. */
@@ -176,6 +183,7 @@ export const EXTENSION_FIELDS = [
   'poisonSeverity',
   'poisonSymptoms',
   'poisonToxicPrinciple',
+  'poisonPart',
 ] as const;
 export type ExtensionField = (typeof EXTENSION_FIELDS)[number];
 
@@ -305,14 +313,16 @@ export function plantSafetyDetails(page: PlantSafetyPage): PlantSafetyDetails | 
 }
 
 export interface FaqItem {
-  id: AnyAnimal | 'whatToDo';
+  id: AnyAnimal | 'parts' | 'whatToDo';
   question: string;
   answer: string;
 }
 
 /**
  * The FAQ a detailed page prints and publishes as FAQPage: one question per
- * cited animal (cats, dogs, then horses when cited), then what to do. Every
+ * cited animal (cats, dogs, then horses when cited), then which parts are
+ * poisonous (only where the extension source quotes its "Poison Part" values
+ * and the ASPCA cites "toxic" for cats or dogs), then what to do. Every
  * word is a catalog template filled from the table, and an animal whose
  * verdict is not cited gets no question. Must match plantFaq() in
  * scripts/pet-toxicity-table.mjs, which the build gate recomposes.
@@ -359,6 +369,18 @@ export function plantSafetyFaq(
       id: animal,
       question: t('plantSafetyPage.faq.question', { name, animal: animalWord }),
       answer: parts.join(' '),
+    });
+  }
+  const parts = details.extension?.fields.find((f) => f.field === 'poisonPart')?.value;
+  if (details.anyToxic && parts && details.extension) {
+    items.push({
+      id: 'parts',
+      question: t('plantSafetyPage.faq.partsQuestion', { name }),
+      answer: t('plantSafetyPage.faq.partsAnswer', {
+        publisher: details.extension.publisher,
+        database: details.extension.database,
+        parts,
+      }),
     });
   }
   items.push({

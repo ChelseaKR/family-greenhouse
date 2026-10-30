@@ -211,10 +211,22 @@ export function publishedPlantPages(table = loadPetToxicityTable()) {
 export const OPTIONAL_ANIMALS = ['horses'];
 
 /** Fields of an ASPCA listing a detailed page quotes, in display order. */
-export const LISTING_FIELDS = ['toxicPrinciples', 'clinicalSigns', 'listingNote'];
+export const LISTING_FIELDS = [
+  'additionalCommonNames',
+  'family',
+  'toxicPrinciples',
+  'clinicalSigns',
+  'listingNote',
+  'listingAdvice',
+];
 
 /** Fields of an extension source a detailed page quotes, in display order. */
-export const EXTENSION_FIELDS = ['poisonSeverity', 'poisonSymptoms', 'poisonToxicPrinciple'];
+export const EXTENSION_FIELDS = [
+  'poisonSeverity',
+  'poisonSymptoms',
+  'poisonToxicPrinciple',
+  'poisonPart',
+];
 
 const ALL_ANIMALS = [...ANIMALS, ...OPTIONAL_ANIMALS];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -355,7 +367,9 @@ function fill(template, values) {
 /**
  * The FAQ a detailed page prints and publishes as FAQPage, composed from the
  * table and a flattened catalog (`a.b.c` keys). One question per cited animal
- * (cats, dogs, then horses when cited), then what to do. Must match
+ * (cats, dogs, then horses when cited), then which parts are poisonous (only
+ * with a quoted "Poison Part" and a cited "toxic" for cats or dogs), then what
+ * to do. Must match
  * plantSafetyFaq() in src/features/petsafe/plantSafetyPages.ts.
  */
 export function plantFaq(entry, details, catalog, aspcaOrigin) {
@@ -391,6 +405,18 @@ export function plantFaq(entry, details, catalog, aspcaOrigin) {
       id: animal,
       question: fill(catalog['plantSafetyPage.faq.question'], { name, animal: animalWord }),
       answer: parts.join(' '),
+    });
+  }
+  const parts = details.extension?.fields.find((f) => f.field === 'poisonPart')?.value;
+  if (details.anyToxic && parts) {
+    items.push({
+      id: 'parts',
+      question: fill(catalog['plantSafetyPage.faq.partsQuestion'], { name }),
+      answer: fill(catalog['plantSafetyPage.faq.partsAnswer'], {
+        publisher: details.extension.publisher,
+        database: details.extension.database,
+        parts,
+      }),
     });
   }
   items.push({

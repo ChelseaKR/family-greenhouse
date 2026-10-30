@@ -346,7 +346,10 @@ cp frontend/.env.mobile.production.example frontend/.env.mobile.production
 
 # Validates versions, metadata, assets, secrets hygiene, production env,
 # source-map removal, and synchronized native bundles. With JAVA_HOME set to
-# JDK 21 it also produces the unsigned release AAB.
+# JDK 21 it also builds the release AAB signed with the upload key. It refuses
+# to start when any ANDROID_UPLOAD_* variable is missing (ALLOW_UNSIGNED_RELEASE=1
+# allows an unsigned local smoke build), then checks the AAB with
+# jarsigner -verify and prints whether it is signed and with which key alias.
 npm run mobile:release -- frontend/.env.mobile.production
 
 cd frontend
