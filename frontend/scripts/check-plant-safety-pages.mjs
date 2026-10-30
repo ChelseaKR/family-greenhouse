@@ -168,6 +168,8 @@ export const TOXICITY_WORDING_ALLOWED = {
     'the label of a quoted extension field; the value beside it is the table text',
   'plantSafetyPage.extensionField.poisonToxicPrinciple':
     'the label of a quoted extension field; the value beside it is the table text',
+  'plantSafetyPage.extensionField.poisonPart':
+    'the label of a quoted extension field; the value beside it is the table text',
   'plantSafetyPage.listCaveat':
     'quotes the ASPCA plant list on every plant, linked beside it; names no plant',
   'plantSafetyPage.extensionCaveat':
