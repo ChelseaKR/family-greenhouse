@@ -160,12 +160,15 @@ test.describe('on the website (unchanged)', () => {
     }
   });
 
-  test('the footer links to plans and gifts and closes with the memorial line', async ({
+  test('the footer links to plans, offers no gift link without a gift offer, and closes with the memorial line', async ({
     page,
   }) => {
     await page.goto('/help');
     await expect(page.locator('footer a[href="/pricing"]')).toHaveCount(1, { timeout: 15000 });
-    await expect(page.locator('footer a[href="/gift"]')).toHaveCount(1);
+    // The Gift link shows only while the plan catalog offers a gift; this run has no API
+    // behind it, so the catalog cannot be read and the link stays hidden (unit tests cover
+    // the link appearing when a tier is available).
+    await expect(page.locator('footer a[href="/gift"]')).toHaveCount(0);
     await expect(page.getByText(MEMORIAL)).toBeVisible();
   });
 

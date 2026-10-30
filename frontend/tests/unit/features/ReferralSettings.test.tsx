@@ -39,7 +39,8 @@ describe('ReferralSettings', () => {
     server.use(http.get(`${API}/me/referral`, () => HttpResponse.json(STATUS)));
     renderPage();
     const input = (await screen.findByTestId('referral-link-input')) as HTMLInputElement;
-    expect(input.value).toBe('http://localhost:3000/register?ref=RF-00000-00001');
+    // The jsdom page origin is the API origin since msw 3 (vitest.config.ts).
+    expect(input.value).toBe('http://localhost:4000/register?ref=RF-00000-00001');
     expect(await screen.findByText('1 of 2 earned a bonus')).toBeInTheDocument();
     const rows = await screen.findAllByTestId('referral-row');
     expect(rows).toHaveLength(2);

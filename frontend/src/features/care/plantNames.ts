@@ -10,7 +10,7 @@
  * plant" and "a english ivy".
  */
 export function sentenceName(commonName: string): string {
-  const KEEP_CASE = new Set(['English', 'Chinese', 'Boston', 'Christmas']);
+  const KEEP_CASE = new Set(['African', 'English', 'Chinese', 'Boston', 'Christmas']);
   return commonName
     .split(' ')
     .map((w) => (KEEP_CASE.has(w) || /^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase()))
@@ -31,7 +31,14 @@ export function sentenceStartName(commonName: string): string {
 
 /**
  * ASPCA Animal Poison Control Center, as printed on
- * https://www.aspca.org/pet-care/animal-poison-control (checked 2026-10-02:
- * "(888) 426-4435"). A consultation fee may apply; that is ASPCA's to state.
+ * https://www.aspca.org/pet-care/animal-poison-control (now redirects to
+ * /pet-care/aspca-poison-control; checked 2026-10-02 and 2026-10-23:
+ * "(888) 426-4435", "A consultation fee may apply.").
  */
 export const ASPCA_POISON_CONTROL_PHONE = '888-426-4435';
+
+/**
+ * Pet Poison Helpline, as printed on https://www.petpoisonhelpline.com/
+ * (checked 2026-10-23: "(855) 764-7661", "$99 incident fee applies").
+ */
+export const PET_POISON_HELPLINE_PHONE = '855-764-7661';

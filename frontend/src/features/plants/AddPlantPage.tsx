@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import clsx from 'clsx';
+import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/outline';
@@ -18,6 +19,7 @@ import {
 import { suggestTaskTemplate, taskService } from '@/services/taskService';
 import { speciesService } from '@/services/speciesService';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -30,6 +32,7 @@ import { PetToxicityNote } from './PetToxicityNote';
 import { PlantNameNursery } from './PlantNameNursery';
 import { SpacePicker } from './SpacePicker';
 import { IdentifyTopUpCard } from '@/features/billing/IdentifyTopUpCard';
+import { PlanCapPrompt } from '@/features/billing/PlanCapPrompt';
 import { prepareImageForUpload } from '@/utils/image';
 import { ImageMetadataError } from '@/utils/imageMetadata';
 import { NativePhotoButtons } from '@/components/NativePhotoButtons';
@@ -396,6 +399,12 @@ export function AddPlantPage() {
     },
     onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
+      // GA4 `household_activated`: the first plant is the product's activation
+      // step. No plant name, id or note is sent.
+      if (wasFirstPlant) {
+        trackGoogleConversion({ name: 'household_activated' });
+        trackGoogleConversion({ name: 'first_plant_added', method: 'full_form' });
+      }
       playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
@@ -419,6 +428,11 @@ export function AddPlantPage() {
     },
     onError: (err) => {
       setError(getErrorMessage(err));
+      // A 402 here is the plant cap. Refresh the usage the cap prompt reads so
+      // the refusal arrives with its way forward, not as a dead end.
+      if (isAxiosError(err) && err.response?.status === 402) {
+        void queryClient.invalidateQueries({ queryKey: ['subscription', householdId] });
+      }
     },
   });
 
@@ -447,6 +461,8 @@ export function AddPlantPage() {
           Enter the details of your plant to start tracking its care.
         </p>
       </div>
+
+      <PlanCapPrompt cap="plants" />
 
       <Card>
         {parentPlantId && (

@@ -23,7 +23,12 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /** Email categories a recipient can switch off without logging in.
  *  Transactional mail (welcome, password, billing) is deliberately absent:
  *  it keeps its own path and is not unsubscribable. */
-export const EMAIL_CATEGORIES = ['weekly_digest', 'year_recap', 'pest_alerts'] as const;
+export const EMAIL_CATEGORIES = [
+  'weekly_digest',
+  'year_recap',
+  'pest_alerts',
+  'trial_notices',
+] as const;
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
 
 export function isEmailCategory(value: unknown): value is EmailCategory {

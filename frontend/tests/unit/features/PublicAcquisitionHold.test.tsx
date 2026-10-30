@@ -324,16 +324,23 @@ describe('free registration with paid activity on hold', () => {
     // (#467), in both locales; the component files hold none of it.
     for (const path of ['landing', 'pricingPage']) {
       const english = catalogCopy('en', path);
-      expect(english, `en ${path}.* must state the 20-plant cap`).toMatch(/20 plants/i);
-      expect(english, `en ${path}.* must state the 3-member cap`).toMatch(
-        /3 (?:household )?members|3 people/i
+      // 8 plants and 2 people since the 2026-10-23 cut (ADR 0040).
+      expect(english, `en ${path}.* must state the 8-plant cap`).toMatch(/\b8 plants/i);
+      expect(english, `en ${path}.* must state the 2-member cap`).toMatch(
+        /\b2 (?:household )?members|\b2 people/i
+      );
+      expect(english, `en ${path}.* must not state the retired caps`).not.toMatch(
+        /\b20 plants|\b3 (?:household )?members|\b3 people/i
       );
       expect(english, `en ${path}.* must state the one-home cap`).toMatch(/one home/i);
 
       const spanish = catalogCopy('es', path);
-      expect(spanish, `es ${path}.* must state the 20-plant cap`).toMatch(/20 plantas/i);
-      expect(spanish, `es ${path}.* must state the 3-member cap`).toMatch(
-        /3 (?:miembros|personas)/i
+      expect(spanish, `es ${path}.* must state the 8-plant cap`).toMatch(/\b8 plantas/i);
+      expect(spanish, `es ${path}.* must state the 2-member cap`).toMatch(
+        /\b2 (?:miembros|personas)/i
+      );
+      expect(spanish, `es ${path}.* must not state the retired caps`).not.toMatch(
+        /\b20 plantas|\b3 (?:miembros|personas)/i
       );
       expect(spanish, `es ${path}.* must state the one-home cap`).toMatch(/un hogar/i);
     }
@@ -346,10 +353,11 @@ describe('free registration with paid activity on hold', () => {
     ]) {
       const source = readFileSync(resolve(repositoryRoot, relativePath), 'utf8');
       // The free tier is "a couple and their plants" (ADR 0014): one home,
-      // three hands, twenty plants. Every acquisition surface says so.
-      expect(source, `${relativePath} must state the 20-plant cap`).toMatch(/20 plants/i);
-      expect(source, `${relativePath} must state the 3-member cap`).toMatch(
-        /3 (?:household )?members|3 people/i
+      // two hands, eight plants since the ADR 0040 cut. Every acquisition
+      // surface says so.
+      expect(source, `${relativePath} must state the 8-plant cap`).toMatch(/\b8 plants/i);
+      expect(source, `${relativePath} must state the 2-member cap`).toMatch(
+        /\b2 (?:household )?members|\b2 people/i
       );
       expect(source, `${relativePath} must state the one-home cap`).toMatch(/one home/i);
     }

@@ -15,7 +15,7 @@
  * The three server events form the subscription lifecycle, and only the
  * middle one is money:
  *
- *   subscription_activated  → a 14-day TRIAL began (or a lifetime purchase
+ *   subscription_activated  → usually a TRIAL began (or a lifetime purchase
  *                             completed — the one case where it is always
  *                             revenue).
  *   subscription_paid       → the subscription became `active`, which Stripe

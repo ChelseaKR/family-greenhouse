@@ -12,11 +12,13 @@ export default function PetSafeHardToKill() {
       <p className="lead">
         &ldquo;Pet-safe&rdquo; and &ldquo;hard to kill&rdquo; sound like two easy boxes to tick. Put
         them together and most of the internet&rsquo;s favorite beginner plants fall out of the
-        running &mdash; <a href="/care/pothos">pothos</a>, <a href="/care/zz-plant">ZZ</a>,{' '}
+        running &mdash; <a href="/care/pothos">pothos</a>,{' '}
         <a href="/care/snake-plant">snake plant</a>, <a href="/care/peace-lily">peace lily</a>,{' '}
         <a href="/care/aloe-vera">aloe</a>, <a href="/care/heartleaf-philodendron">philodendron</a>{' '}
-        are all toxic to cats and dogs. What&rsquo;s left is a shorter, more honest list than the
-        listicles admit.
+        are all toxic to cats and dogs, per the ASPCA. (The <a href="/care/zz-plant">ZZ</a> is on
+        most of those lists too, but the ASPCA plant list has no entry for it, so we give it no
+        verdict either way.) What&rsquo;s left is a shorter, more honest list than the listicles
+        admit.
       </p>
 
       <h2>Why this list is harder than it looks</h2>
@@ -92,9 +94,11 @@ export default function PetSafeHardToKill() {
           plant is not. Check the specific species, never the category.
         </li>
         <li>
-          <strong>&ldquo;Lucky&rdquo; and gift plants.</strong> <a href="/care/jade-plant">Jade</a>,
-          ZZ, and the peace lilies that turn up in supermarket bouquets are all toxic. A plant being
-          marketed as low-maintenance tells you nothing about whether it&rsquo;s pet-safe.
+          <strong>&ldquo;Lucky&rdquo; and gift plants.</strong> <a href="/care/jade-plant">Jade</a>{' '}
+          and the peace lilies that turn up in supermarket bouquets are both toxic to cats and dogs.
+          The ZZ gets sold the same way, but the ASPCA plant list has no entry for it, so we
+          can&rsquo;t tell you either way. A plant being marketed as low-maintenance tells you
+          nothing about whether it&rsquo;s pet-safe.
         </li>
         <li>
           <strong>Anything called a &ldquo;lily.&rdquo;</strong> True lilies (Lilium) and daylilies
@@ -123,13 +127,14 @@ export default function PetSafeHardToKill() {
         next to the ASPCA listing it comes from: the{' '}
         <a href="/pet-safe/spider-plant">spider plant</a>,
         <a href="/pet-safe/parlor-palm">parlor palm</a>,{' '}
+        <a href="/pet-safe/areca-palm">areca palm</a>,{' '}
         <a href="/pet-safe/boston-fern">Boston fern</a>,<a href="/pet-safe/calathea">calathea</a>,{' '}
         <a href="/pet-safe/pothos">pothos</a>, <a href="/pet-safe/snake-plant">snake plant</a>,
         <a href="/pet-safe/peace-lily">peace lily</a>, <a href="/pet-safe/aloe-vera">aloe vera</a>,
         <a href="/pet-safe/philodendron">philodendron</a>,{' '}
         <a href="/pet-safe/jade-plant">jade plant</a> and
-        <a href="/pet-safe/lily">true lilies</a>. The areca palm and the ZZ plant have no page,
-        because we have no cited listing recorded for them.
+        <a href="/pet-safe/lily">true lilies</a>. The ZZ plant has no page, because we have no cited
+        listing recorded for it.
       </p>
 
       <h2>The honest summary</h2>

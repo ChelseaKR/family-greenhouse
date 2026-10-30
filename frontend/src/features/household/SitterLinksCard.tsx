@@ -22,6 +22,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { groupSitterLinks, sitterLinkState } from './sitterLinkState';
 import { SitterGapPrompt } from './SitterGapPrompt';
+import { GoingAwayOffer, type GoingAwayReason } from './GoingAwayOffer';
 import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
 
@@ -48,9 +49,19 @@ interface SitterLinksCardProps {
   householdId: string;
   /** Household roster, used only to name who created a link. */
   members?: ReadonlyArray<{ userId: string; name: string }>;
+  /**
+   * The household arrived from the dashboard's "Going away soon?" card, so a
+   * free household is shown what Garden adds for a trip before it starts the
+   * form (see GoingAwayOffer). The free form stays right below it.
+   */
+  showAwayOffer?: boolean;
 }
 
-export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardProps) {
+export function SitterLinksCard({
+  householdId,
+  members = [],
+  showAwayOffer = false,
+}: SitterLinksCardProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const myUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -154,12 +165,35 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
   const atActiveCap =
     limits !== null && linksQuery.isSuccess && currentLinks.length >= limits.maxActive;
 
+  // The "Going away?" upgrade moment (2026-10-23). At most one at a time, the
+  // most specific first: the live-link cap, then a length past the plan's
+  // longest link, then plain intent from the dashboard. GoingAwayOffer itself
+  // renders only for a household whose tier lacks the Away Kit, so a Garden
+  // household over its own 90 days is never offered an upgrade that changes
+  // nothing. None of them disables the free link: the length can always be
+  // set back to the plan's maximum, from the offer itself.
+  const typedDays = parseInt(shownDays, 10) || 0;
+  const overLength = limits !== null && typedDays > limits.maxDays;
+  const awayReason: GoingAwayReason | null = atActiveCap
+    ? 'second'
+    : overLength
+      ? 'longer'
+      : showAwayOffer
+        ? 'entry'
+        : null;
+
   return (
     <Card>
       <CardHeader
         title="Plant-sitter links"
         description="Going away? Share a temporary link so a neighbour or friend can see due care, plant names, current spaces, and placement notes — never your saved city, private notes, or member details. The link expires on its own, and you can revoke it any time."
       />
+
+      {!created && awayReason === 'entry' && (
+        <div className="mb-4">
+          <GoingAwayOffer householdId={householdId} reason="entry" />
+        </div>
+      )}
 
       {created ? (
         <div className="space-y-3">
@@ -269,6 +303,20 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
               {t('household.sitterLinks.activeCap', { count: limits.maxActive })}
             </Alert>
           )}
+          {(awayReason === 'second' || awayReason === 'longer') && (
+            <GoingAwayOffer
+              householdId={householdId}
+              reason={awayReason}
+              onUseFreeLength={
+                limits
+                  ? () => {
+                      setDaysTouched(true);
+                      setDays(String(limits.maxDays));
+                    }
+                  : undefined
+              }
+            />
+          )}
           <Button
             type="submit"
             isLoading={createMutation.isPending}
@@ -277,7 +325,7 @@ export function SitterLinksCard({ householdId, members = [] }: SitterLinksCardPr
           >
             Create sitter link
           </Button>
-          {limits?.planId === 'seedling' && (
+          {limits?.planId === 'seedling' && awayReason === null && (
             <p className="text-xs text-gray-600">
               {t('household.sitterLinks.seedlingHint')}
               {/* No "see plans" link in the apps (Guideline 3.1.1). */}
