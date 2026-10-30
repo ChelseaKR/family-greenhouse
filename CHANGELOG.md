@@ -88,6 +88,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Two iPad layout bugs.** In the iOS app on iPad, a scrolled page's text
+  showed through, faded, behind the screen's title: the tab bar floats above
+  the navigation bar there, so the bars are taller than the system's soft
+  scroll-edge fade. On iPad the app now uses the hard scroll-edge style, an
+  opaque backdrop under the whole bar area; iPhone keeps the soft fade. In
+  Settings > Notifications, the quiet-hours Start, End and Timezone fields
+  sat at three heights at tablet and desktop widths, because the row aligned
+  them to the bottom and their helper text differs in length. They now share
+  a top edge. In iOS WebKit a time field also keeps its native minimum width
+  and draws shorter when empty, so Start ran under End on iPad; on iOS the
+  time fields now size like the text fields beside them. A Playwright spec
+  checks the row at three iPad sizes.
+
 - **Xcode Cloud builds no longer fail before they start.** Every push to
   `main` failed at "Could not resolve package dependencies", because the
   Capacitor plugins that `CapApp-SPM` resolves live in `node_modules`, which a
