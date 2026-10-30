@@ -48,6 +48,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   violet" keeps its capital, and each description says the page gives the
   numbers to call if a pet ate some. Verdicts, their ASPCA sources and the
   155-character budget are unchanged.
+- **Third Search Console pass: nine more care guides and the vacation post.**
+  From the same 90 days, ten pages had 213 impressions between them at
+  average positions 24 to 69 and no clicks. The Christmas cactus, jade plant,
+  peace lily, rubber plant, hoya, Chinese evergreen, Boston fern, moth orchid
+  and fiddle leaf fig guides now lead their title, description and H1 with
+  the answer to their top query, taken from their own "At a glance" line
+  (watering, light or the ASPCA pet verdict). The vacation post is now titled
+  "How to keep indoor plants alive while on vacation" ("keeping indoor plants
+  alive while on vacation" was 28 of its 54 impressions), and its description
+  gives the post's answer for each trip length. No plant facts change.
 
 ### Fixed
 
