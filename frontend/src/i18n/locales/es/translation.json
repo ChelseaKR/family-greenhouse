@@ -498,9 +498,9 @@
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
-    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas. Gatos: {{cats}}. Perros: {{dogs}}.",
+    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
-    "heading": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
     "verdictsHeading": "Los veredictos, con su fuente",
     "animal": {
       "cats": "Gatos",

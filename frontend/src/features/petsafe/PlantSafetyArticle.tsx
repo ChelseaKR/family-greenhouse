@@ -11,6 +11,7 @@ import {
   POISON_HOTLINES,
   VERDICT_LABEL_KEY,
   citedSources,
+  headName,
   plantSafetyDetails,
   plantSafetyFaq,
   type AnimalClaim,
@@ -56,7 +57,7 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
           data-chrome="plantSafetyPage.heading"
           className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl"
         >
-          {t('plantSafetyPage.heading', { name: page.commonName })}
+          {t('plantSafetyPage.heading', { questionName: headName(page.commonName) })}
         </h1>
         <p data-field="scientificName" className="mt-2 text-lg italic text-gray-600">
           {page.scientificName}

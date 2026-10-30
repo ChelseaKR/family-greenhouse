@@ -502,9 +502,11 @@ describe('third-batch pet-safety guides', () => {
       expect(prose.length, `${g.slug}: no inline link from an older guide`).toBeGreaterThan(0);
       const related = others.filter((o) => o.related.includes(g.slug));
       expect(related.length, `${g.slug}: not in an older guide’s related list`).toBeGreaterThan(0);
-      // A guide that gained a link must carry the ship date in its sitemap lastmod.
+      // A guide that gained a link must carry the ship date, or a later edit,
+      // in its sitemap lastmod. Pinning the exact date failed the next edit
+      // to the guide, which has to move `updated` forward.
       for (const o of [...prose, ...related]) {
-        expect(o.updated, `${o.slug} gained a link to ${g.slug}`).toBe('2026-10-22');
+        expect(o.updated >= '2026-10-22', `${o.slug} gained a link to ${g.slug}`).toBe(true);
       }
     }
   });
