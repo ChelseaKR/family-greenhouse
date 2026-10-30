@@ -42,6 +42,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **Third Search Console pass: three more care guides lead with the answer,
+  and four near-page-one guides get links from related guides.** Search
+  Console page and query data for the 28 days to 2026-10-29 had the heartleaf
+  philodendron (position 14), money tree (10, and 6 in the last 7 days) and
+  nerve plant (8) guides near page one without the answer-first title. Their
+  titles, descriptions and H1s now lead with each guide's own "At a glance"
+  watering line, and the money tree's with its ASPCA pet-safety verdict,
+  which is what its searchers asked. The ZZ plant, monstera, bird of paradise
+  and aloe vera guides, already retitled by the first two passes and being
+  measured until 2026-11-27, are unchanged. They gain one inline link each
+  from the money tree, parlor palm and sago palm guides, where the linked
+  plant shares the watering rhythm or suits the spot being described. No
+  plant facts change.
 - **Search titles answer the question people searched.** From 90 days of
   Search Console data (2026-07-31 to 2026-10-28), the ZZ plant, monstera,
   snake plant and English ivy care guides get titles, descriptions and H1s
