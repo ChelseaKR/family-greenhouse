@@ -67,7 +67,7 @@
         "service": "<strong>The service, as described.</strong> We try to keep the app available, accurate, and free of basic bugs. We don’t promise zero downtime; see <em>Limitations</em> below.",
         "data": "<strong>Your data, treated with care.</strong> See our <privacyLink>Privacy Policy</privacyLink> for the specifics.",
         "notice": "<strong>No mid-period cuts to what you paid for.</strong> We do not reduce a paid plan’s features or usage limits during a period you have already paid for. Free-plan limits can change, and have. Bug fixes and improvements ship continuously.",
-        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 3 people and 20 plants. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
+        "plans": "<strong>A free tier, and paid plans you choose.</strong> Family Greenhouse accepts free Seedling accounts for one home, up to 2 people and 8 plants. A household created before October 24, 2026 keeps the free limits it signed up with, 3 people and 20 plants, for as long as it is on Seedling. Paid Garden and Greenhouse plans are also available; nothing is charged unless a household admin buys one."
       },
       "fromYou": {
         "heading": "What we expect from you",
@@ -82,7 +82,7 @@
       },
       "planStatus": {
         "heading": "Plan status",
-        "body": "Free account registration is open. Paid Garden and Greenhouse plans are available on the web, billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>; the free trials that can come before a first charge are set out under <em>Free trials</em> below. Paid plans are not sold inside the mobile apps. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
+        "body": "Free account registration is open. Paid Garden and Greenhouse plans are billed monthly. Yearly billing and the one-time Garden lifetime purchase are no longer sold; households already on one keep it, at the price and on the terms they bought it at. Purchases, upgrades, and plan changes are made by a household admin in <em>Settings → Billing</em>; the free trials that can come before a first charge are set out under <em>Free trials</em> below. Paid plans are available on our website and, on iPhone, through Apple In-App Purchase. Purchases made through Apple are billed and managed by Apple under Apple's terms. If you believe a billing event affected you, email us so it can be investigated and resolved directly."
       },
       "trial": {
         "heading": "Free trials",
@@ -97,7 +97,7 @@
       },
       "cancellation": {
         "heading": "Cancelling",
-        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. Cancelling is not available inside the mobile apps.",
+        "how": "A household admin can cancel at any time from <em>Settings → Billing → Manage subscription</em>, which opens our payment provider’s billing portal. Changing or cancelling a live subscription happens there, and cancelling there is what stops the next charge. If you subscribed through Apple In-App Purchase on iPhone, cancel in your iPhone's Settings under your Apple Account > Subscriptions; Apple handles that cancellation and any refund.",
         "when": "Cancelling does not cut you off on the spot. It takes effect at the end of the period you have already paid for: until that date the household keeps the plan, its caps, and every paid feature, and the billing page shows the date. After it, the household moves to the free Seedling plan.",
         "whatRemains": "Moving to the free plan deletes nothing. Every plant, photo, member, and record of care stays, and stays readable and editable; tasks keep being created and reminders keep arriving. What changes is that you cannot add plants or members while the household is over a free-plan cap, the monthly plant-identification allowance returns to the free plan’s, the AI care assistant needs Garden or above, API keys need Greenhouse, and plant-sitter links return to the free plan’s limit of one live link of up to seven days, with the task list but not the printable plant-care brief."
       },

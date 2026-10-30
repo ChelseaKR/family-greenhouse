@@ -206,14 +206,15 @@ export const HELP_SECTIONS: HelpSection[] = [
               caring for frees a slot immediately, and keeps all of its history.
             </p>
             <p>
-              The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on
+              The caps are 8 plants on the free Seedling plan, 200 on Garden and 5,000 on
               Greenhouse. Nothing is ever deleted for being over a cap; you just can&rsquo;t add
               more until you are back under it. A household that was already above a cap when it
-              changed keeps every plant it has.
+              changed keeps every plant it has, and a household created before October 24, 2026
+              keeps the earlier free cap of 20 plants.
             </p>
           </>
         ),
-        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 20 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has.',
+        text: 'The cap counts active plants only. Plants you have archived, or marked as died or given away, do not count against it, so archiving a plant you are no longer caring for frees a slot immediately and keeps all of its history. The caps are 8 plants on the free Seedling plan, 200 on Garden and 5,000 on Greenhouse. Nothing is ever deleted for being over a cap; you just cannot add more until you are back under it. A household that was already above a cap when it changed keeps every plant it has, and a household created before October 24, 2026 keeps the earlier free cap of 20 plants.',
       },
       {
         id: 'plant-died',
@@ -735,14 +736,15 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Someone can’t join — it says the household is full.',
         a: (
           <p>
-            The free <strong>Seedling</strong> plan holds three people. <strong>Garden</strong> and{' '}
-            <strong>Greenhouse</strong> have no member limit at all, so Garden — the cheaper of the
-            two — is the tier that lifts this. The cap is checked at the moment someone joins, and
-            it only ever blocks a new join: if you are already over it, everyone you have stays, and
-            stays editable. Either remove a member you no longer need, or move to Garden.
+            The free <strong>Seedling</strong> plan holds two people, or three for a household
+            created before October 24, 2026. <strong>Garden</strong> and <strong>Greenhouse</strong>{' '}
+            have no member limit at all, so Garden — the cheaper of the two — is the tier that lifts
+            this. The cap is checked at the moment someone joins, and it only ever blocks a new
+            join: if you are already over it, everyone you have stays, and stays editable. Either
+            remove a member you no longer need, or move to Garden.
           </p>
         ),
-        text: 'The free Seedling plan holds three people. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
+        text: 'The free Seedling plan holds two people, or three for a household created before October 24, 2026. Garden and Greenhouse have no member limit at all, so Garden, the cheaper of the two, is the tier that lifts this. The cap is checked at the moment someone joins, and it only ever blocks a new join: if you are already over it, everyone you have stays, and stays editable. Either remove a member you no longer need, or move to Garden.',
       },
       {
         id: 'multiple-households',
@@ -907,10 +909,10 @@ export const HELP_SECTIONS: HelpSection[] = [
           <>
             <p>
               The free <strong>Seedling</strong> plan is a real plan, not a trial: a couple and
-              their plants &mdash; one home, up to 3 members and 20 plants, with no card required
-              and no expiry. It includes plants and photos, unlimited tasks and reminders, invites
-              and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the
-              last 30 days of analytics, the calendar feed, data export, and leaf-health checks each
+              their plants &mdash; one home, up to 2 members and 8 plants, with no card required and
+              no expiry. It includes plants and photos, unlimited tasks and reminders, invites and
+              task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last
+              30 days of analytics, the calendar feed, data export, and leaf-health checks each
               month.
             </p>
             <p>
@@ -924,7 +926,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 3 members and 20 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
+        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 2 members and 8 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
       },
       {
         id: 'who-can-buy',

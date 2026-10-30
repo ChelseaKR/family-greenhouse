@@ -14,6 +14,7 @@ import {
   planRank,
   PLANS,
   isIntervalWithdrawn,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
@@ -40,6 +41,7 @@ import {
   checkoutTrialFor,
   type CheckoutTrial,
 } from '../models/checkoutTrial.js';
+import { readAppStoreSubscription, type AppStoreSubscription } from '../models/appStore.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -77,6 +79,15 @@ export interface HouseholdSubscription {
    * so it survives as the household's entitlement floor.
    */
   lifetimePlanId?: PlanId;
+  /**
+   * The household's App Store subscription, bought in the iPhone app (ADR
+   * 0041). Written only by services/appStoreBilling.ts from Apple's signed
+   * transactions and notifications; no Stripe path writes or clears it
+   * (`SubscriptionWriteField` excludes it). Entitlement reads it through
+   * `appStoreState` in models/appStore.ts. Published as is by GET
+   * /billing/me: it carries no transaction id.
+   */
+  appStore?: AppStoreSubscription;
   /**
    * True once the household has cancelled but the paid period has not yet
    * elapsed. Stripe does not delete a cancelled subscription immediately — it
@@ -195,6 +206,15 @@ export interface HouseholdSubscription {
    * can back up on its own.
    */
   staleCheckout?: { startedAt: string };
+  /**
+   * The household row's `createdAt`, or `HOUSEHOLD_CREATED_AT_UNKNOWN` for a
+   * row that exists without a readable one. Read only by entitlement
+   * (`withSeedlingGrandfather` in models/plans.ts): a household created before
+   * the 2026-10-23 Seedling cut keeps 20 plants and 3 members (ADR 0040).
+   * Never written through here (`SubscriptionWriteField` excludes it) and
+   * never published by GET /billing/me, which publishes the resulting caps.
+   */
+  householdCreatedAt?: string;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -247,6 +267,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
+    appStore: readAppStoreSubscription(item.appStore),
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
     pendingCheckoutSessionId: item.pendingCheckoutSessionId as string | undefined,
@@ -256,6 +277,8 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     giftPlanId: isPlanId(item.giftPlanId) ? item.giftPlanId : undefined,
     giftEndsAt: item.giftEndsAt as string | undefined,
     giftSource: item.giftSource === 'referral' ? 'referral' : undefined,
+    householdCreatedAt:
+      typeof item.createdAt === 'string' ? item.createdAt : HOUSEHOLD_CREATED_AT_UNKNOWN,
   };
 }
 
@@ -272,6 +295,7 @@ export async function getHouseholdSubscription(
     status: state.status,
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
+    appStore: state.appStore,
     cancelAtPeriodEnd: state.cancelAtPeriodEnd,
     // Derived here, at the one boundary where the internal row becomes the
     // published shape, so there is a single place that decides what a client
@@ -291,6 +315,7 @@ export async function getHouseholdSubscription(
     // what a client learns about an abandoned checkout — see
     // `HouseholdSubscription.staleCheckout`.
     staleCheckout: staleCheckoutMarker(state),
+    householdCreatedAt: state.householdCreatedAt,
   };
 }
 
@@ -322,11 +347,13 @@ type SubscriptionWriteField =
       keyof HouseholdSubscription,
       | 'trialAvailable'
       | 'checkoutTrialEndsAt'
+      | 'appStore'
       | 'noCardTrialEndsAt'
       | 'giftPlanId'
       | 'giftEndsAt'
       | 'giftSource'
       | 'staleCheckout'
+      | 'householdCreatedAt'
     >
   | 'pendingStripeCancellationId'
   // The pending-checkout marker is CLEARED through here (null → REMOVE) so

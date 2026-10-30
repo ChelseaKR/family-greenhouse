@@ -553,3 +553,104 @@ describe('a slug with no published page still leads with the emergency aside', (
     ).toEqual(POISON_HOTLINES.map((h) => h.tel));
   });
 });
+
+describe('detailed pages (quoted sources, similar plants, FAQ)', () => {
+  const html = (slug: string) => documentFor(findPlantSafetyPage(slug)!);
+  const failuresFor = (slug: string, sabotaged: string) =>
+    gate(sabotaged, entryFor(slug)).join('\n');
+
+  it('render the quoted listing, the extension source and the FAQ', () => {
+    const page = html('aloe-vera');
+    expect(page).toContain('data-claim="listing-field" data-listing-field="clinicalSigns"');
+    expect(page).toContain('https://plants.ces.ncsu.edu/plants/aloe-vera/');
+    expect(page).toContain('data-claim="verdict" data-animal="horses" data-state="toxic"');
+    expect(page).toContain('"@type":"FAQPage"');
+    expect(page).toContain('Is aloe vera toxic to cats?');
+    // The hotline aside still comes first, and the plant-named reminder CTA stays.
+    expect(page.indexOf('data-plant-emergency')).toBeLessThan(page.indexOf('data-claim="verdict"'));
+    expect(page).toContain('Get watering reminders for your Aloe vera');
+  });
+
+  it('a page without details carries none of them', () => {
+    const page = html('hoya');
+    expect(page).not.toContain('data-claim="faq-question"');
+    expect(page).not.toContain('FAQPage');
+    expect(page).not.toContain('plants.ces.ncsu.edu');
+  });
+
+  describe('negative controls', () => {
+    it('a paraphrased ASPCA field fails', () => {
+      const sabotaged = html('aloe-vera').replace(
+        '>Vomiting (not horses), lethargy, diarrhea. The gel is considered edible.<',
+        '>Mild tummy upset at most.<'
+      );
+      expect(failuresFor('aloe-vera', sabotaged)).toContain('quoted listing fields');
+    });
+
+    it('a horse verdict on a page whose listing is silent on horses fails as a safety claim', () => {
+      const sabotaged = html('pothos').replace(
+        '</dl>',
+        '<div data-claim-group="horses"><dt data-chrome="plantSafetyPage.animal.horses">Horses</dt>' +
+          '<dd><p data-claim="verdict" data-animal="horses" data-state="non-toxic">Non-toxic</p></dd></div></dl>'
+      );
+      expect(failuresFor('pothos', sabotaged)).toContain('ASSERTS SAFETY for horses');
+    });
+
+    it('an extension tag where the ASPCA is silent fails as a safety claim', () => {
+      const sabotaged = html('spider-plant').replace(
+        '</ul><p data-chrome="plantSafetyPage.extensionTagsNote"',
+        '<li><span data-chrome="plantSafetyPage.linkedAnimal.horses">Horses:</span> ' +
+          '<span data-claim="extension-tag" data-animal="horses" data-state="non-toxic">Non-toxic</span></li>' +
+          '</ul><p data-chrome="plantSafetyPage.extensionTagsNote"'
+      );
+      expect(sabotaged).not.toBe(html('spider-plant'));
+      expect(failuresFor('spider-plant', sabotaged)).toContain(
+        'ASSERTS SAFETY for horses from a second source'
+      );
+    });
+
+    it('a related plant shown with a verdict its own page does not cite fails', () => {
+      const page = html('aloe-vera');
+      const sabotaged = page.replace(
+        'data-target="jade-plant" data-animal="cats" data-state="toxic">Toxic<',
+        'data-target="jade-plant" data-animal="cats" data-state="non-toxic">Non-toxic<'
+      );
+      expect(sabotaged).not.toBe(page);
+      expect(failuresFor('aloe-vera', sabotaged)).toContain('jade-plant: shows verdicts');
+    });
+
+    it('a toxic plant offered as an alternative fails', () => {
+      const page = html('aloe-vera');
+      const sabotaged = page
+        .replaceAll('haworthia', 'jade-plant')
+        .replace('>Haworthia<', '>Jade plant<');
+      expect(failuresFor('aloe-vera', sabotaged)).toContain('lists alternatives');
+    });
+
+    it('an edited FAQ answer fails, visible and in JSON-LD', () => {
+      const page = html('peace-lily');
+      const sabotaged = page.replaceAll(
+        'Yes. The ASPCA lists Peace Lily (Spathiphyllum) as toxic to dogs.',
+        'Only a little. The ASPCA lists Peace Lily (Spathiphyllum) as toxic to dogs.'
+      );
+      expect(sabotaged).not.toBe(page);
+      const failures = failuresFor('peace-lily', sabotaged);
+      expect(failures).toContain('FAQ answers differ');
+      expect(failures).toContain('JSON-LD FAQPage differs');
+    });
+
+    it('an extension citation pointing elsewhere fails', () => {
+      const sabotaged = html('snake-plant').replaceAll(
+        'https://plants.ces.ncsu.edu/plants/dracaena-trifasciata/',
+        'https://example.com/snake-plant'
+      );
+      expect(failuresFor('snake-plant', sabotaged)).toContain('extension citation links');
+    });
+
+    it('the unsabotaged detailed pages pass, so each failure above is the sabotage', () => {
+      for (const slug of ['aloe-vera', 'pothos', 'spider-plant', 'peace-lily', 'snake-plant']) {
+        expect(gate(html(slug), entryFor(slug)), slug).toEqual([]);
+      }
+    });
+  });
+});

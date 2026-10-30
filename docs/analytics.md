@@ -226,7 +226,7 @@ event-data retention 14 months, Google signals disabled on the property.
 Implementation: `frontend/src/services/googleAnalytics.ts` (loader, consent,
 scrubbing) and `frontend/src/components/GoogleAnalyticsPageViews.tsx` (one page
 view per route). PostHog is untouched and unrelated: GA never sees an account
-id, a household id or any PostHog product event. It does get six funnel
+id, a household id or any PostHog product event. It does get seven funnel
 events of its own, described under "Conversion events in GA4" below.
 
 **Where the ID lives.** One line, in the production web build's environment:
@@ -253,7 +253,7 @@ before. Test fixtures are excluded by the smoke's GPC declaration (above).
   it (the served script embeds it), so no extra lookup is made.
 - `allow_google_signals: false`, `allow_ad_personalization_signals: false`,
   `ads_data_redaction: true`, `send_page_view: false`.
-- No `user_id`. `page_view`, plus the six funnel events below.
+- No `user_id`. `page_view`, plus the seven funnel events below.
 
 **Page views are explicit, and scrubbed.** Every route change sends one
 `page_view` after a `set` of `page_location`, `page_title` and
@@ -317,7 +317,7 @@ property:
 ### Conversion events in GA4
 
 **Decision, 2026-09-18:** judge ads and search on purchases, not taps. GA
-gets six events besides `page_view`, all sent through
+gets seven events besides `page_view`, all sent through
 `trackGoogleConversion` in `googleAnalytics.ts`, which rebuilds every
 parameter from a closed list or a checked shape. The table puts the step first
 because these are GA4 events, not rows of the PostHog vocabulary above (which
@@ -326,14 +326,15 @@ passes through, so no email, name, household name, plant note or Stripe id can r
 Google. Every one is subject to the same loader conditions and opt-outs as a
 page view, and carries the same scrubbed `page_location`.
 
-| Step          | GA4 event (not PostHog) | Fired by                                                                                                                                                                             | Parameters                                                                                                                                                                                               |
-| ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Landing click | `landing_cta_click`     | the home page's header sign-up button, hero sign-up button, and hero "See how it works" link (`LandingPage.tsx`)                                                                     | `cta`: `nav_signup`, `hero_signup` or `hero_how_it_works`                                                                                                                                                |
-| Sign-up       | `sign_up`               | the register form, once the API accepted the account (`RegisterPage.tsx`, beside PostHog's `signup_started`)                                                                         | `method: 'email'`                                                                                                                                                                                        |
-| Confirmed     | `email_confirmed`       | the confirm-email form, once `POST /auth/confirm` succeeded (`ConfirmEmailPage.tsx`, beside PostHog's `signup_completed`)                                                            | none beyond the scrubbed `page_location`                                                                                                                                                                 |
-| Activated     | `household_activated`   | the household's first plant saved: `FirstPlantStep.tsx`, or `AddPlantPage.tsx` when the household had no plants before. The product's own activation definition (funnel stage 3)     | none beyond the scrubbed `page_location`; no plant name, id or note                                                                                                                                      |
-| Trial         | `start_trial`           | the onboarding screen, when `POST /households` answers with `noCardTrialEndsAt`, which the server includes only when that create began the account's no-card Garden trial (ADR 0027) | `trial_plan: 'garden'`, `trial_days: 14`                                                                                                                                                                 |
-| Paid          | `purchase`              | Settings → Billing on Stripe's return from a plan checkout, once the purchase has settled (`features/billing/reportPlanPurchase.ts`)                                                 | `transaction_id`; and `currency: 'USD'`, `value`, `items: [{item_id: '<plan>_<interval>', price, quantity: 1}]` when the return address names the plan and cadence and the settled state shows that plan |
+| Step          | GA4 event (not PostHog) | Fired by                                                                                                                                                                             | Parameters                                                                                                                                                                                                                                      |
+| ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Landing click | `landing_cta_click`     | the home page's header sign-up button and hero sign-up button (`LandingPage.tsx`); rows before 2026-10-23 may also carry the removed hero "See how it works" link                    | `cta`: `nav_signup` or `hero_signup` (`hero_how_it_works` before 2026-10-23)                                                                                                                                                                    |
+| Sign-up       | `sign_up`               | the register form, once the API accepted the account (`RegisterPage.tsx`, beside PostHog's `signup_started`)                                                                         | `method: 'email'`                                                                                                                                                                                                                               |
+| Confirmed     | `email_confirmed`       | the confirm-email form, once `POST /auth/confirm` succeeded (`ConfirmEmailPage.tsx`, beside PostHog's `signup_completed`)                                                            | none beyond the scrubbed `page_location`                                                                                                                                                                                                        |
+| Activated     | `household_activated`   | the household's first plant saved: `FirstPlantStep.tsx`, or `AddPlantPage.tsx` when the household had no plants before. The product's own activation definition (funnel stage 3)     | none beyond the scrubbed `page_location`; no plant name, id or note                                                                                                                                                                             |
+| First plant   | `first_plant_added`     | the same moment as `household_activated`, beside it, in the same places (and the dashboard's empty plants card)                                                                      | `method`: `common_plant` (a tap on the first run's houseplant shortcut), `typed` (the first run's name form), `full_form` (`AddPlantPage.tsx`) or `dashboard_empty` (the same shortcut in the dashboard's empty plants card). Never which plant |
+| Trial         | `start_trial`           | the onboarding screen, when `POST /households` answers with `noCardTrialEndsAt`, which the server includes only when that create began the account's no-card Garden trial (ADR 0027) | `trial_plan: 'garden'`, `trial_days: 14`                                                                                                                                                                                                        |
+| Paid          | `purchase`              | Settings → Billing on Stripe's return from a plan checkout, once the purchase has settled (`features/billing/reportPlanPurchase.ts`)                                                 | `transaction_id`; and `currency: 'USD'`, `value`, `items: [{item_id: '<plan>_<interval>', price, quantity: 1}]` when the return address names the plan and cadence and the settled state shows that plan                                        |
 
 - **`transaction_id`** is the first 32 hex characters of the SHA-256 of the
   Stripe subscription id, or of `lifetime:<household id>:<tier>` for a
@@ -353,7 +354,8 @@ page view, and carries the same scrubbed `page_location`.
 - **Key events:** `purchase`, `sign_up` and `start_trial` are marked as key
   events on the property (Admin API, 2026-09-18). `landing_cta_click` is not a
   key event; it is the arrival signal the funnel report reads.
-  `email_confirmed` and `household_activated` are not yet key events either;
+  `email_confirmed`, `household_activated` and `first_plant_added` are not yet
+  key events either;
   they appear in GA4 only after the first real, non-opted-out visitor fires
   them, and marking them as key events is an owner step in the GA admin.
 

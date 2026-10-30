@@ -137,7 +137,7 @@ export function BlogPost() {
         <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
           <p className="font-serif text-xl text-ink">Try Family Greenhouse</p>
           <p className="mt-2 text-sm text-gray-600">
-            Free for one home, up to 3 household members and 20 plants. No credit card.
+            Free for one home, up to 2 household members and 8 plants. No credit card.
           </p>
           <div className="mt-4">
             <Link to="/register" className={buttonStyles()}>

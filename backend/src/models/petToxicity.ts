@@ -43,7 +43,62 @@ export interface AspcaListing {
   /** Path under ASPCA_ANIMAL_POISON_CONTROL_URL. */
   path: string;
   /** What the listing states, per animal. An animal it does not state is left out. */
-  listed: Partial<Record<'cats' | 'dogs', ToxicityVerdict>>;
+  listed: Partial<Record<'cats' | 'dogs' | 'horses', ToxicityVerdict>>;
+  /**
+   * The listing's own fields, copied VERBATIM (only whitespace normalized) on
+   * the date in `detailsRead`. The `/pet-safe/<slug>` page quotes them beside
+   * the listing, so they are never paraphrased here: a rewording is a claim
+   * the source did not make. Absent when the listing has no such field (a
+   * non-toxic listing gives neither).
+   */
+  toxicPrinciples?: string;
+  clinicalSigns?: string;
+  /** A further line the listing prints under the signs, verbatim. */
+  listingNote?: string;
+  /**
+   * ISO date the fields above (and `listed.horses`) were read off the live
+   * listing. Its presence is what turns on the page's detail sections and its
+   * FAQ: a page without it keeps the short form.
+   */
+  detailsRead?: string;
+}
+
+/**
+ * Where a university extension source may live. Each origin is a plant
+ * database run by a land-grant university extension service; the page links
+ * nothing else as a second source.
+ */
+export const EXTENSION_SOURCE_ORIGINS = ['https://plants.ces.ncsu.edu/plants/'] as const;
+
+/**
+ * A university extension's own page for the plant: a second, independent
+ * source the page quotes beside the ASPCA one. Fields are VERBATIM from that
+ * page (whitespace normalized), as read on `read`.
+ *
+ * It never decides a verdict. `tagged` records the source's "non-toxic for
+ * <animal>" tags, and the page shows one only where the ASPCA listing already
+ * gives the same "non-toxic" verdict for that animal, so a second source can
+ * corroborate safety but never assert it alone.
+ */
+export interface ExtensionSource {
+  /** The extension service, e.g. "NC State Extension". */
+  publisher: string;
+  /** The page's title: the plant as that database names it. */
+  title: string;
+  /** The database's name, e.g. "North Carolina Extension Gardener Plant Toolbox". */
+  database: string;
+  /** Full URL, under one of EXTENSION_SOURCE_ORIGINS. */
+  url: string;
+  /** ISO date the fields were read off the page. */
+  read: string;
+  /** The page's "Poison Severity" value, verbatim (e.g. "Low", "Medium"). */
+  poisonSeverity?: string;
+  /** The page's "Poison Symptoms" value, verbatim. */
+  poisonSymptoms?: string;
+  /** The page's "Poison Toxic Principle" value, verbatim. */
+  poisonToxicPrinciple?: string;
+  /** The page's "#non-toxic for <animal>" tags. */
+  tagged?: Partial<Record<'cats' | 'dogs' | 'horses', 'non-toxic'>>;
 }
 
 export interface PetToxicityEntry {
@@ -59,7 +114,38 @@ export interface PetToxicityEntry {
   note: string;
   /** The per-plant source for `cats`/`dogs`. Absent: no page makes a claim. */
   aspcaListing?: AspcaListing;
+  /**
+   * Horses, recorded only where the plant's own ASPCA listing states a
+   * verdict for them. The same double-entry rule as cats and dogs applies:
+   * the page shows a horse verdict only when this field and
+   * `aspcaListing.listed.horses` agree. The lookup and the assistant answer
+   * for cats and dogs only and do not read it.
+   */
+  horses?: ToxicityVerdict;
+  /** A university extension page for the same plant. See ExtensionSource. */
+  extensionSource?: ExtensionSource;
+  /**
+   * Slugs of other entries, hand-picked for a similar look or the same kind
+   * of spot, whose pages give a cited "non-toxic" for both cats and dogs.
+   * The page lists one only when that still holds (the build gate checks).
+   */
+  alternatives?: string[];
+  /**
+   * Slugs of other published entries a reader of this one is likely to
+   * confuse it with or look up next (same family, a similar name). Each is
+   * shown with that entry's own cited verdicts, whatever they are.
+   */
+  related?: string[];
 }
+
+/**
+ * The ASPCA plant list's index page, cited for the one sentence it prints
+ * about every plant (read 2026-10-24): "be advised that the consumption of
+ * any plant material may cause vomiting and gastrointestinal upset for dogs
+ * and cats."
+ */
+export const ASPCA_PLANT_LIST_URL =
+  'https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants';
 
 export const PET_TOXICITY: PetToxicityEntry[] = [
   {
@@ -71,7 +157,24 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       scientificName: 'Epipremnum aureum',
       path: '/toxic-and-non-toxic-plants/golden-pothos',
       listed: { cats: 'toxic', dogs: 'toxic' },
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns:
+        'Oral irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, vomiting, difficulty swallowing.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Epipremnum aureum',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/epipremnum-aureum/',
+      read: '2026-10-24',
+      poisonSeverity: 'Medium',
+      poisonSymptoms:
+        'Oral irritation, pain and swelling of mouth, tongue, and lips, excessive drooling, vomiting (not horses), difficulty swallowing, skin irritation, diarrhea',
+      poisonToxicPrinciple: 'Calcium oxalate crystals',
+    },
+    alternatives: ['hoya', 'spider-plant', 'boston-fern'],
+    related: ['philodendron', 'monstera'],
     aliases: ['devil’s ivy', 'devils ivy', 'golden pothos', 'money plant', 'epipremnum'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -86,7 +189,25 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       scientificName: 'Monstera deliciosa',
       path: '/toxic-and-non-toxic-plants/swiss-cheese-plant',
       listed: { cats: 'toxic', dogs: 'toxic' },
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns:
+        'Oral irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, vomiting, difficulty swallowing.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Monstera deliciosa',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/monstera-deliciosa/',
+      read: '2026-10-24',
+      poisonSeverity: 'Low',
+      poisonSymptoms:
+        'Intense burning of mouth, tongue, and throat; nausea, vomiting, difficulty swallowing, drooling, and diarrhea may also occur; contact with cell sap may cause skin irritation. Only if eaten in large quantities.',
+      poisonToxicPrinciple:
+        'Needle-like calcium oxalate crystals; possibly other unidentified toxins',
+    },
+    alternatives: ['areca-palm', 'money-tree', 'calathea'],
+    related: ['philodendron', 'pothos'],
     aliases: ['swiss cheese plant', 'split-leaf philodendron', 'split leaf philodendron'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -101,7 +222,23 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       scientificName: 'Sansevieria trifasciata',
       path: '/toxic-and-non-toxic-plants/snake-plant',
       listed: { cats: 'toxic', dogs: 'toxic' },
+      toxicPrinciples: 'Saponins',
+      clinicalSigns: 'Nausea, vomiting, diarrhea.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Dracaena trifasciata',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/dracaena-trifasciata/',
+      read: '2026-10-24',
+      poisonSeverity: 'Low',
+      poisonSymptoms:
+        'Toxic if ingested: vomiting (occasionally with blood), depression, nausea, diarrhea, anorexia, hypersalivation, dilated pupils (cats). The sap can cause skin irritation.',
+      poisonToxicPrinciple: 'Saponins',
+    },
+    alternatives: ['cast-iron-plant', 'ponytail-palm', 'parlor-palm'],
+    related: ['corn-plant', 'aloe-vera'],
     aliases: ['mother-in-law’s tongue', 'mother in laws tongue', 'sansevieria', 'dracaena'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -116,7 +253,18 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       scientificName: 'Chlorophytum comosum',
       path: '/toxic-and-non-toxic-plants/spider-plant',
       listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Chlorophytum comosum',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/chlorophytum-comosum/',
+      read: '2026-10-24',
+      tagged: { cats: 'non-toxic', dogs: 'non-toxic', horses: 'non-toxic' },
+    },
+    alternatives: ['boston-fern', 'parlor-palm', 'hoya'],
+    related: ['pothos', 'english-ivy'],
     aliases: ['airplane plant', 'ribbon plant', 'chlorophytum'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -131,7 +279,24 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       scientificName: 'Spathiphyllum',
       path: '/toxic-and-non-toxic-plants/peace-lily',
       listed: { cats: 'toxic', dogs: 'toxic' },
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns:
+        'Oral irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, vomiting, difficulty swallowing.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Spathiphyllum',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/spathiphyllum/',
+      read: '2026-10-24',
+      poisonSeverity: 'Medium',
+      poisonSymptoms:
+        'The leaves of the Peace Lily can be poisonous if eaten in large quantities. Symptoms include severe pain in the mouth and a burning sensation to the lips, tongue, and throat, excessive drooling, vomiting (not horses), difficulty swallowing',
+      poisonToxicPrinciple: 'Calcium oxalate crystals',
+    },
+    alternatives: ['calathea', 'cast-iron-plant', 'orchid'],
+    related: ['lily', 'anthurium'],
     aliases: ['spathiphyllum', 'closet plant'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -145,8 +310,25 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       title: 'Aloe',
       scientificName: 'Aloe vera',
       path: '/toxic-and-non-toxic-plants/aloe',
-      listed: { cats: 'toxic', dogs: 'toxic' },
+      listed: { cats: 'toxic', dogs: 'toxic', horses: 'toxic' },
+      toxicPrinciples: 'Saponins, anthraquinones',
+      clinicalSigns: 'Vomiting (not horses), lethargy, diarrhea. The gel is considered edible.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Aloe vera',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/aloe-vera/',
+      read: '2026-10-24',
+      poisonSeverity: 'Low',
+      poisonSymptoms:
+        'Poisonous through ingestion or dermatitis. Symptoms may include: Abdominal cramping, diarrhea, red urine; skin irritation from latex.',
+      poisonToxicPrinciple: 'Anthraquinone glycoside',
+    },
+    horses: 'toxic',
+    alternatives: ['haworthia', 'blue-echeveria', 'burros-tail'],
+    related: ['jade-plant', 'snake-plant'],
     aliases: ['aloe', 'medicine plant', 'burn plant'],
     cats: 'toxic',
     dogs: 'toxic',
@@ -396,13 +578,29 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     slug: 'bird-of-paradise',
     commonName: 'Bird of paradise',
     scientificName: 'Strelitzia reginae',
-    // The listing also states Toxic to Horses; this table records cats and dogs.
     aspcaListing: {
       title: 'Bird of Paradise Flower',
       scientificName: 'Strelitzia reginae',
       path: '/toxic-and-non-toxic-plants/bird-paradise-flower',
-      listed: { cats: 'toxic', dogs: 'toxic' },
+      listed: { cats: 'toxic', dogs: 'toxic', horses: 'toxic' },
+      toxicPrinciples: 'GI irritants',
+      clinicalSigns: 'Mild nausea, vomiting, drowsiness; caused mainly by fruit and seeds',
+      listingNote:
+        'Should not be confused with Caesalpinia or Poinciana gilliesii, which is also known as Bird of Paradise and is more toxic.',
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Strelitzia reginae',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/strelitzia-reginae/',
+      read: '2026-10-24',
+      poisonSeverity: 'Low',
+      poisonSymptoms: 'Mild nausea, vomiting, drowsiness; caused mainly by fruit and seeds',
+      poisonToxicPrinciple: 'GI irritants',
+    },
+    horses: 'toxic',
+    alternatives: ['areca-palm', 'parlor-palm', 'ponytail-palm'],
     //
     // ⚠️ TWO different plants are sold as "bird of paradise". ASPCA's entry
     // titled plain "Bird of Paradise" is Caesalpinia gilliesii — a DIFFERENT,
@@ -521,8 +719,20 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       title: 'Christmas Cactus',
       scientificName: 'Schlumbergera bridgesii',
       path: '/toxic-and-non-toxic-plants/christmas-cactus',
-      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+      listed: { cats: 'non-toxic', dogs: 'non-toxic', horses: 'non-toxic' },
+      detailsRead: '2026-10-24',
     },
+    extensionSource: {
+      publisher: 'NC State Extension',
+      title: 'Schlumbergera',
+      database: 'North Carolina Extension Gardener Plant Toolbox',
+      url: 'https://plants.ces.ncsu.edu/plants/schlumbergera/',
+      read: '2026-10-24',
+      tagged: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    horses: 'non-toxic',
+    alternatives: ['orchid', 'african-violet', 'hoya'],
+    related: ['poinsettia'],
     // No bare 'christmas' alias: poinsettia (toxic) is the other Christmas
     // plant in this table and must not be out-ranked by a non-toxic row on a
     // generic seasonal query.

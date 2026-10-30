@@ -48,9 +48,11 @@
  *
  * ## Findings the baseline accepts (frontend/ios/.greenlight.yml)
  *
- * One path, with the reason beside it. The `ignore:` list applies to the code
- * scan only; the privacy scanner has no baseline, and its one INFO on this
- * project (a substring match, see the config file) does not fail the gate.
+ * None since 2026-10-24: the one path it held (NativeReviewPlugin.swift, for
+ * the StoreKit import with no restore) went when the app gained Restore
+ * purchases (ADR 0041). The `ignore:` list applies to the code scan only; the
+ * privacy scanner has no baseline, and its one INFO on this project (a
+ * substring match, see the config file) does not fail the gate.
  *
  * ## Missing tool
  *
@@ -68,8 +70,8 @@
  * silently applied nothing cannot read as a pass:
  *
  *   - iOS: PrivacyInfo.xcprivacy deleted               -> CRITICAL
- *   - iOS: the baseline file removed                   -> HIGH (proves the
- *          baseline is load-bearing and scoped to one file)
+ *   - iOS: NativePurchasesPlugin.swift removed          -> HIGH (Restore
+ *          purchases lives there; without it StoreKit has no restore)
  *   - Android: READ_SMS added to the manifest          -> HIGH
  *
  * The scans take ~100ms each, so this costs the gate well under a second.
@@ -234,10 +236,15 @@ export const CONTROLS = [
     expect: /\[CRITICAL\].*No PrivacyInfo\.xcprivacy found/,
   },
   {
-    name: 'ios: baseline removed (iap-no-restore returns)',
+    // The app sells through StoreKit (ADR 0041) and its Restore purchases
+    // lives in NativePurchasesPlugin.swift. Without that file the remaining
+    // `import StoreKit` (NativeReviewPlugin.swift, the rating sheet) has no
+    // restore beside it, so the 3.1.1 rule must fire: proof the rule is live
+    // and that the plugin is what satisfies it.
+    name: 'ios: Restore purchases removed (iap-no-restore returns)',
     kind: 'ios',
     project: IOS,
-    seed: (copy) => rmSync(join(copy, '.greenlight.yml')),
+    seed: (copy) => rmSync(join(copy, 'App/App/NativePurchasesPlugin.swift')),
     expect: /\[HIGH\].*In-app purchases without restore functionality/,
   },
   {

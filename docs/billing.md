@@ -23,7 +23,7 @@ Source of truth: `backend/src/models/plans.ts`.
 
 | Plan       | Monthly | Plants cap | Members cap | Notes                                      |
 | ---------- | ------- | ---------- | ----------- | ------------------------------------------ |
-| Seedling   | Free    | 20         | 3           | Default for every new household            |
+| Seedling   | Free    | 8          | 2           | Default for every new household            |
 | Garden     | $4.99   | 200        | Unlimited   | Free trial once per household, no stacking |
 | Greenhouse | $9.99   | 5000       | Unlimited   | Free trial once per household, no stacking |
 
@@ -34,11 +34,15 @@ and let the gate tell you what this table should say.
 
 The tiers are drawn on **homes and hands**, not collection size
 ([ADR 0014](adr/0014-plans-drawn-on-homes-and-hands.md)). `plans.ts` states the
-reasoning at each limit: Seedling's 20 plants are deliberate generosity, because
-plant rows cost nothing and "generosity here buys member #2 — the metric that
-matters"; its cap of 3 members is where the charge lands, "at the fourth hand …
-never at the second". Members are uncapped on both paid tiers, so the members
-column is a free-tier boundary rather than a paid-tier ceiling.
+reasoning at each limit. Seedling was 20 plants and 3 members, set generously to
+buy member #2; on 2026-10-23 the owner cut it to 8 plants and 2 members
+([ADR 0040](adr/0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md))
+after the real households turned out to hold 5 to 9 plants with one or two
+people, so the old caps were limits nobody met. A household created before
+`SEEDLING_LIMITS_CUT_AT` keeps 20 plants and 3 members while it is on Seedling
+(`withSeedlingGrandfather`, read off the row's own `createdAt`, so nothing was
+backfilled). Members are uncapped on both paid tiers, so the members column is a
+free-tier boundary rather than a paid-tier ceiling.
 
 > **Superseded note, kept because it was load-bearing advice.** This paragraph
 > used to say Seedling's member cap was "deliberately the same as Garden's, not
@@ -1021,6 +1025,65 @@ a subscription month earns because it is metered the same way.
   trial while the gift still runs. The billing page shows the gift's end date
   beside the plan grid; refusing that checkout, or starting the subscription
   when the gift ends, is a follow-up decision.
+
+## Apple In-App Purchase (ADR 0041)
+
+The iPhone app can sell Garden and Greenhouse through the App Store, beside
+Stripe on the website. It is off by default (`APP_STORE_BILLING_ENABLED`,
+Terraform `app_store_billing_enabled`, and the app build's
+`VITE_APP_STORE_PURCHASES`); the decision record is
+`docs/adr/0041-apple-in-app-purchase-in-the-iphone-app.md` and the app side is
+in `docs/mobile.md`, "In-App Purchase".
+
+**One source of truth.** The household METADATA row. Apple's state is the
+`appStore` map on it (`planId`, `productId`, `expiresAt`, `willRenew`,
+`revoked`, `environment`), written only by `services/appStoreBilling.ts` from
+Apple-signed data and never by a Stripe path (`SubscriptionWriteField`
+excludes it). `getEntitledPlan` raises a household to the App Store tier while
+`appStoreState` is `active`, under the lifetime floor and gifts, exactly as a
+Stripe plan. GET /billing/me publishes `appStore` with a server-clock `state`
+and never the original transaction id. A running App Store subscription also
+ends the no-card trial's metering, like Stripe state.
+
+**Products.** One subscription group, "Family Greenhouse plans":
+`net.familygreenhouse.app.garden.monthly` ($4.99) and
+`net.familygreenhouse.app.greenhouse.monthly` ($9.99), monthly, no
+introductory offer. `models/appStore.ts` maps them to tiers.
+
+**Routes.**
+
+| Route                                     | Auth                | Does                                                                                                                                                                                                 |
+| ----------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /billing/app-store/purchase-intent` | admin               | Refuses a second way to pay (409 `STRIPE_SUBSCRIPTION_ACTIVE`, `APP_STORE_SUBSCRIPTION_ACTIVE`, `PLAN_ALREADY_INCLUDED`), else returns the product id and the household's `appAccountToken`.         |
+| `POST /billing/app-store/transactions`    | member              | Verifies and applies StoreKit signed transactions (purchase, restore, launch sync, updates). Per-transaction outcome; `APP_STORE_LINKED_ELSEWHERE` when a subscription belongs to another household. |
+| `POST /billing/app-store/notifications`   | none (Apple-signed) | App Store Server Notifications v2. 200 when handled or unplaceable, 400 when the JWS does not verify, 500 on a storage failure (Apple retries).                                                      |
+
+All three answer 404 while the switch is off.
+
+**Verification.** `services/appStoreJws.ts` checks the `x5c` chain against the
+pinned Apple Root CA - G3, Apple's two marker extensions, validity at
+`signedDate`, and the ES256 signature, with `node:crypto` only. Bundle id
+`net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox are accepted (App Review buys in Sandbox);
+`APP_STORE_ENVIRONMENTS` narrows it.
+
+**Not paying twice.** The purchase intent refuses a household with a live
+Stripe subscription, an active App Store subscription, or a lifetime or gift
+that covers the tier. `POST /billing/checkout` refuses a web plan checkout
+(409 `APP_STORE_SUBSCRIBED`) while an App Store subscription is active,
+whatever the switch says, and Settings → Plan on the website says the plan is
+billed through the App Store. A second Apple subscription on the same home is
+refused while the first is live; both that and a household found paying
+Stripe and Apple at once are logged (`app_store_second_subscription_on_household`,
+`app_store_and_stripe_both_live`) for a manual refund.
+
+**Rows.** `APPSTORE_TOKEN#<uuid>` (token to household) and
+`APPSTORE_TXN#<originalTransactionId>` (subscription to household, written
+once). On the household row: `appStore`, `appStoreAccountToken`,
+`appStoreOriginalTransactionId`, `appStoreSignedDate`.
+
+**Refunds.** Apple decides them. A `REFUND` or `REVOKE` notification sets the
+revocation date and access ends there; `REFUND_REVERSED` restores it. Nothing
+here calls the App Store Server API.
 
 ## Refer-a-friend
 

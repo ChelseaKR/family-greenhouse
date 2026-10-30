@@ -53,7 +53,7 @@ saying plainly that nothing was deleted.
 
 5. **Honest about the fallback.** Both emails say what Seedling holds, with every figure read from
    the plan catalog, and that everything already made is kept. The day-14 email says so in its
-   subject. It names an over-cap state (more than 20 plants, more than 3 people) only when the
+   subject. It names an over-cap state (more plants or people than the household's free caps: 8 and 2, or 20 and 3 for a household created before the ADR 0040 cut) only when the
    counter was read and is over; an unread counter says nothing rather than guessing.
 
 6. **Absence is not an achievement.** A household with no plants is told "You have not added a

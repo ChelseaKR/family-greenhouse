@@ -1,19 +1,11 @@
 # Baseline for `greenlight preflight frontend/ios` (scripts/check-greenlight.mjs).
-# The `ignore:` list applies to greenlight's CODE scan only. Every entry needs a
-# reason, a way to tell it has stopped being true, and no wildcards.
-
-ignore:
-  # [HIGH] 3.1.1 "In-app purchases without restore functionality" matches the
-  # text `import StoreKit` on line 2. The file calls SKStoreReviewController
-  # (Apple's rating sheet, ADR 0036) and nothing else from StoreKit. The app
-  # sells nothing through Apple: billing is Stripe on the web (docs/billing.md).
-  # Checked 2026-10-23: no SKPaymentQueue, Product.purchase, SKProduct or
-  # RevenueCat anywhere under frontend/ios, frontend/android or frontend/src.
-  # Only this one file is ignored, so IAP code added ANYWHERE ELSE trips the
-  # rule again (scripts/check-greenlight.mjs proves it on every run by
-  # re-scanning a copy without this file). If this app ever adds StoreKit
-  # purchases, delete this entry and add Restore Purchases.
-  - App/App/NativeReviewPlugin.swift
+# The `# Nothing is ignored. Until 2026-10-24 NativeReviewPlugin.swift was, for the
+# [HIGH] 3.1.1 "In-app purchases without restore functionality" match on its
+# `import StoreKit` while the app sold nothing through Apple. The app now sells
+# through StoreKit (ADR 0041) and has Restore purchases
+# (App/App/NativePurchasesPlugin.swift), so the rule passes on its own, and
+# scripts/check-greenlight.mjs proves it fires again without that file.
+ignore: []
 
 # Not baselined, because no baseline can reach it (privacy scanner) and it does
 # not fail the gate: [INFO] "Privacy manifest declares tracking but no tracking

@@ -100,8 +100,35 @@ describe('day 14', () => {
     expect(email.text).toContain('No card was on file, and nothing was charged');
   });
   it('states an over-cap household keeps everything, with its own counts', () => {
+    // Created after the 2026-10-23 cut: Seedling's caps are 8 and 2 (ADR 0040).
     const over = composeTrialLifecycleEmail(
-      ctx({ kind: 'trial_day14', facts: { ...FACTS, plantsNow: ok(31), membersNow: ok(5) } })
+      ctx({
+        kind: 'trial_day14',
+        householdCreatedAt: '2026-11-02T10:00:00.000Z',
+        facts: { ...FACTS, plantsNow: ok(9), membersNow: ok(3) },
+      })
+    );
+    expect(over.text).toContain('Seedling holds up to 8 active plants');
+    expect(over.text).toContain('You have 9 active plants, more than Seedling’s 8. They all stay.');
+    expect(over.text).toContain(
+      'Your household has 3 people, more than Seedling’s 2. They all stay.'
+    );
+    expect(email.text).not.toContain('more than Seedling');
+  });
+  it('names the grandfathered caps to a household created before the cut (ADR 0040)', () => {
+    const facts = { ...FACTS, plantsNow: ok(9), membersNow: ok(3) };
+    const before = composeTrialLifecycleEmail(
+      ctx({ kind: 'trial_day14', householdCreatedAt: '2026-10-01T10:00:00.000Z', facts })
+    );
+    // 9 plants and 3 people are inside 20 and 3: nothing is over.
+    expect(before.text).toContain('Seedling holds up to 20 active plants');
+    expect(before.text).not.toContain('more than Seedling');
+    const over = composeTrialLifecycleEmail(
+      ctx({
+        kind: 'trial_day14',
+        householdCreatedAt: '2026-10-01T10:00:00.000Z',
+        facts: { ...FACTS, plantsNow: ok(31), membersNow: ok(5) },
+      })
     );
     expect(over.text).toContain(
       'You have 31 active plants, more than Seedling’s 20. They all stay.'
@@ -109,7 +136,6 @@ describe('day 14', () => {
     expect(over.text).toContain(
       'Your household has 5 people, more than Seedling’s 3. They all stay.'
     );
-    expect(email.text).not.toContain('more than Seedling');
   });
   it('does not claim an over-cap state it could not read', () => {
     const unknown = composeTrialLifecycleEmail(
