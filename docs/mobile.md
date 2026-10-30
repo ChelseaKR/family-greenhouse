@@ -357,6 +357,28 @@ npx cap open android
 npx cap open ios
 ```
 
+**Xcode Cloud.** The "Default" workflow clones the repo without
+`node_modules` or `frontend/dist`, and `CapApp-SPM/Package.swift` resolves
+every plugin from `node_modules`. `frontend/ios/App/ci_scripts/ci_post_clone.sh`
+(Xcode Cloud only runs scripts from a `ci_scripts/` folder next to
+`App.xcodeproj`) installs the Node major in `.nvmrc` with Homebrew, runs
+`npm ci`, builds the web bundle with `MOBILE_STORE_BUILD=true` and runs
+`npx cap sync ios`. It runs the `--production` validator first, as
+`mobile:release` does, then checks the iOS copy carries `VITE_API_URL`. Its build variables come from the committed
+`.env.mobile.production.example`, which holds public client values only, with
+`VITE_NATIVE_PUSH_ENABLED` defaulting to `true` as in local store builds. No
+secret is needed. A variable set in the workflow's Environment section
+overrides the template (for example `VITE_APP_STORE_PURCHASES=true` or
+`VITE_POSTHOG_KEY`).
+
+Xcode Cloud also turns off automatic package resolution, so it needs the
+committed `App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
+(the pins for `capacitor-swift-pm`, `ion-ios-camera` and `keychain-swift`).
+When a Capacitor or plugin upgrade changes one of those, open the project in
+Xcode (or run `xcodebuild -resolvePackageDependencies` in `frontend/ios/App`)
+after `npx cap sync ios` and commit the updated file, or the next Xcode Cloud
+build stops at "a resolved file is required".
+
 `npx cap run android`/`npx cap run ios` builds and launches on a connected
 device or emulator/simulator. iOS builds require a Mac (or a macOS CI runner
 such as GitHub Actions `macos-` images); the iOS project uses Swift Package
