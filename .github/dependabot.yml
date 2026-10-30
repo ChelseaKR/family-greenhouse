@@ -2,7 +2,12 @@ version: 2
 updates:
   # --- npm workspaces ---
   # Root holds shared tooling (eslint, prettier, commitlint); the two workspaces
-  # carry their own runtime deps. Dependabot needs one entry per manifest.
+  # carry their own runtime deps. The lockfile lives only at the root, so this
+  # is the ONLY npm entry: Dependabot resolves frontend/ and backend/ as
+  # workspaces from "/" and rewrites package-lock.json with them. Separate
+  # /backend and /frontend entries changed only the subdirectory package.json
+  # and left the root lockfile stale, so `npm ci` failed with "Missing: <pkg>
+  # from lock file" (PRs #974, #978, #988, #989, #991, #992). Do not re-add them.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -27,6 +32,10 @@ updates:
       semver-patch-days: 7
     open-pull-requests-limit: 5
     groups:
+      # Carried over from the former /backend entry.
+      aws-sdk:
+        patterns:
+          - '@aws-sdk/*'
       # Batch low-risk dev tooling so we get one PR, not a dozen.
       dev-dependencies:
         dependency-type: development
@@ -35,53 +44,6 @@ updates:
           - patch
     labels:
       - dependencies
-
-  - package-ecosystem: npm
-    directory: /backend
-    schedule:
-      interval: weekly
-      day: monday
-    # Supply-chain cooldown — see the first entry above.
-    cooldown:
-      default-days: 7
-      semver-major-days: 30
-      semver-minor-days: 14
-      semver-patch-days: 7
-    open-pull-requests-limit: 5
-    groups:
-      aws-sdk:
-        patterns:
-          - '@aws-sdk/*'
-      dev-dependencies:
-        dependency-type: development
-        update-types:
-          - minor
-          - patch
-    labels:
-      - dependencies
-      - backend
-
-  - package-ecosystem: npm
-    directory: /frontend
-    schedule:
-      interval: weekly
-      day: monday
-    # Supply-chain cooldown — see the first entry above.
-    cooldown:
-      default-days: 7
-      semver-major-days: 30
-      semver-minor-days: 14
-      semver-patch-days: 7
-    open-pull-requests-limit: 5
-    groups:
-      dev-dependencies:
-        dependency-type: development
-        update-types:
-          - minor
-          - patch
-    labels:
-      - dependencies
-      - frontend
 
   # --- GitHub Actions ---
   # The Node 24-compatible action majors have landed (checkout 7, setup-node 6,

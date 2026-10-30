@@ -358,9 +358,9 @@ function oneTimeReceipt(event: Stripe.Event): BillingNotice | null {
  * one charge to anyone who subscribes the pair in the dashboard, and the
  * dedupe ledger cannot catch that (two events, two ids, one payment).
  *
- * A zero `amount_paid` sends nothing: every subscription this app creates
- * starts on a 14-day trial, whose first invoice is a real, genuinely-zero
- * invoice. That is a read value of 0, not an unread one, and "you were charged
+ * A zero `amount_paid` sends nothing: a subscription this app creates with a
+ * trial (14 days, or the rest of a no-card trial) has a real, genuinely-zero
+ * first invoice. That is a read value of 0, not an unread one, and "you were charged
  * $0.00" is not a receipt anybody wants.
  */
 function invoiceReceipt(event: Stripe.Event): BillingNotice | null {

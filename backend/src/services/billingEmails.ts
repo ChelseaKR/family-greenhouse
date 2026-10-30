@@ -61,7 +61,12 @@ import {
   type BillingNotice,
   type BillingNoticePhase,
 } from '../models/billingNotices.js';
-import { getPlan, type Plan } from '../models/plans.js';
+import {
+  getPlan,
+  withSeedlingGrandfather,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
+  type Plan,
+} from '../models/plans.js';
 import type { HouseholdMember } from '../models/types.js';
 import {
   composeAccountDeletionEmail,
@@ -176,7 +181,17 @@ async function readHouseholdPlan(householdId: string): Promise<Plan> {
       Key: { PK: `HOUSEHOLD#${householdId}`, SK: 'METADATA' },
     })
   );
-  return getPlan(result.Item?.planId as string | undefined);
+  // The caps this household is actually held to: a household created before
+  // the 2026-10-23 Seedling cut keeps 20 plants and 3 members (ADR 0040), and
+  // an email that told it 8 and 2 would state a limit it does not have.
+  return withSeedlingGrandfather(
+    getPlan(result.Item?.planId as string | undefined),
+    result.Item
+      ? typeof result.Item.createdAt === 'string'
+        ? result.Item.createdAt
+        : HOUSEHOLD_CREATED_AT_UNKNOWN
+      : undefined
+  );
 }
 
 /**

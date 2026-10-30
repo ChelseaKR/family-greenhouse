@@ -367,7 +367,7 @@ describe('plants handler', () => {
     // The transactional counter condition lost — e.g. a concurrent create
     // took the last Seedling slot (TransactionCanceled → PlanLimitError).
     vi.mocked(plantService.createPlant).mockRejectedValueOnce(
-      Object.assign(new Error('Plant limit of 20 reached'), { name: 'PlanLimitError' })
+      Object.assign(new Error('Plant limit of 8 reached'), { name: 'PlanLimitError' })
     );
     const event = buildEvent({
       httpMethod: 'POST',
@@ -376,12 +376,12 @@ describe('plants handler', () => {
     });
     const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
-    expect(res.body).toMatch(/Seedling plan is limited to 20 plants/);
+    expect(res.body).toMatch(/Seedling plan is limited to 8 plants/);
     expect(plantService.createPlant).toHaveBeenCalledWith(
       { name: 'eleventh', speciesSource: null },
       'hh-1',
       'user-1',
-      20
+      8
     );
   });
 
@@ -421,7 +421,7 @@ describe('plants handler', () => {
         { name: 'Fern', speciesSource: null },
         'hh-1',
         'user-1',
-        20
+        8
       );
     }
   );

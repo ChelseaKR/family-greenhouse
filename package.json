@@ -1,6 +1,6 @@
 {
   "name": "family-greenhouse",
-  "version": "0.42.0",
+  "version": "0.46.0",
   "license": "Elastic-2.0",
   "private": true,
   "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person in the browser or by email, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
@@ -55,6 +55,7 @@
     "reads:check": "npm run reads:check --workspaces --if-present",
     "entitlements:check": "npm run entitlements:check --workspace backend",
     "mobile:validate": "node scripts/validate-store-release.mjs",
+    "greenlight:check": "node scripts/check-greenlight.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "audit:check": "node scripts/check-audit.mjs",
     "deps:check": "node scripts/check-dependency-freshness.mjs",

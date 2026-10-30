@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, cleanup, waitFor } from '@testing-library/react';
+import { act, render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -18,6 +18,7 @@ import {
   type SubscriptionState,
 } from '@/services/billingService';
 import { useAuthStore } from '@/store/authStore';
+import { formatDate } from '@/i18n/format';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 
 vi.mock('@/services/googleAnalytics', async (importOriginal) => {
@@ -132,7 +133,9 @@ async function renderBilling(
     </QueryClientProvider>
   );
   // Wait for the queries to settle (the plan blurb gives way to content).
-  await screen.findByText(/Your household is on the/);
+  // A no-card trial household also has the trial notice's "Your household is
+  // trying Garden …" title above the plan line, hence findAll.
+  await screen.findAllByText(/Your household is (on the|trying)/);
 }
 
 describe('evaluatePlanLimits (three states, never two)', () => {
@@ -827,9 +830,7 @@ describe('BillingSettings — the free trial is once per household (#602)', () =
     // grid back, which is what made the old sentence dangerous rather than
     // merely imprecise.
     expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/already used its 14-day free trial/, { selector: 'p' })
-    ).toBeInTheDocument();
+    expect(screen.getByText(/already had its free trial/, { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText(/charged straight away/, { selector: 'p' })).toBeInTheDocument();
   });
 
@@ -849,16 +850,58 @@ describe('BillingSettings — the free trial is once per household (#602)', () =
     // repeat the original lie. So it says what is always true instead.
     await renderBilling({ planId: 'seedling' }, { paid: true });
 
-    const description = screen.getByText(
-      /first paid subscription starts with a 14-day free trial/,
-      {
-        selector: 'p',
-      }
-    );
+    const description = screen.getByText(/Free trials are once per household and do not stack/, {
+      selector: 'p',
+    });
     expect(description).toBeInTheDocument();
     expect(description).toHaveTextContent(/once per household/);
     // And it does not claim to know which case this household is in.
     expect(description).not.toHaveTextContent(/This household/);
+  });
+});
+
+describe('BillingSettings — a household on the no-card Garden trial (ADR 0027)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  const endsAt = new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString();
+  const trialHousehold: SubscriptionState = {
+    planId: 'seedling',
+    trialAvailable: true,
+    usageDetail: usage({ plantCount: 0, maxPlants: 500, maxMembers: 6 }),
+    noCardTrial: { state: 'active', endsAt },
+    gift: null,
+  };
+
+  it('marks Garden, not Seedling, as the plan in use, and offers to keep it', async () => {
+    await renderBilling(trialHousehold, { paid: true });
+    const date = formatDate(endsAt, { month: 'long' });
+
+    expect(screen.getByTestId('current-plan')).toHaveTextContent(
+      `Your household is trying Garden free until ${date}. After that it moves to the free Seedling plan unless an admin chooses a paid plan.`
+    );
+    // The marker sits on Garden's card, the tier the household is using.
+    const gardenCard = screen.getByRole('heading', { name: 'Garden' }).closest('li')!;
+    const seedlingCard = screen.getByRole('heading', { name: 'Seedling' }).closest('li')!;
+    expect(within(gardenCard).getByText(`Trying free until ${date}`)).toBeInTheDocument();
+    expect(within(seedlingCard).queryByText(/Trying free|Current plan/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Current plan')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep Garden' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Switch to Garden' })).not.toBeInTheDocument();
+    // Greenhouse is still an upgrade from what the household is using.
+    expect(screen.getByRole('button', { name: 'Switch to Greenhouse' })).toBeInTheDocument();
+  });
+
+  it('goes back to the plain labels once the trial has ended', async () => {
+    await renderBilling(
+      { ...trialHousehold, noCardTrial: { state: 'ended', endsAt: new Date(0).toISOString() } },
+      { paid: true }
+    );
+    expect(screen.getByText('Current plan')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep Garden' })).not.toBeInTheDocument();
   });
 });
 

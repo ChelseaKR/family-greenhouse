@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { authService } from '@/services/authService';
 import { track } from '@/services/analytics';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -171,6 +172,9 @@ export function ConfirmEmailPage() {
       await authService.confirmEmail({ email, code: data.code });
       clearPendingConfirmation();
       track('signup_completed');
+      // The same step as a GA4 `email_confirmed`. No field from the form or
+      // the address is sent with it.
+      trackGoogleConversion({ name: 'email_confirmed' });
       navigate(safeRedirect ? `/login?redirect=${encodeURIComponent(safeRedirect)}` : '/login', {
         state: { email, justConfirmed: true },
       });
