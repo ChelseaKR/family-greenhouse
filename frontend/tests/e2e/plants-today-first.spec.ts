@@ -416,14 +416,14 @@ test.describe('the plant page uses the same Undo (phone website)', () => {
     });
     await uiLogin(page, acct.email, acct.password);
     await page.goto(`/plants/${acct.plantId}`);
-    await page.getByRole('button', { name: 'Water Undo Lily' }).click();
+    await page.getByRole('button', { name: 'Watered: Water Undo Lily' }).click();
     await page.getByRole('button', { name: 'Undo: Water Undo Lily' }).click();
     await page.waitForTimeout(6500);
     expect(completions).toEqual([]);
     await page.reload();
     await expect(page.getByText('Water today')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Water Undo Lily' }).click();
+    await page.getByRole('button', { name: 'Watered: Water Undo Lily' }).click();
     await page.waitForTimeout(3000);
     expect(completions).toEqual([]);
     await expect.poll(() => completions.length, { timeout: 6000 }).toBe(1);

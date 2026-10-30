@@ -941,7 +941,7 @@
       "watered": "Regada",
       "remove": "Quitar…",
       "restore": "Volver al cuidado activo",
-      "doAria": "{{task}} {{plant}}",
+      "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "Me encargo yo"
     }
   },

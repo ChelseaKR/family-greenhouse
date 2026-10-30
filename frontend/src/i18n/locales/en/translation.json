@@ -923,7 +923,7 @@
       "watered": "Watered",
       "remove": "Remove…",
       "restore": "Restore to active care",
-      "doAria": "{{task}} {{plant}}",
+      "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "I’ll do it"
     }
   },
