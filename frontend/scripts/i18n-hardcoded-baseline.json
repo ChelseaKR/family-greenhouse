@@ -60,7 +60,7 @@
     "features/plants/PhotoTimeline.tsx": 1,
     "features/plants/PlantDetailPage.tsx": 5,
     "features/plants/SuggestedCareCard.tsx": 1,
-    "features/settings/AccountPage.tsx": 2,
+    "features/settings/AccountPage.tsx": 1,
     "features/settings/AccountSettings.tsx": 9,
     "features/settings/ApiKeysSettings.tsx": 4,
     "features/settings/BillingSettings.tsx": 1,

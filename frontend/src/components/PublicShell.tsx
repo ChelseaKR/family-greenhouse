@@ -55,7 +55,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
           )}
           aria-label={t('publicShell.siteNavLabel')}
         >
-          <Link to="/" aria-label={t('publicShell.homeLabel')}>
+          <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
             <BrandMark variant="wordmark" size="sm" compactOnMobile />
           </Link>
           {!plainHeader && (

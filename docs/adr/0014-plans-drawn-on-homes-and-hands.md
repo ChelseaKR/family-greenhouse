@@ -159,7 +159,7 @@ relearned:
   here is a structural limit on rows that cost nothing to serve. The homes
   gate adds one `GetItem` per household the user belongs to, and only on
   create/join — a fraction of a cent per household per year at any plausible
-  rate. The one AI number that moves (free identifications 3 → 1) *reduces*
+  rate. The one AI number that moves (free identifications 3 → 1) _reduces_
   cost, by up to $0.117 per free household per month at the ADR 0012 price.
 - **Existing Garden subscribers lose nothing.** Members go 6 → unlimited;
   plants go 500 → 200 for new growth only, and a household above 200 keeps

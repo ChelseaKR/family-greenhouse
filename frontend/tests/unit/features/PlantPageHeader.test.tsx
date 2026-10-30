@@ -164,9 +164,9 @@ describe('the plant page on a phone', () => {
     const card = await screen.findByRole('region', { name: 'What this plant needs now' });
     expect(within(card).getByText('Water · 1 day overdue')).toBeInTheDocument();
     expect(within(card).getByText(/^Up for grabs · last by Dana, /)).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: 'Water Peace Lily' })).toHaveTextContent(
-      'Watered'
-    );
+    expect(
+      within(card).getByRole('button', { name: 'Watered: Water Peace Lily' })
+    ).toHaveTextContent('Watered');
     expect(within(card).getByRole('button', { name: 'I’ll do it' })).toBeInTheDocument();
     expect(within(card).getByLabelText('Snooze task')).toBeInTheDocument();
 
@@ -198,7 +198,7 @@ describe('the plant page on a phone', () => {
     try {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderPlant();
-      await user.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+      await user.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
       await pass(UNDO_WINDOW_MS - 200);
       expect(writes).toEqual([]);
       await pass(400);

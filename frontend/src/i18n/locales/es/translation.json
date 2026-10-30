@@ -199,7 +199,7 @@
     "description": "Una comprobación rápida de que los recordatorios ya forman una rutina que otra persona puede asumir.",
     "progress": "{{completed}} de {{total}} pasos listos",
     "notNow": "Ahora no",
-    "dismissAria": "Ocultar la configuración del cuidado compartido durante 30 días",
+    "dismissAria": "Ahora no, ocultar la configuración del cuidado compartido durante 30 días",
     "completeStatus": "Completado",
     "currentStatus": "Siguiente paso",
     "upcomingStatus": "Próximamente",
@@ -310,7 +310,7 @@
     "body": "Crea un enlace de cuidador para que alguien de confianza vea qué plantas necesitan cuidados mientras no estás. Caduca solo y puedes desactivarlo cuando quieras.",
     "action": "Crear un enlace de cuidador",
     "notNow": "Ahora no",
-    "dismissAria": "Ocultar la tarjeta de viaje durante 30 días"
+    "dismissAria": "Ahora no, ocultar la tarjeta de viaje durante 30 días"
   },
   "nav": {
     "chat": "Chat",
@@ -341,7 +341,7 @@
     "openMenu": "Abrir menú del sitio",
     "tryApp": "Probar la aplicación",
     "siteNavLabel": "Sitio",
-    "homeLabel": "Inicio de Family Greenhouse"
+    "homeLabel": "Family Greenhouse, {{tagline}}, inicio"
   },
   "commercialHold": {
     "statusLabel": "Estado comercial",
@@ -941,7 +941,7 @@
       "watered": "Regada",
       "remove": "Quitar…",
       "restore": "Volver al cuidado activo",
-      "doAria": "{{task}} {{plant}}",
+      "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "Me encargo yo"
     }
   },
@@ -1071,7 +1071,7 @@
     "unclaimAria": "Soltar la tarea de {{plant}}",
     "claimedToast": "Tarea tomada",
     "unclaimedToast": "Tarea liberada",
-    "askFamilyAria": "Pedir al hogar que se encargue de la tarea de {{plant}}",
+    "askFamilyAria": "Pedir ayuda con la tarea de {{plant}}",
     "askedBadge": "Pidió ayuda al hogar",
     "askedByBadge": "{{name}} pidió ayuda al hogar",
     "askedNote": "«{{note}}»",
