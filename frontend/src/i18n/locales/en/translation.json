@@ -486,9 +486,9 @@
   },
   "plantSafetyPage": {
     "metaTitle": "Is {{name}} toxic to cats and dogs? ASPCA verdict",
-    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Cats: {{cats}}. Dogs: {{dogs}}.",
+    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
-    "heading": "Is {{name}} toxic to cats and dogs?",
+    "heading": "Is {{questionName}} toxic to cats and dogs?",
     "verdictsHeading": "The verdicts, with their source",
     "animal": {
       "cats": "Cats",

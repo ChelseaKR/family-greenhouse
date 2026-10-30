@@ -401,15 +401,17 @@ export const POISON_HOTLINES = [
 ] as const;
 
 /**
- * The plant's name as the head spells it: the table's `commonName` without a
- * trailing disambiguation in parentheses ("Orchid (Phalaenopsis)" -> "Orchid").
- * The scientific name follows in the description, and the longest title has to
- * fit a SERP's ~60 characters. Both head catalogs (en and es) take it as `{{name}}`,
- * so the Spanish head drops the parenthetical too. The build gate recomposes it
- * the same way.
+ * The plant's name as the head and the H1 spell it: the table's `commonName`
+ * without a trailing disambiguation in parentheses ("Orchid (Phalaenopsis)" ->
+ * "orchid"), cased as it reads mid-question. The table's sentence-case
+ * `commonName` used to go in verbatim, so 40 titles in search results read "Is
+ * Peace lily toxic to cats and dogs?". The scientific name follows in the
+ * description, and the longest title has to fit a SERP's ~60 characters. Both
+ * head catalogs (en and es) take it as `{{name}}`, the H1 as `{{questionName}}`.
+ * The build gate recomposes it with `faqName()` in pet-toxicity-table.mjs.
  */
 export function headName(commonName: string): string {
-  return commonName.replace(/\s*\([^)]*\)\s*$/, '');
+  return sentenceName(commonName.replace(/\s*\([^)]*\)\s*$/, ''));
 }
 
 type Translate = (key: string, options?: Record<string, string>) => string;

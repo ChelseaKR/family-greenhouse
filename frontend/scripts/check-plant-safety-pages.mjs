@@ -82,6 +82,7 @@ import {
   ANIMALS,
   NOT_ASSESSED,
   PLANT_PAGE_PREFIX,
+  faqName,
   loadPetToxicityTable,
   plantDetails,
   plantFaq,
@@ -348,7 +349,7 @@ function interpolate(template, values) {
 }
 
 /** Must match headName in src/features/petsafe/plantSafetyPages.ts. */
-const headName = (commonName) => commonName.replace(/\s*\([^)]*\)\s*$/, '');
+const headName = faqName;
 
 /** What the head must say, recomposed from the table and the catalog. */
 function expectedHead(entry, page, catalog) {
@@ -669,7 +670,11 @@ export function checkPlantSafetyPageHtml({
     }
   }
 
-  const values = { name: entry.commonName, scientificName: entry.scientificName };
+  const values = {
+    name: entry.commonName,
+    questionName: headName(entry.commonName),
+    scientificName: entry.scientificName,
+  };
   for (const el of main.querySelectorAll('[data-chrome]')) {
     const key = el.getAttribute('data-chrome');
     const template = catalog[key];

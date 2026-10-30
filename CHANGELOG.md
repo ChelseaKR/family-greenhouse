@@ -27,6 +27,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the H1 and the Article headline. The overwatering post's description says
   overwatering causes yellow leaves, which the post already states. No plant
   facts change.
+- **Second Search Console pass: five more care guides and every pet-safety
+  page.** From the same 90 days (4,043 impressions, 18 clicks), the aloe vera,
+  spider plant and pothos guides lead with the watering answer their searchers
+  asked for, the anthurium guide with why it stops flowering ("anthurium no
+  flowers" was its top query) and the bird of paradise guide with "plant care".
+  The aloe vera and bird of paradise titles no longer ask "Is it pet-safe?",
+  which the pet-safety pages answer. Pet-safety titles, descriptions and H1s
+  read "Is peace lily toxic…" instead of "Is Peace lily toxic…", "African
+  violet" keeps its capital, and each description says the page gives the
+  numbers to call if a pet ate some. Verdicts, their ASPCA sources and the
+  155-character budget are unchanged.
 
 ## [0.46.0] - 2026-10-29
 

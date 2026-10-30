@@ -115,11 +115,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Epipremnum aureum',
     alsoKnownAs: ['Devil’s Ivy', 'Golden Pothos', 'Money Plant'],
     related: ['heartleaf-philodendron', 'hoya', 'english-ivy'],
-    metaTitle: 'Pothos Care: How Often to Water (and Not Kill It)',
+    metaTitle: 'How Often to Water a Pothos: Every 7–10 Days',
+    heading: 'Pothos care: how often to water it',
     metaDescription:
-      'How often to water a pothos, how much light it needs, why the leaves go yellow, and how to keep one alive in a shared home.',
+      'Water a pothos every 7–10 days, when the top inch of soil is dry, and about every two weeks in winter or low light. Plus why the leaves go yellow.',
     reviewed: '2026-06-08',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'Pothos is the plant people mean when they say “I can’t keep anything alive, except this one.” It’s forgiving, fast-growing, and tells you clearly when something’s wrong — if you know what to look for.',
     quickFacts: {
@@ -311,13 +312,14 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Chlorophytum comosum',
     alsoKnownAs: ['Airplane Plant', 'Ribbon Plant', 'Spider Ivy'],
     related: ['parlor-palm', 'boston-fern', 'hoya'],
-    metaTitle: 'Spider Plant Care: How Often to Water + Why Brown Tips',
+    metaTitle: 'Spider Plant Care: How Often to Water It + Brown Tips',
+    heading: 'Spider plant care: how often to water it',
     metaDescription:
-      'How often to water a spider plant, the light it likes, why the leaf tips go brown, and what to do with all the babies it keeps making.',
+      'Water a spider plant about once a week, when the top inch of soil is dry, and every 10–14 days in winter. Why the leaf tips go brown, and the babies.',
     reviewed: '2026-06-12',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
-      'The spider plant forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
+      'Water a spider plant about once a week, when the top inch of soil is dry. It forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
     quickFacts: {
       water: 'About once a week, when the top inch of soil is dry; less in winter',
       light: 'Bright, indirect light is ideal; tolerates moderate light',
@@ -556,13 +558,14 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Aloe vera',
     alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
     related: ['jade-plant', 'snake-plant', 'haworthia'],
-    metaTitle: 'Aloe Vera Care: How Often to Water + Is It Pet-Safe?',
+    metaTitle: 'How Often to Water Aloe Vera: Every 2–3 Weeks',
+    heading: 'Aloe vera care: how often to water it',
     metaDescription:
-      'How often to water an aloe vera, the light it needs, why it goes mushy or brown, and whether the plant is safe around cats and dogs.',
+      'Water aloe vera every 2–3 weeks: soak it, then let the soil dry out completely. Once a month or less in winter. Plus light, and why leaves go mushy.',
     reviewed: '2026-06-17',
-    updated: '2026-10-22',
+    updated: '2026-10-29',
     summary:
-      'Aloe vera is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
+      'Water aloe vera every 2–3 weeks, and only once the soil has dried out completely. It is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
       water: 'Every 2–3 weeks; soak fully, then let the soil dry out completely',
       light: 'Bright light, including some direct sun',
@@ -880,11 +883,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Strelitzia reginae',
     alsoKnownAs: ['Crane Flower', 'Strelitzia', 'Bird of Paradise Flower'],
     related: ['monstera', 'fiddle-leaf-fig', 'money-tree'],
-    metaTitle: 'Bird of Paradise Care: How Often to Water + Is It Pet-Safe?',
+    metaTitle: 'Bird of Paradise Plant Care: Watering, Light + Blooms',
+    heading: 'Bird of paradise plant care',
     metaDescription:
-      'How often to water a bird of paradise, how much light it needs indoors, why the leaves split or brown, and whether it is safe around cats and dogs.',
+      'Water a bird of paradise plant every 7–10 days in summer and every 2–3 weeks in winter. The light it needs indoors, and why it may never bloom there.',
     reviewed: '2026-09-02',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
@@ -956,11 +960,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Anthurium andraeanum',
     alsoKnownAs: ['Flamingo Flower', 'Flamingo Lily', 'Painter’s Palette', 'Tail Flower'],
     related: ['peace-lily', 'orchid', 'christmas-cactus'],
-    metaTitle: 'Anthurium Care: Watering + Why It Stopped Flowering',
+    metaTitle: 'Anthurium Not Flowering? Why, Plus Watering and Light',
+    heading: 'Anthurium care: why it stops flowering',
     metaDescription:
-      'How often to water an anthurium, the light it needs to keep flowering, why the leaves yellow or the flowers turn green, and whether it is safe for pets.',
+      'An anthurium with healthy leaves and no flowers nearly always needs brighter, indirect light. Why old blooms turn green, and watering every 7–10 days.',
     reviewed: '2026-09-02',
-    updated: '2026-10-19',
+    updated: '2026-10-29',
     summary:
       'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
     quickFacts: {

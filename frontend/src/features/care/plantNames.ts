@@ -10,7 +10,7 @@
  * plant" and "a english ivy".
  */
 export function sentenceName(commonName: string): string {
-  const KEEP_CASE = new Set(['English', 'Chinese', 'Boston', 'Christmas']);
+  const KEEP_CASE = new Set(['African', 'English', 'Chinese', 'Boston', 'Christmas']);
   return commonName
     .split(' ')
     .map((w) => (KEEP_CASE.has(w) || /^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase()))

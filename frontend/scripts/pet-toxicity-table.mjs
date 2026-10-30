@@ -336,7 +336,7 @@ export function publishedPagesBySlug(table) {
  * "Christmas cactus"). Must match both.
  */
 export function faqName(commonName) {
-  const KEEP_CASE = new Set(['English', 'Chinese', 'Boston', 'Christmas']);
+  const KEEP_CASE = new Set(['African', 'English', 'Chinese', 'Boston', 'Christmas']);
   return commonName
     .replace(/\s*\([^)]*\)\s*$/, '')
     .split(' ')
