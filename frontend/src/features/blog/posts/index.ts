@@ -124,11 +124,11 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: 'how-to-water-plants-while-on-vacation',
-    title: 'How to keep your plants alive while you’re away',
+    title: 'How to keep indoor plants alive while on vacation',
     description:
       'Five days is a non-problem; two weeks is a real one. What actually works at each trip length, which popular hacks quietly fail, and the handover mistake that kills plants after you get home.',
     metaDescription:
-      'What actually works at each trip length, which popular watering hacks quietly fail, and the handover mistake that kills plants after you get home.',
+      'Water well and go for up to five days. For one to two weeks, group plants together or use a wick or bath tray. Past two weeks, you need a person.',
     date: '2026-07-01',
     readingMinutes: 6,
     Component: WateringWhileOnVacation,
