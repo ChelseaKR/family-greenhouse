@@ -19,7 +19,8 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * The commercial sections — trial, renewal, cancellation, price changes,
  * one-time purchases and refunds — describe what the billing code actually
  * does, not a policy written ahead of it. Each claim is traceable: the
- * 14-day trial is `trial_period_days: 14` in services/billing.ts,
+ * trial is `checkoutTrialFor` in backend/src/models/checkoutTrial.ts (14 days,
+ * or the rest of a running no-card trial, never both),
  * cancellation runs through the Stripe portal (`createPortalSession`,
  * admin-only) and holds the plan until `customer.subscription.deleted` drops
  * it to seedling, a failed payment keeps the plan while Stripe retries because

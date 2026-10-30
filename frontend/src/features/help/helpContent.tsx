@@ -19,8 +19,9 @@ import { Link } from 'react-router';
  *
  * Deliberately NOT documented here, and why:
  *
- * - Trial state in Settings. Subscriptions really are created with a 14-day
- *   trial (`trial_period_days: 14` in backend/src/services/billing.ts), so the
+ * - Trial state in Settings. Subscriptions really are created with a trial
+ *   (`checkoutTrialFor` in backend/src/models/checkoutTrial.ts: 14 days, or
+ *   the rest of a running no-card trial), so the
  *   trial itself is safe to describe. How it is *displayed* is not: on main,
  *   `checkout.session.completed` writes a hardcoded `status: 'active'` for a
  *   subscription whose real status is `trialing`, and whichever Stripe event
@@ -969,10 +970,14 @@ export const HELP_SECTIONS: HelpSection[] = [
               one such trial.
             </p>
             <p>
-              Separately, a household&rsquo;s <strong>first</strong> paid subscription starts with a{' '}
-              <strong>14-day free trial</strong>. Checkout collects a card up front, and billing
-              begins when the trial ends unless you cancel before then. Cancelling during the trial
-              leaves you on the free Seedling plan.
+              If you choose a paid plan during those 14 days, checkout collects a card and your{' '}
+              <strong>first charge is on the day the 14 days end</strong>: the trials do not add up.
+              With two days or fewer left, or after the 14 days have ended, the first charge is the
+              day you subscribe. A household that never had those 14 days gets a{' '}
+              <strong>14-day free trial</strong> on its <strong>first</strong> paid subscription
+              instead; checkout collects a card up front, and billing begins when the trial ends
+              unless you cancel before then. Canceling during a trial leaves you on the free
+              Seedling plan.
             </p>
             <p>
               The trial is <strong>once per household</strong>, not once per subscription. If your
@@ -982,7 +987,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: "Yes, two kinds. Every new household starts with 14 days of Garden with no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own. Nothing you added is deleted: anything over Seedling's limits stays and can still be edited, and only adding more waits. Identifications, leaf-health checks and the care assistant use the free plan's monthly allowances during those 14 days, and each account gets one such trial. Separately, a household's first paid subscription starts with a 14-day free trial. Checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Cancelling during the trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
+        text: "Yes, two kinds. Every new household starts with 14 days of Garden with no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own. Nothing you added is deleted: anything over Seedling's limits stays and can still be edited, and only adding more waits. Identifications, leaf-health checks and the care assistant use the free plan's monthly allowances during those 14 days, and each account gets one such trial. If you choose a paid plan during those 14 days, checkout collects a card and your first charge is on the day the 14 days end: the trials do not add up. With two days or fewer left, or after the 14 days have ended, the first charge is the day you subscribe. A household that never had those 14 days gets a 14-day free trial on its first paid subscription instead; checkout collects a card up front, and billing begins when the trial ends unless you cancel before then. Canceling during a trial leaves you on the free Seedling plan. The trial is once per household, not once per subscription: if your household has had one before — you cancelled and came back, or a subscription ended when a payment stopped going through — a new subscription is charged from the start instead of after 14 free days.",
       },
       {
         id: 'cancel',

@@ -830,9 +830,7 @@ describe('BillingSettings — the free trial is once per household (#602)', () =
     // grid back, which is what made the old sentence dangerous rather than
     // merely imprecise.
     expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/already used its 14-day free trial/, { selector: 'p' })
-    ).toBeInTheDocument();
+    expect(screen.getByText(/already had its free trial/, { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText(/charged straight away/, { selector: 'p' })).toBeInTheDocument();
   });
 
@@ -852,12 +850,9 @@ describe('BillingSettings — the free trial is once per household (#602)', () =
     // repeat the original lie. So it says what is always true instead.
     await renderBilling({ planId: 'seedling' }, { paid: true });
 
-    const description = screen.getByText(
-      /first paid subscription starts with a 14-day free trial/,
-      {
-        selector: 'p',
-      }
-    );
+    const description = screen.getByText(/Free trials are once per household and do not stack/, {
+      selector: 'p',
+    });
     expect(description).toBeInTheDocument();
     expect(description).toHaveTextContent(/once per household/);
     // And it does not claim to know which case this household is in.

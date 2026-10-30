@@ -1,10 +1,10 @@
 /**
  * Deployment wiring for the trial lifecycle emails (ADR 0039).
  *
- * INERT BY DEFAULT: the variable defaults to false and is false in the
- * committed production tfvars; with it off the digests Lambda has no
- * TRIAL_LIFECYCLE_EMAILS_ENABLED and the daily rule is DISABLED, so merging
- * this and cutting a routine release changes nothing a household can see.
+ * OFF BY DEFAULT, ON IN PRODUCTION: the variable defaults to false, so any
+ * environment that does not set it (staging included) has no
+ * TRIAL_LIFECYCLE_EMAILS_ENABLED on the digests Lambda and a DISABLED daily
+ * rule. Production sets it to true by the owner's decision of 2026-10-23.
  *
  * Each negative control asserts its sabotage changed the text before asserting
  * the check notices, so a replacement that matched nothing cannot read as a pass.
@@ -20,6 +20,7 @@ const apiVariables = read('infrastructure/modules/api/variables.tf');
 const rootModule = read('infrastructure/main.tf');
 const rootVariables = read('infrastructure/variables.tf');
 const tfvars = read('infrastructure/environments/production/terraform.tfvars');
+const stagingTfvars = read('infrastructure/environments/staging/terraform.tfvars');
 
 const variableBlock = (source: string, name: string): string => {
   const start = source.indexOf(`variable "${name}" {`);
@@ -43,8 +44,9 @@ describe('trial lifecycle emails: off by default', () => {
     expect(defaultsOff(apiVariables)).toBe(true);
   });
 
-  it('the committed production tfvars leave it false, and the root passes it to the api module', () => {
-    expect(tfvars).toMatch(/^trial_lifecycle_emails_enabled\s*=\s*false\s*$/m);
+  it('production turns it on (owner decision 2026-10-23), staging leaves the default, and the root passes it to the api module', () => {
+    expect(tfvars).toMatch(/^trial_lifecycle_emails_enabled\s*=\s*true\s*$/m);
+    expect(stagingTfvars).not.toMatch(/trial_lifecycle_emails_enabled/);
     expect(rootModule).toMatch(
       /trial_lifecycle_emails_enabled\s*=\s*var\.trial_lifecycle_emails_enabled/
     );
@@ -86,12 +88,12 @@ describe('the checks notice a regression (negative controls)', () => {
     expect(sabotaged).not.toMatch(/var\.trial_lifecycle_emails_enabled \? "ENABLED" : "DISABLED"/);
   });
 
-  it('a tfvars that turns it on is caught', () => {
+  it('a production tfvars that turns it back off is caught', () => {
     const sabotaged = tfvars.replace(
-      /^trial_lifecycle_emails_enabled\s*=\s*false\s*$/m,
-      'trial_lifecycle_emails_enabled = true'
+      /^trial_lifecycle_emails_enabled\s*=\s*true\s*$/m,
+      'trial_lifecycle_emails_enabled = false'
     );
     expect(sabotaged).not.toBe(tfvars);
-    expect(sabotaged).not.toMatch(/^trial_lifecycle_emails_enabled\s*=\s*false\s*$/m);
+    expect(sabotaged).not.toMatch(/^trial_lifecycle_emails_enabled\s*=\s*true\s*$/m);
   });
 });

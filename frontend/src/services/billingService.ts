@@ -173,13 +173,20 @@ export interface SubscriptionState {
    *  active/trialing throughout, so this is the only signal that the plan is
    *  ending — without it a cancellation is invisible in the UI. */
   cancelAtPeriodEnd?: boolean;
-  /** Whether a NEW subscription checkout for this household would include the
-   *  14-day free trial. The trial is once per household, not once per
-   *  checkout, so a household that had one before and resubscribes is charged
-   *  at once. `undefined` is UNKNOWN — an older backend, or a response cached
-   *  before the field existed — and must never be read as `false`; go through
+  /** Whether a NEW subscription checkout for this household would include a
+   *  free trial: the 14-day card trial, or, with `checkoutTrialEndsAt`, the
+   *  rest of a running no-card Garden trial. Trials are once per household
+   *  and do not stack, so a household that had a card trial before, or whose
+   *  no-card trial has ended or ends within two days, is charged at once.
+   *  `undefined` is UNKNOWN — an older backend, or a response cached before
+   *  the field existed — and must never be read as `false`; go through
    *  `resolveTrialOffer`, which keeps the three states apart. */
   trialAvailable?: boolean;
+  /** When a new subscription checkout started now would first charge, for a
+   *  household on its no-card Garden trial: the subscription's trial ends with
+   *  the no-card trial rather than adding 14 days. Present only then. Absent
+   *  from older backends. */
+  checkoutTrialEndsAt?: string;
   /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */

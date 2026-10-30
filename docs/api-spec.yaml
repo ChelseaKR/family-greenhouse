@@ -3823,11 +3823,20 @@ components:
         trialAvailable:
           type: boolean
           description: >-
-            Whether a new subscription checkout for this household would include the 14-day free
-            trial. The trial is once per household, not once per checkout, so this is false for a
-            household that has had one before and resubscribes. Derived from an internal timestamp
-            that is never published. Absent from older backends, where it means UNKNOWN — a client
-            must not read a missing field as false.
+            Whether a new subscription checkout for this household would include a free trial: the
+            14-day card trial, or, when `checkoutTrialEndsAt` is present, the rest of a running
+            no-card Garden trial. The trial is once per household, not once per checkout, and it
+            does not stack on the no-card trial, so this is false for a household that has had a
+            card trial before, or whose no-card trial has ended or ends within two days. Derived
+            from internal fields that are never published. Absent from older backends, where it
+            means UNKNOWN — a client must not read a missing field as false.
+        checkoutTrialEndsAt:
+          type: string
+          format: date-time
+          description: >-
+            When a new subscription checkout started now would first charge, for a household on its
+            no-card Garden trial: the subscription's trial ends on the no-card trial's end date
+            rather than adding 14 days. Present only in that case. Absent from older backends.
         noCardTrial:
           description: >-
             The household's no-card Garden trial (ADR 0027), as the server's clock sees it. `null` when

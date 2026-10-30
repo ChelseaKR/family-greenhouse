@@ -152,6 +152,45 @@ describe('day 14', () => {
   });
 });
 
+/**
+ * No stacked trials (owner decision 2026-10-23): checkout during the no-card
+ * trial ends the Stripe trial on the no-card end date, so the email names that
+ * date as the first charge, never "14 more days".
+ */
+describe('the first charge matches checkout (no stacked trials)', () => {
+  it('day 10 names the trial end as the first charge, with the last day to start it', () => {
+    const email = composeTrialLifecycleEmail(ctx());
+    // ENDS is 2026-10-15T10:00Z; minus 48h30m is 2026-10-13T09:30Z, which is
+    // October 13 in Los Angeles.
+    expect(email.text).toContain(
+      'If you start it before October 13, 2026, you add a card then, and your first charge would be on October 15, 2026, the day the trial ends.'
+    );
+    expect(email.text).not.toMatch(/14 (more|free) days|another 14/i);
+  });
+
+  it('day 10 sent inside the minimum lead says the charge is the day you start', () => {
+    const late = composeTrialLifecycleEmail(ctx({ now: new Date('2026-10-14T00:00:00.000Z') }));
+    expect(late.text).toContain('the first charge is the day you start it');
+    expect(late.text).not.toContain('your first charge would be on');
+  });
+
+  it('day 14 says the first charge is the day Garden starts', () => {
+    const email = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14' }));
+    expect(email.text).toContain('If you would like Garden back');
+    expect(email.text).toContain('the first charge is the day you start it');
+    expect(email.text).not.toContain('your first charge would be on');
+  });
+
+  it('says the same in Spanish', () => {
+    const d10 = composeTrialLifecycleEmail(ctx({ locale: 'es' }));
+    expect(d10.text).toContain(
+      'Si lo empiezas antes del 13 de octubre de 2026, añades una tarjeta en ese momento y el primer cobro sería el 15 de octubre de 2026'
+    );
+    const d14 = composeTrialLifecycleEmail(ctx({ locale: 'es', kind: 'trial_day14' }));
+    expect(d14.text).toContain('el primer cobro es el día en que lo empiezas');
+  });
+});
+
 describe('absence is never rendered as achievement', () => {
   const none: TrialFacts = { ...FACTS, plantsAdded: ok(0), tasksCompleted: ok(0) };
   it('says plainly that no plant has been added, and shows no zero count', () => {
