@@ -26,6 +26,12 @@ interface CommonPlantPickerProps {
   method?: Extract<FirstPlantMethod, 'common_plant' | 'dashboard_empty'>;
   /** The heading's level, so it nests under whatever surface hosts it. */
   headingAs?: 'h2' | 'h3';
+  /**
+   * The plant whose care guide the visitor signed up from
+   * (./guidePlantHandoff). It is listed first, marked, and said so above the
+   * list; it is still one tap the visitor makes or doesn't.
+   */
+  suggested?: CommonPlant;
 }
 
 /**
@@ -55,6 +61,7 @@ export function CommonPlantPicker({
   onPendingChange,
   method = 'common_plant',
   headingAs: Heading = 'h2',
+  suggested,
 }: CommonPlantPickerProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -89,7 +96,10 @@ export function CommonPlantPicker({
       // the funnel counts a tapped plant and a typed one as the same step.
       track('plant_added', { ordinal: 'first' });
       trackGoogleConversion({ name: 'household_activated' });
-      trackGoogleConversion({ name: 'first_plant_added', method });
+      trackGoogleConversion({
+        name: 'first_plant_added',
+        method: suggested?.slug === pick.slug ? 'guide_handoff' : method,
+      });
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       if (scheduleFailed) {
@@ -109,6 +119,9 @@ export function CommonPlantPicker({
   });
 
   const busy = disabled || mutation.isPending;
+  const picks = suggested
+    ? [suggested, ...COMMON_PLANTS.filter((pick) => pick.slug !== suggested.slug)]
+    : COMMON_PLANTS;
 
   return (
     <section aria-labelledby={headingId} className="mt-6">
@@ -118,6 +131,14 @@ export function CommonPlantPicker({
       <p id={hintId} className="mt-1 text-sm text-gray-600">
         {t('firstRun.picker.hint')}
       </p>
+      {suggested && (
+        <p data-testid="guide-plant-note" className="mt-2 text-sm text-ink">
+          {t('firstRun.picker.fromGuide', {
+            name: t(`firstRun.picker.plants.${suggested.slug}`),
+            days: suggested.waterEveryDays,
+          })}
+        </p>
+      )}
 
       {error && (
         <Alert variant="error" className="mt-3">
@@ -126,10 +147,15 @@ export function CommonPlantPicker({
       )}
 
       <ul className="mt-3 grid grid-cols-2 gap-2 large-text:grid-cols-1">
-        {COMMON_PLANTS.map((pick) => {
+        {picks.map((pick) => {
           const saving = mutation.isPending && mutation.variables?.slug === pick.slug;
+          const isSuggested = suggested?.slug === pick.slug;
           return (
-            <li key={pick.slug}>
+            <li
+              key={pick.slug}
+              className={clsx(isSuggested && 'col-span-2 large-text:col-span-1')}
+              data-suggested={isSuggested || undefined}
+            >
               <button
                 type="button"
                 onClick={() => mutation.mutate(pick)}
@@ -138,7 +164,9 @@ export function CommonPlantPicker({
                 aria-busy={saving || undefined}
                 className={clsx(
                   'flex min-h-touch w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors',
-                  'border-primary-200 bg-paper text-ink hover:border-primary-500 hover:bg-primary-50',
+                  isSuggested
+                    ? 'border-primary-500 bg-primary-50 text-ink hover:bg-primary-100'
+                    : 'border-primary-200 bg-paper text-ink hover:border-primary-500 hover:bg-primary-50',
                   'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
                   'disabled:cursor-not-allowed disabled:opacity-60'
                 )}

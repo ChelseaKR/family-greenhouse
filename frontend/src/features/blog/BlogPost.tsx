@@ -8,6 +8,7 @@ import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -140,7 +141,17 @@ export function BlogPost() {
             Free for one home, up to 2 household members and 8 plants. No credit card.
           </p>
           <div className="mt-4">
-            <Link to="/register" className={buttonStyles()}>
+            <Link
+              to="/register"
+              className={buttonStyles()}
+              onClick={() =>
+                trackGoogleConversion({
+                  name: 'landing_cta_click',
+                  source: 'blog',
+                  placement: 'body',
+                })
+              }
+            >
               Get started
             </Link>
           </div>

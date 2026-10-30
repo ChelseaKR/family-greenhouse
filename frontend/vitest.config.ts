@@ -27,6 +27,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    // msw 3 intercepts below jsdom's XMLHttpRequest, so jsdom now enforces
+    // CORS on mocked responses. Serving the page from the API origin keeps
+    // every handler same-origin, with no preflight and no CORS headers.
+    environmentOptions: { jsdom: { url: 'http://localhost:4000/' } },
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', 'tests/e2e/**'],

@@ -18,6 +18,7 @@ import { AuthShell } from './AuthShell';
 import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
 import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
+import { setPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
 
 // Three fields, not four. The form used to ask for the password twice. A
 // "Show password" toggle catches a typo the same way without a fourth field,
@@ -56,6 +57,14 @@ export function RegisterPage() {
   useEffect(() => {
     if (referralCode) setPendingReferralCode(referralCode);
   }, [referralCode]);
+  // `?plant=<slug>` from a care guide's sign-up link: kept for this visit so
+  // the first run can offer that plant first (features/onboarding/
+  // guidePlantHandoff). Anything not on the first run's plant list is
+  // ignored there, and the value is never rendered.
+  const guidePlantSlug = searchParams.get('plant');
+  useEffect(() => {
+    setPendingGuidePlant(guidePlantSlug);
+  }, [guidePlantSlug]);
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (

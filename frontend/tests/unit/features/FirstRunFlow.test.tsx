@@ -10,6 +10,10 @@ import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
+import {
+  getPendingGuidePlant,
+  setPendingGuidePlant,
+} from '@/features/onboarding/guidePlantHandoff';
 
 vi.mock('@/services/googleAnalytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
@@ -653,5 +657,101 @@ describe('WelcomeFlow common-plant shortcut', () => {
     expect(screen.queryByRole('heading', { name: /pick a common houseplant/i })).toBeNull();
     expect(created).toEqual([]);
     expect(trackGoogleConversion).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `/register?plant=<slug>` from a care guide: the first run offers that plant
+ * first. It is offered, never added for them, and it is offered once.
+ */
+describe('WelcomeFlow plant carried from a care guide', () => {
+  function capturePlants() {
+    const created: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${API}/plants`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        created.push(body);
+        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+      })
+    );
+    return created;
+  }
+
+  afterEach(() => sessionStorage.clear());
+
+  it('lists the guide’s plant first and says why, without adding it', async () => {
+    setPendingGuidePlant('zz-plant');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    await screen.findByRole('heading', { name: /pick a common houseplant/i });
+    const note = screen.getByTestId('guide-plant-note');
+    expect(note.textContent).toBe(
+      "You came from our ZZ plant care guide, so it's first. One tap adds it with a reminder to check the soil every 14 days."
+    );
+    const picks = screen
+      .getAllByRole('listitem')
+      .map((li) => li.textContent)
+      .filter(Boolean);
+    expect(picks[0]).toBe('ZZ plant');
+    expect(picks.filter((name) => name === 'ZZ plant')).toHaveLength(1);
+    // Offered, not done: nothing is saved until they tap.
+    expect(created).toEqual([]);
+  });
+
+  it('adds it on a tap with the guide’s defaults and counts it as a guide handoff', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('zz-plant');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'ZZ plant' }));
+    expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
+    expect(created).toEqual([{ name: 'ZZ plant', species: 'Zamioculcas zamiifolia' }]);
+    expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 14 });
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'guide_handoff' }],
+    ]);
+    // Used once: it is not offered again anywhere.
+    expect(getPendingGuidePlant()).toBeUndefined();
+  });
+
+  it('counts a different tapped plant as an ordinary common-plant tap', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('zz-plant');
+    newHouseholdHandlers();
+    capturePlants();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'Pothos' }));
+    await screen.findByRole('heading', { name: /share the care/i });
+    expect(vi.mocked(trackGoogleConversion).mock.calls[1]).toEqual([
+      { name: 'first_plant_added', method: 'common_plant' },
+    ]);
+  });
+
+  it('forgets the plant when the step is skipped', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('monstera');
+    newHouseholdHandlers();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: /skip for now/i }));
+    expect(getPendingGuidePlant()).toBeUndefined();
+  });
+
+  it('ignores a stored value that is not one of the first run’s plants (negative control)', async () => {
+    sessionStorage.setItem('fg.pendingGuidePlant', '<img src=x onerror=alert(1)>');
+    newHouseholdHandlers();
+    const { container } = renderFirstRun();
+
+    await screen.findByRole('heading', { name: /pick a common houseplant/i });
+    expect(screen.queryByTestId('guide-plant-note')).toBeNull();
+    expect(container.querySelector('[data-suggested]')).toBeNull();
+    expect(container.innerHTML).not.toContain('onerror');
+    expect(screen.getAllByRole('listitem')[0]!.textContent).toBe('Pothos');
   });
 });

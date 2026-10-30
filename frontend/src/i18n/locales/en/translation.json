@@ -187,7 +187,7 @@
     "description": "A quick check that reminders have become a routine another person can actually pick up.",
     "progress": "{{completed}} of {{total}} steps ready",
     "notNow": "Not now",
-    "dismissAria": "Hide shared-care setup for 30 days",
+    "dismissAria": "Not now, hide shared-care setup for 30 days",
     "completeStatus": "Complete",
     "currentStatus": "Next step",
     "upcomingStatus": "Upcoming",
@@ -263,6 +263,7 @@
       "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
       "saving": "Adding your plant…",
       "somethingElse": "Something else? Type its name",
+      "fromGuide": "You came from our {{name}} care guide, so it's first. One tap adds it with a reminder to check the soil every {{days}} days.",
       "plants": {
         "pothos": "Pothos",
         "snake-plant": "Snake plant",
@@ -298,7 +299,7 @@
     "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",
     "action": "Set up a sitter link",
     "notNow": "Not now",
-    "dismissAria": "Hide the going-away card for 30 days"
+    "dismissAria": "Not now, hide the going-away card for 30 days"
   },
   "nav": {
     "chat": "Chat",
@@ -329,7 +330,7 @@
     "openMenu": "Open site menu",
     "tryApp": "Try the app",
     "siteNavLabel": "Site",
-    "homeLabel": "Family Greenhouse home"
+    "homeLabel": "Family Greenhouse, {{tagline}}, home"
   },
   "commercialHold": {
     "statusLabel": "Commercial status",
@@ -923,7 +924,7 @@
       "watered": "Watered",
       "remove": "Remove…",
       "restore": "Restore to active care",
-      "doAria": "{{task}} {{plant}}",
+      "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "I’ll do it"
     }
   },
@@ -1046,7 +1047,7 @@
     "unclaimAria": "Unclaim the {{plant}} task",
     "claimedToast": "Task claimed",
     "unclaimedToast": "Task released",
-    "askFamilyAria": "Ask the family to take the {{plant}} task",
+    "askFamilyAria": "Ask family to take the {{plant}} task",
     "askedBadge": "Asked the family",
     "askedByBadge": "{{name}} asked the family",
     "askedNote": "“{{note}}”",
