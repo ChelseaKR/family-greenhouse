@@ -16,6 +16,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **The eight most-seen pet-safety pages quote more of their own sources.**
+  Each plant's ASPCA listing now also gives its other common names and plant
+  family, and the six toxic ones quote the listing's own line on what to do
+  (the hotline box still comes first). NC State Extension's "Poison Part"
+  values (which parts of the plant are poisonous) are quoted where its page
+  gives them, and those five pages answer "Which parts of … are poisonous?"
+  in their FAQ. Every value was re-read off the live pages on 2026-10-29.
+
 ### Fixed
 
 - **`npm run mobile:release` no longer builds an unsigned Android bundle

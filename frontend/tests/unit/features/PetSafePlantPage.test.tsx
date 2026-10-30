@@ -566,6 +566,9 @@ describe('detailed pages (quoted sources, similar plants, FAQ)', () => {
     expect(page).toContain('data-claim="verdict" data-animal="horses" data-state="toxic"');
     expect(page).toContain('"@type":"FAQPage"');
     expect(page).toContain('Is aloe vera toxic to cats?');
+    expect(page).toContain('data-claim="listing-field" data-listing-field="family"');
+    expect(page).toContain('data-claim="extension-field" data-extension-field="poisonPart"');
+    expect(page).toContain('Which parts of aloe vera are poisonous?');
     // The hotline aside still comes first, and the plant-named reminder CTA stays.
     expect(page.indexOf('data-plant-emergency')).toBeLessThan(page.indexOf('data-claim="verdict"'));
     expect(page).toContain('Get watering reminders for your Aloe vera');
@@ -645,6 +648,38 @@ describe('detailed pages (quoted sources, similar plants, FAQ)', () => {
         'https://example.com/snake-plant'
       );
       expect(failuresFor('snake-plant', sabotaged)).toContain('extension citation links');
+    });
+
+    it('a paraphrased poison-parts field fails', () => {
+      const page = html('pothos');
+      const sabotaged = page.replace(
+        '>Flowers, Fruits, Leaves, Roots, Seeds, Stems<',
+        '>Only the leaves<'
+      );
+      expect(sabotaged).not.toBe(page);
+      expect(failuresFor('pothos', sabotaged)).toContain('quoted extension fields');
+    });
+
+    it('a parts question on a page the ASPCA cites as non-toxic fails', () => {
+      const page = html('spider-plant');
+      const sabotaged = page.replace(
+        '<dt data-claim="faq-question" data-faq="whatToDo"',
+        '<div><dt data-claim="faq-question" data-faq="parts">Which parts of spider plant are ' +
+          'poisonous?</dt><dd data-claim="faq-answer" data-faq="parts">Leaves.</dd></div>' +
+          '<dt data-claim="faq-question" data-faq="whatToDo"'
+      );
+      expect(sabotaged).not.toBe(page);
+      expect(failuresFor('spider-plant', sabotaged)).toContain('FAQ questions');
+    });
+
+    it('a dropped listing advice line fails', () => {
+      const page = html('snake-plant');
+      const sabotaged = page.replace(
+        /<dd data-claim="listing-field" data-listing-field="listingAdvice"[^>]*>[^<]*<\/dd>/,
+        ''
+      );
+      expect(sabotaged).not.toBe(page);
+      expect(failuresFor('snake-plant', sabotaged)).toContain('quoted listing fields');
     });
 
     it('the unsabotaged detailed pages pass, so each failure above is the sabotage', () => {
