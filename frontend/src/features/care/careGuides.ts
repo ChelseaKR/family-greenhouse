@@ -371,11 +371,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Spathiphyllum',
     alsoKnownAs: ['Spath', 'Closet Plant', 'White Sail Plant'],
     related: ['anthurium', 'chinese-evergreen', 'lily'],
-    metaTitle: 'Peace Lily Care: How Often to Water + Are They Toxic?',
+    metaTitle: 'Peace Lily Care: Water About Once a Week + Is It Toxic?',
+    heading: 'Peace lily care: how often to water it',
     metaDescription:
-      'How often to water a peace lily, the light it actually wants, why the leaves droop or brown, and whether it’s safe around cats and dogs.',
+      'Water a peace lily about once a week, when the top inch of soil is dry; it wilts to warn you. Toxic to cats and dogs if chewed. Why the leaves brown.',
     reviewed: '2026-06-17',
-    updated: '2026-10-22',
+    updated: '2026-10-29',
     summary:
       'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
     quickFacts: {
@@ -759,11 +760,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Ficus lyrata',
     alsoKnownAs: ['Fiddle-Leaf Fig', 'Banjo Fig', 'Ficus lyrata'],
     related: ['rubber-plant', 'bird-of-paradise', 'monstera'],
-    metaTitle: 'Fiddle Leaf Fig Care: Watering + Why It Drops Leaves',
+    metaTitle: 'Fiddle Leaf Fig Care: Watering + Is It Toxic to Dogs?',
+    heading: 'Fiddle leaf fig care and pet safety',
     metaDescription:
-      'How often to water a fiddle leaf fig, the light it actually needs, why the leaves get brown spots or drop, and how to keep one alive in a shared home.',
+      'A fiddle leaf fig is toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic). Water every 7–10 days, when the top 2 inches are dry.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'The fiddle leaf fig is the most photographed and most returned houseplant there is. It isn’t difficult so much as inflexible: it wants one bright spot and the same routine every week, and it registers a complaint about anything else.',
     quickFacts: {
@@ -821,11 +823,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Ficus elastica',
     alsoKnownAs: ['Rubber Tree', 'Rubber Fig', 'Ficus elastica'],
     related: ['fiddle-leaf-fig', 'money-tree', 'dieffenbachia'],
-    metaTitle: 'Rubber Plant Care: How Often to Water a Ficus Elastica',
+    metaTitle: 'Rubber Plant Care: Water a Ficus Elastica Every 7–14 Days',
+    heading: 'Rubber plant care: how often to water it',
     metaDescription:
-      'How often to water a rubber plant, how much light it needs, why the leaves drop or yellow, and how to share the care of one without overwatering it.',
+      'Water a rubber plant (Ficus elastica) every 7–14 days, when the top inch or two of soil is dry. It wants bright, indirect light. Why the leaves drop.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'A rubber plant is what you buy when you want the drama of a fiddle leaf fig without the temperament. Same big glossy leaves, same architectural shape, a fraction of the sulking — it’s the easiest large statement plant you can own.',
     quickFacts: {
@@ -1036,11 +1039,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Aglaonema',
     alsoKnownAs: ['Aglaonema', 'Silver Bay', 'Chinese Evergreen Plant'],
     related: ['zz-plant', 'dieffenbachia', 'peace-lily'],
-    metaTitle: 'Chinese Evergreen Care: Watering, Light, Pet Safety',
+    metaTitle: 'Chinese Evergreen Care: Water Every 7–14 Days, Low Light OK',
+    heading: 'Chinese evergreen care: watering and light',
     metaDescription:
-      'How often to water a Chinese evergreen, why it thrives in low light, what yellow or curling leaves mean, and whether aglaonema is safe for pets.',
+      'Water a Chinese evergreen (aglaonema) every 7–14 days, when the top inch or two of soil is dry. It takes low to medium light. Toxic to pets if chewed.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'If you have a room with bad light and you’ve already killed something in it, this is the plant. Aglaonema is the best-looking thing that genuinely tolerates a dim corner, and it comes in pink and red varieties that look like they ought to be much harder.',
     quickFacts: {
@@ -1098,11 +1102,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Crassula ovata',
     alsoKnownAs: ['Money Plant', 'Lucky Plant', 'Friendship Tree', 'Crassula'],
     related: ['aloe-vera', 'burros-tail', 'snake-plant'],
-    metaTitle: 'Jade Plant Care: How Often to Water (Less Than You Think)',
+    metaTitle: 'How to Water a Jade Plant: Every 2–3 Weeks in Summer',
+    heading: 'Jade plant care: how to water it',
     metaDescription:
-      'How often to water a jade plant, the light it needs, why the leaves drop or wrinkle, and why it is not a pet-safe choice.',
+      'Water a jade plant every 2–3 weeks in summer and monthly or less in winter. It wants bright light with some direct sun; why leaves drop or wrinkle.',
     reviewed: '2026-09-02',
-    updated: '2026-10-22',
+    updated: '2026-10-29',
     summary:
       'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
     quickFacts: {
@@ -1231,11 +1236,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Nephrolepis exaltata',
     alsoKnownAs: ['Sword Fern', 'Nephrolepis', 'Boston Sword Fern'],
     related: ['calathea', 'nerve-plant', 'asparagus-fern'],
-    metaTitle: 'Boston Fern Care: How Often to Water + Is It Pet-Safe?',
+    metaTitle: 'Boston Fern Care: Pet-Safe, Water Every 3–7 Days',
+    heading: 'Boston fern care: watering and pet safety',
     metaDescription:
-      'How often to water a Boston fern, the humidity it needs, why the fronds go brown and shed everywhere, and why it is a genuinely pet-safe choice.',
+      'Boston ferns are non-toxic to cats and dogs (per the ASPCA). Water every 3–7 days to keep the soil damp, and give it high humidity. Why fronds go brown.',
     reviewed: '2026-09-02',
-    updated: '2026-10-21',
+    updated: '2026-10-29',
     summary:
       'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
     quickFacts: {
@@ -1355,11 +1361,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
     related: ['blue-echeveria', 'jade-plant', 'poinsettia'],
-    metaTitle: 'Christmas Cactus Care: Watering + How to Make It Bloom',
+    metaTitle: 'How to Care for a Christmas Cactus: Water Every 1–2 Weeks',
+    heading: 'How to care for a Christmas cactus',
     metaDescription:
-      'How often to water a Christmas cactus, why it drops its buds, how to get it to bloom again, and why it is a pet-safe flowering plant.',
+      'Water a Christmas cactus every 1–2 weeks, when the top inch of soil is dry, in bright, indirect light. Why it drops buds and how to make it bloom again.',
     reviewed: '2026-09-02',
-    updated: '2026-10-22',
+    updated: '2026-10-29',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1483,11 +1490,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Phalaenopsis',
     alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
     related: ['christmas-cactus', 'anthurium', 'african-violet'],
-    metaTitle: 'Orchid Care: Watering a Moth Orchid + Reblooming It',
+    metaTitle: 'How to Water a Moth Orchid: Soak, Drain, Every 7–10 Days',
+    heading: 'Moth orchid care: how to water it',
     metaDescription:
-      'How often to water a phalaenopsis orchid, what the roots are telling you, how to get it to flower again, and why orchids are pet-safe.',
+      'Water a moth orchid (phalaenopsis) roughly every 7–10 days: soak it, then drain completely. What the roots tell you, and how to get it to flower again.',
     reviewed: '2026-09-02',
-    updated: '2026-10-21',
+    updated: '2026-10-29',
     summary:
       'The supermarket orchid is not a delicate specialist plant — it’s an easy plant that almost everybody waters wrong. Get the watering right and a phalaenopsis will flower for months, rest, and then do it again for years.',
     quickFacts: {
@@ -1545,11 +1553,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Hoya carnosa',
     alsoKnownAs: ['Wax Plant', 'Porcelain Flower', 'Hindu Rope Plant', 'Wax Flower'],
     related: ['pothos', 'spider-plant', 'orchid'],
-    metaTitle: 'Hoya Care: How Often to Water a Wax Plant + Pet Safety',
+    metaTitle: 'Hoya (Wax Plant) Care: Water Every 2–3 Weeks + Pet Safety',
+    heading: 'Hoya care: the wax plant and porcelain flower',
     metaDescription:
-      'How often to water a hoya, the light it needs to flower, why the leaves wrinkle or yellow, and why Hoya carnosa is a pet-safe trailing plant.',
+      'Water a hoya (wax plant, porcelain flower) every 2–3 weeks, once the soil is mostly dry. Some gentle direct sun helps it flower. Pet-safe per the ASPCA.',
     reviewed: '2026-09-02',
-    updated: '2026-10-02',
+    updated: '2026-10-29',
     summary:
       'A hoya is a trailing plant with thick, almost plastic-feeling leaves that stores its own water and asks very little of you. It’s slow, it’s nearly indestructible, and Hoya carnosa is on the ASPCA non-toxic list — which makes it the pet-safe answer to a hanging pothos.',
     quickFacts: {
