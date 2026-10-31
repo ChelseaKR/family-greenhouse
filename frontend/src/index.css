@@ -199,6 +199,25 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* A time field in iOS WebKit (Safari and the iOS app) is a native control:
+   it keeps its own minimum width, so in a grid column narrower than that it
+   ran under the field beside it (the quiet-hours Start under End on iPad),
+   and with no value it drew shorter than the text fields in the same row.
+   Without the native appearance it sizes like `.input`; one line plus the
+   field's padding and border keeps an empty one as tall as a filled one.
+   `-webkit-touch-callout` is supported only by iOS WebKit, so desktop and
+   Android time fields keep their native look. */
+@supports (-webkit-touch-callout: none) {
+  @layer base {
+    input.input[type='time'] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      min-height: calc(1lh + 1rem + 2px);
+    }
+  }
+}
+
 /* Scrolling dialog overlays (`fixed inset-0 overflow-y-auto`): keep the
    panel's title and close button out from under the status bar and its
    buttons above the home indicator when a tall dialog is scrolled to either

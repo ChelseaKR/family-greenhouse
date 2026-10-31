@@ -849,7 +849,7 @@ export function NotificationSettings() {
             <p className="text-sm font-medium text-gray-900">Quiet hours</p>
             <p className="text-sm text-gray-600">{t('notifications.quietHoursDescription')}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-start">
             <Input
               label="Start"
               type="time"
