@@ -133,6 +133,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   or wrongly signed bundle. Secret values are never printed
   (`scripts/check-android-release-signing.mjs`).
 
+### Security
+
+- **`follow-redirects` 1.16.2 in the frontend.** Clears
+  GHSA-mrwp-f3q8-3g9p (high), which covers 1.16.0 through 1.16.1. It comes
+  in through `axios`, whose `^1.16.0` range already allows the fix, so only
+  the lockfile changes. The advisory was failing the pre-push `audit` step
+  for every push.
+
 ## [0.46.0] - 2026-10-29
 
 **Free trials no longer stack, and the day-10 and day-14 trial emails go out
