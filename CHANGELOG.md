@@ -18,6 +18,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Seven more pet-safety pages quote their own sources.** Jade plant,
+  philodendron, calathea, Boston fern, anthurium, Chinese evergreen and money
+  tree are the next pages by Search Console impressions after the first
+  eight (90 days to 2026-10-30, positions 30 to 54, no clicks). Each now
+  quotes its ASPCA listing's plant family, and other common names where the
+  listing gives them. The four toxic ones also quote the listing's toxic
+  principles, clinical signs and advice line. Each page shows a horse verdict
+  where the listing states one. NC State Extension's Plant Toolbox is added
+  as a second source where it has a matching page, with its poison parts on
+  the three toxic plants that have one. Each page now lists similar plants
+  that the ASPCA cites as non-toxic, and related plants to look up, which
+  adds internal links. Money tree leaves out the listing's "Money Plant"
+  name, because that name usually means pothos or jade, and both are toxic.
+  Every value was read off the live pages on 2026-10-31 and is pinned in
+  `petToxicity.test.ts`. No verdict changes.
+
 - **Every sign-up link on the content pages is counted, and a care guide's
   plant is carried into the first run.** The care guide's sign-up box, the
   pet-safety page's, the blog post's and the shared header's "Try the app"

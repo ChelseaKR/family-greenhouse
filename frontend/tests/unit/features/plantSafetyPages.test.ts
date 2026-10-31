@@ -204,9 +204,27 @@ const DETAILED = [
   'spider-plant',
   'peace-lily',
   'aloe-vera',
+  'jade-plant',
+  'philodendron',
+  'calathea',
+  'boston-fern',
   'bird-of-paradise',
+  'anthurium',
+  'chinese-evergreen',
+  'money-tree',
   'christmas-cactus',
 ];
+
+/**
+ * Detailed pages with no extension source, each for a stated reason, so a
+ * missing source is a decision and never an oversight. Read 2026-10-31.
+ */
+const NO_EXTENSION_SOURCE: Record<string, string> = {
+  'jade-plant': 'the NC State Crassula ovata page gives no poison fields and no non-toxic tags',
+  calathea: 'NC State has no Calathea page; its Goeppertia genus page gives neither',
+  'money-tree':
+    'the NC State Pachira page quotes poison parts, which this table never records on a plant the ASPCA calls non-toxic',
+};
 
 /** The page's details reduced to what the gate's version also returns. */
 function comparable(details: PlantSafetyDetails | null) {
@@ -242,7 +260,7 @@ const DETAILED_FIXTURE = (slug: string): LooseEntry =>
   structuredClone(PET_TOXICITY.find((e) => e.slug === slug)) as LooseEntry;
 
 describe('detailed pages', () => {
-  it('are exactly the eight pages whose listing details were read', () => {
+  it('are exactly the pages whose listing details were read', () => {
     expect(
       PLANT_SAFETY_PAGES.filter((p) => plantSafetyDetails(p) !== null).map((p) => p.slug)
     ).toEqual(DETAILED);
@@ -260,7 +278,11 @@ describe('detailed pages', () => {
         details.related.map((p) => p.slug),
         slug
       ).toEqual(entry.related ?? []);
-      expect(details.extension, `${slug}: extension source`).not.toBeNull();
+      if (slug in NO_EXTENSION_SOURCE) {
+        expect(details.extension, `${slug}: ${NO_EXTENSION_SOURCE[slug]}`).toBeNull();
+      } else {
+        expect(details.extension, `${slug}: extension source`).not.toBeNull();
+      }
     }
   });
 
@@ -270,7 +292,17 @@ describe('detailed pages', () => {
         plantSafetyDetails(p)?.horses.state !== undefined &&
         plantSafetyDetails(p)!.horses.state !== 'not-assessed'
     ).map((p) => p.slug);
-    expect(withHorses.sort()).toEqual(['aloe-vera', 'bird-of-paradise', 'christmas-cactus']);
+    expect(withHorses.sort()).toEqual([
+      'aloe-vera',
+      'anthurium',
+      'bird-of-paradise',
+      'calathea',
+      'chinese-evergreen',
+      'christmas-cactus',
+      'jade-plant',
+      'money-tree',
+      'philodendron',
+    ]);
   });
 });
 
