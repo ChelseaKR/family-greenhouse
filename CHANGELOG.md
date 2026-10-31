@@ -97,6 +97,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Staging can deploy again.** cd-staging run 41136306730 stopped with
+  CloudFront 409 `CachePolicyInUse`: staging had not applied since
+  2026-09-04, so it got #855's removal of the `/plants/*` behavior and #940's
+  removal of the images cache policy in one apply. Terraform deleted the
+  policy before it updated the distribution that still used it. The
+  `images` cache policy is back, in staging only (`count`, with a `moved`
+  block to `[0]`), so the next staging plan updates the distribution and
+  destroys nothing. Production deleted its copy under #940 and plans no
+  change from this. A later change removes the block once staging's
+  distributions no longer use the policy.
+
 - **Two iPad layout bugs.** In the iOS app on iPad, a scrolled page's text
   showed through, faded, behind the screen's title: the tab bar floats above
   the navigation bar there, so the bars are taller than the system's soft
