@@ -1028,9 +1028,9 @@ describe('listing details read on 2026-10-29', () => {
     },
   };
 
-  it('only these eight entries record details', () => {
+  it('these eight entries record details read that day', () => {
     expect(
-      PET_TOXICITY.filter((e) => e.aspcaListing?.detailsRead !== undefined)
+      PET_TOXICITY.filter((e) => e.aspcaListing?.detailsRead === '2026-10-29')
         .map((e) => e.slug)
         .sort()
     ).toEqual(Object.keys(DETAILS).sort());
@@ -1095,5 +1095,130 @@ describe('listing details read on 2026-10-29', () => {
         ).toBeDefined();
       }
     }
+  });
+});
+
+/**
+ * The next seven /pet-safe pages by Search Console impressions (90 days to
+ * 2026-10-30: jade plant 73, money tree 68, calathea 54, anthurium 50, Boston
+ * fern 36, Chinese evergreen 31, philodendron 23), read off the live
+ * ASPCA listings and NC State Extension's Plant Toolbox on 2026-10-31. Pinned
+ * the same way: an edit here is a re-read of the source, not a copy edit.
+ */
+describe('listing details read on 2026-10-31', () => {
+  const ADVICE =
+    'If you suspect your pet may have ingested a potentially toxic substance, call the ASPCA Poison Control at (888) 426-4435 or contact your local veterinarian as soon as possible.';
+  const CAOX =
+    'Oral irritation, pain and swelling of mouth, tongue and lips, excessive drooling, vomiting (not horses), difficulty swallowing';
+  const DETAILS: Record<
+    string,
+    {
+      horses?: 'toxic' | 'non-toxic';
+      toxicPrinciples?: string;
+      clinicalSigns?: string;
+      additionalCommonNames?: string;
+      family: string;
+      ncsuPath?: string;
+      poisonSeverity?: string;
+      poisonPart?: string;
+      tagged?: Array<'cats' | 'dogs' | 'horses'>;
+    }
+  > = {
+    'jade-plant': {
+      horses: 'toxic',
+      toxicPrinciples: 'Unknown',
+      clinicalSigns: 'Vomiting, depression, incoordination',
+      additionalCommonNames:
+        'Baby Jade, Dwarf rubber plant, Jade tree, Chinese rubber plant, Japanese rubber plant',
+      family: 'Crassulaceae',
+    },
+    philodendron: {
+      horses: 'toxic',
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      additionalCommonNames: 'Cordatum, Sweetheart Plant',
+      family: 'Araceae',
+      ncsuPath: 'philodendron-hederaceum',
+      poisonSeverity: 'Low',
+      poisonPart: 'Flowers, Fruits, Leaves, Roots, Sap/Juice, Stems',
+    },
+    calathea: { horses: 'non-toxic', family: 'Marantaceae' },
+    'boston-fern': {
+      family: 'Dryopteridaceae',
+      ncsuPath: 'nephrolepis-exaltata',
+      tagged: ['cats', 'dogs', 'horses'],
+    },
+    anthurium: {
+      horses: 'toxic',
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      additionalCommonNames:
+        "Flamingo Lily, Tail Flower, Oilcloth Flower, Pigtail Plant, Painter's Pallet",
+      family: 'Araceae',
+      ncsuPath: 'anthurium',
+      poisonSeverity: 'Low',
+      poisonPart: 'Flowers, Fruits, Leaves, Roots, Seeds, Stems',
+    },
+    'chinese-evergreen': {
+      horses: 'toxic',
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns: CAOX,
+      family: 'Araceae',
+      ncsuPath: 'aglaonema',
+      poisonSeverity: 'Low',
+      poisonPart: 'Bark, Flowers, Fruits, Leaves, Roots, Seeds, Stems',
+    },
+    // The listing's other common name is "Money Plant"; it is deliberately not
+    // quoted, because that name usually means pothos or jade, both toxic.
+    'money-tree': { horses: 'non-toxic', family: 'Malvaceae' },
+  };
+
+  it('these seven entries record details read that day', () => {
+    expect(
+      PET_TOXICITY.filter((e) => e.aspcaListing?.detailsRead === '2026-10-31')
+        .map((e) => e.slug)
+        .sort()
+    ).toEqual(Object.keys(DETAILS).sort());
+  });
+
+  it('no other entry records details', () => {
+    expect(
+      PET_TOXICITY.filter(
+        (e) =>
+          e.aspcaListing?.detailsRead !== undefined &&
+          !['2026-10-29', '2026-10-31'].includes(e.aspcaListing.detailsRead)
+      ).map((e) => e.slug)
+    ).toEqual([]);
+  });
+
+  it.each(Object.entries(DETAILS))('%s records what its sources say', (slug, row) => {
+    const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+    const listing = e.aspcaListing!;
+    expect(listing.detailsRead).toBe('2026-10-31');
+    expect(listing.toxicPrinciples).toBe(row.toxicPrinciples);
+    expect(listing.clinicalSigns).toBe(row.clinicalSigns);
+    expect(listing.listingNote).toBeUndefined();
+    expect(listing.additionalCommonNames).toBe(row.additionalCommonNames);
+    expect(listing.family).toBe(row.family);
+    expect(listing.listed.horses).toBe(row.horses);
+    expect(e.horses).toBe(row.horses);
+    const toxic = e.cats === 'toxic' || e.dogs === 'toxic';
+    expect(listing.listingAdvice).toBe(toxic ? ADVICE : undefined);
+    if (!row.ncsuPath) {
+      expect(e.extensionSource).toBeUndefined();
+      return;
+    }
+    const ext = e.extensionSource!;
+    expect(ext.url).toBe(`https://plants.ces.ncsu.edu/plants/${row.ncsuPath}/`);
+    expect(ext.read).toBe('2026-10-31');
+    expect(ext.poisonSeverity).toBe(row.poisonSeverity);
+    expect(ext.poisonPart).toBe(row.poisonPart);
+    if (!toxic) expect(ext.poisonPart).toBeUndefined();
+    expect(Object.keys(ext.tagged ?? {}).sort()).toEqual([...(row.tagged ?? [])].sort());
+  });
+
+  it('never quotes "Money Plant" on the money tree page', () => {
+    const e = PET_TOXICITY.find((x) => x.slug === 'money-tree')!;
+    expect(JSON.stringify(e.aspcaListing)).not.toMatch(/money plant/i);
   });
 });
