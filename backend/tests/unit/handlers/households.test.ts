@@ -5,6 +5,11 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 // these tests never reach a real DynamoDB client.
 vi.mock('../../../src/services/householdAudit.js');
 vi.mock('../../../src/services/householdService.js');
+// A parent's withdrawn app consent (services/appConsent.ts) refuses create and
+// join; off unless a test turns it on.
+vi.mock('../../../src/services/appConsent.js', () => ({
+  isAppConsentRevoked: vi.fn(async () => false),
+}));
 vi.mock('../../../src/services/welcomeEmail.js');
 vi.mock('../../../src/services/inviteEmail.js', () => ({
   sendInviteEmail: vi.fn(async () => 'accepted'),
@@ -500,6 +505,43 @@ describe('households handler', () => {
         historyLimitDays: null,
       });
       expect(taskService.getCompletionReview).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a parent withdrew app consent (services/appConsent.ts)', () => {
+    it('refuses to create a household, with APP_CONSENT_REVOKED, and creates nothing', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const appConsent = await import('../../../src/services/appConsent.js');
+      const { createHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(appConsent.isAppConsentRevoked).mockResolvedValueOnce(true);
+      const event = buildEvent(
+        { sub: 'user-1', email: 'a@b.com' },
+        {
+          httpMethod: 'POST',
+          body: JSON.stringify({ name: 'Home' }),
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+      const res = (await createHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body).details?.code).toBe('APP_CONSENT_REVOKED');
+      expect(householdService.createHousehold).not.toHaveBeenCalled();
+    });
+
+    it('refuses to join a household, and adds no member', async () => {
+      const householdService = await import('../../../src/services/householdService.js');
+      const appConsent = await import('../../../src/services/appConsent.js');
+      const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+      vi.mocked(appConsent.isAppConsentRevoked).mockResolvedValueOnce(true);
+      const event = buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      );
+      const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body).details?.code).toBe('APP_CONSENT_REVOKED');
+      expect(householdService.getInvite).not.toHaveBeenCalled();
+      expect(householdService.addMember).not.toHaveBeenCalled();
     });
   });
 

@@ -28,6 +28,8 @@
 		A11E00160000000000000020 /* NativeIntroModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00170000000000000021 /* NativeIntroModel.swift */; };
 		A11E00180000000000000022 /* NativeIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00190000000000000023 /* NativeIntroView.swift */; };
 		A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001B0000000000000025 /* NativeIntroPlugin.swift */; };
+		A11E00AA0000000000000040 /* NativeAgeRangePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E00AA0000000000000041 /* NativeAgeRangePlugin.swift */; };
+		A11E00AA0000000000000042 /* AgeAssurance in Frameworks */ = {isa = PBXBuildFile; productRef = A11E00AA0000000000000043 /* AgeAssurance */; };
 		A11E001C0000000000000026 /* NativeReviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001D0000000000000027 /* NativeReviewPlugin.swift */; };
 		A11E001E0000000000000028 /* NativePurchasesPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11E001F0000000000000029 /* NativePurchasesPlugin.swift */; };
 /* End PBXBuildFile section */
@@ -57,6 +59,7 @@
 		A11E00170000000000000021 /* NativeIntroModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroModel.swift; sourceTree = "<group>"; };
 		A11E00190000000000000023 /* NativeIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroView.swift; sourceTree = "<group>"; };
 		A11E001B0000000000000025 /* NativeIntroPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeIntroPlugin.swift; sourceTree = "<group>"; };
+		A11E00AA0000000000000041 /* NativeAgeRangePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAgeRangePlugin.swift; sourceTree = "<group>"; };
 		A11E001D0000000000000027 /* NativeReviewPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReviewPlugin.swift; sourceTree = "<group>"; };
 		A11E001F0000000000000029 /* NativePurchasesPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePurchasesPlugin.swift; sourceTree = "<group>"; };
 		A11E0020000000000000002A /* FamilyGreenhouse.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = FamilyGreenhouse.storekit; sourceTree = "<group>"; };
@@ -68,6 +71,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				A11E00AA0000000000000042 /* AgeAssurance in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +113,7 @@
 				A11E00190000000000000023 /* NativeIntroView.swift */,
 				A11E001B0000000000000025 /* NativeIntroPlugin.swift */,
 				A11E001D0000000000000027 /* NativeReviewPlugin.swift */,
+				A11E00AA0000000000000041 /* NativeAgeRangePlugin.swift */,
 				A11E001F0000000000000029 /* NativePurchasesPlugin.swift */,
 				A11E0020000000000000002A /* FamilyGreenhouse.storekit */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -141,6 +146,7 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				A11E00AA0000000000000043 /* AgeAssurance */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -173,6 +179,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				A11E00AA0000000000000044 /* XCLocalSwiftPackageReference "AgeAssurance" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -219,6 +226,7 @@
 				A11E00180000000000000022 /* NativeIntroView.swift in Sources */,
 				A11E001A0000000000000024 /* NativeIntroPlugin.swift in Sources */,
 				A11E001C0000000000000026 /* NativeReviewPlugin.swift in Sources */,
+				A11E00AA0000000000000040 /* NativeAgeRangePlugin.swift in Sources */,
 				A11E001E0000000000000028 /* NativePurchasesPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -432,6 +440,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "CapApp-SPM";
 		};
+		A11E00AA0000000000000044 /* XCLocalSwiftPackageReference "AgeAssurance" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../AgeAssurance;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -439,6 +451,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		A11E00AA0000000000000043 /* AgeAssurance */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A11E00AA0000000000000044 /* XCLocalSwiftPackageReference "AgeAssurance" */;
+			productName = AgeAssurance;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

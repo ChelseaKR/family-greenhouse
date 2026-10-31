@@ -930,5 +930,8 @@ export async function getMemberByUserId(
     email: result.Item.email as string,
     role: result.Item.role as 'admin' | 'member',
     joinedAt: result.Item.joinedAt as string,
+    ...(typeof result.Item.appConsentRevokedAt === 'string'
+      ? { appConsentRevokedAt: result.Item.appConsentRevokedAt }
+      : {}),
   };
 }

@@ -76,6 +76,9 @@ export function PrivacyPage() {
         <li>
           <Trans i18nKey="legal.privacy.collect.auditLog" components={strong} />
         </li>
+        <li>
+          <Trans i18nKey="legal.privacy.collect.ageRange" components={strong} />
+        </li>
       </ul>
 
       <p>{t('legal.privacy.collect.telemetryIntro')}</p>

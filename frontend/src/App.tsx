@@ -17,6 +17,8 @@ import { useAppStoreTransactionSync } from '@/hooks/useAppStoreTransactionSync';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
 import { isNativeApp } from '@/lib/platform';
 import { noteSignedIn } from '@/lib/nativeIntroState';
+import { AgeGate } from '@/features/auth/AgeGate';
+import { loadAgeSignal } from '@/services/nativeAgeRange';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -203,6 +205,11 @@ function App() {
   useEffect(() => {
     if (isAuthenticated && isNativeApp()) noteSignedIn();
   }, [isAuthenticated]);
+  // App-store age assurance: ask for the age range once per launch, in the
+  // iPhone app only (services/nativeAgeRange.ts; the website resolves at once).
+  useEffect(() => {
+    void loadAgeSignal();
+  }, []);
 
   return (
     <>
@@ -246,16 +253,39 @@ function App() {
               />
               <Route
                 path="/login"
-                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+                element={
+                  isAuthenticated ? (
+                    <Navigate to="/dashboard" replace />
+                  ) : (
+                    <AgeGate>
+                      <LoginPage />
+                    </AgeGate>
+                  )
+                }
               />
               <Route
                 path="/register"
-                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />}
+                element={
+                  isAuthenticated ? (
+                    <Navigate to="/dashboard" replace />
+                  ) : (
+                    <AgeGate holdWhilePending>
+                      <RegisterPage />
+                    </AgeGate>
+                  )
+                }
               />
               <Route path="/confirm-email" element={<ConfirmEmailPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/join/:inviteCode" element={<JoinHouseholdPage />} />
+              <Route
+                path="/join/:inviteCode"
+                element={
+                  <AgeGate holdWhilePending>
+                    <JoinHouseholdPage />
+                  </AgeGate>
+                }
+              />
               {/* Public cutting-share landing page — works logged-out (the
                   preview endpoint has no auth, like invite validation). */}
               <Route path="/shared/:code" element={<SharedPlantPage />} />
@@ -305,7 +335,13 @@ function App() {
               <Route path="/gift" element={<GiftLandingPage />} />
 
               {/* Protected routes */}
-              <Route element={<ProtectedRoute />}>
+              <Route
+                element={
+                  <AgeGate>
+                    <ProtectedRoute />
+                  </AgeGate>
+                }
+              >
                 <Route
                   path="/onboarding"
                   element={

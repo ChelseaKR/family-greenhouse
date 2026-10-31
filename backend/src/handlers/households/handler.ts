@@ -25,6 +25,7 @@ import {
   SetHouseholdTimeZoneInput,
 } from '../../models/schemas.js';
 import * as householdService from '../../services/householdService.js';
+import * as appConsent from '../../services/appConsent.js';
 import * as welcomeEmail from '../../services/welcomeEmail.js';
 import * as inviteEmail from '../../services/inviteEmail.js';
 import * as householdEmails from '../../services/householdEmails.js';
@@ -103,10 +104,25 @@ async function sendFirstHouseholdWelcome(
 // the legacy "default household" path keeps working for clients that don't
 // send X-Household-Id. Subsequent households are reachable via the
 // switcher, which sets the header per-request.
+/**
+ * 403 when a parent has withdrawn consent for this account's use of the app
+ * (services/appConsent.ts): the account may not start or join a household.
+ */
+async function refuseWithdrawnConsent(userId: string): Promise<void> {
+  if (await appConsent.isAppConsentRevoked(userId)) {
+    throw createHttpError(
+      403,
+      'A parent or guardian has withdrawn consent for this account. Email support for help.',
+      { expose: true, details: { code: 'APP_CONSENT_REVOKED' } }
+    );
+  }
+}
+
 export const createHousehold = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<CreateHouseholdInput>;
+    await refuseWithdrawnConsent(user.userId);
 
     const userName = await cognitoUsers.getUserName(user.userId, user.email);
     // JWT custom claims can remain stale until the client refreshes after its
@@ -484,6 +500,7 @@ export const joinHousehold = createHandler(
     if (!inviteCode) {
       throw createHttpError(400, 'Invite code is required');
     }
+    await refuseWithdrawnConsent(user.userId);
 
     const invite = await householdService.getInvite(inviteCode);
 

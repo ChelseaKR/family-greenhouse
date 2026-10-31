@@ -18,6 +18,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **App-store age assurance (Texas, and California, Alabama, Utah and
+  Louisiana in 2027).** On iOS 26.2 and later the iPhone app asks Apple's
+  Declared Age Range for the person's age range once per launch, only when
+  Apple says a law covers them, and holds it in memory only. A store-reported
+  age under 13 stops sign-up, sign-in and invitations in the app and signs
+  the device out; a missing or declined signal changes nothing and is never
+  read as an adult. A parent's withdrawal of consent through Apple
+  (`RESCIND_CONSENT`) ends that account's access to every household. The
+  Terms say only an adult may start a paid plan, and the privacy policy
+  describes the age range and the app-download record kept for a minor.
+  Policy values in `frontend/src/config/ageAssurance.ts`.
+
 - **Every sign-up link on the content pages is counted, and a care guide's
   plant is carried into the first run.** The care guide's sign-up box, the
   pet-safety page's, the blog post's and the shared header's "Try the app"

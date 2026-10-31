@@ -2994,6 +2994,12 @@
     "privacy": "Privacy Policy",
     "lockedSeePlans": "See plans",
     "lockedMember": "A household admin can change the plan in Settings.",
-    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions)."
+    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions).",
+    "adultRequired": "Only an adult can start a paid plan. Ask a parent or guardian to subscribe from their account."
+  },
+  "ageGate": {
+    "title": "Family Greenhouse accounts start at {{age}}",
+    "body": "Your Apple Account shows an age under {{age}}, so this app can’t create an account, sign in or accept a household invitation here. Nothing was saved.",
+    "parent": "Parents and guardians: you can care for plants together from your own account. If you think this is wrong, or you want an account deleted, email <supportLink>{{supportEmail}}</supportLink>."
   }
 }

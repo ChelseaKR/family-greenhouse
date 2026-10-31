@@ -84,6 +84,20 @@ than the workspaces `package.json` declares.
   Environment (its protection rules are the human sign-off).
 - `docs/runbooks.md` updated if operational behavior changed; incident notes in
   `docs/incidents.md` if the release remediates one.
+- **Significant change (app-store age-assurance laws).** Texas SB 2420, Utah
+  13-76, Louisiana R.S. 51:1771 and Alabama HB 161 require notifying the app
+  stores, and letting parents of minors approve, before a "significant
+  change": a Terms or privacy change that adds a category of personal data
+  collected, stored or shared, adds in-app purchases or ads (Utah and
+  Alabama: where none existed), or changes the age rating or its content
+  descriptors; in Texas and Louisiana also a material change to
+  functionality or user experience (`SignificantChange.states(for:)` in
+  `frontend/ios/AgeAssurance`). For such a release: notify App Store Connect
+  (and the Play Console Age Signals page once on Google Play) before release,
+  and present the platform flow on first launch
+  (`SignificantUpdatePresenter.present`, as `requiredRegulatoryFeatures`
+  says). Keep the age rating honest and stable; a later change is itself a
+  significant change.
 
 ---
 

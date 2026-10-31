@@ -20,6 +20,12 @@ vi.mock('../../../src/services/apiKeys.js');
 vi.mock('../../../src/services/calendarTokens.js');
 vi.mock('../../../src/services/billingEmails.js');
 vi.mock('../../../src/services/referralCodes.js');
+vi.mock('../../../src/services/appConsent.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/services/appConsent.js')>(
+    '../../../src/services/appConsent.js'
+  );
+  return { AppConsentError: actual.AppConsentError, registerAppTransaction: vi.fn() };
+});
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
   TABLE_NAME: 'test-table',
@@ -69,6 +75,51 @@ describe('me handler', () => {
     __resetMembershipCacheForTests();
     const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
     setCachedMembership('user-1', 'hh-1', 'admin');
+  });
+
+  describe('registerAppTransaction (age assurance)', () => {
+    const post = (body: unknown) =>
+      buildEvent({
+        httpMethod: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    it('registers the signed app transaction for the caller and answers 204', async () => {
+      const appConsent = await import('../../../src/services/appConsent.js');
+      vi.mocked(appConsent.registerAppTransaction).mockResolvedValueOnce(undefined);
+      const { registerAppTransaction } = await import('../../../src/handlers/me/handler.js');
+      const res = (await registerAppTransaction(
+        post({ signedAppTransaction: 'a.b.c' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(204);
+      expect(appConsent.registerAppTransaction).toHaveBeenCalledWith('user-1', 'a.b.c');
+    });
+
+    it("answers 400 for data that is not this app's Apple-signed app transaction", async () => {
+      const appConsent = await import('../../../src/services/appConsent.js');
+      const { AppStoreVerificationError } = await import('../../../src/services/appStoreJws.js');
+      vi.mocked(appConsent.registerAppTransaction).mockRejectedValueOnce(
+        new AppStoreVerificationError('bad chain')
+      );
+      const { registerAppTransaction } = await import('../../../src/handlers/me/handler.js');
+      const res = (await registerAppTransaction(
+        post({ signedAppTransaction: 'a.b.c' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('answers 400 without a body, and registers nothing', async () => {
+      const appConsent = await import('../../../src/services/appConsent.js');
+      const { registerAppTransaction } = await import('../../../src/handlers/me/handler.js');
+      const res = (await registerAppTransaction(post({}), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(appConsent.registerAppTransaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteMe', () => {

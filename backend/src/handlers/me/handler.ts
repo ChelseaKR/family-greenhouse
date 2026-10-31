@@ -30,6 +30,10 @@ import { myToday } from './today.js';
 import { createdResponse, noContentResponse, successResponse } from '../../utils/response.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
+import { z } from 'zod';
+import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
+import * as appConsent from '../../services/appConsent.js';
+import { AppStoreVerificationError } from '../../services/appStoreJws.js';
 
 /**
  * Refuse the deletion if the user is the last admin in a household with
@@ -520,6 +524,34 @@ export const getMyReferral = createHandler(
   .use(requireHousehold())
   .use(userRateLimit({ perWindowMs: 60_000, max: 30 }));
 
+// POST /me/app-transaction
+// The iPhone app registers Apple's signed app transaction for the signed-in
+// account, so a parent's later RESCIND_CONSENT notification (which names only
+// the app download) can reach this account (services/appConsent.ts). The app
+// sends it only when Apple's age signal says the person is a minor. 204 on
+// success; 400 for anything that is not this app's Apple-signed data.
+const appTransactionSchema = z.object({ signedAppTransaction: z.string().min(1).max(64_000) });
+type AppTransactionInput = z.infer<typeof appTransactionSchema>;
+
+export const registerAppTransaction = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    const { validatedBody } = event as ValidatedEvent<AppTransactionInput>;
+    try {
+      await appConsent.registerAppTransaction(user.userId, validatedBody.signedAppTransaction);
+    } catch (err) {
+      if (err instanceof AppStoreVerificationError || err instanceof appConsent.AppConsentError) {
+        throw createHttpError(400, 'App transaction did not verify.', { expose: true });
+      }
+      throw err;
+    }
+    return noContentResponse();
+  }
+)
+  .use(authMiddleware())
+  .use(userRateLimit({ perWindowMs: 60_000, max: 10 }))
+  .use(validateBody(appTransactionSchema));
+
 // Lambda entrypoint: dispatch this group's routes (see middleware/router.ts).
 export const handler = createRouter({
   'DELETE /me': deleteMe,
@@ -531,5 +563,6 @@ export const handler = createRouter({
   'GET /me/calendar-token': getCalendarToken,
   'POST /me/calendar-token': createCalendarToken,
   'DELETE /me/calendar-token': revokeCalendarToken,
+  'POST /me/app-transaction': registerAppTransaction,
   'GET /calendar/{token}/family-greenhouse.ics': calendarFeed,
 });

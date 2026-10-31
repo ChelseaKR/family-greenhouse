@@ -41,6 +41,13 @@
 	  ever served from familygreenhouse.net, never a www or app subdomain, so
 	  there is nothing else to list.
 	-->
+	<!--
+	  Declared Age Range (app-store age-assurance laws). Lets the app ask
+	  Apple for the person's age range (NativeAgeRangePlugin.swift).
+	  scripts/validate-store-release.mjs requires it while that plugin exists.
+	-->
+	<key>com.apple.developer.declared-age-range</key>
+	<true/>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:familygreenhouse.net</string>

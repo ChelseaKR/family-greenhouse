@@ -63,6 +63,11 @@ export interface HouseholdMember {
   email: string;
   role: 'admin' | 'member';
   joinedAt: string;
+  /**
+   * Set when a parent withdrew consent for this account's use of the app
+   * (services/appConsent.ts). `authMiddleware` treats the row as absent.
+   */
+  appConsentRevokedAt?: string;
 }
 
 /**

@@ -30,6 +30,9 @@ class MainViewController: CAPBridgeViewController {
         // web uses it only when the build turns purchases on and the bridge
         // lists it.
         bridge?.registerPluginInstance(NativePurchasesPlugin())
+        // App-store age assurance (NativeAgeRangePlugin.swift). The web asks
+        // for the age range once per launch, only when the bridge lists it.
+        bridge?.registerPluginInstance(NativeAgeRangePlugin())
         observeBackSwipe()
     }
 

@@ -3,6 +3,9 @@ import { api } from './api';
 import { appStorePurchasesAvailable } from './appStoreAvailability';
 import type { AppStoreSubscriptionView, PlanId } from './billingService';
 import type { SignedTransaction, StoreProduct } from './appStorePurchasesPlugin';
+import { AGE_ASSURANCE_POLICY } from '@/config/ageAssurance';
+import { checkoutGate } from '@/lib/ageSignal';
+import { loadAgeSignal } from '@/services/nativeAgeRange';
 
 /**
  * Apple In-App Purchase in the iPhone app (ADR 0041).
@@ -51,6 +54,8 @@ const loadPlugin = () => import('@/services/appStorePurchasesPlugin');
 
 /** Refusals the server names, so the app can say what is true without a web pointer. */
 export type PurchaseRefusalCode =
+  /** Refused in the app, not by the server: decision B2 (config/ageAssurance.ts). */
+  | 'ADULT_REQUIRED'
   | 'STRIPE_SUBSCRIPTION_ACTIVE'
   | 'APP_STORE_SUBSCRIPTION_ACTIVE'
   | 'PLAN_ALREADY_INCLUDED'
@@ -138,6 +143,12 @@ export async function loadStoreProducts(): Promise<Partial<Record<PaidPlanId, St
 }
 
 export async function buyPlan(planId: PaidPlanId): Promise<BuyOutcome> {
+  // App-store age assurance (decision B). With the recommended `termsOnly`
+  // this never refuses: the Terms carry the adult-payer rule and Apple's Ask
+  // to Buy puts a minor's purchase in front of a parent.
+  if (checkoutGate(await loadAgeSignal(), AGE_ASSURANCE_POLICY) === 'blocked') {
+    return { kind: 'refused', code: 'ADULT_REQUIRED' };
+  }
   let intent: { productId: string; appAccountToken: string };
   try {
     intent = await appStoreApi.purchaseIntent(planId);

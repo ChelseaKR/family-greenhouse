@@ -284,6 +284,28 @@ aws cognito-idp admin-set-user-mfa-preference \
    `SOFTWARE_TOKEN_MFA`. Reply that they can sign in with their password and
    set up a new authenticator under Settings → Security.
 
+## A parent withdrew consent, or asks to restore it
+
+App-store age assurance (backend `services/appConsent.ts`). When a parent or
+guardian withdraws consent for a minor's use of the iPhone app, Apple stops
+the app launching on that device and sends `RESCIND_CONSENT` to
+`/billing/app-store/notifications` (handled even while purchases are off).
+If the minor's account had registered that app download, every membership of
+the account is marked `appConsentRevokedAt` and a `USER#<sub> / APP_CONSENT`
+row is written: the account reaches no household and cannot create or join
+one (`APP_CONSENT_REVOKED`). The log line is `app_consent_rescinded` with the
+number of accounts reached, never an identifier.
+
+Apple sends nothing when consent is given again, so restoring access is a
+support action. Verify first: the request must come from the parent or
+guardian, by email, and say they have re-approved the app in Apple's Family
+Sharing settings. Then, with the account's Cognito `sub`, run
+`restoreAppConsent('<sub>')` from `services/appConsent.ts` (one-off script
+against production, same pattern as the other runbook scripts), which deletes
+the consent row and clears the membership marks. A parent who instead wants
+the account deleted: delete it as for any deletion request; the app
+transaction link is in the account's own partition and goes with it.
+
 ## Re-key credentials still stored in plaintext (#450)
 
 **Symptom:** the table still holds a sitter link, kiosk link, caretaker seat,

@@ -57,6 +57,8 @@ function paidOutsideAppStore(sub: SubscriptionState | undefined): {
 
 function refusalKey(code: PurchaseRefusalCode): string {
   switch (code) {
+    case 'ADULT_REQUIRED':
+      return 'appStore.adultRequired';
     case 'APP_STORE_LINKED_ELSEWHERE':
       return 'appStore.linkedElsewhere';
     case 'APP_STORE_OTHER_SUBSCRIPTION':

@@ -1405,6 +1405,24 @@ paths:
         '204': { description: Revoked }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /me/app-transaction:
+    post:
+      summary: Register Apple's signed app transaction (from the iPhone app's AppTransaction) for the caller's account, so a parent's RESCIND_CONSENT App Store notification can withdraw this account's access. The app sends it only when Apple's age signal says the person is a minor. Idempotent.
+      tags: [Me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signedAppTransaction]
+              properties:
+                signedAppTransaction:
+                  { type: string, description: 'Apple-signed JWS of the app transaction' }
+      responses:
+        '204': { description: Registered }
+        '400': { description: Not this app's Apple-signed app transaction }
+        '429': { description: Rate limited (10/min per user) }
   /calendar/{token}/family-greenhouse.ics:
     get:
       summary: Public subscribe-able iCalendar feed. No auth — the 256-bit token in the path is the only credential (a capability URL; whoever holds it can read the feed). Scoped to one user's view of one household, read-only, membership re-checked on every fetch. Emits task titles, cadence, and due dates only — never notes, assignees, or member data. IP-rate-limited.

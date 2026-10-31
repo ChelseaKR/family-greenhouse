@@ -1800,6 +1800,18 @@ app.delete('/me/calendar-token', authMiddleware, requireHousehold, (req, res) =>
   res.status(204).end();
 });
 
+// POST /me/app-transaction — age assurance (services/appConsent.ts). The mock
+// has no Apple signing chain, so it accepts any compact JWS-shaped string and
+// records nothing: a minor's app-transaction link only matters to Apple's
+// RESCIND_CONSENT notification, which never reaches the mock.
+app.post('/me/app-transaction', authMiddleware, (req, res) => {
+  const jws = req.body?.signedAppTransaction;
+  if (typeof jws !== 'string' || jws.split('.').length !== 3) {
+    return res.status(400).json({ message: 'App transaction did not verify.' });
+  }
+  res.status(204).end();
+});
+
 // GET /calendar/:token/family-greenhouse.ics
 // PUBLIC (no auth): the token is the only credential. Generic 404 on every
 // miss (unknown / revoked / regenerated / membership gone), like sitter links.

@@ -138,7 +138,10 @@ export const authMiddleware = (): middy.MiddlewareObj<
       let role = getCachedMembership(claims.sub, requestedHouseholdId);
       if (!role) {
         const member = await getMemberByUserId(requestedHouseholdId, claims.sub);
-        if (!member) {
+        // A parent's withdrawn consent (services/appConsent.ts) makes the
+        // membership row count as absent, so the account's tokens reach
+        // nothing in any household.
+        if (!member || member.appConsentRevokedAt) {
           if (isExplicitOverride) {
             throw createHttpError(403, 'Not a member of the requested household');
           }

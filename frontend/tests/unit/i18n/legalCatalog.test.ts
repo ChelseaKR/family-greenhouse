@@ -54,7 +54,7 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 130 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 131 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
@@ -71,7 +71,7 @@ describe('deferred legal catalog', () => {
     // (#593), +1 for the shell line a legal page shows before the release that
     // ships its text names a day (#593), +2 for the Apple purchases section
     // of the Terms (ADR 0041).
-    expect(en).toHaveLength(130);
+    expect(en).toHaveLength(131);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

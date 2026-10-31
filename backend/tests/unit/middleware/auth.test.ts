@@ -116,6 +116,32 @@ describe('authMiddleware', () => {
     });
   });
 
+  it('treats a membership whose app consent a parent withdrew as no membership', async () => {
+    // services/appConsent.ts marks the row; the account's tokens then reach
+    // nothing, the same as a removed member.
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+      householdId: 'hh-1',
+      userId: 'user-1',
+      name: 'Kid',
+      email: 'a@b.com',
+      role: 'member',
+      joinedAt: '2026-01-01T00:00:00.000Z',
+      appConsentRevokedAt: '2026-10-30T00:00:00.000Z',
+    });
+    const { invoke, inner } = makeHandler([authMiddleware()]);
+    const res = await invoke(
+      buildEvent({
+        sub: 'user-1',
+        email: 'a@b.com',
+        'custom:household_id': 'hh-1',
+        'custom:household_role': 'member',
+      })
+    );
+    expect(res.statusCode).toBe(200);
+    const calledEvent = inner.mock.calls[0][0] as { user: Record<string, unknown> };
+    expect(calledEvent.user).toMatchObject({ householdId: null, householdRole: null });
+  });
+
   it('requireHousehold still 403s a stale-claim caller on a route that needs a household', async () => {
     vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
     const { invoke } = makeHandler([authMiddleware(), requireHousehold()]);

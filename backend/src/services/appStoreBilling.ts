@@ -17,6 +17,7 @@ import {
 } from '../config/appStore.js';
 import { verifyAppleJws, AppStoreVerificationError, type VerifyOptions } from './appStoreJws.js';
 import { getHouseholdSubscription, hasLiveStripeSubscription } from './billing.js';
+import { applyRescindConsent, type RescindAppData } from './appConsent.js';
 
 /**
  * Apple In-App Purchase, server side (ADR 0041).
@@ -325,8 +326,15 @@ export async function applyNotification(
       signedTransactionInfo?: string;
       signedRenewalInfo?: string;
     };
+    appData?: RescindAppData;
   }>(signedPayload, options);
   const notificationType = payload.notificationType;
+  // A parent withdrew consent for a minor's use of the app (services/appConsent.ts).
+  // It carries `appData`, not `data`, and no purchase.
+  if (notificationType === 'RESCIND_CONSENT') {
+    const rescind = await applyRescindConsent(payload.appData, options, now);
+    return { outcome: rescind.outcome === 'wrong_app' ? 'wrong_app' : 'applied', notificationType };
+  }
   const data = payload.data;
   if (!data || data.bundleId !== APP_STORE_BUNDLE_ID) {
     return { outcome: 'wrong_app', notificationType };
@@ -345,6 +353,22 @@ export async function applyNotification(
     : null;
   const result = await applyVerifiedTransaction(transaction, renewal, null, now);
   return { ...result, notificationType };
+}
+
+/**
+ * The one notification handled while the In-App Purchase switch is off:
+ * `RESCIND_CONSENT` is about a minor's use of the app, not about billing, so
+ * it must not wait for purchases to be turned on. Returns null for any other
+ * type; throws `AppStoreVerificationError` for a payload that does not verify.
+ */
+export async function applyConsentNotification(
+  signedPayload: string,
+  options?: VerifyOptions,
+  now: Date = new Date()
+): Promise<(ApplyResult & { notificationType?: string }) | null> {
+  const payload = verifyAppleJws<{ notificationType?: string }>(signedPayload, options);
+  if (payload.notificationType !== 'RESCIND_CONSENT') return null;
+  return applyNotification(signedPayload, options, now);
 }
 
 export type PurchaseRefusal =

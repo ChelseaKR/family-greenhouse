@@ -17,6 +17,7 @@ import { appStoreProductForPlan } from '../../models/appStore.js';
 import { getEntitledPlan } from '../../models/plans.js';
 import { getHouseholdSubscription } from '../../services/billing.js';
 import {
+  applyConsentNotification,
   applyNotification,
   applyVerifiedTransaction,
   getOrCreateAccountToken,
@@ -179,8 +180,24 @@ type NotificationInput = z.infer<typeof notificationSchema>;
 // failure is a 500, which Apple retries on its own schedule.
 export const notifications = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    assertEnabled();
     const { validatedBody } = event as ValidatedEvent<NotificationInput>;
+    if (!appStoreBillingEnabled()) {
+      // Purchases off: only a parent's withdrawn consent is handled
+      // (services/appConsent.ts). Anything else, including a payload that
+      // does not verify, still learns only that the feature is not there.
+      let consent: Awaited<ReturnType<typeof applyConsentNotification>> = null;
+      try {
+        consent = await applyConsentNotification(validatedBody.signedPayload);
+      } catch (err) {
+        if (!(err instanceof AppStoreVerificationError)) throw err;
+      }
+      if (!consent) assertEnabled();
+      logger.info(
+        { notificationType: consent?.notificationType, outcome: consent?.outcome },
+        'app_store_notification'
+      );
+      return successResponse({ received: true });
+    }
     try {
       const result = await applyNotification(validatedBody.signedPayload);
       logger.info(

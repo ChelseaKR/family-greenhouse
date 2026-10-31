@@ -665,6 +665,37 @@ if (nativePushIsReachable) {
   }
 }
 
+// App-store age assurance: NativeAgeRangePlugin.swift asks Apple's Declared
+// Age Range for the person's age range. Without the entitlement the request
+// fails at runtime and every person reads as "no signal", silently. So while
+// the plugin is in the app, the entitlement, the plugin's registration and
+// the shared AgeAssurance package must all be there too.
+const ageRangePlugin = 'frontend/ios/App/App/NativeAgeRangePlugin.swift';
+if (existsSync(resolve(root, ageRangePlugin))) {
+  const appEntitlements = 'frontend/ios/App/App/App.entitlements';
+  const entitlementsText = existsSync(resolve(root, appEntitlements)) ? read(appEntitlements) : '';
+  if (!/<key>com\.apple\.developer\.declared-age-range<\/key>\s*<true\/>/.test(entitlementsText)) {
+    fail(
+      `${ageRangePlugin} exists but ${appEntitlements} does not set ` +
+        'com.apple.developer.declared-age-range to true; the age-range request fails without it'
+    );
+  }
+  if (!read('frontend/ios/App/App/MainViewController.swift').includes('NativeAgeRangePlugin()')) {
+    fail('NativeAgeRangePlugin is not registered in MainViewController.swift');
+  }
+  if (!xcodeProject.includes('NativeAgeRangePlugin.swift in Sources')) {
+    fail("NativeAgeRangePlugin.swift is not in the App target's Sources build phase");
+  }
+  if (
+    !xcodeProject.includes('XCLocalSwiftPackageReference "AgeAssurance"') ||
+    !existsSync(resolve(root, 'frontend/ios/AgeAssurance/Package.swift'))
+  ) {
+    fail(
+      'The App target does not link the vendored AgeAssurance package (frontend/ios/AgeAssurance)'
+    );
+  }
+}
+
 if (production) {
   const requiredEnvironment = [
     'VITE_API_URL',

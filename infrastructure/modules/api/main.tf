@@ -1283,6 +1283,9 @@ locals {
     "GET /me/calendar-token"    = { group = "me", auth = "jwt" }
     "POST /me/calendar-token"   = { group = "me", auth = "jwt" }
     "DELETE /me/calendar-token" = { group = "me", auth = "jwt" }
+    # Age assurance: the iPhone app's signed app transaction, so a parent's
+    # RESCIND_CONSENT notification can reach the account (services/appConsent.ts).
+    "POST /me/app-transaction" = { group = "me", auth = "jwt" }
     # Refer-a-friend (ADR 0029): the caller's own code + referral history.
     "GET /me/referral" = { group = "me", auth = "jwt" }
     # Capability URL for calendar apps: the token in the path is the credential.
