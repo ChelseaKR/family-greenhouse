@@ -1267,14 +1267,14 @@ export const HELP_SECTIONS: HelpSection[] = [
                 honour.
               </li>
               <li>
-                <strong>No purchases.</strong> Plans can be viewed but not bought or changed in the
-                app. Use the website for anything to do with billing.
+                <strong>No purchases.</strong> The app shows your household&rsquo;s plan and what it
+                includes, but plans aren&rsquo;t bought or changed in the app.
               </li>
             </ul>
             <p>Everything else — plants, tasks, households, sitters, chat — works the same.</p>
           </>
         ),
-        text: 'Two things, and both are worth knowing before you rely on the app. No notifications at all: push notifications are not shipped in the mobile apps, and web push does not work inside them either. Reminders reach you by email, and the notification settings screen deliberately hides the controls it cannot honour. No purchases: plans can be viewed but not bought or changed in the app, so use the website for anything to do with billing. Everything else — plants, tasks, households, sitters, chat — works the same.',
+        text: 'Two things, and both are worth knowing before you rely on the app. No notifications at all: push notifications are not shipped in the mobile apps, and web push does not work inside them either. Reminders reach you by email, and the notification settings screen deliberately hides the controls it cannot honour. No purchases: the app shows your household’s plan and what it includes, but plans aren’t bought or changed in the app. Everything else — plants, tasks, households, sitters, chat — works the same.',
       },
       {
         id: 'dark-mode',
