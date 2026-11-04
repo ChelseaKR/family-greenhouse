@@ -16,15 +16,46 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-03
+
+**Perenual is off in production, the pet-safety pages quote the ASPCA less,
+and the Terms name who runs the service.** A data license audit on 2026-11-03
+found that Perenual's free plan and the ASPCA's pages allow personal,
+non-commercial use only, so production stops calling Perenual and the
+pet-safety pages quote only each listing's clinical signs. The Privacy Policy
+says what Plant.id may do with photos. The Terms text changed (#1078), so
+their effective date is this release's. Also in this release: more care guides
+and pet-safety pages answer what people searched, every content sign-up link
+is counted, and four dependency majors.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.46.0 in
+  three files: the production tfvars drop `perenual_api_key_parameter_name`
+  (#1077), the staging tfvars set `app_store_billing_enabled = "1"` (#1064),
+  and `modules/frontend/main.tf` adds a staging-only `images` cache policy
+  with `count` and a `moved` block (#1066), which is `count = 0` in
+  production and plans nothing there. In production, expect the usual Lambda
+  updates, with `PERENUAL_API_KEY_PARAMETER_NAME` going from the parameter
+  name to `""` on `plants`, `notifications`, `species` and `reminders`, and
+  nothing added or destroyed. The inbound mail forwarder's `FORWARD_TO`
+  variable also changes, because its SSM parameter was changed outside
+  Terraform; the plan shows it as a sensitive value. No stored data is
+  migrated.
+- **The Terms effective date is November 3, 2026 (release 0.47.0).**
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.47.0, build 4700.
+
 ### Added
 
-- **Seven more pet-safety pages quote their own sources.** Jade plant,
+- **Seven more pet-safety pages quote their own sources (#1068).** Jade plant,
   philodendron, calathea, Boston fern, anthurium, Chinese evergreen and money
   tree are the next pages by Search Console impressions after the first
   eight (90 days to 2026-10-30, positions 30 to 54, no clicks). Each now
   quotes its ASPCA listing's plant family, and other common names where the
-  listing gives them. The four toxic ones also quote the listing's toxic
-  principles, clinical signs and advice line. Each page shows a horse verdict
+  listing gives them. The four toxic ones also show the listing's toxic
+  principles and quote its clinical signs (#1068 also quoted the advice line,
+  which #1077 took back off before release). Each page shows a horse verdict
   where the listing states one. NC State Extension's Plant Toolbox is added
   as a second source where it has a matching page, with its poison parts on
   the three toxic plants that have one. Each page now lists similar plants
@@ -35,7 +66,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `petToxicity.test.ts`. No verdict changes.
 
 - **Every sign-up link on the content pages is counted, and a care guide's
-  plant is carried into the first run.** The care guide's sign-up box, the
+  plant is carried into the first run (#1062).** The care guide's sign-up box, the
   pet-safety page's, the blog post's and the shared header's "Try the app"
   link now send GA4 `landing_cta_click`, as the home page's two buttons
   already did. They use their own parameters (`cta_source`, `cta_placement`,
@@ -48,27 +79,58 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   says why. Nothing is added until the person taps it, and the sign-up steps
   are unchanged. Unknown values are ignored and never shown.
 
-- **The eight most-seen pet-safety pages quote more of their own sources.**
+- **The eight most-seen pet-safety pages quote more of their own sources
+  (#1057).**
   Each plant's ASPCA listing now also gives its other common names and plant
-  family, and the six toxic ones quote the listing's own line on what to do
-  (the hotline box still comes first). NC State Extension's "Poison Part"
-  values (which parts of the plant are poisonous) are quoted where its page
-  gives them, and those five pages answer "Which parts of … are poisonous?"
-  in their FAQ. Every value was re-read off the live pages on 2026-10-29.
+  family. (#1057 also quoted the six toxic listings' own line on what to do;
+  #1077 took that line back off before release, see Changed.) NC State
+  Extension's "Poison Part" values (which parts of the plant are poisonous)
+  are quoted where its page gives them, and those five pages answer "Which
+  parts of … are poisonous?" in their FAQ. Every value was re-read off the
+  live pages on 2026-10-29.
 
 ### Changed
 
+- **Perenual is off in production, and nothing credits it (#1077).**
+  Perenual's free plan is licensed for personal use only, and Family
+  Greenhouse is a paid product (data license audit, 2026-11-03). The
+  production tfvars no longer name the Perenual key parameter, so the
+  `plants`, `notifications`, `species` and `reminders` Lambdas get an empty
+  `PERENUAL_API_KEY_PARAMETER_NAME`, every Perenual path reports unset, and no
+  key is read and no call is made; the app falls back to its own species
+  catalog and care guides. The cache-only species peek (the Move Day hardiness
+  hint and archive restore) no longer serves rows cached while the key was on.
+  The footer no longer says plant data is powered by Perenual. The SSM
+  parameter that holds the key is not managed by Terraform; deleting it is a
+  separate owner step.
+
+- **The pet-safety pages quote the ASPCA once and say we are not affiliated
+  (#1077).** The ASPCA's terms allow personal, non-commercial use only.
+  Titles no longer end in "ASPCA verdict" and descriptions no longer lead with
+  the ASPCA. The listing's own note and advice lines are no longer reprinted;
+  the clinical signs are the one passage quoted, beside a link to the listing.
+  The plant-list caveat, the FAQ answers and the hotline fee are in our own
+  words, and every page says Family Greenhouse is not affiliated with or
+  endorsed by the ASPCA. A test checks this on every published page. No
+  verdict changes.
+
+- **The Privacy Policy says what Plant.id's terms let it do with photos
+  (#1077).** Plant.id is run by FlowerChecker s.r.o. (Kindwise). Its API terms
+  take a non-exclusive, unlimited and irrevocable license to submitted photos,
+  for commercial use including model training, showing them to its other
+  customers and sharing them under CC BY-SA 4.0. The privacy page now says so,
+  in English and Spanish, and its effective date is November 3, 2026.
+
 - **The Terms name who runs the service, disclose paid links, and say they
-  are not veterinary advice.** A new "Who runs the service" section names
+  are not veterinary advice (#1078).** A new "Who runs the service" section names
   Chelsea Kelly-Reif in California and the support address. A "Paid links"
   section says plant pages on the website may carry a shop link labeled
   "Paid link" that earns a commission, and that the apps do not show them
   (ADR 0038; no program is configured today, so none render). Limitations
   adds that nothing here is veterinary advice and to call a vet or the ASPCA
   Animal Poison Control Center if a pet may have eaten a plant. English and
-  Spanish, and the effective date is `UNRELEASED` until the release that
-  ships it.
-- **Staging opens Apple In-App Purchase, ahead of production.**
+  Spanish. The Terms text changed, and takes effect with this release.
+- **Staging opens Apple In-App Purchase, ahead of production (#1064).**
   `infrastructure/environments/staging/terraform.tfvars` sets
   `app_store_billing_enabled = "1"`, so after the next manual cd-staging run
   the staging billing Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and the
@@ -78,7 +140,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   added, because Apple's signed data is verified against the pinned Apple
   Root CA - G3 (ADR 0041).
 - **Third Search Console pass: three more care guides lead with the answer,
-  and four near-page-one guides get links from related guides.** Search
+  and four near-page-one guides get links from related guides (#1063).** Search
   Console page and query data for the 28 days to 2026-10-29 had the heartleaf
   philodendron (position 14), money tree (10, and 6 in the last 7 days) and
   nerve plant (8) guides near page one without the answer-first title. Their
@@ -90,7 +152,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   from the money tree, parlor palm and sago palm guides, where the linked
   plant shares the watering rhythm or suits the spot being described. No
   plant facts change.
-- **Search titles answer the question people searched.** From 90 days of
+- **Search titles answer the question people searched (#1055).** From 90 days of
   Search Console data (2026-07-31 to 2026-10-28), the ZZ plant, monstera,
   snake plant and English ivy care guides get titles, descriptions and H1s
   that lead with what searchers asked ("how often to water zz plant" was 96
@@ -100,7 +162,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   overwatering causes yellow leaves, which the post already states. No plant
   facts change.
 - **Second Search Console pass: five more care guides and every pet-safety
-  page.** From the same 90 days (4,043 impressions, 18 clicks), the aloe vera,
+  page (#1058).** From the same 90 days (4,043 impressions, 18 clicks), the aloe vera,
   spider plant and pothos guides lead with the watering answer their searchers
   asked for, the anthurium guide with why it stops flowering ("anthurium no
   flowers" was its top query) and the bird of paradise guide with "plant care".
@@ -110,7 +172,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   violet" keeps its capital, and each description says the page gives the
   numbers to call if a pet ate some. Verdicts, their ASPCA sources and the
   155-character budget are unchanged.
-- **Third Search Console pass: nine more care guides and the vacation post.**
+- **Third Search Console pass: nine more care guides and the vacation post
+  (#1060).**
   From the same 90 days, ten pages had 213 impressions between them at
   average positions 24 to 69 and no clicks. The Christmas cactus, jade plant,
   peace lily, rubber plant, hoya, Chinese evergreen, Boston fern, moth orchid
@@ -123,7 +186,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
-- **Staging can deploy again.** cd-staging run 41136306730 stopped with
+- **Staging can deploy again (#1066).** cd-staging run 41136306730 stopped with
   CloudFront 409 `CachePolicyInUse`: staging had not applied since
   2026-09-04, so it got #855's removal of the `/plants/*` behavior and #940's
   removal of the images cache policy in one apply. Terraform deleted the
@@ -134,7 +197,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   change from this. A later change removes the block once staging's
   distributions no longer use the policy.
 
-- **Two iPad layout bugs.** In the iOS app on iPad, a scrolled page's text
+- **Two iPad layout bugs (#1065).** In the iOS app on iPad, a scrolled page's text
   showed through, faded, behind the screen's title: the tab bar floats above
   the navigation bar there, so the bars are taller than the system's soft
   scroll-edge fade. On iPad the app now uses the hard scroll-edge style, an
@@ -147,7 +210,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   time fields now size like the text fields beside them. A Playwright spec
   checks the row at three iPad sizes.
 
-- **Xcode Cloud builds no longer fail before they start.** Every push to
+- **Xcode Cloud builds no longer fail before they start (#1061).** Every push to
   `main` failed at "Could not resolve package dependencies", because the
   Capacitor plugins that `CapApp-SPM` resolves live in `node_modules`, which a
   fresh clone does not have. `frontend/ios/App/ci_scripts/ci_post_clone.sh`
@@ -159,7 +222,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   packages with automatic resolution off and stops without it. Internal, no
   user-facing change.
 - **`npm run mobile:release` no longer builds an unsigned Android bundle
-  without saying so.** It used to print "Unsigned Android release bundle
+  without saying so (#1056).** It used to print "Unsigned Android release bundle
   built" every time, signed or not, and Gradle builds an unsigned AAB without
   failing when any `ANDROID_UPLOAD_*` variable is missing. The build now stops
   before it starts when a signing variable is missing or the keystore file
@@ -172,11 +235,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Security
 
-- **`follow-redirects` 1.16.2 in the frontend.** Clears
+- **`follow-redirects` 1.16.2 in the frontend (#1067).** Clears
   GHSA-mrwp-f3q8-3g9p (high), which covers 1.16.0 through 1.16.1. It comes
   in through `axios`, whose `^1.16.0` range already allows the fix, so only
   the lockfile changes. The advisory was failing the pre-push `audit` step
   for every push.
+
+### Dependencies
+
+- **Four major versions, all green in CI on `main` before this release.**
+  `@sentry/react` 10.76.2 to 11.7.0 in the frontend (#991),
+  `@sentry/aws-serverless` 10.76.2 to 11.6.0 in the backend (#989), and the
+  dev-only `msw` 2.15.0 to 3.0.3 (#992) and `vite-plugin-pwa` 1.3.0 to 2.0.0
+  (#978). `react-dom` and `@types/react-dom` go from 19.2.x to 19.3.0 (#973).
+- **Minor and patch bumps.** `qs` 6.16.2 and `express` 4.22.3 (#1053),
+  `fast-uri` 3.1.9 (#1029), `undici` 8.12.3 (#1031), `serialize-javascript`
+  7.1.4 (#1030), Kotlin 2.4.21 for Android (#998), and the 24-package
+  dev-dependencies group (#1059).
+
+<!-- internal: #995 #1015 -->
 
 ## [0.46.0] - 2026-10-29
 
