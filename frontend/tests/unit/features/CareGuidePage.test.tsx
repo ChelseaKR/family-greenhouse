@@ -123,6 +123,24 @@ describe('CareGuidePage content dates', () => {
   });
 });
 
+describe('CareGuidePage care sources', () => {
+  it('links every care source with the date it was read, on every guide', () => {
+    for (const guide of CARE_GUIDES) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const block = container.querySelector('[data-testid="care-sources"]');
+      expect(block, guide.slug).not.toBeNull();
+      const links = [...block!.querySelectorAll('a')];
+      expect(
+        links.map((a) => a.getAttribute('href')),
+        guide.slug
+      ).toEqual(guide.careSources.map((s) => s.url));
+      const times = [...block!.querySelectorAll('time')].map((t) => t.getAttribute('datetime'));
+      expect(times, guide.slug).toEqual(guide.careSources.map((s) => s.accessed));
+      unmount();
+    }
+  });
+});
+
 /**
  * The pet answer on the page and in its structured data. It comes only from
  * the cited table (careToxicity.ts): a verdict with its ASPCA listing linked

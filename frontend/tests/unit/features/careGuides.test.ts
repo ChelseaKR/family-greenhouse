@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARE_GUIDES, findCareGuide } from '@/features/care/careGuides';
+import { CARE_GUIDES, findCareGuide, type CareGuide } from '@/features/care/careGuides';
 import { careToxicity, careToxicityFrom } from '@/features/care/careToxicity';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 import { petSafetyLevel } from '@/features/petsafe/petSafeSpecies';
@@ -146,10 +146,87 @@ describe('CARE_GUIDES registry', () => {
   });
 
   it('is written in American English', () => {
-    const text = JSON.stringify(CARE_GUIDES);
+    // Source titles are the publishers' own (the RHS writes British English),
+    // so they are left out of the check.
+    const text = JSON.stringify(CARE_GUIDES.map(({ careSources: _cited, ...rest }) => rest));
     expect(text).not.toMatch(
       /\b(colour\w*|ageing|draughts?|draughty|diarrhoea|humour|fertiliser|behaviour|centre|metre|realise)\b/i
     );
+  });
+});
+
+/**
+ * Every care guide's water, light and humidity advice must trace to a page
+ * someone can open. Until 2026-11-03, 28 of 33 guides had no recorded source
+ * (written from "general knowledge" or Perenual, whose free plan does not
+ * allow this use). The pet line is cited separately, from the ASPCA table.
+ */
+const CARE_SOURCE_ORIGIN =
+  /^https:\/\/(?:[a-z0-9-]+\.)*(?:[a-z0-9-]+\.edu|missouribotanicalgarden\.org|mobot\.org|rhs\.org\.uk)\//;
+
+/** Every reason a guide's care citations fall short, as "slug: reason". */
+function careSourceProblems(guides: readonly CareGuide[]): string[] {
+  const problems: string[] = [];
+  for (const g of guides) {
+    if (!Array.isArray(g.careSources) || g.careSources.length === 0) {
+      problems.push(`${g.slug}: cites no care source`);
+      continue;
+    }
+    const urls = g.careSources.map((s) => s.url);
+    if (new Set(urls).size !== urls.length) problems.push(`${g.slug}: lists a source twice`);
+    for (const s of g.careSources) {
+      if (!CARE_SOURCE_ORIGIN.test(s.url)) {
+        problems.push(
+          `${g.slug}: ${s.url} is not an extension, Missouri Botanical Garden or RHS page`
+        );
+      }
+      if (/perenual/i.test(s.url)) problems.push(`${g.slug}: cites Perenual`);
+      if (s.publisher.trim().length < 3 || s.title.trim().length < 3) {
+        problems.push(`${g.slug}: ${s.url} has no publisher or title`);
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s.accessed)) {
+        problems.push(`${g.slug}: ${s.url} has no ISO access date`);
+      } else if (s.accessed > g.reviewed) {
+        // The facts can only have been checked against a page already read.
+        problems.push(`${g.slug}: ${s.url} was read after the guide's review date`);
+      }
+    }
+  }
+  return problems;
+}
+
+describe('care sources', () => {
+  it('every published guide cites at least one extension, garden or RHS page', () => {
+    expect(careSourceProblems(CARE_GUIDES)).toEqual([]);
+  });
+
+  it('dates no source reading in the future', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const g of CARE_GUIDES) {
+      for (const s of g.careSources) {
+        expect(s.accessed <= today, `${g.slug}: ${s.url}`).toBe(true);
+      }
+    }
+  });
+
+  it('negative control: a guide with its sources removed fails the check', () => {
+    const [first, ...rest] = CARE_GUIDES;
+    const stripped = { ...first!, careSources: [] };
+    expect(careSourceProblems([stripped, ...rest])).toEqual([
+      `${first!.slug}: cites no care source`,
+    ]);
+  });
+
+  it('negative control: a source on another site fails the check', () => {
+    const g = CARE_GUIDES[0]!;
+    const off = {
+      ...g,
+      careSources: [{ ...g.careSources[0]!, url: 'https://perenual.com/plant-species-database' }],
+    };
+    expect(careSourceProblems([off])).toEqual([
+      `${g.slug}: https://perenual.com/plant-species-database is not an extension, Missouri Botanical Garden or RHS page`,
+      `${g.slug}: cites Perenual`,
+    ]);
   });
 });
 
@@ -221,10 +298,18 @@ describe('CARE_GUIDES content dates', () => {
   it('still records the drift the split was introduced to fix', () => {
     // If this ever drops to zero, either every guide was genuinely re-reviewed
     // after its last edit — or somebody "tidied" `updated` back onto
-    // `reviewed` and re-created the bug. Six guides are known to have been
-    // edited (#649, #651) long after their last review.
+    // `reviewed` and re-created the bug. The six guides edited by #649 and
+    // #651 were re-reviewed against cited sources on 2026-11-03. The five
+    // guides from #1022 were reviewed on 2026-10-22 and then gained their
+    // sources block on 2026-11-03 without a new review, so they carry the drift now.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
-    expect(drifted.length).toBeGreaterThanOrEqual(6);
+    expect(drifted.map((g) => g.slug).sort()).toEqual([
+      'begonia',
+      'blue-echeveria',
+      'burros-tail',
+      'haworthia',
+      'lily',
+    ]);
   });
 });
 
@@ -406,7 +491,8 @@ describe('third-batch pet-safety guides', () => {
       expect(g.metaDescription.length, g.slug).toBeGreaterThanOrEqual(70);
       expect(g.metaDescription.length, g.slug).toBeLessThan(155);
       expect(g.reviewed, g.slug).toBe('2026-10-22');
-      expect(g.updated, g.slug).toBe('2026-10-22');
+      // The sources block (careSources) was added to each on 2026-11-03.
+      expect(g.updated, g.slug).toBe('2026-11-03');
     }
     const titles = CARE_GUIDES.map((g) => g.metaTitle);
     const descriptions = CARE_GUIDES.map((g) => g.metaDescription);

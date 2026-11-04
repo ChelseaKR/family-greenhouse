@@ -114,6 +114,26 @@ export interface CareGuide {
    * never disagree with its source; careGuides.test rejects one here.
    */
   faqs: { q: string; a: string }[];
+  /**
+   * Where the guide's water, light and humidity advice comes from: a US
+   * university extension page, the Missouri Botanical Garden Plant Finder or
+   * the RHS. Rendered under "Where this care advice comes from" on the page.
+   * Every published guide needs at least one (careGuides.test), so no care
+   * fact rests on an unrecorded source. The pet line is cited separately, from
+   * the ASPCA table (`careToxicity.ts`), and is not listed here.
+   */
+  careSources: CareSource[];
+}
+
+/** One page a guide's care advice was checked against. */
+export interface CareSource {
+  /** The organization that publishes the page, as it names itself. */
+  publisher: string;
+  /** The page's own title. */
+  title: string;
+  url: string;
+  /** ISO date the page was read and the guide compared with it. */
+  accessed: string;
 }
 
 export const CARE_GUIDES: CareGuide[] = [
@@ -123,32 +143,33 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Epipremnum aureum',
     alsoKnownAs: ['Devil’s Ivy', 'Golden Pothos', 'Money Plant'],
     related: ['heartleaf-philodendron', 'hoya', 'english-ivy'],
-    metaTitle: 'How Often to Water a Pothos: Every 7–10 Days',
+    metaTitle: 'How Often to Water a Pothos: When the Soil Is Dry',
     heading: 'Pothos care: how often to water it',
     metaDescription:
-      'Water a pothos every 7–10 days, when the top inch of soil is dry, and about every two weeks in winter or low light. Plus why the leaves go yellow.',
-    reviewed: '2026-06-08',
-    updated: '2026-10-29',
+      'Water a pothos when the soil has dried out, not on a fixed day count. It wants bright, indirect light and no direct sun. Plus why the leaves go yellow.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'Pothos is the plant people mean when they say “I can’t keep anything alive, except this one.” It’s forgiving, fast-growing, and tells you clearly when something’s wrong — if you know what to look for.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top inch of soil is dry',
-      light: 'Bright, indirect light. Tolerates low light (just grows slower)',
+      water: 'When the soil has dried out; it is better kept too dry than too wet',
+      light: 'Bright, indirect light; survives low light, but the variegation fades',
       difficulty: 'Very easy',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
-      humidity: 'Average household humidity is fine',
+      humidity:
+        'Ordinary room air is fine; the sources differ, and one suggests a pebble tray for very dry air',
     },
     sections: {
       watering: [
-        'Water a pothos roughly every 7–10 days — but the calendar is a starting point, not the rule. The real signal is the soil: stick a finger in, and if the top inch is dry, water it thoroughly until it drains out the bottom. If it’s still damp, wait.',
-        'In winter, or in a low-light spot, it drinks less — stretch to every two weeks. In a bright window in summer, it may want water every 5–6 days. A pothos would rather be a touch too dry than too wet, so when in doubt, wait a day.',
+        'Water a pothos when the soil has dried out, and skip the calendar. Push a finger into the pot: dry means water it, still damp means wait. The extension sources give no number of days, because how fast the pot dries depends on your room, the light and the season.',
+        'If you are going to get it wrong, get it wrong on the dry side. Penn State Extension says a pothos is better kept too dry than too wet: too little water makes the leaves droop for a while, and too much leads to root rot. A pot with a drainage hole and a mix that drains well does most of the work.',
       ],
       light: [
-        'Bright, indirect light is the sweet spot — near a window, but out of direct midday sun, which scorches the leaves. The good news is pothos tolerates low light better than almost anything; it just grows slower and the variegation (the cream-and-green marbling) fades toward plain green.',
-        'If the vines get long and sparse with big gaps between leaves, that’s “leggy” — it’s reaching for light. Move it brighter and the new growth tightens up.',
+        'Bright, indirect light is the spot to aim for: near a window, but out of direct sun. Penn State Extension warns that direct sun turns the leaves yellow. Pothos does survive low light for a long time, which is why it ends up on dim shelves, but there the cream-and-green marbling fades toward plain green.',
+        'The sources split on humidity. North Carolina State Extension suggests a humidifier or a tray of wet pebbles to raise it, and Illinois Extension lists low humidity among its conditions. In practice, ordinary room air works, and a pebble tray is worth trying only if the air in your home is very dry.',
       ],
       problems: [
-        'Yellow leaves are almost always overwatering. The instinct when a plant looks sad is to give it more water; with pothos, that’s usually the thing that’s hurting it. Let it dry out properly and the yellowing stops.',
+        'Yellow leaves have two usual suspects. One is too much water: the instinct when a plant looks sad is to give it more, and with pothos that can be the thing hurting it, so let the soil dry before the next drink. The other is direct sun, which Penn State Extension says yellows the leaves.',
         'Brown, crispy tips point the other way — underwatering, or very dry air. Crispy edges on an otherwise green leaf means it got too thirsty at some point.',
         'Limp, mushy stems at the soil line are root rot, the one genuinely dangerous problem, and it comes from sitting in soggy soil. Pothos forgives a missed watering; it does not forgive a pot with no drainage hole.',
       ],
@@ -168,19 +189,39 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a pothos?',
-        a: 'About every 7–10 days, when the top inch of soil is dry. Less in winter or low light (every two weeks); more in a bright window in summer. When unsure, wait a day — it prefers slightly dry over soggy.',
+        a: 'When the soil has dried out, rather than on a set number of days. The extension sources give no interval. Check with a finger, water when it is dry, and when unsure, wait: it is better kept too dry than too wet.',
       },
       {
         q: 'Why are my pothos leaves turning yellow?',
-        a: 'Almost always overwatering. Let the soil dry out properly between waterings and make sure the pot drains. Yellowing from underwatering is rarer and usually comes with crispy brown edges.',
+        a: 'Two common causes. Too much water, especially in a pot that does not drain, leads to root rot, so let the soil dry between waterings. Direct sun also yellows the leaves, according to Penn State Extension, so move it out of any direct beam.',
       },
       {
         q: 'Can pothos survive in low light?',
-        a: 'Yes, better than most houseplants. It just grows more slowly and the variegation fades toward solid green. Bright indirect light keeps it fuller and more colorful.',
+        a: 'Yes. It survives low light for long periods, though the variegation fades toward solid green. Bright, indirect light keeps it more colorful.',
       },
       {
         q: 'How do you propagate pothos?',
         a: 'Cut a piece of vine just below a node, put the node in water, and pot it once the roots are an inch or two long, usually after two to four weeks. The node is essential: a cutting without one will not root.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Epipremnum aureum (Pothos)',
+        url: 'https://plants.ces.ncsu.edu/plants/epipremnum-aureum/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Penn State Extension',
+        title: 'Pothos as a Houseplant',
+        url: 'https://extension.psu.edu/pothos-as-a-houseplant',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Pothos',
+        url: 'https://extension.illinois.edu/houseplants/pothos',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -190,29 +231,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Dracaena trifasciata',
     alsoKnownAs: ['Sansevieria', 'Mother-in-Law’s Tongue'],
     related: ['zz-plant', 'aloe-vera', 'jade-plant'],
-    metaTitle: 'How to Care for a Snake Plant: Water Every 2–3 Weeks',
+    metaTitle: 'How to Care for a Snake Plant: Water Once the Soil Is Dry',
     heading: 'How to care for a snake plant',
     metaDescription:
-      'Water a snake plant every 2–3 weeks, only once the soil is completely dry. It takes low to bright, indirect light; mushy leaves mean too much water.',
-    reviewed: '2026-06-08',
-    updated: '2026-10-29',
+      'Water a snake plant only once the soil has dried, and very little in winter. It takes anything from low light to some sun; overwatering is what kills it.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
-      water: 'Every 2–3 weeks; let the soil dry out completely first',
-      light: 'Anything from low light to bright, indirect light',
+      water: 'Once the soil has dried out; very little in winter',
+      light: 'Anything from low light to a few hours of direct sun',
       difficulty: 'Very easy — famously hard to kill',
       toxicity: 'Mildly toxic to cats and dogs if eaten',
-      humidity: 'Dry household air is perfectly fine',
+      humidity: 'Dry household air is fine',
     },
     sections: {
       watering: [
-        'Water a snake plant every 2–3 weeks, and only after the soil has dried out completely — not “mostly,” completely, all the way to the bottom of the pot. These are succulents; they store water in those stiff upright leaves and genuinely prefer drought to damp.',
-        'In winter, back off to roughly once a month. The single most useful habit you can build with a snake plant is doing nothing — if you’re not sure whether it needs water, it almost certainly doesn’t. An [aloe vera](/care/aloe-vera) on the same windowsill wants the same dry-out between drinks, so the two can share a schedule.',
+        'Water a snake plant once the soil has dried out. Illinois Extension says to let it dry completely between waterings, and North Carolina State Extension says to let it dry from spring to autumn. Overwatering is the main reason these plants fail, and the roots rot in soil that stays wet, so a pot with a drainage hole matters.',
+        'In winter, water far less. North Carolina State Extension puts it at once every one to two months. If you are not sure whether it needs water, it almost certainly does not. An [aloe vera](/care/aloe-vera) on the same windowsill also wants to dry out between drinks.',
       ],
       light: [
-        'Snake plants are unbothered by light. They’ll handle a dim hallway corner and a bright living-room window equally, which is why they end up in offices and bathrooms where nothing else survives. Bright indirect light makes them grow faster; low light just slows them down.',
-        'The only thing to avoid is harsh, direct, all-day sun through glass, which can bleach the leaves. Other than that, put it where you want it.',
+        'Snake plants are unbothered by light. They tolerate very low light, which is why they end up in offices and hallways, and Illinois Extension says they grow in anything from a dim interior to full sun. North Carolina State Extension suggests a spot with two to six hours of direct sun.',
+        'Low humidity and cool rooms are fine too. North Carolina State Extension says it tolerates dry air and temperatures around 50°F.',
       ],
       problems: [
         'Soft, mushy, yellowing leaves at the base mean root rot — and root rot means too much water. This is the one real way to kill a snake plant. If you catch it early, stop watering, let it dry out hard, and it often recovers.',
@@ -235,19 +276,33 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a snake plant?',
-        a: 'Every 2–3 weeks, and only once the soil is completely dry. Drop to about once a month in winter. If you’re unsure, wait — overwatering is the main way snake plants die.',
+        a: 'Once the soil has dried out, and as little as once every one to two months in winter, according to North Carolina State Extension. The sources give no fixed summer interval. If you are unsure, wait: overwatering is the main way snake plants die.',
       },
       {
         q: 'Why is my snake plant going soft and mushy?',
-        a: 'That’s root rot from too much water. Stop watering, let the soil dry out fully, and remove any mushy leaves. Make sure the pot drains and isn’t oversized.',
+        a: 'The usual cause is root rot from too much water. Stop watering, let the soil dry out fully, and remove any mushy leaves. Make sure the pot drains.',
       },
       {
         q: 'Can a snake plant live in low light?',
-        a: 'Yes — it’s one of the few plants that genuinely tolerates a dim corner. It grows faster in bright indirect light but survives low light comfortably.',
+        a: 'Yes. It tolerates very low light, and it also handles bright windows and some direct sun.',
       },
       {
         q: 'How long do snake plants live?',
         a: 'A long time. Snake plants are slow and tough, and many are kept for a decade or more. Because you can divide the rhizome when you repot, the same plant can keep going, and multiplying, far longer than that.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Dracaena trifasciata (Snake Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/dracaena-trifasciata/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Mother-in-Law Tongue',
+        url: 'https://extension.illinois.edu/houseplants/mother-law-tongue',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -260,26 +315,26 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'How Often to Water a Monstera + Why No Leaf Holes',
     heading: 'Monstera care: how often to water it',
     metaDescription:
-      'Water a monstera every 1–2 weeks, when the top 1–2 inches of soil are dry. The light it needs to grow leaf holes, and why leaves yellow or brown.',
-    reviewed: '2026-06-08',
-    updated: '2026-10-29',
+      'Water a monstera thoroughly, then let the top 1–2 inches of soil dry. The light it needs to grow leaf holes, and why leaves turn yellow or brown.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
-      water: 'Every 1–2 weeks, when the top 1–2 inches of soil are dry',
-      light: 'Bright, indirect light — never harsh direct sun',
+      water: 'Thoroughly, once the top 1–2 inches of soil are dry',
+      light: 'Bright light near a window; the sources differ on direct sun',
       difficulty: 'Easy to moderate',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalates)',
-      humidity: 'Likes higher humidity but copes with average rooms',
+      humidity: 'Likes medium to high humidity; tolerates average rooms',
     },
     sections: {
       watering: [
-        'Water a monstera every 1–2 weeks, when the top inch or two of soil has dried out. Like most tropicals it wants a real drink — water until it runs from the drainage holes — and then a dry-down period before the next one. Soggy, never-quite-dry soil is what kills them.',
-        'The interval drifts with the seasons: closer to weekly in bright, warm summer months, closer to every two weeks in winter. Let the soil, not the date, make the call. A [bird of paradise](/care/bird-of-paradise) follows a similar summer-to-winter pattern, with a bigger gap between the two.',
+        'Give a monstera a thorough drink, then wait until the top inch or two of soil has dried before the next one. That is Penn State Extension’s rule. Soil that never dries leads to root rot, so the pot must drain. There is no fixed interval in the sources, so let the soil make the call.',
+        'Water less in winter, when it grows more slowly. A [bird of paradise](/care/bird-of-paradise) also wants less water in winter than in summer.',
       ],
       light: [
-        'Bright, indirect light is non-negotiable if you want the famous holes. Those splits — “fenestrations” — only develop when a monstera gets enough light and matures; a plant in a dim corner stays small with plain, solid, heart-shaped leaves and people wonder what they did wrong. The answer is almost always: more light.',
-        'Keep it out of harsh direct sun through glass, which scorches the leaves. A few feet back from a bright window, or beside an east-facing one, is ideal.',
+        'Light is what makes the famous holes. University of Wisconsin–Madison Extension says the leaves will not develop their perforations when the light is too low, and the splits come as the plant matures. In a dim spot it also gets leggy, with long bare stems.',
+        'The sources differ on sun. Penn State Extension says bright light near a sunny window but not direct sun. University of Wisconsin–Madison Extension says bright light in summer and direct sun in winter. A spot near a bright window, out of strong summer sun, fits both.',
       ],
       problems: [
         'Yellow leaves usually mean overwatering — the same story as most houseplants. Check that the soil is drying between waterings and that the pot actually drains.',
@@ -302,15 +357,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a monstera?',
-        a: 'Every 1–2 weeks, when the top 1–2 inches of soil are dry. Lean weekly in bright summer months and every two weeks in winter. Always let it drain — it hates sitting in water.',
+        a: 'Water thoroughly, then wait until the top 1–2 inches of soil are dry, and water less in winter. The extension sources give no fixed number of days. Always let it drain: wet soil causes root rot.',
       },
       {
         q: 'Why doesn’t my monstera have holes in its leaves?',
-        a: 'Almost always not enough light, or the plant is still young. The famous splits (fenestrations) develop as a monstera matures in bright, indirect light. Move it brighter and give it time.',
+        a: 'Usually not enough light, or the plant is still young. The splits develop as a monstera matures in bright light. Move it brighter and give it time.',
       },
       {
         q: 'Why are my monstera’s leaves turning yellow?',
-        a: 'Usually overwatering. Let the top inch or two of soil dry between waterings and confirm the pot drains. Brown crispy edges, by contrast, mean dry air or underwatering.',
+        a: 'The sources do not tie yellow leaves to one cause, so check the basics: soil that stays wet and a pot that does not drain lead to root rot. Brown edges are different: University of Wisconsin–Madison Extension links them to humidity that is too low.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Penn State Extension',
+        title: 'Monstera as a Houseplant',
+        url: 'https://extension.psu.edu/monstera-as-a-houseplant',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Swiss-Cheese Plant, Monstera deliciosa',
+        url: 'https://hort.extension.wisc.edu/articles/monstera-deliciosa/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -323,26 +392,26 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Spider Plant Care: How Often to Water It + Brown Tips',
     heading: 'Spider plant care: how often to water it',
     metaDescription:
-      'Water a spider plant about once a week, when the top inch of soil is dry, and every 10–14 days in winter. Why the leaf tips go brown, and the babies.',
-    reviewed: '2026-06-12',
-    updated: '2026-10-29',
+      'Water a spider plant when the soil has dried slightly, and less in winter. It wants medium to bright light. Why the leaf tips go brown, and the babies.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
-      'Water a spider plant about once a week, when the top inch of soil is dry. It forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
+      'Water a spider plant thoroughly once the soil has dried slightly. It forgives missed waterings, shrugs off ordinary light, and hands you free copies of itself. Its one famous complaint, brown leaf tips, is usually about what’s in your tap water, not about your skill.',
     quickFacts: {
-      water: 'About once a week, when the top inch of soil is dry; less in winter',
-      light: 'Bright, indirect light is ideal; tolerates moderate light',
+      water: 'Water thoroughly once the soil has dried slightly; less in winter',
+      light: 'Medium to bright, indirect light; avoid midday sun',
       difficulty: 'Very easy',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA), though cats love chewing it',
       humidity: 'Average household humidity is fine; very dry air browns the tips',
     },
     sections: {
       watering: [
-        'Water a spider plant about once a week, when the top inch of soil has dried out. It stores water in thick, tuberous roots, so a missed week is a non-event: the leaves go a little flat and pale, then stand back up within hours of a drink, no grudge held. When you do water, do it properly, until it runs from the drainage holes.',
-        'In winter, stretch the interval to every 10–14 days. The real danger runs the other way: those water-storing roots rot in soil that never dries, and a rotted spider plant is much harder to save than a thirsty one. If you’re not sure it needs water, wait a day or two.',
+        'Water a spider plant thoroughly, then let the soil dry slightly before the next drink. University of Wisconsin–Madison Extension and Clemson Cooperative Extension both give that rule, and neither gives a number of days. Its thick roots store water, so it survives an uneven schedule.',
+        'Water less in winter. The real danger is soil that stays wet: overwatering or a slow-draining mix leads to root rot. If you are not sure it needs water, wait a day or two.',
       ],
       light: [
-        'Bright, indirect light keeps a spider plant full, crisply striped, and making babies. It also copes fine with a moderately lit room a few feet from the window; it just grows slower there, and the variegated kinds lose some of their cream stripe.',
-        'What it can’t take is harsh direct sun through glass, which bleaches the leaves and scorches the tips. An east window, or anywhere bright without a direct beam, is the sweet spot. There’s a reason this is the classic hanging-basket plant.',
+        'Medium to bright light keeps a spider plant growing well indoors all year. Clemson Cooperative Extension says it does best in bright, indirect light, and North Carolina State Extension says medium light and that it can tolerate deep shade.',
+        'Keep it out of strong direct sun. Clemson says some direct light is fine, but midday sun may scorch the leaves. There’s a reason this is the classic hanging-basket plant.',
       ],
       problems: [
         'Brown leaf tips are the spider plant complaint, and the usual culprits are the fluoride and chlorine in tap water, or very dry air. Switching to distilled, filtered, or rain water fixes it for most people. Existing brown tips never turn green again; snip them off at an angle and the plant looks fine.',
@@ -365,11 +434,31 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a spider plant?',
-        a: 'About once a week, when the top inch of soil is dry, stretching to every 10–14 days in winter. Its tuberous roots store water, so it forgives a late watering far better than a constantly wet pot.',
+        a: 'When the soil has dried slightly, with a thorough watering each time, and less in winter. The extension sources give no fixed number of days. Its thick roots store water, so it forgives a late watering far better than a constantly wet pot.',
       },
       {
         q: 'Why are my spider plant’s leaf tips turning brown?',
-        a: 'Usually fluoride and chlorine in tap water, or very dry air. Switch to distilled, filtered, or rain water and new growth comes in clean. Snip existing brown tips off at an angle; they don’t recover.',
+        a: 'Several causes, according to the extension sources: fluoride or chlorine in tap water, salts or too much fertilizer, low humidity, and soil that got too dry. University of Wisconsin–Madison Extension suggests distilled water or rainwater. Existing brown tips do not recover, so snip them off.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Spider plant, Chlorophytum comosum',
+        url: 'https://hort.extension.wisc.edu/articles/spider-plant-chlorophytum-comosum/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Spider Plant',
+        url: 'https://hgic.clemson.edu/factsheet/spider-plant/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Chlorophytum comosum (Spider Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/chlorophytum-comosum/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -379,29 +468,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Spathiphyllum',
     alsoKnownAs: ['Spath', 'Closet Plant', 'White Sail Plant'],
     related: ['anthurium', 'chinese-evergreen', 'lily'],
-    metaTitle: 'Peace Lily Care: Water About Once a Week + Is It Toxic?',
+    metaTitle: 'Peace Lily Care: When to Water It + Is It Toxic?',
     heading: 'Peace lily care: how often to water it',
     metaDescription:
-      'Water a peace lily about once a week, when the top inch of soil is dry; it wilts to warn you. Toxic to cats and dogs if chewed. Why the leaves brown.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-29',
+      'Water a peace lily when the soil has dried slightly; it wilts to warn you. Toxic to cats and dogs if chewed. Why the leaves brown, and why it won’t flower.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The peace lily is the rare plant that tells you out loud when it’s thirsty — it wilts dramatically, then springs back within hours of a drink. That theatrical droop makes it one of the easiest plants to read, and one of the most over-watered when people panic at the first sad leaf.',
     quickFacts: {
-      water: 'About once a week, when the top inch of soil is dry; it wilts to warn you',
-      light: 'Medium to bright, indirect light; tolerates low light but flowers less',
+      water: 'Keep it moist, not soggy, and let it dry slightly between waterings',
+      light: 'Bright, indirect light for flowers; tolerates low light; no direct sun',
       difficulty: 'Easy',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
-      humidity: 'Likes higher humidity; brown tips in very dry rooms',
+      humidity: 'Average rooms are fine; very dry air can brown the leaf tips',
     },
     sections: {
       watering: [
-        'Water a peace lily about once a week, when the top inch of soil has dried. Its party trick is the wilt: when it’s genuinely thirsty the whole plant droops and looks half-dead, then recovers within a few hours of watering. That makes it easy to read — but don’t use the droop as your only signal, because repeated dramatic wilts stress the plant over time.',
-        'It drinks less in winter and in lower light, so check the soil rather than counting days. The plant prefers steady, lightly moist soil to a hard drought-then-flood cycle, but it will not forgive sitting in a saucer of water — that’s root rot, the one thing it doesn’t bounce back from.',
+        'Keep a peace lily moist but never soggy, and let it dry slightly between waterings. That is the advice of Clemson Cooperative Extension and North Carolina State Extension, and neither gives a number of days. If the soil dries out too far, the plant wilts and the leaf edges yellow, so treat the droop as a sign you waited too long, not as your schedule.',
+        'Never leave the pot standing in a saucer of water: Clemson says that leads to root rot. North Carolina State Extension adds that watering from below works well for this plant.',
       ],
       light: [
-        'Medium to bright, indirect light is the sweet spot. The peace lily earns its reputation as a low-light plant because it survives a dim corner, but “survives” and “flowers” are different things: in low light it stays green and healthy but rarely produces the white blooms people buy it for.',
-        'Keep it out of direct sun, which scorches the broad leaves into brown patches. A few feet back from a bright window, or beside a north or east one, gives you the best shot at flowers without burning the foliage. Despite the name it is not a true lily; for the plant that is, see the [lily](/care/lily) guide.',
+        'Clemson Cooperative Extension says a peace lily tolerates low light but grows best in bright, indirect light, and that young plants or plants in too little light usually do not flower. North Carolina State Extension says it prefers partial to deep shade. Either way, a dim corner keeps it alive but may not bring the white blooms people buy it for.',
+        'Keep it out of direct sun, which scorches the broad leaves. Brown leaf tips can come from too much sun, too little water or low humidity. Despite the name it is not a true lily; for the plant that is, see the [lily](/care/lily) guide.',
       ],
       problems: [
         'Drooping leaves are usually just thirst — water it and watch it recover. If it droops even when the soil is wet, that’s the opposite problem: overwatering and the start of root rot. Check the soil before you reach for the watering can, because the same wilt has two opposite causes.',
@@ -424,15 +513,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a peace lily?',
-        a: 'About once a week, when the top inch of soil is dry — and it’ll wilt dramatically to tell you when it’s thirsty, recovering within hours of a drink. Less in winter and low light. Don’t let it sit in standing water, which causes root rot.',
+        a: 'When the soil has dried slightly. Keep it moist but not soggy, and do not let it sit in standing water, which causes root rot. It wilts when it gets too dry. The extension sources give no fixed number of days.',
       },
       {
         q: 'Why is my peace lily drooping?',
-        a: 'Usually thirst — water it and it perks up within hours. But if it droops while the soil is still wet, that’s overwatering and early root rot. Always check the soil first, because the same droop has two opposite causes.',
+        a: 'Most often thirst: the extension sources say it wilts when the soil dries out too much. If it droops while the soil is still wet, check that the pot drains, because standing water rots the roots.',
       },
       {
         q: 'Why won’t my peace lily flower?',
-        a: 'Almost always not enough light. Peace lilies survive low light but only bloom in medium to bright, indirect light. Move it brighter (out of direct sun) and the white flowers usually follow.',
+        a: 'Usually too little light, or a plant under a year old, according to Clemson Cooperative Extension. Move it to bright, indirect light, out of direct sun, and give it time.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Peace Lily',
+        url: 'https://hgic.clemson.edu/factsheet/peace-lily/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Spathiphyllum (Peace Lily)',
+        url: 'https://plants.ces.ncsu.edu/plants/spathiphyllum/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -442,29 +545,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Philodendron hederaceum',
     alsoKnownAs: ['Sweetheart Plant', 'Philodendron', 'Philodendron scandens'],
     related: ['pothos', 'monstera', 'hoya'],
-    metaTitle: 'Heartleaf Philodendron Care: Water Every 7–10 Days',
+    metaTitle: 'Heartleaf Philodendron Care: Keep It Lightly Moist',
     heading: 'Heartleaf philodendron care: how often to water it',
     metaDescription:
-      'Water a heartleaf philodendron every 7–10 days, when the top inch of soil is dry. It copes with lower light, and it’s toxic to cats and dogs if chewed.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-30',
+      'Keep a heartleaf philodendron’s soil lightly moist, never soggy, and water less in winter. It copes with low light, and it’s toxic to cats and dogs if chewed.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The heartleaf philodendron is the plant people confuse with pothos, and for good reason — same trailing habit, same near-indestructible temperament, same forgiving nature. It’s one of the genuinely easy ones, and a great vine for a beginner who wants something prettier than they had to work for.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top inch of soil is dry',
-      light: 'Bright, indirect light; tolerates lower light (grows slower)',
+      water: 'Keep the soil lightly and evenly moist, never soggy; less in winter',
+      light: 'Bright, indirect light; tolerates very low light',
       difficulty: 'Very easy',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals)',
-      humidity: 'Average household humidity is fine; enjoys a little more',
+      humidity: 'Prefers more humidity, but tolerates the dry air of most homes',
     },
     sections: {
       watering: [
-        'Water a heartleaf philodendron every 7–10 days, when the top inch of soil has dried. Like pothos, it would rather be a touch dry than soggy, so the soil — not the calendar — makes the call: finger in, water thoroughly if the top inch is dry, wait if it’s still damp.',
-        'It drinks less in winter and in lower light; stretch toward every two weeks then. The one reliable way to kill it is a pot that never drains, so when you’re unsure, give it another day rather than another splash.',
+        'Keep a heartleaf philodendron’s soil lightly moist. Clemson Cooperative Extension says evenly moist but not soggy, and North Carolina State Extension says slightly moist. That makes it thirstier than its look-alike, the pothos, which the extension sources say to let dry between waterings. Neither source gives a number of days.',
+        'Slow down in winter. The one reliable way to kill it is soggy soil: a mix that drains slowly, or a pot left standing in water, leads to root rot.',
       ],
       light: [
-        'Bright, indirect light keeps it full and fast-growing, with leaves close together along the vine. It tolerates lower light better than most plants — that’s why it ends up on shelves and in bathrooms — but it grows slower and leggier there.',
-        'Keep it out of harsh direct sun, which scorches the thin leaves. If the vine gets sparse with long gaps between leaves, that’s a light signal: move it brighter and the new growth tightens up.',
+        'Bright, indirect light suits it best, and it should stay out of direct sun. It is also one of the plants the extension sources single out for tolerating very low light, which is why it ends up on shelves and in bathrooms.',
+        'Clemson Cooperative Extension says high humidity is ideal but that philodendrons tolerate the low humidity of most homes. North Carolina State Extension says it appreciates misting.',
       ],
       problems: [
         'Yellow leaves are usually overwatering, the same story as most trailing plants. Let the soil dry between waterings and confirm the pot drains. A single old leaf yellowing low on the vine is normal aging, not a problem.',
@@ -487,15 +590,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a heartleaf philodendron?',
-        a: 'Every 7–10 days, when the top inch of soil is dry. Less in winter or lower light (toward every two weeks). It prefers slightly dry over soggy, so when in doubt, wait a day and make sure the pot drains.',
+        a: 'Often enough to keep the soil lightly and evenly moist, never soggy, and less in winter. The extension sources give no fixed number of days. Make sure the pot drains.',
       },
       {
         q: 'What’s the difference between a philodendron and a pothos?',
-        a: 'They look alike and are cared for identically. Heartleaf philodendron leaves are thinner, softer, and a deeper matte green with a more pointed heart shape; pothos leaves are thicker, glossier, and often variegated. For watering and light, treat them the same, so the [pothos care guide](/care/pothos) applies here too.',
+        a: 'They look alike, and their light needs are the same: bright, indirect light, with tolerance for low light. Watering differs. The extension sources say to keep a philodendron lightly moist and to let a pothos dry between waterings. Heartleaf philodendron leaves are thinner, softer, and a deeper matte green with a more pointed heart shape; pothos leaves are thicker, glossier, and often variegated. The [pothos care guide](/care/pothos) covers the other plant.',
       },
       {
         q: 'Why is my philodendron getting leggy?',
-        a: 'Long, bare vines with big gaps between leaves mean it’s reaching for light. Move it somewhere brighter (still indirect) and pinch the growing tips to encourage it to branch and fill out.',
+        a: 'Long, bare vines with big gaps between leaves are a common sign of too little light. Move it somewhere brighter, still out of direct sun, and pinch the growing tips to encourage it to branch and fill out.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Philodendron hederaceum (Heartleaf Philodendron)',
+        url: 'https://plants.ces.ncsu.edu/plants/philodendron-hederaceum/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Philodendron',
+        url: 'https://hgic.clemson.edu/factsheet/philodendron-pothos-monstera/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -505,29 +622,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Zamioculcas zamiifolia',
     alsoKnownAs: ['Zanzibar Gem', 'Zamioculcas', 'Zuzu Plant'],
     related: ['snake-plant', 'chinese-evergreen', 'parlor-palm'],
-    metaTitle: 'How Often to Water a ZZ Plant: Every 2–3 Weeks',
+    metaTitle: 'How Often to Water a ZZ Plant: About Every 2 Weeks',
     heading: 'ZZ plant care: how often to water it',
     metaDescription:
-      'Water a ZZ plant every 2–3 weeks, once the soil is completely dry, and about once a month in winter. Plus the light it takes and why stems go mushy.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-29',
+      'Water a ZZ plant about every 2 weeks in summer, once the soil is dry, and about once a month in winter. Plus the light it takes and why stems go mushy.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {
-      water: 'Every 2–3 weeks; let the soil dry out completely first',
-      light: 'Low to bright, indirect light — tolerates almost anything',
+      water: 'About every 2 weeks in summer, once dry; monthly in winter',
+      light: 'Low to bright, indirect light; no direct sun',
       difficulty: 'Very easy — famously hard to kill',
       toxicity: 'Unknown: the ASPCA plant list has no entry for the ZZ plant',
-      humidity: 'Dry household air is perfectly fine',
+      humidity: 'Grows in ordinary room air',
     },
     sections: {
       watering: [
-        'Water a ZZ plant every 2–3 weeks, and only once the soil has dried out completely — all the way down, not just the surface. Those potato-like rhizomes under the soil are water tanks, so the plant runs happily on its reserves between drinks. Topping up a full tank is how you rot it.',
-        'In winter, drop to roughly once a month. The single most useful habit with a ZZ is doing nothing: if you’re not sure whether it needs water, it almost certainly doesn’t. When in genuine doubt, wait another week.',
+        'Water a ZZ plant thoroughly, then let the soil dry before the next drink. North Carolina State Extension says twice a month in summer, and only if the soil has dried out completely. Iowa State University Extension says a thorough watering every 7 to 14 days is usually fine. Those potato-like rhizomes under the soil store water, so the plant copes with drought far better than with wet feet.',
+        'In winter, when it is not actively growing, North Carolina State Extension says to water only once a month. The single most useful habit with a ZZ is restraint: if the soil is still damp, it does not need water.',
       ],
       light: [
-        'ZZ plants tolerate a huge range of light, from a dim office corner to a bright indirect window. That adaptability is why they end up in lobbies and windowless bathrooms where nothing else survives. Brighter (indirect) light just makes them grow faster and fuller.',
-        'The one thing to avoid is harsh, direct, all-day sun through glass, which can scorch the glossy leaves. Other than that, put it where you want it and it’ll cope.',
+        'ZZ plants tolerate very low light, even rooms lit only by fluorescent bulbs, which is why they end up in lobbies and offices. Both extension sources say they do best in bright, indirect light.',
+        'Avoid direct sun. North Carolina State Extension says it can scald and brown the leaves, and Iowa State University Extension warns about direct afternoon sun.',
       ],
       problems: [
         'Yellowing stems and leaves, especially with a soft mushy base, mean overwatering and rhizome rot — the one genuine way to kill a ZZ. Stop watering, let it dry out hard, and check the rhizomes are firm rather than soft. Caught early, it often recovers.',
@@ -550,7 +667,7 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a ZZ plant?',
-        a: 'Every 2–3 weeks, and only once the soil is completely dry — drop to about once a month in winter. Its rhizomes store water, so it tolerates drought far better than overwatering. When unsure, wait; overwatering is the main way ZZ plants die.',
+        a: 'About every two weeks in summer, and only once the soil has dried; about once a month in winter. North Carolina State Extension gives twice a month in summer, and Iowa State University Extension says every 7 to 14 days is usually fine. Its rhizomes store water, so when unsure, wait.',
       },
       {
         q: 'Why is my ZZ plant turning yellow?',
@@ -558,7 +675,21 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Can a ZZ plant survive in low light?',
-        a: 'Yes — it’s one of the most light-tolerant houseplants there is, surviving dim offices and windowless rooms. It grows faster and fuller in bright, indirect light, but low light just slows it down rather than harming it.',
+        a: 'Yes. It grows in very low light, even under fluorescent lights alone, though both extension sources say it does best in bright, indirect light.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Zamioculcas zamiifolia (ZZ Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/zamioculcas-zamiifolia/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Iowa State University Extension',
+        title: 'The ZZ Plant',
+        url: 'https://yardandgarden.extension.iastate.edu/article/2009/2-4/Zamioculcas.html',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -568,30 +699,30 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Aloe vera',
     alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
     related: ['jade-plant', 'snake-plant', 'haworthia'],
-    metaTitle: 'How Often to Water Aloe Vera: Every 2–3 Weeks',
+    metaTitle: 'How Often to Water Aloe Vera: When the Top Inch Is Dry',
     heading: 'Aloe vera care: how often to water it',
     metaDescription:
-      'Water aloe vera every 2–3 weeks: soak it, then let the soil dry out completely. Once a month or less in winter. Plus light, and why leaves go mushy.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-29',
+      'Water aloe vera well when the top inch of soil is dry, and much less in winter. It wants a sunny window. Plus why the leaves go mushy or sunburned.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
-      'Water aloe vera every 2–3 weeks, and only once the soil has dried out completely. It is a succulent that thinks it lives in a desert, because it does. Treat it like a cactus — bright light, deep but rare watering — and it’s nearly carefree. Treat it like a leafy tropical and you’ll drown it in a month. Most aloe deaths are kindness, not neglect.',
+      'Aloe vera is a succulent that stores water in its leaves, so it shrugs off a missed drink and suffers from too many. Give it a sunny window, water it well only when the top of the soil has dried, and never leave it standing in water. Most aloe deaths are kindness, not neglect.',
     quickFacts: {
-      water: 'Every 2–3 weeks; soak fully, then let the soil dry out completely',
-      light: 'Bright light, including some direct sun',
+      water: 'Water well when the top inch of soil is dry; much less in winter',
+      light: 'Full sun to bright, indirect light, such as a sunny window',
       difficulty: 'Easy, if you under-water it',
       toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
-      humidity: 'Dry household air is ideal — it hates damp',
+      humidity: 'No figure in the sources; it is drought-tolerant and grown in room air',
     },
     sections: {
       watering: [
-        'Water an aloe every 2–3 weeks: soak the soil thoroughly so it runs out the bottom, then leave it completely alone until the soil is bone dry all the way down. This “drench and dry” rhythm mimics the desert downpours it evolved for, and it’s the whole secret to a happy aloe.',
-        'In winter, back right off — once a month or even less. Aloe stores water in those plump leaves, so a missed watering is a non-event; a too-frequent one is fatal. Plant it in gritty, fast-draining cactus mix, never ordinary potting soil that stays soggy.',
-        'To check whether it is time, push a finger or a wooden skewer well down into the pot: if anything at all comes up damp, wait. Use a pot with a drainage hole and empty the saucer after every soak, because an aloe sitting in leftover water rots from the roots up. The same drench-and-dry rhythm suits a [jade plant](/care/jade-plant), which is a handy way to keep two succulents on one schedule.',
+        'Water an aloe when the top inch of soil is dry to the touch, and when you do, water it well. UF/IFAS Gardening Solutions gives that top-inch rule, and Penn State Extension says to water thoroughly once the surface is dry during the growing season, from early spring to early fall. Neither gives a number of days.',
+        'From fall through winter, cut back: Penn State Extension says to keep the soil only barely moist then, just enough that the leaves do not shrivel. Aloe stores water in its leaves, stems and roots, so it tolerates dry spells, and the same source advises erring on the side of underwatering.',
+        'Never let it sit in water. Use a pot with good drainage holes, empty the saucer, and avoid a pot much bigger than the plant, since extra soil holds moisture that can rot the roots. A [jade plant](/care/jade-plant) is another succulent that wants its soil to dry between waterings.',
       ],
       light: [
-        'Aloe wants the brightest spot you’ve got — a sunny south or west window is ideal, and it’ll take a few hours of direct sun happily once it’s used to it. In a dim corner it stretches, pales, and flops, with leaves splaying outward instead of standing up.',
-        'If you move it from indoors into strong outdoor sun suddenly, it can sunburn (brown or reddish patches). Step it up gradually over a week or two. Indoors, a bright windowsill is hard to beat. A smaller rosette that looks like a miniature aloe, the [haworthia](/care/haworthia), wants a gentler east or west window.',
+        'Aloe wants a lot of light. Penn State Extension says it grows best, keeps its color and flowers in full to partial sun, and that indoors it belongs near a sunny window. Turn the pot now and then so every side gets light.',
+        'If it has been somewhere dim, move it into stronger light gradually: UF/IFAS Gardening Solutions warns that a sudden jump from low to bright light can sunburn it. A smaller rosette that looks like a miniature aloe, the [haworthia](/care/haworthia), wants a gentler east or west window.',
       ],
       problems: [
         'Mushy, translucent, or brown leaves at the base mean overwatering and rot — by far the most common way aloe dies. Stop watering, let it dry out hard, and repot into gritty mix if the soil stays wet. Soft leaves are almost never thirst.',
@@ -615,27 +746,41 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water an aloe vera?',
-        a: 'Every 2–3 weeks: soak it thoroughly, then let the soil dry out completely before the next drink. Once a month or less in winter. Plant it in gritty, fast-draining cactus mix — overwatering is the main way aloe dies.',
+        a: 'When the top inch of soil is dry, water it well, and cut back from fall through winter so the soil stays only barely moist. The extension sources give no fixed number of days. Never leave it standing in water: overwatering and root rot are the main way aloe dies.',
       },
       {
         q: 'Why is my aloe vera going mushy or brown?',
-        a: 'Mushy, translucent leaves mean overwatering and rot — the most common aloe problem. Stop watering, let it dry out fully, and repot into gritty mix if the soil stays soggy. Brown sunburn patches, by contrast, come from sudden strong direct sun.',
+        a: 'Soft, mushy leaves usually go with too much water and rotting roots. Stop watering until the top of the soil is dry, empty any standing water, and check that the pot drains. Brown or discolored patches after a move into strong sun are more likely sunburn.',
       },
       {
         q: 'Why is my aloe vera flopping over?',
-        a: 'Pale, stretched, splaying leaves mean too little light. Aloe wants a bright, sunny window; in a dim spot it stretches and flops. Move it to your sunniest spot and new growth comes in firm and upright.',
+        a: 'Usually too little light. Aloe wants a sunny window, with full to partial sun. Move it somewhere brighter, gradually if it has been in a dim spot, and new growth should come in firmer.',
       },
       {
         q: 'How do I know when my aloe vera needs water?',
-        a: 'Wait until the soil is dry all the way down, not just on top. Thin, curled or puckered leaves are the real thirst signal, and a soak plumps them up again within a few days. Soft, mushy or translucent leaves mean too much water, never too little.',
+        a: 'Check the soil: when the top inch is dry to the touch, it is time to water well. In winter, give only enough to keep the leaves from shriveling. Shriveled leaves mean it has gone too dry, and soft, mushy leaves usually mean too much water.',
       },
       {
         q: 'Does an aloe vera need direct sun?',
-        a: 'It wants the brightest spot you have. A sunny south or west window is ideal, and a few hours of direct sun is fine once the plant is used to it. Step it up gradually if it has been somewhere dim, or the leaves can sunburn.',
+        a: 'It does best in full to partial sun, near a sunny window. Bright, indirect light also works. If it has been somewhere dim, move it into stronger light gradually, or the leaves can sunburn.',
       },
       {
         q: 'How do you propagate an aloe vera?',
         a: 'Use the pups that grow around the base. When a pup is a few inches tall and has roots of its own, separate it with a clean knife, let the cut end dry for a day or two, and pot it in gritty cactus mix. Wait about a week before a light watering. Cut leaves almost always rot instead of rooting.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Penn State Extension',
+        title: 'Aloe, a Hardy Houseplant',
+        url: 'https://extension.psu.edu/aloe-a-hardy-houseplant',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Aloe Vera',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/ornamentals/aloe-vera/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -648,25 +793,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Dieffenbachia (Dumb Cane) Care: Watering, Light + Toxicity',
     metaDescription:
       'How often to water a dieffenbachia, the light it likes, why the leaves yellow or brown, and why it’s one to keep away from pets and kids.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'Dieffenbachia gives you big, splashy, tropical leaves for not much effort — a lot of visual payoff for an easy plant. The catch is in the old name, dumb cane: its sap is among the harsher of the common houseplants, so it’s a striking plant that comes with a real keep-out-of-reach asterisk.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top inch of soil is dry',
-      light: 'Bright, indirect light; tolerates medium light',
+      water: 'Water thoroughly, then wait until the top inch of soil is dry',
+      light: 'Bright, filtered light; tolerates lower light; shield it from hot direct sun',
       difficulty: 'Easy to moderate',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals, per the ASPCA)',
-      humidity: 'Prefers higher humidity; browns at the edges in dry rooms',
+      humidity: 'Prefers relatively high humidity',
     },
     sections: {
       watering: [
-        'Water a dieffenbachia every 7–10 days, when the top inch of soil has dried. It likes its soil lightly and evenly moist — not bone-dry like a succulent, not waterlogged like a swamp. Water thoroughly until it drains, then let the top inch dry before the next round.',
-        'It drinks less in winter and in lower light, so let the soil guide you rather than the calendar. The usual killer is overwatering: soggy soil rots the thick stem from the base up, and a rotted dieffenbachia is hard to bring back.',
+        'Water a dieffenbachia thoroughly, then let the top inch of soil dry before the next drink. Clemson Cooperative Extension and North Carolina State Extension both give that rule, and UF/IFAS Gardening Solutions says to keep the routine fairly regular, since uneven watering can brown the leaf tips. None of them gives a number of days.',
+        'The usual killer is too much water. Overly frequent watering or a mix that drains slowly leads to root rot, so never leave the pot standing in water.',
       ],
       light: [
-        'Bright, indirect light keeps the leaf markings bold and the plant compact. It tolerates medium light but grows leggier and paler there, leaning toward the window. Direct sun scorches the big soft leaves into bleached or brown patches, so keep it back from a hot windowsill.',
-        'If it’s stretching and the lower leaves are dropping, that’s usually a reach for light — move it brighter (still indirect) and rotate it now and then so it grows evenly rather than leaning.',
+        'Bright, filtered light suits it from spring to fall, according to Clemson Cooperative Extension, which adds that it tolerates low light with slower growth. UF/IFAS Gardening Solutions says it will take full shade. North Carolina State Extension says to protect it from direct sun, while Clemson says bright light, even direct sun, is best in winter, so the strong summer sun is the one to avoid.',
+        'If it is stretching and leaning toward the window, or its growth has slowed or stopped, it needs more light: move it somewhere brighter. Both UF/IFAS and North Carolina State say it prefers relatively high humidity, and keep it away from cold drafts.',
       ],
       problems: [
         'Yellow lower leaves usually mean overwatering; let the soil dry more between drinks and confirm the pot drains. A soft, mushy, darkening stem base is stem rot — the serious version of the same problem, and a reason to cut back hard on water immediately.',
@@ -689,15 +834,35 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a dieffenbachia?',
-        a: 'Every 7–10 days, when the top inch of soil is dry. It likes lightly, evenly moist soil — not bone-dry, not soggy. Less in winter and lower light. Overwatering rots the stem base, so let the top inch dry between waterings and make sure the pot drains.',
+        a: 'Water thoroughly, then wait until the top inch of soil is dry before watering again. The extension sources give no fixed number of days. Keep the routine fairly regular, and make sure the pot drains: overly frequent watering leads to root rot.',
       },
       {
         q: 'Why are my dieffenbachia leaves turning yellow?',
-        a: 'Usually overwatering — yellow lower leaves with a soft, mushy stem base mean stem rot. Cut back on water and check drainage. Brown crispy edges, by contrast, point to dry air, underwatering, or cold drafts.',
+        a: 'Yellowing has more than one cause. Clemson Cooperative Extension links yellow, smaller leaves to a lack of nutrients, and soggy soil leads to root rot, so check drainage before you water again. Brown tips can come from uneven watering or too much fertilizer.',
       },
       {
         q: 'Why is my dieffenbachia leggy and leaning?',
-        a: 'It’s reaching for light. Move it to a brighter (still indirect) spot and rotate the pot regularly so it grows evenly. Dropping lower leaves while stretching is the same light signal.',
+        a: 'It is reaching for light. Move it to a brighter spot, out of strong summer sun, and turn the pot now and then so it grows evenly.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Dieffenbachia',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/dieffenbachia/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Dieffenbachia',
+        url: 'https://hgic.clemson.edu/factsheet/dieffenbachia/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Dieffenbachia seguine',
+        url: 'https://plants.ces.ncsu.edu/plants/dieffenbachia-seguine/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -710,25 +875,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Calathea Care: How Often to Water + Are They Pet-Safe?',
     metaDescription:
       'How often to water a calathea, the humidity and water quality it demands, why the leaves curl or crisp, and why it’s a pet-safe choice.',
-    reviewed: '2026-06-17',
-    updated: '2026-10-02',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'Calatheas have the most beautiful foliage of any common houseplant and the shortest temper. The trade-off is honest: stunning patterned leaves that fold up at night like praying hands, in exchange for fussiness about water, humidity, and what comes out of your tap. The pay-off, if you want it, is real.',
     quickFacts: {
-      water: 'Keep lightly, evenly moist; water when the top half-inch is dry',
-      light: 'Medium, indirect light; never direct sun',
+      water: 'Keep the soil moist but not soggy',
+      light: 'Bright, indirect light; no direct sun',
       difficulty: 'Moderate to fussy',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'High humidity is essential; dry air crisps the edges fast',
+      humidity: 'High humidity, above 60% by one source; dry air browns the edges',
     },
     sections: {
       watering: [
-        'Calatheas want their soil kept lightly and evenly moist — not soggy, not dried out. Water when the top half-inch is dry, which usually lands somewhere around every 5–7 days, more often in summer and warmth. Unlike most plants on this site, you can’t just let it dry out hard between drinks; a full dry-out browns the edges and the leaves curl in protest.',
-        'The catch is water quality. Calatheas are notably sensitive to the fluoride, chlorine, and salts in tap water, which show up as brown leaf edges. Filtered, distilled, or rainwater makes a real difference — for this plant it’s not fussiness, it’s the single biggest fix for the most common complaint.',
+        'Keep a calathea’s soil moist but never soggy or wet. That is North Carolina State Extension’s advice, and it gives no number of days, so check the soil with a finger rather than the calendar. Unlike the succulents on this site, it should not dry out hard between drinks: the same source says leaves curl when the plant gets too little water or the air is too dry. Overwatering causes root rot.',
+        'Water quality matters. North Carolina State Extension says to use rainwater or distilled water, because the fluoride in tap water can turn the leaves brown.',
       ],
       light: [
-        'Medium, indirect light is the sweet spot. Calatheas grow on the shaded forest floor, so direct sun is actively harmful — it bleaches the patterns and scorches the leaves, washing out the very colors you bought it for. An east window, or a few feet back from a brighter one, suits them.',
-        'Too little light, though, and the markings fade and the plant sulks. Bright but indirect, with no direct beam ever hitting the leaves, keeps the patterns vivid. The nightly leaf-folding (the “prayer plant” move) is normal and a good sign the plant is happy.',
+        'Bright, indirect light is what both sources recommend. The RHS suggests an east-facing windowsill, and both warn that direct sun scorches the leaves.',
+        'Too little light makes the bright coloring fade. Humidity matters as much as light: North Carolina State Extension gives above 60% and suggests a humidifier or a tray of wet pebbles. The leaves fold and move through the day in response to light and temperature, which is normal.',
       ],
       problems: [
         'Brown, crispy leaf edges are the signature calathea complaint, and the usual culprits are dry air and tap water. Raise the humidity and switch to filtered or distilled water; existing brown edges won’t turn green again, so trim them and judge by the new growth.',
@@ -751,15 +916,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a calathea?',
-        a: 'Keep the soil lightly and evenly moist — water when the top half-inch is dry, usually every 5–7 days. Don’t let it dry out hard like a succulent, and don’t leave it soggy. Use filtered, distilled, or rainwater, since calatheas are sensitive to tap-water chemicals.',
+        a: 'Often enough to keep the soil moist but not soggy. The extension sources give no fixed number of days, so check with a finger. Use rainwater or distilled water, since fluoride in tap water can brown the leaves.',
       },
       {
         q: 'Why are my calathea’s leaves turning brown and crispy at the edges?',
-        a: 'The two usual causes are dry air and minerals (fluoride, chlorine, salts) in tap water. Raise the humidity and switch to filtered or distilled water. Existing brown edges won’t recover — trim them and watch the new growth come in clean.',
+        a: 'The two causes North Carolina State Extension names are low humidity and fluoride in tap water. Raise the humidity and switch to rainwater or distilled water. Trim the damaged edges and watch the new growth.',
       },
       {
         q: 'Why are my calathea leaves curling?',
-        a: 'Curling that doesn’t open by day means it’s too dry — thirsty soil or parched air. Water it and raise the humidity. A gentle nightly curl that opens each morning is normal: it’s the “prayer plant” rhythm and a sign the plant is healthy.',
+        a: 'Curling comes from low humidity or too little water, so check the soil and raise the humidity. Leaves that fold and move with the light through the day are normal.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Goeppertia roseopicta (Rose-Painted Calathea)',
+        url: 'https://plants.ces.ncsu.edu/plants/goeppertia-roseopicta/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Calatheas',
+        url: 'https://www.rhs.org.uk/plants/calathea',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -772,26 +951,26 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Fiddle Leaf Fig Care: Watering + Is It Toxic to Dogs?',
     heading: 'Fiddle leaf fig care and pet safety',
     metaDescription:
-      'A fiddle leaf fig is toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic). Water every 7–10 days, when the top 2 inches are dry.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'A fiddle leaf fig is toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic). Keep the soil moist but well-drained and the light bright.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The fiddle leaf fig is the most photographed and most returned houseplant there is. It isn’t difficult so much as inflexible: it wants one bright spot and the same routine every week, and it registers a complaint about anything else.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top 2 inches of soil are dry',
-      light: 'Bright light, including a few hours of direct morning sun',
+      water: 'Keep it moist but well-drained; it is sensitive to overwatering',
+      light: 'Bright light; the sources differ on direct sun, so shield it from afternoon sun',
       difficulty: 'Moderate — fussy about change, not about care',
       toxicity: 'Toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic)',
-      humidity: 'Prefers moderate humidity; dislikes cold drafts more',
+      humidity: 'Medium humidity; keep it away from heating and cooling vents',
     },
     sections: {
       watering: [
-        'Water a fiddle leaf fig roughly every 7–10 days, once the top two inches of soil have gone dry. Water thoroughly — until it runs out of the drainage hole — then let it drain properly and tip away whatever is left in the saucer. Half-hearted splashes wet only the top of the pot and leave the roots at the bottom bone dry.',
-        'The thing that kills them is inconsistency, not the interval. A big drink one week, nothing for three, then a panic-soak is far worse than a slightly wrong schedule kept steadily. In winter it wants less; check the soil rather than the calendar and it will forgive you.',
+        'A fiddle leaf fig wants soil that is moist but well-drained. North Carolina State Extension says it is sensitive to overwatering, and that leaves can drop from too much water or from too little. Neither source gives a number of days, so check the soil with a finger before each drink.',
+        'When you do water, water thoroughly and let the pot drain, then empty the saucer so the roots are not left standing in water.',
       ],
       light: [
-        'This is the one plant on this site that genuinely wants a lot of light. A bright window — south or west facing, with a few hours of gentle direct sun in the morning — is what keeps the leaves large and dark. In a dim corner it doesn’t die dramatically; it just stops growing and sheds a leaf now and then until there’s nothing left.',
-        'Once it’s happy, leave it there. Fiddle leaf figs acclimatise to a specific light level and sulk when moved, which is why so many drop leaves in the fortnight after coming home from the shop. Rotate the pot a quarter-turn each time you water so it grows evenly, but don’t keep relocating it.',
+        'This is a plant that wants a lot of light, but the sources differ on sun. The RHS lists full sun and a south- or west-facing aspect. North Carolina State Extension says bright, indirect light or partial shade, protected from afternoon sun, and warns that too much direct sun scorches the leaves. A bright window with morning sun, or a bright spot shaded from hot afternoon sun, fits both.',
+        'It does best in medium humidity and above 55°F. North Carolina State Extension says brown spots can appear when room temperatures swing near heating or cooling vents, so keep it away from them. Turn the pot a little each time you water so it grows evenly.',
       ],
       problems: [
         'Brown spots in the middle of a leaf, with a dark edge, usually mean root rot from too much water or a pot with no drainage. Brown patches that start at the leaf edge and creep inward are more often underwatering or dry air. It’s worth looking closely before you reach for the watering can, because the two look similar and the fixes are opposite.',
@@ -803,7 +982,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'For a thick, woody branch, air layering is more reliable: wound the stem, wrap it in damp sphagnum moss and plastic, and cut it free once roots fill the moss. A single leaf will sometimes root, but it rarely grows into a plant.',
       ],
       sharedCare: [
-        'The fiddle leaf fig is the plant most likely to be killed by two people caring for it kindly. It only wants water every week or so, so if you each water it “when it looks a bit dry,” it gets twice what it needs and rots quietly from the bottom.',
+        'The fiddle leaf fig is the plant most likely to be killed by two people caring for it kindly. It is sensitive to overwatering, so if you each water it “when it looks a bit dry,” it gets twice what it needs and suffers quietly from the bottom.',
         'Make it a one-owner plant, or write down the date every time it gets watered so the second person can see it’s been done. This is the plant where a shared log earns its keep — the damage from double-watering takes weeks to show, and by then the cause is invisible.',
       ],
       honestBit: [
@@ -814,15 +993,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a fiddle leaf fig?',
-        a: 'About every 7–10 days, once the top two inches of soil are dry. Water thoroughly until it drains out the bottom, then empty the saucer. Consistency matters more than the exact interval — steady beats a soak-and-forget cycle.',
+        a: 'The extension sources give no fixed number of days. Keep the soil moist but well-drained, check it with a finger, and water thoroughly when it is drying out, then empty the saucer. It is sensitive to overwatering.',
       },
       {
         q: 'Why is my fiddle leaf fig dropping leaves?',
-        a: 'Usually stress from a change: it was moved, repotted, hit by a cold draft, or the heating came on. Give it one bright, stable spot, water on a regular schedule, and stop moving it. Leaf drop paired with brown spotting is more likely a watering problem.',
+        a: 'North Carolina State Extension says leaf drop can come from too much or too little water, and brown spots from temperature swings near heating or cooling vents. Check the soil before you water, and keep it in one bright, stable spot away from vents.',
       },
       {
         q: 'What kind of light does a fiddle leaf fig need?',
-        a: 'Bright light, more than most houseplants — ideally a south or west window with a few hours of direct morning sun. Low light won’t kill it quickly; it just stalls and slowly sheds leaves from the bottom up.',
+        a: 'A lot of light. The RHS lists full sun and a south- or west-facing aspect, and North Carolina State Extension says bright, indirect light with protection from afternoon sun, since too much direct sun scorches the leaves. A bright window with morning sun suits both.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Ficus lyrata (Fiddle-leaf Fig)',
+        url: 'https://plants.ces.ncsu.edu/plants/ficus-lyrata/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Ficus lyrata, fiddle-leaf fig',
+        url: 'https://www.rhs.org.uk/plants/7207/ficus-lyrata/details',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -832,29 +1025,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Ficus elastica',
     alsoKnownAs: ['Rubber Tree', 'Rubber Fig', 'Ficus elastica'],
     related: ['fiddle-leaf-fig', 'money-tree', 'dieffenbachia'],
-    metaTitle: 'Rubber Plant Care: Water a Ficus Elastica Every 7–14 Days',
+    metaTitle: 'Rubber Plant Care: When to Water a Ficus Elastica',
     heading: 'Rubber plant care: how often to water it',
     metaDescription:
-      'Water a rubber plant (Ficus elastica) every 7–14 days, when the top inch or two of soil is dry. It wants bright, indirect light. Why the leaves drop.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a rubber plant (Ficus elastica) thoroughly, then let the soil dry slightly, and water less in fall and winter. It wants bright light. Why leaves drop.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A rubber plant is what you buy when you want the drama of a fiddle leaf fig without the temperament. Same big glossy leaves, same architectural shape, a fraction of the sulking — it’s the easiest large statement plant you can own.',
     quickFacts: {
-      water: 'Every 7–14 days, when the top inch or two of soil is dry',
-      light: 'Bright, indirect light; tolerates medium light',
+      water: 'Water thoroughly, then let the soil dry slightly; less from fall to late winter',
+      light: 'Bright, indirect light; adapts to lower light',
       difficulty: 'Easy',
       toxicity: 'Toxic to cats and dogs if chewed (the ASPCA lists Ficus species as toxic)',
-      humidity: 'Average household humidity is fine',
+      humidity: 'Prefers humid air but tolerates the dry air of most homes',
     },
     sections: {
       watering: [
-        'Water a rubber plant every 7–14 days, when the top inch or two of soil is dry. It’s a wide range because it depends on pot size and light: a big plant in a bright room drinks weekly, the same plant in a dim corner in January might go three weeks. Check with a finger, water thoroughly, let it drain.',
-        'Rubber plants would rather be slightly dry than slightly wet. If you’ve inherited one and have no idea what its schedule was, err on the side of waiting — a thirsty rubber plant recovers in a day, a waterlogged one takes months.',
+        'Water a rubber plant thoroughly, then let the soil dry slightly to the touch before the next drink. That is Clemson Cooperative Extension’s rule, and neither source gives a number of days. Use a pot with drainage holes and empty the saucer after watering.',
+        'North Carolina State Extension says to water less from fall to late winter, when it is dormant. Soil that stays too wet can yellow the leaves, and overly frequent watering leads to root rot, so when in doubt, wait.',
       ],
       light: [
-        'Bright, indirect light gives you the best leaves: large, thick and glossy. It copes with medium light and a spot a few feet from a window, just with slower growth and more space between leaves. The variegated ones — the pink and cream types — need more light than the plain burgundy ones to hold their color.',
-        'Direct midday sun through glass can scorch the leaves, so a sheer curtain helps in a very bright window. Wipe the leaves with a damp cloth every month or so; they’re big enough to collect real dust, and dusty leaves genuinely take in less light.',
+        'Bright light gives you the best leaves, and Clemson Cooperative Extension says it does especially well with morning light from an east window. It adapts to lower light too.',
+        'North Carolina State Extension says to protect it from afternoon sun. Wipe the big leaves with a damp cloth when they get dusty; both extension sources recommend it.',
       ],
       problems: [
         'Leaves dropping from the bottom of the plant is the classic rubber plant complaint, and it’s usually overwatering — soggy soil starves the roots of air and the plant sheds from the bottom up. Let it dry out properly and check the pot actually drains.',
@@ -877,15 +1070,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a rubber plant?',
-        a: 'Every 7–14 days, once the top inch or two of soil is dry. Bright rooms and summer push it toward weekly; dim corners and winter stretch it to every two or three weeks. When in doubt, wait — it handles dry far better than soggy.',
+        a: 'Water thoroughly, then let the soil dry slightly to the touch before watering again, and water less from fall to late winter. The extension sources give no fixed number of days. When in doubt, wait.',
       },
       {
         q: 'Why is my rubber plant losing its bottom leaves?',
-        a: 'Almost always overwatering. Soggy soil starves the roots of air and the plant drops leaves from the bottom up. Let it dry out fully, make sure the pot has a drainage hole, and stop watering on a fixed calendar.',
+        a: 'There are several causes. North Carolina State Extension says it is normal for some bottom leaves to yellow and drop, and that overwatering, temperature drops and cold drafts also cause leaf loss. Clemson Cooperative Extension adds too little light and dry air. Let the soil dry slightly between waterings, check that the pot drains, and keep it away from cold drafts.',
       },
       {
         q: 'Do rubber plants need direct sunlight?',
-        a: 'No — bright indirect light is ideal, and harsh midday sun through glass can scorch the leaves. Variegated varieties need more light than the plain dark ones to keep their pink and cream markings.',
+        a: 'No. Bright light is best, with morning sun from an east window ideal, and it should be protected from hot afternoon sun.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Rubber Plant',
+        url: 'https://hgic.clemson.edu/factsheet/rubber-plant/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Ficus elastica (Rubber Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/ficus-elastica/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -898,27 +1105,27 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Bird of Paradise Plant Care: Watering, Light + Blooms',
     heading: 'Bird of paradise plant care',
     metaDescription:
-      'Water a bird of paradise plant every 7–10 days in summer and every 2–3 weeks in winter. The light it needs indoors, and why it may never bloom there.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a bird of paradise plant generously in summer and less in winter. It needs as much bright light as you can give it indoors, and may never bloom there.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
-      water: 'Every 7–10 days in summer, every 2–3 weeks in winter',
+      water: 'Generously in spring and summer; drier in winter',
       light: 'As much bright light as you can give it, including some direct sun',
       difficulty: 'Easy to keep, hard to flower indoors',
       toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
-      humidity: 'Likes moderate to high humidity; tolerates average',
+      humidity: 'Likes moderate humidity, around 60%; homes are often drier',
     },
     sections: {
       watering: [
-        'Water thoroughly every 7–10 days through spring and summer, letting the top inch or two dry out first. These are big plants with big leaves and they genuinely drink — a mature one in a bright room can empty its pot in a week. Water until it runs from the bottom, then let it drain.',
-        'In winter, back right off to every two or three weeks. Growth slows, the plant uses far less, and the most common winter death is a summer schedule carried on into December.',
-        'Whatever the season, check the soil before you water rather than trusting the calendar, and let the pot drain fully afterward. A big plant in a big pot dries out slowly, so a heavy pot that still feels damp a few inches down can wait another few days.',
+        'In spring and summer, water a bird of paradise thoroughly. These are big plants with big leaves that lose a lot of water, and the sources differ on how dry to let them get. University of Wisconsin–Madison Extension and Clemson Cooperative Extension say to let the mix dry slightly between waterings indoors. The RHS says to keep the compost moist but not saturated, which can mean daily watering in warm weather. Check the soil rather than counting days.',
+        'In winter, water less. All the sources agree that it needs far less water when the light is low and growth slows, and the RHS says to let the compost get fairly dry between waterings.',
+        'Whatever the season, let the pot drain fully afterward. A mix that drains slowly, or watering too often, leads to root rot.',
       ],
       light: [
-        'Give it the brightest spot you have. Bird of paradise is a full-sun plant outdoors, and indoors it wants a south or west window with a few hours of direct sun. This is not one to tuck into a corner — it will survive there and look progressively worse.',
-        'If you’re hoping for the orange-and-blue flower, light is most of the answer and patience is the rest: plants usually need to be mature, four or five years old, and snug in their pot before they bloom, and plenty of indoor plants never do. Treat the flower as a bonus and the leaves as the point.',
+        'Give it the brightest spot you have. Clemson Cooperative Extension says it prefers full sun, and University of Wisconsin–Madison Extension says it needs nearly full sun in summer and as much light as possible in winter to bloom. A large sunny window is the place for it.',
+        'If you are hoping for the orange-and-blue flower, light is most of the answer and patience is the rest. Plants flower only once they are mature: the RHS says five to ten years old, and Clemson says seedlings can take four to ten years or more. Keeping it a little snug in its pot helps. Treat the flower as a bonus and the leaves as the point.',
       ],
       problems: [
         'Split leaves are normal and not a problem. In the wild the splits let wind through instead of tearing the whole leaf off; indoors they happen from handling, drafts and simple age. A split leaf isn’t damaged, and cutting them off just leaves you with less plant.',
@@ -931,8 +1138,8 @@ export const CARE_GUIDES: CareGuide[] = [
         'It can also be grown from seed, but slowly: a seedling usually takes years to reach flowering size. Division is the practical route for a houseplant.',
       ],
       sharedCare: [
-        'This is a plant that changes what it wants twice a year, which is exactly the sort of thing that gets lost between two people. The summer routine and the winter routine are genuinely different, and a housemate who learned “water it weekly” in July will drown it in January.',
-        'The fix is to write down the rule and not just the date: weekly in summer, fortnightly-to-monthly in winter, always check the soil first. A shared note attached to the plant beats one person privately remembering the seasonal switch.',
+        'This is a plant that changes what it wants twice a year, which is exactly the sort of thing that gets lost between two people. The summer routine and the winter routine are genuinely different, and a housemate who learned the July routine will drown it in January.',
+        'The fix is to write down the rule and not just the date: generous in summer, much less in winter, always check the soil first. A shared note attached to the plant beats one person privately remembering the seasonal switch.',
       ],
       honestBit: [
         'My take: buy it for the leaves. Almost every bird of paradise sold as a houseplant is bought by somebody imagining the flower, and most of them will never see one indoors. That’s fine — the foliage alone is the best value-per-pound of any large houseplant.',
@@ -942,7 +1149,7 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a bird of paradise?',
-        a: 'Every 7–10 days in spring and summer, once the top inch or two is dry, and every two to three weeks in winter. They’re thirsty in growth and barely drink in the cold — carrying the summer schedule into winter is the usual way people kill them.',
+        a: 'Generously in spring and summer, and much less in winter. The sources give no fixed number of days and differ on summer dryness: two extension sources say let the mix dry slightly between waterings, and the RHS says keep it moist but not saturated. Check the soil, and do not carry the summer routine into winter.',
       },
       {
         q: 'Why are my bird of paradise leaves splitting?',
@@ -950,19 +1157,45 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Why won’t my bird of paradise flower indoors?',
-        a: 'Usually not enough light, or the plant is still too young. They typically need several years of maturity, a snug pot and hours of direct sun to bloom, and many indoor plants never do. Grow it for the leaves and treat a flower as a surprise.',
+        a: 'Usually not enough light, or the plant is still too young. It needs to be mature, which the RHS puts at five to ten years old, with a snug pot and as much light as you can give it. Grow it for the leaves and treat a flower as a surprise.',
       },
       {
         q: 'How much light does a bird of paradise need indoors?',
-        a: 'As much as you can give it: a south or west window with a few hours of direct sun. It survives in a dim corner but looks progressively worse there, and it will not flower without strong light.',
+        a: 'As much as you can give it: a large, sunny window, with full sun if possible. It will not flower without strong light.',
       },
       {
         q: 'Why are my bird of paradise leaves turning brown?',
-        a: 'Brown, crispy edges usually mean dry air, underwatering or minerals building up in the soil. Water thoroughly until it runs out the bottom, and try filtered water if your tap is hard. Yellow lower leaves with damp soil point to overwatering instead.',
+        a: 'The sources do not tie brown edges to one cause. Check the basics: water thoroughly in spring and summer, raise the humidity in dry winter rooms, and make sure the pot drains, since soggy soil leads to root rot.',
       },
       {
         q: 'Which plant does this guide cover when people say “bird of paradise”?',
         a: 'Strelitzia reginae, the houseplant with the orange-and-blue flower. The name is also used for a different shrub, Caesalpinia gilliesii, which the ASPCA lists separately and warns against confusing with Strelitzia. The white bird of paradise, Strelitzia nicolai, is a close relative with its own listing status that we have not recorded, so we make no claim about it here.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Bird of Paradise, Strelitzia reginae',
+        url: 'https://hort.extension.wisc.edu/articles/bird-of-paradise-strelitzia-reginae/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Bird of Paradise',
+        url: 'https://hgic.clemson.edu/factsheet/bird-of-paradise/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Strelitzia reginae (Bird of Paradise)',
+        url: 'https://plants.ces.ncsu.edu/plants/strelitzia-reginae/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'How to grow strelitzia',
+        url: 'https://www.rhs.org.uk/plants/strelitzia/how-to-grow-strelitzia',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -975,26 +1208,26 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Anthurium Not Flowering? Why, Plus Watering and Light',
     heading: 'Anthurium care: why it stops flowering',
     metaDescription:
-      'An anthurium with healthy leaves and no flowers nearly always needs brighter, indirect light. Why old blooms turn green, and watering every 7–10 days.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'An anthurium with healthy leaves and no flowers usually needs brighter, indirect light. Why old blooms turn green, and when to water it.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The anthurium is the houseplant that actually keeps flowering — those waxy red or pink blooms hold for weeks and come back for months on end. The catch is that it stops the moment the light isn’t good enough, and most people blame the water.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top inch of soil is dry',
-      light: 'Bright, indirect light — essential if you want flowers',
+      water: 'When the top inch of soil is dry',
+      light: 'Bright, indirect light; too little light stops flowering',
       difficulty: 'Easy to keep alive, moderate to keep flowering',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals, per the ASPCA)',
-      humidity: 'Likes higher humidity; copes with average, with browner tips',
+      humidity: 'Likes high humidity, 60 to 80% by one source',
     },
     sections: {
       watering: [
-        'Water every 7–10 days, when the top inch of soil has dried. Anthuriums grow on trees in the wild rather than in the ground, so their roots want air as much as water — a chunky, well-draining mix and a pot that empties properly matter more here than the exact interval.',
-        'They are very sensitive to standing wet. If the pot sits inside a decorative outer cover, tip the water out of it after every watering; the single most common anthurium killer is a plastic pot standing in an inch of leftover water inside a nice ceramic sleeve.',
+        'Water an anthurium when the top inch of soil feels dry. That is North Carolina State Extension’s rule, and neither source gives a number of days. The RHS recommends an open, fast-draining mix and rainwater or filtered water, since anthuriums dislike tap water.',
+        'They are very sensitive to standing wet: both sources say soggy soil rots the roots. If the pot sits inside a decorative outer cover, tip the water out of it after every watering.',
       ],
       light: [
-        'Bright, indirect light is the whole game with anthuriums. In medium or low light the plant stays perfectly healthy and simply stops producing flowers — which is how you end up with a green plant that somebody insists is “not doing anything.” Move it near a window, out of the direct beam, and the blooms come back.',
-        'Direct midday sun scorches the leaves and bleaches the flowers, so bright-but-filtered is the target: an east window, or a meter back from a south one. If it hasn’t flowered in six months and everything else looks fine, light is almost certainly your answer.',
+        'Bright, indirect light is the whole game with anthuriums. Both sources say too little light reduces or stops flowering, which is how you end up with a green plant that somebody insists is “not doing anything.” Move it near a window, out of the direct beam, and the blooms usually return.',
+        'Direct sun, especially in summer, scorches the leaves. They also like warmth and humid air: North Carolina State Extension gives 60 to 80% humidity and warns against cold drafts.',
       ],
       problems: [
         'Flowers turning green as they age is normal. Anthurium blooms fade to green before they finish, so a green “flower” is an old one rather than a sick plant. Cut the stem back to the base and let the plant put its energy into the next one.',
@@ -1018,11 +1251,11 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water an anthurium?',
-        a: 'Every 7–10 days, when the top inch of soil is dry. Water thoroughly, and always tip out any water left standing in the decorative outer pot — that is the most common way anthuriums are killed.',
+        a: 'When the top inch of soil is dry. Water thoroughly, and always tip out any water left standing in the decorative outer pot, since soggy soil rots the roots.',
       },
       {
         q: 'Why is my anthurium not flowering, or why has it stopped?',
-        a: 'Almost always not enough light. Anthuriums stay green and healthy in medium light but stop producing blooms. Move it to bright, indirect light near a window and feed it through spring and summer, and flowers usually return.',
+        a: 'Usually not enough light. Both sources say too little light reduces flowering, and North Carolina State Extension also names a lack of nutrients. Move it to bright, indirect light near a window and feed it through spring and summer, and flowers usually return.',
       },
       {
         q: 'Why are my anthurium flowers turning green?',
@@ -1034,11 +1267,25 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Why are my anthurium flowers fading or dying?',
-        a: 'A flower that fades to green after several weeks is aging normally. Cut the stem back to the base. If the whole plant is also yellowing or wilting, check whether the pot is standing in water inside a decorative cover, which is the most common cause of decline.',
+        a: 'A flower that fades to green after several weeks is aging normally. Cut the stem back to the base. If the whole plant is also yellowing or wilting, check whether the pot is standing in water inside a decorative cover, since soggy soil rots the roots.',
       },
       {
         q: 'Why are my anthurium leaves turning yellow?',
-        a: 'Usually too much water or a pot that does not drain. Tip out any water in the outer pot after watering and let the top inch dry before the next drink. Brown, crispy tips point the other way: dry air or minerals from hard tap water.',
+        a: 'Usually too much water or a pot that does not drain; North Carolina State Extension also names a lack of nutrients. Tip out any water in the outer pot after watering and let the top inch dry before the next drink.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Anthurium andraeanum (Flamingo Flower)',
+        url: 'https://plants.ces.ncsu.edu/plants/anthurium-andraeanum/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Anthuriums',
+        url: 'https://www.rhs.org.uk/plants/anthuriums',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1048,29 +1295,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Aglaonema',
     alsoKnownAs: ['Aglaonema', 'Silver Bay', 'Chinese Evergreen Plant'],
     related: ['zz-plant', 'dieffenbachia', 'peace-lily'],
-    metaTitle: 'Chinese Evergreen Care: Water Every 7–14 Days, Low Light OK',
+    metaTitle: 'Chinese Evergreen Care: When to Water, Low Light OK',
     heading: 'Chinese evergreen care: watering and light',
     metaDescription:
-      'Water a Chinese evergreen (aglaonema) every 7–14 days, when the top inch or two of soil is dry. It takes low to medium light. Toxic to pets if chewed.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a Chinese evergreen (aglaonema) when the top inch or two of soil is dry. It takes low to medium light. Toxic to pets if chewed.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'If you have a room with bad light and you’ve already killed something in it, this is the plant. Aglaonema is the best-looking thing that genuinely tolerates a dim corner, and it comes in pink and red varieties that look like they ought to be much harder.',
     quickFacts: {
-      water: 'Every 7–14 days, when the top inch or two of soil is dry',
+      water: 'When the top inch or two of soil is dry',
       light: 'Low to medium indirect light; no direct sun',
       difficulty: 'Very easy',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalate crystals, per the ASPCA)',
-      humidity: 'Average household humidity is fine',
+      humidity: 'Average household humidity is fine by one source; the RHS suggests misting',
     },
     sections: {
       watering: [
-        'Water when the top inch or two of soil is dry, which lands somewhere around every 7–14 days depending on how bright and warm the room is. In a genuinely dim corner it can go much longer — a Chinese evergreen in low light in winter might want water once a month, and will be perfectly happy about it.',
-        'These are far more likely to be overwatered than underwatered, because they look lush and people assume lush means thirsty. It stores water in those thick stems; if the soil is damp, put the can down.',
+        'Water when the top inch or two of soil is dry. Clemson Cooperative Extension’s test is two fingers in the soil: dry means water, cool and damp means wait. Neither source gives a number of days, and the RHS says to let it dry a little more between waterings in winter.',
+        'These are more likely to be overwatered than underwatered. Clemson says they tolerate drought, and that overwatering or a slow-draining mix leads to root rot. If the soil is damp, put the can down.',
       ],
       light: [
-        'Low to medium indirect light is what it’s famous for, and it’s one of the few plants where “low light” is a real recommendation rather than marketing. A north window, an interior wall, an office with no window of its own — it copes with all of them.',
-        'The exception is the colored varieties. The pink, red and heavily silver-marked aglaonemas need more light to hold their color and drift back toward plain green in a dark spot. Keep the plain dark-green types for the worst corners and the colorful ones nearer a window. Direct sun burns all of them.',
+        'Low to medium indirect light is what it is known for, and Clemson Cooperative Extension says the solid green kinds grow in low light, such as a heavily shaded spot indoors. The RHS prefers bright, filtered light, so a brighter spot is fine too, as long as no direct sun reaches the leaves.',
+        'The colored varieties need more light than the plain green ones: Clemson puts the variegated types at low to moderate light. Keep the plain dark-green types for the dimmest corners and the colorful ones nearer a window. Direct sun can scorch all of them.',
       ],
       problems: [
         'Yellow leaves are overwatering, nearly always. Chinese evergreens are slow, quiet plants, so a soggy pot shows up as gradual yellowing rather than sudden collapse — which means it can go on for weeks before anybody notices.',
@@ -1083,7 +1330,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'The Chinese evergreen is the ideal plant for the shared room nobody quite owns: a hallway, a landing, a home office two people use. It goes weeks without complaint, so it survives the gap where everyone assumes somebody else has it in hand.',
-        'That same forgiveness is the trap. Because it never looks urgent, it can quietly go two months without water and then decline all at once. Pin it to a rough monthly check rather than a tight schedule, and it will outlast almost everything else in the house.',
+        'That same forgiveness is the trap. Because it never looks urgent, it can quietly go far too long without anyone checking it. Pin it to a regular soil check rather than a tight schedule, and it will outlast almost everything else in the house.',
       ],
       honestBit: [
         'My take: aglaonema is the answer to the question people actually ask, which is not “what’s the prettiest plant” but “what will survive in this specific bad corner.” It’s what I recommend when somebody describes a room with one small north-facing window.',
@@ -1093,15 +1340,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a Chinese evergreen?',
-        a: 'Every 7–14 days, when the top inch or two of soil is dry — and considerably less in a dim room in winter, sometimes as little as once a month. It is far easier to overwater one than to underwater it.',
+        a: 'When the top inch or two of soil is dry, and a little less in winter. The extension sources give no fixed number of days. It tolerates drought, and overwatering leads to root rot, so when the soil is still damp, wait.',
       },
       {
         q: 'Can a Chinese evergreen live in low light?',
-        a: 'Yes, genuinely. It’s one of the few houseplants that does well in a dim corner or a windowless office. The plain dark-green varieties handle the least light; the pink and red ones need more to keep their color.',
+        a: 'Yes. Clemson Cooperative Extension says the solid green varieties grow in low light. The variegated ones, including the pink and red kinds, need low to moderate light.',
       },
       {
         q: 'Why are my Chinese evergreen leaves turning yellow?',
-        a: 'Overwatering is the usual cause. Let the soil dry out further between waterings and check the pot drains. Yellowing paired with a cold or drafty spot is also common in winter.',
+        a: 'The sources do not name one cause. Check for soggy soil and a pot that does not drain, which lead to root rot, and keep it away from cold: Clemson says it is sensitive to temperatures below 50°F.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Chinese Evergreen (Aglaonema)',
+        url: 'https://hgic.clemson.edu/factsheet/chinese-evergreen-aglaonema-care-cultivation-growing-guide/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Aglaonema modestum, Chinese evergreen',
+        url: 'https://www.rhs.org.uk/plants/707/aglaonema-modestum/details',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1111,29 +1372,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Crassula ovata',
     alsoKnownAs: ['Money Plant', 'Lucky Plant', 'Friendship Tree', 'Crassula'],
     related: ['aloe-vera', 'burros-tail', 'snake-plant'],
-    metaTitle: 'How to Water a Jade Plant: Every 2–3 Weeks in Summer',
+    metaTitle: 'How to Water a Jade Plant: Deeply, Then Let It Dry',
     heading: 'Jade plant care: how to water it',
     metaDescription:
-      'Water a jade plant every 2–3 weeks in summer and monthly or less in winter. It wants bright light with some direct sun; why leaves drop or wrinkle.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a jade plant deeply, then let the soil dry, and keep it on the dry side in winter. It wants four or more hours of direct sun. Why leaves drop.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
     quickFacts: {
-      water: 'Every 2–3 weeks in summer, monthly or less in winter',
-      light: 'Bright light, including several hours of direct sun',
+      water: 'Water deeply, then let the soil dry; keep it on the dry side in winter',
+      light: 'Four or more hours of direct sun a day',
       difficulty: 'Very easy, if you can resist watering it',
       toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
-      humidity: 'Dry household air is ideal',
+      humidity: 'The warm, dry air of most homes suits it',
     },
     sections: {
       watering: [
-        'Water a jade plant every two to three weeks in summer, and roughly monthly or less in winter — and only once the soil is dry all the way through. When you do water, soak it properly and let everything drain away. The pattern is drought, then flood, then drought again: that’s how it lives in the wild.',
-        'The wrinkle test beats any schedule. Plump, firm leaves mean it has plenty of water stored and needs nothing from you. Slightly soft or wrinkled leaves mean it’s ready for a drink. If you learn one thing about jade plants, learn to look at the leaves instead of the calendar.',
+        'Water a jade plant deeply, then let the soil dry before the next drink, and never let it sit in water. The sources differ on how dry: Penn State Extension says to wait until the soil is completely dry, and University of Wisconsin–Madison Extension says that in spring and summer it can be watered liberally and allowed to dry slightly. Neither gives a number of days.',
+        'In winter, when it is semi-dormant, keep it on the dry side. Both too much and too little water can make the leaves drop: Wisconsin says overwatering drops leaves and rots the stem, and that drought can also cause spotting and leaf drop.',
       ],
       light: [
-        'Jade wants real light — several hours of direct sun a day if you can manage it. A south or west windowsill is ideal. Good light keeps the growth compact and can bring out a red blush on the leaf edges, which is a sign of a happy plant rather than a stressed one.',
-        'In low light it stretches: long floppy stems, widely spaced leaves, and a plant that leans toward the window until it eventually tips over. If yours has gone lanky, that’s a light problem, and no amount of water or feeding will fix it. Two smaller succulents with their own guides, the [burro’s tail](/care/burros-tail) and the [blue echeveria](/care/blue-echeveria), want the same bright window.',
+        'Jade wants real light: both extension sources say four or more hours of direct sun a day, and Penn State says it will thrive in a south-facing window. With enough light the growth stays compact and the leaf edges can take on a red tinge, which is a sign of a happy plant.',
+        'In low light it stretches, with drooping stems and a plant that leans toward the window. If yours has gone lanky, that is a light problem, and no amount of water or feeding will fix it. Two smaller succulents with their own guides, the [burro’s tail](/care/burros-tail) and the [blue echeveria](/care/blue-echeveria), want the same bright window.',
       ],
       problems: [
         'Leaves dropping at the slightest touch is the classic overwatering signal, and so are soft, yellowing, translucent leaves at the base. Stop watering entirely, let it dry out hard, and it usually recovers — jade is remarkably resilient once the soil is dry again.',
@@ -1145,8 +1406,8 @@ export const CARE_GUIDES: CareGuide[] = [
         'Hold off on real watering until it resists a gentle tug, which usually means it has rooted (often two to four weeks). A fallen leaf can root and sprout a tiny plant on its own if it lands on soil.',
       ],
       sharedCare: [
-        'Jade is the plant most likely to be killed by a well-meaning housemate. It looks like a normal leafy plant rather than obviously a succulent, so the instinct is to water it weekly like everything else — and weekly watering will kill it within a season.',
-        'If it lives in a shared space, label it or say it plainly: this one gets water once a month, and it’s meant to look dry. It’s one of the few plants where “do nothing” is the correct instruction, and it needs saying out loud precisely because it’s so counterintuitive.',
+        'Jade is the plant most likely to be killed by a well-meaning housemate. It looks like a normal leafy plant rather than obviously a succulent, so the instinct is to water it on the same routine as everything else, and soil that never dries is what rots it.',
+        'If it lives in a shared space, label it or say it plainly: this one gets water only when the soil has dried, and it’s meant to look dry. It’s one of the few plants where “do nothing” is the correct instruction, and it needs saying out loud precisely because it’s so counterintuitive.',
       ],
       honestBit: [
         'My take: a jade plant is a fifty-year plant. People buy them as small desk succulents and don’t realize they’re looking at something that becomes a proper miniature tree with a thick trunk if it’s simply left to get on with it. The main skill is patience and the main danger is enthusiasm.',
@@ -1156,19 +1417,33 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a jade plant?',
-        a: 'Every two to three weeks in summer and about monthly in winter, only once the soil is completely dry. Better still, go by the leaves: firm and plump means wait, slightly soft or wrinkled means water.',
+        a: 'Deeply, and only after the soil has dried, keeping it on the dry side in winter. The extension sources give no fixed number of days, and they differ on how dry: Penn State says completely dry, Wisconsin says slightly dry in spring and summer.',
       },
       {
         q: 'Why is my jade plant dropping leaves?',
-        a: 'Overwatering is the usual cause — leaves that fall at a touch, or go soft and translucent at the base, mean soggy soil. Stop watering, let it dry out completely, and check the pot drains. Leaf drop can also follow a sudden move or a cold draft.',
+        a: 'Watering, in either direction. University of Wisconsin–Madison Extension says overwatering causes leaf drop and stem rot, and that drought can cause leaf drop too. Check the soil and the drainage before you change anything.',
       },
       {
         q: 'Why is my jade plant leggy and floppy?',
-        a: 'Not enough light. Jade needs several hours of direct sun to stay compact; in a dim spot it stretches toward the window with long bare stems. Move it somewhere brighter and prune the stretched growth — new growth comes in tighter.',
+        a: 'Not enough light. Jade needs four or more hours of direct sun a day to stay compact; in a dim spot it stretches toward the window. Move it somewhere brighter and prune the stretched growth.',
       },
       {
         q: 'How long does a jade plant live?',
         a: 'Jade plants are famously long-lived. With bright light and sparse watering they are commonly kept for decades, slowly turning into small trees, and are often passed down from one generation to the next.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Jade Plant, Crassula ovata',
+        url: 'https://hort.extension.wisc.edu/articles/jade-plant-crassula-ovata/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Penn State Extension',
+        title: 'Jade Plant, A No Fuss Houseplant',
+        url: 'https://extension.psu.edu/jade-plant-a-no-fuss-houseplant',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1181,26 +1456,26 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'English Ivy Indoor Care: Watering, Light, and Pet Safety',
     heading: 'English ivy care indoors',
     metaDescription:
-      'English ivy indoors wants a cool, bright room and water every 5–10 days, kept lightly moist. How to beat spider mites, and why it is not pet-safe.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'English ivy indoors wants a cool, bright room and soil that dries only half an inch down between waterings. How to beat pests, and why it is not pet-safe.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
-      'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants cool, bright and humid, and in a warm dry living room it gets spider mites and sulks.',
+      'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants a cool, bright room, and in a warm dry living room it is more prone to pests and sulks.',
     quickFacts: {
-      water: 'Every 5–10 days; keep lightly moist, never soggy',
-      light: 'Bright, indirect light',
+      water: 'Water thoroughly when the top half-inch of soil is dry; never soggy',
+      light: 'Bright light, but not direct sun',
       difficulty: 'Moderate indoors — easy in a cool, bright room',
       toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
-      humidity: 'Prefers higher humidity; dry heated air invites spider mites',
+      humidity: 'Prefers moderate humidity; tolerates normal home levels',
     },
     sections: {
       watering: [
-        'Keep the soil lightly moist — water when the top half-inch to inch is dry, usually every 5–10 days. Ivy doesn’t want to dry out hard like a succulent, and equally won’t tolerate sitting in a wet pot. Even and moderate is the target.',
-        'It drinks noticeably more in a warm room and much less in a cool one. If yours is on a cool bright windowsill or in an unheated porch, which is where it does best, expect to water considerably less often than the same plant in the living room.',
+        'Water ivy thoroughly, then let the top half-inch of soil dry before watering again. That is Clemson Cooperative Extension’s rule, and it gives no number of days. Ivy does not want to dry out hard like a succulent, and it will not tolerate standing in water: a slow-draining mix or watering too often leads to root rot.',
+        'It does best in a cool room. Clemson gives 50 to 70°F by day and a little cooler at night, so a cool, bright spot suits it better than a warm living room.',
       ],
       light: [
-        'Bright, indirect light keeps ivy full and keeps the variegated types variegated. Plain green ivies cope with medium light; the cream and white marbled ones fade and revert to green if the light is poor.',
-        'Direct hot sun through glass scorches the leaves, but ivy genuinely loves being cool. A bright unheated room, a hallway, or a north-facing porch suits it far better than a warm living room — this is one of the very few houseplants that prefers the chilly end of your home.',
+        'Most ivies grow best in bright light, but not direct sun. They tolerate low to medium light with slower growth, though the variegated kinds may turn all green there.',
+        'Clemson Cooperative Extension says a north, east or west window works, as do grow lights. Ivy prefers moderate humidity and tolerates the lower levels in most homes; a tray of wet pebbles raises it if you need to.',
       ],
       problems: [
         'Fine webbing between the leaves, and a dusty, stippled, faded look, is spider mites — and English ivy indoors is a magnet for them. Warm dry air is what invites them in. Rinse the whole plant thoroughly in the shower, raise the humidity, and check weekly, because mites rebound fast from a single treatment.',
@@ -1216,26 +1491,34 @@ export const CARE_GUIDES: CareGuide[] = [
         'If two of you share it, the useful habit isn’t splitting the watering but agreeing that whoever waters also gives it ten seconds of inspection — undersides of leaves, new growth at the tips. That’s the whole maintenance routine, and it only works if it belongs to the job rather than to a particular person.',
       ],
       honestBit: [
-        'My honest take: most people would be happier with a pothos. Ivy looks like the easy trailing plant and isn’t — it wants cool, humid and bright all at once, which describes very few centrally heated homes. It’s genuinely lovely in a cold bright hallway and genuinely miserable above a radiator.',
+        'My honest take: most people would be happier with a pothos. Ivy looks like the easy trailing plant and isn’t — it wants cool and bright at the same time, which describes very few centrally heated homes. It’s genuinely lovely in a cold bright hallway and genuinely miserable above a radiator.',
         'And a real warning if you have pets: the ASPCA lists English ivy as toxic to cats and dogs, with the foliage more toxic than the berries. Trailing plants are exactly the ones a cat can reach, because the plant comes down to them. If you want the trailing look with a clean pet record, a spider plant or a hoya does the same job.',
       ],
     },
     faqs: [
       {
         q: 'How often should I water English ivy indoors?',
-        a: 'Every 5–10 days, when the top half-inch to inch of soil is dry. Keep it lightly and evenly moist — not bone dry, not soggy. Cool rooms need watering much less often than warm ones.',
+        a: 'Water thoroughly, then wait until the top half-inch of soil is dry before the next drink. The extension sources give no fixed number of days. Do not leave it standing in water.',
       },
       {
         q: 'Why does my English ivy keep getting spider mites?',
-        a: 'Warm, dry indoor air, and ivy is unusually prone to them. Rinse the whole plant in the shower, raise the humidity, move it somewhere cooler, and re-check weekly — one treatment is rarely enough.',
+        a: 'Mites are among the most common pests of indoor ivy, and Clemson Cooperative Extension says cooler temperatures and higher humidity help prevent common pests. Rinse the whole plant in the shower, move it somewhere cooler, and re-check weekly; one treatment is rarely enough.',
       },
       {
         q: 'Why is my English ivy going brown and dropping leaves?',
-        a: 'Usually dry air or too much heat. Ivy prefers cool, humid conditions and struggles near radiators. Move it somewhere cooler and brighter, raise the humidity, and check for spider mites while you’re at it.',
+        a: 'The sources do not name a single cause. Check the basics: a room warmer than the 50 to 70°F ivy prefers, very dry air, soil that stays soggy, and pests such as mites. Move it somewhere cooler and bright, and look under the leaves.',
       },
       {
         q: 'Can English ivy grow indoors?',
-        a: 'Yes. English ivy is a common indoor plant as long as it gets bright light and a cool room. Warm, dry, heated air is what usually goes wrong indoors, because it brings on spider mites; a cooler spot and regular checks under the leaves keep it healthy.',
+        a: 'Yes. English ivy is a common indoor plant as long as it gets bright light and a cool room. Warm, dry air makes pests more likely; a cooler spot and regular checks under the leaves help keep it healthy.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Growing English Ivy Indoors',
+        url: 'https://hgic.clemson.edu/factsheet/growing-english-ivy-indoors/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1245,29 +1528,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Nephrolepis exaltata',
     alsoKnownAs: ['Sword Fern', 'Nephrolepis', 'Boston Sword Fern'],
     related: ['calathea', 'nerve-plant', 'asparagus-fern'],
-    metaTitle: 'Boston Fern Care: Pet-Safe, Water Every 3–7 Days',
+    metaTitle: 'Boston Fern Care: Pet-Safe, Keep the Soil Evenly Moist',
     heading: 'Boston fern care: watering and pet safety',
     metaDescription:
-      'Boston ferns are non-toxic to cats and dogs (per the ASPCA). Water every 3–7 days to keep the soil damp, and give it high humidity. Why fronds go brown.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Boston ferns are non-toxic to cats and dogs (per the ASPCA). Keep the soil evenly moist, never saturated, and give it high humidity. Why fronds go brown.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
     quickFacts: {
-      water: 'Every 3–7 days; keep the soil consistently damp, never dry',
-      light: 'Bright, indirect light; no direct sun',
+      water: 'Keep the soil evenly moist but not saturated; less in winter',
+      light: 'Bright to medium indirect light; no direct sun',
       difficulty: 'Moderate — easy to keep alive, harder to keep beautiful',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'High humidity is essential; dry air is the main killer',
+      humidity: 'High humidity; dry winter air browns the tips',
     },
     sections: {
       watering: [
-        'Boston ferns want the soil consistently damp — not wet, not dry. Check every few days and water when the surface starts to feel dry to the touch, which in practice is often every three to five days in summer and closer to weekly in winter. A fern that dries out completely, even once, browns off a batch of fronds and doesn’t forgive you.',
-        'Because they dry from the top, a light watering can leave the middle of a dense root ball bone dry. Every few weeks it’s worth standing the pot in a sink of water for twenty minutes and letting it drink from the bottom, then draining it fully.',
+        'Boston ferns want the soil evenly moist, not saturated. North Carolina State Extension says never to let it dry out, while University of Wisconsin–Madison Extension says it does best with consistent moisture but is the most drought-tolerant of the common ferns, so a single missed watering is not the end. Neither source gives a number of days: check the soil by touch.',
+        'In winter, water less. North Carolina State Extension says the plant is dormant then and overwatering can lead to root rot.',
       ],
       light: [
-        'Bright but indirect. A north or east window is ideal, or a spot just out of the beam of a brighter one. Direct sun scorches the fronds quickly — this is a forest-floor plant and it shows.',
-        'Too little light gives you a thin, sparse fern that sheds more than it grows. If yours is looking gappy and you’ve got the watering right, light is the next thing to change.',
+        'Bright but indirect, or medium-bright. University of Wisconsin–Madison Extension suggests an east window, or a south or west window behind a sheer curtain or far enough back that no direct sun reaches it.',
+        'Humidity matters as much as light. North Carolina State Extension says it needs high humidity and suggests a kitchen or bathroom, or a tray of wet pebbles, and Wisconsin says the tips and edges can brown in dry rooms, especially in winter.',
       ],
       problems: [
         'Brown, crispy fronds and leaflets shedding all over the floor is the signature Boston fern complaint, and it’s almost always dry air. Central heating in winter is brutal on them. Grouping plants together, a pebble tray, a humidifier, or a bright bathroom all help far more than misting does.',
@@ -1279,7 +1562,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'The fern also sends out thin, fuzzy runners; where one touches damp soil it can root and form a small new plant you can cut free. Keep new divisions humid while they establish.',
       ],
       sharedCare: [
-        'This is a plant with a short fuse: three or four days late and it starts browning off. That makes it a bad candidate for “whoever gets to it,” and a good candidate for one named owner with a recurring reminder.',
+        'This is a plant that wants steady moisture and humid air, and it shows dry spells in its fronds. That makes it a bad candidate for “whoever gets to it,” and a good candidate for one named owner with a recurring reminder.',
         'If it does live in a shared house, the honest advice is to put it somewhere the humidity does the work for you — a bright bathroom is the classic answer — so the schedule matters less. A fern in a steamy bathroom forgives a forgetful household in a way that a fern in a heated living room never will. If you are comparing it with the feathery [asparagus fern](/care/asparagus-fern), note that they are different plants with different pet-safety listings.',
       ],
       honestBit: [
@@ -1290,15 +1573,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a Boston fern?',
-        a: 'Every three to seven days — keep the soil consistently damp and never let it dry out fully. Check by touch rather than by calendar, and soak the pot from the bottom every few weeks so the middle of the root ball actually gets wet.',
+        a: 'Often enough to keep the soil evenly moist but never saturated, and less in winter. The extension sources give no fixed number of days, so check by touch.',
       },
       {
         q: 'Why is my Boston fern turning brown and dropping everywhere?',
-        a: 'Dry air, almost always, and central heating in winter is the usual culprit. Raise the humidity with a pebble tray, a humidifier, or a move to a bright bathroom. Letting the soil dry out completely will do it too.',
+        a: 'Dry air is the usual suspect, especially in heated rooms in winter: University of Wisconsin–Madison Extension says the tips and edges brown in dry interiors. Raise the humidity with a tray of wet pebbles or a move to a bright kitchen or bathroom, and keep the soil evenly moist.',
       },
       {
         q: 'Does misting a Boston fern help?',
-        a: 'Barely. Misting raises the humidity for a few minutes and then it’s gone. A pebble tray, grouping plants together, a humidifier, or a naturally humid room all do far more, and none of them need you to remember anything daily.',
+        a: 'The sources recommend steadier ways to raise humidity: a tray of wet pebbles or a naturally humid room such as a kitchen or bathroom. Those work without anyone having to remember a daily job.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Boston Fern, Nephrolepis exaltata var. Bostoniensis',
+        url: 'https://hort.extension.wisc.edu/articles/boston-fern-nephrolepis-exaltata-bostoniensis/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Nephrolepis exaltata (Boston Fern)',
+        url: 'https://plants.ces.ncsu.edu/plants/nephrolepis-exaltata/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1308,29 +1605,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Pachira aquatica',
     alsoKnownAs: ['Pachira', 'Guiana Chestnut', 'Malabar Chestnut', 'Braided Money Tree'],
     related: ['parlor-palm', 'rubber-plant', 'calathea'],
-    metaTitle: 'Money Tree Care: Pet-Safe, Water Every 1–2 Weeks',
+    metaTitle: 'Money Tree Care: Pet-Safe, Moist but Well-Drained Soil',
     heading: 'Money tree care: watering and pet safety',
     metaDescription:
-      'The ASPCA lists the money tree as non-toxic to cats and dogs. Water it every 1–2 weeks, when the top 2 inches of soil are dry, in bright, indirect light.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-30',
+      'The ASPCA lists the money tree as non-toxic to cats and dogs. Keep its soil moist but well-drained, never standing in water, in bright, indirect light.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The braided money tree is a genuinely good houseplant hiding behind a gimmicky presentation. It’s easy, it’s forgiving, and — unusually for a plant this size — the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
-      water: 'Every 1–2 weeks, when the top 2 inches of soil are dry',
-      light: 'Bright, indirect light; tolerates medium',
+      water: 'Keep the mix moist but well-drained; never leave it standing in water',
+      light: 'Bright, indirect light or partial shade; no hot direct sun',
       difficulty: 'Easy',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'Likes moderate humidity; copes with average',
+      humidity: 'Thrives in humid air; low humidity can yellow the leaves',
     },
     sections: {
       watering: [
-        'Water every one to two weeks, once the top two inches of soil are dry. Water thoroughly until it drains, then leave it alone until it’s dry again. Pachira stores water in that swollen trunk base, so it handles a missed week far better than a doubled-up one. That’s about the same rhythm as a [monstera](/care/monstera).',
-        'In winter, stretch it out — every two to three weeks is plenty. The commonest money tree death is a well-meaning fortnightly routine kept identical all year, which is about right in July and much too much in January.',
+        'North Carolina State Extension says a money tree prefers a moist, well-drained potting mix. It does not tolerate standing water, which can cause root rot, and soil that gets too dry can make it drop leaves. Neither source gives a number of days or a depth to check, so feel the soil and water before it dries out completely, then let the pot drain. That is a similar approach to a [monstera](/care/monstera).',
+        'Water thoroughly, empty the saucer, and keep it in an open, free-draining mix, as the RHS recommends.',
       ],
       light: [
-        'Bright, indirect light is ideal, and it does fine a few feet back from a window or in a medium-light room. Direct afternoon sun scorches the leaves, so a sheer curtain or a bit of distance from a south window helps.',
-        'Turn the pot a quarter-turn every time you water. Money trees lean hard toward the light, and with a braided trunk that can’t correct itself, a plant that spent a year facing one way ends up permanently lopsided.',
+        'Bright, indirect light suits it, and both sources say it also grows in partial shade. Direct sun can scorch the leaves, so a sheer curtain or a bit of distance from a sunny window helps.',
+        'It thrives in humid air at 65 to 75°F, according to North Carolina State Extension. Turn the pot now and then so every side gets light, since a braided trunk cannot correct itself later.',
       ],
       problems: [
         'Yellow leaves dropping off is the classic sign of too much water. The trunk should feel firm; if the base is soft or spongy, that’s rot and the watering needs to stop immediately.',
@@ -1342,8 +1639,8 @@ export const CARE_GUIDES: CareGuide[] = [
         'A cutting grows into a single stem. The braided trunks you see in stores are several young plants woven together by the grower, so a cutting will not reproduce the braid on its own.',
       ],
       sharedCare: [
-        'Money trees are frequently office plants and gift plants, which means they are frequently nobody’s plant — everyone likes it, nobody waters it, and it dies slowly in a corner. A plant that only needs attention every couple of weeks is exactly the kind that falls through the gaps.',
-        'It’s a good candidate for a shared reminder rather than a shared habit. Fortnightly in summer, monthly in winter, and one person confirming it was actually done is enough to keep it alive indefinitely.',
+        'Money trees are frequently office plants and gift plants, which means they are frequently nobody’s plant — everyone likes it, nobody waters it, and it dies slowly in a corner. A plant that never looks urgent is exactly the kind that falls through the gaps.',
+        'It’s a good candidate for a shared reminder rather than a shared habit. A regular soil check, and one person confirming it was actually done, is enough to keep it going.',
       ],
       honestBit: [
         'My take: if you want a floor-standing plant and you have a cat that chews, this is the one. Most large statement plants — fiddle leaf figs, rubber plants, bird of paradise, dracaenas — are toxic. Pachira is on the ASPCA non-toxic list and gets to five or six feet indoors. That combination is rarer than it should be.',
@@ -1353,15 +1650,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a money tree?',
-        a: 'Every one to two weeks in the growing season, when the top two inches of soil are dry, and every two to three weeks in winter. It stores water in the swollen trunk base and copes much better with being late than with being early.',
+        a: 'The extension sources give no fixed number of days. Keep the potting mix moist but well-drained, never leave it standing in water, and do not let it dry out so far that it drops leaves.',
       },
       {
         q: 'Why are my money tree leaves turning yellow and falling off?',
-        a: 'Overwatering is the most likely cause. Let the soil dry down two inches before watering again and check the pot drains. If the base of the trunk feels soft or spongy, that is rot, and you should stop watering entirely.',
+        a: 'North Carolina State Extension names low humidity and a lack of nutrients for yellow leaves, and soil that is too dry for leaf drop. Standing water causes root rot. Check the humidity and the soil before you change the watering.',
       },
       {
         q: 'Why is my money tree leaning to one side?',
-        a: 'It’s growing toward the light. Rotate the pot a quarter-turn each time you water so every side gets its share — braided trunks can’t straighten themselves out later.',
+        a: 'It may be growing toward the light. Rotate the pot a little each time you water so every side gets its share, since braided trunks cannot straighten themselves out later.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Pachira aquatica (Money Tree)',
+        url: 'https://plants.ces.ncsu.edu/plants/pachira-aquatica/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Pachira aquatica',
+        url: 'https://www.rhs.org.uk/plants/12078/pachira-aquatica/details',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1371,29 +1682,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
     related: ['blue-echeveria', 'jade-plant', 'poinsettia'],
-    metaTitle: 'How to Care for a Christmas Cactus: Water Every 1–2 Weeks',
+    metaTitle: 'How to Care for a Christmas Cactus: When to Water It',
     heading: 'How to care for a Christmas cactus',
     metaDescription:
-      'Water a Christmas cactus every 1–2 weeks, when the top inch of soil is dry, in bright, indirect light. Why it drops buds and how to make it bloom again.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a Christmas cactus when the top inch of soil is dry, in bright, filtered light. Why it drops buds and how to make it bloom again.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
-      water: 'Every 1–2 weeks, when the top inch of soil is dry',
-      light: 'Bright, indirect light; no direct sun',
+      water: 'When the top inch of soil is dry; water thoroughly',
+      light: 'Bright, filtered light; avoid strong sun',
       difficulty: 'Easy to grow, moderate to re-flower',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'Likes moderate humidity; average is fine',
+      humidity: 'High humidity, according to University of Minnesota Extension',
     },
     sections: {
       watering: [
-        'Water when the top inch of soil is dry, roughly every one to two weeks. Despite the name this is not a desert cactus: it grows in the crooks of trees in Brazilian rainforest and doesn’t want to be baked dry between drinks. Let it get slightly dry, then water thoroughly.',
-        'It drinks more while it’s budding and flowering, and less afterwards while it rests. A dry spell during budding is the single most common reason buds drop off before they ever open.',
+        'Water when the top inch of soil feels dry, not on a fixed schedule; UF/IFAS Gardening Solutions puts it exactly that way. Water thoroughly, until it runs out the bottom. Keep the soil moist but not wet: this is not a desert cactus, and UF says letting the soil dry out makes the flowers drop.',
+        'After it has finished blooming, water less often, and increase again in spring or early summer, as University of Minnesota Extension advises. While it is in bud, keep things steady: improper watering is one cause of bud drop, though UF says the usual cause is a change in its surroundings, especially heat.',
       ],
       light: [
-        'Bright, indirect light. Direct sun bleaches and reddens the flat segments and can burn them outright. An east window, or a shaded spot in a brighter room, is about right.',
-        'Light is also how you get it to flower. Schlumbergera sets buds in response to long nights and cool temperatures — roughly six to eight weeks of twelve-plus hours of uninterrupted darkness each night, at around 10–15°C. A spare room where nobody switches a lamp on in the evening, from about October, does it with no special effort at all.',
+        'Bright, filtered light. UF/IFAS Gardening Solutions says to keep it within 6 feet of a window and that any window except a north one works. University of Minnesota Extension warns that too much sun can leave the stems pale and sunburned.',
+        'Light is also how you get it to flower. It sets buds in response to long nights and cool temperatures: University of Minnesota Extension says at least 12 hours of complete darkness each night at 60 to 65°F, and that at 55°F nights it blooms in about 5 to 6 weeks. Above 65°F it is unlikely to bloom. UF suggests starting about mid-October for flowers by Christmas.',
       ],
       problems: [
         'Buds forming and then dropping before they open is the classic complaint, and the cause is almost always change: it got moved, the temperature swung, or it dried out at the wrong moment. Once it’s budding, put it where it will stay and keep the watering steady.',
@@ -1416,19 +1727,33 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a Christmas cactus?',
-        a: 'Every one to two weeks, when the top inch of soil is dry. It’s a rainforest plant, not a desert one, so don’t treat it like a succulent — but don’t leave it soggy either. It drinks more while budding and flowering.',
+        a: 'When the top inch of soil is dry, not on a fixed schedule, and thoroughly, until water runs out the bottom. Keep it moist but not wet, and water less after it has bloomed.',
       },
       {
         q: 'Why is my Christmas cactus dropping its buds?',
-        a: 'Usually a change of some kind — it was moved, the temperature swung, or the soil dried out while it was budding. Once buds appear, leave it in place and keep the watering steady.',
+        a: 'Usually a change in its surroundings, especially heat, according to UF/IFAS Gardening Solutions. Drafts, sudden temperature swings, dry soil and improper watering can also do it. Once buds appear, leave it in place and keep the watering steady.',
       },
       {
         q: 'How do I make a Christmas cactus bloom again?',
-        a: 'Give it long, uninterrupted dark nights and cool temperatures for about six to eight weeks in autumn — twelve or more hours of darkness at roughly 10–15°C. A spare room where nobody turns a lamp on in the evening does it.',
+        a: 'Give it long, uninterrupted nights and cool temperatures in fall: at least 12 hours of darkness each night at 60 to 65°F for about six weeks, according to University of Minnesota Extension. A spare room where nobody turns a lamp on in the evening does it.',
       },
       {
         q: 'How long does a Christmas cactus live?',
         a: 'For decades, with basic care. Christmas cactus is one of the classic heirloom houseplants, and a plant grown from a cutting of a relative’s cactus is the same plant, still going.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Christmas Cactus Preparation',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/christmas-cactus/christmas-cactus-preparation/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'University of Minnesota Extension',
+        title: 'Holiday cacti',
+        url: 'https://extension.umn.edu/garden-and-home/yard-and-garden/gardening-in-minnesota/holiday-cacti',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1441,25 +1766,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Parlor Palm Care: Watering, Low Light, and Pet Safety',
     metaDescription:
       'How often to water a parlor palm, why it works in low light, what brown tips mean, and why it is one of the best pet-safe plants you can buy.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-30',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The parlor palm has been the standard indoor palm since the Victorians, and for good reason: it handles low light, it’s genuinely pet-safe, and it looks tropical while asking for almost nothing.',
     quickFacts: {
-      water: 'Every 7–10 days, when the top inch of soil is dry',
-      light: 'Low to medium indirect light; no direct sun',
+      water: 'When the surface of the soil has dried; less in winter',
+      light: 'Bright, indirect light is best; tolerates low light; no direct sun',
       difficulty: 'Easy',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'Prefers moderate humidity; browns at the tips in very dry air',
+      humidity: 'Prefers moderate humidity; brown tips in very dry air',
     },
     sections: {
       watering: [
-        'Water every 7–10 days, when the top inch of soil is dry. Parlor palms like their soil lightly moist, but they’re far more tolerant of a missed watering than of a soggy pot — the roots are fine and they rot easily if they stay wet.',
-        'In a low-light spot, or in winter, stretch it to every two weeks or more. A dim corner plus a damp pot is the combination that kills them; if it’s somewhere dark, it needs water noticeably less often than you’d think.',
+        'Water a parlor palm when the surface of the soil has dried, and not while it is still damp. That is the RHS rule, and North Carolina State Extension says to let it dry slightly between waterings. Neither gives a number of days. It handles a short dry spell far better than a soggy pot, because roots left standing in water rot.',
+        'Water less in winter, when growth slows. A dim corner plus a damp pot is the combination to avoid.',
       ],
       light: [
-        'Low to medium indirect light. This is a genuine low-light plant — it grows in the understorey of Central American rainforest and never sees direct sun there. A north window, an interior corner, or a shaded spot in a brighter room all work. If your spot is dimmer still, or you’d rather water less often, a [ZZ plant](/care/zz-plant) copes with low light and goes 2–3 weeks between waterings.',
-        'Direct sun scorches the fronds and turns them a bleached yellow-green, so the one mistake to avoid is putting it on a sunny windowsill because it looks tropical. Shade isn’t a compromise for this plant; it’s the preference. If a sunny spot is what you have, a [bird of paradise](/care/bird-of-paradise) wants exactly that.',
+        'Both sources say bright, indirect light gives the best growth, and North Carolina State Extension suggests a north- or east-facing window. It also tolerates low light, which is why it is sold as a low-light plant, but the RHS says too little light can yellow the leaves and slow growth. If your spot is dimmer still, or you would rather water less often, a [ZZ plant](/care/zz-plant) copes with very low light and goes about two weeks between summer waterings.',
+        'Keep it out of direct sun, especially in summer, when it scorches the fronds. So the one mistake to avoid is putting it on a sunny windowsill because it looks tropical. If a sunny spot is what you have, a [bird of paradise](/care/bird-of-paradise) wants exactly that.',
       ],
       problems: [
         'Brown, crispy frond tips are the most common complaint and usually mean dry air, though hard tap water and inconsistent watering both contribute. Trim the brown off with scissors if it bothers you, raise the humidity, and judge by the new growth.',
@@ -1471,7 +1796,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'You can carefully separate those seedlings into smaller pots when repotting, but palms resent root disturbance, so expect a sulk afterward. Most people are better off buying a new plant than dividing one.',
       ],
       sharedCare: [
-        'A parlor palm is one of the best plants for a household that isn’t very good at plants. It goes over a week without water, it doesn’t need a bright window, and it doesn’t die dramatically when the routine slips — which makes it forgiving of the gap where everybody assumed somebody else had it.',
+        'A parlor palm is one of the best plants for a household that isn’t very good at plants. It tolerates a missed watering and lower light, and it doesn’t die dramatically when the routine slips — which makes it forgiving of the gap where everybody assumed somebody else had it.',
         'It’s also a good one for the room the pets live in, precisely because it’s safe. Households often end up with every plant exiled to a high shelf; this is one you can put on the floor and stop thinking about. Do not confuse it with the [sago palm](/care/sago-palm), which only looks like a palm and is the opposite for pets.',
       ],
       honestBit: [
@@ -1482,7 +1807,7 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a parlor palm?',
-        a: 'Every 7–10 days, when the top inch of soil is dry, and less in winter or in a dim spot — sometimes every two weeks or more. They tolerate a missed watering much better than a soggy pot.',
+        a: 'When the surface of the soil has dried, and less in winter. The sources give no fixed number of days. It tolerates a missed watering much better than a soggy pot.',
       },
       {
         q: 'Why are my parlor palm tips turning brown?',
@@ -1490,7 +1815,21 @@ export const CARE_GUIDES: CareGuide[] = [
       },
       {
         q: 'Can a parlor palm live in low light?',
-        a: 'Yes, genuinely. It grows in rainforest understorey and prefers shade to sun, and direct sunlight scorches the fronds. Just remember that a plant in low light needs watering less often, not more.',
+        a: 'It tolerates low light, but both sources say bright, indirect light is best for growth, and the RHS says too little light can yellow the leaves. Keep it out of direct sun, which scorches the fronds.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Chamaedorea elegans (Parlor Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/chamaedorea-elegans/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'How to grow chamaedorea',
+        url: 'https://www.rhs.org.uk/plants/chamaedorea/growing-guide',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1500,29 +1839,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Phalaenopsis',
     alsoKnownAs: ['Phalaenopsis', 'Phal', 'Moon Orchid', 'Supermarket Orchid'],
     related: ['christmas-cactus', 'anthurium', 'african-violet'],
-    metaTitle: 'How to Water a Moth Orchid: Soak, Drain, Every 7–10 Days',
+    metaTitle: 'How to Water a Moth Orchid: Soak, Drain, About Weekly',
     heading: 'Moth orchid care: how to water it',
     metaDescription:
-      'Water a moth orchid (phalaenopsis) roughly every 7–10 days: soak it, then drain completely. What the roots tell you, and how to get it to flower again.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a moth orchid (phalaenopsis) about once a week: soak the bark, then drain it completely. What the roots tell you, and how to get it to flower again.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The supermarket orchid is not a delicate specialist plant — it’s an easy plant that almost everybody waters wrong. Get the watering right and a phalaenopsis will flower for months, rest, and then do it again for years.',
     quickFacts: {
-      water: 'Roughly every 7–10 days; soak, then drain completely',
-      light: 'Bright, indirect light — an east window is ideal',
+      water: 'About once a week; soak the bark, then drain completely',
+      light: 'Bright, indirect light, such as an east window',
       difficulty: 'Easy, once you stop watering it like a normal plant',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'Likes moderate to high humidity; average is workable',
+      humidity: '40 to 60%; most homes are drier than that in winter',
     },
     sections: {
       watering: [
-        'An orchid isn’t growing in soil, it’s growing in bark, and its roots are meant to be wet briefly and then dry with air around them. Water roughly every 7–10 days by taking the plastic inner pot to the sink, running water through the bark for a minute, then letting it drain completely before it goes back in its cover. Never leave it standing in water.',
-        'The roots tell you when. Firm, silvery-green roots mean it’s fine; roots that have gone plain silver-white and slightly shrivelled mean it’s thirsty. That’s far more reliable than a schedule, and it’s the reason clear plastic pots are standard — you’re supposed to look.',
+        'An orchid grows in bark, not soil. Water it about once a week: University of Maryland Extension says that at normal room temperatures it should not need watering more often than that, and the RHS says weekly through the growing season, a little less in winter. Take the inner pot to the sink, let water run through the bark until it has soaked in, then let it drain completely before it goes back in its cover. Never leave it standing in water: watering too often rots the roots.',
+        'The roots help you judge. University of Maryland Extension says aerial roots turn from dull silver or white to pale green once they have had enough water. The RHS adds that a clear pot lets you see whether the bark below the surface is still moist, and warns against letting the roots dry out completely.',
       ],
       light: [
-        'Bright, indirect light. An east-facing window is close to perfect: gentle morning sun, shade for the rest of the day. The leaves should be a medium grass green — very dark green means not enough light, and yellow-green or red-tinged means too much.',
-        'Light is also the flowering lever. An orchid that hasn’t reflowered is usually in a spot that’s too dim. That, plus a cool spell — a few weeks with night temperatures around 15°C, which an autumn windowsill provides by itself — is what triggers a new flower spike.',
+        'Bright, indirect light, out of direct summer sun. An east window suits it, and the sources also name north and west windows. University of Maryland Extension says leaves in the right light are light green; very dark, stiff leaves mean too little light, and yellow-green leaves with reddish edges mean too much.',
+        'Light is also the flowering lever: too little light is the most common reason a moth orchid does not flower. A cool spell helps too. Iowa State University Extension says fall nights of 55 to 60°F help start flower development. Humidity matters as well: the same source gives 40 to 60%, and most homes fall below that in winter, so a tray of damp gravel under the pot helps.',
       ],
       problems: [
         'Wrinkled, floppy, leathery leaves mean the plant can’t take up water, and confusingly the usual cause is overwatering that has rotted the roots. Tip it out and look: healthy roots are firm and green or silver, dead ones are brown, flat and mushy. Cut the dead ones off and repot into fresh bark.',
@@ -1545,15 +1884,35 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water an orchid?',
-        a: 'Roughly every 7–10 days. Take the inner pot to the sink, run water through the bark for a minute, and let it drain completely before returning it to its cover pot. Better still, go by the roots: silvery and shrivelled means water, firm and green means wait.',
+        a: 'About once a week, not more often at normal room temperatures. Take the inner pot to the sink, run water through the bark until it soaks in, and let it drain completely before returning it to its cover pot. Silver-white aerial roots turning pale green tell you it has had enough.',
       },
       {
         q: 'How do I get my orchid to flower again?',
-        a: 'More light and a cool spell. Move it to a bright east window, and let it experience a few weeks of cooler nights in autumn, around 15°C. A dim spot is the usual reason an otherwise healthy orchid never spikes again.',
+        a: 'More light and a cool spell. Move it to a bright east window, and give it a few weeks of cooler fall nights, around 55 to 60°F. Low light is the most common reason an otherwise healthy orchid never flowers again.',
       },
       {
         q: 'Why are my orchid leaves wrinkled and floppy?',
-        a: 'The roots can’t take up water, and the usual cause is root rot from overwatering or a pot that stays wet. Tip it out and inspect: firm green or silver roots are healthy, brown mushy ones are dead. Trim the dead roots and repot into fresh bark.',
+        a: 'University of Maryland Extension names low humidity and too little water as causes of wrinkled leaves. Check the roots too: if they are brown and mushy, they have rotted from watering too often, and the plant cannot take up water. Trim the dead roots and repot into fresh bark.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'What is the proper care for a moth orchid?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/what-proper-care-moth-orchid',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'How to grow Phalaenopsis (moth orchids)',
+        url: 'https://www.rhs.org.uk/plants/phalaenopsis/growing-guide',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'University of Maryland Extension',
+        title: 'Care of Phalaenopsis Orchids (Moth Orchids)',
+        url: 'https://extension.umd.edu/resource/care-phalaenopsis-orchids-moth-orchids',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1563,29 +1922,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Hoya carnosa',
     alsoKnownAs: ['Wax Plant', 'Porcelain Flower', 'Hindu Rope Plant', 'Wax Flower'],
     related: ['pothos', 'spider-plant', 'orchid'],
-    metaTitle: 'Hoya (Wax Plant) Care: Water Every 2–3 Weeks + Pet Safety',
+    metaTitle: 'Hoya (Wax Plant) Care: When to Water + Pet Safety',
     heading: 'Hoya care: the wax plant and porcelain flower',
     metaDescription:
-      'Water a hoya (wax plant, porcelain flower) every 2–3 weeks, once the soil is mostly dry. Some gentle direct sun helps it flower. Pet-safe per the ASPCA.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-29',
+      'Water a hoya (wax plant, porcelain flower) thoroughly, then let the mix dry almost completely. Bright, indirect light helps it flower. Pet-safe per the ASPCA.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A hoya is a trailing plant with thick, almost plastic-feeling leaves that stores its own water and asks very little of you. It’s slow, it’s nearly indestructible, and Hoya carnosa is on the ASPCA non-toxic list — which makes it the pet-safe answer to a hanging pothos.',
     quickFacts: {
-      water: 'Every 2–3 weeks; let the soil dry out most of the way first',
-      light: 'Bright, indirect light; some gentle direct sun helps it flower',
+      water: 'Water thoroughly, then let the mix dry almost completely; very little in winter',
+      light: 'Bright, indirect light; too much sun can scorch or redden the leaves',
       difficulty: 'Very easy',
       toxicity: 'Non-toxic to cats and dogs (the ASPCA lists Hoya carnosa as non-toxic)',
-      humidity: 'Average household humidity is fine',
+      humidity: 'Adapts to average indoor humidity; 40 to 60% is ideal',
     },
     sections: {
       watering: [
-        'Water every two to three weeks, once the soil has dried out most of the way. Those thick waxy leaves are water storage — a hoya is closer to a succulent than to a fern in how it wants to be treated, and it genuinely prefers being forgotten to being fussed over.',
-        'In winter, once a month is often enough. The wrinkle test works here as well as it does on a jade plant: firm leaves mean it’s fine, slightly soft or dimpled leaves mean it’s time.',
+        'Water thoroughly so the whole root zone is wet, then let the mix dry almost completely before watering again. Iowa State University Extension says a hoya is happiest a little on the dry side, and UF/IFAS Gardening Solutions says to let the top third to half of the soil dry out between waterings. Neither gives a number of days.',
+        'In winter, or in lower light, water much less: UF says very sparingly. The quickest way to lose one is overwatering in a mix that drains poorly.',
       ],
       light: [
-        'Bright, indirect light keeps it healthy, and a bit of gentle direct sun — morning, or a west window through a curtain — is what gets it to flower. A hoya in medium light will live happily for years and simply never bloom.',
-        'If you want the flowers, and they’re worth wanting, there’s one rule that catches everybody out: don’t cut off the bare little stalk a flower cluster grew from. Hoyas rebloom from the same spur year after year, and pruning it off means starting over.',
+        'Bright, indirect light keeps it healthy and is what gets it to flower. Iowa State University Extension says light is the main driver of blooming, and that many hoyas that never flower are simply not getting enough of it. Too much light can scorch the leaves or turn them red, and low light gives thin, stretched growth.',
+        'If you want the flowers, and they are worth wanting, there is one rule that catches everybody out: do not cut off the bare little stalk a flower cluster grew from. Many hoyas rebloom from the same spur year after year, and pruning it off means starting over.',
       ],
       problems: [
         'Yellowing leaves that feel soft mean too much water. It’s the main way hoyas are killed, and it takes a while to show because the plant is so slow — by the time leaves yellow, the roots have usually been sitting wet for weeks.',
@@ -1597,7 +1956,7 @@ export const CARE_GUIDES: CareGuide[] = [
         'Don’t cut off the leafless spurs where flowers formed, either on the cutting or the parent; hoyas reflower from the same spurs.',
       ],
       sharedCare: [
-        'Hoyas are ideal for households that travel or forget. A three-week interval means a fortnight away does no damage at all, and there’s no realistic scenario in which two people miss it badly enough to matter.',
+        'Hoyas are ideal for households that travel or forget. It is happiest a little on the dry side, so a missed watering does far less harm than an extra one.',
         'The one thing worth telling everybody is the flower spur rule. A tidy-minded housemate deadheading the spent flowers and snipping off the “dead-looking twig” underneath will cost you next year’s blooms — and it’s a completely reasonable mistake to make if nobody has ever mentioned it.',
       ],
       honestBit: [
@@ -1608,15 +1967,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a hoya?',
-        a: 'Every two to three weeks, once the soil has dried out most of the way, and about monthly in winter. The leaves are the best guide: firm means wait, slightly soft or wrinkled means water.',
+        a: 'Thoroughly, and then not again until the mix has dried almost completely, with very little water in winter. The extension sources give no fixed number of days.',
       },
       {
         q: 'Why won’t my hoya flower?',
-        a: 'Usually not enough light, or the plant is still young — many hoyas take a few years. Give it bright light with a little gentle direct sun, avoid repotting it often since they bloom better slightly root-bound, and never cut off the bare spur a flower cluster grew from, because it reblooms from the same one.',
+        a: 'Usually not enough light, or the plant is still young, since hoyas often take several years to mature. Give it bright, indirect light, avoid repotting it often, since they bloom better slightly potbound, and never cut off the bare spur a flower cluster grew from, because it reblooms from the same one.',
       },
       {
         q: 'Why are my hoya leaves wrinkled?',
-        a: 'That’s the thirst signal — give it a thorough soak and they should plump up within a couple of days. If they don’t, check the roots: root rot from overwatering causes the same wrinkling, because the damaged roots can’t take up water.',
+        a: 'Often thirst, so check the soil and give it a thorough soak if it is dry. If the soil is wet, check the roots instead: overwatering in a poorly drained mix damages them, and damaged roots cannot take up water.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'All About Hoyas',
+        url: 'https://yardandgarden.extension.iastate.edu/how-to/all-about-hoyas',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Hoya',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/hoya/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1626,29 +1999,29 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
     related: ['calathea', 'begonia', 'african-violet'],
-    metaTitle: 'Nerve Plant Care: Water Every 3–5 Days, Keep It Moist',
+    metaTitle: 'Nerve Plant Care: Water Twice a Week, Keep It Moist',
     heading: 'Nerve plant care: how often to water it',
     metaDescription:
-      'Water a nerve plant every 3–5 days and keep the soil lightly moist. It faints when thirsty and revives within hours, and it’s non-toxic to cats and dogs.',
-    reviewed: '2026-09-02',
-    updated: '2026-10-30',
+      'Water a nerve plant about twice a week; keep the soil moist, not waterlogged. It wilts when thirsty, recovers fast, and it’s non-toxic to cats and dogs.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
-      water: 'Every 3–5 days; keep the soil lightly moist at all times',
-      light: 'Medium, indirect light; no direct sun',
+      water: 'About twice a week; keep the soil moist but never waterlogged',
+      light: 'Bright to medium light; no direct sun',
       difficulty: 'Easy in the right spot, difficult in a dry room',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'High humidity is essential — this is the whole plant',
+      humidity: 'Humid air, though the sources differ on how much',
     },
     sections: {
       watering: [
-        'Keep the soil lightly moist, checking every few days — in practice that usually means watering every three to five days. Fittonias have shallow roots and small pots and they dry out fast, especially in a warm room. They don’t want to be soggy, but they won’t tolerate drying out fully either.',
-        'The famous collapse is your reminder: when it runs dry the whole plant goes limp and flat, as though it has died. Water it and it stands back up within a few hours, usually with no lasting damage. It’s alarming the first time and completely routine after that — though repeatedly letting it faint does eventually cost you leaves.',
+        'Keep the soil moist. North Carolina State Extension recommends watering about twice a week, and the RHS says fittonias do not like waterlogged compost. Overwatering can cause root rot, so the pot must drain.',
+        'The famous collapse is your reminder: when it runs dry the whole plant wilts dramatically, and it usually perks up soon after a thorough watering. It is alarming the first time and routine after that, but check the soil before it gets that far.',
       ],
       light: [
-        'Medium, indirect light. Fittonia grows on the rainforest floor and burns in direct sun, so a north or east window, or a shaded spot in a brighter room, is what it wants. Under a desk lamp or a grow light works well too.',
-        'Too little light makes it leggy and washes out the pink or white veining that is the entire point of the plant. If yours has gone sparse and dull, move it somewhere brighter but keep it out of the sun beam. Another plant that wants humid air and gentle light, the [begonia](/care/begonia), has its own guide.',
+        'Bright to medium light, out of direct sun, which scorches the leaves. North Carolina State Extension says it does well under fluorescent lights too, and that dry air, drafts or direct sun can make the leaves shrivel and fall.',
+        'The sources differ on humidity. The RHS says humid air is essential and suggests a bathroom or terrarium. North Carolina State Extension says medium humidity, and that air that is too humid can make the leaves wither. Another plant that wants gentle light, the [begonia](/care/begonia), has its own guide.',
       ],
       problems: [
         'A collapsed, flat plant means it’s thirsty. Water it thoroughly and check again in a few hours. If it doesn’t stand back up after a good soak, look at the roots — sitting wet causes rot, which produces exactly the same wilting.',
@@ -1661,7 +2034,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'A fittonia is a bad plant to share on a rota and a great plant to share as a visible signal, because it announces its own neglect. When it faints, everybody can see it needs water — no note required.',
-        'That said, three to five days is a short leash for a shared household. If nobody in the house is reliable on that timescale, put it in a closed terrarium or a big jar with a lid, where it keeps itself humid and goes weeks without you. That isn’t a compromise; it’s genuinely how these plants grow best indoors. For a small flowering plant that is more forgiving of a missed day, the [African violet](/care/african-violet) is the other pet-safe windowsill option.',
+        'That said, about twice a week is a short leash for a shared household. If nobody in the house is reliable on that timescale, put it in a closed terrarium or a big jar with a lid, where it keeps itself humid and goes weeks without you. That isn’t a compromise; it’s genuinely how these plants grow best indoors. For a small flowering plant that is more forgiving of a missed day, the [African violet](/care/african-violet) is the other pet-safe windowsill option.',
       ],
       honestBit: [
         'My take: buy a fittonia for a terrarium or a bathroom, not for a shelf in a heated living room. In the right microclimate it’s one of the prettiest and easiest small plants there is. In dry air it’s a slow, sad, crispy-edged disappointment, and no amount of misting will fix that.',
@@ -1671,15 +2044,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a nerve plant?',
-        a: 'Every three to five days — keep the soil lightly moist and never let it dry out fully. Small pots and shallow roots mean fittonias dry fast, especially in a warm room.',
+        a: 'About twice a week, according to North Carolina State Extension, keeping the soil moist but never waterlogged. Small pots dry fast, especially in a warm room.',
       },
       {
         q: 'Why does my fittonia keep collapsing?',
-        a: 'It’s thirsty. Nerve plants wilt dramatically flat when the soil dries out, and recover within hours of watering. It’s normal behavior rather than damage, though repeated faints will eventually cost leaves. If a good soak doesn’t revive it, check the roots for rot.',
+        a: 'Usually thirst. Nerve plants wilt dramatically when the soil dries out and usually recover soon after a thorough watering. If a good soak does not revive it, check the roots for rot.',
       },
       {
         q: 'Why are my fittonia leaves going brown and crispy at the edges?',
-        a: 'Dry air. Fittonias need genuinely high humidity, more than a heated room provides. A terrarium, a covered jar, a bathroom, or grouping it with other plants under a cloche fixes it far more effectively than misting.',
+        a: 'Dry air, drafts and direct sun can all make the leaves shrivel, according to North Carolina State Extension. The RHS says humid air is essential and suggests a bathroom or terrarium, while North Carolina State says medium humidity and warns that too much can make the leaves wither. Raise the humidity a little and keep it out of drafts and sun.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Fittonia albivenis (Nerve Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/fittonia-albivenis/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'RHS',
+        title: 'Fittonia',
+        url: 'https://www.rhs.org.uk/plants/fittonia',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1692,26 +2079,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'African Violet Care: Watering, Light + Pet Safety',
     metaDescription:
       'How to water an African violet without spotting the leaves, the light it blooms in, and why the ASPCA lists it as non-toxic to cats and dogs.',
-    reviewed: '2026-10-21',
-    updated: '2026-10-21',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'African violets bloom almost all year on a bright windowsill, and they have one rule that matters more than the rest: keep cold water off the leaves. The ASPCA lists the African violet as non-toxic to cats and dogs, so it can sit where a curious pet can reach it.',
     quickFacts: {
-      water:
-        'When the top of the soil feels dry, about once a week; water the soil, not the leaves',
-      light: 'Bright, indirect light; an east window is ideal',
+      water: 'Keep the mix moist but not soggy; water the soil, not the leaves',
+      light: 'Moderate to bright, indirect light; a north or northeast window works well',
       difficulty: 'Easy once you learn the watering trick',
       toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
-      humidity: 'Average to slightly humid; 40–60% is comfortable',
+      humidity: '40 to 60% helps it thrive',
     },
     sections: {
       watering: [
-        'Water an African violet when the top of the soil feels dry, which is usually about once a week. Use room-temperature water and pour it onto the soil, or into a saucer under the pot, and tip out whatever the plant has not taken up after about half an hour.',
-        'Keep water off the leaves. Cold droplets sitting on the fuzzy foliage leave pale rings and spots, and water pooled in the crown at the center of the plant invites rot. If you do splash the leaves, blot them dry before the plant goes back in the light.',
+        'Keep an African violet’s potting mix moist but not soggy, and never let the pot sit in water. University of Minnesota Extension says root rot from overwatering is one of the most common reasons they die. Use room-temperature water, ideally distilled, rain or reverse-osmosis water. Neither source gives a number of days.',
+        'Water the mix, not the leaves: water left on the leaves causes spots. To water from below, stand the pot in about an inch of room-temperature water until the surface of the soil feels moist, then take it out and let it drain.',
       ],
       light: [
-        'Bright, indirect light is what makes an African violet bloom. An east window is close to perfect, and a north or lightly shaded west window works too. A sunny south window needs a sheer curtain, because direct midday sun bleaches and scorches the leaves.',
-        'If yours produces healthy leaves and no flowers, it wants more light. If the leaves lie flat and pale against the pot or crisp at the edges, it is getting too much. A violet that grows evenly is usually in the right place; turn the pot a quarter turn each week so it does not lean.',
+        'Bright, cool light is what makes an African violet bloom. University of Minnesota Extension says north, northwest or northeast windows work well, and South Dakota State University Extension says moderate to bright, indirect light. To flower it also needs a proper night: 8 to 10 hours of darkness a day.',
+        'If it makes yellowing leaves and long stems and no flowers, it wants more light. Brown spots on the leaves and flowers, or leaves curling downward, can mean too much. Humidity of 40 to 60% helps it thrive. Turn the pot now and then so it grows evenly.',
       ],
       problems: [
         'Pale rings or spots on the leaves almost always mean cold water landed on them. Use room-temperature water and keep it on the soil, and new leaves will come in clean. Old spotted leaves do not recover, so you can pick them off.',
@@ -1724,7 +2110,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'In a shared home, the one rule worth writing on the pot is “water the saucer, not the leaves,” because a well-meaning housemate pouring from the top is how violets end up with leaf spots.',
-        'A violet that needs water roughly once a week fits a simple weekly rota, and it is small enough to move to whoever has the brightest east-facing sill. Because it is cited as non-toxic to cats and dogs, it is also a reasonable choice for a household where the pets have free run of the shelves.',
+        'A violet that needs its soil checked regularly fits a simple rota, and it is small enough to move to whoever has the best bright, cool sill. Because it is cited as non-toxic to cats and dogs, it is also a reasonable choice for a household where the pets have free run of the shelves.',
       ],
       honestBit: [
         'My take: African violets get a reputation as fussy, and it is mostly the watering. Once you stop watering from above, they are close to the easiest flowering plant you can own, and a healthy one will bloom for most of the year with no help from you.',
@@ -1734,15 +2120,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water an African violet?',
-        a: 'About once a week, whenever the top of the soil feels dry. Water the soil or a saucer under the pot with room-temperature water, and empty the saucer after half an hour. Avoid getting water on the leaves.',
+        a: 'Often enough to keep the potting mix moist but not soggy, never leaving it standing in water. The extension sources give no fixed number of days. Use room-temperature water on the soil, not the leaves.',
       },
       {
         q: 'Why does my African violet have spots on its leaves?',
-        a: 'Pale rings or spots usually mean cold water splashed onto the leaves. Water the soil instead, use room-temperature water, and the new leaves will grow in clean. The spotted leaves will not recover.',
+        a: 'Water left on the leaves causes spots, according to both extension sources. Water the soil or from below, gently shake off any drops, and the new leaves will grow in clean. Brown spots can also mean too much light.',
       },
       {
         q: 'Why is my African violet not blooming?',
-        a: 'Almost always light. African violets bloom in bright, indirect light, such as an east window. Move yours somewhere brighter, out of direct midday sun, and give it a few weeks.',
+        a: 'Usually light. African violets need moderate to bright, indirect light, and enough darkness at night, to bloom. Move yours somewhere brighter, such as a north or northeast window, and give it a few weeks.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'University of Minnesota Extension',
+        title: 'African violets',
+        url: 'https://extension.umn.edu/garden-and-home/yard-and-garden/gardening-in-minnesota/african-violets',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'South Dakota State University Extension',
+        title: 'African Violet: Houseplant How-To',
+        url: 'https://extension.sdstate.edu/african-violet-houseplant-how',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1755,25 +2155,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Poinsettia Care and Pet Safety: Past the Holidays',
     metaDescription:
       'How to water a poinsettia, the light it needs, how to keep it alive after the holidays, and what the ASPCA says about poinsettias and cats and dogs.',
-    reviewed: '2026-10-21',
-    updated: '2026-10-21',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'A poinsettia is the one houseplant most people bring home in December and lose by February, usually from too much water or a cold drafty doorway. It can last for months with a bright window and a careful hand, and the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
-      water: 'When the top inch of soil is dry; then drain fully',
-      light: 'Bright, indirect light, at least six hours a day',
+      water: 'When the soil surface is dry to the touch; then drain fully',
+      light: 'Bright, indirect light near a sunny window',
       difficulty: 'Moderate: easy to keep through winter, hard to rebloom',
       toxicity: 'Toxic to cats and dogs (per the ASPCA); usually mild mouth and stomach irritation',
-      humidity: 'Average household humidity is fine',
+      humidity: 'No figure in the sources; keep it away from heat vents and drafts',
     },
     sections: {
       watering: [
-        'Water a poinsettia when the top inch of the soil is dry, then water until it drains from the bottom and let it drain completely. The most common way to lose one is a pot that sits in water, and the most common cause of that is the decorative foil sleeve it came in. Punch a hole in the foil or take the plant out of it to water.',
-        'A poinsettia wilts when it is too dry and also when its roots are drowning, so check the soil before you add water. If the plant is drooping and the soil is wet, more water is the wrong answer.',
+        'Check a poinsettia’s soil daily with a finger, and when the surface is dry to the touch, water until it runs out of the bottom, then let it drain. Iowa State University Extension gives that rule. Never leave it standing in water: University of Delaware Cooperative Extension says to remove the decorative foil or punch holes in it, and to empty the saucer if water is still there after a few hours.',
+        'Too much and too little water both cause trouble, so check the soil before you add any. Iowa State says overwatering yellows and drops the lower leaves and can rot the roots, and that a dry plant wilts and drops leaves early. If the plant is drooping and the soil is wet, more water is the wrong answer.',
       ],
       light: [
-        'Give it bright, indirect light for at least six hours a day, such as a south or west window with a sheer curtain, and keep the leaves from touching cold glass. Keep it away from heat vents, radiators and cold drafts. Anything much below 50°F or a blast from an opening door can make it drop its leaves.',
-        'Comfortable room temperatures, roughly 60–70°F, keep the colored bracts looking good for the longest time. The bracts are modified leaves, and they fade slowly whatever you do.',
+        'Give it bright, indirect light near a sunny window, as University of Delaware Cooperative Extension advises, and keep the bracts from touching cold glass. Keep it away from heat vents, radiators and cold drafts: temperatures below 50°F damage it.',
+        'Room temperatures of roughly 60 to 70°F, with nights around 60 to 62°F, suit it best, according to the same source. Cool rooms combined with wet soil encourage root rot. The bracts are modified leaves, and they fade slowly whatever you do.',
       ],
       problems: [
         'Dropping leaves usually come from one of three things: soggy soil, a cold draft, or a sudden move from the store. Check the soil first, then check where the plant is standing, and hold it steady in one good spot.',
@@ -1796,15 +2196,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a poinsettia?',
-        a: 'When the top inch of soil is dry, usually about once a week in a warm room. Water until it drains from the bottom, let it drain completely, and never leave it standing in the foil sleeve or a full saucer.',
+        a: 'When the soil surface is dry to the touch; check it daily. Water until it drains from the bottom, let it drain completely, and never leave it standing in the foil sleeve or a full saucer. The extension sources give no fixed number of days.',
       },
       {
         q: 'Why is my poinsettia dropping its leaves?',
-        a: 'Usually soggy soil, a cold draft, or being moved around. Check that the pot drains, keep it above about 50°F and away from vents and doors, and leave it in one bright spot.',
+        a: 'Usually water or cold. Overwatering yellows and drops the lower leaves, a dry plant drops leaves too, and temperatures below 50°F damage it. Check that the pot drains and keep it away from vents and doors.',
       },
       {
         q: 'How do I keep a poinsettia after Christmas?',
-        a: 'Keep it in a bright window, water only when the top inch is dry, and keep it warm. The colored bracts fade over several weeks, and the plant itself can stay green for the rest of the year.',
+        a: 'Keep it near a bright, sunny window in indirect light, water only when the soil surface is dry, and keep it warm. The colored bracts fade over several weeks, and the plant itself can stay green for the rest of the year.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How often should I water my poinsettia?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-often-should-i-water-my-poinsettia',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'University of Delaware Cooperative Extension',
+        title: 'Caring for Poinsettias',
+        url: 'https://www.udel.edu/academics/colleges/canr/cooperative-extension/fact-sheets/poinsettias/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1817,25 +2231,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Sago Palm Care and Pet Safety: Watering and Light',
     metaDescription:
       'How often to water a sago palm, how much light it needs, why the fronds yellow, and why the ASPCA lists it as toxic to cats and dogs.',
-    reviewed: '2026-10-21',
-    updated: '2026-10-30',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The sago palm is a slow, sturdy plant that is not really a palm, and it is easy to keep alive indoors if you do not overwater it. It is also one of the most dangerous houseplants for pets: the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
-      water: 'Every 2–3 weeks, once the soil has dried out most of the way',
-      light: 'Bright light; a few hours of direct sun is fine',
+      water: 'Keep it evenly moist, letting the surface nearly dry between waterings',
+      light: 'Bright, filtered sun for 4 to 6 hours a day; no harsh direct sun',
       difficulty: 'Easy to keep, very slow to grow',
       toxicity: 'Toxic to cats and dogs (per the ASPCA); severe, a vet emergency if eaten',
-      humidity: 'Average household humidity is fine',
+      humidity: 'No figure in the sources',
     },
     sections: {
       watering: [
-        'Water a sago palm only after the soil has dried out most of the way down, which is usually every two to three weeks, and less often in winter. Water thoroughly so it drains from the bottom, then leave it alone. The plant stores water in its swollen trunk and prefers a dry spell to a wet one. That’s the same every-two-to-three-weeks rhythm as [aloe vera](/care/aloe-vera).',
-        'The trunk is the warning sign. A firm trunk is healthy, and a soft or darkening base means the plant has been sitting wet. Use a gritty, fast-draining mix, such as a cactus mix, and a pot with a drainage hole.',
+        'The Missouri Botanical Garden says a sago palm needs regular, consistent moisture, with the soil surface nearly drying out between waterings, and North Carolina State Extension says the soil should be moist and well-drained. Neither gives a number of days. Water thoroughly so it drains from the bottom. That is a wetter routine than [aloe vera](/care/aloe-vera), which waits until the top inch is dry.',
+        'What it will not tolerate is overwatering or poor drainage: North Carolina State Extension says either can rot the roots. Use a pot with a drainage hole and never leave it standing in water. Established plants tolerate some drought.',
       ],
       light: [
-        'Sago palms like bright light and tolerate a few hours of direct sun, so a south, east or west window suits them. They survive lower light, but growth slows to a crawl, and the fronds become weak.',
-        'If you move a plant that has lived in shade into strong sun, do it gradually over a couple of weeks. Sudden sun can scorch the fronds, and scorched fronds do not turn green again.',
+        'Indoors, both sources recommend filtered sun for 4 to 6 hours a day, such as through a curtain on an east, west or south window. North Carolina State Extension says it prefers bright but indirect light and that harsh sun can damage the fronds.',
+        'If you move a plant that has lived in shade into stronger light, do it gradually, and keep it out of harsh direct sun. Scorched fronds do not turn green again.',
       ],
       problems: [
         'Yellow fronds are most often overwatering, especially in winter, when the plant is barely growing. They can also be a sign of poor light or of nutrient shortage. Check the soil and trunk first, because rot is the problem you cannot undo.',
@@ -1848,7 +2262,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'In a shared home, a sago palm needs very little care and very clear information, so the person who owns it should tell every housemate and guest that it is a plant to keep away from pets.',
-        'It is slow, drought-tolerant and easy to forget, which makes the risk too much care rather than too little. Agree on one person to water it every few weeks, and put the pot where no pet can chew a frond.',
+        'It is slow, drought-tolerant and easy to forget, which makes the risk too much care rather than too little. Agree on one person to water it when the soil surface is nearly dry, and put the pot where no pet can chew a frond.',
       ],
       honestBit: [
         'My take: the sago palm is a handsome, architectural plant, and in a house with a dog or a cat I would not own one. The reason is not subtle.',
@@ -1858,15 +2272,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water a sago palm?',
-        a: 'Every two to three weeks, after the soil has dried out most of the way down, and less in winter. Water until it drains, then let it dry. A firm trunk is healthy; a soft base means too much water.',
+        a: 'Often enough to keep the soil evenly moist, letting the surface nearly dry between waterings, according to the Missouri Botanical Garden. The sources give no fixed number of days. Water until it drains, and never leave it standing in water: overwatering and poor drainage rot the roots.',
       },
       {
         q: 'Why are my sago palm fronds turning yellow?',
-        a: 'Overwatering is the most common cause, particularly in winter. Check that the soil dries between waterings and the pot drains. Poor light and low nutrients can also yellow the fronds.',
+        a: 'The sources do not name one cause. Check the watering first: soggy soil and poor drainage rot the roots. Then check the light, since indoors it wants filtered sun for 4 to 6 hours a day.',
       },
       {
         q: 'Is a sago palm a real palm?',
-        a: 'No. It is a cycad, an old group of cone-bearing plants, that only looks like a palm. That is why its care is different from a parlor palm, with far less water and much more light.',
+        a: 'No. It is a cycad, and the Missouri Botanical Garden notes it is botanically closer to conifers than to palms. That is why its care is different from a [parlor palm](/care/parlor-palm)’s.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Missouri Botanical Garden',
+        title: 'Cycas revoluta (Plant Finder)',
+        url: 'https://plantfinder.mobot.org/PlantFinderDetails.aspx?taxonid=279640',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Cycas revoluta (Sago Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/cycas-revoluta/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1879,25 +2307,25 @@ export const CARE_GUIDES: CareGuide[] = [
     metaTitle: 'Asparagus Fern Care: Watering + Pet Safety',
     metaDescription:
       'How to water an asparagus fern, why it drops needles, the light it wants, and why the ASPCA lists it as toxic to cats and dogs.',
-    reviewed: '2026-10-21',
-    updated: '2026-10-21',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
     summary:
       'The asparagus fern looks like a soft, feathery fern, but it belongs to the asparagus family, and it is not a true fern. It is easy to grow in a bright room, and the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
-      water: 'Every 5–7 days; keep the soil lightly moist',
-      light: 'Bright, indirect light; tolerates a little direct morning sun',
+      water: 'Keep the soil consistently moist but well-drained; less in winter',
+      light: 'Bright, indirect light or filtered sun; no hot afternoon sun',
       difficulty: 'Easy in bright light, drops needles if it dries out',
       toxicity: 'Toxic to cats and dogs (per the ASPCA); berries and sap can cause illness',
-      humidity: 'Average household humidity is fine; it enjoys a bit more',
+      humidity: 'Does not need high humidity',
     },
     sections: {
       watering: [
-        'Water an asparagus fern about every five to seven days, keeping the soil lightly moist but never soggy. Its thick, fleshy roots store water, so it forgives a late watering better than a true fern does, but it will not tolerate sitting in water.',
-        'In winter, when growth slows, let the top of the soil dry a little more between waterings. If the plant drops needles after a dry spell, water it normally and be patient, because it usually sprouts again from the base.',
+        'Water an asparagus fern regularly from spring to autumn, keeping the soil consistently moist but well-drained. That is the Missouri Botanical Garden’s advice, and it gives no number of days. Its tuberous roots help it cope with a dry spell, but it should not sit in water.',
+        'In winter it appreciates a rest with less water. If the plant drops needles after a dry spell, water it normally and be patient.',
       ],
       light: [
-        'Bright, indirect light keeps the foliage full and green. A little direct morning sun is fine. Deep shade makes the stems long and thin, and the plant drops more needles.',
-        'Because the plant arches and trails, it looks best on a shelf, a stand or a hanging basket where the stems have room. Turn the pot occasionally so it grows evenly.',
+        'Bright, indirect light or filtered sun keeps the foliage full and green. The Missouri Botanical Garden warns that hot afternoon sun can yellow the leaves, and says it tolerates full shade, though the foliage may turn a lighter green.',
+        'Because the plant arches and trails, it looks best on a shelf, a stand or a hanging basket where the stems have room. It does not need high humidity. Turn the pot occasionally so it grows evenly.',
       ],
       problems: [
         'Yellow, dropping needles are usually dryness or a sudden change in light. Check the soil, move the plant to a brighter spot if it has been in shade, and give it a few weeks before you decide it has failed.',
@@ -1910,7 +2338,7 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'In a shared household, whoever has the plant on their shelf should be the one who waters it, because an asparagus fern that dries out once drops needles over everyone’s floor.',
-        'Its watering rhythm of about once a week suits a shared rota. Because the ASPCA lists it as toxic to cats and dogs, put it somewhere the pets cannot reach, and do not mistake it for a Boston fern, which has a different listing.',
+        'Its steady watering suits a shared rota. Because the ASPCA lists it as toxic to cats and dogs, put it somewhere the pets cannot reach, and do not mistake it for a Boston fern, which has a different listing.',
       ],
       honestBit: [
         'My take: people buy an asparagus fern because it looks like a fern and then assume it has a fern’s reputation for being safe around pets. It does not. The two plants look related and are not.',
@@ -1920,15 +2348,29 @@ export const CARE_GUIDES: CareGuide[] = [
     faqs: [
       {
         q: 'How often should I water an asparagus fern?',
-        a: 'About every five to seven days, keeping the soil lightly moist. Its tuberous roots store water, so a late watering is forgiven, but it should not sit in a full saucer.',
+        a: 'Often enough to keep the soil consistently moist but well-drained, with less water in winter. The sources give no fixed number of days. Its tuberous roots help it through a late watering, but it should not sit in a full saucer.',
       },
       {
         q: 'Why is my asparagus fern dropping needles?',
-        a: 'Usually dry soil, low light, or a sudden change in conditions. Water it normally, put it somewhere bright, and give it a few weeks, because it often regrows from the base.',
+        a: 'Check the basics: soil that has dried out, too little light, or too much hot sun, which the Missouri Botanical Garden says can yellow the leaves. Water it normally, put it somewhere bright out of afternoon sun, and give it a few weeks.',
       },
       {
         q: 'Is an asparagus fern a true fern?',
         a: 'No. It belongs to the asparagus family and reproduces by seed and division rather than spores. That is why it is treated separately from a Boston fern.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Missouri Botanical Garden',
+        title: "Asparagus densiflorus 'Sprengeri' (Plant Finder)",
+        url: 'https://plantfinder.mobot.org/PlantFinderDetails.aspx?kempercode=b578',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Texas A&M AgriLife Extension',
+        title: 'Sprengeri or Asparagus Fern',
+        url: 'https://aggie-horticulture.tamu.edu/ornamental/a-reference-guide-to-plant-care-handling-and-merchandising/selected-foliage-flowering-plants/foliage-plants/sprengeri-or-asparagus-fern/',
+        accessed: '2026-11-03',
       },
     ],
   },
@@ -1942,7 +2384,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a haworthia, the light it wants, why it stretches or shrivels, and why the ASPCA lists it as non-toxic to cats and dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-10-22',
+    updated: '2026-11-03',
     summary:
       'Haworthia is a small, slow rosette of thick, pointed leaves that looks like a miniature aloe and asks for even less. It wants a bright window, a fast-draining mix and a dry spell between waterings. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -1994,6 +2436,14 @@ export const CARE_GUIDES: CareGuide[] = [
         a: 'They look alike from a distance, but they are different plants with different ASPCA listings. If yours is an aloe, read the aloe vera guide instead.',
       },
     ],
+    careSources: [
+      {
+        publisher: 'University of Wisconsin–Madison Extension',
+        title: 'Haworthias – Super Succulents for Small Spaces',
+        url: 'https://hort.extension.wisc.edu/articles/haworthias-super-succulents-for-small-spaces/',
+        accessed: '2026-10-22',
+      },
+    ],
   },
   {
     slug: 'burros-tail',
@@ -2005,7 +2455,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How to water burro’s tail, the light it needs, why the leaves fall off, and why the ASPCA lists it as non-toxic to cats and dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-10-22',
+    updated: '2026-11-03',
     summary:
       'Burro’s tail is a succulent with long, trailing stems of plump, blue-green leaves, grown in a hanging pot. It wants sun and a long dry spell, and its leaves fall off at a touch. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -2056,6 +2506,20 @@ export const CARE_GUIDES: CareGuide[] = [
         a: 'Yes. North Carolina State Extension says cuttings and dropped leaves root easily, so keep them on a well-drained succulent mix.',
       },
     ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Sedum morganianum (Burro’s Tail)',
+        url: 'https://plants.ces.ncsu.edu/plants/sedum-morganianum/',
+        accessed: '2026-10-22',
+      },
+      {
+        publisher: 'South Dakota State University Extension',
+        title: 'How to Care for Succulents Indoors',
+        url: 'https://extension.sdstate.edu/how-care-succulents-indoors',
+        accessed: '2026-10-22',
+      },
+    ],
   },
   {
     slug: 'blue-echeveria',
@@ -2067,7 +2531,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How to water a blue echeveria, the light it needs, why it stretches, and why the ASPCA lists this species as non-toxic to cats and dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-10-22',
+    updated: '2026-11-03',
     summary:
       'Blue echeveria is a tight rosette of blue-gray leaves that holds its shape in strong light and loses it in weak light. It rots in wet soil and stretches in a dim room. The ASPCA lists this species as non-toxic to cats and dogs.',
     quickFacts: {
@@ -2118,6 +2582,20 @@ export const CARE_GUIDES: CareGuide[] = [
         a: 'In a warm climate. North Carolina State Extension lists USDA zones 9 through 12 and says it will not survive a hard frost.',
       },
     ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Echeveria secunda (Blue Echeveria)',
+        url: 'https://plants.ces.ncsu.edu/plants/echeveria-secunda/',
+        accessed: '2026-10-22',
+      },
+      {
+        publisher: 'South Dakota State University Extension',
+        title: 'How to Care for Succulents Indoors',
+        url: 'https://extension.sdstate.edu/how-care-succulents-indoors',
+        accessed: '2026-10-22',
+      },
+    ],
   },
   {
     slug: 'begonia',
@@ -2129,7 +2607,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How to water a houseplant begonia, the light and humidity it wants, why leaves go bad, and why the ASPCA lists it as toxic to cats and dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-10-22',
+    updated: '2026-11-03',
     summary:
       'Begonia is a large genus, and the ones sold as houseplants range from striped rex leaves to cane-stemmed angel wings and wax begonias in bloom. They agree on a bright spot without hot sun, evenly moist soil and humid air. The ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
@@ -2181,6 +2659,20 @@ export const CARE_GUIDES: CareGuide[] = [
         a: 'The common houseplant types: rex and other foliage begonias, cane-stemmed begonias and wax begonias. Tuberous begonias are grown from tubers that are dug up and stored in the fall, so their care is different.',
       },
     ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Growing Begonias Indoors',
+        url: 'https://hgic.clemson.edu/factsheet/growing-begonias-indoors/',
+        accessed: '2026-10-22',
+      },
+      {
+        publisher: 'University of Minnesota Extension',
+        title: 'Begonia',
+        url: 'https://extension.umn.edu/garden-and-home/yard-and-garden/gardening-in-minnesota/begonia',
+        accessed: '2026-10-22',
+      },
+    ],
   },
   {
     slug: 'lily',
@@ -2192,7 +2684,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How to keep a potted Easter lily indoors, what to do after it blooms, and why the ASPCA lists lilies as toxic to cats and non-toxic to dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-10-22',
+    updated: '2026-11-03',
     summary:
       'A potted Easter lily is a gift plant that blooms once indoors for a few weeks, then goes outdoors if you want to keep it. Care is simple. The risk is not: the ASPCA lists lilies as toxic to cats and non-toxic to dogs, and a lily is dangerous to a cat.',
     quickFacts: {
@@ -2241,6 +2733,20 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'Is a peace lily or a calla lily a true lily?',
         a: 'No. A peace lily is a different plant with its own care guide and its own ASPCA listing. This guide covers the true lily, the genus Lilium.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How should I care for my Easter lily?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-should-i-care-my-easter-lily',
+        accessed: '2026-10-22',
+      },
+      {
+        publisher: 'Nebraska Extension in Lancaster County',
+        title: 'Easter Lily Care',
+        url: 'https://lancaster.unl.edu/easter-lily-care/',
+        accessed: '2026-10-22',
       },
     ],
   },

@@ -587,8 +587,8 @@ describe('WelcomeFlow common-plant shortcut', () => {
 
     expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
     expect(created).toEqual([{ name: 'Snake plant', species: 'Dracaena trifasciata' }]);
-    // The guide says every 2–3 weeks: the reminder starts at the low end, one
-    // interval out, never due today.
+    // The pick's first reminder (14 days for a snake plant), one interval
+    // out, never due today.
     expect(createdTasks).toHaveLength(1);
     expect(createdTasks[0]).toMatchObject({ plantId: 'p-new', type: 'water', frequency: 14 });
     const dueInDays = (Date.parse(String(createdTasks[0].nextDue)) - before) / 86_400_000;
