@@ -58,6 +58,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The Terms name who runs the service, disclose paid links, and say they
+  are not veterinary advice.** A new "Who runs the service" section names
+  Chelsea Kelly-Reif in California and the support address. A "Paid links"
+  section says plant pages on the website may carry a shop link labeled
+  "Paid link" that earns a commission, and that the apps do not show them
+  (ADR 0038; no program is configured today, so none render). Limitations
+  adds that nothing here is veterinary advice and to call a vet or the ASPCA
+  Animal Poison Control Center if a pet may have eaten a plant. English and
+  Spanish, and the effective date is `UNRELEASED` until the release that
+  ships it.
 - **Staging opens Apple In-App Purchase, ahead of production.**
   `infrastructure/environments/staging/terraform.tfvars` sets
   `app_store_billing_enabled = "1"`, so after the next manual cd-staging run

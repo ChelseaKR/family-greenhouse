@@ -57,6 +57,15 @@ export function TermsPage() {
       <h2>{t('legal.terms.agreement.heading')}</h2>
       <p>{t('legal.terms.agreement.body')}</p>
 
+      <h2>{t('legal.terms.operator.heading')}</h2>
+      <p>
+        <Trans
+          i18nKey="legal.terms.operator.body"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
+      </p>
+
       <h2>{t('legal.terms.eligibility.heading')}</h2>
       <p>
         <Trans
@@ -181,9 +190,19 @@ export function TermsPage() {
       <h2>{t('legal.terms.applePurchases.heading')}</h2>
       <p>{t('legal.terms.applePurchases.body')}</p>
 
+      {/*
+        Paid links (ADR 0038). Website only: PlantShopLink renders nothing
+        inside the native apps, and nothing at all while
+        config/affiliateLinks.json is empty, hence "may carry". The label
+        quoted here is the `plantShop.paidLink` catalog string.
+      */}
+      <h2>{t('legal.terms.paidLinks.heading')}</h2>
+      <p>{t('legal.terms.paidLinks.body')}</p>
+
       <h2>{t('legal.terms.limitations.heading')}</h2>
       <p>{t('legal.terms.limitations.asIs')}</p>
       <p>{t('legal.terms.limitations.advice')}</p>
+      <p>{t('legal.terms.limitations.petSafety')}</p>
 
       <h2>{t('legal.terms.disputes.heading')}</h2>
       <p>{t('legal.terms.disputes.body')}</p>

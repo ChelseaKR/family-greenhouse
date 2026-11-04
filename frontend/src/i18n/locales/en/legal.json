@@ -58,6 +58,10 @@
         "heading": "The agreement",
         "body": "By creating an account or using the service, you agree to these terms. If you don’t agree, don’t use the service. When these terms change materially we publish the new version here with a new effective date at the top, and the full revision history is public in our repository. Anything that changes what a subscriber is charged is emailed to the household’s admins first, at least 14 days before it takes effect. Continued use after the new effective date is acceptance of the new terms."
       },
+      "operator": {
+        "heading": "Who runs the service",
+        "body": "Family Greenhouse is run by Chelsea Kelly-Reif in California, USA; “we” and “us” in these terms mean her. To reach us, email <supportLink>{{supportEmail}}</supportLink>."
+      },
       "eligibility": {
         "heading": "Who may use the service",
         "body": "You must be at least 13 years old to create an account or accept a household invitation. If you are under the age of legal majority where you live, use the service only with permission from a parent or legal guardian. A parent or guardian who believes a child under 13 created an account can email <supportLink>{{supportEmail}}</supportLink> to have it deleted."
@@ -121,10 +125,15 @@
         "heading": "Purchases made through Apple",
         "body": "If you subscribe in the iPhone app through Apple In-App Purchase, there is no free trial: Apple charges when you confirm, and buying ends any no-card Garden trial. Apple bills, renews, retries failed payments, and handles price changes, refunds and cancellations under Apple's terms; the sections above on cards, failed payments, price changes and refunds apply only to subscriptions bought on our website. Deleting your account does not cancel an Apple subscription; cancel it first in your iPhone's Settings."
       },
+      "paidLinks": {
+        "heading": "Paid links",
+        "body": "Some plant pages on our website may carry a link to buy that plant from a plant shop. Each one is labeled “Paid link” where it appears: if you buy through it, Family Greenhouse earns a commission. The commission does not change what our pages say about any plant. The iOS and Android apps do not show these links."
+      },
       "limitations": {
         "heading": "Limitations",
         "asIs": "The service is provided “as is.” We aim for high availability but do not promise zero downtime, zero data loss, or that every feature will work in every browser at every moment. Our liability is limited to the amount you’ve paid us in the previous 12 months.",
-        "advice": "We don’t give plant-care advice as a regulated service — the suggestions come from public botanical databases plus simple heuristics. If a plant matters to you (heirloom, expensive, sentimental), don’t rely on our reminders alone."
+        "advice": "We don’t give plant-care advice as a regulated service — the suggestions come from public botanical databases plus simple heuristics. If a plant matters to you (heirloom, expensive, sentimental), don’t rely on our reminders alone.",
+        "petSafety": "Family Greenhouse does not give veterinary advice. The pet-safety pages and toxicity notes repeat what published sources such as the ASPCA’s plant list say; they cannot tell how much your pet ate or how it will react. If a pet may have eaten a plant, call your vet or the ASPCA Animal Poison Control Center now; don’t wait for symptoms."
       },
       "disputes": {
         "heading": "Disputes",

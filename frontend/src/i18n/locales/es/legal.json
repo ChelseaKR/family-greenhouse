@@ -58,6 +58,10 @@
         "heading": "El acuerdo",
         "body": "Al crear una cuenta o usar el servicio, aceptas estos términos. Si no estás de acuerdo, no uses el servicio. Cuando estos términos cambien de forma sustancial, publicaremos aquí la nueva versión con una nueva fecha de vigencia al principio, y el historial completo de revisiones es público en nuestro repositorio. Cualquier cambio en lo que se cobra a una persona suscriptora se comunica antes por correo electrónico a las personas administradoras del hogar, con al menos 14 días de antelación. Seguir usando el servicio después de la nueva fecha de vigencia supone aceptar los nuevos términos."
       },
+      "operator": {
+        "heading": "Quién gestiona el servicio",
+        "body": "Family Greenhouse lo gestiona Chelsea Kelly-Reif, en California (EE. UU.); “nosotros” en estos términos se refiere a ella. Para contactarnos, escribe a <supportLink>{{supportEmail}}</supportLink>."
+      },
       "eligibility": {
         "heading": "Quién puede usar el servicio",
         "body": "Debes tener al menos 13 años para crear una cuenta o aceptar una invitación a un hogar. Si eres menor de edad según la legislación del lugar donde vives, usa el servicio solo con el permiso de tu madre, padre o tutor legal. Si una madre, un padre o un tutor cree que un menor de 13 años ha creado una cuenta, puede escribir a <supportLink>{{supportEmail}}</supportLink> para que la eliminemos."
@@ -121,10 +125,15 @@
         "heading": "Compras realizadas a través de Apple",
         "body": "Si la suscripción se contrata en la app de iPhone mediante la compra dentro de la app de Apple (In-App Purchase), no hay prueba gratuita: Apple cobra en el momento de confirmar, y la compra pone fin a cualquier prueba de Garden sin tarjeta. Apple factura, renueva y vuelve a intentar los pagos fallidos, y gestiona los cambios de precio, los reembolsos y las cancelaciones según los términos de Apple; las secciones anteriores sobre tarjetas, pagos fallidos, cambios de precio y reembolsos se aplican solo a las suscripciones contratadas en nuestro sitio web. Eliminar la cuenta no cancela una suscripción de Apple; primero hay que cancelarla en la Configuración del iPhone."
       },
+      "paidLinks": {
+        "heading": "Enlaces pagados",
+        "body": "Algunas páginas de plantas de nuestro sitio web pueden incluir un enlace para comprar esa planta en una tienda de plantas. Cada uno lleva la etiqueta “Enlace pagado” allí donde aparece: si compras a través de él, Family Greenhouse recibe una comisión. La comisión no cambia lo que nuestras páginas dicen sobre ninguna planta. Las apps para iOS y Android no muestran estos enlaces."
+      },
       "limitations": {
         "heading": "Limitaciones",
         "asIs": "El servicio se ofrece “tal cual”. Aspiramos a una alta disponibilidad, pero no prometemos cero interrupciones, cero pérdida de datos ni que todas las funciones funcionen en todos los navegadores en todo momento. Nuestra responsabilidad se limita al importe que nos hayas pagado en los 12 meses anteriores.",
-        "advice": "No ofrecemos consejos de cuidado de plantas como un servicio regulado: las sugerencias proceden de bases de datos botánicas públicas y de reglas sencillas. Si una planta es importante para ti (heredada, cara o con valor sentimental), no dependas únicamente de nuestros recordatorios."
+        "advice": "No ofrecemos consejos de cuidado de plantas como un servicio regulado: las sugerencias proceden de bases de datos botánicas públicas y de reglas sencillas. Si una planta es importante para ti (heredada, cara o con valor sentimental), no dependas únicamente de nuestros recordatorios.",
+        "petSafety": "Family Greenhouse no ofrece consejo veterinario. Las páginas de seguridad para mascotas y las notas de toxicidad repiten lo que dicen fuentes publicadas, como la lista de plantas de la ASPCA; no pueden saber cuánto comió tu mascota ni cómo le afectará. Si una mascota puede haber comido una planta, llama ya a tu veterinario o al ASPCA Animal Poison Control Center; no esperes a ver si aparecen síntomas."
       },
       "disputes": {
         "heading": "Disputas",
