@@ -91,6 +91,12 @@ is counted, and four dependency majors.
 
 ### Changed
 
+- **Every care guide cites where its advice comes from (#1079).** All 33 care
+  guides list their sources (US extension pages or the RHS) under "Where this
+  care advice comes from", and a test fails if a guide has none. Lines that
+  conflicted with the sources were corrected, and day intervals no source
+  gives were removed, which changed the search title or description on 21
+  guides.
 - **Perenual is off in production, and nothing credits it (#1077).**
   Perenual's free plan is licensed for personal use only, and Family
   Greenhouse is a paid product (data license audit, 2026-11-03). The
