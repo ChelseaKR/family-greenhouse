@@ -12,13 +12,14 @@
  * 2026-11-03). What the record shows today: the pet line comes from the
  * ASPCA-cited table (`careToxicity.ts`); haworthia, burro's tail, blue
  * echeveria, begonia and lily cite university extension pages (#1022); the
- * other 28 guides have no recorded source for their water, light and humidity
- * lines (#1007 says its four were written from general knowledge), so those
- * lines need a cited source before anyone treats them as verified. The
+ * eight watering guides added 2026-11-03 (string of pearls through corn plant)
+ * cite extension and RHS pages read that day; and since #1079 every guide
+ * records its sources in `careSources`, so no water, light or humidity line
+ * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 33 now, still short
+ * architecture could be judged before scaling; there are 41 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -870,7 +871,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'calathea',
     commonName: 'Calathea',
     scientificName: 'Goeppertia (formerly Calathea)',
-    alsoKnownAs: ['Prayer Plant', 'Rattlesnake Plant', 'Peacock Plant', 'Goeppertia'],
+    alsoKnownAs: ['Rattlesnake Plant', 'Peacock Plant', 'Goeppertia'],
     related: ['nerve-plant', 'boston-fern', 'parlor-palm'],
     metaTitle: 'Calathea Care: How Often to Water + Are They Pet-Safe?',
     metaDescription:
@@ -2747,6 +2748,614 @@ export const CARE_GUIDES: CareGuide[] = [
         title: 'Easter Lily Care',
         url: 'https://lancaster.unl.edu/easter-lily-care/',
         accessed: '2026-10-22',
+      },
+    ],
+  },
+  {
+    slug: 'string-of-pearls',
+    commonName: 'String of Pearls',
+    scientificName: 'Curio rowleyanus (formerly Senecio rowleyanus)',
+    alsoKnownAs: ['String of Beads', 'Senecio rowleyanus', 'Rosary Vine'],
+    related: ['burros-tail', 'jade-plant', 'peperomia'],
+    metaTitle: 'How Often to Water String of Pearls: When It Is Dry',
+    metaDescription:
+      'Water string of pearls sparingly, once the mix has dried, not on a set day count. Overwatering is what usually kills it. Bright, indirect light.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'String of pearls is a trailing succulent with stems of small, round, bead-like leaves, usually grown in a hanging pot. The beads hold water, so the way most people lose one is too much water, not too little.',
+    quickFacts: {
+      water: 'Sparingly, once the mix is dry; overwatering kills it',
+      light: 'Bright, indirect light; direct sun can scorch it',
+      difficulty: 'Moderate',
+      toxicity: 'Unknown: the ASPCA plant list has no entry for string of pearls',
+      humidity: 'Humidity tolerant; the sources give no figure',
+    },
+    sections: {
+      watering: [
+        'Water string of pearls sparingly, and only once the mix has dried. Neither extension source gives a number of days, and they disagree on how far to let it dry. Wisconsin Horticulture says to let the mix dry out completely and to water when the pearls begin to look a little shriveled. North Carolina State Extension says it tolerates infrequent watering but should not dry out all the way.',
+        'Both name the same killer: overwatering, and the root rot that follows, which Wisconsin calls the most common way the plant dies. So when in doubt, wait a day. Give more water in summer than in winter, and use a mix that drains fast. NC State suggests cactus mix, or potting soil cut with sand or perlite. Wisconsin suggests adding grit or pumice and using a shallow clay pot, which dries faster than plastic.',
+      ],
+      light: [
+        'Indoors, give it bright, indirect light; North Carolina State Extension says direct sun can scorch the leaves. Wisconsin Horticulture notes that in the wild it often grows in partial shade under shrubs or between rocks. If it spends the summer outdoors, move it out gradually so it does not sunburn, and bring it back in before frost.',
+        'Wisconsin suggests a cool winter rest at 55 to 60°F. NC State lists the plant as humidity tolerant, and neither source gives a humidity figure.',
+      ],
+      problems: [
+        'Soggy soil is the main threat. NC State says it leads to root rot that can kill the plant. Wilting can come from too much water or too little, so check the mix before you water a limp plant.',
+        'For pests, Wisconsin names mealybugs and aphids, and NC State adds whiteflies, gnats and ants. NC State says yellow or graying leaves may point to insects.',
+        'NC State also says older plants tend to decline after several years, so the fix for a tired plant is fresh cuttings rather than a rescue.',
+      ],
+      propagation: [
+        'Stem cuttings are the method both sources give. Wisconsin Horticulture says to take stem tips 3 to 4 inches long, strip the bottom few leaves, and set them in or on moist potting mix with the lower nodes lightly covered. Roots form at each node. Mist the surface until they take, rather than soaking it.',
+        'NC State gives 3 to 5 inch cuttings with a few nodes covered by mix, and says rooting dropped leaves is possible but slower and less reliable.',
+      ],
+      sharedCare: [
+        'In a shared household, string of pearls needs one waterer, because the plant that dies of kindness is the one two people each topped up.',
+        'Hang it in bright light where nobody has to brush past it, and agree that slightly wrinkled beads are the signal to water, not a date on the calendar. NC State says the sap can irritate skin, so whoever trims it or takes cuttings may want gloves.',
+      ],
+      honestBit: [
+        'My take: this is a plant for people who can leave a pot alone. The ones that die were usually watered on a schedule; the ones that thrive were watered when the beads asked.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has no entry for string of pearls under that name or its scientific names, and we won’t borrow the verdict of a different plant that shares its old genus name. If you have a pet that chews, hang it out of reach, or pick a trailing plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water string of pearls?',
+        a: 'Once the mix has dried, not on a set number of days; the extension sources give no interval. Slightly wrinkled pearls are the plant asking for water. Soggy soil is the thing to avoid.',
+      },
+      {
+        q: 'Why is my string of pearls dying?',
+        a: 'Most often too much water. Wisconsin Horticulture names root rot from overwatering as the most common cause. Let the mix dry, use a fast-draining cactus mix, and check for mealybugs and aphids.',
+      },
+      {
+        q: 'How do you propagate string of pearls?',
+        a: 'From stem tips 3 to 4 inches long, with the bottom leaves removed and the lower nodes lightly covered in moist mix. Mist the surface instead of soaking it until roots form.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Curio rowleyanus (String of Pearls)',
+        url: 'https://plants.ces.ncsu.edu/plants/curio-rowleyanus/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'String of Pearls, Curio rowleyanus',
+        url: 'https://hort.extension.wisc.edu/articles/string-of-pearls-senecio-rowleyanus/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'prayer-plant',
+    commonName: 'Prayer Plant',
+    scientificName: 'Maranta leuconeura',
+    alsoKnownAs: ['Maranta', 'Red-Veined Prayer Plant', 'Herringbone Plant', 'Rabbit Tracks'],
+    related: ['calathea', 'nerve-plant', 'boston-fern'],
+    metaTitle: 'How Often to Water a Prayer Plant: Keep It Evenly Moist',
+    metaDescription:
+      'Keep a prayer plant’s soil evenly moist through the growing season and let it dry a little in winter. It wants bright, indirect light and high humidity.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'The prayer plant, Maranta leuconeura, is grown for its patterned leaves, which lie flat by day and fold upward at night: the movement that gives it its name. It wants evenly moist soil, humid air, and light that is bright but not direct.',
+    quickFacts: {
+      water: 'Keep it evenly moist; let it dry a little in winter',
+      light: 'Bright, indirect light; direct sun bleaches the leaves',
+      difficulty: 'Moderate',
+      toxicity: 'Unknown: no ASPCA plant listing names Maranta leuconeura',
+      humidity: 'High humidity; a pebble tray or humidifier helps',
+    },
+    sections: {
+      watering: [
+        'A prayer plant wants its soil evenly moist from spring through summer, neither bone dry nor soggy. In winter, let the soil dry between waterings, though Illinois Extension says not to let it dry out completely. The extension sources give no number of days, so check the soil instead of the calendar.',
+        'Water the soil, not the crown. Illinois Extension warns that water left standing on the crowns rots the stems easily, and North Carolina State Extension says poorly drained soil leads to root rot.',
+      ],
+      light: [
+        'Both sources call for bright, indirect light. NC State says too much sun bleaches the leaf color, and that the plant tolerates low to medium light but not direct sun. It also says the color fades in low light or when the plant is underfed.',
+        'Humidity matters as much as light. Both sources say it needs high humidity. NC State suggests a humidified room or setting the pot on a tray of wet pebbles, and says it does not tolerate low temperatures or cold drafts.',
+      ],
+      problems: [
+        'Burned leaves point to the water or the feeding. NC State says high fluoride levels and over-fertilizing both burn the leaves, so feed lightly.',
+        'Rotting stems at the base come from water sitting on the crown, or from soil that stays wet. NC State lists no serious pest or disease problems, with occasional spider mites and mealybugs to watch for.',
+        'Leaves that fold up at night are not a problem. That daily movement is what the plant is named for.',
+      ],
+      propagation: [
+        'North Carolina State Extension says to propagate a prayer plant by dividing its rhizomes. Ease the plant out of its pot and separate it into clumps, each with its own roots and leaves, then pot them in moist potting mix.',
+        'Illinois Extension’s page does not cover propagation, so division is the one method this guide gives.',
+      ],
+      sharedCare: [
+        'In a shared household, a prayer plant needs one person watching it, because it wants steady moisture and humid air, and both slip when nobody owns them.',
+        'Agree on how it gets watered as well as when: at the soil, not over the crown. A pebble tray or a humidifier in the room takes some pressure off whoever is in charge.',
+      ],
+      honestBit: [
+        'My take: the nightly fold is the reason to own one. Treat humidity as part of the watering routine rather than an extra, and it is a much easier plant than its reputation.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has no listing that names this species, Maranta leuconeura, and we won’t borrow a verdict from a relative. The [calathea](/care/calathea) is a related plant with its own listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a prayer plant?',
+        a: 'Often enough to keep the soil evenly moist through spring and summer, and less in winter, when the soil can dry between waterings. The extension sources give no set number of days, so check the soil with a finger.',
+      },
+      {
+        q: 'Why does my prayer plant fold its leaves at night?',
+        a: 'That is normal. The leaves lie flat by day and fold upward at night, which is where the name comes from.',
+      },
+      {
+        q: 'Is a prayer plant the same as a calathea?',
+        a: 'No, though they are relatives and the name is sometimes used for both. North Carolina State Extension gives the name prayer plant to Maranta leuconeura, the plant this guide covers. Calathea has its own [care guide](/care/calathea).',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Maranta leuconeura (Prayer Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/maranta-leuconeura/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Prayer Plant',
+        url: 'https://extension.illinois.edu/houseplants/prayer-plant',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'croton',
+    commonName: 'Croton',
+    scientificName: 'Codiaeum variegatum',
+    alsoKnownAs: ['Garden Croton', 'Joseph’s Coat', 'Fire Croton'],
+    related: ['rubber-plant', 'fiddle-leaf-fig', 'alocasia'],
+    metaTitle: 'How Often to Water a Croton: When the Top Inch Is Dry',
+    metaDescription:
+      'Water a croton when the top half-inch to inch of soil is dry, and less in winter. Too wet or too dry for long and it drops leaves. Bright light keeps the color.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'Croton is grown for leaves splashed with yellow, orange, red and green, and it keeps those colors only in bright light. It drops leaves when its conditions change too far or too fast, so the trick is keeping things steady.',
+    quickFacts: {
+      water: 'When the top half-inch to inch of soil is dry',
+      light: 'Bright light for color; the sources differ on direct sun',
+      difficulty: 'Moderate to hard',
+      toxicity: 'Unknown: the ASPCA plant list has no entry for the croton',
+      humidity: 'Moderate humidity; the sources differ on how much',
+    },
+    sections: {
+      watering: [
+        'Water a croton when the top half-inch to an inch of soil has dried, then water well. Wisconsin Horticulture gives that depth and no number of days. North Carolina State Extension says to water liberally from spring to fall and sparingly in winter, when the plant rests.',
+        'Wisconsin says a croton drops leaves when it stays too wet or too dry for long, so steady matters more than generous. It does best in fertile, well-drained soil that stays moist.',
+      ],
+      light: [
+        'The sources agree that a croton needs bright light to keep its color, and differ on direct sun. Wisconsin says bright, indirect light is best indoors and that too much direct sun leaves the leaves gray and dull. NC State says it needs bright light with some direct sun, and that too much shade makes the lower leaves drop. Wisconsin adds that in low light the leaves can revert to green.',
+        'They differ on humidity too. Wisconsin says moderate to high, while NC State lists low to medium and suggests setting the pot on a tray of wet pebbles. Wisconsin gives a temperature range of 60 to 85°F.',
+      ],
+      problems: [
+        'Sudden leaf drop is the croton’s signature complaint. Wisconsin lists the causes: soil kept too wet or too dry for long stretches, temperatures below 50°F, drafts, and a change of surroundings that comes too quickly. A move to a new home is that kind of change, so some drop after you bring one home is no surprise.',
+        'Spider mites are the common pest; NC State says they sometimes limit how long a croton can be kept indoors. Wisconsin also names mealybugs and scale.',
+        'A croton that gets leggy can be pruned hard in early spring to make it branch, Wisconsin says.',
+      ],
+      propagation: [
+        'Wisconsin Horticulture says a croton is easily propagated by air layering in spring or by softwood cuttings in summer. Plants grown from seed do not match the parent, so a named variety has to be propagated from the plant itself.',
+        'Cut stems ooze a milky sap, so wear gloves and keep it off your clothes. NC State’s page does not cover propagation.',
+      ],
+      sharedCare: [
+        'In a shared household, a croton does best with one person in charge, because it reacts to every change and a plant moved and watered by three different people will drop leaves for all of them.',
+        'Pick its spot once, in bright light and away from drafts, and agree not to move it. Wisconsin says the milky sap from cut stems may cause contact dermatitis in some people, and NC State says it stains fabric permanently, so wash your hands after handling it.',
+      ],
+      honestBit: [
+        'My take: a croton is a plant for the brightest spot you have and a household that leaves it there. The colors are the reward for light, and the dropped leaves are the price of moving it around.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has no entry for croton or Codiaeum, and we won’t guess. If you have a pet that chews, keep it out of reach, or pick a plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a croton?',
+        a: 'When the top half-inch to an inch of soil is dry, and less in winter. Wisconsin Horticulture gives that depth, and neither source gives a fixed number of days.',
+      },
+      {
+        q: 'Why is my croton dropping leaves?',
+        a: 'Usually a change it did not like: soil that stayed too wet or too dry, temperatures below 50°F, a draft, or a move to a new spot. Keep its conditions steady and it should settle.',
+      },
+      {
+        q: 'Why is my croton losing its color?',
+        a: 'Too little light. Wisconsin Horticulture says the leaves can revert to green in low light, so move it somewhere brighter.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Croton, Codiaeum variegatum',
+        url: 'https://hort.extension.wisc.edu/articles/croton-codiaeum-variegatum/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Codiaeum variegatum (Croton)',
+        url: 'https://plants.ces.ncsu.edu/plants/codiaeum-variegatum/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'chinese-money-plant',
+    commonName: 'Chinese Money Plant',
+    scientificName: 'Pilea peperomioides',
+    alsoKnownAs: ['Pilea', 'Pancake Plant', 'UFO Plant', 'Coin Plant'],
+    related: ['peperomia', 'spider-plant', 'hoya'],
+    metaTitle: 'How Often to Water a Chinese Money Plant (Pilea)',
+    metaDescription:
+      'Water a Chinese money plant when the top of the mix starts to dry, and less in winter. Root rot from overwatering is the main risk. Bright, indirect light.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'The Chinese money plant, Pilea peperomioides, is the one with round, coin-like leaves on long stalks. It is a fast-growing, low-maintenance houseplant that makes small offsets around its base, and those are easy to pot up as new plants.',
+    quickFacts: {
+      water: 'When the top of the mix starts to dry; less in winter',
+      light: 'Bright, indirect light; strong summer sun can scorch it',
+      difficulty: 'Easy',
+      toxicity: 'Unknown: the ASPCA plant list has no entry for Pilea peperomioides',
+      humidity: 'Average household humidity is fine',
+    },
+    sections: {
+      watering: [
+        'Water a Chinese money plant when the top of the mix starts to dry out. The RHS suggests checking with a finger or by lifting the pot: a light pot means it is time. No source gives a number of days. Water less in winter, and pour off what collects in the saucer so the roots do not sit in soggy mix.',
+        'Overwatering is the main risk, and both sources say it rots the roots. North Carolina State Extension also says to keep water off the leaves, because wet foliage can develop leaf spots. The RHS says rainwater or filtered water is best if you have it, though tap water is tolerated, and that a pot much bigger than the root ball holds water too long.',
+      ],
+      light: [
+        'Bright, indirect light suits it. The RHS suggests a north-, east- or west-facing window, or a spot set back from a south-facing one, especially in summer, and says too much direct sun turns the leaves red-brown. Both sources say weak light makes it leggy.',
+        'Humidity is not a worry. The RHS says most pileas, this one included, cope with ordinary home air, and NC State says it does best in moderate to high humidity but tolerates the average home. Keep it away from cold drafts and heat sources, and above 50°F.',
+      ],
+      problems: [
+        'Root rot from overwatering is the main disease both sources name. Let the top of the mix dry before watering again, and use a pot only slightly larger than the roots.',
+        'The RHS reads the leaves: red-brown patches usually mean too much direct sun, yellowing between the veins usually means a nutrient shortage, and curling or puckered leaves point to a water or light problem.',
+        'Pests to check for are mealybugs, spider mites, scale insects and thrips, which the RHS names, plus the fungus gnats NC State adds.',
+      ],
+      propagation: [
+        'The RHS says Pilea peperomioides makes offsets, small baby plants, around its base. Once one is big enough, separate it and pot it on its own. NC State lists offsets and stem cuttings, and says spring or early summer, while the plant is growing, is the time to do it.',
+        'The RHS also lists stem cuttings, division and leaf cuttings, but the offsets are the simplest route.',
+      ],
+      sharedCare: [
+        'In a shared household, a Chinese money plant needs one rule everyone follows: check the mix before watering, because the way it dies is two people each giving it a drink.',
+        'The offsets make a good household project. Once they are big enough, pot them up and give one to each person, so everyone has their own plant to water.',
+      ],
+      honestBit: [
+        'My take: this is the easiest plant here to share, literally. A healthy one keeps making babies, and a pot of offsets is a better gift than anything from a store.',
+        'On pets we don’t give a verdict for this one. The ASPCA lists several other Pilea species, but it has no entry for Pilea peperomioides, and a relative’s verdict does not carry over. If you have a pet that chews, keep it out of reach, or pick a plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Chinese money plant?',
+        a: 'When the top of the mix starts to dry, checked with a finger or by the weight of the pot, and less in winter. No source gives a fixed number of days, and overwatering is the main risk.',
+      },
+      {
+        q: 'Why is my Chinese money plant leggy?',
+        a: 'Not enough light. Both sources say weak light makes it stretch, so move it to a brighter spot out of strong direct sun.',
+      },
+      {
+        q: 'How do I propagate a Chinese money plant?',
+        a: 'Separate the offsets that grow around its base once they are big enough, and pot each one on its own. Spring or early summer is the time to do it.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'RHS',
+        title: 'How to grow pilea',
+        url: 'https://www.rhs.org.uk/plants/pilea/how-to-grow-pilea',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Pilea peperomioides (Chinese Money Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/pilea-peperomioides/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'peperomia',
+    commonName: 'Peperomia',
+    scientificName: 'Peperomia obtusifolia',
+    alsoKnownAs: ['Baby Rubber Plant', 'American Rubber Plant', 'Pepper Face'],
+    related: ['chinese-money-plant', 'string-of-pearls', 'hoya'],
+    metaTitle: 'How Often to Water a Peperomia: Let It Dry Out First',
+    metaDescription:
+      'Let a peperomia dry out between waterings, because overwatering yellows the leaves and rots the roots. It wants bright, indirect light and tolerates low light.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'This guide covers Peperomia obtusifolia, the baby rubber plant: a compact, bushy plant with thick, glossy, rounded leaves. Other peperomias have their own care and their own listings. The ASPCA lists the baby rubber plant as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Let it dry out between waterings; never soggy',
+      light: 'Bright, indirect light; tolerates low light for months',
+      difficulty: 'Easy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Medium to low humidity; a winter humidifier helps',
+    },
+    sections: {
+      watering: [
+        'Let a peperomia dry out between waterings, then water and let the pot drain before it goes back on its saucer. Neither extension source gives a number of days. Clemson Cooperative Extension says it prefers to dry out between drinks, and North Carolina State Extension says it dislikes both wet soil and very dry soil, so dry does not mean bone dry for weeks.',
+        'Overwatering is the usual way people lose one. NC State calls it “a big problem” that yellows the leaves and can rot the roots, and Clemson says it makes the leaves drop and that root rot is the most common disease. Water the soil rather than the plant: Clemson says keeping the leaves dry helps prevent fungal leaf spots.',
+      ],
+      light: [
+        'Bright, indirect light is best. Clemson suggests a spot near an east- or south-facing window, and says it can manage fairly low light near a large north-facing one. NC State says it tolerates low light for several months, especially the plain green kinds, and both sources say strong direct sun burns the leaves.',
+        'NC State lists medium to low humidity, and Clemson recommends a humidifier in winter. NC State also says it does not tolerate very drafty spots.',
+      ],
+      problems: [
+        'Yellow leaves and rotting roots mean too much water, so let the soil dry before the next drink and make sure the pot drains. Clemson says dropped leaves can mean the same thing.',
+        'Pests to watch for are mealybugs, spider mites and whiteflies, plus fungus gnats and scale, which Clemson adds. NC State says it has no serious pest or disease problems beyond overwatering.',
+        'It does not need repotting every year. Clemson says it can stay in the same pot for several years, in a well-drained houseplant or cactus mix.',
+      ],
+      propagation: [
+        'Both sources list stem and leaf cuttings. Clemson says to take a stem piece 3 to 5 inches long, strip the lower leaves, and root it in soil or a rooting mix under clear plastic, out of direct sun. For a leaf cutting, use a leaf with at least an inch of stalk; the new plant forms at its base.',
+        'Clemson adds that the baby rubber plant roots well in water. Take a 4 to 6 inch cutting just below a node and keep it in bright, indirect light until roots and new leaves appear.',
+      ],
+      sharedCare: [
+        'In a shared household, a peperomia does best with one waterer, because its main danger is too much water and a second person “just topping it up” is how it gets it.',
+        'NC State notes it is commonly grown as a desk plant, which puts it where everyone sees it. Agree on the rule: soil dry, then water, then drain.',
+      ],
+      honestBit: [
+        'My take: peperomia is the plant to give someone who overwaters everything. It forgives a forgotten week and shows a soggy one plainly, in yellow leaves.',
+        'The ASPCA lists the baby rubber plant (Peperomia obtusifolia) as non-toxic to cats and dogs. The listing names this one species, so a different peperomia needs its own check. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for peperomia](/pet-safe/peperomia) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a peperomia?',
+        a: 'Once the soil has dried, not on a set number of days, and then let the pot drain. Overwatering is the common mistake: it yellows the leaves and rots the roots.',
+      },
+      {
+        q: 'Why are my peperomia’s leaves turning yellow or falling off?',
+        a: 'Usually too much water. North Carolina State Extension says overwatering yellows the leaves and leads to root rot, and Clemson Cooperative Extension says it makes them drop.',
+      },
+      {
+        q: 'Which peperomia does this guide cover?',
+        a: 'Peperomia obtusifolia, the baby rubber plant, the species that both the main care source and the ASPCA listing cover. Other peperomias, such as the watermelon peperomia, have their own care and their own listings.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Peperomia obtusifolia (Baby Rubber Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/peperomia-obtusifolia/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Peperomia (Peperomia spp.) Indoor Plant Care and Growing Guide',
+        url: 'https://hgic.clemson.edu/factsheet/peperomia-peperomia-spp-indoor-plant-care-and-growing-guide/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'alocasia',
+    commonName: 'Alocasia',
+    scientificName: 'Alocasia',
+    alsoKnownAs: ['Elephant Ear', 'Elephant’s-Ear'],
+    related: ['monstera', 'calathea', 'prayer-plant'],
+    metaTitle: 'How Often to Water an Alocasia: When the Top 2 in. Is Dry',
+    metaDescription:
+      'Water an alocasia once the top 2 inches of mix are dry from spring to fall, and keep it nearly dry in winter, when it rests. Bright, indirect light, humid air.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'Alocasia is grown for its big, dramatic leaves. It wants warmth, humid air and bright, indirect light, and it rests in winter, when it needs very little water. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the top 2 inches are dry; very little in winter',
+      light: 'Bright, indirect light; strong sun scorches the leaves',
+      difficulty: 'Hard',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); insoluble calcium oxalates',
+      humidity: 'Medium to high humidity; dry air browns the edges',
+    },
+    sections: {
+      watering: [
+        'From spring to fall, water an alocasia once the top 2 inches of mix are dry. That depth comes from the RHS, which gives April to October as the season for it, and no source gives a number of days. The RHS also suggests giving the pot a slight turn at each watering so the plant does not lean toward the light.',
+        'In winter it rests. The RHS says to cut watering to a minimum and keep it cooler and drier, and that losing a leaf or two then is normal. North Carolina State Extension also says to reduce watering in winter, and that overwatering causes root rot and leaf spots.',
+      ],
+      light: [
+        'Bright, indirect light suits it indoors. The RHS says strong sun scorches the leaves and low light slows growth. NC State’s page is mostly about growing it outdoors, where it prefers a shaded site.',
+        'Humidity is the other half of its care. The RHS gives medium to high, and suggests a pebble tray, grouping plants together, misting, a bathroom or a humidifier. Keep it above 60°F while it grows and above 50°F in winter, out of cold drafts.',
+      ],
+      problems: [
+        'Brown, crisp leaf edges usually mean the air is too dry, the RHS says, and dry air also invites spider mites, which NC State calls common. NC State adds aphids and mealybugs to watch for.',
+        'Yellow leaves have more than one cause. NC State says they can come from too much water, too little water or too little light, so check the soil and the spot before changing anything.',
+        'Rotting roots and spotted leaves point to overwatering, especially in winter, when a resting plant sits in wet mix.',
+      ],
+      propagation: [
+        'Both sources say to separate the offsets. The RHS says to do it in spring and pot them in a gritty, peat-free mix, or to divide the rhizome in late spring or early summer. NC State lists dividing offsets as the recommended method.',
+        'Wear gloves while you do it. The RHS says the sap can irritate skin, and NC State says contact can cause dermatitis.',
+      ],
+      sharedCare: [
+        'In a shared household, an alocasia needs everyone to know its winter rule, because it needs far less water while it rests and a well-meaning extra drink then is how the roots rot.',
+        'Because the ASPCA lists it as toxic to cats and dogs, keep it where pets cannot chew the leaves, and pick up any leaf that drops.',
+      ],
+      honestBit: [
+        'My take: alocasia is a plant you keep for the leaves and forgive for the drama. A leaf lost in winter is part of the deal, not a sign you failed.',
+        'The ASPCA lists alocasia (Alocasia spp.) as toxic to cats and dogs. It names insoluble calcium oxalates, and lists oral irritation, pain and swelling of the mouth, tongue and lips, excessive drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for alocasia](/pet-safe/alocasia) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an alocasia?',
+        a: 'From spring to fall, once the top 2 inches of mix are dry; in winter, very little. The RHS gives that depth, and no source gives a fixed number of days.',
+      },
+      {
+        q: 'Why is my alocasia losing leaves in winter?',
+        a: 'It is resting. The RHS says losing some leaves in winter is normal. Water very little until spring, and keep it above 50°F.',
+      },
+      {
+        q: 'Why are my alocasia’s leaf edges turning brown?',
+        a: 'Dry air is the usual cause, according to the RHS. Raise the humidity with a pebble tray, by grouping plants or with a humidifier, and check for spider mites.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'RHS',
+        title: 'How to grow alocasias',
+        url: 'https://www.rhs.org.uk/plants/alocasia/growing-guide',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Alocasia (Elephant’s-Ear)',
+        url: 'https://plants.ces.ncsu.edu/plants/alocasia/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'cast-iron-plant',
+    commonName: 'Cast Iron Plant',
+    scientificName: 'Aspidistra elatior',
+    alsoKnownAs: ['Aspidistra', 'Bar Room Plant', 'Iron Plant'],
+    related: ['zz-plant', 'snake-plant', 'corn-plant'],
+    metaTitle: 'How Often to Water a Cast Iron Plant: When It Is Dry',
+    metaDescription:
+      'Water a cast iron plant when the soil is dry 2 to 3 inches down, and less in winter. It takes low light and shade, but not direct sun. Pet-safe per the ASPCA.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'The cast iron plant lives up to its name: it takes deep shade, dry soil and poor soil that would finish most houseplants. It grows in upright clumps of dark green leaves, and the one thing it will not take is direct sun. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the soil is dry 2 to 3 inches down; less in winter',
+      light: 'Low light to shade; no direct sun',
+      difficulty: 'Very easy',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA) — pet-safe',
+      humidity: 'Not covered by the extension sources',
+    },
+    sections: {
+      watering: [
+        'Water a cast iron plant once the soil is dry 2 to 3 inches down, which is the depth Clemson Cooperative Extension gives. No source gives a number of days. Let the pot drain, and do not leave water standing in the saucer.',
+        'North Carolina State Extension says to water regularly from spring to fall and sparingly in winter, and calls the plant drought tolerant. A missed week does far less harm than a waterlogged pot: Clemson says it dislikes wet conditions.',
+      ],
+      light: [
+        'Low light is where it belongs. Clemson suggests a north-facing window or a low-light spot away from south-facing windows, and NC State says it prefers partial to full shade, suits deep shade and does not tolerate direct sun. It flowers only in brighter light, and the flowers are small and sit close to the soil.',
+        'Neither extension source mentions humidity, so this guide gives no figure for it. Use a well-drained potting mix.',
+      ],
+      problems: [
+        'Scorched leaves mean too much sun, Clemson says. Move it farther from the window.',
+        'Clemson suggests checking the leaves weekly for mites and scale. NC State says it has no serious pest problems.',
+        'Wet soil is the other risk; NC State says it tolerates dry, poor soil. Remove tired, weathered leaves one at a time at soil level, Clemson says, or cut the whole clump back every two to three years in late winter, and new leaves come back in spring.',
+      ],
+      propagation: [
+        'Divide it. Clemson says to split the clump in spring or early summer while it is growing, making sure each division has two or more leaves.',
+        'NC State says it spreads by rhizomes, which is how an older plant fills its pot. Feed in spring and summer with an all-purpose houseplant fertilizer, as Clemson advises.',
+      ],
+      sharedCare: [
+        'In a shared household, a cast iron plant is the one for the hallway or the dim corner nobody else can fill, because it asks for almost nothing.',
+        'The only house rule it needs is not to overdo the water: check that the soil is dry a few inches down before anyone waters it, and empty the saucer.',
+      ],
+      honestBit: [
+        'My take: if your home has more shade than windows, this is the plant. It is not showy, but it is the one most likely to still be in that dark corner years from now.',
+        'The ASPCA lists the cast iron plant (Aspidistra elatior) as non-toxic to cats and dogs. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for cast iron plant](/pet-safe/cast-iron-plant) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a cast iron plant?',
+        a: 'When the soil is dry 2 to 3 inches down, and less in winter. Clemson Cooperative Extension gives that depth, and no source gives a fixed number of days. It is drought tolerant, so when in doubt, wait.',
+      },
+      {
+        q: 'Can a cast iron plant live in a dark room?',
+        a: 'It handles low light well. North Carolina State Extension says it suits deep shade, and Clemson suggests a north window or a low-light spot. What it does not tolerate is direct sun.',
+      },
+      {
+        q: 'How do I divide a cast iron plant?',
+        a: 'In spring or early summer, while it is growing, split the clump so each division keeps two or more leaves, then pot the pieces in a well-drained mix.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Cast Iron Plant',
+        url: 'https://hgic.clemson.edu/cast-iron-plant/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Aspidistra elatior (Cast Iron Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/aspidistra-elatior/',
+        accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'corn-plant',
+    commonName: 'Corn Plant',
+    scientificName: 'Dracaena fragrans',
+    alsoKnownAs: ['Dracaena Massangeana', 'Cornstalk Plant'],
+    related: ['cast-iron-plant', 'croton', 'snake-plant'],
+    metaTitle: 'How Often to Water a Corn Plant (Dracaena Fragrans)',
+    metaDescription:
+      'Water a corn plant thoroughly once the soil surface is dry, and less in winter. Bright to moderate filtered light. Brown tips usually mean dry air.',
+    reviewed: '2026-11-03',
+    updated: '2026-11-03',
+    summary:
+      'The corn plant, Dracaena fragrans, has long, arching leaves like a corn stalk’s, often with a wide yellow stripe down the middle in the common Massangeana form. It grows slowly, wants filtered light, and takes a thorough drink once the surface dries. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the surface is dry, then water thoroughly',
+      light: 'Bright to moderate filtered light; no direct sun',
+      difficulty: 'Easy',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); saponins',
+      humidity: 'Low humidity browns the tips; mist or use a humidifier',
+    },
+    sections: {
+      watering: [
+        'Water a corn plant thoroughly once the surface of the soil feels dry, then let it drain. That is Clemson Cooperative Extension’s advice for dracaenas, and neither source gives a number of days. Clemson also says to let it dry partway between waterings and to avoid cold water, so use water at room temperature.',
+        'North Carolina State Extension says to keep the soil moist while it grows, to water less in winter, and to use a pot with drainage holes. Clemson says soil that drains slowly can cause root rot, and names too much or too little water as a main problem.',
+      ],
+      light: [
+        'Give it bright to moderate, filtered light. NC State says direct sun can burn the leaves and that too little light makes them narrow. Clemson says most dracaenas tolerate lower light, and that moving one into brighter light gives thicker, stronger new leaves.',
+        'Keep it warm: NC State says it thrives at about 70 to 80°F and should stay above 50°F if possible. Dry indoor air browns the tips. Clemson recommends misting the leaves now and then when indoor humidity drops below 30 to 40 percent, as it often does in winter, and NC State says a humidifier may help.',
+      ],
+      problems: [
+        'Brown, dry leaf tips and edges usually mean too little humidity, Clemson says. Yellow or burned leaf edges often come from over-fertilizing or fluoride. NC State says the plant is sensitive to fluoride and salt buildup, and recommends non-fluoridated water and flushing the salts out of the soil monthly.',
+        'Sudden leaf loss can follow a temperature change, a draft, overwatering, poor drainage or a heavy insect infestation, according to Clemson. The pests to check for are scale and mites, which Clemson names, and the thrips and mealybugs NC State names.',
+        'Round, dry patches or streaks on the leaves can come from too much sun, Clemson says, so move it out of direct light.',
+      ],
+      propagation: [
+        'NC State lists stem cuttings. Clemson adds tip cuttings, air layering, and rooted shoots taken from the base in spring or late summer.',
+        'If a stem has grown long and bare, Clemson says you can cut it back to the height you want, and new leaves will follow. The top you cut off can become your cutting.',
+      ],
+      sharedCare: [
+        'In a shared household, a corn plant needs one person who knows its two quirks, room-temperature water and humid air, because everyone else will water it straight from the cold tap.',
+        'Because the ASPCA lists it as toxic to cats and dogs, keep it where pets cannot chew the leaves. A tall plant standing on the floor puts its lower leaves at pet height.',
+      ],
+      honestBit: [
+        'My take: judge a corn plant by its new leaves, not its old tips. A browned tip will not turn green again, so whether the humidity and water are right shows in what grows next.',
+        'The ASPCA lists the corn plant (Dracaena fragrans) as toxic to cats and dogs. It names saponins, and lists vomiting (occasionally with blood), depression, loss of appetite and drooling, plus dilated pupils in cats. If your pet has eaten some, call your vet or a poison hotline. The [pet-safety page for corn plant](/pet-safe/corn-plant) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a corn plant?',
+        a: 'Thoroughly, once the surface of the soil is dry, and less in winter. Clemson Cooperative Extension gives that rule for dracaenas, and neither source gives a fixed number of days.',
+      },
+      {
+        q: 'Why does my corn plant have brown tips?',
+        a: 'Usually dry air. Clemson Cooperative Extension says brown, dry tips and edges usually mean too little humidity. Fluoride and salt buildup in the soil can also burn the leaves, according to North Carolina State Extension.',
+      },
+      {
+        q: 'How much light does a corn plant need?',
+        a: 'Bright to moderate, filtered light, out of direct sun, which can burn the leaves. Too little light makes the new leaves narrow.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Dracaena',
+        url: 'https://hgic.clemson.edu/factsheet/dracaena/',
+        accessed: '2026-11-03',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Dracaena fragrans (Corn Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/dracaena-fragrans/',
+        accessed: '2026-11-03',
       },
     ],
   },

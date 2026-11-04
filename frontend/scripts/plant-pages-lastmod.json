@@ -137,6 +137,10 @@
       "content": "sha256-82602b8385b3ad99f0d3982a8d859b85174733dac257f9fda2438f6046205688",
       "lastmod": "2026-10-22"
     },
+    "peperomia": {
+      "content": "sha256-a4a5accdcce85baec49b56d36ae6eb4d44269d7501fe8b343c29a1d44613c47f",
+      "lastmod": "2026-11-04"
+    },
     "jasmine": {
       "content": "sha256-884c3d3efe1ac193acb09b291b3047686b8cda44620c12c5452dd22fed0ed7b9",
       "lastmod": "2026-10-22"

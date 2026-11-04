@@ -16,6 +16,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Eight new care guides that answer "how often to water".** String of
+  pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
+  peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant
+  now have `/care` pages. Each cites the university extension or RHS pages it
+  was written from, read on 2026-11-03. None gives a day count for watering,
+  because none of those sources does. Each says which dryness check to use.
+- **A pet-safety page for peperomia**, citing the ASPCA's "Baby Rubber Plant"
+  listing (Peperomia obtusifolia, non-toxic to cats and dogs). String of
+  pearls, prayer plant, croton and Chinese money plant have no ASPCA listing
+  of their own, so their pet line reads "Unknown".
+
+### Changed
+
+- **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
+  calathea guide and its pet-safety row no longer carry those names, so a
+  search for either no longer answers with calathea's verdict.
+
 ## [0.47.0] - 2026-11-03
 
 **Perenual is off in production, the pet-safety pages quote the ASPCA less,

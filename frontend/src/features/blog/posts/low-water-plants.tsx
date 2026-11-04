@@ -64,9 +64,10 @@ export default function LowWaterPlants() {
 
       <h3>4. Cast iron plant (Aspidistra elatior)</h3>
       <p>
-        Named for its toughness. Survives dim light, dry soil, and most common pests. The catch: it
-        grows so slowly you may not realize it&rsquo;s alive. A friend of mine had one for nine
-        years before producing a new leaf.
+        Named for its toughness, the <a href="/care/cast-iron-plant">cast iron plant</a> survives
+        dim light, dry soil, and most common pests. The catch: it grows so slowly you may not
+        realize it&rsquo;s alive. A friend of mine had one for nine years before producing a new
+        leaf.
       </p>
 
       <h3>5. Spider plant (Chlorophytum comosum)</h3>

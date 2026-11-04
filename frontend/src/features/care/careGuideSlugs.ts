@@ -40,6 +40,14 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'blue-echeveria',
   'begonia',
   'lily',
+  'string-of-pearls',
+  'prayer-plant',
+  'croton',
+  'chinese-money-plant',
+  'peperomia',
+  'alocasia',
+  'cast-iron-plant',
+  'corn-plant',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */

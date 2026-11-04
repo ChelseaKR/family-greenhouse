@@ -508,7 +508,11 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       family: 'Marantaceae',
       detailsRead: '2026-10-31',
     },
-    aliases: ['prayer plant', 'goeppertia', 'maranta', 'rattlesnake plant'],
+    // No 'prayer plant' or 'maranta' alias: those names belong to Maranta
+    // leuconeura, which has its own care guide and no ASPCA listing that names
+    // it, so a search for either must not answer with this row's verdict
+    // (owner decision, 2026-11-03).
+    aliases: ['goeppertia', 'rattlesnake plant'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
     note: 'Non-toxic to cats and dogs per the ASPCA — a genuinely pet-safe choice if you want something showy. A big mouthful might cause a mild upset like any plant, but nothing poisonous.',
@@ -1072,6 +1076,25 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     cats: 'non-toxic',
     dogs: 'non-toxic',
     note: 'Non-toxic to cats and dogs per the ASPCA.',
+  },
+  {
+    slug: 'peperomia',
+    commonName: 'Peperomia',
+    scientificName: 'Peperomia obtusifolia',
+    // Read off the live listing on 2026-11-03. ASPCA has no genus-level
+    // Peperomia listing; this one names P. obtusifolia only. Other peperomias
+    // (watermelon, ripple and more) have listings of their own, so no other
+    // species is an alias here.
+    aspcaListing: {
+      title: 'Baby Rubber Plant',
+      scientificName: 'Peperomia obtusifolia',
+      path: '/toxic-and-non-toxic-plants/baby-rubber-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['peperomia obtusifolia', 'baby rubber plant', 'american rubber plant', 'pepper face'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, whose listing covers Peperomia obtusifolia, the baby rubber plant. Other peperomias have their own listings, so check your species.',
   },
   {
     slug: 'jasmine',
