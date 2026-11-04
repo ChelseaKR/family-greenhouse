@@ -282,6 +282,11 @@ export type SpeciesPeekResult =
  * looked up.
  */
 export async function peekSpeciesCached(id: number): Promise<SpeciesPeekResult> {
+  // With Perenual switched off (no key configured), rows cached while it was
+  // on are Perenual content we are no longer licensed to use, so they are not
+  // read. `absent` is the honest answer: we hold no species data for it.
+  // An unreadable key store (`unavailable`) still reads the cache, as before.
+  if ((await perenual.configurationStatus()) === 'unset') return { status: 'absent' };
   const cached = await readCacheEntry<PerenualSpeciesDetail | null>(
     'PERENUAL#CACHE',
     `SPECIES#${id}`

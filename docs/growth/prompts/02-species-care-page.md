@@ -2,7 +2,7 @@
 
 Generates one grounded care page per species. Targets "how often to water [plant]", "[plant] care", "why is my [plant] dying". This is the prompt the **batch generator** runs over the catalog; it's also fine to run by hand.
 
-The discipline that makes this work (and keeps Google happy): **the model writes prose, but every fact comes from the data you paste in.** Run it with real data from your catalog / Perenual — never let it recall watering numbers from memory.
+The discipline that makes this work (and keeps Google happy): **the model writes prose, but every fact comes from the data you paste in.** Run it with real data from a cited source you are allowed to use (a university extension page, read and restated in your own words) — never let it recall watering numbers from memory. Do not use Perenual: its free plan is for personal use only, and Family Greenhouse is a paid product.
 
 ---
 

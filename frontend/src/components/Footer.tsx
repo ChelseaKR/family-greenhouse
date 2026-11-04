@@ -29,9 +29,6 @@ const FOOTER_LINKS = [
  */
 const WEB_ONLY_LINKS = new Set(['/pricing', '/gift']);
 
-/** A proper noun, the same in every locale. */
-const PLANT_DATA_PROVIDER = 'Perenual';
-
 /**
  * Footer rendered at the bottom of public content pages (via PublicShell).
  * Compact cousin of the landing page's full footer: same dark-green
@@ -73,18 +70,10 @@ export function Footer() {
             <MemorialFrame className="hidden sm:block h-8 w-32 text-primary-300/50 -scale-x-100" />
           </div>
         )}
-        <p className="mt-6 text-sm text-primary-200">
-          {t('footer.copyrightPlantData', { year })}{' '}
-          <a
-            href="https://perenual.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-white"
-          >
-            {PLANT_DATA_PROVIDER}
-          </a>
-          .
-        </p>
+        {/* No plant-data credit: Perenual, the provider this line used to
+            credit, is switched off in production (license audit, 2026-11-03),
+            and no page credits it as a source. */}
+        <p className="mt-6 text-sm text-primary-200">{t('footer.copyright', { year })}</p>
       </div>
     </footer>
   );

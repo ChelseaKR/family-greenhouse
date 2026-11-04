@@ -44,6 +44,16 @@ beforeEach(async () => {
   store.reset();
   vi.clearAllMocks();
   vi.stubEnv('FRONTEND_URL', 'https://app.example.invalid');
+  // The species cache is read only while a Perenual key is configured
+  // (enrichment.peekSpeciesCached). These tests seed a cached row and assert a
+  // restore reads it, so they run with a placeholder key. Nothing may reach the
+  // network with it: every Perenual request fails here.
+  vi.stubEnv('PERENUAL_API_KEY', 'test-placeholder-key');
+  vi.stubGlobal('fetch', async () => {
+    throw new Error('no network in archive-import tests');
+  });
+  const { __resetApiKeyForTests } = await import('../../src/services/perenual.js');
+  __resetApiKeyForTests();
   const { __resetMembershipCacheForTests } = await import('../../src/middleware/auth.js');
   __resetMembershipCacheForTests();
   const { __resetRateLimitForTests } = await import('../../src/middleware/rateLimit.js');
@@ -57,6 +67,7 @@ beforeEach(() => {
 afterEach(() => {
   console.log = originalLog;
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 type Json = Record<string, unknown>;

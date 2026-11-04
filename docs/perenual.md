@@ -1,5 +1,7 @@
 # Perenual integration
 
+**Status: off in production since the 2026-11-03 license audit.** Perenual's free plan is licensed for personal use only ("Personal Free"; only the paid plans list commercial use), and Family Greenhouse is a paid product. Do not set the key in production again unless a plan whose terms allow commercial use is in place.
+
 External plant-data enrichment via the [Perenual API](https://perenual.com/). Powers smarter species autocomplete, suggested watering schedules, long-form care guides, image fallbacks, and seasonal pest alerts.
 
 The integration is **feature-gated by the presence of `PERENUAL_API_KEY`**. With no key, every Perenual code path returns `null` and the app falls back to its 245-entry static species catalog. There is no separate "enabled" flag — configure the secret to turn it on.

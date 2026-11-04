@@ -8,13 +8,15 @@ Pre-req: `aws sso login --profile family-greenhouse` (or whatever profile you us
 
 ## Perenual — species autocomplete + care guides
 
+**Status: off in production since the 2026-11-03 license audit.** Perenual's free plan is licensed for personal use only ("Personal Free"; only the paid plans list commercial use), and Family Greenhouse is a paid product. Do not set the key in production again unless a plan whose terms allow commercial use is in place.
+
 **What we use it for:** `services/perenual.ts` powers `/species/search`, `/species/{id}`, `/species/{id}/guide`, the Add Plant species autocomplete, and the care suggestions on the plant detail page.
 
 **Without it:** every call short-circuits to `null`. The autocomplete is empty, plant cards show "Species unknown", care guide tab is blank. Nothing breaks; the feature just isn't there.
 
 ### Setup
 
-1. Sign up at https://perenual.com/docs/api. The Hobby tier is free for 100 requests/day, which is plenty for low-traffic prod.
+1. Sign up at https://perenual.com/docs/api. The free tier (100 requests/day) is for personal use only, so it is fine for local development but not for production.
 2. Copy your API key from the dashboard.
 3. Store it as an SSM `SecureString`; only its parameter name belongs in
    Terraform:

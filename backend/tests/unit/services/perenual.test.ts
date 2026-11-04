@@ -49,6 +49,29 @@ describe('perenual client', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Production since the 2026-11-03 license audit: the tfvars no longer set
+  // perenual_api_key_parameter_name, so Terraform's "" default reaches the
+  // Lambdas as an EMPTY PERENUAL_API_KEY_PARAMETER_NAME (not a missing one).
+  // That must read as switched off: no Parameter Store read, no network call,
+  // and every method returning its "no data" answer.
+  it('treats the empty parameter name Terraform sets with Perenual off as unset', async () => {
+    process.env = { ...ORIGINAL, PERENUAL_API_KEY_PARAMETER_NAME: '' };
+    delete process.env.PERENUAL_API_KEY;
+    const perenual = await import('../../../src/services/perenual.js');
+    perenual.__resetApiKeyForTests();
+    expect(await perenual.configurationStatus()).toBe('unset');
+    expect(await perenual.searchSpecies('monstera')).toBeNull();
+    expect(await perenual.lookupSpecies(1)).toEqual({
+      status: 'unavailable',
+      reason: 'unconfigured',
+      result: null,
+    });
+    expect(await perenual.getCareGuide(1)).toBeNull();
+    expect(await perenual.listPestsForSpecies('monstera deliciosa')).toBeNull();
+    expect(ssmSend).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('parses a search response into normalized summaries', async () => {
     process.env = { ...ORIGINAL, PERENUAL_API_KEY: 'k' };
     fetchMock.mockResolvedValueOnce({
