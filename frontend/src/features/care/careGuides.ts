@@ -313,7 +313,7 @@ export const CARE_GUIDES: CareGuide[] = [
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
-      water: 'Water thoroughly, then wait until the top 1–2 inches of soil are dry',
+      water: 'Thoroughly, once the top 1–2 inches of soil are dry',
       light: 'Bright light near a window; the sources differ on direct sun',
       difficulty: 'Easy to moderate',
       toxicity: 'Toxic to cats and dogs if chewed (calcium oxalates)',
@@ -623,11 +623,11 @@ export const CARE_GUIDES: CareGuide[] = [
     summary:
       'The ZZ plant is the one you buy when you’ve decided you’re bad with plants. Thick underground rhizomes store water for weeks, the glossy leaves shrug off dim light, and the only real way to kill it is to care too much. It’s as close to a houseplant you can ignore as exists.',
     quickFacts: {
-      water: 'About every 2 weeks in summer once the soil is dry; monthly in winter',
+      water: 'About every 2 weeks in summer, once dry; monthly in winter',
       light: 'Low to bright, indirect light; no direct sun',
       difficulty: 'Very easy — famously hard to kill',
       toxicity: 'Unknown: the ASPCA plant list has no entry for the ZZ plant',
-      humidity: 'No figure in the sources; it is grown in ordinary room air',
+      humidity: 'Grows in ordinary room air',
     },
     sections: {
       watering: [
@@ -1103,7 +1103,7 @@ export const CARE_GUIDES: CareGuide[] = [
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
-      water: 'Generously in spring and summer; let it dry more between waterings in winter',
+      water: 'Generously in spring and summer; drier in winter',
       light: 'As much bright light as you can give it, including some direct sun',
       difficulty: 'Easy to keep, hard to flower indoors',
       toxicity: 'Toxic to cats and dogs if eaten (per the ASPCA)',
