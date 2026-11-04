@@ -30,6 +30,12 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDynamo } from './support/inMemoryDynamo.js';
 import { invokeHandler } from './support/invokeHandler.js';
+import {
+  couldOccurInTimestamp,
+  HOUSEHOLD_LATITUDE,
+  HOUSEHOLD_LONGITUDE,
+  LOCATION_SENTINELS,
+} from './support/locationSentinels.js';
 import { seedHousehold, setHouseholdPlan } from './support/seed.js';
 
 const store = createInMemoryDynamo();
@@ -184,8 +190,8 @@ async function seedEverything(): Promise<Seeded> {
   await setHouseholdPlan(store, householdId, 'greenhouse');
   await householdService.setHouseholdLocation(householdId, {
     city: HOUSEHOLD_CITY,
-    latitude: 34.05,
-    longitude: -118.24,
+    latitude: HOUSEHOLD_LATITUDE,
+    longitude: HOUSEHOLD_LONGITUDE,
   });
   const space = await spaceService.createSpace({ name: SPACE_NAME }, householdId, ADMIN.userId);
 
@@ -431,6 +437,13 @@ describe('a tag scan exposes nothing the sitter brief does not, except what the 
     expect(tagWire).toContain(HOUSE_RULE);
   });
 
+  it('searches for a location no timestamp can contain', () => {
+    // The scan once failed with no leak: its `completedAt` read
+    // 2026-11-04T02:02:34.056Z and the seeded latitude was 34.05.
+    expect(couldOccurInTimestamp('34.05')).toBe(true);
+    expect(LOCATION_SENTINELS.filter(couldOccurInTimestamp)).toEqual([]);
+  });
+
   it('the scan still carries nothing private that the sitter link does not, anywhere in its bytes', async () => {
     const { tagWire } = await readBothSurfaces(await seedEverything());
     for (const secret of [
@@ -448,8 +461,7 @@ describe('a tag scan exposes nothing the sitter brief does not, except what the 
       MEMBER.email,
       MEMBER.userId,
       'MEMBERLAST-6T2',
-      '34.05',
-      '-118.24',
+      ...LOCATION_SENTINELS,
     ]) {
       expect(tagWire, `a tag scan must not contain "${secret}"`).not.toContain(secret);
     }
