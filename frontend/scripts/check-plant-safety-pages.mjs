@@ -172,7 +172,7 @@ export const TOXICITY_WORDING_ALLOWED = {
   'plantSafetyPage.extensionField.poisonPart':
     'the label of a quoted extension field; the value beside it is the table text',
   'plantSafetyPage.listCaveat':
-    'quotes the ASPCA plant list on every plant, linked beside it; names no plant',
+    'restates the ASPCA plant list caveat in our own words, linked beside it; names no plant',
   'plantSafetyPage.extensionCaveat':
     'says the rating is not a dose guide and sends a reader to a hotline or vet; names no effect',
 };

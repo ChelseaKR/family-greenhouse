@@ -90,7 +90,7 @@ describe('the pet-safe page heads', () => {
 
   it('asks the searcher’s question in both words, in the title and the description', () => {
     for (const { page, title, description } of heads) {
-      expect(title, page.slug).toMatch(/^Is .+ toxic to cats and dogs\? ASPCA verdict$/);
+      expect(title, page.slug).toMatch(/^Is .+ toxic to cats and dogs\? What to know$/);
       expect(description, page.slug).toContain('poisonous or safe for pets?');
     }
   });
@@ -149,7 +149,10 @@ describe('negative controls: the checker can fail', () => {
   });
 
   it('flags a description that is over-long', () => {
-    const sabotaged = base.description.replace('What the ASPCA lists.', `${'x'.repeat(120)}.`);
+    const sabotaged = base.description.replace(
+      'The source, and who to call',
+      `${'x'.repeat(120)}.`
+    );
     expect(sabotaged).not.toBe(base.description);
     expect(faults(toxic.slug, base.title, sabotaged)).toContainEqual(
       expect.stringMatching(/^description is \d+ characters$/)

@@ -356,7 +356,7 @@ describe('detail rules fail closed', () => {
   it('a blank quoted field is left out rather than shown empty', () => {
     const entry = DETAILED_FIXTURE('snake-plant');
     (entry.aspcaListing as Record<string, unknown>).clinicalSigns = '  ';
-    const expected = ['additionalCommonNames', 'family', 'toxicPrinciples', 'listingAdvice'];
+    const expected = ['additionalCommonNames', 'family', 'toxicPrinciples'];
     expect(pageDetails(entry)!.listing.map((f) => f.field)).toEqual(expected);
     expect(gateDetails(entry).listing.map((f: { field: string }) => f.field)).toEqual(expected);
   });
@@ -391,10 +391,9 @@ describe('the page details and FAQ agree with the gate', () => {
         'the ASPCA verdicts on this page are the ones for pets.'
     );
     expect(faq[1]!.answer).toBe(
-      'Yes. The ASPCA lists Peace Lily (Spathiphyllum) as toxic to dogs. Its listing gives the ' +
-        'toxic principles as “Insoluble calcium oxalates” and the clinical signs as “Oral ' +
-        'irritation, intense burning and irritation of mouth, tongue and lips, excessive drooling, ' +
-        'vomiting, difficulty swallowing”.'
+      'Yes. The ASPCA lists Peace Lily (Spathiphyllum) as toxic to dogs. Its listing names the ' +
+        'toxic principles: Insoluble calcium oxalates. The signs it lists are on this page, under ' +
+        '“Clinical signs”.'
     );
   });
 

@@ -6,9 +6,17 @@
  * (`CareGuidePage.tsx`) renders all of them, so growing the surface = adding
  * data entries, not writing components.
  *
- * Entries are GROUNDED: the facts (watering interval, light, toxicity) come
- * from the species catalog / Perenual, the prose is original. The generator
- * prompt that produces this shape is `docs/growth/prompts/02-species-care-page.md`.
+ * Entries are meant to be GROUNDED: every fact from a cited source, the prose
+ * original. Perenual is NOT a source for these pages: its free plan is for
+ * personal use only, and it is switched off in production (license audit,
+ * 2026-11-03). What the record shows today: the pet line comes from the
+ * ASPCA-cited table (`careToxicity.ts`); haworthia, burro's tail, blue
+ * echeveria, begonia and lily cite university extension pages (#1022); the
+ * other 28 guides have no recorded source for their water, light and humidity
+ * lines (#1007 says its four were written from general knowledge), so those
+ * lines need a cited source before anyone treats them as verified. The
+ * generator prompt that produces this shape is
+ * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
  * architecture could be judged before scaling; there are 33 now, still short
  * of the ~150 species the surface is sized for.

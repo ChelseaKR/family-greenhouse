@@ -210,14 +210,20 @@ export function publishedPlantPages(table = loadPetToxicityTable()) {
  */
 export const OPTIONAL_ANIMALS = ['horses'];
 
-/** Fields of an ASPCA listing a detailed page quotes, in display order. */
+/**
+ * Fields of an ASPCA listing a detailed page shows, in display order. Names,
+ * family and toxic principles are facts; the clinical signs are the one
+ * passage the page quotes from the ASPCA. The listing's own prose lines
+ * (`listingNote`, `listingAdvice`) stay in the table as a record of what was
+ * read but are not published: the ASPCA's terms allow personal, non-commercial
+ * use only (license audit, 2026-11-03), so the page states those facts in its
+ * own words (the emergency aside) rather than reprinting the listing.
+ */
 export const LISTING_FIELDS = [
   'additionalCommonNames',
   'family',
   'toxicPrinciples',
   'clinicalSigns',
-  'listingNote',
-  'listingAdvice',
 ];
 
 /** Fields of an extension source a detailed page quotes, in display order. */

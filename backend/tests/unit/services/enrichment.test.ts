@@ -406,6 +406,15 @@ describe('enrichment (Perenual cache + budget breaker)', () => {
       expect(await peekSpeciesCached(7)).toEqual({ status: 'cached', value: null });
     });
 
+    it('reports `absent` without reading the cache when Perenual is switched off', async () => {
+      // A row cached while the key was on must not be served once it is off.
+      stubDynamo({ cacheItem: { payload: { id: 7, hardinessZone: '10-12' } } });
+      vi.mocked(perenual.configurationStatus).mockResolvedValue('unset');
+      expect(await peekSpeciesCached(7)).toEqual({ status: 'absent' });
+      expect(dynamodb.send).not.toHaveBeenCalled();
+      expect(perenual.lookupSpecies).not.toHaveBeenCalled();
+    });
+
     it('returns the cached detail on a hit', async () => {
       stubDynamo({ cacheItem: { payload: { id: 7, hardinessZone: '10-12' } } });
       expect(await peekSpeciesCached(7)).toEqual({

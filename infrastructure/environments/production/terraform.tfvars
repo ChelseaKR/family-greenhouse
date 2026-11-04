@@ -11,9 +11,14 @@ email_from_address             = "Family Greenhouse <hello@familygreenhouse.net>
 email_reply_to                 = "support@familygreenhouse.net"
 dmarc_rua_email                = "dmarc@familygreenhouse.net"
 
-# Perenual: only the secret NAME goes through Terraform. The actual API key
-# was put into SSM Parameter Store via the AWS CLI and is never tracked by IAC.
-perenual_api_key_parameter_name = "/family-greenhouse/perenual-api-key"
+# Perenual: OFF in production. Its free plan is licensed for personal use only,
+# and Family Greenhouse is a paid product (data license audit, 2026-11-03). With
+# perenual_api_key_parameter_name left at its default (""), the Lambdas get an
+# empty PERENUAL_API_KEY_PARAMETER_NAME, every Perenual path reports "unset",
+# no call is made, and the app falls back to its own species catalog and care
+# guides. Turning it back on needs a plan whose terms allow commercial use.
+# The SSM parameter /family-greenhouse/perenual-api-key is not managed here;
+# deleting it is a separate owner step.
 
 # CI/CD: provisions the GitHub OIDC provider + deploy role (modules/cicd).
 # The role ARN goes into the AWS_DEPLOY_ROLE_ARN + AWS_PRODUCTION_ROLE_ARN
