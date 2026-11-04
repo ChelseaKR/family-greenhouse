@@ -451,6 +451,30 @@ export function CareGuidePage() {
             </div>
           ))}
         </dl>
+
+        {/* The water, light and humidity lines above were checked against
+            these pages; the pet answer cites the ASPCA in its own section. */}
+        <section aria-labelledby="care-sources" data-testid="care-sources">
+          <h2 id="care-sources">Where this care advice comes from</h2>
+          <p>
+            The watering, light and humidity advice on this page was checked against the following
+            pages. The wording is ours.
+          </p>
+          <ul>
+            {guide.careSources.map((s) => (
+              <li key={s.url}>
+                <a
+                  href={s.url}
+                  className="text-primary-700 underline hover:no-underline"
+                  rel="noopener"
+                >
+                  {s.publisher}, {s.title}
+                </a>{' '}
+                (read <time dateTime={s.accessed}>{formatContentDate(s.accessed)}</time>)
+              </li>
+            ))}
+          </ul>
+        </section>
       </article>
 
       {/* The page's own copy of the dates its markup publishes. Without this
