@@ -167,14 +167,20 @@ export function citedSources(page: PlantSafetyPage): CitedSource[] {
 // Detailed pages: quoted listing fields, a second source, similar plants, FAQ.
 // ---------------------------------------------------------------------------
 
-/** Fields of an ASPCA listing a detailed page quotes, in display order. */
+/**
+ * Fields of an ASPCA listing a detailed page shows, in display order. Names,
+ * family and toxic principles are facts; the clinical signs are the one
+ * passage the page quotes from the ASPCA. The listing's own prose lines
+ * (`listingNote`, `listingAdvice`) stay in the table as a record of what was
+ * read but are not published: the ASPCA's terms allow personal, non-commercial
+ * use only (license audit, 2026-11-03), so the page states those facts in its
+ * own words (the emergency aside) rather than reprinting the listing.
+ */
 export const LISTING_FIELDS = [
   'additionalCommonNames',
   'family',
   'toxicPrinciples',
   'clinicalSigns',
-  'listingNote',
-  'listingAdvice',
 ] as const;
 export type ListingField = (typeof LISTING_FIELDS)[number];
 

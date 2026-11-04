@@ -499,7 +499,7 @@
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
-    "metaDescription": "Lo que dice la ficha de la ASPCA sobre {{name}} ({{scientificName}}) y las mascotas, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
+    "metaDescription": "El veredicto sobre {{name}} ({{scientificName}}) y las mascotas, con su fuente, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
     "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
     "verdictsHeading": "Los veredictos, con su fuente",
@@ -527,13 +527,13 @@
       "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
     },
     "hotlineFee": {
-      "aspca": "Según su página, puede cobrarse una tarifa de consulta («A consultation fee may apply»).",
+      "aspca": "La ASPCA indica que puede cobrarse una tarifa de consulta.",
       "petPoisonHelpline": "Según su página, se cobra una tarifa de 99 USD por incidente («$99 incident fee applies»)."
     },
     "hotlinesChecked": "Números y tarifas tal como los indicaba la página de cada servicio el 23 de octubre de 2026.",
     "emergencyListingNote": "Los veredictos de esta página vienen de la lista de plantas de la ASPCA, que no dice nada sobre cuánto comió tu mascota. Una línea de toxicología o tu veterinario pueden valorarlo contigo.",
     "aboutHeading": "Cómo se hace esta página",
-    "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar.",
+    "aboutBody": "Cada línea sobre esta planta sale de la tabla curada que usa nuestro buscador de plantas, tal como está. Un veredicto solo aparece junto a la ficha de la ASPCA que lo indica; si la tabla no tiene esa fuente, la página dice «Sin evaluar» en lugar de adivinar. Family Greenhouse no está afiliada a la ASPCA ni cuenta con su respaldo.",
     "careGuideLink": "Guía de cuidados: {{name}} (riego, luz y problemas comunes)",
     "checkAnother": "Buscar otra planta",
     "breadcrumbHome": "Inicio",
@@ -545,16 +545,14 @@
     "unknownBody": "Solo publicamos los veredictos para gatos y perros junto a la ficha de la ASPCA que los indica, y para esta planta no tenemos ninguna registrada. Hasta que lo compruebes, considérala desconocida y mantenla fuera del alcance.",
     "unknownCta": "Buscar una planta",
     "listingHeading": "Lo que dice la ficha de la ASPCA",
-    "listingIntro": "Citado palabra por palabra de la ficha de la ASPCA de esta planta (en inglés).",
+    "listingIntro": "Nombres y datos tal como los registra la ficha de la ASPCA de esta planta. Sus signos clínicos son el único pasaje que esta página cita de la ASPCA, palabra por palabra (en inglés).",
     "listingField": {
       "additionalCommonNames": "Otros nombres en la ficha",
       "family": "Familia botánica",
       "toxicPrinciples": "Principios tóxicos",
-      "clinicalSigns": "Signos clínicos",
-      "listingNote": "También en la ficha",
-      "listingAdvice": "Lo que la ficha indica hacer"
+      "clinicalSigns": "Signos clínicos"
     },
-    "listCaveat": "La lista de plantas de la ASPCA también dice esto de todas las plantas que incluye: «the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats» (comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos).",
+    "listCaveat": "La lista de plantas de la ASPCA también señala que comer cualquier planta puede causar vómitos o malestar estomacal en perros y gatos.",
     "listCitation": "ASPCA, «Toxic and Non-Toxic Plants»",
     "extensionHeading": "Lo que añade una extensión universitaria",
     "extensionIntro": "Una segunda fuente independiente sobre la misma planta, citada palabra por palabra (en inglés).",
@@ -590,8 +588,8 @@
       "question": "¿La planta {{name}} es tóxica para {{animal}}?",
       "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
       "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
-      "answerDetails": "Su ficha indica como principios tóxicos «{{principles}}» y como signos clínicos «{{signs}}».",
-      "answerAnyPlant": "Su lista de plantas también dice que comer cualquier material vegetal puede causar vómitos y malestar gastrointestinal en perros y gatos.",
+      "answerDetails": "Su ficha indica los principios tóxicos: {{principles}}. Los signos que enumera aparecen en esta página, en «Signos clínicos».",
+      "answerAnyPlant": "Su lista de plantas también señala que comer cualquier planta puede causar vómitos o malestar estomacal en perros y gatos.",
       "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
       "partsAnswer": "La base de datos {{database}} de {{publisher}} indica como venenosas estas partes de la planta: {{parts}}. Da esa lista bajo «Poisonous to Humans» (venenosa para personas), y los veredictos de la ASPCA en esta página son los que valen para mascotas.",
       "whatToDoQuestion": "¿Qué hago si mi mascota se comió un trozo de {{name}}?",
@@ -2886,7 +2884,7 @@
     "deleteAccount": "Eliminar cuenta",
     "terms": "Términos",
     "memorial": "En cariñosa memoria de mi mamá, Joyce, quien nos enseñó a seguir creciendo.",
-    "copyrightPlantData": "© {{year}} Family Greenhouse. Datos de plantas proporcionados por"
+    "copyright": "© {{year}} Family Greenhouse. Todos los derechos reservados."
   },
   "notFound": {
     "metaTitle": "Página no encontrada — Family Greenhouse",

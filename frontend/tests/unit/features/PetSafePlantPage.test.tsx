@@ -79,6 +79,33 @@ function gate(html: string, entry: unknown): string[] {
   return checkPlantSafetyPageHtml({ html, entry, aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL });
 }
 
+// The ASPCA's terms allow personal, non-commercial use only (license audit,
+// 2026-11-03). On every published page: the "not affiliated" line is there, the
+// title does not lead with the ASPCA, the listing's own prose lines are not
+// reprinted, and its clinical signs (the one quoted passage) appear once.
+describe('ASPCA use on every published page', () => {
+  it.each(PLANT_SAFETY_PAGES.map((p) => [p.slug, p] as const))('%s', (_slug, page) => {
+    const html = documentFor(page);
+    expect(html).toContain('Family Greenhouse is not affiliated with or endorsed by the ASPCA.');
+    expect(html).not.toMatch(/<title>[^<]*ASPCA/);
+    expect(html).not.toContain('data-listing-field="listingNote"');
+    expect(html).not.toContain('data-listing-field="listingAdvice"');
+    const listing = entryFor(page.slug).aspcaListing as Record<string, unknown> | undefined;
+    for (const field of ['listingNote', 'listingAdvice', 'clinicalSigns'] as const) {
+      const value = listing?.[field];
+      if (typeof value !== 'string' || value.trim() === '') continue;
+      const text = value.replace(/\s+/g, ' ').trim();
+      // An extension source can print the same words (bird of paradise); that
+      // is its own quote, not a second one from the ASPCA.
+      const body = html
+        .slice(html.indexOf('<body>'))
+        .replace(/<dd data-claim="extension-field"[^>]*>[^<]*<\/dd>/g, '');
+      const count = body.split(text).length - 1;
+      expect(count, `${field} on ${page.slug}`).toBe(field === 'clinicalSigns' ? 1 : 0);
+    }
+  });
+});
+
 describe('every published plant page passes the build gate as rendered', () => {
   it.each(PLANT_SAFETY_PAGES.map((page) => [page.slug, page] as const))('%s', (slug, page) => {
     expect(gate(documentFor(page), entryFor(slug))).toEqual([]);
@@ -395,7 +422,8 @@ describe('the emergency aside', () => {
       expect(text).toContain('(855) 764-7661');
       expect(text).toContain(catalog.hotlineFee.aspca);
       expect(text).toContain(catalog.hotlineFee.petPoisonHelpline);
-      expect(text).toContain('A consultation fee may apply');
+      // The ASPCA fee is stated in our own words, not quoted (license audit, 2026-11-03).
+      expect(catalog.hotlineFee.aspca).not.toMatch(/[“”«»]/);
       expect(text).toContain('$99 incident fee applies');
       expect(text).toContain(catalog.emergencyBody);
       expect(text).toContain(catalog.emergencyListingNote);
@@ -672,10 +700,10 @@ describe('detailed pages (quoted sources, similar plants, FAQ)', () => {
       expect(failuresFor('spider-plant', sabotaged)).toContain('FAQ questions');
     });
 
-    it('a dropped listing advice line fails', () => {
+    it('a dropped clinical signs line fails', () => {
       const page = html('snake-plant');
       const sabotaged = page.replace(
-        /<dd data-claim="listing-field" data-listing-field="listingAdvice"[^>]*>[^<]*<\/dd>/,
+        /<dd data-claim="listing-field" data-listing-field="clinicalSigns"[^>]*>[^<]*<\/dd>/,
         ''
       );
       expect(sabotaged).not.toBe(page);

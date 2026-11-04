@@ -486,8 +486,8 @@
     "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
   },
   "plantSafetyPage": {
-    "metaTitle": "Is {{name}} toxic to cats and dogs? ASPCA verdict",
-    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? What the ASPCA lists. Who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
+    "metaTitle": "Is {{name}} toxic to cats and dogs? What to know",
+    "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? The source, and who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
     "heading": "Is {{questionName}} toxic to cats and dogs?",
     "verdictsHeading": "The verdicts, with their source",
@@ -515,13 +515,13 @@
       "petPoisonHelpline": "Pet Poison Helpline: (855) 764-7661"
     },
     "hotlineFee": {
-      "aspca": "Its page says: “A consultation fee may apply.”",
+      "aspca": "The ASPCA says a consultation fee may apply.",
       "petPoisonHelpline": "Its page says: “$99 incident fee applies.”"
     },
     "hotlinesChecked": "Numbers and fees as each service’s own page stated them on October 23, 2026.",
     "emergencyListingNote": "The verdicts on this page come from the ASPCA plant list, which says nothing about how much your pet ate. A hotline or your vet can weigh that with you.",
     "aboutHeading": "How this page is made",
-    "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing.",
+    "aboutBody": "Every line about this plant comes from the curated table behind our plant checker, as it stands. A verdict appears only beside the ASPCA listing that states it; where the table has no such source, the page says “Not assessed” instead of guessing. Family Greenhouse is not affiliated with or endorsed by the ASPCA.",
     "careGuideLink": "{{name}} care guide: watering, light and common problems",
     "checkAnother": "Look up another plant",
     "breadcrumbHome": "Home",
@@ -533,16 +533,14 @@
     "unknownBody": "We publish a plant’s cat and dog verdicts only beside the ASPCA listing that states them, and we have none recorded for this one. Until you have checked, treat it as unknown and keep it out of reach.",
     "unknownCta": "Look up a plant",
     "listingHeading": "What the ASPCA listing says",
-    "listingIntro": "Quoted word for word from this plant’s own ASPCA listing.",
+    "listingIntro": "Names and facts as this plant’s ASPCA listing records them. Its clinical signs are the one passage this page quotes from the ASPCA, word for word.",
     "listingField": {
       "additionalCommonNames": "Other names on the listing",
       "family": "Plant family",
       "toxicPrinciples": "Toxic principles",
-      "clinicalSigns": "Clinical signs",
-      "listingNote": "Also on the listing",
-      "listingAdvice": "What the listing says to do"
+      "clinicalSigns": "Clinical signs"
     },
-    "listCaveat": "The ASPCA’s plant list also says this about every plant on it: “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+    "listCaveat": "The ASPCA’s plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats.",
     "listCitation": "ASPCA, “Toxic and Non-Toxic Plants”",
     "extensionHeading": "What a university extension adds",
     "extensionIntro": "A second, independent source for the same plant, quoted word for word.",
@@ -578,8 +576,8 @@
       "question": "Is {{name}} toxic to {{animal}}?",
       "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
       "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
-      "answerDetails": "Its listing gives the toxic principles as “{{principles}}” and the clinical signs as “{{signs}}”.",
-      "answerAnyPlant": "Its plant list also says that “the consumption of any plant material may cause vomiting and gastrointestinal upset for dogs and cats.”",
+      "answerDetails": "Its listing names the toxic principles: {{principles}}. The signs it lists are on this page, under “Clinical signs”.",
+      "answerAnyPlant": "Its plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats.",
       "partsQuestion": "Which parts of {{name}} are poisonous?",
       "partsAnswer": "{{publisher}}’s {{database}} lists these parts of the plant as poisonous: {{parts}}. It gives that list under “Poisonous to Humans”, and the ASPCA verdicts on this page are the ones for pets.",
       "whatToDoQuestion": "What should I do if my pet ate some {{name}}?",
@@ -2822,7 +2820,7 @@
     "deleteAccount": "Delete account",
     "terms": "Terms",
     "memorial": "In loving memory of my mom, Joyce — who taught us to keep growing.",
-    "copyrightPlantData": "© {{year}} Family Greenhouse. Plant data powered by"
+    "copyright": "© {{year}} Family Greenhouse. All rights reserved."
   },
   "notFound": {
     "metaTitle": "Page not found — Family Greenhouse",

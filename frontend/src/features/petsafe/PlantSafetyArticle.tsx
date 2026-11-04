@@ -259,9 +259,9 @@ export function EmergencyAside() {
 }
 
 /**
- * The plant's own ASPCA listing, quoted: its toxic principles, clinical signs
- * and any further line, each verbatim from the table, then the list-wide line
- * the ASPCA prints for every plant, each beside its source.
+ * The plant's own ASPCA listing: its names, family and toxic principles, and
+ * its clinical signs (the one passage quoted), each from the table, then the
+ * plant list's general caveat in our own words, each beside its source.
  */
 function ListingDetails({ page, details }: { page: PlantSafetyPage; details: PlantSafetyDetails }) {
   const { t } = useTranslation();
