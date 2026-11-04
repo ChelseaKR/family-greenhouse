@@ -70,8 +70,9 @@ describe('deferred legal catalog', () => {
     // (#675), +1 for the failed-payment retry window in the renewal section
     // (#593), +1 for the shell line a legal page shows before the release that
     // ships its text names a day (#593), +2 for the Apple purchases section
-    // of the Terms (ADR 0041).
-    expect(en).toHaveLength(130);
+    // of the Terms (ADR 0041), +5 for the Terms' operator section, its
+    // paid-links section (ADR 0038), and the not-veterinary-advice line.
+    expect(en).toHaveLength(135);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 
