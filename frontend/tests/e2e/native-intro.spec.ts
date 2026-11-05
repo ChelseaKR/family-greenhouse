@@ -250,21 +250,49 @@ test.describe('without the intro (unchanged)', () => {
   }) => {
     // @capacitor/core is the runtime the intro's plugin module brings; the
     // website must never download it. Its bundle carries this name.
-    const scripts: Promise<string>[] = [];
-    page.on('response', (r) => {
-      if (r.url().endsWith('.js')) scripts.push(r.text().catch(() => ''));
+    //
+    // Every script the page asks for is recorded by URL, and its body is read
+    // afterwards from the server, not from the page's response. A page
+    // response cannot be read reliably here: the landing page's lazy chunks
+    // are still loading when the test moves on to /login, Chromium can leave
+    // the end of such a load unreported, and then `response.text()` never
+    // settles and the test times out (the flake on #1083). Most of the other
+    // responses could not be read either and counted as empty scripts: chunks
+    // cut off by the navigation, and every /login script, which the browser
+    // revalidates (a 304 has no body). Reading each URL afresh checks every
+    // script, so none passes by being unread.
+    const scriptUrls = new Set<string>();
+    page.on('request', (r) => {
+      if (new URL(r.url()).pathname.endsWith('.js')) scriptUrls.add(r.url());
     });
     const chunk = watchIntroChunk(page);
     await page.goto('/');
     await expect(page).not.toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: /^Plant care for your/ })
+    ).toBeVisible();
+    // The heading is prerendered, so it shows before the page hydrates and
+    // asks for its lazy chunks. Leave only once the page has stopped asking,
+    // or a script it would load after mounting is never requested and never
+    // checked.
+    await page.waitForLoadState('networkidle');
     await page.goto('/login');
     await expect(page.getByRole('button', { name: /^sign in$/i })).toBeVisible({
       timeout: 15000,
     });
     await expect(page.getByRole('link', { name: /sign up free/i })).toBeVisible();
-    const bodies = await Promise.all(scripts);
-    expect(bodies.length).toBeGreaterThan(0);
-    expect(bodies.filter((b) => b.includes('CapacitorCustomPlatform'))).toEqual([]);
+    await page.waitForLoadState('networkidle');
+    expect(scriptUrls.size).toBeGreaterThan(0);
+    const bodies = await Promise.all(
+      [...scriptUrls].map(async (url) => {
+        const res = await page.request.get(url);
+        expect(res.status(), url).toBe(200);
+        return { url, body: await res.text() };
+      })
+    );
+    expect(
+      bodies.filter((s) => s.body.includes('CapacitorCustomPlatform')).map((s) => s.url)
+    ).toEqual([]);
     expect(chunk).toEqual([]);
   });
 });
