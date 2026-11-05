@@ -26,6 +26,12 @@ export interface NotificationPreferences {
   dndEnd: string;
   /** IANA timezone name, e.g. "America/New_York". Defaults to UTC server-side. */
   timezone: string;
+  /**
+   * True once the member set `timezone` themselves. False while it is the UTC
+   * default or a zone the app filled in from the browser. Absent on older
+   * servers: treat as false.
+   */
+  timezoneChosen?: boolean;
   /** Opt-in seasonal pest pressure alerts. Defaults false. */
   pestAlerts: boolean;
   /** Weekly "plants at risk" digest email. Defaults on when email is enabled. */
@@ -114,7 +120,11 @@ export const notificationService = {
       | 'careCredit'
       | 'yearRecap'
       | 'emailLocale'
-    >
+    > & {
+      /** `'detected'`: the browser's zone, sent on app load. The server applies
+       *  it only while the stored zone is unset and changes nothing else. */
+      timezoneSource?: 'detected';
+    }
   ): Promise<NotificationPreferences> {
     const response = await api.put<NotificationPreferences>('/notifications/prefs', prefs);
     return response.data;

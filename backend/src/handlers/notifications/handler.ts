@@ -91,6 +91,13 @@ const prefsSchema = z
       .max(64)
       .refine(notificationPrefs.isValidTimeZone, 'Unknown timezone')
       .default('UTC'),
+    /**
+     * `'detected'`: this timezone is the one the browser reports, sent by the
+     * app on load rather than picked by the person. The server then applies it
+     * only while the stored zone is still unset and changes nothing else
+     * (`notificationPrefs.applyDetectedTimeZone`). Absent: an ordinary save.
+     */
+    timezoneSource: z.literal('detected').optional(),
     /** Opt-in seasonal pest pressure alerts. Defaults false. */
     pestAlerts: z.boolean().default(false),
     /** Weekly "plants at risk" digest. Optional so older clients that don't
@@ -243,6 +250,18 @@ export const updatePrefs = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<PrefsInput>;
+    if (validatedBody.timezoneSource === 'detected') {
+      // A background fill-in, not a save: only the zone can change, and only
+      // when the person never set one. The other fields in the body are
+      // ignored, so a stale copy of them cannot overwrite a newer save.
+      const prefs = await notificationPrefs.applyDetectedTimeZone(
+        user.userId,
+        validatedBody.timezone
+      );
+      return successResponse(
+        withNotificationCapabilities(await withEmailDeliverability(prefs, user.email))
+      );
+    }
     if (validatedBody.sms && !validatedBody.phone) {
       throw createHttpError(400, 'A phone number is required to enable SMS reminders');
     }

@@ -60,11 +60,10 @@ interface SaveVariables {
 const UTC_ALIASES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT']);
 
 /**
- * The API has no "timezone never chosen" state: GET /notifications/prefs
- * answers 'UTC' both for a row that was never written and for one saved as
- * UTC, and PUT stores 'UTC' whenever a client omits the field. UTC is thus the
- * server's own "not provided" sentinel — the only signal this client has that
- * a zone still needs choosing.
+ * GET /notifications/prefs answers 'UTC' both for a row that was never written
+ * and for one saved as UTC, and PUT stores 'UTC' whenever a client omits the
+ * field. UTC is thus the server's "not provided" sentinel; `timezoneChosen`
+ * (checked at the call site) tells a deliberate UTC apart from it.
  */
 function isServerDefaultTimeZone(zone: string): boolean {
   return zone === '' || zone === 'UTC';
@@ -252,6 +251,8 @@ export function NotificationSettings() {
     if (
       !timezoneDefaulted.current &&
       isServerDefaultTimeZone(data.timezone) &&
+      // A UTC the member chose is a choice, not the default.
+      data.timezoneChosen !== true &&
       browserTimeZone !== null &&
       !UTC_ALIASES.has(browserTimeZone)
     ) {

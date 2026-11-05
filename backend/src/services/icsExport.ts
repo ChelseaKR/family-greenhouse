@@ -8,7 +8,8 @@
  *
  * Key decisions:
  *  - All-day events. Tasks don't have a clock time on them; landing them
- *    on a specific hour would be misleading.
+ *    on a specific hour would be misleading. The day is the reader's local
+ *    day of `nextDue` (see `formatDueDate`), never the UTC day.
  *  - ONE single-occurrence VEVENT per task at its current nextDue — no
  *    RRULE. The app re-anchors nextDue on every completion/snooze, so an
  *    RRULE anchored at export-time DTSTART drifts from the real schedule
@@ -25,7 +26,9 @@
  *    which member is on the hook. Both are still visible in the app.
  */
 import type { Task } from '../models/types.js';
+import { localDay } from './dueDay.js';
 import { resolveCadence, type Hemisphere } from './seasonalCadence.js';
+import { isValidTimeZone } from '../utils/timeZone.js';
 
 const PROD_ID = '-//Family Greenhouse//Plant care tasks//EN';
 
@@ -34,15 +37,25 @@ function pad(n: number): string {
 }
 
 /**
- * Format a Date as a DTSTART;VALUE=DATE — the all-day form per RFC 5545
- * §3.3.4. Local timezone of the user's calendar app handles display.
+ * The calendar day `nextDue` falls on in `timeZone`, as an RFC 5545 DATE
+ * value (§3.3.4, `YYYYMMDD`), or `null` for an instant we cannot read.
+ *
+ * A DATE value is a floating day label: it has no zone, so the calendar app
+ * shows it on that date wherever the subscriber is. That makes the zone used
+ * to PICK the label the whole question. It used to be UTC
+ * (`getUTCFullYear/Month/Date`), and a task due at 23:59 Pacific is 07:59Z
+ * the next morning, so every subscriber in the Americas saw most tasks a day
+ * after the app did. The label is now taken in the reader's own zone, the
+ * same `localDay` rule the reminders use.
  */
-function formatDate(d: Date): string {
-  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+function formatDueDate(instant: string, timeZone: string): string | null {
+  const day = localDay(instant, timeZone);
+  return day === null ? null : day.replace(/-/g, '');
 }
 
+/** DTSTAMP is a real instant, so it stays in UTC form (`...Z`). */
 function formatDateTime(d: Date): string {
-  return `${formatDate(d)}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
 }
 
 /**
@@ -91,8 +104,17 @@ function escapeText(text: string): string {
     .replace(/\r?\n/g, '\\n');
 }
 
-function eventLines(task: Task, now: Date, hemisphere: Hemisphere | null): string[] {
-  const due = new Date(task.nextDue);
+function eventLines(
+  task: Task,
+  now: Date,
+  hemisphere: Hemisphere | null,
+  timeZone: string
+): string[] {
+  const dueDate = formatDueDate(task.nextDue, timeZone);
+  // A due date we cannot read is not a day. It used to print as
+  // `DTSTART;VALUE=DATE:NaNNaNNaN`, which calendar apps reject; leaving the
+  // one unreadable task out keeps the rest of the feed valid.
+  if (dueDate === null) return [];
   // Legacy rows can have an empty `type`; `type[0].toUpperCase()` threw on
   // those and 500'd the whole feed. Fall back to a generic label.
   const typeLabel = task.type ? `${task.type[0].toUpperCase()}${task.type.slice(1)}` : 'Care task';
@@ -123,7 +145,7 @@ function eventLines(task: Task, now: Date, hemisphere: Hemisphere | null): strin
     'BEGIN:VEVENT',
     `UID:${task.id}@familygreenhouse.app`,
     `DTSTAMP:${formatDateTime(now)}`,
-    `DTSTART;VALUE=DATE:${formatDate(due)}`,
+    `DTSTART;VALUE=DATE:${dueDate}`,
     `SUMMARY:${escapeText(summary)}`,
     `DESCRIPTION:${escapeText(description)}`,
     'END:VEVENT',
@@ -144,8 +166,16 @@ export function buildIcs(
    * every description on the task's base cadence — the same text the feed
    * emitted before seasonal profiles existed.
    */
-  hemisphere: Hemisphere | null = null
+  hemisphere: Hemisphere | null = null,
+  /**
+   * The IANA zone whose calendar day each all-day event is labeled with: the
+   * reader's notification zone (see `handlers/me/handler.ts`). An unknown or
+   * empty zone falls back to UTC, which is what the feed did before it took a
+   * zone at all.
+   */
+  timeZone = 'UTC'
 ): string {
+  const zone = timeZone && isValidTimeZone(timeZone) ? timeZone : 'UTC';
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -158,7 +188,7 @@ export function buildIcs(
     'X-WR-CALDESC:Recurring plant care tasks from Family Greenhouse',
   ];
   for (const task of tasks) {
-    lines.push(...eventLines(task, now, hemisphere));
+    lines.push(...eventLines(task, now, hemisphere, zone));
   }
   lines.push('END:VCALENDAR');
   // RFC 5545 mandates CRLF line endings + line folding for over-75 lines.

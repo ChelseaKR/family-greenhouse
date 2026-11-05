@@ -212,6 +212,144 @@ describe('notificationPrefs', () => {
     expect(empty.timezone).toBe('UTC');
   });
 
+  describe('time zone: chosen vs. filled in from the browser', () => {
+    /** Like mockStore, but also records each Put's condition. */
+    async function mockStoreWithConditions(storedItem: Record<string, unknown> | undefined) {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const puts: Array<Record<string, unknown>> = [];
+      vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
+        const { kind, input } = cmd as { kind: string; input: Record<string, unknown> };
+        if (kind === 'Get') return { Item: storedItem } as never;
+        if (kind === 'Put') puts.push(input);
+        return {} as never;
+      });
+      return puts;
+    }
+
+    it('reads a legacy row with no flag as not chosen', async () => {
+      await mockStore({ ...STORED_VERIFIED });
+      const { getPreferences, isTimeZoneUnset } =
+        await import('../../../src/services/notificationPrefs.js');
+      const prefs = await getPreferences('user-1');
+      expect(prefs.timezoneChosen).toBe(false);
+      expect(isTimeZoneUnset(prefs)).toBe(true);
+    });
+
+    it('a save that changes the zone marks it chosen; a round-trip of the default does not', async () => {
+      const { setPreferences } = await import('../../../src/services/notificationPrefs.js');
+      await mockStore({ ...STORED_VERIFIED, phone: '' });
+      expect((await setPreferences({ ...BASE_INPUT, timezone: 'UTC' })).timezoneChosen).toBe(false);
+      await mockStore({ ...STORED_VERIFIED, phone: '' });
+      expect(
+        (await setPreferences({ ...BASE_INPUT, timezone: 'America/Denver' })).timezoneChosen
+      ).toBe(true);
+      // Choosing UTC on purpose, away from a filled-in zone, is a choice too.
+      await mockStore({ ...STORED_VERIFIED, phone: '', timezone: 'America/Denver' });
+      expect((await setPreferences({ ...BASE_INPUT, timezone: 'UTC' })).timezoneChosen).toBe(true);
+      // And it stays chosen through later saves that leave the zone alone.
+      await mockStore({ ...STORED_VERIFIED, phone: '', timezone: 'UTC', timezoneChosen: true });
+      expect((await setPreferences({ ...BASE_INPUT, timezone: 'UTC' })).timezoneChosen).toBe(true);
+    });
+
+    it('fills an unset zone, keeps every other field, and does not mark it chosen', async () => {
+      const puts = await mockStoreWithConditions({
+        ...STORED_VERIFIED,
+        email: false,
+        dndStart: '22:00',
+        dndEnd: '07:00',
+      });
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      const result = await applyDetectedTimeZone('user-1', 'America/New_York');
+      expect(result.timezone).toBe('America/New_York');
+      expect(result.timezoneChosen).toBe(false);
+      expect(puts).toHaveLength(1);
+      expect(puts[0].Item).toMatchObject({
+        timezone: 'America/New_York',
+        email: false,
+        dndStart: '22:00',
+        dndEnd: '07:00',
+        phone: '+15551234567',
+        phoneVerified: true,
+      });
+      // Only if nobody saved in between.
+      expect(puts[0].ConditionExpression).toBe('updatedAt = :prev');
+      expect(puts[0].ExpressionAttributeValues).toEqual({
+        ':prev': STORED_VERIFIED.updatedAt,
+      });
+    });
+
+    it('creates the row with the full defaults when none exists', async () => {
+      const puts = await mockStoreWithConditions(undefined);
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      await applyDetectedTimeZone('user-1', 'America/Chicago');
+      expect(puts[0].ConditionExpression).toBe('attribute_not_exists(PK)');
+      // Email reminders stay on: a partial row would read `email` as false.
+      expect(puts[0].Item).toMatchObject({
+        timezone: 'America/Chicago',
+        email: true,
+        weeklyDigest: true,
+      });
+    });
+
+    it('never overwrites a chosen zone, a filled-in zone, or a chosen UTC', async () => {
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      for (const stored of [
+        { timezone: 'Europe/Berlin', timezoneChosen: true },
+        { timezone: 'America/Denver', timezoneChosen: false },
+        { timezone: 'UTC', timezoneChosen: true },
+      ]) {
+        const puts = await mockStoreWithConditions({ ...STORED_VERIFIED, ...stored });
+        const result = await applyDetectedTimeZone('user-1', 'America/New_York');
+        expect(result.timezone).toBe(stored.timezone);
+        expect(puts).toHaveLength(0);
+      }
+    });
+
+    it('treats a UTC alias as nothing to fill in', async () => {
+      const puts = await mockStoreWithConditions({ ...STORED_VERIFIED });
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      const result = await applyDetectedTimeZone('user-1', 'Etc/UTC');
+      expect(result.timezone).toBe('UTC');
+      expect(puts).toHaveLength(0);
+    });
+
+    it('rejects an unknown zone with a 400 and writes nothing', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      await expect(applyDetectedTimeZone('user-1', 'Mars/Olympus_Mons')).rejects.toMatchObject({
+        statusCode: 400,
+      });
+      expect(dynamodb.send).not.toHaveBeenCalled();
+    });
+
+    it('lets a save that lands in between win, and returns the fresh row', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      let reads = 0;
+      vi.mocked(dynamodb.send).mockImplementation(async (cmd: unknown) => {
+        const { kind } = cmd as { kind: string };
+        if (kind === 'Get') {
+          reads += 1;
+          return {
+            Item:
+              reads === 1
+                ? { ...STORED_VERIFIED }
+                : { ...STORED_VERIFIED, timezone: 'Asia/Tokyo', timezoneChosen: true },
+          } as never;
+        }
+        if (kind === 'Put') {
+          throw Object.assign(new Error('conditional'), {
+            name: 'ConditionalCheckFailedException',
+          });
+        }
+        return {} as never;
+      });
+      const { applyDetectedTimeZone } = await import('../../../src/services/notificationPrefs.js');
+      const result = await applyDetectedTimeZone('user-1', 'America/New_York');
+      expect(result.timezone).toBe('Asia/Tokyo');
+      expect(result.timezoneChosen).toBe(true);
+    });
+  });
+
   describe('household email toggles', () => {
     it('defaults every household email on for a user with no row', async () => {
       await mockStore(undefined);

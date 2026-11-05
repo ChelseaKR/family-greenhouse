@@ -357,10 +357,37 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap, trialNotices,
-emailLocale, memberJoined, taskUpForGrabs, coverageUpdates, careCredit,
-updatedAt
+dndStart, dndEnd, timezone, timezoneChosen, pestAlerts, weeklyDigest,
+yearRecap, trialNotices, emailLocale, memberJoined, taskUpForGrabs,
+coverageUpdates, careCredit, updatedAt
 ```
+
+#### Time zone
+
+`timezone` is the member's IANA zone. Quiet hours, the daily reminder's slot
+and send time, and the calendar feed's all-day dates are all read in it.
+
+It defaults to `'UTC'`, and for a long time it was only set when someone
+opened Notification settings, so most members got reminders around 3-4 a.m.
+Eastern and saw feed dates a day late. Two fields now fix that:
+
+- **`timezoneChosen`** is true once a PUT changes the zone. Re-sending the
+  stored value, as every toggle does, does not count as choosing it.
+- **The app fills in the browser's zone on load** (`useDetectedTimeZone`,
+  mounted in `Layout`). It sends `PUT /notifications/prefs` with
+  `timezoneSource: 'detected'`, and the server
+  (`notificationPrefs.applyDetectedTimeZone`) applies it only while the zone is
+  unset: not chosen, and still `'UTC'` or empty. It validates the zone, writes
+  nothing else, ignores UTC aliases, and is conditional on the row being
+  unchanged since its read. It leaves `timezoneChosen` false.
+
+**Existing rows.** Rows written before `timezoneChosen` existed read it as
+false, so a stored `'UTC'` is treated as unset and gets filled on the member's
+next visit. The data cannot tell those defaults apart from someone who
+deliberately chose UTC before this change. Such a person, if their browser
+reports a different zone, gets switched once. Choosing UTC again then sticks,
+because changing the zone sets `timezoneChosen`. Members who never open the app
+again stay on UTC.
 
 `memberJoined`, `taskUpForGrabs`, `coverageUpdates` and `careCredit` are the
 household-email switches; `yearRecap` gates the annual recap, which used to
