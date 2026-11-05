@@ -392,7 +392,7 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Chlorophytum comosum',
     alsoKnownAs: ['Airplane Plant', 'Ribbon Plant', 'Spider Ivy'],
     related: ['parlor-palm', 'boston-fern', 'hoya'],
-    metaTitle: 'Spider Plant Care: How Often to Water It + Brown Tips',
+    metaTitle: 'How Often to Water a Spider Plant: When Slightly Dry',
     heading: 'Spider plant care: how often to water it',
     metaDescription:
       'Water a spider plant when the soil has dried slightly, and less in winter. It wants medium to bright light. Why the leaf tips go brown, and the babies.',

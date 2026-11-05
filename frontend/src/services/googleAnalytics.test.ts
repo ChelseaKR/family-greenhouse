@@ -347,6 +347,19 @@ describe('page views', () => {
     expect(ga.gaReferrer('', origin)).toBe('');
     expect(ga.gaReferrer('not a url', origin)).toBe('');
   });
+
+  it('reports a return from Stripe as our own site, so a purchase is not credited to Stripe', async () => {
+    const { ga } = await load();
+    const origin = 'https://familygreenhouse.net';
+    expect(ga.gaReferrer('https://checkout.stripe.com/', origin)).toBe(`${origin}/`);
+    expect(ga.gaReferrer('https://billing.stripe.com/p/session/x', origin)).toBe(`${origin}/`);
+    expect(ga.gaReferrer('https://hooks.stripe.com/3d_secure', origin)).toBe(`${origin}/`);
+    // Only Stripe's own hosts: a look-alike domain is still another site.
+    expect(ga.gaReferrer('https://notstripe.com/', origin)).toBe('https://notstripe.com/');
+    expect(ga.gaReferrer('https://stripe.com.example.org/', origin)).toBe(
+      'https://stripe.com.example.org/'
+    );
+  });
 });
 
 describe('gaPagePath', () => {

@@ -44,9 +44,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   guides each name the other five in a line under "Keeping it alive when you
   share a home". The poinsettia's related plants now include the amaryllis,
   and the Christmas cactus's include the kalanchoe.
+- **The spider plant care guide's title now leads with "How often to water a
+  spider plant".** That query put the page at about position 5 in the week to
+  2026-11-03, with no clicks, and it was the only ranking watering guide whose
+  title still opened with "Spider Plant Care". The page's content is unchanged.
 - **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.
+- **The Privacy Policy now lists what Google Analytics records toward a paid
+  plan.** It said six steps with no detail. It now names the content-page
+  sign-up clicks (the kind of page, where the link was and, on a care guide or
+  pet-safety page, that page's plant), how a first plant was added, and the
+  14-day Garden trial, and it no longer mentions the removed "See how it
+  works" link. Both locales. The page's effective date is set by the release
+  that ships it.
+
+### Fixed
+
+- **Google Analytics no longer credits a purchase to Stripe.** The page a
+  buyer returns to after Stripe Checkout or the billing portal now reports
+  our own site as its referrer instead of `checkout.stripe.com`, so the
+  `purchase` it records stays with the search, ad or page that brought the
+  buyer.
 
 ## [0.47.0] - 2026-11-03
 
