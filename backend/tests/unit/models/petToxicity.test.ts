@@ -824,12 +824,23 @@ describe('rows read on 2026-10-21', () => {
   it.each(READ)('$slug records the listing it was read from and its verdicts', (row) => {
     const entry = PET_TOXICITY.find((e) => e.slug === row.slug);
     expect(entry, `${row.slug} missing from the catalog`).toBeDefined();
-    expect(entry!.aspcaListing).toEqual({
+    // The fields read that day. Details read later (detailsRead, horses) are
+    // pinned by their own block, e.g. 'listing details read on 2026-11-05'.
+    const { title, scientificName, path, listed } = entry!.aspcaListing!;
+    expect({ title, scientificName, path }).toEqual({
       title: row.title,
       scientificName: row.listingScientificName,
       path: `/toxic-and-non-toxic-plants/${row.path}`,
-      listed: { cats: row.cats, dogs: row.dogs },
     });
+    expect({ cats: listed.cats, dogs: listed.dogs }).toEqual({ cats: row.cats, dogs: row.dogs });
+    if (!entry!.aspcaListing!.detailsRead) {
+      expect(entry!.aspcaListing).toEqual({
+        title,
+        scientificName,
+        path,
+        listed: { cats: row.cats, dogs: row.dogs },
+      });
+    }
     expect(entry!.cats).toBe(row.cats);
     expect(entry!.dogs).toBe(row.dogs);
     expect(citedVerdict(entry!, 'cats')).toBe(row.cats);
