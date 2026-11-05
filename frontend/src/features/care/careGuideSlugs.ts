@@ -48,6 +48,10 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'alocasia',
   'cast-iron-plant',
   'corn-plant',
+  'amaryllis',
+  'norfolk-island-pine',
+  'cyclamen',
+  'kalanchoe',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */

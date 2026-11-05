@@ -13,13 +13,15 @@
  * ASPCA-cited table (`careToxicity.ts`); haworthia, burro's tail, blue
  * echeveria, begonia and lily cite university extension pages (#1022); the
  * eight watering guides added 2026-11-03 (string of pearls through corn plant)
- * cite extension and RHS pages read that day; and since #1079 every guide
+ * cite extension and RHS pages read that day; the four holiday guides added
+ * 2026-11-04 (amaryllis, Norfolk Island pine, cyclamen, kalanchoe) cite
+ * extension pages read that day; and since #1079 every guide
  * records its sources in `careSources`, so no water, light or humidity line
  * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 41 now, still short
+ * architecture could be judged before scaling; there are 45 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -3356,6 +3358,333 @@ export const CARE_GUIDES: CareGuide[] = [
         title: 'Dracaena fragrans (Corn Plant)',
         url: 'https://plants.ces.ncsu.edu/plants/dracaena-fragrans/',
         accessed: '2026-11-03',
+      },
+    ],
+  },
+  {
+    slug: 'amaryllis',
+    commonName: 'Amaryllis',
+    scientificName: 'Hippeastrum',
+    alsoKnownAs: ['Hippeastrum', 'Dutch Amaryllis', 'Barbados Lily'],
+    related: ['poinsettia', 'cyclamen', 'christmas-cactus'],
+    metaTitle: 'How Often to Water an Amaryllis: When the Soil Is Dry',
+    metaDescription:
+      'Water an amaryllis when the soil surface feels dry, and never leave it in a full saucer. Give it direct sun, then rest the bulb so it blooms again.',
+    reviewed: '2026-11-04',
+    updated: '2026-11-04',
+    summary:
+      'An amaryllis is a large tropical bulb, Hippeastrum, sold in the fall to bloom indoors for the holidays. It wants a sunny window, a pot that drains, and water only once the surface dries, and after it blooms it can be kept and flowered again. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the soil surface feels dry; empty the saucer',
+      light: 'At least 4 hours of direct sun; a south window is best',
+      difficulty: 'Easy to bloom; reblooming needs a rest',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); bulb is worst',
+      humidity: 'No figure in the sources; keep it off heaters and vents',
+    },
+    sections: {
+      watering: [
+        'Water an amaryllis when the surface of the soil feels dry to the touch. That is Clemson Cooperative Extension’s rule, and it says to water thoroughly, let the pot drain, and never leave it sitting in a saucer of water. Once it starts to flower, Clemson says it needs water more often, about once or twice a week, but the dry surface is still the check.',
+        'A newly potted bulb needs very little. Clemson says to water it thoroughly once, wait a week, and then keep the soil only slightly moist. UF/IFAS Gardening Solutions goes further and says no more water should be needed until the bulb sprouts. Both warn against soggy soil, and Clemson says bulb and root rot usually start when the soil is kept too wet.',
+      ],
+      light: [
+        'Give it the sunniest window you have. Clemson says an amaryllis grows best with at least four hours of direct sun a day, with a south window best and an east or west window second. Turn the pot every few days so the flower stalk grows straight instead of leaning toward the glass.',
+        'Warmth gets it going and coolness makes the flowers last. Clemson says 70 to 75°F suits it until the roots, leaves and stalk start growing, and that about 65°F once it blooms prolongs the flowers. UF/IFAS adds that moving it out of direct sun once the flowers open helps them last. Keep a blooming plant away from heaters and air vents.',
+      ],
+      problems: [
+        'A soft bulb or rotting roots usually means the soil stayed too wet or the bulb was bruised when it was planted, according to Clemson. Its advice is to throw out a diseased bulb and replace the potting soil rather than try to save it.',
+        'Reddish brown spots on the bulb, leaves or flower stalk are likely red blotch, a fungal disease that Clemson says can spread quickly. Planting with a third to a half of the bulb above the soil keeps its top dry and helps prevent it. Light yellow streaks on the leaves can mean mosaic virus, which cannot be cured.',
+        'A tall stalk gets top-heavy and can bend. Clemson suggests staking it, and if it bends too far, cutting it and putting it in a vase, where the flowers keep opening. The pests it names are scale, mites, thrips, bulb maggots and mealybugs.',
+      ],
+      propagation: [
+        'NC State Extension lists division and seed. The easier way to get more flowers is to keep the bulb you have: Clemson says the secret is to keep the plant growing after it blooms, in a sunny window with slightly moist soil and regular feeding, so the bulb builds up for next year.',
+        'To flower it again, Clemson says to stop watering and feeding for 8 to 10 weeks and let the leaves yellow and wither. NC State says to rest it somewhere cool (50 to 55°F) and fairly dark during that time. When the tip of a new flower bud shows, bring it back to a sunny spot and start watering again.',
+      ],
+      sharedCare: [
+        'An amaryllis is often a gift for the whole house, and the one thing everyone needs to know is to check the soil before watering, because a bulb watered by three people in one week is a bulb that rots.',
+        'Because the ASPCA lists it as toxic to cats and dogs, and says the bulb is the most poisonous part, keep the pot where pets cannot dig in it or chew the leaves.',
+      ],
+      honestBit: [
+        'My take: the amaryllis is the most generous of the holiday plants. The first bloom runs on energy already stored in the bulb, so the main way to lose it is a pot kept wet. Save your effort for after the flowers, when keeping the leaves growing is what earns a second year.',
+        'The ASPCA lists amaryllis (its “Barbados Lily” listing, Hippeastrum) as toxic to cats and dogs. It names lycorine and other alkaloids, lists vomiting, drooling and diarrhea, and says the bulbs are the most poisonous part. If your pet has eaten some, call your vet or a poison hotline. The [pet-safety page for amaryllis](/pet-safe/amaryllis) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an amaryllis?',
+        a: 'When the surface of the soil feels dry to the touch. Water thoroughly, let it drain, and empty the saucer. Clemson Cooperative Extension says a blooming plant wants water more often, about once or twice a week, so check the soil rather than the calendar.',
+      },
+      {
+        q: 'How do I get my amaryllis to bloom again?',
+        a: 'Keep it growing in a sunny window after the flowers fade, then rest the bulb. Clemson Cooperative Extension says to stop watering and feeding for 8 to 10 weeks until the leaves wither, and to start again when a new flower bud appears.',
+      },
+      {
+        q: 'How long does an amaryllis take to bloom?',
+        a: 'Clemson Cooperative Extension says to expect flowers 4 to 8 weeks after planting in early to mid-November, and UF/IFAS Gardening Solutions says six to eight weeks. Bigger bulbs give bigger flowers and more stalks.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Amaryllis',
+        url: 'https://hgic.clemson.edu/factsheet/amaryllis/',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Amaryllis',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/ornamentals/amaryllis/',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Hippeastrum (Amaryllis)',
+        url: 'https://plants.ces.ncsu.edu/plants/hippeastrum/',
+        accessed: '2026-11-04',
+      },
+    ],
+  },
+  {
+    slug: 'norfolk-island-pine',
+    commonName: 'Norfolk Island Pine',
+    scientificName: 'Araucaria heterophylla',
+    alsoKnownAs: ['Norfolk Pine', 'House Pine'],
+    related: ['poinsettia', 'amaryllis', 'parlor-palm'],
+    metaTitle: 'How Often to Water a Norfolk Island Pine: When Dry',
+    metaDescription:
+      'Water a Norfolk Island pine thoroughly when the soil surface is dry, then drain it. It needs bright light and help with dry winter air.',
+    reviewed: '2026-11-04',
+    updated: '2026-11-04',
+    summary:
+      'A Norfolk Island pine is not a true pine but a slow-growing tropical conifer, often sold at the holidays as a small living Christmas tree. It needs a bright window, a thorough drink once the surface dries, and help with dry winter air. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the surface is dry; water thoroughly',
+      light: 'Bright light near an east, west or south window',
+      difficulty: 'Easy, if the light is bright enough',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Dry winter air browns tips; use a pebble tray',
+    },
+    sections: {
+      watering: [
+        'Water a Norfolk Island pine thoroughly once the surface of the soil is dry to the touch, then pour away the water that drains into the saucer. Iowa State University Extension and Outreach gives that rule, and none of the sources gives a number of days.',
+        'Water less in winter. North Carolina State Extension says to water regularly from spring to autumn while avoiding soil that is too wet, and to water sparingly in winter. UF/IFAS Gardening Solutions says these trees do not like being too wet, and that more water is not the way to give them the humidity they want.',
+      ],
+      light: [
+        'Bright light matters most. Iowa State says to place it near an east, west or south window and to turn it weekly so it does not grow lopsided toward the light. UF/IFAS says that if one is not thriving, the likely cause is too little light or humidity. NC State says full sun gives the most compact growth, with light afternoon shade if the needles start to bleach yellow.',
+        'Keep it cool to moderate: Iowa State gives 55 to 70°F, and NC State says a bright, cool room of 55 to 65°F. The sources disagree on humidity. Iowa State and UF/IFAS say it wants humid air and suggest a humidifier or a pebble tray, a saucer of gravel and water with the pot sitting above the water. NC State says it usually adapts to the dry air of homes and offices, and suggests misting in heated rooms in winter.',
+      ],
+      problems: [
+        'Brown branch tips and lower branches falling off are the classic complaint. Iowa State names three causes: low humidity, too little light, and soil that gets too dry. Winter is the hard season, because heated homes have dry air.',
+        'NC State says a tree kept in very low light can hang on for two or three years and then start dropping leaves and losing its lower branches, so a slow decline in a dim corner is a light problem, not a watering one. The pests and diseases it lists are scale, sooty mold and leaf spot.',
+      ],
+      propagation: [
+        'NC State lists seed as the way this tree is propagated. None of the sources describes rooting a cutting, so this guide does not suggest one.',
+        'It grows slowly, so the tree you have can stay a houseplant for years: UF/IFAS says a potted one may reach 5 to 8 feet after about a decade indoors.',
+      ],
+      sharedCare: [
+        'In a shared household, a Norfolk Island pine needs one person to turn it and check the soil, because a tree that everyone admired in December is easy for everyone to forget by February.',
+        'Iowa State notes that many people decorate one as a living Christmas tree. If yours is, decide who takes the decorations off after the holidays, so it can go back to its bright window.',
+      ],
+      honestBit: [
+        'My take: a Norfolk Island pine is a houseplant first and a Christmas tree second. Treat it as a tree for one month and a bright-window plant for the other eleven, and it will outlast a lot of holidays.',
+        'The ASPCA lists the Norfolk Island pine (under “Australian Pine”, Araucaria heterophylla) as non-toxic to cats and dogs. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for Norfolk Island pine](/pet-safe/norfolk-island-pine) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Norfolk Island pine?',
+        a: 'Thoroughly, once the surface of the soil is dry to the touch, and less in winter. Pour away the water that drains into the saucer. Iowa State University Extension and Outreach gives that rule, and none of the sources gives a fixed number of days.',
+      },
+      {
+        q: 'Why is my Norfolk Island pine losing its lower branches?',
+        a: 'Usually low humidity, too little light or soil that got too dry. Iowa State University Extension and Outreach names all three for brown tips and lost lower branches, and North Carolina State Extension says a tree kept in very low light for a few years starts losing them.',
+      },
+      {
+        q: 'How much light does a Norfolk Island pine need?',
+        a: 'Bright light, near an east, west or south window, turned weekly so it grows straight. North Carolina State Extension says full sun gives the most compact growth.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for a Norfolk Island Pine?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-norfolk-island-pine',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Norfolk Island Pine',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/trees-and-shrubs/trees/norfolk-island-pine/',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Araucaria heterophylla (Norfolk Island Pine)',
+        url: 'https://plants.ces.ncsu.edu/plants/araucaria-heterophylla/',
+        accessed: '2026-11-04',
+      },
+    ],
+  },
+  {
+    slug: 'cyclamen',
+    commonName: 'Cyclamen',
+    scientificName: 'Cyclamen persicum',
+    alsoKnownAs: ['Florist’s Cyclamen', 'Persian Cyclamen'],
+    related: ['african-violet', 'kalanchoe', 'amaryllis'],
+    metaTitle: 'How Often to Water a Cyclamen: When the Surface Is Dry',
+    metaDescription:
+      'Water a cyclamen when the soil surface is dry, at the edge of the pot or from below, never on the tuber. Keep it cool and bright to keep it blooming.',
+    reviewed: '2026-11-04',
+    updated: '2026-11-04',
+    summary:
+      'Florist’s cyclamen, Cyclamen persicum, flowers through the winter with swept-back petals over silver-marked, heart-shaped leaves. It wants a cool, bright room and soil that stays moist but never wet, and it goes dormant after flowering. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the surface is dry; water at the pot’s edge',
+      light: 'Bright, indirect light in a cool room',
+      difficulty: 'Moderate: easy in bloom, hard to rebloom',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA); saponins',
+      humidity: 'Moderate humidity; keep it away from heat vents',
+    },
+    sections: {
+      watering: [
+        'Check a cyclamen’s soil every day, and when the surface is dry to the touch, water thoroughly. If it is still moist, wait and check again the next day. That is Iowa State University Extension and Outreach’s advice: the plant likes moist soil but does not tolerate wet soil, and none of the sources gives a number of days.',
+        'Water at the edge of the pot or from below, never onto the tuber in the middle. Clemson Cooperative Extension and Iowa State both say water on the crown can rot it. Iowa State recommends room-temperature water, and Clemson says a spot near a heat vent dries the soil out too quickly.',
+      ],
+      light: [
+        'Give it bright, indirect light and a cool room. Iowa State says 50 to 60°F. Clemson says days of 60 to 65°F with nights around 50°F, and that above 70°F the buds fail to develop. A cool windowsill out of direct sun suits it better than a warm living room.',
+        'North Carolina State Extension recommends moderate humidity. Keeping it cool and away from heaters is the part all three sources agree on.',
+      ],
+      problems: [
+        'Yellowing leaves after flowering are usually the plant going dormant, not dying. Clemson says that in its Mediterranean home it rests after blooming, its leaves yellow and fall, and most people throw it out at this point.',
+        'A rotting tuber comes from overwatering, NC State says. Aphids, mealybugs, spider mites and thrips can attack it, and Clemson says a plant with cyclamen mites is best thrown away, because that pest is hard to control.',
+        'To keep it flowering, remove spent flowers. Clemson says to grasp the old flower stem and pull it off completely at the crown.',
+      ],
+      propagation: [
+        'Clemson says both seed and division are difficult: seed is slow and erratic, and a cut tuber tends to dry out or rot, so it recommends buying new plants instead.',
+        'Reblooming the same plant is possible but tricky. Iowa State says to cut back watering gradually as the leaves yellow, rest it in a cool, shaded spot for about six to eight weeks in late spring and early summer, and start watering again in mid-to-late summer. Clemson says to keep the soil from drying out completely while it rests, and to move it into bright light when new leaves appear in mid-September.',
+      ],
+      sharedCare: [
+        'In a shared household, a cyclamen needs one person who waters it at the edge of the pot, because a well-meant glass of water poured over the middle is how the tuber rots.',
+        'Because the ASPCA lists it as toxic to cats and dogs, set it somewhere the pets do not go, and keep the tuber out of reach if the plant is repotted or thrown out.',
+      ],
+      honestBit: [
+        'My take: a cyclamen is the winter plant for a cold room. The chilly bedroom or entryway that other plants sulk in is what keeps it blooming, so put it there instead of the warm spot by the heater.',
+        'The ASPCA lists cyclamen as toxic to cats and dogs. It names terpenoid saponins and lists drooling, vomiting and diarrhea, with heart rhythm problems and seizures after large amounts of the tuber. If your pet has eaten some, call your vet or a poison hotline. The [pet-safety page for cyclamen](/pet-safe/cyclamen) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a cyclamen?',
+        a: 'Check the soil daily and water thoroughly when the surface is dry to the touch, at the edge of the pot or from below. If it is still moist, check again the next day. Iowa State University Extension and Outreach gives that rule, with no fixed number of days.',
+      },
+      {
+        q: 'Why are my cyclamen’s leaves turning yellow?',
+        a: 'After flowering, it is usually the plant going dormant: Clemson Cooperative Extension says cyclamen rest after they bloom, and the leaves yellow and fall. While it is still blooming, look at warmth and water first: above 70°F the buds fail, and soggy soil rots the tuber.',
+      },
+      {
+        q: 'How do I keep a cyclamen blooming?',
+        a: 'Keep it cool and bright, keep the soil moist but not wet, and pull off spent flowers at the crown. Iowa State University Extension and Outreach says cool temperatures and moist soil are the keys to a longer bloom.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'All About Cyclamen',
+        url: 'https://yardandgarden.extension.iastate.edu/how-to/all-about-cyclamen',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Florist Cyclamen',
+        url: 'https://hgic.clemson.edu/factsheet/cyclamen/',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Cyclamen persicum (Florist’s Cyclamen)',
+        url: 'https://plants.ces.ncsu.edu/plants/cyclamen-persicum/',
+        accessed: '2026-11-04',
+      },
+    ],
+  },
+  {
+    slug: 'kalanchoe',
+    commonName: 'Kalanchoe',
+    scientificName: 'Kalanchoe blossfeldiana',
+    alsoKnownAs: ['Florist Kalanchoe', 'Christmas Kalanchoe', 'Flaming Katy'],
+    related: ['christmas-cactus', 'jade-plant', 'norfolk-island-pine'],
+    metaTitle: 'How Often to Water a Kalanchoe: Let the Soil Dry First',
+    metaDescription:
+      'Water a kalanchoe once the soil has dried, before it wilts, and never leave it standing in water. Bright light, and long fall nights to rebloom.',
+    reviewed: '2026-11-04',
+    updated: '2026-11-04',
+    summary:
+      'Kalanchoe, Kalanchoe blossfeldiana, is a flowering succulent with thick, scalloped leaves and clusters of small flowers in red, pink, orange, yellow or white. It takes very little care and rots if it is kept wet. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the soil has dried, but before it wilts',
+      light: 'Bright light; shade it from hot afternoon sun',
+      difficulty: 'Easy; reblooming needs long fall nights',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'No figure in the sources; give it good air flow',
+    },
+    sections: {
+      watering: [
+        'Let a kalanchoe’s soil dry between waterings, but not so far that the plant wilts, then water it deeply. Iowa State University Extension and Outreach gives the first half of that rule and North Carolina State Extension the second. Clemson Cooperative Extension says overwatering damages it and to let the soil dry slightly between waterings. None of the three gives a number of days.',
+        'Drainage matters as much as timing. Iowa State says never to let the pot sit in a sleeve full of water, and Clemson says root rot usually comes from a mix that drains slowly or from watering too often. NC State recommends a well-drained cactus or succulent mix.',
+      ],
+      light: [
+        'Give it bright light. Clemson says it grows best in full sun and gets spindly in low light. NC State prefers bright, indirect light or partial shade, and says long direct sun can scorch the leaves, so afternoon shade is wise. A bright window with some shade from the hottest sun meets both.',
+        'Cool nights make the flowers last. Iowa State and Clemson both give 45 to 65°F at night and 50 to 70°F during the day.',
+      ],
+      problems: [
+        'Soft, rotting stems or roots mean it has been kept too wet. NC State says overwatering causes root and stem rot, so let it dry out and check that the pot drains.',
+        'Mottled leaves with yellow spots or fine webbing can be powdery mildew, which Clemson says is hard to recognize on kalanchoe; good air flow around the plant helps prevent it. Mealybugs, aphids and brown scale are the most common pests, according to Clemson, and NC State adds spider mites.',
+        'If it will not flower again, it has probably missed its long nights. NC State says a plant that fails to bloom may not have had the dark period it needs.',
+      ],
+      propagation: [
+        'Stem cuttings root readily. Clemson says to take two- to three-inch tip cuttings from shoots that are not flowering, in spring or early summer, strip the bottom leaves, and let the cut end dry for several days before setting it in a mix of peat moss and perlite. Kept in bright, indirect light inside a closed plastic bag, cuttings should be ready to transplant in two to three weeks. NC State says leaf cuttings work too.',
+        'Reblooming is a matter of darkness, as with the [Christmas cactus](/care/christmas-cactus). Iowa State says to move it in October to a room where the lights stay off at night, and that it needs six weeks of 14-hour nights to set buds. Clemson says that once the buds show above the leaves, the plant can go anywhere.',
+      ],
+      sharedCare: [
+        'In a shared household, a kalanchoe needs a house rule more than a schedule: nobody waters it until the soil is dry. A succulent watered on everyone’s good intentions rots.',
+        'If you want it to rebloom, the autumn rule is about the lights: whoever uses its room has to leave the lamp off at night for those six weeks. Because the ASPCA lists it as toxic to cats and dogs, pick a room where the pets cannot reach it, too.',
+      ],
+      honestBit: [
+        'My take: kalanchoe is the low-effort holiday plant. It forgives a missed watering far more readily than an extra one, and Iowa State says it is fine to throw it out after it blooms if reblooming feels like too much work.',
+        'The ASPCA lists kalanchoe (Kalanchoe species) as toxic to cats and dogs. It names bufadienolides and lists vomiting and diarrhea, with an abnormal heart rhythm in rare cases. If your pet has eaten some, call your vet or a poison hotline. The [pet-safety page for kalanchoe](/pet-safe/kalanchoe) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a kalanchoe?',
+        a: 'Once the soil has dried, but before the plant wilts, and then deeply. Never leave it standing in water. Iowa State University Extension and Outreach and Clemson Cooperative Extension give that rule, and none of the sources gives a fixed number of days.',
+      },
+      {
+        q: 'How do I get my kalanchoe to bloom again?',
+        a: 'Give it long nights. Iowa State University Extension and Outreach says to keep it from October in a room where the lights stay off at night, and that it needs six weeks of 14-hour nights to form buds.',
+      },
+      {
+        q: 'How much light does a kalanchoe need?',
+        a: 'Bright light. It gets spindly in low light, Clemson Cooperative Extension says, but North Carolina State Extension says long direct sun can scorch the leaves, so shade it from hot afternoon sun.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Kalanchoe',
+        url: 'https://hgic.clemson.edu/factsheet/kalanchoe/',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for Kalanchoe?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-kalanchoe',
+        accessed: '2026-11-04',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Kalanchoe blossfeldiana (Florist Kalanchoe)',
+        url: 'https://plants.ces.ncsu.edu/plants/kalanchoe-blossfeldiana/',
+        accessed: '2026-11-04',
       },
     ],
   },

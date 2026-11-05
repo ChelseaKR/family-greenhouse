@@ -28,6 +28,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   listing (Peperomia obtusifolia, non-toxic to cats and dogs). String of
   pearls, prayer plant, croton and Chinese money plant have no ASPCA listing
   of their own, so their pet line reads "Unknown".
+- **Care guides for four holiday plants: amaryllis, Norfolk Island pine,
+  cyclamen and kalanchoe.** People search for these in November and December.
+  Each guide answers "how often to water" first and cites the Clemson, Iowa
+  State, UF/IFAS and NC State extension pages it was written from, read on
+  2026-11-04. Each also has a pet-safety page citing the plant's own ASPCA
+  listing. The amaryllis row cites "Barbados Lily" (Hippeastrum), the genus
+  sold for the holidays, and not ASPCA's "Amaryllis" listing, which names a
+  different genus.
 
 ### Changed
 

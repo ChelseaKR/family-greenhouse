@@ -773,3 +773,117 @@ describe('watering guides batch 1', () => {
     expect(row.aliases).not.toContain('maranta');
   });
 });
+
+/**
+ * The four holiday-plant guides added 2026-11-04 (amaryllis, Norfolk Island
+ * pine, cyclamen, kalanchoe), which get their search demand in November and
+ * December. Each cites extension pages read that day and opens its water line
+ * with the dryness check those pages give; the one interval a source does
+ * give (Clemson: a blooming amaryllis wants water about once or twice a week)
+ * is quoted as Clemson's and is the only one allowed. Every pet line reads
+ * the plant's own ASPCA listing, recorded the same day.
+ */
+describe('holiday guides', () => {
+  const HOLIDAY = ['amaryllis', 'norfolk-island-pine', 'cyclamen', 'kalanchoe'] as const;
+  const guides = HOLIDAY.map((slug) => findCareGuide(slug)!);
+
+  /** A stated watering interval: "every 7 days", "2 to 3 weeks", "once a week". */
+  const INTERVAL =
+    /\b(?:\d+\s*(?:to|-|–)?\s*\d*\s*(?:days?|weeks?)|every\s+(?:day|week|other|few|couple)|once\s+a\s+(?:day|week)|(?:once\s+or\s+)?twice\s+a\s+(?:day|week|month)|weekly|daily)\b/i;
+  /**
+   * Phrases a cited source states, removed before the check: Clemson's
+   * interval for a blooming amaryllis, and Iowa State's advice to check a
+   * cyclamen's soil daily (how often to look, not how often to water).
+   */
+  const SOURCED_INTERVALS: Record<string, string[]> = {
+    amaryllis: ['about once or twice a week'],
+    cyclamen: ['soil every day', 'soil daily'],
+  };
+
+  /** The places a guide answers "how often to water". */
+  const wateringText = (g: CareGuide) =>
+    [g.quickFacts.water, g.metaTitle, g.metaDescription, ...g.sections.watering, g.faqs[0]!.a].map(
+      (t) => (SOURCED_INTERVALS[g.slug] ?? []).reduce((s, ok) => s.split(ok).join(''), t)
+    );
+
+  it('publishes all four, reviewed and updated on the day the sources were read', () => {
+    for (const [i, slug] of HOLIDAY.entries()) {
+      const g = guides[i];
+      expect(g, slug).toBeDefined();
+      expect(g!.reviewed, slug).toBe('2026-11-04');
+      expect(g!.updated, slug).toBe('2026-11-04');
+      expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(2);
+      for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-04');
+      expect(g!.heading, slug).toBeUndefined();
+    }
+  });
+
+  it('answers "how often to water" first, in the title and the first FAQ', () => {
+    for (const g of guides) {
+      expect(g.metaTitle, g.slug).toMatch(/^How Often to Water /);
+      expect(g.faqs[0]!.q, g.slug).toMatch(/^How often should I water /);
+    }
+  });
+
+  it('keeps every water line short enough for the first screen', () => {
+    for (const g of guides) expect(g.quickFacts.water.length, g.slug).toBeLessThanOrEqual(55);
+    for (const g of guides) expect(g.quickFacts.light.length, g.slug).toBeLessThanOrEqual(56);
+  });
+
+  it('states no watering interval the sources do not give', () => {
+    for (const g of guides) {
+      for (const text of wateringText(g)) expect(text, g.slug).not.toMatch(INTERVAL);
+    }
+  });
+
+  it('negative control: an unsourced interval fails the check, and the sourced one is really there', () => {
+    const real = findCareGuide('cyclamen')!;
+    const doctored = { ...real, quickFacts: { ...real.quickFacts, water: 'Every 7 days' } };
+    expect(wateringText(doctored).some((t) => INTERVAL.test(t))).toBe(true);
+    // The allowance is not a no-op: the amaryllis text does carry the
+    // interval, and it would fail without the allowance.
+    const amaryllis = findCareGuide('amaryllis')!;
+    expect(amaryllis.sections.watering.join(' ')).toContain('about once or twice a week');
+    expect(amaryllis.sections.watering.some((t) => INTERVAL.test(t))).toBe(true);
+  });
+
+  it('reads each pet line from the plant’s own ASPCA listing', () => {
+    for (const g of guides) {
+      const row = PET_TOXICITY.find((e) => e.slug === g.slug)!;
+      expect(row, g.slug).toBeDefined();
+      expect(row.aspcaListing, g.slug).toBeDefined();
+      const view = careToxicity(g);
+      expect(view.sourced, g.slug).toBe(true);
+      expect(view.petSafePath, g.slug).toBe(`/pet-safe/${g.slug}`);
+      expect(petSafetyLevel(g.quickFacts.toxicity), g.slug).toBe(
+        row.cats === 'toxic' ? 'toxic' : 'safe'
+      );
+      const pet = g.sections.honestBit.join(' ');
+      expect(pet, g.slug).toContain(`](/pet-safe/${g.slug})`);
+      expect(pet, g.slug).toContain('[free pet-safe checker](/pet-safe)');
+      expect(pet, g.slug).toMatch(
+        row.cats === 'toxic'
+          ? /call your vet or a poison hotline/
+          : /Non-toxic is not the same as safe to eat in quantity/
+      );
+    }
+    // The holiday amaryllis is Hippeastrum: its row cites ASPCA's "Barbados
+    // Lily" listing, not the "Amaryllis" one, which names Amaryllis spp.
+    expect(PET_TOXICITY.find((e) => e.slug === 'amaryllis')!.aspcaListing).toMatchObject({
+      title: 'Barbados Lily',
+      scientificName: 'Hippeastrum spp.',
+      path: '/toxic-and-non-toxic-plants/barbados-lily',
+    });
+    expect(PET_TOXICITY.find((e) => e.slug === 'norfolk-island-pine')!.aspcaListing).toMatchObject({
+      title: 'Australian Pine',
+      path: '/toxic-and-non-toxic-plants/australian-pine',
+    });
+  });
+
+  it('is linked from another guide’s related list', () => {
+    for (const slug of HOLIDAY) {
+      const from = CARE_GUIDES.filter((g) => g.slug !== slug && g.related.includes(slug));
+      expect(from.length, slug).toBeGreaterThan(0);
+    }
+  });
+});

@@ -1185,6 +1185,86 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     dogs: 'toxic',
     note: 'Toxic to cats and dogs per the ASPCA, which names calcium oxalate crystals and lists intense burning and irritation of the mouth, lips and tongue, excessive drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline.',
   },
+  // ---------------------------------------------------------------------
+  // The four holiday-plant care guides of 2026-11-04. Each verdict was read
+  // off that plant's own live ASPCA listing on 2026-11-04.
+  {
+    slug: 'amaryllis',
+    commonName: 'Amaryllis',
+    scientificName: 'Hippeastrum',
+    // The holiday amaryllis is Hippeastrum, which ASPCA lists as "Barbados
+    // Lily" (Amaryllis, Fire Lily, Lily of the Palace, Ridderstjerne). ASPCA's
+    // separate "Amaryllis" listing names Amaryllis spp., the belladonna lily,
+    // a different genus, so it is not this row's source. Both are toxic.
+    aspcaListing: {
+      title: 'Barbados Lily',
+      scientificName: 'Hippeastrum spp.',
+      path: '/toxic-and-non-toxic-plants/barbados-lily',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // 'fire lily' and 'lily of the palace' are listed names but not aliases:
+    // "fire lily" more often means Gloriosa, a different plant, and a name
+    // must not point at two plants.
+    aliases: ['hippeastrum', 'barbados lily', 'dutch amaryllis'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names lycorine and other alkaloids and lists vomiting, drooling and diarrhea, with tremors and heart rhythm problems after large amounts. The bulb is the most poisonous part. If your pet has eaten some, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'norfolk-island-pine',
+    // 'Norfolk pine', not 'Norfolk Island pine': the longer name pushes the
+    // /pet-safe page's description to 156 characters, over the 155 limit.
+    commonName: 'Norfolk pine',
+    scientificName: 'Araucaria heterophylla',
+    // ASPCA lists it as "Australian Pine" (Norfolk Pine, House Pine, Norfolk
+    // Island Pine). 'australian pine' is not an alias: in ordinary US use it
+    // more often means Casuarina, a different tree.
+    aspcaListing: {
+      title: 'Australian Pine',
+      scientificName: 'Araucaria heterophylla',
+      path: '/toxic-and-non-toxic-plants/australian-pine',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['norfolk island pine', 'araucaria heterophylla', 'house pine'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, which lists it as Australian pine. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'cyclamen',
+    commonName: 'Cyclamen',
+    scientificName: 'Cyclamen persicum',
+    // A genus-level listing (Cyclamen spp); florist's cyclamen is C. persicum.
+    aspcaListing: {
+      title: 'Cyclamen',
+      scientificName: 'Cyclamen spp',
+      path: '/toxic-and-non-toxic-plants/cyclamen',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['florists cyclamen', 'persian cyclamen', 'sowbread', 'cyclamen persicum'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names terpenoid saponins and lists drooling, vomiting and diarrhea, with heart rhythm problems and seizures after large amounts of the tuber. If your pet has eaten some, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'kalanchoe',
+    commonName: 'Kalanchoe',
+    scientificName: 'Kalanchoe blossfeldiana',
+    // A genus-level listing (Kalanchoe spp); the florist kalanchoe is
+    // K. blossfeldiana. The listing's other names (mother-in-law plant,
+    // devil's backbone, chandelier plant, mother of millions) are other
+    // species or collide with other rows, so they are not aliases.
+    aspcaListing: {
+      title: 'Kalanchoe',
+      scientificName: 'Kalanchoe spp',
+      path: '/toxic-and-non-toxic-plants/kalanchoe',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['kalanchoe blossfeldiana', 'flaming katy', 'florist kalanchoe'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names bufadienolides and lists vomiting and diarrhea, with an abnormal heart rhythm in rare cases. If your pet has eaten some, call your vet or a poison hotline.',
+  },
 ];
 
 /** Normalize a query/name for fuzzy matching: lowercase, strip punctuation,

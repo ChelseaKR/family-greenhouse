@@ -23,7 +23,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/care</loc>
-    <lastmod>2026-11-03</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -399,6 +399,30 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://familygreenhouse.net/care/amaryllis</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/norfolk-island-pine</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/cyclamen</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/care/kalanchoe</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://familygreenhouse.net/pet-safe/pothos</loc>
     <lastmod>2026-10-30</lastmod>
     <changefreq>monthly</changefreq>
@@ -635,6 +659,30 @@
   <url>
     <loc>https://familygreenhouse.net/pet-safe/schefflera</loc>
     <lastmod>2026-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/pet-safe/amaryllis</loc>
+    <lastmod>2026-11-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/pet-safe/norfolk-island-pine</loc>
+    <lastmod>2026-11-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/pet-safe/cyclamen</loc>
+    <lastmod>2026-11-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/pet-safe/kalanchoe</loc>
+    <lastmod>2026-11-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
