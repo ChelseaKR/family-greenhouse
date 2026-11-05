@@ -50,6 +50,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   unchanged. All JS combined drops from 718.4 to 667.6 kB, so new guides no
   longer spend that budget.
 
+### Fixed
+
+- **Google Analytics no longer credits a purchase to Stripe.** The page a
+  buyer returns to after Stripe Checkout or the billing portal now reports
+  our own site as its referrer instead of `checkout.stripe.com`, so the
+  `purchase` it records stays with the search, ad or page that brought the
+  buyer.
+
 ## [0.47.0] - 2026-11-03
 
 **Perenual is off in production, the pet-safety pages quote the ASPCA less,

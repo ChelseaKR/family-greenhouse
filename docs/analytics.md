@@ -267,7 +267,10 @@ before. Test fixtures are excluded by the smoke's GPC declaration (above).
 - a page whose path needed scrubbing gets the generic title "Family
   Greenhouse", because `PlantDetailPage` titles itself with the plant's name;
 - the referrer is another site's origin only, or one of our pages scrubbed the
-  same way.
+  same way. A full page load back from Stripe (Checkout, the billing portal,
+  3-D Secure, any `*.stripe.com` host) is reported as our own origin, so GA
+  does not read Stripe as a referral and credit the `purchase` on the return
+  page to it instead of to whatever brought the buyer.
 
 Because `set` carries these values, GA's automatic events inherit the scrubbed
 address and title rather than reading `location.href` and `document.title`.
