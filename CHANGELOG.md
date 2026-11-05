@@ -18,6 +18,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Cited detail on seven short pet-safety pages.** Rubber plant,
+  dieffenbachia, orchid, alocasia, begonia, cast iron plant and haworthia
+  were about 350 words and not indexed (Search Console, 2026-11-05). Each now
+  quotes its ASPCA listing's family and, where they are names, other names;
+  the toxic ones its principles, signs and advice line; a horse verdict where
+  the listing states one; NC State Extension where it has a matching page;
+  and similar and related plants with their own verdicts. Read off the live
+  pages on 2026-11-05 and pinned in petToxicity.test.ts. No verdict, title,
+  H1 or meta description changes.
 - **Eight new care guides that answer "how often to water".** String of
   pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
   peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant

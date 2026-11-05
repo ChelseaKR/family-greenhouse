@@ -1199,7 +1199,7 @@ describe('listing details read on 2026-10-31', () => {
       PET_TOXICITY.filter(
         (e) =>
           e.aspcaListing?.detailsRead !== undefined &&
-          !['2026-10-29', '2026-10-31'].includes(e.aspcaListing.detailsRead)
+          !['2026-10-29', '2026-10-31', '2026-11-05'].includes(e.aspcaListing.detailsRead)
       ).map((e) => e.slug)
     ).toEqual([]);
   });
@@ -1233,5 +1233,130 @@ describe('listing details read on 2026-10-31', () => {
   it('never quotes "Money Plant" on the money tree page', () => {
     const e = PET_TOXICITY.find((x) => x.slug === 'money-tree')!;
     expect(JSON.stringify(e.aspcaListing)).not.toMatch(/money plant/i);
+  });
+});
+
+/**
+ * Seven ~350-word /pet-safe pages that Search Console URL Inspection found
+ * not indexed on 2026-11-05 ("Unknown to Google" or "Discovered"), while the
+ * detailed ~850-word pages are indexed: rubber plant, dieffenbachia, orchid,
+ * alocasia, begonia, cast iron plant and haworthia. Read off the live ASPCA
+ * listings and NC State Extension's Plant Toolbox on 2026-11-05 and pinned
+ * the same way: an edit here is a re-read of the source, not a copy edit.
+ *
+ * Left out on purpose: begonia's "Over 1,000 species and 10,000 hybrids" and
+ * haworthia's "Many cultivars" (not names), alocasia's "Elephant's Ear" (ASPCA
+ * keeps separate listings for other plants sold under that name), and
+ * haworthia's "Toxic Principles: Non-toxic" (a non-toxic page quotes none).
+ */
+describe('listing details read on 2026-11-05', () => {
+  const ADVICE =
+    'If you suspect your pet may have ingested a potentially toxic substance, call the ASPCA Poison Control at (888) 426-4435 or contact your local veterinarian as soon as possible.';
+  const DETAILS: Record<
+    string,
+    {
+      horses?: 'toxic' | 'non-toxic';
+      toxicPrinciples?: string;
+      clinicalSigns?: string;
+      additionalCommonNames?: string;
+      family: string;
+      ncsuPath?: string;
+      poisonSeverity?: string;
+      poisonPart?: string;
+      tagged?: Array<'cats' | 'dogs' | 'horses'>;
+    }
+  > = {
+    // The Ficus genus listing (Weeping Fig) states no clinical signs.
+    'rubber-plant': {
+      horses: 'toxic',
+      toxicPrinciples: 'Proteolytic enzyme (ficin), psoralen (ficusin)',
+      additionalCommonNames: 'fig, indian rubber plant',
+      family: 'Moraceae',
+    },
+    dieffenbachia: {
+      toxicPrinciples: 'Insoluble calcium oxalates, proteolytic enzyme',
+      clinicalSigns:
+        'Oral irritation, intense burning and irritation of mouth , tongue and lips, excessive drooling, vomiting, difficulty swallowing',
+      additionalCommonNames:
+        'Charming Dieffenbachia, Giant Dumb Cane, Tropic Snow, Dumbcane, Exotica, Spotted Dumb Cane, Exotica Perfection',
+      family: 'Araceae',
+      ncsuPath: 'dieffenbachia-seguine',
+      poisonSeverity: 'High',
+      poisonPart: 'Leaves, Roots, Sap/Juice, Stems',
+    },
+    orchid: {
+      horses: 'non-toxic',
+      additionalCommonNames: 'Moth Orchid, Moon Orchid',
+      family: 'Orchidaceae',
+      ncsuPath: 'phalaenopsis',
+      tagged: ['cats', 'dogs', 'horses'],
+    },
+    alocasia: {
+      horses: 'toxic',
+      toxicPrinciples: 'Insoluble calcium oxalates',
+      clinicalSigns:
+        'Oral irritation, pain and swelling of mouth, tongue and lips, excessive drooling, vomiting (not horses), difficulty swallowing',
+      family: 'Araceae',
+      ncsuPath: 'alocasia',
+      poisonSeverity: 'Medium',
+      poisonPart: 'Bark, Flowers, Fruits, Leaves, Roots, Seeds, Stems',
+    },
+    begonia: {
+      horses: 'toxic',
+      toxicPrinciples: 'Soluble calcium oxalates',
+      clinicalSigns:
+        'Kidney failure (in grazing animals), vomiting, salivation in dogs/cats. Most toxic part is underground.',
+      family: 'Begoniaceae',
+      ncsuPath: 'begonia',
+      poisonSeverity: 'Low',
+      poisonPart: 'Roots, Sap/Juice',
+    },
+    'cast-iron-plant': {
+      horses: 'non-toxic',
+      additionalCommonNames: 'Bar Room Plant, Iron Plant, Variegated Cast Iron Plant',
+      family: 'Liliaceae',
+      ncsuPath: 'aspidistra-elatior',
+      tagged: ['cats', 'dogs', 'horses'],
+    },
+    haworthia: { family: 'Liliaceae' },
+  };
+
+  it('these seven entries record details read that day', () => {
+    expect(
+      PET_TOXICITY.filter((e) => e.aspcaListing?.detailsRead === '2026-11-05')
+        .map((e) => e.slug)
+        .sort()
+    ).toEqual(Object.keys(DETAILS).sort());
+  });
+
+  it.each(Object.entries(DETAILS))('%s records what its sources say', (slug, row) => {
+    const e = PET_TOXICITY.find((x) => x.slug === slug)!;
+    const listing = e.aspcaListing!;
+    expect(listing.detailsRead).toBe('2026-11-05');
+    expect(listing.toxicPrinciples).toBe(row.toxicPrinciples);
+    expect(listing.clinicalSigns).toBe(row.clinicalSigns);
+    expect(listing.listingNote).toBeUndefined();
+    expect(listing.additionalCommonNames).toBe(row.additionalCommonNames);
+    expect(listing.family).toBe(row.family);
+    expect(listing.listed.horses).toBe(row.horses);
+    expect(e.horses).toBe(row.horses);
+    const toxic = e.cats === 'toxic' || e.dogs === 'toxic';
+    expect(listing.listingAdvice).toBe(toxic ? ADVICE : undefined);
+    if (!row.ncsuPath) {
+      expect(e.extensionSource).toBeUndefined();
+      return;
+    }
+    const ext = e.extensionSource!;
+    expect(ext.url).toBe(`https://plants.ces.ncsu.edu/plants/${row.ncsuPath}/`);
+    expect(ext.read).toBe('2026-11-05');
+    expect(ext.poisonSeverity).toBe(row.poisonSeverity);
+    expect(ext.poisonPart).toBe(row.poisonPart);
+    if (!toxic) expect(ext.poisonPart).toBeUndefined();
+    expect(Object.keys(ext.tagged ?? {}).sort()).toEqual([...(row.tagged ?? [])].sort());
+  });
+
+  it('never quotes "Elephant\'s Ear" on the alocasia page', () => {
+    const e = PET_TOXICITY.find((x) => x.slug === 'alocasia')!;
+    expect(JSON.stringify(e)).not.toMatch(/elephant/i);
   });
 });
