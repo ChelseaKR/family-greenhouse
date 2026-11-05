@@ -1490,6 +1490,103 @@ describe('applyStripeEvent — gift subscription purchase (ADR 0028)', () => {
   });
 });
 
+describe('applyStripeEvent — charge.refunded voids an unredeemed gift (decision E1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const refundEvent = (charge: Record<string, unknown> = {}) =>
+    ({
+      id: 'evt_refund_1',
+      created: 1_764_000_000,
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_1',
+          payment_intent: 'pi_gift_1',
+          refunded: true,
+          amount: 1497,
+          amount_refunded: 1497,
+          ...charge,
+        },
+      },
+    }) as unknown as Stripe.Event;
+
+  type Sent = { kind: string; input: Record<string, any> };
+  const sentCalls = async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    return vi.mocked(dynamodb.send).mock.calls.map((c) => c[0] as unknown as Sent);
+  };
+
+  it('looks the PaymentIntent up, voids the gift, then writes the ledger, and touches no household', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockResolvedValue({} as never);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(refundEvent());
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['Get', 'Update', 'Put']);
+    expect(calls[0].input.Key).toEqual({ PK: 'GIFTPAYMENT#pi_gift_1', SK: 'METADATA' });
+    expect(calls[1].input.Key).toEqual({ PK: 'GIFT#cs_gift_1', SK: 'METADATA' });
+    expect(calls[1].input.UpdateExpression).toBe('SET voidedAt = :now, voidReason = :reason');
+    expect(calls[2].input.Item.PK).toBe('STRIPE_EVENT#evt_refund_1');
+    expect(JSON.stringify(calls)).not.toContain('HOUSEHOLD#');
+  });
+
+  it('leaves the code valid on a partial refund', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(refundEvent({ refunded: false, amount_refunded: 500 }));
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['Put']);
+    expect(calls[0].input.Item.PK).toBe('STRIPE_EVENT#evt_refund_1');
+  });
+
+  it('ignores a refund of anything that is not a gift', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockResolvedValue({} as never);
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(refundEvent({ payment_intent: 'pi_plan' }));
+    const calls = await sentCalls();
+    expect(calls.map((c) => c.kind)).toEqual(['Get', 'Put']);
+  });
+
+  it('warns, and takes nothing back, when the gift was already redeemed', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('failed'), { name: 'ConditionalCheckFailedException' })
+      )
+      .mockResolvedValueOnce({
+        Item: {
+          stripeSessionId: 'cs_gift_1',
+          planId: 'garden',
+          months: 3,
+          buyerUserId: 'user-buyer',
+          codeHash: 'h'.repeat(64),
+          purchasedAt: '2026-11-20T00:00:00.000Z',
+          redeemedAt: '2026-11-21T00:00:00.000Z',
+          redeemedHouseholdId: 'hh-1',
+        },
+      } as never)
+      .mockResolvedValue({} as never);
+    const { logger } = await import('../../../src/utils/logger.js');
+    const warnSpy = vi.spyOn(logger, 'warn');
+    const { applyStripeEvent } = await import('../../../src/services/billing.js');
+    await applyStripeEvent(refundEvent());
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ stripeSessionId: 'cs_gift_1' }),
+      'gift_refunded_after_redemption'
+    );
+    const calls = await sentCalls();
+    expect(JSON.stringify(calls)).not.toContain('HOUSEHOLD#');
+    warnSpy.mockRestore();
+  });
+});
+
 describe('applyStripeEvent — a PAID event that grants nothing is never silent', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
   /**

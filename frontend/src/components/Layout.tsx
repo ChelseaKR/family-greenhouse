@@ -25,6 +25,7 @@ import { billingService, effectivePlanId } from '@/services/billingService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { DoubleCarePrompt } from '@/features/tasks/DoubleCarePrompt';
 import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
+import { PendingGiftCodeNotice } from '@/features/gift/PendingGiftCodeNotice';
 import { ConnectionNotice } from './ConnectionNotice';
 import { PullToRefresh } from './PullToRefresh';
 import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
@@ -245,6 +246,7 @@ export function Layout() {
           <div className={isChatRoute ? '' : 'px-4 sm:px-6 lg:px-8'}>
             {!isChatRoute && <ConnectionNotice />}
             {showPaymentFailedBanner && <PaymentFailedBanner subscription={subscription} />}
+            {!isChatRoute && <PendingGiftCodeNotice />}
             <Outlet />
           </div>
         </main>

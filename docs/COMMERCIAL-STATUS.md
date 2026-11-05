@@ -27,7 +27,7 @@ never granted to a household that already existed, and it is never applied to a
 household with any Stripe subscription state.
 
 Gift subscriptions ([ADR 0028](adr/0028-gift-subscriptions.md), proposed
-2026-09-13) let a signed-in member pay once, on their own card, for 1–12 months of
+2026-09-13, accepted 2026-11-05) let a signed-in member pay once, on their own card, for 1–12 months of
 Garden or Greenhouse for another household, at the monthly price times the months
 with no discount; the recipient's admin redeems a code and the gift ends on the
 clock. **Nothing is for sale on that path until the owner creates the two

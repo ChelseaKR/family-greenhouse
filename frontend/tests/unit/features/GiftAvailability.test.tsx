@@ -33,7 +33,6 @@ function catalog(giftAvailable: boolean): PlanCatalog {
     giftSubscriptions: {
       minMonths: 1,
       maxMonths: 12,
-      redeemWindowDays: 365,
       plans: [
         { planId: 'garden', available: giftAvailable },
         { planId: 'greenhouse', available: giftAvailable },

@@ -119,6 +119,9 @@ reactivation runbook before changing any of these controls.
    - Events to send — **billing emails** (ADR 0023; the app is silent without these):
      `invoice.paid`, `invoice.upcoming`, `invoice.payment_failed`,
      `customer.source.expiring`
+   - Events to send — **gifts** (ADR 0028, decision E1): `charge.refunded`.
+     A full refund of an unredeemed gift voids its code. Without it a refunded
+     code keeps working until it is voided by hand.
    - Events to send — **optional**: `checkout.session.expired`. Releases a
      household's hold on a second plan checkout at the 30-minute mark when it
      abandoned the first (`docs/billing.md` § _One plan checkout at a time_);

@@ -59,8 +59,15 @@ export const GIFT_PRICE_ENV: Record<GiftablePlanId, string> = {
 export const GIFT_MIN_MONTHS = 1;
 export const GIFT_MAX_MONTHS = 12;
 
-/** A code may be redeemed this many days after purchase. The gift itself runs from redemption. */
-export const GIFT_REDEEM_WINDOW_DAYS = 365;
+/*
+ * A gift code never expires (owner decision B1, 2026-11-05). There is no
+ * redeem-by date: the gift is paid in full up front, so an unredeemed code
+ * costs nothing to honor, and California's gift-certificate law (Civil Code
+ * §1749.5) bars selling one with an expiration date. Codes minted before this
+ * change carry a `redeemBy` on their rows; it is ignored everywhere. A code
+ * stops working only when it is redeemed, or when its payment is refunded
+ * (`voidedAt`, decision E1).
+ */
 
 /**
  * Metadata marker stamped on the Checkout Session at creation. Every
@@ -102,7 +109,6 @@ export function giftAmountCents(planId: GiftablePlanId, months: number): number 
 export interface GiftSubscriptionSummary {
   minMonths: number;
   maxMonths: number;
-  redeemWindowDays: number;
   /** Per tier: true only when payments are on AND a Stripe price is configured. */
   plans: Array<{ planId: GiftablePlanId; available: boolean }>;
 }
@@ -117,7 +123,6 @@ export function giftSubscriptionSummary(paymentsAvailable: boolean): GiftSubscri
   return {
     minMonths: GIFT_MIN_MONTHS,
     maxMonths: GIFT_MAX_MONTHS,
-    redeemWindowDays: GIFT_REDEEM_WINDOW_DAYS,
     plans: GIFTABLE_PLAN_IDS.map((planId) => ({
       planId,
       available: paymentsAvailable && isGiftConfigured(planId),
@@ -234,8 +239,14 @@ export interface GiftPurchaseGrant {
   months: number;
   /** The account that paid. The code is shown to this account and nobody else. */
   buyerUserId: string;
-  /** ISO timestamp the payment completed; the redeem-by window counts from here. */
+  /** ISO timestamp the payment completed. */
   purchasedAt: string;
+  /**
+   * The Session's PaymentIntent id, or null when the event did not carry one.
+   * It is how a later `charge.refunded` finds the gift to void (decision E1):
+   * a Charge names its PaymentIntent, never its Checkout Session.
+   */
+  paymentIntentId: string | null;
 }
 
 /**
@@ -261,6 +272,7 @@ export function giftPurchaseFromEvent(event: Stripe.Event): GiftPurchaseGrant | 
     id?: string;
     mode?: string;
     payment_status?: string;
+    payment_intent?: string | { id?: string } | null;
     metadata?: Record<string, string> | null;
   };
   if (!isGiftSession(session)) return null;
@@ -278,5 +290,53 @@ export function giftPurchaseFromEvent(event: Stripe.Event): GiftPurchaseGrant | 
     months,
     buyerUserId,
     purchasedAt: new Date(event.created * 1000).toISOString(),
+    paymentIntentId: paymentIntentIdOf(session.payment_intent),
+  };
+}
+
+function paymentIntentIdOf(value: unknown): string | null {
+  if (typeof value === 'string' && value !== '') return value;
+  if (value && typeof value === 'object') {
+    const id = (value as { id?: unknown }).id;
+    if (typeof id === 'string' && id !== '') return id;
+  }
+  return null;
+}
+
+export interface GiftRefund {
+  paymentIntentId: string;
+  /** The Charge id, for log lines and the audit record. */
+  chargeId: string | null;
+  /** True only when the whole charge was refunded. */
+  fullyRefunded: boolean;
+}
+
+/**
+ * The refund a `charge.refunded` event describes, or null for any other event
+ * or a Charge with no PaymentIntent. It says nothing about whether the charge
+ * paid for a gift; `giftCodes.voidGiftForRefund` decides that from its own
+ * lookup row, so a refunded plan or pack charge is a quiet no-op.
+ */
+export function giftRefundFromEvent(event: Stripe.Event): GiftRefund | null {
+  if (event.type !== 'charge.refunded') return null;
+  const charge = event.data.object as unknown as {
+    id?: string;
+    payment_intent?: string | { id?: string } | null;
+    refunded?: boolean;
+    amount?: number;
+    amount_refunded?: number;
+  };
+  const paymentIntentId = paymentIntentIdOf(charge.payment_intent);
+  if (!paymentIntentId) return null;
+  const fullyRefunded =
+    charge.refunded === true ||
+    (typeof charge.amount === 'number' &&
+      typeof charge.amount_refunded === 'number' &&
+      charge.amount > 0 &&
+      charge.amount_refunded >= charge.amount);
+  return {
+    paymentIntentId,
+    chargeId: typeof charge.id === 'string' ? charge.id : null,
+    fullyRefunded,
   };
 }

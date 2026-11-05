@@ -18,6 +18,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
   TransactWriteCommand: vi.fn(function (input) {
     return { input, kind: 'TransactWrite' };
   }),
+  UpdateCommand: vi.fn(function (input) {
+    return { input, kind: 'Update' };
+  }),
 }));
 vi.mock('../../../src/utils/dynamodb.js', () => ({
   dynamodb: { send: vi.fn() },
@@ -30,6 +33,7 @@ import {
   grantGiftPurchase,
   listGiftPurchases,
   redeemGift,
+  voidGiftForRefund,
   type GiftRecord,
 } from '../../../src/services/giftCodes.js';
 import { hashGiftCode, normalizeGiftCode } from '../../../src/models/giftSubscriptions.js';
@@ -49,6 +53,7 @@ const GRANT = {
   months: 3,
   buyerUserId: 'user-buyer',
   purchasedAt: '2026-09-13T12:00:00.000Z',
+  paymentIntentId: null,
 };
 
 describe('grantGiftPurchase', () => {
@@ -76,9 +81,11 @@ describe('grantGiftPurchase', () => {
       months: 3,
       buyerUserId: 'user-buyer',
       purchasedAt: '2026-09-13T12:00:00.000Z',
-      redeemBy: '2027-09-13T12:00:00.000Z',
-      redeemByEpoch: Math.floor(Date.parse('2027-09-13T12:00:00.000Z') / 1000),
     });
+    // No redeem-by date: codes never expire (decision B1).
+    expect(gift.Item.redeemBy).toBeUndefined();
+    expect(gift.Item.redeemByEpoch).toBeUndefined();
+    expect(gift.Item.paymentIntentId).toBeUndefined();
     // The gift row carries the hash and never the code.
     expect(gift.Item.codeHash).toMatch(/^[0-9a-f]{64}$/);
     expect(gift.Item.code).toBeUndefined();
@@ -96,12 +103,26 @@ describe('grantGiftPurchase', () => {
       entityType: 'GiftPurchase',
       planId: 'garden',
       months: 3,
-      redeemBy: '2027-09-13T12:00:00.000Z',
     });
+    expect(buyer.Item.redeemBy).toBeUndefined();
     expect(buyer.Item.code).toMatch(/^FG[0-9A-HJKMNP-TV-Z]{16}$/);
     expect(hashGiftCode(buyer.Item.code)).toBe(gift.Item.codeHash);
     expect(normalizeGiftCode(buyer.Item.code)).toBe(buyer.Item.code);
     for (const put of [gift, lookup, buyer]) expect(put.TableName).toBe('test-table');
+  });
+
+  it('adds the PaymentIntent lookup row, in the same transaction, when the event named one', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    await expect(grantGiftPurchase({ ...GRANT, paymentIntentId: 'pi_gift_1' })).resolves.toBe(true);
+    const items = sent(0).input.TransactItems as Array<{ Put: Record<string, any> }>;
+    expect(items).toHaveLength(4);
+    expect(items[0].Put.Item.paymentIntentId).toBe('pi_gift_1');
+    expect(items[3].Put.Item).toEqual({
+      PK: 'GIFTPAYMENT#pi_gift_1',
+      SK: 'METADATA',
+      entityType: 'GiftPayment',
+      stripeSessionId: 'cs_gift_1',
+    });
   });
 
   it('creates nothing — and mints no second code — when a gift for this Session already exists', async () => {
@@ -118,7 +139,7 @@ describe('grantGiftPurchase', () => {
     await expect(grantGiftPurchase(GRANT)).rejects.toThrow('cancelled');
   });
 
-  it('refuses an unreadable purchase time rather than computing a redeem-by from NaN', async () => {
+  it('refuses an unreadable purchase time rather than writing NaN', async () => {
     await expect(grantGiftPurchase({ ...GRANT, purchasedAt: 'yesterday' })).rejects.toThrow(
       /invalid purchase time/
     );
@@ -137,8 +158,6 @@ const giftItem = (over: Record<string, unknown> = {}) => ({
   buyerUserId: 'user-buyer',
   codeHash: HASH,
   purchasedAt: '2026-09-13T12:00:00.000Z',
-  redeemBy: '2027-09-13T12:00:00.000Z',
-  redeemByEpoch: Math.floor(Date.parse('2027-09-13T12:00:00.000Z') / 1000),
   ...over,
 });
 
@@ -192,8 +211,6 @@ describe('redeemGift', () => {
     buyerUserId: 'user-buyer',
     codeHash: HASH,
     purchasedAt: '2026-09-13T12:00:00.000Z',
-    redeemBy: '2027-09-13T12:00:00.000Z',
-    redeemByEpoch: Math.floor(Date.parse('2027-09-13T12:00:00.000Z') / 1000),
   };
   const now = new Date('2026-10-01T09:30:00.000Z');
   const endsAt = new Date('2027-01-01T09:30:00.000Z');
@@ -212,13 +229,12 @@ describe('redeemGift', () => {
 
     expect(code.Key).toEqual({ PK: 'GIFT#cs_gift_1', SK: 'METADATA' });
     expect(code.ConditionExpression).toBe(
-      'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND redeemByEpoch > :nowEpoch AND codeHash = :hash'
+      'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND attribute_not_exists(voidedAt) AND codeHash = :hash'
     );
     expect(code.ExpressionAttributeValues).toEqual({
       ':now': '2026-10-01T09:30:00.000Z',
       ':hh': 'hh-9',
       ':endsAt': '2027-01-01T09:30:00.000Z',
-      ':nowEpoch': Math.floor(now.getTime() / 1000),
       ':hash': HASH,
     });
 
@@ -274,7 +290,6 @@ describe('listGiftPurchases', () => {
     vi.clearAllMocks();
   });
 
-  const now = new Date('2026-10-01T00:00:00.000Z');
   const buyerRow = (sid: string, purchasedAt: string) => ({
     PK: 'USER#user-buyer',
     SK: `GIFT#${sid}`,
@@ -283,7 +298,8 @@ describe('listGiftPurchases', () => {
     planId: 'garden',
     months: 3,
     purchasedAt,
-    redeemBy: '2027-09-13T12:00:00.000Z',
+    // A row minted before decision B1 still carries one; nothing reads it.
+    redeemBy: '2026-09-30T00:00:00.000Z',
   });
 
   it('lists the buyer’s gifts newest first with the display code and each one’s status', async () => {
@@ -293,7 +309,7 @@ describe('listGiftPurchases', () => {
           buyerRow('cs_old', '2026-08-01T00:00:00.000Z'),
           buyerRow('cs_new', '2026-09-13T12:00:00.000Z'),
           buyerRow('cs_used', '2026-09-01T00:00:00.000Z'),
-          buyerRow('cs_late', '2026-07-01T00:00:00.000Z'),
+          buyerRow('cs_refunded', '2026-07-01T00:00:00.000Z'),
         ],
       } as never)
       // One Get per row, in row order.
@@ -308,12 +324,11 @@ describe('listGiftPurchases', () => {
       } as never)
       .mockResolvedValueOnce({
         Item: giftItem({
-          stripeSessionId: 'cs_late',
-          redeemBy: '2026-09-30T00:00:00.000Z',
-          redeemByEpoch: Math.floor(Date.parse('2026-09-30T00:00:00.000Z') / 1000),
+          stripeSessionId: 'cs_refunded',
+          voidedAt: '2026-07-02T00:00:00.000Z',
         }),
       } as never);
-    const list = await listGiftPurchases('user-buyer', now);
+    const list = await listGiftPurchases('user-buyer');
     expect(sent(0).kind).toBe('Query');
     expect(sent(0).input.ExpressionAttributeValues).toEqual({
       ':pk': 'USER#user-buyer',
@@ -322,9 +337,11 @@ describe('listGiftPurchases', () => {
     expect(list.map((g) => [g.stripeSessionId, g.status])).toEqual([
       ['cs_new', 'unredeemed'],
       ['cs_used', 'redeemed'],
+      // Past the old 365-day date, still unredeemed: codes never expire (B1).
       ['cs_old', 'unredeemed'],
-      ['cs_late', 'expired'],
+      ['cs_refunded', 'voided'],
     ]);
+    expect(list[0]).not.toHaveProperty('redeemBy');
     expect(list[0].code).toBe('FG-0123-4567-89AB-CDEF');
     expect(list[1]).toMatchObject({
       redeemedAt: '2026-09-02T00:00:00.000Z',
@@ -336,20 +353,90 @@ describe('listGiftPurchases', () => {
     vi.mocked(dynamodb.send)
       .mockResolvedValueOnce({ Items: [buyerRow('cs_1', '2026-09-13T12:00:00.000Z')] } as never)
       .mockRejectedValueOnce(new Error('throttled'));
-    const list = await listGiftPurchases('user-buyer', now);
+    const list = await listGiftPurchases('user-buyer');
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ status: 'unknown', code: 'FG-0123-4567-89AB-CDEF' });
   });
 
   it('propagates a failed read of the buyer’s own rows rather than answering with an empty list', async () => {
     vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('throttled'));
-    await expect(listGiftPurchases('user-buyer', now)).rejects.toThrow('throttled');
+    await expect(listGiftPurchases('user-buyer')).rejects.toThrow('throttled');
   });
 
   it('skips a malformed buyer row', async () => {
     vi.mocked(dynamodb.send).mockResolvedValueOnce({
       Items: [{ PK: 'USER#user-buyer', SK: 'GIFT#x', stripeSessionId: 'x' }],
     } as never);
-    await expect(listGiftPurchases('user-buyer', now)).resolves.toEqual([]);
+    await expect(listGiftPurchases('user-buyer')).resolves.toEqual([]);
+  });
+});
+
+describe('voidGiftForRefund (decision E1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+  const now = new Date('2026-12-01T10:00:00.000Z');
+  const conditionFailed = () =>
+    Object.assign(new Error('failed'), { name: 'ConditionalCheckFailedException' });
+
+  it('voids an unredeemed gift found through its PaymentIntent, under a condition', async () => {
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockResolvedValueOnce({} as never);
+    await expect(voidGiftForRefund({ paymentIntentId: 'pi_1', now })).resolves.toEqual({
+      outcome: 'voided',
+      stripeSessionId: 'cs_gift_1',
+    });
+    expect(sent(0).input.Key).toEqual({ PK: 'GIFTPAYMENT#pi_1', SK: 'METADATA' });
+    const update = sent(1).input;
+    expect(update.Key).toEqual({ PK: 'GIFT#cs_gift_1', SK: 'METADATA' });
+    expect(update.UpdateExpression).toBe('SET voidedAt = :now, voidReason = :reason');
+    expect(update.ConditionExpression).toBe(
+      'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND attribute_not_exists(voidedAt)'
+    );
+    expect(update.ExpressionAttributeValues).toEqual({
+      ':now': '2026-12-01T10:00:00.000Z',
+      ':reason': 'refunded',
+    });
+  });
+
+  it('is a no-op for a PaymentIntent that paid for no gift', async () => {
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({} as never);
+    await expect(voidGiftForRefund({ paymentIntentId: 'pi_plan', now })).resolves.toEqual({
+      outcome: 'not_a_gift',
+      stripeSessionId: null,
+    });
+    expect(vi.mocked(dynamodb.send)).toHaveBeenCalledTimes(1);
+  });
+
+  it('never takes back a redeemed gift, and says so', async () => {
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockRejectedValueOnce(conditionFailed())
+      .mockResolvedValueOnce({
+        Item: giftItem({ redeemedAt: '2026-11-01T00:00:00.000Z' }),
+      } as never);
+    await expect(voidGiftForRefund({ paymentIntentId: 'pi_1', now })).resolves.toEqual({
+      outcome: 'already_redeemed',
+      stripeSessionId: 'cs_gift_1',
+    });
+  });
+
+  it('is idempotent: a second delivery finds it already voided', async () => {
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockRejectedValueOnce(conditionFailed())
+      .mockResolvedValueOnce({ Item: giftItem({ voidedAt: '2026-12-01T09:00:00.000Z' }) } as never);
+    await expect(voidGiftForRefund({ paymentIntentId: 'pi_1', now })).resolves.toEqual({
+      outcome: 'already_voided',
+      stripeSessionId: 'cs_gift_1',
+    });
+  });
+
+  it('propagates an infrastructure failure so the webhook retries', async () => {
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Item: { stripeSessionId: 'cs_gift_1' } } as never)
+      .mockRejectedValueOnce(new Error('throttled'));
+    await expect(voidGiftForRefund({ paymentIntentId: 'pi_1', now })).rejects.toThrow('throttled');
   });
 });

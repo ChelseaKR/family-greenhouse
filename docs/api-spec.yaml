@@ -3063,7 +3063,8 @@ paths:
         Places the gift on the household: `giftPlanId` / `giftEndsAt` on its METADATA row, read by
         entitlement on every request and ending on the clock (ADR 0028). The code is consumed only in
         the same transaction that places the gift. Every refusal leaves the code unspent and carries
-        `details.code`: `GIFT_CODE_INVALID` / `GIFT_CODE_EXPIRED` (400); `GIFT_CODE_REDEEMED`,
+        `details.code`: `GIFT_CODE_INVALID` (400; unknown, malformed, or refunded — codes never
+        expire); `GIFT_CODE_REDEEMED`,
         `GIFT_HOUSEHOLD_SUBSCRIBED` (a live Stripe subscription is on file), `GIFT_ALREADY_ACTIVE`
         (with `details.endsAt`), `GIFT_ADDS_NOTHING` (a lifetime tier at or above the gift), or
         `GIFT_REDEEM_CONFLICT` (409). Rate-limited per IP and per user; the code is never logged.
@@ -3861,18 +3862,7 @@ components:
     GiftPurchase:
       type: object
       additionalProperties: false
-      required:
-        [
-          stripeSessionId,
-          code,
-          planId,
-          months,
-          purchasedAt,
-          redeemBy,
-          status,
-          redeemedAt,
-          giftEndsAt,
-        ]
+      required: [stripeSessionId, code, planId, months, purchasedAt, status, redeemedAt, giftEndsAt]
       properties:
         stripeSessionId: { type: string }
         code:
@@ -3881,11 +3871,12 @@ components:
         planId: { type: string, enum: [garden, greenhouse] }
         months: { type: integer, minimum: 1, maximum: 12 }
         purchasedAt: { type: string, format: date-time }
-        redeemBy: { type: string, format: date-time }
         status:
           type: string
-          enum: [unredeemed, redeemed, expired, unknown]
-          description: '`unknown` means the gift row could not be read; the code is still shown.'
+          enum: [unredeemed, redeemed, voided, unknown]
+          description: >-
+            Codes never expire. `voided` means the payment was fully refunded and the code no longer
+            works. `unknown` means the gift row could not be read; the code is still shown.
         redeemedAt: { type: [string, 'null'], format: date-time }
         giftEndsAt: { type: [string, 'null'], format: date-time }
 

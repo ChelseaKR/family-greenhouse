@@ -58,7 +58,6 @@ const CATALOG: PlanCatalog = {
   giftSubscriptions: {
     minMonths: 1,
     maxMonths: 12,
-    redeemWindowDays: 365,
     plans: [
       { planId: 'garden', available: true },
       { planId: 'greenhouse', available: true },
@@ -72,7 +71,6 @@ const PURCHASE: GiftPurchase = {
   planId: 'garden',
   months: 3,
   purchasedAt: '2026-09-13T12:00:00.000Z',
-  redeemBy: '2027-09-13T12:00:00.000Z',
   status: 'unredeemed',
   redeemedAt: null,
   giftEndsAt: null,
@@ -163,17 +161,31 @@ describe('GiftLandingPage', () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.test/gift'));
   });
 
-  it('shows the returned-from-purchase notice and the buyer’s own gift codes', async () => {
-    signIn(null);
+  it('shows the returned-from-purchase notice and the buyer’s own gift codes, above the buy form', async () => {
+    signIn('hh-1');
     vi.mocked(billingService.listGiftPurchases).mockResolvedValue([PURCHASE]);
     renderPage(['/gift?status=success&purchase=gift']);
 
     expect(
       await screen.findByText(
-        'Thanks — your gift code will appear here as soon as the payment is confirmed. This can take a moment.'
+        'Thanks. Your gift code will appear here as soon as the payment is confirmed, which can take a moment. Stripe, our payment provider, emails your receipt.'
       )
     ).toBeInTheDocument();
-    expect(await screen.findByText('FG-0123-4567-89AB-CDEF')).toBeInTheDocument();
+    const code = await screen.findByText('FG-0123-4567-89AB-CDEF');
+    const buy = screen.getByRole('button', { name: /Buy gift/ });
+    // The code comes first in the page after a purchase (decision D1).
+    expect(code.compareDocumentPosition(buy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy gift message' })).toBeInTheDocument();
+  });
+
+  it('promises no email from us: the code is shown here and Stripe sends the receipt', async () => {
+    renderPage();
+    expect(
+      await screen.findByText(
+        'One payment, nothing renews. Your code appears on this page as soon as the payment clears, and Stripe, our payment provider, emails your receipt.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/We send a receipt/)).not.toBeInTheDocument();
   });
 
   describe('while no gift price id is configured', () => {

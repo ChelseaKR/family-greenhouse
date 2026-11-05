@@ -102,6 +102,7 @@ const TAB_PREFIXES: ReadonlyArray<readonly [string, NativeTabId]> = [
   ['/help', 'more'],
   ['/pricing', 'more'],
   ['/gift', 'more'],
+  ['/redeem', 'more'],
   ['/changelog', 'more'],
   ['/support', 'more'],
   ['/status', 'more'],

@@ -200,8 +200,6 @@ const gift = (over: Partial<GiftRecord> = {}): GiftRecord => ({
   buyerUserId: 'user-buyer',
   codeHash: 'h'.repeat(64),
   purchasedAt: '2026-09-13T12:00:00.000Z',
-  redeemBy: '2027-09-13T12:00:00.000Z',
-  redeemByEpoch: Math.floor(Date.parse('2027-09-13T12:00:00.000Z') / 1000),
   ...over,
 });
 
@@ -243,20 +241,32 @@ describe('redeemGiftCode', () => {
     await refusal(redeemGiftCode({ code: CODE, householdId: 'hh-9' }), 'GIFT_CODE_INVALID');
   });
 
-  it('refuses a code already redeemed, or past its redeem-by date, naming the date', async () => {
+  it('refuses a code already redeemed', async () => {
     vi.mocked(findGiftByCode).mockResolvedValue(gift({ redeemedAt: '2026-09-20T00:00:00.000Z' }));
     await refusal(
       redeemGiftCode({ code: CODE, householdId: 'hh-9', now: NOW }),
       'GIFT_CODE_REDEEMED'
     );
-    vi.mocked(findGiftByCode).mockResolvedValue(gift());
-    const late = redeemGiftCode({
-      code: CODE,
-      householdId: 'hh-9',
-      now: new Date('2027-09-13T12:00:00.000Z'),
-    });
-    await refusal(late, 'GIFT_CODE_EXPIRED');
-    await expect(late).rejects.toMatchObject({ details: { redeemBy: '2027-09-13T12:00:00.000Z' } });
+  });
+
+  it('never refuses a code for its age: codes never expire (decision B1)', async () => {
+    // A row minted before B1 still carries a redeem-by date; nothing reads it.
+    vi.mocked(findGiftByCode).mockResolvedValue({
+      ...gift(),
+      redeemBy: '2027-09-13T12:00:00.000Z',
+    } as GiftRecord);
+    await expect(
+      redeemGiftCode({ code: CODE, householdId: 'hh-9', now: new Date('2031-01-01T00:00:00.000Z') })
+    ).resolves.toMatchObject({ planId: 'garden' });
+  });
+
+  it('answers a refunded (voided) code exactly like an unknown one, and spends nothing (E1)', async () => {
+    vi.mocked(findGiftByCode).mockResolvedValue(gift({ voidedAt: '2026-09-20T00:00:00.000Z' }));
+    await refusal(
+      redeemGiftCode({ code: CODE, householdId: 'hh-9', now: NOW }),
+      'GIFT_CODE_INVALID'
+    );
+    expect(redeemGift).not.toHaveBeenCalled();
   });
 
   it('refuses a household with a live Stripe subscription — including one whose status is not yet known', async () => {

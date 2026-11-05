@@ -147,8 +147,34 @@ export function TermsPage() {
       <p>{t('legal.terms.priceChanges.body')}</p>
 
       <h2>{t('legal.terms.oneTimePurchases.heading')}</h2>
-      <p>{t('legal.terms.oneTimePurchases.body')}</p>
+      <p>
+        <Trans i18nKey="legal.terms.oneTimePurchases.body" components={{ em: <em /> }} />
+      </p>
       <p>{t('legal.terms.oneTimePurchases.packs')}</p>
+
+      {/*
+        Gifts (ADR 0028; owner decisions B1, D1 and E1 of 2026-11-05). Each
+        claim is the code: the price is the monthly price times the months
+        (`giftAmountCents`), any signed-in account buys one
+        (`POST /billing/gift/checkout` has no household gate), the apps never
+        sell one, the code has no redeem-by date, redemption is admin-only and
+        refused on a household with a live subscription or a running gift
+        without spending the code (`redeemGiftCode`), and a full refund voids
+        an unredeemed code (`charge.refunded` → `voidGiftForRefund`). The
+        refund itself is still issued by hand in the Stripe dashboard.
+      */}
+      <h2>{t('legal.terms.gifts.heading')}</h2>
+      <p>{t('legal.terms.gifts.body')}</p>
+      <p>
+        <Trans i18nKey="legal.terms.gifts.redeeming" components={{ em: <em /> }} />
+      </p>
+      <p>
+        <Trans
+          i18nKey="legal.terms.gifts.refunds"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
+      </p>
 
       {/*
         Refunds (#426). Every sentence here describes what the billing code
@@ -172,7 +198,9 @@ export function TermsPage() {
           components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
         />
       </p>
-      <p>{t('legal.terms.refunds.oneTime')}</p>
+      <p>
+        <Trans i18nKey="legal.terms.refunds.oneTime" components={{ em: <em /> }} />
+      </p>
       <p>{t('legal.terms.refunds.statutory')}</p>
 
       {/*

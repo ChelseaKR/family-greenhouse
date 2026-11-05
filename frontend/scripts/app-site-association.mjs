@@ -232,6 +232,10 @@ export const ROUTE_POLICY = {
   // purchase at all inside the native shell (App Store in-app-purchase
   // rules, same as /pricing).
   '/gift': 'web',
+  // Public redeem page (ADR 0028). A recipient opens a /redeem#code link a
+  // friend sent, very likely before installing anything, and the apps never
+  // mention gifts (Guideline 3.1.1): never claimed.
+  '/redeem': 'web',
   '/status': 'web',
   '/support': 'web',
 

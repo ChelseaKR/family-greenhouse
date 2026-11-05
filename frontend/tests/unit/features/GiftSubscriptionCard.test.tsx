@@ -62,7 +62,6 @@ const PLANS: Plan[] = [
 const OFFER = {
   minMonths: 1,
   maxMonths: 12,
-  redeemWindowDays: 365,
   plans: [
     { planId: 'garden' as const, available: true },
     { planId: 'greenhouse' as const, available: true },
@@ -75,7 +74,6 @@ const PURCHASE: GiftPurchase = {
   planId: 'garden',
   months: 3,
   purchasedAt: '2026-09-13T12:00:00.000Z',
-  redeemBy: '2027-09-13T12:00:00.000Z',
   status: 'unredeemed',
   redeemedAt: null,
   giftEndsAt: null,
@@ -159,12 +157,33 @@ describe('GiftSubscriptionCard', () => {
         .getAllByRole('option')
         .map((o) => o.textContent)
     ).toEqual(['Garden']);
-    cleanup();
-    renderCard({ paymentsAvailable: false });
+  });
+
+  it('is hidden entirely when nothing can be bought and the account has no gift or purchase', async () => {
+    const { billingService } = await import('@/services/billingService');
+    const { container } = renderCard({ paymentsAvailable: false });
+    await waitFor(() => expect(billingService.listGiftPurchases).toHaveBeenCalled());
+    // Let the (empty) purchase list settle, then the card is still absent.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByTestId('gift-subscription-card')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('still shows, with redemption, when nothing is for sale but a gift is running or was bought', async () => {
+    const { billingService } = await import('@/services/billingService');
+    renderCard({
+      paymentsAvailable: false,
+      gift: { planId: 'garden', endsAt: '2026-12-13T14:00:00.000Z', state: 'active' },
+    });
     expect(screen.getByText("Gifts aren't available right now.")).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Buy gift/ })).not.toBeInTheDocument();
     // Redeeming does not depend on payments being on.
     expect(screen.getByLabelText('Gift code')).toBeInTheDocument();
+    cleanup();
+    vi.mocked(billingService.listGiftPurchases).mockResolvedValue([PURCHASE]);
+    renderCard({ paymentsAvailable: false });
+    await screen.findByTestId('gift-purchases');
+    expect(screen.getByTestId('gift-subscription-card')).toBeInTheDocument();
   });
 
   it('shows a running gift with its end date, and that nothing is charged or renewed', () => {
@@ -190,6 +209,7 @@ describe('GiftSubscriptionCard', () => {
         redeemedAt: '2026-10-01T00:00:00.000Z',
       },
       { ...PURCHASE, stripeSessionId: 'cs_3', status: 'unknown' },
+      { ...PURCHASE, stripeSessionId: 'cs_4', status: 'voided' },
     ]);
     renderCard();
     await screen.findByTestId('gift-purchases');
@@ -198,11 +218,31 @@ describe('GiftSubscriptionCard', () => {
       'FG-0123-4567-89AB-CDEF',
       'FG-0123-4567-89AB-CDEF',
       'FG-0123-4567-89AB-CDEF',
+      'FG-0123-4567-89AB-CDEF',
     ]);
     const statuses = screen.getAllByTestId('gift-purchase-status').map((s) => s.textContent);
-    expect(statuses[0]).toMatch(/Not redeemed yet/);
+    expect(statuses[0]).toBe('Not redeemed yet. This code never expires.');
     expect(statuses[1]).toMatch(/Redeemed on/);
     expect(statuses[2]).toBe("We couldn't check whether this has been redeemed.");
+    expect(statuses[3]).toBe('Refunded. This code no longer works.');
+    // Only a code that still works gets a gift message to pass on.
+    expect(screen.getAllByTestId('gift-copy-message')).toHaveLength(1);
+  });
+
+  it('copies a gift message with the months, the plan and the /redeem#code link', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.listGiftPurchases).mockResolvedValue([PURCHASE]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderCard();
+    await screen.findByTestId('gift-purchases');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy gift message' }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        `I got you 3 months of Family Greenhouse Garden. Redeem it here: ${window.location.origin}/redeem#FG-0123-4567-89AB-CDEF`
+      )
+    );
+    expect(screen.getByRole('button', { name: 'Message copied' })).toBeInTheDocument();
   });
 
   it('says the list could not be read rather than showing an empty one', async () => {
@@ -236,11 +276,6 @@ describe('GiftSubscriptionCard', () => {
     renderCard();
     const cases: Array<[number, Record<string, unknown>, RegExp]> = [
       [400, { code: 'GIFT_CODE_INVALID' }, /That code isn't valid/],
-      [
-        400,
-        { code: 'GIFT_CODE_EXPIRED', redeemBy: '2027-09-13T12:00:00.000Z' },
-        /can no longer be redeemed/,
-      ],
       [409, { code: 'GIFT_CODE_REDEEMED' }, /already been redeemed/],
       [409, { code: 'GIFT_HOUSEHOLD_SUBSCRIBED' }, /The code stays valid/],
       [

@@ -1,6 +1,10 @@
 /**
  * The two no-card-trial lifecycle emails (ADR 0039): day 10, "your trial ends
  * in 4 days", and day 14, "you are back on Seedling, nothing was deleted".
+ * The same scan also sends the "your gift ends in 7 days" email for a
+ * purchased gift (ADR 0028, `giftEndingEmailDue`), under the same flag,
+ * consent (`prefs.trialNotices`), quiet-hours and exactly-once rules, with a
+ * marker per gift end date.
  *
  * A scheduled scan, not an event: ADR 0027 decided the trial ends on the clock
  * with no job and no write at day 14, and this keeps that true. The scan only
@@ -51,9 +55,11 @@ import { DeleteCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import { trialLifecycleEmailsEnabled } from '../config/trialLifecycleEmails.js';
-import { NO_CARD_TRIAL_DAYS, noCardTrialState } from '../models/plans.js';
+import { NO_CARD_TRIAL_DAYS, giftState, noCardTrialState, planRank } from '../models/plans.js';
+import { appStoreState } from '../models/appStore.js';
+import { isGiftablePlanId, type GiftablePlanId } from '../models/giftSubscriptions.js';
 import type { HouseholdMember } from '../models/types.js';
-import { getHouseholdSubscription } from './billing.js';
+import { getHouseholdSubscription, hasLiveStripeSubscription } from './billing.js';
 import * as householdService from './householdService.js';
 import * as notificationPrefs from './notificationPrefs.js';
 import * as emailNotifier from './emailNotifier.js';
@@ -63,6 +69,7 @@ import { resolveEmailLocale, householdLocaleFrom } from './email/locale.js';
 import { fanOutHouseholds, type FanOutOptions } from './scheduledFanOut.js';
 import { readTrialFacts, type TrialFacts } from './trialLifecycleFacts.js';
 import { composeTrialLifecycleEmail, type TrialEmailKind } from './trialLifecycleEmailCopy.js';
+import { GIFT_ENDING_DAYS_BEFORE_END, composeGiftEndingEmail } from './giftEndingEmailCopy.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -119,12 +126,58 @@ export function trialEmailDue(
     : null;
 }
 
+/** A purchased gift that ends within `GIFT_ENDING_DAYS_BEFORE_END` days. */
+export interface GiftEndingDue {
+  kind: 'gift_ending';
+  planId: GiftablePlanId;
+  endsAt: string;
+}
+
+/**
+ * The "your gift ends in 7 days" email a household is owed right now, or
+ * null (ADR 0028). Only a PURCHASED gift: a refer-a-friend bonus
+ * (`giftSource: 'referral'`) is not a gift somebody bought. Never for a
+ * household that will not actually drop when the gift ends: a live Stripe
+ * subscription, an active App Store subscription, or a lifetime tier at or
+ * above the gift.
+ */
+export function giftEndingEmailDue(
+  sub: Parameters<typeof giftState>[0] & {
+    giftSource?: 'purchase' | 'referral';
+    stripeSubscriptionId?: string | null;
+    status?: string | null;
+    lifetimePlanId?: string | null;
+    appStore?: Parameters<typeof appStoreState>[0]['appStore'];
+  },
+  now: Date
+): GiftEndingDue | null {
+  if (giftState(sub, now) !== 'active' || !sub.giftEndsAt) return null;
+  if (!isGiftablePlanId(sub.giftPlanId)) return null;
+  if (sub.giftSource === 'referral') return null;
+  const endsAtMs = Date.parse(sub.giftEndsAt);
+  if (!Number.isFinite(endsAtMs)) return null;
+  if (endsAtMs - now.getTime() > GIFT_ENDING_DAYS_BEFORE_END * DAY_MS) return null;
+  if (hasLiveStripeSubscription(sub)) return null;
+  if (appStoreState(sub, now) === 'active') return null;
+  if (
+    sub.lifetimePlanId &&
+    isGiftablePlanId(sub.lifetimePlanId) &&
+    planRank(sub.lifetimePlanId) >= planRank(sub.giftPlanId)
+  ) {
+    return null;
+  }
+  return { kind: 'gift_ending', planId: sub.giftPlanId, endsAt: sub.giftEndsAt };
+}
+
 // ---------------------------------------------------------------------------
 // Exactly-once marker (mirrors checkoutRecoveryEmails.ts)
 // ---------------------------------------------------------------------------
 
 const partition = (householdId: string) => `HOUSEHOLD#${householdId}`;
 const markerSortKey = (kind: TrialEmailKind, userId: string) => `TRIAL_EMAIL#${kind}#${userId}`;
+/** Per gift, not per household: a household can be given a second gift later. */
+const giftMarkerSortKey = (endsAt: string, userId: string) =>
+  `TRIAL_EMAIL#gift_ending#${endsAt}#${userId}`;
 
 async function claimSlot(householdId: string, sk: string, reservationId: string): Promise<boolean> {
   const nowEpoch = Math.floor(Date.now() / 1000);
@@ -252,17 +305,72 @@ function adminRecipients(members: HouseholdMember[]): HouseholdMember[] {
   );
 }
 
+type Composed = {
+  subject: string;
+  text: string;
+  html: string;
+  headers?: Record<string, string>;
+};
+
+/** What to send one recipient: the marker it is claimed under, and its words. */
+interface EmailJob {
+  kind: TrialEmailKind | 'gift_ending';
+  sk: (userId: string) => string;
+  compose: (args: {
+    locale: ReturnType<typeof resolveEmailLocale>['locale'];
+    member: HouseholdMember;
+    prefs: notificationPrefs.NotificationPreferences;
+    unsubscribe: string | null;
+  }) => Promise<Composed>;
+}
+
+function trialJob(due: TrialEmailDue, getFacts: () => Promise<TrialFacts>, now: Date): EmailJob {
+  return {
+    kind: due.kind,
+    sk: (userId) => markerSortKey(due.kind, userId),
+    compose: async ({ locale, member, prefs, unsubscribe }) =>
+      composeTrialLifecycleEmail({
+        kind: due.kind,
+        locale,
+        recipientName: member.name || null,
+        endsAt: due.endsAt,
+        now,
+        timeZone: prefs.timezone || 'UTC',
+        facts: await getFacts(),
+        unsubscribeUrl: unsubscribe,
+        householdCreatedAt: due.householdCreatedAt,
+      }),
+  };
+}
+
+function giftJob(due: GiftEndingDue): EmailJob {
+  return {
+    kind: due.kind,
+    sk: (userId) => giftMarkerSortKey(due.endsAt, userId),
+    compose: ({ locale, member, prefs, unsubscribe }) =>
+      Promise.resolve(
+        composeGiftEndingEmail({
+          locale,
+          recipientName: member.name || null,
+          planId: due.planId,
+          endsAt: due.endsAt,
+          timeZone: prefs.timezone || 'UTC',
+          unsubscribeUrl: unsubscribe,
+        })
+      ),
+  };
+}
+
 async function sendToRecipient(
   householdId: string,
-  due: TrialEmailDue,
+  job: EmailJob,
   member: HouseholdMember,
   householdLocale: ReturnType<typeof householdLocaleFrom>,
   prefs: notificationPrefs.NotificationPreferences,
-  getFacts: () => Promise<TrialFacts>,
-  now: Date,
   summary: TrialEmailRunSummary
 ): Promise<void> {
-  const sk = markerSortKey(due.kind, member.userId);
+  const due = { kind: job.kind };
+  const sk = job.sk(member.userId);
   const reservationId = randomUUID();
   if (!(await claimSlot(householdId, sk, reservationId))) {
     summary.alreadySent += 1;
@@ -284,18 +392,7 @@ async function sendToRecipient(
         'trial_email.unsubscribe_link_unavailable'
       );
     }
-    const facts = await getFacts();
-    const composed = composeTrialLifecycleEmail({
-      kind: due.kind,
-      locale,
-      recipientName: member.name || null,
-      endsAt: due.endsAt,
-      now,
-      timeZone: prefs.timezone || 'UTC',
-      facts,
-      unsubscribeUrl: unsubscribe,
-      householdCreatedAt: due.householdCreatedAt,
-    });
+    const composed = await job.compose({ locale, member, prefs, unsubscribe });
     const acceptance = await emailNotifier.sendEmailAccepted({
       to: member.email,
       subject: composed.subject,
@@ -351,7 +448,10 @@ async function processHousehold(
 ): Promise<void> {
   try {
     const subscription = await getHouseholdSubscription(householdId);
-    const due = trialEmailDue(subscription, now);
+    const trialDue = trialEmailDue(subscription, now);
+    // A running gift makes the trial `none`, so at most one of these is due.
+    const giftDue = trialDue ? null : giftEndingEmailDue(subscription, now);
+    const due = trialDue ?? giftDue;
     if (!due) return;
     summary.due += 1;
 
@@ -374,8 +474,21 @@ async function processHousehold(
     // One facts read per household, shared by its admins and made only if
     // somebody is actually going to be mailed.
     let facts: Promise<TrialFacts> | null = null;
-    const windowEnd = new Date(Math.min(now.getTime(), Date.parse(due.endsAt))).toISOString();
-    const getFacts = () => (facts ??= readTrialFacts(householdId, due.startedAt, windowEnd));
+    const job = trialDue
+      ? trialJob(
+          trialDue,
+          () =>
+            (facts ??= readTrialFacts(
+              householdId,
+              trialDue.startedAt,
+              new Date(Math.min(now.getTime(), Date.parse(trialDue.endsAt))).toISOString()
+            )),
+          now
+        )
+      : giftDue
+        ? giftJob(giftDue)
+        : null;
+    if (!job) return;
 
     for (const member of recipients) {
       const prefs = prefsByUser.get(member.userId);
@@ -387,16 +500,7 @@ async function processHousehold(
         summary.quietHours += 1;
         continue;
       }
-      await sendToRecipient(
-        householdId,
-        due,
-        member,
-        householdLocale,
-        prefs,
-        getFacts,
-        now,
-        summary
-      );
+      await sendToRecipient(householdId, job, member, householdLocale, prefs, summary);
     }
   } catch (err) {
     summary.errors += 1;

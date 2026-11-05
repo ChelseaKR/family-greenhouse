@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { GiftIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
-  type GiftPurchase,
   type GiftState,
   type GiftSubscriptionOffer,
   type Plan,
@@ -12,52 +11,19 @@ import {
 } from '@/services/billingService';
 import { formatCurrency, formatDate } from '@/i18n/format';
 import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
-import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import { GiftPurchaseList } from '@/features/gift/GiftPurchaseList';
+import { GiftRedeemForm } from '@/features/gift/GiftRedeemForm';
 
 type GiftablePlanId = Exclude<PlanId, 'seedling'>;
 
 /** How long to keep re-reading the purchase list after Stripe sends the buyer back. */
 const PURCHASE_POLL_MS = 60_000;
 
-const REDEEM_ERROR_CODES = new Set([
-  'GIFT_CODE_INVALID',
-  'GIFT_CODE_EXPIRED',
-  'GIFT_CODE_REDEEMED',
-  'GIFT_HOUSEHOLD_SUBSCRIBED',
-  'GIFT_ALREADY_ACTIVE',
-  'GIFT_ADDS_NOTHING',
-  'GIFT_REDEEM_CONFLICT',
-]);
-
 interface ApiErrorShape {
-  response?: {
-    status?: number;
-    data?: { details?: { code?: unknown; endsAt?: unknown; redeemBy?: unknown } };
-  };
-}
-
-/**
- * Map a redemption refusal onto the sentence for it. The server's
- * `details.code` is the contract; a status without one is either the rate
- * limit or something we cannot name, and gets the honest generic line.
- */
-function redeemError(error: unknown): { key: string; date?: string } {
-  const response = (error as ApiErrorShape)?.response;
-  const code = response?.data?.details?.code;
-  if (typeof code === 'string' && REDEEM_ERROR_CODES.has(code)) {
-    const raw = response?.data?.details?.endsAt ?? response?.data?.details?.redeemBy;
-    return {
-      key: `giftSubscription.errors.${code}`,
-      date: typeof raw === 'string' ? raw : undefined,
-    };
-  }
-  if (response?.status === 429) return { key: 'giftSubscription.errors.rateLimited' };
-  if (response?.status === 403) return { key: 'giftSubscription.redeemAdminOnly' };
-  return { key: 'giftSubscription.errors.generic' };
+  response?: { status?: number; data?: { details?: { code?: unknown } } };
 }
 
 function purchaseErrorKey(error: unknown): string {
@@ -110,8 +76,6 @@ export function GiftSubscriptionCard({
 }: GiftSubscriptionCardProps) {
   const { t } = useTranslation();
   const isAdmin = useIsHouseholdAdmin();
-  const householdId = useActiveHouseholdId();
-  const queryClient = useQueryClient();
 
   const givable = offer.plans.filter((p) => p.available && paymentsAvailable);
   const [planId, setPlanId] = useState<GiftablePlanId>(givable[0]?.planId ?? 'garden');
@@ -149,34 +113,15 @@ export function GiftSubscriptionCard({
     refetchInterval: () => (Date.now() < pollUntil ? 3000 : false),
   });
 
-  const [code, setCode] = useState('');
-  const [redeemErrorState, setRedeemError] = useState<{ key: string; date?: string } | null>(null);
-  const [redeemed, setRedeemed] = useState<{ planId: GiftablePlanId; endsAt: string } | null>(null);
-  const redeemMutation = useMutation({
-    mutationFn: () => billingService.redeemGiftCode({ code }),
-    onMutate: () => {
-      setRedeemError(null);
-      setRedeemed(null);
-    },
-    onSuccess: (result) => {
-      setRedeemed(result);
-      setCode('');
-      // Entitlement changed behind every plan-aware card: re-read it.
-      void queryClient.invalidateQueries({ queryKey: ['subscription', householdId] });
-    },
-    onError: (error) => setRedeemError(redeemError(error)),
-  });
-
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = async (purchase: GiftPurchase) => {
-    try {
-      await navigator.clipboard.writeText(purchase.code);
-      setCopied(purchase.stripeSessionId);
-    } catch {
-      // The code is on screen either way; a failed copy changes nothing.
-      setCopied(null);
-    }
-  };
+  // Nothing to offer, nothing running and nothing bought: the card would be
+  // a heading over "Gifts aren't available right now", so it is not shown at
+  // all. A code can still be redeemed at /redeem. While the purchase list is
+  // still loading it stays hidden too, so it does not flash in and out.
+  const purchases = purchasesQuery.data;
+  const hasPurchases = purchasesQuery.isError || (purchases?.length ?? 0) > 0;
+  if (givable.length === 0 && gift?.state !== 'active' && !returnedFromPurchase && !hasPurchases) {
+    return null;
+  }
 
   return (
     <div data-testid="gift-subscription-card">
@@ -271,8 +216,7 @@ export function GiftSubscriptionCard({
                 <p className="text-xs text-gray-600">
                   {t('giftSubscription.terms', {
                     total: formatCurrency(total),
-                    days: offer.redeemWindowDays,
-                    months,
+                    count: months,
                   })}
                 </p>
               )}
@@ -310,57 +254,7 @@ export function GiftSubscriptionCard({
               {t('giftSubscription.purchasesEmpty')}
             </p>
           ) : purchasesQuery.isSuccess ? (
-            <ul className="mt-2 space-y-3" data-testid="gift-purchases">
-              {purchasesQuery.data.map((purchase) => (
-                <li
-                  key={purchase.stripeSessionId}
-                  className="rounded-md border border-gray-200 p-3"
-                >
-                  <p className="text-sm text-gray-900">
-                    {t('giftSubscription.purchaseLine', {
-                      months: purchase.months,
-                      plan: planName(plans, purchase.planId),
-                      date: formatDate(purchase.purchasedAt),
-                    })}
-                  </p>
-                  <p className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="text-xs uppercase text-gray-600">
-                      {t('giftSubscription.codeLabel')}
-                    </span>
-                    <code className="font-mono text-sm tracking-wider" data-testid="gift-code">
-                      {purchase.code}
-                    </code>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void copy(purchase)}
-                    >
-                      {copied === purchase.stripeSessionId
-                        ? t('giftSubscription.codeCopied')
-                        : t('giftSubscription.copyCode')}
-                    </Button>
-                  </p>
-                  <p className="mt-1 text-xs text-gray-600" data-testid="gift-purchase-status">
-                    {purchase.status === 'redeemed' && purchase.redeemedAt
-                      ? t('giftSubscription.status.redeemed', {
-                          date: formatDate(purchase.redeemedAt),
-                        })
-                      : purchase.status === 'redeemed'
-                        ? t('giftSubscription.status.redeemedNoDate')
-                        : purchase.status === 'expired'
-                          ? t('giftSubscription.status.expired', {
-                              date: formatDate(purchase.redeemBy),
-                            })
-                          : purchase.status === 'unredeemed'
-                            ? t('giftSubscription.status.unredeemed', {
-                                date: formatDate(purchase.redeemBy),
-                              })
-                            : t('giftSubscription.status.unknown')}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <GiftPurchaseList purchases={purchasesQuery.data} plans={plans} />
           ) : null}
         </section>
 
@@ -370,55 +264,8 @@ export function GiftSubscriptionCard({
             {t('giftSubscription.redeemTitle')}
           </h3>
           <p className="mt-1 text-sm text-gray-600">{t('giftSubscription.redeemBody')}</p>
-          {redeemErrorState && (
-            <Alert variant="error" title={t('giftSubscription.errorTitle')} className="mt-2">
-              <p>
-                {t(redeemErrorState.key, {
-                  date: redeemErrorState.date ? formatDate(redeemErrorState.date) : '',
-                })}
-              </p>
-            </Alert>
-          )}
-          {redeemed && (
-            <div data-testid="gift-redeemed">
-              <Alert variant="success" className="mt-2">
-                <p>
-                  {t('giftSubscription.redeemed', {
-                    plan: planName(plans, redeemed.planId),
-                    date: formatDate(redeemed.endsAt),
-                  })}
-                </p>
-              </Alert>
-            </div>
-          )}
           {isAdmin ? (
-            <form
-              className="mt-2 flex flex-wrap items-end gap-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (code.trim() !== '') redeemMutation.mutate();
-              }}
-            >
-              <div className="min-w-[16rem] grow">
-                <Input
-                  id="gift-code"
-                  label={t('giftSubscription.codeInputLabel')}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder={t('giftSubscription.codePlaceholder')}
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                />
-              </div>
-              <Button
-                type="submit"
-                isLoading={redeemMutation.isPending}
-                disabled={code.trim() === '' || redeemMutation.isPending}
-              >
-                {t('giftSubscription.redeem')}
-              </Button>
-            </form>
+            <GiftRedeemForm plans={plans} />
           ) : (
             <p className="mt-2 text-sm text-gray-600">{t('giftSubscription.redeemAdminOnly')}</p>
           )}

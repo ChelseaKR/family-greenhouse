@@ -49,6 +49,7 @@ export type AuditEvent =
   // code placed on a household. Neither line carries the code.
   | 'billing.gift_subscription_granted'
   | 'billing.gift_redeemed'
+  | 'billing.gift_voided'
   // Refer-a-friend (ADR 0029): a household's bonus is audited as part of
   // household.created; this line covers the REFERRER's side, since that
   // write happens later, against a different household, and can be skipped.

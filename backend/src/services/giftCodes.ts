@@ -2,7 +2,7 @@
  * Durable storage for gift subscriptions (ADR 0028): the gift a paid checkout
  * bought, the code that redeems it, and the buyer's own view of it.
  *
- * Three rows per gift, written in ONE transaction so a gift can never exist
+ * Three or four rows per gift, written in ONE transaction so a gift can never exist
  * without its code or its code without its gift:
  *
  *   GIFT#{stripeSessionId} / METADATA          the gift. The Session id is
@@ -14,6 +14,12 @@
  *                                              STRIPE_EVENT# ledger says.
  *   GIFTCODE#{hash} / METADATA                 the lookup: hash → Session id.
  *                                              The row never carries the code.
+ *   GIFTPAYMENT#{paymentIntentId} / METADATA   the refund lookup: PaymentIntent
+ *                                              → Session id, so `charge.refunded`
+ *                                              (which names only the PaymentIntent)
+ *                                              can find the gift to void. Absent
+ *                                              when the event carried no
+ *                                              PaymentIntent.
  *   USER#{buyerUserId} / GIFT#{stripeSessionId} the buyer's copy, with the
  *                                              code in plain text. It lives in
  *                                              the buyer's own partition, is
@@ -22,7 +28,7 @@
  *                                              (`accountCleanup.deleteUserScopedData`).
  *
  * Redeeming is one more transaction: the gift row takes `redeemedAt` under a
- * condition that it has none yet and is inside its redeem-by window, and the
+ * condition that it has none yet and was not voided by a refund, and the
  * redeeming household's METADATA row takes `giftPlanId` / `giftEndsAt` under
  * a condition that no gift is running and no live Stripe subscription is on
  * file. Either condition failing cancels both writes, so a code is never
@@ -38,11 +44,15 @@
  * gift's stable, non-secret name everywhere else (Stripe's dashboard, the
  * audit log, the buyer's list).
  */
-import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import {
-  GIFT_REDEEM_WINDOW_DAYS,
   formatGiftCode,
   generateGiftCode,
   hashGiftCode,
@@ -54,6 +64,7 @@ import {
 
 const GIFT_PK = (stripeSessionId: string) => `GIFT#${stripeSessionId}`;
 const CODE_PK = (codeHash: string) => `GIFTCODE#${codeHash}`;
+const PAYMENT_PK = (paymentIntentId: string) => `GIFTPAYMENT#${paymentIntentId}`;
 const BUYER_SK_PREFIX = 'GIFT#';
 
 /** The gift row, as read back. `redeemedAt` and friends are absent until redemption. */
@@ -64,11 +75,13 @@ export interface GiftRecord {
   buyerUserId: string;
   codeHash: string;
   purchasedAt: string;
-  redeemBy: string;
-  redeemByEpoch: number;
+  /** The PaymentIntent the gift was paid with; absent on a gift granted without one. */
+  paymentIntentId?: string;
   redeemedAt?: string;
   redeemedHouseholdId?: string;
   giftEndsAt?: string;
+  /** Set when the payment was fully refunded before redemption: the code no longer works. */
+  voidedAt?: string;
 }
 
 function transactCancellationReasons(err: unknown): Array<{ Code?: string }> {
@@ -92,9 +105,22 @@ export async function grantGiftPurchase(grant: GiftPurchaseGrant): Promise<boole
   }
   const code = generateGiftCode();
   const codeHash = hashGiftCode(code);
-  const redeemByEpoch =
-    Math.floor(purchased.getTime() / 1000) + GIFT_REDEEM_WINDOW_DAYS * 24 * 60 * 60;
-  const redeemBy = new Date(redeemByEpoch * 1000).toISOString();
+  // No redeem-by date: a gift code never expires (owner decision B1).
+  const paymentLookup = grant.paymentIntentId
+    ? [
+        {
+          Put: {
+            TableName: TABLE_NAME,
+            Item: {
+              PK: PAYMENT_PK(grant.paymentIntentId),
+              SK: 'METADATA',
+              entityType: 'GiftPayment',
+              stripeSessionId: grant.stripeSessionId,
+            },
+          },
+        },
+      ]
+    : [];
   try {
     await dynamodb.send(
       new TransactWriteCommand({
@@ -112,8 +138,7 @@ export async function grantGiftPurchase(grant: GiftPurchaseGrant): Promise<boole
                 buyerUserId: grant.buyerUserId,
                 codeHash,
                 purchasedAt: purchased.toISOString(),
-                redeemBy,
-                redeemByEpoch,
+                ...(grant.paymentIntentId ? { paymentIntentId: grant.paymentIntentId } : {}),
               },
               ConditionExpression: 'attribute_not_exists(PK)',
             },
@@ -141,10 +166,10 @@ export async function grantGiftPurchase(grant: GiftPurchaseGrant): Promise<boole
                 planId: grant.planId,
                 months: grant.months,
                 purchasedAt: purchased.toISOString(),
-                redeemBy,
               },
             },
           },
+          ...paymentLookup,
         ],
       })
     );
@@ -165,9 +190,7 @@ function toGiftRecord(item: Record<string, unknown> | undefined): GiftRecord | n
     typeof item.months !== 'number' ||
     typeof item.buyerUserId !== 'string' ||
     typeof item.codeHash !== 'string' ||
-    typeof item.purchasedAt !== 'string' ||
-    typeof item.redeemBy !== 'string' ||
-    typeof item.redeemByEpoch !== 'number'
+    typeof item.purchasedAt !== 'string'
   ) {
     return null;
   }
@@ -178,12 +201,12 @@ function toGiftRecord(item: Record<string, unknown> | undefined): GiftRecord | n
     buyerUserId: item.buyerUserId,
     codeHash: item.codeHash,
     purchasedAt: item.purchasedAt,
-    redeemBy: item.redeemBy,
-    redeemByEpoch: item.redeemByEpoch,
+    paymentIntentId: typeof item.paymentIntentId === 'string' ? item.paymentIntentId : undefined,
     redeemedAt: typeof item.redeemedAt === 'string' ? item.redeemedAt : undefined,
     redeemedHouseholdId:
       typeof item.redeemedHouseholdId === 'string' ? item.redeemedHouseholdId : undefined,
     giftEndsAt: typeof item.giftEndsAt === 'string' ? item.giftEndsAt : undefined,
+    voidedAt: typeof item.voidedAt === 'string' ? item.voidedAt : undefined,
   };
 }
 
@@ -251,13 +274,15 @@ export async function redeemGift(args: {
               Key: { PK: GIFT_PK(gift.stripeSessionId), SK: 'METADATA' },
               UpdateExpression:
                 'SET redeemedAt = :now, redeemedHouseholdId = :hh, giftEndsAt = :endsAt',
+              // No redeem-by clause: codes never expire (decision B1). A
+              // refund that landed between the read and this write voids the
+              // code, and the void wins.
               ConditionExpression:
-                'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND redeemByEpoch > :nowEpoch AND codeHash = :hash',
+                'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND attribute_not_exists(voidedAt) AND codeHash = :hash',
               ExpressionAttributeValues: {
                 ':now': nowIso,
                 ':hh': householdId,
                 ':endsAt': endsAtIso,
-                ':nowEpoch': Math.floor(now.getTime() / 1000),
                 ':hash': gift.codeHash,
               },
             },
@@ -311,7 +336,7 @@ export async function redeemGift(args: {
   }
 }
 
-export type GiftPurchaseStatus = 'unredeemed' | 'redeemed' | 'expired' | 'unknown';
+export type GiftPurchaseStatus = 'unredeemed' | 'redeemed' | 'voided' | 'unknown';
 
 /** One gift the buyer bought, as their own account sees it. The code is included. */
 export interface GiftPurchaseView {
@@ -321,7 +346,6 @@ export interface GiftPurchaseView {
   planId: GiftablePlanId;
   months: number;
   purchasedAt: string;
-  redeemBy: string;
   /** `unknown` when the gift row could not be read: the code is still shown,
    *  and its status is not guessed. */
   status: GiftPurchaseStatus;
@@ -354,10 +378,7 @@ async function readGiftForListing(
  * the buyer's own rows — the caller decides how to say "unavailable" — and
  * marks an individual gift `unknown` when its gift row could not be read.
  */
-export async function listGiftPurchases(
-  buyerUserId: string,
-  now: Date = new Date()
-): Promise<GiftPurchaseView[]> {
+export async function listGiftPurchases(buyerUserId: string): Promise<GiftPurchaseView[]> {
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -366,7 +387,6 @@ export async function listGiftPurchases(
     })
   );
   const rows = (result.Items ?? []) as Array<Record<string, unknown>>;
-  const nowEpoch = Math.floor(now.getTime() / 1000);
   const views: GiftPurchaseView[] = [];
   for (const row of rows) {
     if (
@@ -374,8 +394,7 @@ export async function listGiftPurchases(
       typeof row.code !== 'string' ||
       !isGiftablePlanId(row.planId) ||
       typeof row.months !== 'number' ||
-      typeof row.purchasedAt !== 'string' ||
-      typeof row.redeemBy !== 'string'
+      typeof row.purchasedAt !== 'string'
     ) {
       continue;
     }
@@ -389,8 +408,8 @@ export async function listGiftPurchases(
         ? 'unknown'
         : known.redeemedAt
           ? 'redeemed'
-          : known.redeemByEpoch <= nowEpoch
-            ? 'expired'
+          : known.voidedAt
+            ? 'voided'
             : 'unredeemed';
     const redeemedAt = known?.redeemedAt ?? null;
     const giftEndsAt = known?.giftEndsAt ?? null;
@@ -400,7 +419,6 @@ export async function listGiftPurchases(
       planId: row.planId,
       months: row.months,
       purchasedAt: row.purchasedAt,
-      redeemBy: row.redeemBy,
       status,
       redeemedAt,
       giftEndsAt,
@@ -409,4 +427,60 @@ export async function listGiftPurchases(
   return views.sort((a, b) =>
     a.purchasedAt < b.purchasedAt ? 1 : a.purchasedAt > b.purchasedAt ? -1 : 0
   );
+}
+
+export type GiftVoidOutcome =
+  /** The code no longer works. */
+  | 'voided'
+  /** Already voided by an earlier delivery of this or another refund event. */
+  | 'already_voided'
+  /** The gift was redeemed before the refund. The household keeps it; an operator decides. */
+  | 'already_redeemed'
+  /** The PaymentIntent paid for no gift (a plan, a pack), or the gift row is gone. */
+  | 'not_a_gift';
+
+/**
+ * Void the gift a refunded PaymentIntent paid for (owner decision E1).
+ *
+ * The code stops working: the gift row takes `voidedAt` under a condition
+ * that it is unredeemed and not voided yet, and `redeemGift` refuses a voided
+ * gift. A redeemed gift is NOT taken back from the household here: the Terms
+ * handle a refund of a redeemed gift case by case, so the webhook reports it
+ * and leaves the household's plan alone. Idempotent: a redelivered event finds
+ * the gift already voided and changes nothing.
+ */
+export async function voidGiftForRefund(args: {
+  paymentIntentId: string;
+  now: Date;
+}): Promise<{ outcome: GiftVoidOutcome; stripeSessionId: string | null }> {
+  const lookup = await dynamodb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: PAYMENT_PK(args.paymentIntentId), SK: 'METADATA' },
+    })
+  );
+  const stripeSessionId: unknown = lookup.Item?.stripeSessionId;
+  if (typeof stripeSessionId !== 'string' || stripeSessionId === '') {
+    return { outcome: 'not_a_gift', stripeSessionId: null };
+  }
+  try {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: GIFT_PK(stripeSessionId), SK: 'METADATA' },
+        UpdateExpression: 'SET voidedAt = :now, voidReason = :reason',
+        ConditionExpression:
+          'attribute_exists(PK) AND attribute_not_exists(redeemedAt) AND attribute_not_exists(voidedAt)',
+        ExpressionAttributeValues: { ':now': args.now.toISOString(), ':reason': 'refunded' },
+      })
+    );
+    return { outcome: 'voided', stripeSessionId };
+  } catch (err) {
+    if (!(err instanceof Error) || err.name !== 'ConditionalCheckFailedException') throw err;
+  }
+  // The condition failed: say which way, from the row itself.
+  const gift = await getGift(stripeSessionId);
+  if (!gift) return { outcome: 'not_a_gift', stripeSessionId };
+  if (gift.redeemedAt) return { outcome: 'already_redeemed', stripeSessionId };
+  return { outcome: 'already_voided', stripeSessionId };
 }

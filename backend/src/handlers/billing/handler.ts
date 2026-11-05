@@ -423,13 +423,13 @@ export const giftCheckout = createHandler(
     const { user } = event as AuthenticatedEvent;
     const { validatedBody } = event as ValidatedEvent<GiftCheckoutInput>;
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    // A household member returns to the billing settings they already know;
-    // a buyer with no household (the public /gift page is the only way to
-    // reach one) returns to /gift, which reads its own purchase list — the
-    // /settings/billing route lives behind ProtectedRoute's household gate
-    // and would otherwise bounce a gift-only buyer into onboarding right
-    // after they paid.
-    const returnPath = user.householdId ? '/settings/billing' : '/gift';
+    // Every buyer returns to /gift, which polls its own purchase list and
+    // shows the code the moment the webhook mints it (owner decision D1: no
+    // email from us carries the code, so this page is where it lives). Not
+    // /settings/billing, even for a household member: the gift is for
+    // somebody else, and that route sits behind ProtectedRoute's household
+    // gate, which would bounce a buyer with no household into onboarding.
+    const returnPath = '/gift';
     const notConfigured = () =>
       createHttpError(400, 'Gift subscriptions are not available in this environment.', {
         expose: true,
@@ -478,7 +478,6 @@ export const giftCheckout = createHandler(
  */
 const GIFT_REDEEM_STATUS: Record<GiftRedeemErrorCode, number> = {
   GIFT_CODE_INVALID: 400,
-  GIFT_CODE_EXPIRED: 400,
   GIFT_CODE_REDEEMED: 409,
   GIFT_HOUSEHOLD_SUBSCRIBED: 409,
   GIFT_ALREADY_ACTIVE: 409,

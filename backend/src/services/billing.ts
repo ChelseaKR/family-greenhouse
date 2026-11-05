@@ -29,8 +29,13 @@ import {
   type IdentifyTopUpGrant,
 } from '../models/identifyTopUp.js';
 import { grantCreditPack } from './identifyCredits.js';
-import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSubscriptions.js';
-import { grantGiftPurchase } from './giftCodes.js';
+import {
+  giftPurchaseFromEvent,
+  giftRefundFromEvent,
+  type GiftPurchaseGrant,
+  type GiftRefund,
+} from '../models/giftSubscriptions.js';
+import { grantGiftPurchase, voidGiftForRefund } from './giftCodes.js';
 import { assertPriceMatchesCatalog } from './stripePrices.js';
 import { recordBillingTransition } from './householdAudit.js';
 import {
@@ -1616,6 +1621,47 @@ async function applyGiftPurchase(event: Stripe.Event, grant: GiftPurchaseGrant):
   });
 }
 
+/**
+ * A refunded charge (owner decision E1): if it paid for a gift that has not
+ * been redeemed, the code stops working. Only a FULL refund voids; a partial
+ * refund is a goodwill adjustment and leaves the code valid, logged so an
+ * operator can see it. A redeemed gift is never taken back here (the Terms
+ * handle that case by case); it is logged at warn for the operator. A refund
+ * of anything that is not a gift is acknowledged and ignored.
+ */
+async function applyGiftRefund(event: Stripe.Event, refund: GiftRefund): Promise<void> {
+  if (!refund.fullyRefunded) {
+    logger.info(
+      { stripeEventId: event.id, chargeId: refund.chargeId },
+      'gift_refund_partial_not_voided'
+    );
+    await recordStripeEventOnce(event.id);
+    return;
+  }
+  const { outcome, stripeSessionId } = await voidGiftForRefund({
+    paymentIntentId: refund.paymentIntentId,
+    now: new Date(),
+  });
+  await recordStripeEventOnce(event.id);
+  if (outcome === 'not_a_gift') return;
+  if (outcome === 'already_redeemed') {
+    logger.warn(
+      { stripeEventId: event.id, chargeId: refund.chargeId, stripeSessionId },
+      'gift_refunded_after_redemption'
+    );
+    return;
+  }
+  logger.info(
+    { stripeEventId: event.id, chargeId: refund.chargeId, stripeSessionId, outcome },
+    outcome === 'voided' ? 'gift_voided_on_refund' : 'gift_void_duplicate_skipped'
+  );
+  if (outcome === 'voided') {
+    audit('billing.gift_voided', {
+      metadata: { stripeEventType: event.type, stripeSessionId, chargeId: refund.chargeId },
+    });
+  }
+}
+
 export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   // Money-lifecycle emails, `charge` phase (ADR 0023): receipt, renewal
   // notice, payment failure, card expiring. Dispatched BEFORE any branch
@@ -1680,6 +1726,15 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
   const giftGrant = giftPurchaseFromEvent(event);
   if (giftGrant) {
     await applyGiftPurchase(event, giftGrant);
+    return;
+  }
+
+  // A refunded charge voids the gift it paid for, if any (decision E1).
+  // `charge.refunded` carries no subscription delta, so without this branch
+  // it would fall through to the ignored-event path below.
+  const giftRefund = giftRefundFromEvent(event);
+  if (giftRefund) {
+    await applyGiftRefund(event, giftRefund);
     return;
   }
 

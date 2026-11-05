@@ -11,13 +11,13 @@ import {
   GIFT_MAX_MONTHS,
   GIFT_MIN_MONTHS,
   GIFT_PRICE_ENV,
-  GIFT_REDEEM_WINDOW_DAYS,
   GIFT_SUBSCRIPTION_PURCHASE_KIND,
   addCalendarMonthsUtc,
   formatGiftCode,
   generateGiftCode,
   giftAmountCents,
   giftPurchaseFromEvent,
+  giftRefundFromEvent,
   giftSubscriptionSummary,
   hashGiftCode,
   isGiftSession,
@@ -28,10 +28,9 @@ import {
 import { PLANS } from '../../../src/models/plans.js';
 
 describe('gift subscriptions: the constants are the decision', () => {
-  it('sells 1 to 12 months, redeemable for a year, of the two paid tiers only', () => {
+  it('sells 1 to 12 months of the two paid tiers only, with no redeem-by window (B1)', () => {
     expect(GIFT_MIN_MONTHS).toBe(1);
     expect(GIFT_MAX_MONTHS).toBe(12);
-    expect(GIFT_REDEEM_WINDOW_DAYS).toBe(365);
     expect(isGiftablePlanId('garden')).toBe(true);
     expect(isGiftablePlanId('greenhouse')).toBe(true);
     expect(isGiftablePlanId('seedling')).toBe(false);
@@ -72,7 +71,6 @@ describe('gift subscriptions: the offer is fail-closed on both gates', () => {
     expect(giftSubscriptionSummary(true)).toEqual({
       minMonths: 1,
       maxMonths: 12,
-      redeemWindowDays: 365,
       plans: [
         { planId: 'garden', available: true },
         { planId: 'greenhouse', available: false },
@@ -195,10 +193,21 @@ describe('giftPurchaseFromEvent', () => {
       months: 3,
       buyerUserId: 'user-buyer',
       purchasedAt: new Date(created * 1000).toISOString(),
+      paymentIntentId: null,
     });
     expect(isGiftSession({ metadata: { purchase: GIFT_SUBSCRIPTION_PURCHASE_KIND } })).toBe(true);
     expect(isGiftSession({ metadata: { purchase: 'identify_top_up' } })).toBe(false);
     expect(isGiftSession({ metadata: null })).toBe(false);
+  });
+
+  it('carries the PaymentIntent id, as a string or an expanded object, so a refund can find it', () => {
+    expect(giftPurchaseFromEvent(session({ payment_intent: 'pi_gift_1' }))?.paymentIntentId).toBe(
+      'pi_gift_1'
+    );
+    expect(
+      giftPurchaseFromEvent(session({ payment_intent: { id: 'pi_gift_2' } }))?.paymentIntentId
+    ).toBe('pi_gift_2');
+    expect(giftPurchaseFromEvent(session({ payment_intent: '' }))?.paymentIntentId).toBeNull();
   });
 
   it('also grants on the async event that settles a deferred payment method', () => {
@@ -241,5 +250,52 @@ describe('giftPurchaseFromEvent', () => {
     expect(
       giftPurchaseFromEvent(meta({ planId: 'garden', months: '3', buyerUserId: 'u' }))
     ).toBeNull();
+  });
+});
+
+describe('giftRefundFromEvent (decision E1)', () => {
+  const refunded = (charge: Record<string, unknown>, type = 'charge.refunded') =>
+    ({ id: 'evt_refund_1', type, data: { object: charge } }) as unknown as Stripe.Event;
+
+  it('reads the PaymentIntent and whether the whole charge was refunded', () => {
+    expect(
+      giftRefundFromEvent(
+        refunded({
+          id: 'ch_1',
+          payment_intent: 'pi_1',
+          refunded: true,
+          amount: 1497,
+          amount_refunded: 1497,
+        })
+      )
+    ).toEqual({ paymentIntentId: 'pi_1', chargeId: 'ch_1', fullyRefunded: true });
+  });
+
+  it('marks a partial refund as not full', () => {
+    expect(
+      giftRefundFromEvent(
+        refunded({
+          id: 'ch_2',
+          payment_intent: { id: 'pi_2' },
+          refunded: false,
+          amount: 1497,
+          amount_refunded: 500,
+        })
+      )
+    ).toEqual({ paymentIntentId: 'pi_2', chargeId: 'ch_2', fullyRefunded: false });
+  });
+
+  it('treats an amount fully refunded as full even when the flag is missing', () => {
+    expect(
+      giftRefundFromEvent(refunded({ payment_intent: 'pi_3', amount: 999, amount_refunded: 999 }))
+        ?.fullyRefunded
+    ).toBe(true);
+  });
+
+  it('is null for other events and for a charge with no PaymentIntent', () => {
+    expect(
+      giftRefundFromEvent(refunded({ payment_intent: 'pi_1' }, 'charge.succeeded'))
+    ).toBeNull();
+    expect(giftRefundFromEvent(refunded({ refunded: true }))).toBeNull();
   });
 });

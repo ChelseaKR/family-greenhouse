@@ -15,13 +15,9 @@ import { siteUrl } from '@/config/site';
 import { useGiftAvailability } from './useGiftAvailability';
 import { useAuthStore } from '@/store/authStore';
 import { isNativeApp } from '@/lib/platform';
-import { formatCurrency, formatDate } from '@/i18n/format';
-import {
-  billingService,
-  type GiftPurchase,
-  type Plan,
-  type PlanId,
-} from '@/services/billingService';
+import { formatCurrency } from '@/i18n/format';
+import { billingService, type Plan, type PlanId } from '@/services/billingService';
+import { GiftPurchaseList } from './GiftPurchaseList';
 
 type GiftablePlanId = Exclude<PlanId, 'seedling'>;
 
@@ -84,7 +80,7 @@ export function GiftLandingPage() {
   useMetaTags({
     title: 'Send a Family Greenhouse gift subscription',
     description:
-      "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code — no household of your own required to send one.",
+      "Pay once for months of Garden or Greenhouse for someone else's household. You get a code that never expires to pass on, and no household of your own is needed to send one.",
     canonical: siteUrl('/gift'),
   });
 
@@ -232,16 +228,6 @@ function GiftPurchaseForm({ returnedFromPurchase }: { returnedFromPurchase: bool
     onError: (error) => setPurchaseErrorKey(purchaseErrorKey(error)),
   });
 
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = async (purchase: GiftPurchase) => {
-    try {
-      await navigator.clipboard.writeText(purchase.code);
-      setCopied(purchase.stripeSessionId);
-    } catch {
-      setCopied(null);
-    }
-  };
-
   if (plansQuery.isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -254,8 +240,39 @@ function GiftPurchaseForm({ returnedFromPurchase }: { returnedFromPurchase: bool
     return <CommercialHoldNotice className="mx-auto max-w-2xl" />;
   }
 
+  const purchases = (
+    <section
+      className={returnedFromPurchase ? 'mb-8' : 'mt-8'}
+
+      aria-labelledby="gift-landing-purchases-heading"
+    >
+      <h2 id="gift-landing-purchases-heading" className="text-sm font-semibold text-gray-900">
+        {t('giftSubscription.purchasesTitle')}
+      </h2>
+      {returnedFromPurchase && (
+        <Alert variant="info" className="mt-2">
+          <p>{t('giftSubscription.purchaseReturned')}</p>
+        </Alert>
+      )}
+      {purchasesQuery.isError ? (
+        <p className="mt-2 text-sm text-gray-600">{t('giftSubscription.purchasesUnavailable')}</p>
+      ) : purchasesQuery.isSuccess && purchasesQuery.data.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-600">{t('giftSubscription.purchasesEmpty')}</p>
+      ) : purchasesQuery.isSuccess ? (
+        <GiftPurchaseList
+          purchases={purchasesQuery.data}
+          plans={plans}
+          testId="gift-landing-purchases"
+        />
+      ) : null}
+    </section>
+  );
+
   return (
     <div data-testid="gift-landing-purchase-form">
+      {/* Back from Stripe, the code is what the buyer came for (decision D1:
+          it is shown here, not emailed), so the list comes first. */}
+      {returnedFromPurchase && purchases}
       <Card variant="paper">
         <CardHeader title={t('giftSubscription.giveTitle')} />
         {purchaseErrorKeyState && (
@@ -325,8 +342,7 @@ function GiftPurchaseForm({ returnedFromPurchase }: { returnedFromPurchase: bool
               <p className="text-xs text-gray-600">
                 {t('giftSubscription.terms', {
                   total: formatCurrency(total),
-                  days: offer.redeemWindowDays,
-                  months,
+                  count: months,
                 })}
               </p>
             )}
@@ -344,69 +360,7 @@ function GiftPurchaseForm({ returnedFromPurchase }: { returnedFromPurchase: bool
           </div>
         )}
       </Card>
-
-      <section className="mt-8" aria-labelledby="gift-landing-purchases-heading">
-        <h2 id="gift-landing-purchases-heading" className="text-sm font-semibold text-gray-900">
-          {t('giftSubscription.purchasesTitle')}
-        </h2>
-        {returnedFromPurchase && (
-          <Alert variant="info" className="mt-2">
-            <p>{t('giftSubscription.purchaseReturned')}</p>
-          </Alert>
-        )}
-        {purchasesQuery.isError ? (
-          <p className="mt-2 text-sm text-gray-600">{t('giftSubscription.purchasesUnavailable')}</p>
-        ) : purchasesQuery.isSuccess && purchasesQuery.data.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-600">{t('giftSubscription.purchasesEmpty')}</p>
-        ) : purchasesQuery.isSuccess ? (
-          <ul className="mt-2 space-y-3" data-testid="gift-landing-purchases">
-            {purchasesQuery.data.map((purchase) => (
-              <li key={purchase.stripeSessionId} className="rounded-md border border-gray-200 p-3">
-                <p className="text-sm text-gray-900">
-                  {t('giftSubscription.purchaseLine', {
-                    months: purchase.months,
-                    plan: planName(plans, purchase.planId),
-                    date: formatDate(purchase.purchasedAt),
-                  })}
-                </p>
-                <p className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="text-xs uppercase text-gray-600">
-                    {t('giftSubscription.codeLabel')}
-                  </span>
-                  <code className="font-mono text-sm tracking-wider">{purchase.code}</code>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void copy(purchase)}
-                  >
-                    {copied === purchase.stripeSessionId
-                      ? t('giftSubscription.codeCopied')
-                      : t('giftSubscription.copyCode')}
-                  </Button>
-                </p>
-                <p className="mt-1 text-xs text-gray-600">
-                  {purchase.status === 'redeemed' && purchase.redeemedAt
-                    ? t('giftSubscription.status.redeemed', {
-                        date: formatDate(purchase.redeemedAt),
-                      })
-                    : purchase.status === 'redeemed'
-                      ? t('giftSubscription.status.redeemedNoDate')
-                      : purchase.status === 'expired'
-                        ? t('giftSubscription.status.expired', {
-                            date: formatDate(purchase.redeemBy),
-                          })
-                        : purchase.status === 'unredeemed'
-                          ? t('giftSubscription.status.unredeemed', {
-                              date: formatDate(purchase.redeemBy),
-                            })
-                          : t('giftSubscription.status.unknown')}
-                </p>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+      {!returnedFromPurchase && purchases}
     </div>
   );
 }

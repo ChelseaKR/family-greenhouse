@@ -1,8 +1,8 @@
 # 0028 — A gift is prepaid months of a paid tier, priced at the monthly rate, redeemed by code, and it ends on the clock
 
-**Status:** Proposed
+**Status:** Accepted (2026-11-05)
 
-**Date:** 2026-09-13
+**Date:** 2026-09-13 (proposed); accepted 2026-11-05
 
 **Deciders:** Chelsea Kelly-Reif
 
@@ -11,6 +11,37 @@ discounted gift would be the annual plan under another name); [ADR 0019](0019-id
 (the one-time purchase mechanics this reuses); [ADR 0027](0027-no-card-garden-trial.md) (the
 app-side entitlement shape this copies); [`docs/billing.md`](../billing.md) § _Gift subscriptions_;
 [`evals/UNIT-ECONOMICS.md`](../../evals/UNIT-ECONOMICS.md) §4b.
+
+## Acceptance, 2026-11-05
+
+Chelsea accepted this decision on 2026-11-05 with four amendments, which
+override the text below where they differ:
+
+- **A1. On sale for both tiers** before 2026-11-24, at the monthly price times
+  the months, 1 to 12 months, no discount, exactly as decided in point 1.
+- **B1. Codes never expire.** There is no redeem-by date (point 4's 365 days and
+  point 6's "past its redeem-by date" refusal are withdrawn). A prepaid code
+  costs nothing to honor, and California's gift-certificate law (Civil Code
+  §1749.5) bars selling one with an expiration date. Rows minted earlier keep a
+  `redeemBy` attribute that nothing reads.
+- **D1. No gift email from us.** The buyer's receipt is Stripe's own
+  "Successful payments" email (an owner setting in the Stripe dashboard). The
+  code lives on `/gift`, where Stripe's success URL now returns every buyer,
+  and the buyer passes it on with a "Copy gift message" button that carries a
+  `/redeem#code` link. The code stays out of every email, as point 3 decided.
+- **E1. A refund voids the code.** On `charge.refunded` for the full amount of
+  a gift's PaymentIntent, an unredeemed gift is marked `voidedAt` and its code
+  answers `GIFT_CODE_INVALID`. A refund of a redeemed gift does not take it
+  back from the household; it is logged (`gift_refunded_after_redemption`) and
+  handled case by case. The refund itself is still made by hand in Stripe.
+
+Also added with the acceptance: a public `/redeem` page that keeps a code from
+a shared link through sign-up and household creation, the gift card on
+Settings → Billing is hidden when nothing can be bought and the account has no
+gift, and the Terms gained a _Gifts_ section and the Privacy page a gift line.
+"Alternatives considered" below still rejects a public, unauthenticated gift
+PURCHASE page; `/redeem` creates no Stripe Session and redeeming still needs a
+signed-in household admin.
 
 ## Context
 

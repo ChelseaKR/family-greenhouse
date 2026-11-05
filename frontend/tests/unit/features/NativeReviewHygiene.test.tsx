@@ -186,7 +186,6 @@ describe('on the website (unchanged)', () => {
       giftSubscriptions: {
         minMonths: 1,
         maxMonths: 12,
-        redeemWindowDays: 365,
         plans: [{ planId: 'garden', available: true }],
       },
     });

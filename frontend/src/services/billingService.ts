@@ -94,7 +94,6 @@ export interface IdentifyCreditBalance {
 export interface GiftSubscriptionOffer {
   minMonths: number;
   maxMonths: number;
-  redeemWindowDays: number;
   plans: Array<{ planId: Exclude<PlanId, 'seedling'>; available: boolean }>;
 }
 
@@ -119,9 +118,12 @@ export interface GiftPurchase {
   planId: Exclude<PlanId, 'seedling'>;
   months: number;
   purchasedAt: string;
-  redeemBy: string;
-  /** `unknown` means the server could not read whether it was redeemed. */
-  status: 'unredeemed' | 'redeemed' | 'expired' | 'unknown';
+  /**
+   * Codes never expire. `voided` means the payment was refunded and the code
+   * no longer works. `unknown` means the server could not read whether it was
+   * redeemed.
+   */
+  status: 'unredeemed' | 'redeemed' | 'voided' | 'unknown';
   redeemedAt: string | null;
   giftEndsAt: string | null;
 }
@@ -545,7 +547,7 @@ export const billingService = {
 
   /**
    * Redeem a gift code onto the active household (admin only). Refusals carry
-   * `details.code` (GIFT_CODE_INVALID, GIFT_CODE_EXPIRED, GIFT_CODE_REDEEMED,
+   * `details.code` (GIFT_CODE_INVALID, GIFT_CODE_REDEEMED,
    * GIFT_HOUSEHOLD_SUBSCRIBED, GIFT_ALREADY_ACTIVE, GIFT_ADDS_NOTHING,
    * GIFT_REDEEM_CONFLICT) and never consume the code.
    */

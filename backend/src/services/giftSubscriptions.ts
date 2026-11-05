@@ -108,10 +108,13 @@ export async function createGiftCheckoutSession(args: GiftCheckoutArgs): Promise
 }
 
 export type GiftRedeemErrorCode =
-  /** Not a well-formed code, or no gift by that code. One answer for both. */
+  /**
+   * Not a well-formed code, no gift by that code, or a gift whose payment was
+   * refunded. One answer for all three, so the endpoint is not an oracle.
+   * There is no "expired": codes never expire (decision B1).
+   */
   | 'GIFT_CODE_INVALID'
   | 'GIFT_CODE_REDEEMED'
-  | 'GIFT_CODE_EXPIRED'
   /** The household has a live Stripe subscription; a gift cannot pause it. */
   | 'GIFT_HOUSEHOLD_SUBSCRIBED'
   /** A gift is already running on the household. */
@@ -123,9 +126,9 @@ export type GiftRedeemErrorCode =
 
 export class GiftRedeemError extends Error {
   readonly code: GiftRedeemErrorCode;
-  readonly details: { endsAt?: string; redeemBy?: string };
+  readonly details: { endsAt?: string };
 
-  constructor(code: GiftRedeemErrorCode, details: { endsAt?: string; redeemBy?: string } = {}) {
+  constructor(code: GiftRedeemErrorCode, details: { endsAt?: string } = {}) {
     super(code);
     this.name = 'GiftRedeemError';
     this.code = code;
@@ -156,8 +159,8 @@ export interface GiftRedemption {
  *     months somebody else already bought. The code stays valid for the
  *     household to redeem after the subscription ends, or for another one.
  *   - **Lifetime tier at or above the gift** → refused: the gift adds nothing.
- *   - **A gift already running** → refused until it ends. Codes stay
- *     redeemable for a year, so a second gift is not lost, only queued.
+ *   - **A gift already running** → refused until it ends. Codes never
+ *     expire, so a second gift is not lost, only queued.
  *   - **The card trial** (`trialConsumedAt`) is untouched. A gift is paid,
  *     not free, so it neither consumes nor grants the 14 free days.
  *   - **The no-card trial** defers to a running gift (`noCardTrialState`).
@@ -175,9 +178,8 @@ export async function redeemGiftCode(args: {
   const gift = await findGiftByCode(code);
   if (!gift) throw new GiftRedeemError('GIFT_CODE_INVALID');
   if (gift.redeemedAt) throw new GiftRedeemError('GIFT_CODE_REDEEMED');
-  if (gift.redeemByEpoch <= Math.floor(now.getTime() / 1000)) {
-    throw new GiftRedeemError('GIFT_CODE_EXPIRED', { redeemBy: gift.redeemBy });
-  }
+  // A refunded gift (decision E1) reads as no gift at all.
+  if (gift.voidedAt) throw new GiftRedeemError('GIFT_CODE_INVALID');
 
   const sub = await getHouseholdSubscription(args.householdId);
   if (hasLiveStripeSubscription(sub)) throw new GiftRedeemError('GIFT_HOUSEHOLD_SUBSCRIBED');

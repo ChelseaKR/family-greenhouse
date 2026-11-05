@@ -1025,7 +1025,6 @@ describe('billing handler', () => {
         expect(JSON.parse(res.body).giftSubscriptions).toEqual({
           minMonths: 1,
           maxMonths: 12,
-          redeemWindowDays: 365,
           plans: [
             { planId: 'garden', available: false },
             { planId: 'greenhouse', available: true },
@@ -1137,8 +1136,9 @@ describe('billing handler', () => {
           buyerEmail: 'test@example.com',
           planId: 'garden',
           months: 3,
-          successUrl: expect.stringContaining('/settings/billing?status=success&purchase=gift'),
-          cancelUrl: expect.stringContaining('/settings/billing?status=cancel'),
+          // Every buyer returns to /gift, where the code is shown (decision D1).
+          successUrl: expect.stringContaining('/gift?status=success&purchase=gift'),
+          cancelUrl: expect.stringContaining('/gift?status=cancel'),
           idempotencyKey: 'gift:user-1:0f6ba7f4-2bc7-4d0e-9c3a-3f9a4e1b8c11',
         });
       });
@@ -1294,7 +1294,6 @@ describe('billing handler', () => {
         const { giftRedeem } = await import('../../../src/handlers/billing/handler.js');
         const cases: Array<[string, number, Record<string, string>]> = [
           ['GIFT_CODE_INVALID', 400, {}],
-          ['GIFT_CODE_EXPIRED', 400, { redeemBy: '2027-09-13T12:00:00.000Z' }],
           ['GIFT_CODE_REDEEMED', 409, {}],
           ['GIFT_HOUSEHOLD_SUBSCRIBED', 409, {}],
           ['GIFT_ALREADY_ACTIVE', 409, { endsAt: '2026-12-01T00:00:00.000Z' }],
@@ -1377,7 +1376,6 @@ describe('billing handler', () => {
             planId: 'garden',
             months: 3,
             purchasedAt: '2026-09-13T12:00:00.000Z',
-            redeemBy: '2027-09-13T12:00:00.000Z',
             status: 'unredeemed',
             redeemedAt: null,
             giftEndsAt: null,

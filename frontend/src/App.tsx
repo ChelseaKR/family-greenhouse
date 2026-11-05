@@ -145,6 +145,7 @@ const GiftLandingPage = lazyNamed(
   () => import('@/features/gift/GiftLandingPage'),
   'GiftLandingPage'
 );
+const RedeemGiftPage = lazyNamed(() => import('@/features/gift/RedeemGiftPage'), 'RedeemGiftPage');
 
 /**
  * Single source of truth for the /onboarding route gate. Default: bounce
@@ -303,6 +304,10 @@ function App() {
                   reachable and readable with no login wall — the checkout
                   mutation itself still requires a signed-in buyer. */}
               <Route path="/gift" element={<GiftLandingPage />} />
+              {/* Public redeem page (ADR 0028): a recipient follows a
+                  /redeem#code link before they have an account. The code is
+                  in the fragment, so it never reaches the server. */}
+              <Route path="/redeem" element={<RedeemGiftPage />} />
 
               {/* Protected routes */}
               <Route element={<ProtectedRoute />}>

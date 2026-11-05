@@ -57,7 +57,7 @@ be invisible.
 | [0025](0025-household-timezone-and-the-due-date-migration.md)                | A due date is a calendar day in the household's zone, and the migration to it is staged                                    | Proposed |
 | [0026](0026-household-counts-over-a-partial-payload-block.md)                | An answer may not count a household it was only partly given                                                               | Accepted |
 | [0027](0027-no-card-garden-trial.md)                                         | Every new household gets a 14-day Garden trial with no card, and falls back to Seedling on its own                         | Accepted |
-| [0028](0028-gift-subscriptions.md)                                           | A gift is prepaid months of a paid tier, priced at the monthly rate, redeemed by code, and it ends on the clock            | Proposed |
+| [0028](0028-gift-subscriptions.md)                                           | A gift is prepaid months of a paid tier, priced at the monthly rate, redeemed by code, and it ends on the clock            | Accepted |
 | [0029](0029-refer-a-friend.md)                                               | Refer-a-friend is a household-invite look-alike that grants a gift, not a household invite with a prize bolted on          | Proposed |
 | [0030](0030-household-trash-moves-rows-out-of-the-live-key-space.md)         | The household trash moves rows out of the live key space instead of flagging them                                          | Proposed |
 | [0031](0031-reply-to-act-on-reminder-emails.md)                              | A reminder can be answered by mail, through a hashed per-email reply address that reaches only the tasks that email listed | Proposed |

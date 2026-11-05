@@ -953,7 +953,8 @@ rendering `/settings/billing` are available only as an unattributed total.
 
 ## Gift subscriptions
 
-Proposed 2026-09-13 ([ADR 0028](adr/0028-gift-subscriptions.md)). A signed-in
+Proposed 2026-09-13, accepted 2026-11-05 with amendments
+([ADR 0028](adr/0028-gift-subscriptions.md) § _Acceptance_). A signed-in
 member pays once for **1–12 months of Garden or Greenhouse for another
 household**, gets a code, and a household admin redeems it. Priced at the tier's
 **monthly price times the months, with no discount** — a discounted twelve-month
@@ -961,7 +962,7 @@ gift would be the annual plan ADR 0012 withdrew, and a gift month must earn what
 a subscription month earns because it is metered the same way.
 
 - **Offer:** `GET /billing/plans` publishes `giftSubscriptions`
-  (`{ minMonths, maxMonths, redeemWindowDays, plans: [{ planId, available }] }`).
+  (`{ minMonths, maxMonths, plans: [{ planId, available }] }`).
   `available` per tier is true only when payments are on AND that tier's gift
   price env (`STRIPE_PRICE_ID_GIFT_GARDEN_MONTH` / `_GREENHOUSE_MONTH`) is set.
   The per-month amount is the tier's `monthlyPrice`, already on the catalog.
@@ -974,30 +975,45 @@ a subscription month earns because it is metered the same way.
   household is neither granted nor receipted (`billingNotices.oneTimeReceipt`
   returns null for a gift), and no household admin's saved card can be offered.
   With the env var blank: 400 `details.code: GIFT_NOT_CONFIGURED` before Stripe.
+  Stripe returns **every** buyer to `/gift?status=success&purchase=gift`, which
+  polls the purchase list and shows the code first (decision D1).
 - **Grant:** on a PAID checkout event the webhook (`applyStripeEvent` →
   `giftCodes.grantGiftPurchase`) writes three rows in **one transaction**:
   `GIFT#{sessionId}` (conditional put — the Session id is the idempotency key,
   so a redelivery creates nothing and mints no second code), `GIFTCODE#{hash}`
   (hash → session; the row never carries the code) and
   `USER#{buyerId} / GIFT#{sessionId}` (the buyer's copy, code in plain text, in
-  the buyer's own partition, deleted with the account). Then the
+  the buyer's own partition, deleted with the account), plus
+  `GIFTPAYMENT#{paymentIntentId}` (PaymentIntent → session, for refunds) when
+  the event names a PaymentIntent. Then the
   `STRIPE_EVENT#` ledger, after the grant like every other event. A paid gift
   whose metadata is broken reaches `stripe_event_paid_no_grant` (alarmed).
 - **The code** is `FG` + 16 Crockford base32 symbols (80 bits from the OS
   CSPRNG), shown as `FG-XXXX-XXXX-XXXX-XXXX`. It is a bearer credential: never
   stamped on a Stripe object, never logged, shown only to the buying account via
   `GET /billing/gift/purchases`. Redemption normalises case, separators and the
-  Crockford confusables (`O`→`0`, `I`/`L`→`1`). No email carries it yet.
+  Crockford confusables (`O`→`0`, `I`/`L`→`1`). No email from us carries it
+  (decision D1): the buyer's receipt is Stripe's own "Successful payments"
+  email, and the buyer passes the code on with **Copy gift message**, which
+  copies "I got you N months of Family Greenhouse {plan}. Redeem it here:
+  {origin}/redeem#{code}". The code rides in the URL **fragment**, which is never
+  sent to the server, CloudFront logs or GA. **It never expires** (decision B1).
+- **The `/redeem` page** (public, web only, `noindex`): reads the fragment, keeps
+  the code in sessionStorage (`pendingGiftCode`, guarded) and clears it from the
+  address bar. Signed out, it offers register / sign in; with no household, the
+  onboarding link; a non-admin is told to ask the admin; an admin gets the form
+  with the code filled in. After onboarding the Layout shows "You have a gift
+  code" (`PendingGiftCodeNotice`) until it is redeemed. Blocked storage gets
+  "paste it after you sign in".
 - **Redeem:** `POST /billing/gift/redeem` `{ code }` — admin-only, rate-limited
   5/min per IP and 20/hour per user. It places `giftPlanId` / `giftEndsAt` on the
   household METADATA row and consumes the code **in the same transaction**, each
   half conditioned (`giftCodes.redeemGift`): a spent code never grants, a refused
   household never spends one. The gift runs from redemption for whole calendar
-  months (day clamped: 31 Jan + 1 month = 28/29 Feb). A code may be redeemed
-  within 365 days of purchase.
+  months (day clamped: 31 Jan + 1 month = 28/29 Feb). There is no redeem-by date.
 - **Refusals, none of which consume the code** (`details.code`):
-  `GIFT_CODE_INVALID` (unknown or malformed — one answer for both),
-  `GIFT_CODE_EXPIRED`, `GIFT_CODE_REDEEMED`, `GIFT_HOUSEHOLD_SUBSCRIBED` (a live
+  `GIFT_CODE_INVALID` (unknown, malformed or refunded — one answer for all),
+  `GIFT_CODE_REDEEMED`, `GIFT_HOUSEHOLD_SUBSCRIBED` (a live
   Stripe subscription — `hasLiveStripeSubscription`, the `ALREADY_SUBSCRIBED`
   rule, fail-closed on an id with no status yet), `GIFT_ALREADY_ACTIVE` (one is
   running; `details.endsAt`), `GIFT_ADDS_NOTHING` (lifetime tier at or above the
@@ -1018,6 +1034,17 @@ a subscription month earns because it is metered the same way.
 - **Ending:** on the clock at `giftEndsAt`. The downgrade contract below applies
   unchanged; nothing is deleted. `GET /billing/me` publishes
   `gift: { planId, endsAt, state } | null` and never the raw attributes.
+- **Refunds (decision E1):** a refund is still made by hand in the Stripe
+  dashboard. The webhook's `charge.refunded` (an event the owner must add to the
+  endpoint) looks the PaymentIntent up in `GIFTPAYMENT#`; on a **full** refund
+  of an unredeemed gift it sets `voidedAt` (`giftCodes.voidGiftForRefund`), and
+  the code then answers `GIFT_CODE_INVALID`; the buyer's list shows "Refunded".
+  A partial refund leaves the code valid (`gift_refund_partial_not_voided`). A
+  refund of a redeemed gift does not take it back
+  (`gift_refunded_after_redemption`, warn) and is handled case by case, as the
+  Terms say. A refund of anything that is not a gift is ignored.
+- **Settings → Billing** hides the gift card entirely when no tier can be given,
+  no gift is running and the account has bought none.
 - **Not written by any Stripe path:** `SubscriptionWriteField` excludes
   `giftPlanId` / `giftEndsAt`, exactly like the trial attributes.
 - **Known gap, deliberately left:** a gifted household can still subscribe
@@ -1216,7 +1243,7 @@ change to any row below is a change to the Terms as well, in **both** locales.
 | Cancelling          | Through the billing portal, admin only; `cancel_at_period_end` keeps the plan to the end of the paid period; `customer.subscription.deleted` then drops the household to seedling; over-cap data stays readable/editable                                                                                                                              | `createPortalSession`, `deltaForStripeEvent`, and the cap checks on create/import/invite only                                                                           |
 | Price changes       | A new price applies to new subscriptions only; a live subscription is never moved onto a different price, and a change that would move one is emailed to the household's admins 14 days ahead                                                                                                                                                         | `line_items: [{ price: priceId }]` set once at checkout and never updated; § _Price changes_ below; § _Setup checklist_ above ("do not archive those Stripe prices")    |
 | One-time purchases  | Charged once, never renews; identification credits are a household balance drawn on after the plan allowance, expiring 12 months from purchase and surviving a cancellation                                                                                                                                                                           | `models/identifyTopUp.ts`, `services/identifyCredits.ts`, ADR 0019                                                                                                      |
-| Gifts               | **Not yet in the Terms.** A gift is a third one-time purchase with rules the `oneTime` sentence does not cover: redeemable within 365 days, runs from redemption, not refundable, cannot be applied to a subscribed household (ADR 0028)                                                                                                              | `models/giftSubscriptions.ts`, `services/giftSubscriptions.ts`; the Terms sentence is the owner's to write, in both locales                                             |
+| Gifts               | Gifts section (2026-11-05): 1–12 months at the monthly price, one payment, bought by any account on the web; the code never expires; redeemed by an admin, refused without spending the code on a subscribed or already-gifted household; an unredeemed gift is refunded on request and its code voided                                               | `models/giftSubscriptions.ts`, `services/giftSubscriptions.ts`, `giftCodes.voidGiftForRefund`                                                                           |
 | Refunds             | Cancelling stops the next charge and returns nothing already taken; no code path issues a refund; a wrong charge is investigated by hand; unused pack credits are not returned, and are erased with the household on last-member deletion                                                                                                             | `accountCleanup.cancelAbandonedHouseholdSubscription` (cancel with `{}`), `deleteAbandonedHouseholdData`, and § _Refunds_ below                                         |
 | Account termination | Deleting the last member's account cancels that household's subscription immediately, and refuses the deletion if Stripe cannot confirm it                                                                                                                                                                                                            | `handlers/me/handler.ts` (billing pass), `accountCleanup.cancelAbandonedHouseholdSubscription`                                                                          |
 

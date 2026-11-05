@@ -60,6 +60,7 @@ import * as householdService from '../../../src/services/householdService.js';
 import * as capability from '../../../src/services/email/capability.js';
 import * as factsModule from '../../../src/services/trialLifecycleFacts.js';
 import {
+  giftEndingEmailDue,
   runTrialLifecycleEmails,
   trialEmailDue,
 } from '../../../src/services/trialLifecycleEmails.js';
@@ -416,5 +417,75 @@ describe('what is sent', () => {
     vi.mocked(factsModule.readTrialFacts).mockClear();
     await runTrialLifecycleEmails(DAY14, {}, ENABLED);
     expect(factsModule.readTrialFacts).toHaveBeenCalledWith('hh-1', STARTED, ENDS);
+  });
+});
+
+describe('the "your gift ends in 7 days" email (ADR 0028)', () => {
+  const GIFT_ENDS = '2027-03-20T10:00:00.000Z';
+  const FIVE_LEFT = new Date('2027-03-15T10:00:00.000Z');
+  const EIGHT_LEFT = new Date('2027-03-12T10:00:00.000Z');
+  const AFTER = new Date('2027-03-21T10:00:00.000Z');
+  const gift = { planId: 'seedling', giftPlanId: 'garden', giftEndsAt: GIFT_ENDS } as const;
+
+  function seedGift(extra: Record<string, unknown> = {}): void {
+    rows.set('HOUSEHOLD#hh-1|METADATA', {
+      planId: 'seedling',
+      noCardTrialEndsAt: '2026-12-10T10:00:00.000Z',
+      giftPlanId: 'garden',
+      giftEndsAt: GIFT_ENDS,
+      giftSource: 'purchase',
+      ...extra,
+    });
+  }
+
+  it('is due once 7 days or fewer remain on a purchased gift, and not before or after', () => {
+    expect(giftEndingEmailDue(gift, EIGHT_LEFT)).toBeNull();
+    expect(giftEndingEmailDue(gift, FIVE_LEFT)).toEqual({
+      kind: 'gift_ending',
+      planId: 'garden',
+      endsAt: GIFT_ENDS,
+    });
+    expect(giftEndingEmailDue(gift, AFTER)).toBeNull();
+  });
+
+  it('is never due for a referral bonus, or a household that will not drop when it ends', () => {
+    expect(giftEndingEmailDue({ ...gift, giftSource: 'referral' }, FIVE_LEFT)).toBeNull();
+    expect(
+      giftEndingEmailDue({ ...gift, stripeSubscriptionId: 'sub_1', status: 'active' }, FIVE_LEFT)
+    ).toBeNull();
+    expect(
+      giftEndingEmailDue({ ...gift, giftPlanId: 'garden', lifetimePlanId: 'garden' }, FIVE_LEFT)
+    ).toBeNull();
+    // A canceled subscription does not keep the plan: the email is due.
+    expect(
+      giftEndingEmailDue({ ...gift, stripeSubscriptionId: 'sub_1', status: 'canceled' }, FIVE_LEFT)
+        ?.kind
+    ).toBe('gift_ending');
+  });
+
+  it('sends once per admin per gift, reads no trial facts, and a later scan sends nothing more', async () => {
+    seedGift();
+    const first = await runTrialLifecycleEmails(FIVE_LEFT, {}, ENABLED);
+    expect(first.sent).toBe(1);
+    expect(sesSendMock).toHaveBeenCalledTimes(1);
+    expect(factsModule.readTrialFacts).not.toHaveBeenCalled();
+    expect(markerKeys()).toEqual([
+      `HOUSEHOLD#hh-1|TRIAL_EMAIL#gift_ending#${GIFT_ENDS}#user-admin`,
+    ]);
+    const again = await runTrialLifecycleEmails(new Date('2027-03-16T10:00:00.000Z'), {}, ENABLED);
+    expect(again.alreadySent).toBe(1);
+    expect(sesSendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing too early, and nothing to a recipient who turned trial notices off', async () => {
+    seedGift();
+    expect((await runTrialLifecycleEmails(EIGHT_LEFT, {}, ENABLED)).sent).toBe(0);
+    seedPrefs('user-admin', { trialNotices: false });
+    const optedOut = await runTrialLifecycleEmails(FIVE_LEFT, {}, ENABLED);
+    expect(optedOut.optedOut).toBe(1);
+    expect(sesSendMock).not.toHaveBeenCalled();
+    // Positive control.
+    seedPrefs('user-admin');
+    expect((await runTrialLifecycleEmails(FIVE_LEFT, {}, ENABLED)).sent).toBe(1);
   });
 });
