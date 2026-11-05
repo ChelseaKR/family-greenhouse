@@ -16,64 +16,125 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-05
+
+**Twelve new care guides, reminders on your own time zone, and a fuller
+Privacy Policy.** Eight watering guides and four holiday plants join the care
+guides, and the six holiday guides link to each other. Reminders and calendar
+dates now use your own time zone instead of UTC. The Privacy Policy says more
+about what website analytics records and names the time zone the app saves.
+The Privacy text changed (#1085, and this release), so its effective date is
+this release's.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.47.0 in
+  one file: `modules/frontend/functions/spa-router.js` adds 12 prerendered
+  `/care` routes (#1083, #1089). Expect an in-place update of the `spa-router`
+  CloudFront function and the usual Lambda updates, with nothing added or
+  destroyed. No stored data is migrated. Notification-settings rows gain a
+  `timezoneChosen` field as they are written (#1092); older rows read as not
+  chosen.
+- **The Privacy effective date is November 5, 2026 (release 0.48.0).** Set by
+  hand in `PrivacyPage.tsx`. The Terms did not change, so `termsEffective.json`
+  stays at November 3, 2026 (release 0.47.0).
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.48.0, build 4800.
+
 ### Added
 
-- **Eight new care guides that answer "how often to water".** String of
+- **Eight new care guides that answer "how often to water" (#1083).** String of
   pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
   peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant
   now have `/care` pages. Each cites the university extension or RHS pages it
   was written from, read on 2026-11-03. None gives a day count for watering,
   because none of those sources does. Each says which dryness check to use.
-- **A pet-safety page for peperomia**, citing the ASPCA's "Baby Rubber Plant"
-  listing (Peperomia obtusifolia, non-toxic to cats and dogs). String of
-  pearls, prayer plant, croton and Chinese money plant have no ASPCA listing
-  of their own, so their pet line reads "Unknown".
+- **A pet-safety page for peperomia (#1083),** citing the ASPCA's "Baby Rubber
+  Plant" listing (Peperomia obtusifolia, non-toxic to cats and dogs). String
+  of pearls, prayer plant, croton and Chinese money plant have no ASPCA
+  listing of their own, so their pet line reads "Unknown".
 - **Care guides for four holiday plants: amaryllis, Norfolk Island pine,
-  cyclamen and kalanchoe.** People search for these in November and December.
-  Each guide answers "how often to water" first and cites the Clemson, Iowa
-  State, UF/IFAS and NC State extension pages it was written from, read on
-  2026-11-04. Each also has a pet-safety page citing the plant's own ASPCA
-  listing. The amaryllis row cites "Barbados Lily" (Hippeastrum), the genus
-  sold for the holidays, and not ASPCA's "Amaryllis" listing, which names a
-  different genus.
+  cyclamen and kalanchoe (#1089).** People search for these in November and
+  December. Each guide answers "how often to water" first and cites the
+  Clemson, Iowa State, UF/IFAS and NC State extension pages it was written
+  from, read on 2026-11-04. Each also has a pet-safety page citing the plant's
+  own ASPCA listing. The amaryllis row cites "Barbados Lily" (Hippeastrum),
+  the genus sold for the holidays, and not ASPCA's "Amaryllis" listing, which
+  names a different genus.
 
 ### Changed
 
-- **The six holiday care guides now link to each other.** The poinsettia,
-  Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and kalanchoe
-  guides each name the other five in a line under "Keeping it alive when you
-  share a home". The poinsettia's related plants now include the amaryllis,
-  and the Christmas cactus's include the kalanchoe.
+- **The six holiday care guides now link to each other (#1091).** The
+  poinsettia, Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and
+  kalanchoe guides each name the other five in a line under "Keeping it alive
+  when you share a home". The poinsettia's related plants now include the
+  amaryllis, and the Christmas cactus's include the kalanchoe.
 - **The spider plant care guide's title now leads with "How often to water a
-  spider plant".** That query put the page at about position 5 in the week to
-  2026-11-03, with no clicks, and it was the only ranking watering guide whose
-  title still opened with "Spider Plant Care". The page's content is unchanged.
-- **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
+  spider plant" (#1088).** That query put the page at about position 5 in the
+  week to 2026-11-03, with no clicks, and it was the only ranking watering
+  guide whose title still opened with "Spider Plant Care". The page's content
+  is unchanged.
+- **"Prayer plant" and "maranta" now mean Maranta, not calathea (#1083).** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.
 - **The Privacy Policy now lists what Google Analytics records toward a paid
-  plan.** It said six steps with no detail. It now names the content-page
-  sign-up clicks (the kind of page, where the link was and, on a care guide or
-  pet-safety page, that page's plant), how a first plant was added, and the
-  14-day Garden trial, and it no longer mentions the removed "See how it
-  works" link. Both locales. The page's effective date is set by the release
-  that ships it.
-- **Care guides are no longer in the JavaScript bundle.** The 41 guides were
-  one 53 kB (brotli) chunk that every `/care` and `/pet-safe` visitor
-  downloaded in full. The browser now gets a 2.5 kB index of names and
+  plan (#1085).** It said six steps with no detail. It now names the
+  content-page sign-up clicks (the kind of page, where the link was and, on a
+  care guide or pet-safety page, that page's plant), how a first plant was
+  added, and the 14-day Garden trial, and it no longer mentions the removed
+  "See how it works" link. Both locales.
+- **The Privacy Policy says the app saves your time zone.** A new line under
+  "What we collect" says the app saves the time zone your browser or phone
+  reports when you have not picked one, what it is used for (reminder times,
+  quiet hours, dates in our emails, calendar dates), where to change it, and
+  that it is in your data export and deleted with your account. English and
+  Spanish. It describes #1092.
+- **Care guides are no longer in the JavaScript bundle (#1087).** The 41
+  guides were one 53 kB (brotli) chunk that every `/care` and `/pet-safe`
+  visitor downloaded in full. The browser now gets a 2.5 kB index of names and
   quick facts, and each guide page carries its own guide as JSON in its
   prerendered HTML (about 0.4 kB more per page). Navigating to a guide from
   inside the app fetches that page. The prerendered pages are otherwise
   unchanged. All JS combined drops from 718.4 to 667.6 kB, so new guides no
-  longer spend that budget.
+  longer spend that budget. A guide your browser has never opened will not
+  open offline.
+- **The dashboard says when nothing is due this week (#1093).** When
+  every task was more than 7 days out, it said "No tasks yet. Add tasks to
+  your plants". It now says "Nothing due this week" with the next task and
+  its date. "No tasks yet" shows only when the household has no tasks.
+  English and Spanish.
 
 ### Fixed
 
-- **Google Analytics no longer credits a purchase to Stripe.** The page a
-  buyer returns to after Stripe Checkout or the billing portal now reports
-  our own site as its referrer instead of `checkout.stripe.com`, so the
-  `purchase` it records stays with the search, ad or page that brought the
-  buyer.
+- **Reminders arrive in your own time zone (#1092).** Anyone who never opened
+  Settings, Notifications had reminders on UTC, so the daily email came around
+  3 to 4 a.m. Eastern and counted days by the UTC date. The app now saves the
+  time zone your browser or phone reports, but only while you have not picked
+  one, and it changes no other setting. A zone you pick is never changed.
+  Accounts from before this release that still read UTC count as not picked,
+  so someone who chose UTC on purpose is switched once and keeps UTC if they
+  pick it again.
+- **Calendar dates match the app (#1092).** The calendar link wrote each
+  task's all-day date from the UTC day, so in the US most tasks showed a day
+  late in Google or Apple Calendar. Each date now uses the day in your
+  notification time zone.
+- **Google Analytics no longer credits a purchase to Stripe (#1086).** The
+  page a buyer returns to after Stripe Checkout or the billing portal now
+  reports our own site as its referrer instead of `checkout.stripe.com`, so
+  the `purchase` it records stays with the search, ad or page that brought
+  the buyer.
+- **A server error no longer signs you out (#1093).** A 5xx or 429
+  response at launch or during a token refresh used to end the session, in
+  the iPhone app too. Now only a 400, 401 or 403 does. Other errors keep you
+  signed in, and the page shows its usual error with a way to retry.
+- **Plant pages show each task's real last-care date (#1093).** Care
+  just outside the 10 newest entries read "0 done · last never", and a run of
+  misting could show "No watering has been logged". Each task now shows its
+  real last date, "none in last 10" when that is all the page knows, and
+  "never" only when it is true.
+- **The sitter page says so when Done fails (#1093).** A failed Done
+  stopped the spinner and said nothing. It now announces "That didn't save.
+  Check your connection and tap Done again.", and the task stays undone.
+
+<!-- internal: #1082 #1084 -->
 
 ## [0.47.0] - 2026-11-03
 

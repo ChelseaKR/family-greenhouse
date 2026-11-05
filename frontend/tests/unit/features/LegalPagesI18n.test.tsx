@@ -81,9 +81,8 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    // The Google Analytics wording changed after 0.47.0; the release that
-    // ships it sets the date.
-    ...termsEffectiveText('UNRELEASED'),
+    // The Google Analytics wording (#1085) and the time-zone line changed in 0.48.0.
+    ...termsEffectiveText('2026-11-05'),
   },
   {
     name: 'terms',
