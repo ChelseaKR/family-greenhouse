@@ -35,7 +35,9 @@ this release's.
   chosen.
 - **The Privacy effective date is November 5, 2026 (release 0.48.0).** Set by
   hand in `PrivacyPage.tsx`. The Terms did not change, so `termsEffective.json`
-  stays at November 3, 2026 (release 0.47.0).
+  stays at November 3, 2026 (release 0.47.0). The account-deletion page's
+  text changed (#1096), so its date moves from September 2 to November 5,
+  2026, also set by hand in `AccountDeletionPage.tsx`.
 - **The website gets every change at this tag; the apps get them only with a
   store build.** The next store upload is 0.48.0, build 4800.
 
@@ -101,6 +103,15 @@ this release's.
   your plants". It now says "Nothing due this week" with the next task and
   its date. "No tasks yet" shows only when the household has no tasks.
   English and Spanish.
+- **Help, email and push text match what the app does (#1096).** The
+  account-deletion email no longer suggests a deleted account can be
+  restored: it says it cannot be, and to write to us if you did not ask for
+  the deletion or are still being charged. Help says the app saves your time
+  zone for quiet hours (#1092), that the app is available in Spanish, and that
+  Preferences has a language picker. The account-deletion page says a paid
+  plan whose household has only you is canceled at once, and the Spanish
+  deletion guide names the buttons a Spanish reader sees. "Settings → Billing"
+  reads "Settings → Plan status" outside the Terms. English and Spanish.
 
 ### Fixed
 
@@ -150,6 +161,14 @@ this release's.
   heading, and the emergency box on each pet-safety page no longer puts a
   heading ahead of the page title. On phones, the first link after "Skip to
   main content" is no longer hidden under the sticky header (WCAG 2.4.11).
+- **The Spanish dashboard names the next task in Spanish (#1098).** The
+  "Nothing due this week" line from #1093 showed the English task type
+  ("Lo próximo: Water Fern…"). It now uses the app's Spanish task names
+  ("Lo próximo: Regar (Helecho)…"). Custom task names stay as typed.
+- **The care report says what it counts (#1098).** Its header said "Older care
+  is not counted here", though last care now reads each task's own last date.
+  It now says counts and streaks cover the plant's last 10 logged completions
+  and last care covers all of its history.
 
 <!-- internal: #1082 #1084 -->
 
@@ -2729,8 +2748,6 @@ CHECKOUT_PENDING`; the web client says a checkout is already in progress and
   anywhere west of UTC. The renderer that gets this right is
   `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
   blog and changelog can stop making the same mistake.
-  <<<<<<< HEAD
-  \=======
 
 - **The deep-link gates could not tell this account's Enrollment ID from its
   Team ID.** An `appID` is `<Team ID>.<bundle id>`, and
