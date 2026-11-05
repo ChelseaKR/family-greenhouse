@@ -31,6 +31,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The spider plant care guide's title now leads with "How often to water a
+  spider plant".** That query put the page at about position 5 in the week to
+  2026-11-03, with no clicks, and it was the only ranking watering guide whose
+  title still opened with "Spider Plant Care". The page's content is unchanged.
 - **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.
