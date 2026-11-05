@@ -340,6 +340,59 @@ describe('refresh that never reached the server', () => {
   });
 });
 
+describe('refresh answered by a server error', () => {
+  // A 5xx or 429 from /auth/refresh is the server failing to judge the
+  // session, not refusing it. Signing out here cost people their 30-day
+  // session (and the keychain copy on iOS) for the length of an outage.
+  it.each([500, 502, 503, 429])('keeps the session when the refresh answers %i', async (status) => {
+    useAuthStore.setState({
+      idToken: 'expired-id',
+      accessToken: 'expired',
+      refreshToken: 'good-refresh',
+      isAuthenticated: true,
+      user: { id: 'u', email: 'someone@example.invalid', name: 'n' },
+    } as never);
+
+    server.use(
+      http.get(`${API}/plants`, () =>
+        HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      ),
+      http.post(`${API}/auth/refresh`, () =>
+        HttpResponse.json({ message: 'Service unavailable' }, { status })
+      )
+    );
+
+    // The caller still gets an error to show (and retry from).
+    await expect(api.get('/plants')).rejects.toBeDefined();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.refreshToken).toBe('good-refresh');
+    expect(state.idToken).toBe('expired-id');
+  });
+
+  it.each([400, 403])('still signs out when the refresh answers %i', async (status) => {
+    useAuthStore.setState({
+      idToken: 'expired-id',
+      accessToken: 'expired',
+      refreshToken: 'rotten',
+      isAuthenticated: true,
+      user: { id: 'u', email: 'someone@example.invalid', name: 'n' },
+    } as never);
+
+    server.use(
+      http.get(`${API}/plants`, () =>
+        HttpResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      ),
+      http.post(`${API}/auth/refresh`, () => HttpResponse.json({ message: 'no' }, { status }))
+    );
+
+    await expect(api.get('/plants')).rejects.toBeDefined();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().refreshToken).toBeNull();
+  });
+});
+
 /**
  * The funnel's "hit a limit" step. Every plan cap and locked feature answers
  * 402 from one place in the API, so it is recorded from one place here — the
