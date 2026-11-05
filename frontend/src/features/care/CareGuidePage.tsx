@@ -46,9 +46,11 @@ const SITE = SITE_URL;
  * inbound links from the 24 pages most likely to send it traffic.
  *
  * Paths only, never absolute URLs: an external href would need rel/target
- * handling and a trust decision, and none of this copy wants one.
+ * handling and a trust decision, and none of this copy wants one. That
+ * includes `//host`, which a router reads as another origin, so a path may
+ * not open with two slashes.
  */
-const INLINE_LINK = /\[([^\]]+)\]\((\/[A-Za-z0-9\-._~/]*)\)/g;
+const INLINE_LINK = /\[([^\]]+)\]\((\/(?!\/)[A-Za-z0-9\-._~/]*)\)/g;
 
 function withLinks(text: string): ReactNode[] {
   const out: ReactNode[] = [];

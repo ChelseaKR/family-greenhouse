@@ -14,7 +14,9 @@ import {
   careGuideResource,
   findCareGuideEntry,
   parseCareGuideData,
+  isHttpsUrl,
   resetCareGuideResources,
+  toCareGuide,
 } from '@/features/care/careGuideContent';
 import { CareGuidePage } from '@/features/care/CareGuidePage';
 import {
@@ -215,5 +217,98 @@ describe('CareGuidePage without bundled guides', () => {
 
   it('lists every published guide in the index', () => {
     expect(CARE_GUIDE_INDEX.map((e) => e.slug)).toEqual(CARE_GUIDES.map((g) => g.slug));
+  });
+});
+
+describe('untrusted guide JSON from the page', () => {
+  // The embedded JSON is read out of the DOM, so it is checked before any of
+  // it reaches an attribute: careSources[].url is rendered as an href.
+  const guide = CARE_GUIDES.find((g) => g.slug === 'pothos')!;
+
+  function withSourceUrl(url: unknown): CareGuide {
+    return {
+      ...guide,
+      careSources: [
+        { ...guide.careSources[0]!, url: url as string },
+        ...guide.careSources.slice(1),
+      ],
+    };
+  }
+
+  function roundTrip(g: CareGuide): CareGuide | undefined {
+    return parseCareGuideData(careGuideDataElement(g), g.slug);
+  }
+
+  it('rejects a guide with a javascript: source URL', () => {
+    expect(roundTrip(withSourceUrl('javascript:alert(document.domain)'))).toBeUndefined();
+    expect(roundTrip(withSourceUrl(' JavaScript:alert(1)'))).toBeUndefined();
+  });
+
+  it('rejects a guide with a malformed or non-https source URL', () => {
+    for (const url of ['https://', 'not a url', '//evil.example/x', 'http://extension.example/']) {
+      expect(roundTrip(withSourceUrl(url)), url).toBeUndefined();
+    }
+    expect(roundTrip(withSourceUrl(42))).toBeUndefined();
+  });
+
+  it('rejects JSON that is not a guide, or not this guide', () => {
+    expect(
+      parseCareGuideData(
+        `<script type="application/json" id="${CARE_GUIDE_DATA_ID}" data-slug="pothos">{nope</script>`,
+        'pothos'
+      )
+    ).toBeUndefined();
+    expect(toCareGuide(null, guide.slug)).toBeUndefined();
+    expect(toCareGuide({ ...guide, slug: 'zz-plant' }, guide.slug)).toBeUndefined();
+    expect(toCareGuide({ ...guide, faqs: [{ q: 'Why?', a: 1 }] }, guide.slug)).toBeUndefined();
+    expect(
+      toCareGuide({ ...guide, sections: { ...guide.sections, light: 'x' } }, guide.slug)
+    ).toBeUndefined();
+  });
+
+  it('accepts https URLs, and every published guide passes', () => {
+    expect(isHttpsUrl('https://extension.psu.edu/pothos')).toBe(true);
+    for (const g of CARE_GUIDES)
+      expect(toCareGuide(JSON.parse(JSON.stringify(g)), g.slug), g.slug).toEqual(g);
+  });
+
+  it('does not use an embedded guide that fails the check', () => {
+    withoutBundledGuides();
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      careGuideDataElement(withSourceUrl('javascript:alert(1)'))
+    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 404 }));
+    const resource = careGuideResource(guide.slug) as Promise<CareGuide> & { status?: string };
+    expect(resource.status).toBeUndefined();
+    expect(fetchSpy).toHaveBeenCalledWith(`/care/${guide.slug}/index.html`);
+    return expect(resource).rejects.toThrow('HTTP 404');
+  });
+
+  it('renders an embedded guide’s https sources as links, and no //host link', async () => {
+    withoutBundledGuides();
+    const withHostLink: CareGuide = {
+      ...guide,
+      faqs: [...guide.faqs, { q: 'Elsewhere?', a: 'See [this page](//evil.example/x).' }],
+    };
+    document.body.insertAdjacentHTML('beforeend', careGuideDataElement(withHostLink));
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={[`/care/${guide.slug}`]}>
+          <Suspense fallback={<p>loading</p>}>
+            <Routes>
+              <Route path="/care/:slug" element={<CareGuidePage />} />
+            </Routes>
+          </Suspense>
+        </MemoryRouter>
+      );
+    });
+    const first = guide.careSources[0]!;
+    expect(first.url.startsWith('https://')).toBe(true);
+    const link = screen.getAllByRole('link').find((a) => a.getAttribute('href') === first.url);
+    expect(link).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'this page' })).toBeNull();
   });
 });

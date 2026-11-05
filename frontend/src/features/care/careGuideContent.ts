@@ -1,4 +1,4 @@
-import type { CareGuide } from './careGuides';
+import type { CareGuide, CareSource } from './careGuides';
 import type { CareGuideIndexEntry } from './careGuideIndex';
 import { CARE_GUIDE_INDEX, bundledCareGuide } from './careGuideSource';
 
@@ -47,18 +47,105 @@ const DATA_ELEMENT = new RegExp(
   `<script type="application/json" id="${CARE_GUIDE_DATA_ID}" data-slug="([^"]*)">([^<]*)</script>`
 );
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The parsed JSON as a CareGuide, or undefined when it is not one.
+ *
+ * The JSON is read out of the DOM (or a fetched page), so it is untrusted
+ * input, not the typed module it was written from: whatever is in the page is
+ * what reaches the render. Every field is type-checked here, the slug must be
+ * the one asked for, and every `careSources[].url`, which the page renders as
+ * an `href`, must parse with `new URL` and be `https:`. Anything else rejects
+ * the whole guide, so a `javascript:` URL can never reach an attribute.
+ */
+export function toCareGuide(value: unknown, slug: string): CareGuide | undefined {
+  if (!isRecord(value) || value.slug !== slug) return undefined;
+  const g = value;
+  const quickFacts = g.quickFacts;
+  const sections = g.sections;
+  const valid =
+    isString(g.commonName) &&
+    isString(g.scientificName) &&
+    isStringArray(g.alsoKnownAs) &&
+    isStringArray(g.related) &&
+    isString(g.metaTitle) &&
+    isString(g.metaDescription) &&
+    (g.heading === undefined || isString(g.heading)) &&
+    isString(g.reviewed) &&
+    isString(g.updated) &&
+    isString(g.summary) &&
+    isRecord(quickFacts) &&
+    QUICK_FACT_KEYS.every((key) => isString(quickFacts[key])) &&
+    isRecord(sections) &&
+    SECTION_KEYS.every((key) => isStringArray(sections[key])) &&
+    Array.isArray(g.faqs) &&
+    g.faqs.every((f) => isRecord(f) && isString(f.q) && isString(f.a)) &&
+    Array.isArray(g.careSources) &&
+    g.careSources.every(isCareSource);
+  return valid ? (value as unknown as CareGuide) : undefined;
+}
+
+const QUICK_FACT_KEYS = ['water', 'light', 'difficulty', 'toxicity', 'humidity'] as const;
+const SECTION_KEYS = [
+  'watering',
+  'light',
+  'problems',
+  'propagation',
+  'sharedCare',
+  'honestBit',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isString);
+}
+
+function isCareSource(value: unknown): value is CareSource {
+  return (
+    isRecord(value) &&
+    isString(value.publisher) &&
+    isString(value.title) &&
+    isString(value.accessed) &&
+    isHttpsUrl(value.url)
+  );
+}
+
+/** An absolute `https:` URL, written the way `new URL` reads it. */
+export function isHttpsUrl(value: unknown): value is string {
+  if (!isString(value) || !/^https:\/\//i.test(value)) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** The guide in a prerendered page's HTML, if the page carries the one asked for. */
 export function parseCareGuideData(html: string, slug: string): CareGuide | undefined {
   const match = DATA_ELEMENT.exec(html);
   if (!match || match[1] !== slug) return undefined;
-  return JSON.parse(match[2]!) as CareGuide;
+  return toCareGuide(parseJson(match[2]!), slug);
 }
 
 function embeddedCareGuide(slug: string): CareGuide | undefined {
   if (typeof document === 'undefined') return undefined;
   const element = document.getElementById(CARE_GUIDE_DATA_ID);
   if (!element || element.dataset.slug !== slug || !element.textContent) return undefined;
-  return JSON.parse(element.textContent) as CareGuide;
+  return toCareGuide(parseJson(element.textContent), slug);
 }
 
 async function fetchCareGuide(slug: string): Promise<CareGuide> {
