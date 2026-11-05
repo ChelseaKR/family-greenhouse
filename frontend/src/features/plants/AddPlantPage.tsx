@@ -21,6 +21,7 @@ import { speciesService } from '@/services/speciesService';
 import { track } from '@/services/analytics';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Card } from '@/components/Card';
@@ -297,7 +298,10 @@ export function AddPlantPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: async (data: AddPlantFormData) => {
+    // Never paused offline: a save either goes out now or says it didn't
+    // (services/failFastSave.ts). A paused create used to spin forever and,
+    // after Cancel, still land on reconnect as a duplicate.
+    ...failFastSave(async (data: AddPlantFormData) => {
       // Discriminate the first-plant activation event from subsequent adds
       // using the AUTHORITATIVE pre-create list, not just whatever happens to
       // be in cache. A deep-link or "Propagate cutting" entry to /plants/new
@@ -396,7 +400,7 @@ export function AddPlantPage() {
         }
       }
       return { plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed };
-    },
+    }),
     onSuccess: ({ plant, wasFirstPlant, tasksAdded, taskSetupFailed, photoUploadFailed }) => {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       // GA4 `household_activated`: the first plant is the product's activation
@@ -427,7 +431,7 @@ export function AddPlantPage() {
       });
     },
     onError: (err) => {
-      setError(getErrorMessage(err));
+      setError(saveErrorMessage(err));
       // A 402 here is the plant cap. Refresh the usage the cap prompt reads so
       // the refusal arrives with its way forward, not as a dead end.
       if (isAxiosError(err) && err.response?.status === 402) {
