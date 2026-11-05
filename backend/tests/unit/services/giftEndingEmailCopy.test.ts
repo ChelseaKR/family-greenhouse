@@ -43,7 +43,8 @@ describe('the gift-ending email', () => {
   it('says nothing is charged and nothing is deleted', () => {
     const e = composeGiftEndingEmail(ctx());
     expect(e.text).toContain('Nothing is charged, and nothing renews.');
-    expect(e.text).toContain('Nothing is deleted');
+    expect(e.text).toMatch(/nothing is deleted/i);
+    expect(e.text).toContain('Every plant, care task, note and bit of care history stays');
   });
 
   it('names the catalog price once and says to start on or after the end date, never sooner', () => {

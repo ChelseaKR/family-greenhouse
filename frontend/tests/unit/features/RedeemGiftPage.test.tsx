@@ -88,7 +88,7 @@ describe('giftLink and pendingGiftCode', () => {
     expect(getPendingGiftCode()).toBe(CODE);
     clearPendingGiftCode();
     expect(getPendingGiftCode()).toBeNull();
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    const setItem = vi.spyOn(window.sessionStorage, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
     expect(setPendingGiftCode(CODE)).toBe(false);
@@ -135,7 +135,7 @@ describe('RedeemGiftPage', () => {
   });
 
   it('says to paste the code after signing in when storage is blocked', () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    const setItem = vi.spyOn(window.sessionStorage, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
     renderAt(`#${CODE}`);
