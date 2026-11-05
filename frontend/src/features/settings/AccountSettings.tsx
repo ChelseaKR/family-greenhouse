@@ -282,7 +282,7 @@ export function AccountSettings() {
         )}
         <div className="flex flex-wrap gap-3">
           <Button isLoading={exportJson.isPending} onClick={() => exportJson.mutate()}>
-            Download full data (JSON)
+            {t('settings.account.exportJson')}
           </Button>
           {hasHousehold && (
             <Button
@@ -331,7 +331,7 @@ export function AccountSettings() {
           </Alert>
         )}
         <Button variant="danger" onClick={() => setDeleteConfirm(true)}>
-          Delete my account
+          {t('settings.account.deleteButton')}
         </Button>
       </Card>
 
