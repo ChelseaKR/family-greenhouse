@@ -144,6 +144,16 @@ describe('CARE_GUIDES registry', () => {
     }
   });
 
+  it('leads the titles of the guides that rank for "how often to water" with those words', () => {
+    // Search Console, 28 days to 2026-11-03: these five guides rank about 5 to
+    // 22 for "how often to water <plant>", and nearly every result above them
+    // is titled with that phrase. A title that opens with "<Plant> Care" made
+    // the spider plant the odd one out at position 5.
+    for (const slug of ['zz-plant', 'monstera', 'spider-plant', 'aloe-vera', 'pothos']) {
+      expect(findCareGuide(slug)!.metaTitle, slug).toMatch(/^How Often to Water /);
+    }
+  });
+
   it('keeps titles and descriptions within what search results display', () => {
     for (const g of CARE_GUIDES) {
       expect(g.metaTitle.length, g.slug).toBeLessThanOrEqual(60);
