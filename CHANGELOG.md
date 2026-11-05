@@ -34,6 +34,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.
+- **The Privacy Policy now lists what Google Analytics records toward a paid
+  plan.** It said six steps with no detail. It now names the content-page
+  sign-up clicks (the kind of page, where the link was and, on a care guide or
+  pet-safety page, that page's plant), how a first plant was added, and the
+  14-day Garden trial, and it no longer mentions the removed "See how it
+  works" link. Both locales. The page's effective date is set by the release
+  that ships it.
 
 ### Fixed
 
