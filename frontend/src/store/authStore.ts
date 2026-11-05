@@ -37,6 +37,7 @@
 import { create } from 'zustand';
 import { isNativeApp } from '@/lib/platform';
 import { jwtIsExpired } from '@/lib/jwtExpiry';
+import { isAuthRejectionStatus } from '@/lib/authRejection';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import {
   identify,
@@ -438,7 +439,11 @@ export const useAuthStore = create<AuthState>()(
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refreshToken }),
             });
-            if (!refreshResponse.ok) return null;
+            if (!refreshResponse.ok) {
+              // Only a refusal (400/401/403) is a verdict on the session. A
+              // 5xx or 429 means the server could not judge it right now.
+              return isAuthRejectionStatus(refreshResponse.status) ? null : 'unreachable';
+            }
             const data = await refreshResponse.json();
             const newBearer = data.idToken ?? data.accessToken;
             if (!newBearer) return null;
@@ -474,6 +479,12 @@ export const useAuthStore = create<AuthState>()(
           // No refresh token to try with, and the one call we made never
           // reached the server: that is not a verdict on this session.
           if (response === null && !refreshToken) response = 'unreachable';
+        }
+
+        // An answered outage (5xx, 429, ...) from /auth/me is not a verdict
+        // on the session either: keep it, exactly like an unanswered call.
+        if (response && response !== 'unreachable' && !response.ok) {
+          if (!isAuthRejectionStatus(response.status)) response = 'unreachable';
         }
 
         if (response === 'unreachable') {
