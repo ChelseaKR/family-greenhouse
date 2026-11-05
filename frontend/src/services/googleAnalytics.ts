@@ -193,15 +193,32 @@ export function gaPageLocation(origin: string, pathname: string, search: string)
 }
 
 /**
+ * True for Stripe's own pages (Checkout, the billing portal, 3-D Secure),
+ * which send a buyer back to us with a full page load.
+ */
+function isPaymentProcessorHost(hostname: string): boolean {
+  return hostname === 'stripe.com' || hostname.endsWith('.stripe.com');
+}
+
+/**
  * The referrer GA receives. Another site is reduced to its origin, which is
  * all acquisition reporting needs; one of our own pages (a full page load from
  * a sitter link, say) is scrubbed like any other page address.
+ *
+ * A return from Stripe is reported as coming from our own site. Stripe is a
+ * step inside our checkout, not a site that sent the visitor, and GA would
+ * otherwise read `checkout.stripe.com` as a referral, so the `purchase` fired
+ * on the return page could be credited to Stripe instead of the search, ad or
+ * page that brought the buyer. Google's guidance is to exclude payment
+ * processors as unwanted referrals; doing it here keeps it out of the GA
+ * admin and in reviewed code.
  */
 export function gaReferrer(referrer: string, origin: string): string {
   if (!referrer) return '';
   try {
     const url = new URL(referrer);
     if (url.origin === origin) return gaPageLocation(origin, url.pathname, url.search);
+    if (isPaymentProcessorHost(url.hostname)) return `${origin}/`;
     return `${url.origin}/`;
   } catch {
     return '';
