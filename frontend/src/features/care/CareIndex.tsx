@@ -44,8 +44,15 @@ export function CareIndex() {
       </ul>
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
-        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-          <p className="font-serif text-xl text-ink">Knowing the schedule is the easy part</p>
+        <aside
+          aria-labelledby="care-index-cta"
+          className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center"
+        >
+          {/* A real heading, as on /pet-safe, so it is reachable by heading
+              navigation and names the aside landmark. */}
+          <h2 id="care-index-cta" className="font-serif text-xl text-ink">
+            Knowing the schedule is the easy part
+          </h2>
           <p className="mt-2 text-sm text-gray-600">
             The hard part is remembering — and not assuming someone else did it. Family Greenhouse
             handles both. Free for up to 8 plants.
