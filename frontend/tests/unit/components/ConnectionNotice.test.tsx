@@ -40,7 +40,7 @@ describe('ConnectionNotice', () => {
     expect(screen.getByText("You're offline")).toBeInTheDocument();
     expect(screen.getByText(/What you see was last updated at 9:05/)).toBeInTheDocument();
     expect(
-      screen.getByText(/sent once you're back online, as long as the app stays open/)
+      screen.getByText(/mark done is sent once you're back online, as long as the app stays open/)
     ).toBeInTheDocument();
     // Offline, a retry would only pause again: there is no button to press.
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
