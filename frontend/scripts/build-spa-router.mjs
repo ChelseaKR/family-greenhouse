@@ -40,6 +40,16 @@
  * while the committed bytes stay stale. Same reasoning as
  * `build-sitemap.mjs --check`, and the same reason it is a separate gate step.
  *
+ * ## Why /.well-known passes through untouched (rule 1b in spa-router.js)
+ *
+ * Moved here from the function, which sits against CloudFront's 10 KB limit.
+ * Passing it through also means a MISSING association file answers 404
+ * rather than 200-with-the-shell, which is the difference between Android's
+ * verifier reporting "no such file" and reporting a JSON parse error on a
+ * page of HTML. Same reasoning as `/assets/`, and it works for the same
+ * reason: the frontend bucket grants `s3:ListBucket`, so a missing object is
+ * a 404 that no `custom_error_response` turns into a 200.
+ *
  * Usage:
  *   node scripts/build-spa-router.mjs           # rewrite the generated block
  *   node scripts/build-spa-router.mjs --check   # verify, write nothing

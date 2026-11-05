@@ -181,14 +181,8 @@ function handler(event) {
   // segment has a dot — but `apple-app-site-association` is extensionless by
   // Apple's spec, so without this it is rewritten to `/app-shell.html` and
   // Apple's CDN fetches `200 text/html` no matter what the deploy uploaded.
-  // The file would be in the bucket, correctly typed, and unreachable.
-  //
-  // Passing it through also means a MISSING association file answers 404
-  // rather than 200-with-the-shell, which is the difference between Android's
-  // verifier reporting "no such file" and reporting a JSON parse error on a
-  // page of HTML. Same reasoning as `/assets/` above, and it works for the
-  // same reason: the frontend bucket grants `s3:ListBucket`, so a missing
-  // object is a 404 that no `custom_error_response` turns into a 200.
+  // The file would be in the bucket, correctly typed, and unreachable. Why a
+  // missing one must 404: build-spa-router.mjs, "Why /.well-known passes".
   if (uri === '/.well-known' || uri.indexOf('/.well-known/') === 0) {
     return request;
   }
