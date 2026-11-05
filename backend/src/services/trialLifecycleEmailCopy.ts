@@ -154,11 +154,11 @@ const PHRASES: Record<EmailLocale, Phrases> = {
     overMembers:
       'Your household has {{count}} people, more than Seedling’s {{limit}}. They all stay. New people cannot join until there is room.',
     keepGardenUntil:
-      'If you would like to keep Garden, it is {{price}} a month. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings, under Billing.',
+      'If you would like to keep Garden, it is {{price}} a month. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings → Plan status.',
     keepGardenNow:
-      'If you would like to keep Garden, it is {{price}} a month, and the first charge is the day you start it. You can start it in Settings, under Billing.',
+      'If you would like to keep Garden, it is {{price}} a month, and the first charge is the day you start it. You can start it in Settings → Plan status.',
     gardenBack:
-      'If you would like Garden back, it is {{price}} a month, and the first charge is the day you start it. You can start it any time in Settings, under Billing.',
+      'If you would like Garden back, it is {{price}} a month, and the first charge is the day you start it. You can start it any time in Settings → Plan status.',
     nothingToDo: 'If you would rather stay on Seedling, there is nothing you need to do.',
     cta: 'See plans in Settings',
     reply: 'Questions? Reply to this email and a person will read it.',
@@ -213,11 +213,11 @@ const PHRASES: Record<EmailLocale, Phrases> = {
     overMembers:
       'Tu hogar tiene {{count}} personas, más que las {{limit}} de Seedling. Todas se quedan. Las personas nuevas no pueden unirse hasta que haya sitio.',
     keepGardenUntil:
-      'Si quieres conservar Garden, cuesta {{price}} al mes. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes, en Facturación.',
+      'Si quieres conservar Garden, cuesta {{price}} al mes. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
     keepGardenNow:
-      'Si quieres conservar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes, en Facturación.',
+      'Si quieres conservar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
     gardenBack:
-      'Si quieres recuperar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes, en Facturación.',
+      'Si quieres recuperar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes → Estado del plan.',
     nothingToDo: 'Si prefieres quedarte en Seedling, no tienes que hacer nada.',
     cta: 'Ver los planes en Ajustes',
     reply: '¿Preguntas? Responde a este correo y lo leerá una persona.',

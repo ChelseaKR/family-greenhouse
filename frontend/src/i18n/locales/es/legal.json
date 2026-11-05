@@ -46,7 +46,7 @@
       },
       "effect": {
         "heading": "Qué hace la eliminación",
-        "body": "Eliminamos tu inicio de sesión, tus membresías en hogares, tus preferencias de notificación, tus suscripciones push del navegador y los tokens de notificación de tus dispositivos. Las plantas de un hogar del que eras el único miembro se eliminan. El historial de cuidados compartido del que dependen otros miembros puede conservarse, pero tu nombre y tu identificador de cuenta se sustituyen por “Former member” (antiguo miembro). Las conversaciones con el asistente de cuidado caducan automáticamente a los 30 días; los reportes de seguridad enviados caducan a los 90 días."
+        "body": "Eliminamos tu inicio de sesión, tus membresías en hogares, tus preferencias de notificación, tus suscripciones push del navegador y los tokens de notificación de tus dispositivos. Las plantas de un hogar del que eras el único miembro se eliminan. El historial de cuidados compartido del que dependen otros miembros puede conservarse, pero tu nombre y tu identificador de cuenta se sustituyen por “Former member” (antiguo miembro). Las conversaciones con el asistente de cuidado caducan automáticamente a los 30 días; los reportes de seguridad enviados caducan a los 90 días. Si eras el único miembro de un hogar con un plan de pago, eliminar tu cuenta cancela ese plan de inmediato, no al final del periodo que pagaste. Las copias de seguridad de la base de datos conservan una copia hasta que caducan."
       }
     },
     "terms": {

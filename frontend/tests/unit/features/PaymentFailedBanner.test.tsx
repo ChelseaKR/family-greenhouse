@@ -253,7 +253,7 @@ describe('PaymentFailedBanner under es', () => {
     // It says what the last failed retry does, in Spanish too.
     expect(
       screen.getByText(
-        /Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Plántula/
+        /Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Seedling/
       )
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/settings\.billing\./);
@@ -264,7 +264,7 @@ describe('PaymentFailedBanner under es', () => {
   it('renders both lapsed wordings in Spanish', () => {
     const { rerender } = renderSpanish(lapsed);
     expect(screen.getByText('No hemos podido cobrar tu último pago')).toBeInTheDocument();
-    expect(screen.getByText(/plan gratuito Plántula/)).toBeInTheDocument();
+    expect(screen.getByText(/plan gratuito Seedling/)).toBeInTheDocument();
 
     rerender(
       <I18nextProvider i18n={spanish}>

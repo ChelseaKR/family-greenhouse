@@ -47,7 +47,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
     <Card>
       <CardHeader
         title="Care report"
-        description={`How this plant has been cared for across its last ${RECENT_COMPLETIONS_LIMIT} logged completions. Older care is not counted here.`}
+        description={`Counts and streaks cover this plant's last ${RECENT_COMPLETIONS_LIMIT} logged completions. Last care covers all of its history.`}
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm large-text:grid-cols-1">
