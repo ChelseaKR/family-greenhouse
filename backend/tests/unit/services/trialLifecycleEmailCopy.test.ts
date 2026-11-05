@@ -226,6 +226,79 @@ describe('absence is never rendered as achievement', () => {
   });
 });
 
+describe('day 10 for a household with no plant (decision C1)', () => {
+  const none: TrialFacts = {
+    ...FACTS,
+    plantsAdded: ok(0),
+    tasksCompleted: ok(0),
+    plantsNow: ok(0),
+  };
+  const hrefs = (html: string) => [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+
+  it('leads with "Add your first plant" and its button, before the plans line', () => {
+    const e = composeTrialLifecycleEmail(ctx({ facts: none }));
+    const lead = e.text.indexOf('Add your first plant and say how often it needs water');
+    const plans = e.text.indexOf('If you would like to keep Garden');
+    expect(lead).toBeGreaterThan(-1);
+    expect(plans).toBeGreaterThan(lead);
+    expect(e.text).toContain('You have not added a plant yet.');
+    const links = hrefs(e.html);
+    const add = links.findIndex((h) => h.endsWith('/plants/new'));
+    const billing = links.findIndex((h) => h.endsWith('/settings/billing'));
+    expect(add).toBeGreaterThan(-1);
+    expect(billing).toBeGreaterThan(add);
+    // The plans line and its button stay.
+    expect(e.text).toContain('See plans in Settings');
+    // With nothing to count, the facts section is not repeated.
+    expect(e.text).not.toContain('What your household did during the trial');
+    expect(e.text.split('$4.99').length - 1).toBe(1);
+  });
+
+  it('says the same in Spanish', () => {
+    const e = composeTrialLifecycleEmail(ctx({ locale: 'es', facts: none }));
+    expect(e.text).toContain(
+      'Todavía no has añadido ninguna planta. Añade tu primera planta e indica cada cuánto necesita agua'
+    );
+    expect(e.html).toContain('Añadir tu primera planta');
+    expect(e.text.indexOf('Añadir tu primera planta')).toBeLessThan(
+      e.text.indexOf('Ver los planes en Ajustes')
+    );
+  });
+
+  it('keeps the usual email for a household with plants', () => {
+    const e = composeTrialLifecycleEmail(ctx());
+    expect(e.text).not.toContain('Add your first plant');
+    expect(hrefs(e.html).some((h) => h.endsWith('/plants/new'))).toBe(false);
+    expect(e.text).toContain('You added 6 plants.');
+  });
+
+  it('never leads with it on an unreadable count, or when plants exist now', () => {
+    const unread = composeTrialLifecycleEmail(
+      ctx({ facts: { ...none, plantsAdded: { status: 'unavailable' } } })
+    );
+    expect(unread.text).not.toContain('Add your first plant');
+    const hasNow = composeTrialLifecycleEmail(ctx({ facts: { ...none, plantsNow: ok(2) } }));
+    expect(hasNow.text).not.toContain('Add your first plant');
+    expect(hasNow.text).toContain('You have not added a plant yet.');
+    // An unreadable plantsNow does not undo a real 0.
+    const nowUnread = composeTrialLifecycleEmail(
+      ctx({ facts: { ...none, plantsNow: { status: 'unavailable' } } })
+    );
+    expect(nowUnread.text).toContain('Add your first plant');
+  });
+
+  it('day 14 is unchanged', () => {
+    const e = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14', facts: none }));
+    expect(e.text).not.toContain('Add your first plant');
+    expect(e.text).toContain('You have not added a plant yet.');
+  });
+
+  it('has no urgency language', () => {
+    const e = composeTrialLifecycleEmail(ctx({ facts: none }));
+    for (const re of BANNED) expect(e.text).not.toMatch(re);
+  });
+});
+
 describe('tone', () => {
   it.each([
     ['en', 'trial_day10'],

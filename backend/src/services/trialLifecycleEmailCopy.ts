@@ -19,6 +19,9 @@
  *   - **Absence is never an achievement.** A household that added no plant is
  *     told "You have not added a plant yet." A count that could not be read is
  *     left out and the email says so; it is never written as 0.
+ *   - **No plant, first things first.** On day 10, a household whose plant
+ *     count read as 0 gets "Add your first plant" and its button first, and
+ *     the plans line second (owner decision C1, 2026-11-05).
  *   - **Only existing data.** Plants added, care tasks done. Nothing that
  *     needed new tracking. (Reminders delivered is excluded on purpose; see
  *     `trialLifecycleFacts.ts`.)
@@ -75,6 +78,9 @@ interface Phrases {
   d10Intro: string;
   d10ChangesHeading: string;
   d10ChangesLead: string;
+  /** Day 10, a household that has added no plant: the first thing it reads. */
+  d10FirstPlant: string;
+  d10FirstPlantCta: string;
   d14Subject: string;
   d14Title: string;
   d14Preheader: string;
@@ -122,6 +128,9 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'Your household’s free Garden trial ends on {{date}}. We never asked for a card, so nothing will be charged. On that day your household moves to Seedling, the free plan, on its own.',
     d10ChangesHeading: 'What changes on {{date}}',
     d10ChangesLead: 'Everything you have made stays. What changes is what you can add:',
+    d10FirstPlant:
+      'You have not added a plant yet. Add your first plant and say how often it needs water, and Family Greenhouse can remind you when it is due.',
+    d10FirstPlantCta: 'Add your first plant',
     d14Subject: 'You are back on Seedling, and nothing was deleted',
     d14Title: 'Your Garden trial has ended',
     d14Preheader: 'Everything you added is still here, and nothing was charged.',
@@ -181,6 +190,9 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'La prueba gratuita de Garden de tu hogar termina el {{date}}. Nunca pedimos una tarjeta, así que no se cobrará nada. Ese día tu hogar pasa a Seedling, el plan gratuito, de forma automática.',
     d10ChangesHeading: 'Qué cambia el {{date}}',
     d10ChangesLead: 'Todo lo que has creado se queda. Lo que cambia es lo que puedes añadir:',
+    d10FirstPlant:
+      'Todavía no has añadido ninguna planta. Añade tu primera planta e indica cada cuánto necesita agua, y Family Greenhouse puede avisarte cuando toque regarla.',
+    d10FirstPlantCta: 'Añadir tu primera planta',
     d14Subject: 'Has vuelto a Seedling y no se borró nada',
     d14Title: 'Terminó tu prueba de Garden',
     d14Preheader: 'Todo lo que añadiste sigue aquí y no se cobró nada.',
@@ -261,6 +273,18 @@ export function daysLeft(endsAt: string, now: Date): number {
 
 function countOf(read: CountRead): number | null {
   return read.status === 'ok' ? read.value : null;
+}
+
+/**
+ * Day 10 leads with "Add your first plant" only for a household that READ as
+ * having added none. An unreadable count is not "none" (ADR 0010), and a
+ * household the counter says has plants right now is not shown it either.
+ */
+export function leadsWithFirstPlant(ctx: TrialEmailContext): boolean {
+  if (ctx.kind !== 'trial_day10') return false;
+  if (countOf(ctx.facts.plantsAdded) !== 0) return false;
+  const now = countOf(ctx.facts.plantsNow);
+  return now === null || now === 0;
 }
 
 /**
@@ -383,7 +407,14 @@ export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTria
     preheader = fill(p.d10Preheader, { date });
     reason = p.reasonDay10;
     blocks.push({ kind: 'text', text: fill(p.d10Intro, { date }) });
-    blocks.push(...factBlocks(ctx, p));
+    if (leadsWithFirstPlant(ctx)) {
+      // The add-a-plant line replaces the facts section: with no plant there
+      // is nothing else to count, and its button comes before the plans one.
+      blocks.push({ kind: 'text', text: p.d10FirstPlant });
+      blocks.push({ kind: 'button', label: p.d10FirstPlantCta, href: appUrl('/plants/new') });
+    } else {
+      blocks.push(...factBlocks(ctx, p));
+    }
     blocks.push({ kind: 'heading', text: fill(p.d10ChangesHeading, { date }) });
     blocks.push({ kind: 'text', text: p.d10ChangesLead });
     blocks.push(...limitBlocks(ctx, p, false));
