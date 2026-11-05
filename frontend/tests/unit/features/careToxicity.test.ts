@@ -103,9 +103,18 @@ describe('careToxicityFrom', () => {
 });
 
 describe('careToxicity over the real table', () => {
-  it('cites every guide except the ZZ plant, which the ASPCA does not list', () => {
+  it('cites every guide except the plants the ASPCA does not list', () => {
+    // ZZ plant, plus four 2026-11-03 guides with no listing of their own:
+    // string of pearls, prayer plant (Maranta leuconeura), croton and
+    // Chinese money plant (Pilea peperomioides).
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
-    expect(unsourced).toEqual(['zz-plant']);
+    expect(unsourced).toEqual([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+    ]);
   });
 
   it('reads the heartleaf philodendron guide from the genus row and its listing', () => {

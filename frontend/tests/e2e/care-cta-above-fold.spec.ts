@@ -13,7 +13,8 @@ import { expect, test } from '@playwright/test';
  * audit's measurement). On the smallest case measured, an iPhone SE in
  * Safari with its bars showing (375x548), the near-page-one guides fit, but
  * eight guides with three-line headings (anthurium, hoya and others) end
- * 13-61px below; that case is checked for the near-page-one guides only.
+ * 13-61px below; that case is checked for the near-page-one guides and the
+ * 2026-11-03 watering guides only.
  */
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 375, height: 667 },
@@ -26,8 +27,30 @@ const VIEWPORTS = [
 
 /** The near-page-one guides from Search Console (2026-10-30). */
 const NEAR_PAGE_ONE = ['zz-plant', 'monstera', 'bird-of-paradise', 'aloe-vera'];
+/**
+ * The watering guides added 2026-11-03. Each was written to fit the smallest
+ * case too, so they are checked there as well; string of pearls and Chinese
+ * money plant have the longest names of the batch.
+ */
+const WATERING_BATCH_1 = [
+  'string-of-pearls',
+  'prayer-plant',
+  'croton',
+  'chinese-money-plant',
+  'peperomia',
+  'alocasia',
+  'cast-iron-plant',
+  'corn-plant',
+];
 /** Plus the guides with the longest headings, which push the link lowest. */
-const GUIDES = [...NEAR_PAGE_ONE, 'anthurium', 'hoya', 'chinese-evergreen', 'boston-fern'];
+const GUIDES = [
+  ...NEAR_PAGE_ONE,
+  'anthurium',
+  'hoya',
+  'chinese-evergreen',
+  'boston-fern',
+  ...WATERING_BATCH_1,
+];
 
 const SMALLEST = { name: 'iPhone SE in Safari', width: 375, height: 548 } as const;
 
@@ -38,7 +61,7 @@ test.describe('care guide sign-up link above the fold', () => {
 
   const cases = [
     ...VIEWPORTS.map((viewport) => ({ viewport, slugs: GUIDES })),
-    { viewport: SMALLEST, slugs: NEAR_PAGE_ONE },
+    { viewport: SMALLEST, slugs: [...NEAR_PAGE_ONE, ...WATERING_BATCH_1] },
   ];
   for (const { viewport, slugs } of cases) {
     test(`is fully on the first screen at ${viewport.name} ${viewport.height}px`, async ({

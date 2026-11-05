@@ -177,6 +177,9 @@ describe('per-plant ASPCA listings', () => {
         'jasmine',
         'ponytail-palm',
         'schefflera',
+        // Read off the live ASPCA page on 2026-11-03 for the peperomia care
+        // guide: the "Baby Rubber Plant" listing (Peperomia obtusifolia).
+        'peperomia',
       ].sort()
     );
   });
@@ -517,14 +520,17 @@ describe('alias collision traps', () => {
     }
   });
 
-  it('“prayer plant” resolves to calathea, matching ASPCA’s Calathea insignis entry', () => {
-    // ASPCA's "Prayer Plant" entry IS Calathea insignis (non-toxic), listing
-    // Maranta and Rattlesnake Plant among its other common names — so the
-    // calathea row legitimately owns all of these aliases.
-    const [hit] = lookupToxicity('prayer plant');
-    expect(hit?.slug).toBe('calathea');
-    expect(hit?.cats).toBe('non-toxic');
-    expect(lookupToxicity('maranta')[0]?.slug).toBe('calathea');
+  it('“prayer plant” and “maranta” no longer answer with the calathea row', () => {
+    // The names belong to Maranta leuconeura, which has its own care guide and
+    // no ASPCA listing that names it, so its pet line is "Unknown" (owner
+    // decision, 2026-11-03). Neither name may borrow calathea's verdict.
+    expect(lookupToxicity('prayer plant', 20).map((m) => m.slug)).not.toContain('calathea');
+    expect(lookupToxicity('maranta', 20).map((m) => m.slug)).not.toContain('calathea');
+    const calathea = PET_TOXICITY.find((e) => e.slug === 'calathea')!;
+    expect(calathea.aliases).not.toContain('prayer plant');
+    expect(calathea.aliases).not.toContain('maranta');
+    // Calathea's own names still reach it.
+    expect(lookupToxicity('calathea')[0]?.slug).toBe('calathea');
     expect(lookupToxicity('rattlesnake plant')[0]?.slug).toBe('calathea');
   });
 

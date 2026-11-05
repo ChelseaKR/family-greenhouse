@@ -98,9 +98,16 @@ describe('CARE_GUIDES registry', () => {
     // ZZ plant has no ASPCA listing. Its prose used to call it toxic from
     // general knowledge; the page now says "Unknown" and the prose must not
     // contradict that in either direction. Link anchors are stripped first,
-    // so "[free pet-safe checker](/pet-safe)" is not read as a verdict.
+    // so "[free pet-safe checker](/pet-safe)" is not read as a verdict. Four
+    // of the 2026-11-03 watering guides have no listing of their own either.
     const unknown = CARE_GUIDES.filter((g) => !careToxicity(g).sourced);
-    expect(unknown.map((g) => g.slug)).toEqual(['zz-plant']);
+    expect(unknown.map((g) => g.slug)).toEqual([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+    ]);
     for (const g of unknown) {
       const prose = [
         g.summary,
@@ -444,9 +451,15 @@ describe('pet-safety test guides', () => {
     expect(view.claims.cats.state).toBe('not-assessed');
   });
 
-  it('negative control: the unsourced guide is still the only one, so nothing was added without a source', () => {
+  it('negative control: the unsourced guides are exactly the known ones, so nothing was added without a source', () => {
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
-    expect(unsourced).toEqual(['zz-plant']);
+    expect(unsourced).toEqual([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+    ]);
   });
 });
 
@@ -636,8 +649,127 @@ describe('third-batch pet-safety guides', () => {
     expect(repeatsTableSigns(doctored, 'lily')).toBe(false);
   });
 
-  it('negative control: the unsourced guide is still the only one, so nothing was added without a source', () => {
+  it('negative control: the unsourced guides are exactly the known ones, so nothing was added without a source', () => {
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
-    expect(unsourced).toEqual(['zz-plant']);
+    expect(unsourced).toEqual([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+    ]);
+  });
+});
+
+/**
+ * The eight watering guides added 2026-11-03 (research:
+ * `fg-watering-guides-batch1-2026-11-03`). No source gives a day interval for
+ * any of them, so none may state one; each water line stays short enough that
+ * the "Remind me to water" link under it stays on a phone's first screen
+ * (care-cta-above-fold.spec.ts measures that in a browser). Four plants have
+ * no ASPCA listing of their own and must read "Unknown"; the other four read
+ * the table's cited row.
+ */
+describe('watering guides batch 1', () => {
+  const UNLISTED = ['string-of-pearls', 'prayer-plant', 'croton', 'chinese-money-plant'] as const;
+  const CITED = ['peperomia', 'alocasia', 'cast-iron-plant', 'corn-plant'] as const;
+  const BATCH = [...UNLISTED, ...CITED];
+  const guides = BATCH.map((slug) => findCareGuide(slug)!);
+
+  /** A stated watering interval: "every 7 days", "2 to 3 weeks", "once a week". */
+  const INTERVAL =
+    /\b(?:\d+\s*(?:to|-|–)?\s*\d*\s*(?:days?|weeks?)|every\s+(?:day|week|other|few|couple)|once\s+a\s+(?:day|week)|twice\s+a\s+(?:day|week|month)|weekly|daily)\b/i;
+
+  /** Every place a guide could state how often to water. */
+  const wateringText = (g: CareGuide) => [
+    g.quickFacts.water,
+    g.metaTitle,
+    g.metaDescription,
+    ...g.sections.watering,
+    ...g.faqs.map((f) => f.a),
+  ];
+
+  it('publishes all eight, reviewed and updated on the day the sources were read', () => {
+    for (const [i, slug] of BATCH.entries()) {
+      const g = guides[i];
+      expect(g, slug).toBeDefined();
+      expect(g!.reviewed, slug).toBe('2026-11-03');
+      expect(g!.updated, slug).toBe('2026-11-03');
+      expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(2);
+      for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-03');
+      expect(g!.heading, slug).toBeUndefined();
+    }
+  });
+
+  it('keeps every water line short enough for the first screen', () => {
+    for (const g of guides) expect(g.quickFacts.water.length, g.slug).toBeLessThanOrEqual(55);
+  });
+
+  it('states no watering interval the sources do not give', () => {
+    for (const g of guides) {
+      for (const text of wateringText(g)) expect(text, g.slug).not.toMatch(INTERVAL);
+    }
+  });
+
+  it('negative control: an interval in the water line fails the check', () => {
+    const real = findCareGuide('croton')!;
+    const doctored = { ...real, quickFacts: { ...real.quickFacts, water: 'Every 7 days' } };
+    // The sabotage landed: the copy has an interval, the real guide does not.
+    expect(real.quickFacts.water).not.toMatch(INTERVAL);
+    expect(wateringText(doctored).some((t) => INTERVAL.test(t))).toBe(true);
+  });
+
+  it('reads "Unknown" for the four plants with no listing of their own, and has no row for them', () => {
+    for (const slug of UNLISTED) {
+      const g = findCareGuide(slug)!;
+      expect(
+        PET_TOXICITY.some((e) => e.slug === slug),
+        slug
+      ).toBe(false);
+      expect(careToxicity(g).sourced, slug).toBe(false);
+      expect(g.quickFacts.toxicity, slug).toMatch(/^Unknown\b/);
+    }
+  });
+
+  it('reads the cited row for the other four, each from its own ASPCA listing', () => {
+    for (const slug of CITED) {
+      const g = findCareGuide(slug)!;
+      const row = PET_TOXICITY.find((e) => e.slug === slug)!;
+      expect(row.aspcaListing, slug).toBeDefined();
+      const view = careToxicity(g);
+      expect(view.sourced, slug).toBe(true);
+      expect(view.petSafePath, slug).toBe(`/pet-safe/${slug}`);
+      expect(petSafetyLevel(g.quickFacts.toxicity), slug).toBe(
+        row.cats === 'toxic' ? 'toxic' : 'safe'
+      );
+      const pet = g.sections.honestBit.join(' ');
+      expect(pet, slug).toContain(`](/pet-safe/${slug})`);
+      expect(pet, slug).toContain('[free pet-safe checker](/pet-safe)');
+      expect(pet, slug).toMatch(
+        row.cats === 'toxic'
+          ? /call your vet or a poison hotline/
+          : /Non-toxic is not the same as safe to eat in quantity/
+      );
+    }
+    // The peperomia row cites the one species its listing names.
+    const peperomia = PET_TOXICITY.find((e) => e.slug === 'peperomia')!;
+    expect(peperomia.aspcaListing).toMatchObject({
+      title: 'Baby Rubber Plant',
+      scientificName: 'Peperomia obtusifolia',
+      path: '/toxic-and-non-toxic-plants/baby-rubber-plant',
+    });
+  });
+
+  it('gives the names "prayer plant" and "maranta" to the prayer plant guide, not calathea', () => {
+    const calathea = findCareGuide('calathea')!;
+    const prayer = findCareGuide('prayer-plant')!;
+    const names = (g: CareGuide) => [g.commonName, ...g.alsoKnownAs].map((n) => n.toLowerCase());
+    expect(names(calathea)).not.toContain('prayer plant');
+    expect(names(calathea)).not.toContain('maranta');
+    expect(names(prayer)).toContain('prayer plant');
+    expect(names(prayer)).toContain('maranta');
+    const row = PET_TOXICITY.find((e) => e.slug === 'calathea')!;
+    expect(row.aliases).not.toContain('prayer plant');
+    expect(row.aliases).not.toContain('maranta');
   });
 });

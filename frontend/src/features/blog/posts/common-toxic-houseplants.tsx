@@ -56,10 +56,10 @@ export default function CommonToxicHouseplants() {
       <p>
         The <a href="/care/snake-plant">snake plant</a> is the go-to &ldquo;tough upright
         architectural&rdquo; plant, and its saponins make it mildly toxic to pets. For the same
-        upright, neglect-tolerant, low-light silhouette without the toxicity, the cast iron plant
-        (Aspidistra) is the swap &mdash; non-toxic, famously indestructible, and happy in the same
-        dim corners. It grows slowly enough to test your patience, but it asks for nothing and
-        won&rsquo;t hurt a curious pet.
+        upright, neglect-tolerant, low-light silhouette without the toxicity, the{' '}
+        <a href="/care/cast-iron-plant">cast iron plant</a> (Aspidistra) is the swap &mdash;
+        non-toxic, famously indestructible, and happy in the same dim corners. It grows slowly
+        enough to test your patience, but it asks for nothing and won&rsquo;t hurt a curious pet.
       </p>
 
       <h3>Peace lily &rarr; calathea</h3>

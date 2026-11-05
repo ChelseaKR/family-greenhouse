@@ -289,6 +289,14 @@ describe('CareGuidePage pet toxicity', () => {
   });
 
   it('marks up every FAQ it shows except an unsourced pet answer, and nothing else', () => {
+    // The guides whose plant has no ASPCA listing of its own.
+    const UNLISTED = new Set([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+    ]);
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);
       const shown = [...container.querySelectorAll('article dl dt')]
@@ -298,7 +306,7 @@ describe('CareGuidePage pet toxicity', () => {
       for (const name of marked) expect(shown, `${guide.slug}: ${name}`).toContain(name);
       const petQuestion = shown.find((t) => /toxic to cats and dogs\?$/.test(t))!;
       expect(petQuestion, guide.slug).toBeDefined();
-      expect(marked.includes(petQuestion), guide.slug).toBe(guide.slug !== 'zz-plant');
+      expect(marked.includes(petQuestion), guide.slug).toBe(!UNLISTED.has(guide.slug));
       unmount();
     }
   });
