@@ -118,6 +118,9 @@ describe('dashboard empty week', () => {
     renderDashboard({ upcoming: [], all: [] });
 
     expect(await screen.findByText('No tasks yet')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View plants' })).toHaveAttribute('href', '/plants');
+    expect(await screen.findByRole('link', { name: 'View plants' })).toHaveAttribute(
+      'href',
+      '/plants'
+    );
   });
 });
