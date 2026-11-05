@@ -910,7 +910,8 @@ describe('me handler', () => {
       const res = (await calendarIcs(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
 
       expect(res.statusCode).toBe(200);
-      expect(vi.mocked(icsExport.buildIcs).mock.lastCall?.[3]).toBe('UTC');
+      // No zone handed over: buildIcs falls back to UTC days itself.
+      expect(vi.mocked(icsExport.buildIcs).mock.lastCall?.[3]).toBeUndefined();
     });
 
     it('returns 403 when the caller has no active household', async () => {

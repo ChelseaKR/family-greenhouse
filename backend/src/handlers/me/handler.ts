@@ -340,19 +340,26 @@ function icsResponse(ics: string): APIGatewayProxyResult {
  * now fills from the browser on first load). Read fresh on every fetch so a
  * zone change reaches the feed on the calendar app's next refresh.
  *
- * A failed read serves the feed on UTC days rather than failing it: a
- * subscription that 500s is dropped by some calendar apps, and the UTC day is
- * at most one day off. The failure is logged, never silent.
+ * Returns `null` when the read failed, a state distinct from a stored zone
+ * (ADR 0010). `buildIcs` is then handed `undefined` and labels the feed on UTC
+ * days rather than failing it: a subscription that 500s is dropped by some
+ * calendar apps, and the UTC day is at most one day off. That fail-open choice
+ * is logged here, never silent.
  */
-async function feedTimeZone(userId: string): Promise<string> {
+async function feedTimeZone(userId: string): Promise<string | null> {
   try {
-    return (await notificationPrefs.getPreferences(userId)).timezone || 'UTC';
+    return (await notificationPrefs.getPreferences(userId)).timezone;
   } catch (err) {
     logger.warn(
-      { err: (err as Error).message, userId, msg: 'calendar_feed.timezone_read_failed' },
+      {
+        err: (err as Error).message,
+        userId,
+        fallback: 'utc_days',
+        msg: 'calendar_feed.timezone_read_failed',
+      },
       'calendar_feed.timezone_read_failed'
     );
-    return 'UTC';
+    return null;
   }
 }
 
@@ -374,7 +381,8 @@ export const calendarIcs = createHandler(
     const tasks = await taskService.getTasks(user.householdId);
     const hemisphere = await taskService.hemisphereForTasks(user.householdId, tasks);
     const timeZone = await feedTimeZone(user.userId);
-    return icsResponse(buildIcs(tasks, new Date(), hemisphere, timeZone));
+    // Unread zone: fail open to UTC days (logged in feedTimeZone).
+    return icsResponse(buildIcs(tasks, new Date(), hemisphere, timeZone ?? undefined));
   }
 )
   .use(authMiddleware())
@@ -508,7 +516,8 @@ export const calendarFeed = createHandler(
     const hemisphere = await taskService.hemisphereForTasks(grant.householdId, tasks);
     // The grant's user, never the request: the feed is that member's view.
     const timeZone = await feedTimeZone(grant.userId);
-    return icsResponse(buildIcs(tasks, new Date(), hemisphere, timeZone));
+    // Unread zone: fail open to UTC days (logged in feedTimeZone).
+    return icsResponse(buildIcs(tasks, new Date(), hemisphere, timeZone ?? undefined));
   }
 ).use(rateLimit({ perWindowMs: 60_000, max: 60 }));
 
