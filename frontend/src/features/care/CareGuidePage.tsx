@@ -349,9 +349,12 @@ export function CareGuidePage() {
         className="mt-8 rounded-xl border border-primary-200 bg-parchment/70 shadow-journal"
       >
         <div className="m-2 rounded-lg border border-dashed border-primary-300/70 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-800">
+          {/* A heading, so heading navigation lands on the answer and its
+              reminder link rather than jumping from the h1 to the watering
+              section below them. */}
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-800">
             At a glance
-          </p>
+          </h2>
           <dl className="mt-1 divide-y divide-primary-200/50">
             {(
               [
@@ -368,31 +371,33 @@ export function CareGuidePage() {
                 ],
               ] as Array<[string, string, React.ComponentType<{ className?: string }>]>
             ).map(([label, value, Icon]) => (
-              <div key={label} className="flex gap-4 py-3">
-                <Icon className="mt-0.5 h-8 w-8 shrink-0 text-primary-700" />
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-primary-800">
-                    {label}
-                  </dt>
-                  <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
-                  {/* A link to the reminder right beside the answer it is
-                      about, so it is on the first screen of a phone and a
-                      laptop. The sign-up box below sat just under the fold
-                      on both (2026-10-30 audit: y=900 against a 664px phone
-                      screen, 778 against 768 on a laptop). */}
-                  {label === 'Water' && PUBLIC_REGISTRATION_AVAILABLE && (
-                    <dd className="mt-1 text-sm">
-                      <Link
-                        to={registerHref}
-                        data-testid="care-glance-cta"
-                        className="inline-flex min-h-touch items-center font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800"
-                        onClick={() => trackCareCta('glance')}
-                      >
-                        Remind me to water my {sentenceName(guide.commonName)} →
-                      </Link>
-                    </dd>
-                  )}
-                </div>
+              // `dt` and `dd` are direct children of the row `div`, the only
+              // wrapper a `dl` allows (WCAG 1.3.1). The icon sits inside the
+              // `dt`, placed in the row's left padding, so the row looks as
+              // it did when the icon and text were flex siblings.
+              <div key={label} className="relative py-3 pl-12">
+                <dt className="text-xs font-medium uppercase tracking-wide text-primary-800">
+                  <Icon className="absolute left-0 top-3.5 h-8 w-8 text-primary-700" />
+                  {label}
+                </dt>
+                <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
+                {/* A link to the reminder right beside the answer it is
+                    about, so it is on the first screen of a phone and a
+                    laptop. The sign-up box below sat just under the fold
+                    on both (2026-10-30 audit: y=900 against a 664px phone
+                    screen, 778 against 768 on a laptop). */}
+                {label === 'Water' && PUBLIC_REGISTRATION_AVAILABLE && (
+                  <dd className="mt-1 text-sm">
+                    <Link
+                      to={registerHref}
+                      data-testid="care-glance-cta"
+                      className="inline-flex min-h-touch items-center font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800"
+                      onClick={() => trackCareCta('glance')}
+                    >
+                      Remind me to water my {sentenceName(guide.commonName)} →
+                    </Link>
+                  </dd>
+                )}
               </div>
             ))}
           </dl>

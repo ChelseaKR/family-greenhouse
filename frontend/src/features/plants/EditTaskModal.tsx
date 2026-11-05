@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Task } from '@/services/plantService';
 import { taskService } from '@/services/taskService';
-import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -85,14 +85,16 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
   }, [isOpen, task, reset]);
 
   const mutation = useMutation({
-    mutationFn: (data: TaskFormData) =>
+    // Offline, refuse at once instead of pausing (services/failFastSave.ts).
+    ...failFastSave((data: TaskFormData) =>
       taskService.updateTask(task.id, {
         type: data.type,
         customType: data.type === 'custom' ? data.customType || undefined : undefined,
         frequency: data.frequency,
         seasonalCadences: cadencesFromForm(data),
         notes: data.notes || undefined,
-      }),
+      })
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
@@ -159,7 +161,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
 
                 {mutation.isError && (
                   <Alert variant="error" className="mb-4">
-                    {getErrorMessage(mutation.error)}
+                    {saveErrorMessage(mutation.error)}
                   </Alert>
                 )}
 
