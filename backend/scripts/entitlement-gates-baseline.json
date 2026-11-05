@@ -117,6 +117,10 @@
       "reason": "Not a plan-row read. `rule.planId` is ALREADY the entitled plan id: getEscalationRule resolves it through getEntitledPlan from the same projected GetItem (planId + subscriptionStatus + lifetimePlanId), so this is a catalog lookup on a resolved id. Delete this line if that resolution ever moves back to the row.",
       "arg": "rule.planId"
     },
+    "services/giftEndingEmailCopy.ts::composeGiftEndingEmail::PLANS[]": {
+      "reason": "Not entitlement. `ctx.planId` is the tier a purchased gift ALREADY grants (`giftPlanId`, read by `giftEndingEmailDue` only while `giftState` is active), and the lookup reads only that tier's display name and catalog monthly price for the \"your gift ends in 7 days\" email. Nothing here decides what the household may use or start.",
+      "arg": "ctx.planId"
+    },
     "services/sitterPlanGate.ts::checkSitterLinkPlanGate::PlanId===": {
       "reason": "Not the gate — the MESSAGE. The gate is the two caps read immediately above (`plan.limits.sitterLinkMaxDays`, `plan.limits.sitterLinksActive`); this only chooses whether the refusal sentence names Garden as the lift or says 'Shorten the window'. A tier added between Seedling and Garden would therefore get a slightly wrong upsell sentence, not free access. If that copy ever needs to be exact, the right answer is `resolveTargetPlan` (models/upgradeFeatures.ts), which computes the real upgrade target, not another literal.",
       "arg": "plan.id === 'seedling'"

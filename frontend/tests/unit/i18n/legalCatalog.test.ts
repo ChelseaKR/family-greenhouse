@@ -71,8 +71,10 @@ describe('deferred legal catalog', () => {
     // (#593), +1 for the shell line a legal page shows before the release that
     // ships its text names a day (#593), +2 for the Apple purchases section
     // of the Terms (ADR 0041), +5 for the Terms' operator section, its
-    // paid-links section (ADR 0038), and the not-veterinary-advice line.
-    expect(en).toHaveLength(135);
+    // paid-links section (ADR 0038), and the not-veterinary-advice line,
+    // +4 for the Terms' Gifts section (ADR 0028): heading, body, redeeming
+    // and refunds.
+    expect(en).toHaveLength(139);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

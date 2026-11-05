@@ -29,9 +29,7 @@
 //
 // Anything with a dot in its last segment is a file request and is left alone.
 //
-// WHY (4) EXISTS (issue #719): (3) used to take every extensionless path, so
-// every url answered 200. (3) and (4) split on App.tsx's routes, so a url that
-// now 404s already rendered "Nothing growing here". See app-routes.mjs.
+// WHY (4) EXISTS: see issue #719 and app-routes.mjs.
 //
 // PRERENDERED is generated from frontend/scripts/public-routes.mjs — the same
 // list the sitemap and the prerenderer read. APP_EXACT and APP_PATTERNS are
