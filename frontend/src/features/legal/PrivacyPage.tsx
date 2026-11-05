@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
-import { LegalShell } from './LegalShell';
+import { LegalShell, UNRELEASED_EFFECTIVE_DATE } from './LegalShell';
 import { HELLO_EMAIL, HELLO_MAILTO, SUPPORT_EMAIL, SUPPORT_MAILTO } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
@@ -10,7 +10,10 @@ const AWS_DATA_PRIVACY_URL = 'https://aws.amazon.com/compliance/data-privacy/';
  * Privacy policy. Honest, plain-language version — not the
  * boilerplate-from-a-template variety. Tracks our actual data practices:
  * what we collect, why, who we share with, and the user's rights. Updates
- * here should bump the effective date.
+ * here should bump the effective date. Between a text change and the release
+ * that ships it the date is `UNRELEASED_EFFECTIVE_DATE`; the release PR sets
+ * it to that release's date. Nothing checks this for the Privacy page
+ * (scripts/check-terms-effective-date.mjs covers the Terms only).
  *
  * There is no in-app policy-change banner, and since #714 this page no longer
  * says there is: `legal.privacy.changes.body` promises the effective date and
@@ -40,7 +43,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-11-03">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate={UNRELEASED_EFFECTIVE_DATE}>
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"
