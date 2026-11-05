@@ -401,7 +401,7 @@ describe('account deletion confirmation', () => {
   it('never claims a household was erased when none was', () => {
     const { text } = composeAccountDeletionEmail('en', APP_URL, 0, 1);
     expect(text).not.toContain('where you were the only member');
-    expect(text).not.toContain('cancelled at Stripe');
+    expect(text).not.toContain('canceled at Stripe');
   });
 
   it('never claims history was retained when the user shared no household', () => {
