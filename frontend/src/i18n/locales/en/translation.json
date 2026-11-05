@@ -2014,11 +2014,12 @@
     "lastSyncedAt": "What you see was last updated at {{time}}.",
     "lastSyncedOn": "What you see was last updated on {{date}}.",
     "neverSynced": "Nothing has loaded yet.",
-    "offlineChanges": "Changes you make now are sent once you're back online, as long as the app stays open.",
+    "offlineChanges": "Care you mark done is sent once you're back online, as long as the app stays open. Adding or editing a plant or task, and snoozing, won't save until then.",
     "unreachableChanges": "Changes you make now won't save until Family Greenhouse can be reached again.",
     "refreshing": "Refreshing",
     "refreshed": "Updated",
-    "requestUnreachable": "Can't reach Family Greenhouse. Check your connection and try again."
+    "requestUnreachable": "Can't reach Family Greenhouse. Check your connection and try again.",
+    "saveOffline": "You're offline. Nothing was saved. Try again once you're connected."
   },
   "validation": {
     "nameRequired": "Name is required",
