@@ -314,7 +314,7 @@
     "noneTitle": "Todavía no hay tareas",
     "noneBody": "Agrega tareas a tus plantas para verlas aquí.",
     "notThisWeekTitle": "Nada para esta semana",
-    "notThisWeekNext": "Lo próximo: {{task}} {{plant}}, el {{date}}.",
+    "notThisWeekNext": "Lo próximo: {{task}} ({{plant}}), el {{date}}.",
     "notThisWeekBody": "No hay nada atrasado ni para los próximos siete días.",
     "viewTasks": "Ver todas las tareas",
     "viewPlants": "Ver plantas"
