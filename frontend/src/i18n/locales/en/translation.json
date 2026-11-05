@@ -294,6 +294,18 @@
   "dashboardEmpty": {
     "somethingElse": "Something else? Add any plant, with photos and details"
   },
+  "dashboardTasksEmpty": {
+    "laterTitle": "Nothing to do right now",
+    "laterBody_one": "Nothing is overdue or due today. {{count}} task is coming up later this week.",
+    "laterBody_other": "Nothing is overdue or due today. {{count}} tasks are coming up later this week.",
+    "noneTitle": "No tasks yet",
+    "noneBody": "Add tasks to your plants to see them here.",
+    "notThisWeekTitle": "Nothing due this week",
+    "notThisWeekNext": "Next up: {{task}} {{plant}} on {{date}}.",
+    "notThisWeekBody": "Nothing is overdue or due in the next seven days.",
+    "viewTasks": "View all tasks",
+    "viewPlants": "View plants"
+  },
   "goingAwaySoon": {
     "title": "Going away soon?",
     "body": "Make a sitter link so a neighbor or friend can see what needs care while you’re gone. It ends on its own, and you can revoke it any time.",

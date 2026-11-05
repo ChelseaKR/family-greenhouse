@@ -306,6 +306,19 @@
   "dashboardEmpty": {
     "somethingElse": "¿Otra planta? Añádela con fotos y más detalles"
   },
+  "dashboardTasksEmpty": {
+    "laterTitle": "Ahora mismo no hay nada que hacer",
+    "laterBody_one": "No hay nada atrasado ni para hoy. {{count}} tarea llega más adelante esta semana.",
+    "laterBody_many": "No hay nada atrasado ni para hoy. {{count}} tareas llegan más adelante esta semana.",
+    "laterBody_other": "No hay nada atrasado ni para hoy. {{count}} tareas llegan más adelante esta semana.",
+    "noneTitle": "Todavía no hay tareas",
+    "noneBody": "Agrega tareas a tus plantas para verlas aquí.",
+    "notThisWeekTitle": "Nada para esta semana",
+    "notThisWeekNext": "Lo próximo: {{task}} {{plant}}, el {{date}}.",
+    "notThisWeekBody": "No hay nada atrasado ni para los próximos siete días.",
+    "viewTasks": "Ver todas las tareas",
+    "viewPlants": "Ver plantas"
+  },
   "goingAwaySoon": {
     "title": "¿Te vas pronto?",
     "body": "Crea un enlace de cuidador para que alguien de confianza vea qué plantas necesitan cuidados mientras no estás. Caduca solo y puedes desactivarlo cuando quieras.",

@@ -312,23 +312,21 @@ export function DashboardPage() {
              true and points at where the rest lives. */
           laterTasks.length > 0 ? (
             <EmptyState
-              title="Nothing to do right now"
-              description={`Nothing is overdue or due today. ${laterTasks.length} ${
-                laterTasks.length === 1 ? 'task is' : 'tasks are'
-              } coming up later this week.`}
+              title={t('dashboardTasksEmpty.laterTitle')}
+              description={t('dashboardTasksEmpty.laterBody', { count: laterTasks.length })}
               action={
                 <Link to="/tasks">
-                  <Button>View all tasks</Button>
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
                 </Link>
               }
             />
           ) : reallyNoTasks ? (
             <EmptyState
-              title="No tasks yet"
-              description="Add tasks to your plants to see them here."
+              title={t('dashboardTasksEmpty.noneTitle')}
+              description={t('dashboardTasksEmpty.noneBody')}
               action={
                 <Link to="/plants">
-                  <Button>View plants</Button>
+                  <Button>{t('dashboardTasksEmpty.viewPlants')}</Button>
                 </Link>
               }
             />
@@ -336,17 +334,19 @@ export function DashboardPage() {
             /* Tasks exist, just none in the next seven days (or the full list
                has not loaded, in which case this is still true). */
             <EmptyState
-              title="Nothing due this week"
+              title={t('dashboardTasksEmpty.notThisWeekTitle')}
               description={
                 nextScheduledTask
-                  ? `Next up: ${
-                      nextScheduledTask.customType || taskTypeLabels[nextScheduledTask.type]
-                    } ${nextScheduledTask.plantName} on ${formatDate(nextScheduledTask.nextDue)}.`
-                  : 'Nothing is overdue or due in the next seven days.'
+                  ? t('dashboardTasksEmpty.notThisWeekNext', {
+                      task: nextScheduledTask.customType || taskTypeLabels[nextScheduledTask.type],
+                      plant: nextScheduledTask.plantName,
+                      date: formatDate(nextScheduledTask.nextDue),
+                    })
+                  : t('dashboardTasksEmpty.notThisWeekBody')
               }
               action={
                 <Link to="/tasks">
-                  <Button>View all tasks</Button>
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
                 </Link>
               }
             />
