@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -74,6 +74,16 @@ const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'u
  *  retrying the same request unchanged. */
 function purchaseErrorKey(error: unknown): string {
   const status = (error as { response?: { status?: number } })?.response?.status;
+  // Checked before the plain 503 below: this one is not "payments are
+  // paused" but "Stripe could not confirm your earlier checkout", and the
+  // household should simply try again.
+  if (
+    status === 503 &&
+    (error as { response?: { data?: { details?: { code?: string } } } })?.response?.data?.details
+      ?.code === 'CHECKOUT_HOLD_UNVERIFIED'
+  ) {
+    return 'settings.billing.errorCheckoutHoldUnverified';
+  }
   if (status === 409) {
     // Three different 409s: already subscribed (fix: use the portal), already
     // owned outright (fix: nothing, there is nothing left to buy), and a
@@ -139,6 +149,26 @@ export function BillingSettings() {
   // a plan, and each has its own pending/settled notice below.
   const returnedFromPlanCheckout =
     searchParams.get('status') === 'success' && !returnedFromTopUp && !returnedFromGift;
+  // Stripe sends a buyer who backs out to `?status=cancel`. Only a cancelled
+  // PLAN checkout is released here; a top-up or gift has no hold to release.
+  const returnedFromCancel =
+    searchParams.get('status') === 'cancel' && !searchParams.get('purchase') && !native;
+  // Release the plan checkout the server is holding, once per page load, so
+  // the buyer can pick a plan again straight away instead of being refused.
+  // A failure is quiet on purpose: the next plan click asks Stripe again and
+  // explains itself if it still cannot confirm.
+  const releaseSent = useRef(false);
+  useEffect(() => {
+    if (!returnedFromCancel || !isAdmin || !householdId || releaseSent.current) return;
+    releaseSent.current = true;
+    void (async () => {
+      try {
+        await billingService.releaseCheckout();
+      } catch {
+        // See above: the next plan click asks again.
+      }
+    })();
+  }, [returnedFromCancel, isAdmin, householdId]);
   // Has the poll window below closed? Kept in state rather than read from
   // `Date.now()` at render time because nothing else re-renders when the
   // window lapses: without this the page would sit on the "finishing up"
@@ -390,6 +420,11 @@ export function BillingSettings() {
               </p>
             )}
           </div>
+        </Alert>
+      )}
+      {returnedFromCancel && !purchaseErrorKeyState && (
+        <Alert variant="info">
+          <p data-testid="checkout-canceled">{t('settings.billing.checkoutCanceled')}</p>
         </Alert>
       )}
       {purchaseErrorKeyState && (

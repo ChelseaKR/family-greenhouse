@@ -351,6 +351,38 @@ key did not collapse it either.)
   with a message quoting the window, and the web client shows
   `settings.billing.errorCheckoutPending` — not "already subscribed" (the row
   does not say so yet) and not "provider failed" (nothing failed).
+- **A fresh marker is checked with Stripe, not refused outright (2026-11-05).**
+  A buyer who taps Stripe's back arrow to pick another plan used to be refused
+  for up to 45 minutes. Now `createCheckoutSession` retrieves the Session the
+  marker names (`settlePendingCheckout`):
+  - `open`: expire it (`checkout.sessions.expire`, after which it can never be
+    paid), then mint the new Session and claim it with an extra admission,
+    `#pendingCheckoutSessionId = :replacing`, the expired Session's exact id.
+    One exception: an open Session stamped with this same click's
+    `metadata.checkoutAttempt` (the idempotency key) is a safe retry, and is
+    left open so Stripe hands the same Session back.
+  - `expired`: replace it the same way, without calling expire.
+  - `complete`, or a status Stripe does not state: refuse with
+    `CHECKOUT_PENDING` as before. A buyer who paid is never replaced.
+  - Any Stripe error (the retrieve fails, the expire fails, including the race
+    where the buyer completes it in the same instant, or the expire does not
+    come back `expired`): refuse with `CHECKOUT_HOLD_UNVERIFIED`, mapped to
+    **503 `details.code: CHECKOUT_HOLD_UNVERIFIED`** ("No new charge was
+    made. Please try again in a minute."). Nothing is created.
+
+  A request that loses the claim race also expires the Session it just minted,
+  so a double-click never leaves two payable Sessions at Stripe (the negative
+  control in `billing.test.ts` shows the race would leave two without it).
+
+- **The cancel return releases the hold.** Stripe sends a buyer who backs out to
+  `/settings/billing?status=cancel`. The page says "No charge was made. You
+  can choose a plan again." and, for an admin, calls
+  `POST /billing/checkout/release` once, which expires the held Session if it is
+  still open (`releasePendingCheckout`). The marker is kept on purpose: the
+  `checkout.session.expired` webhook clears it if subscribed, and otherwise it
+  lapses on its usual clock, so the abandoned-checkout email keeps its timing.
+  The next plan click sees the Session as `expired` and goes straight through.
+  A failed release is quiet; the next click asks Stripe again.
 - **Identification top-ups are outside it.** A second pack is a second pack,
   delivered; it is not a renewing liability. The top-up path keeps its own
   rules (below).

@@ -3128,6 +3128,28 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/GiftPurchase' }
         '502': { description: Purchases could not be read }
+  /billing/checkout/release:
+    post:
+      summary: After a return from Stripe without paying, expire the household's held plan checkout if it is still open (admin only)
+      description: >-
+        Asks Stripe about the Session this household was last handed. An open Session is expired, so it can
+        never be paid and the next plan checkout is not refused. A completed Session is never touched.
+        If Stripe cannot confirm, the answer is a retryable 503 with `details.code: CHECKOUT_HOLD_UNVERIFIED`
+        and nothing changes.
+      tags: [Billing]
+      responses:
+        '200':
+          description: What was found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state]
+                properties:
+                  state: { type: string, enum: [released, nothing_pending, completed] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503':
+          description: Payments are paused, or Stripe could not confirm the held checkout (retryable)
   /billing/portal:
     post:
       summary: Open the Stripe customer portal for plan management

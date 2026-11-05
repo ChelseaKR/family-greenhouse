@@ -520,6 +520,20 @@ export const billingService = {
   },
 
   /**
+   * Stripe sent the buyer back through `cancel_url`. Ask the server to expire
+   * the plan checkout it is holding for this household, if it is still open,
+   * so the next plan click is not refused. Admin only. A 503 with
+   * `details.code: CHECKOUT_HOLD_UNVERIFIED` means Stripe could not confirm
+   * and nothing changed; the next plan click asks again.
+   */
+  async releaseCheckout(): Promise<{ state: 'released' | 'nothing_pending' | 'completed' }> {
+    const response = await api.post<{ state: 'released' | 'nothing_pending' | 'completed' }>(
+      '/billing/checkout/release'
+    );
+    return response.data;
+  },
+
+  /**
    * Start a one-time Stripe Checkout for an identification top-up pack
    * (ADR 0019). Same idempotency contract as `createCheckout`: generate the
    * attempt id at click time. The server answers 400 with

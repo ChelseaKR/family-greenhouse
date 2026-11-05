@@ -1848,6 +1848,8 @@
       "ownedForLife": "Ya tienes este plan de forma permanente.",
       "errorLifetimeOwned": "Tu hogar ya posee este plan de forma permanente. No hay nada más que comprar en este nivel.",
       "errorCheckoutPending": "Este hogar ya tiene un pago en curso. Si acabas de pagar, tu plan se actualizará aquí en cuanto lo confirme nuestro proveedor de pagos; no vuelvas a pasar por la caja, una segunda compra iniciaría una segunda suscripción. Si dejaste un pago sin terminar, se libera solo en menos de una hora.",
+      "errorCheckoutHoldUnverified": "No hemos podido confirmar tu pago anterior con nuestro proveedor de pagos, así que no hemos iniciado uno nuevo. No se ha realizado ningún cargo nuevo. Inténtalo de nuevo en un minuto.",
+      "checkoutCanceled": "No se ha realizado ningún cargo. Puedes volver a elegir un plan.",
       "cancelPending": "Cancelado: tu plan {{plan}} termina el {{date}} y luego tu hogar vuelve a Seedling.",
       "cancelPendingNoDate": "Cancelado: tu plan {{plan}} termina al final del periodo actual y luego tu hogar vuelve a Seedling.",
       "trialEnds": "Tu prueba gratuita termina el {{date}}. No se te cobrará antes de esa fecha, y cancelar en cualquier momento antes no cuesta nada.",

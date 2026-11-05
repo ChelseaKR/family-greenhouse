@@ -47,6 +47,7 @@ vi.mock('@/services/billingService', async () => {
       createCheckout: vi.fn(),
       createPortalSession: vi.fn(),
       createTopUpCheckout: vi.fn(),
+      releaseCheckout: vi.fn(),
     },
   };
 });
@@ -1545,6 +1546,70 @@ describe('returning from a subscription checkout before the webhook lands', () =
     expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
     expect(screen.queryByText(/Buying again would charge you twice/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
+  });
+});
+
+describe('returning from Stripe without paying (?status=cancel)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+  });
+
+  it('says no charge was made, and asks the server once to release the held checkout', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.releaseCheckout).mockResolvedValue({ state: 'released' });
+    await renderBilling(
+      { planId: 'seedling' },
+      { paid: true, route: '/settings/billing?status=cancel' }
+    );
+
+    expect(screen.getByTestId('checkout-canceled')).toHaveTextContent(
+      'No charge was made. You can choose a plan again.'
+    );
+    await waitFor(() => expect(billingService.releaseCheckout).toHaveBeenCalledTimes(1));
+    // Never the "you just paid" notice: nothing was paid.
+    expect(screen.queryByText('Payment received — finishing up')).not.toBeInTheDocument();
+  });
+
+  it('still shows the line, and lets a plan be chosen, when the release call fails', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.releaseCheckout).mockRejectedValue(new Error('network'));
+    vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s2' });
+    await renderBilling(
+      { planId: 'seedling' },
+      { paid: true, route: '/settings/billing?status=cancel' }
+    );
+    await waitFor(() => expect(billingService.releaseCheckout).toHaveBeenCalled());
+    expect(screen.getByTestId('checkout-canceled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeEnabled();
+  });
+
+  it('asks nothing for a member, and nothing on an ordinary visit', async () => {
+    const { billingService } = await import('@/services/billingService');
+    isAdmin.mockReturnValue(false);
+    await renderBilling(
+      { planId: 'seedling' },
+      { paid: true, route: '/settings/billing?status=cancel' }
+    );
+    cleanup();
+    isAdmin.mockReturnValue(true);
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+    expect(screen.queryByTestId('checkout-canceled')).not.toBeInTheDocument();
+    expect(billingService.releaseCheckout).not.toHaveBeenCalled();
+  });
+
+  it('explains a hold Stripe could not confirm as "try again", not "payments are paused"', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockRejectedValue({
+      response: {
+        status: 503,
+        data: { message: 'x', details: { code: 'CHECKOUT_HOLD_UNVERIFIED' } },
+      },
+    });
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
+    expect(await screen.findByText(/could not confirm your earlier checkout/)).toBeInTheDocument();
+    expect(screen.queryByText(/Payments are currently paused/)).not.toBeInTheDocument();
   });
 });
 

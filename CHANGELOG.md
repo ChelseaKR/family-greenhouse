@@ -45,6 +45,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **Backing out of Stripe no longer locks a household out of checkout.** A
+  buyer who tapped Stripe's back arrow used to be refused for up to 45 minutes
+  ("a checkout is already in progress"). The billing page now says "No charge
+  was made. You can choose a plan again." and expires the unpaid Stripe
+  checkout, and the next plan click checks with Stripe: an open checkout is
+  expired and replaced, a paid one is still refused, and if Stripe cannot be
+  reached nothing new starts and the buyer is asked to try again.
 - **Nothing in the iPhone app or its listing says the app sells nothing.** The
   App Store description names the three In-App Purchase subscriptions and their
   renewal terms. Help no longer says the apps have no notifications and no

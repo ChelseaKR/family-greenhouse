@@ -99,6 +99,16 @@ type CheckoutInput = z.infer<typeof checkoutSchema>;
  */
 export const CHECKOUT_PENDING = 'CHECKOUT_PENDING';
 
+/**
+ * `details.code` on the 503 for a plan checkout refused because the earlier
+ * Session this household holds could not be checked with Stripe. Retryable;
+ * nothing new was started and nothing was charged by this request.
+ */
+export const CHECKOUT_HOLD_UNVERIFIED = billing.CHECKOUT_HOLD_UNVERIFIED;
+
+const CHECKOUT_HOLD_UNVERIFIED_MESSAGE =
+  'We could not confirm your earlier checkout with our payment provider, so we did not start a new one. No new charge was made. Please try again in a minute.';
+
 /** `details.code` on the 409 for a web plan checkout by a household that pays Apple. */
 export const APP_STORE_SUBSCRIBED = 'APP_STORE_SUBSCRIBED';
 
@@ -320,6 +330,12 @@ export const checkout = createHandler(
       // progress" rather than "already subscribed" (the row does not say
       // that yet) or "provider failed" (nothing failed). The window is the
       // service's, so the message quotes it rather than restating it.
+      if ((err as Error).message?.startsWith(CHECKOUT_HOLD_UNVERIFIED)) {
+        throw createHttpError(503, CHECKOUT_HOLD_UNVERIFIED_MESSAGE, {
+          expose: true,
+          details: { code: CHECKOUT_HOLD_UNVERIFIED },
+        });
+      }
       if ((err as Error).message?.startsWith('CHECKOUT_PENDING')) {
         const minutes = Math.ceil(billing.PENDING_CHECKOUT_WINDOW_MS / 60_000);
         throw createHttpError(
@@ -354,6 +370,40 @@ export const checkout = createHandler(
   .use(requireHousehold())
   .use(requireAdmin())
   .use(validateBody(checkoutSchema));
+
+// POST /billing/checkout/release
+//
+// Called by Settings → Billing when Stripe sends a buyer back through
+// `cancel_url`. Expires the household's held plan Session if it is still
+// open, so it can never be paid and the next plan click is not refused
+// (billing.releasePendingCheckout). Admin-only like the checkout it undoes.
+// Fails closed: if Stripe cannot confirm, the answer is the same retryable
+// 503 a plan click would get, and nothing is changed.
+export const checkoutRelease = createHandler(
+  async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    const { user } = event as AuthenticatedEvent;
+    try {
+      return successResponse(await billing.releasePendingCheckout(user.householdId!));
+    } catch (err) {
+      if (isPaymentActivityDisabledError(err)) {
+        throw createHttpError(503, 'Payments are currently paused.', { expose: true });
+      }
+      if ((err as Error).message?.startsWith(CHECKOUT_HOLD_UNVERIFIED)) {
+        throw createHttpError(503, CHECKOUT_HOLD_UNVERIFIED_MESSAGE, {
+          expose: true,
+          details: { code: CHECKOUT_HOLD_UNVERIFIED },
+        });
+      }
+      logger.error({ err }, 'stripe_checkout_release_failed');
+      throw createHttpError(502, 'Stripe checkout failed. Please try again shortly.', {
+        expose: true,
+      });
+    }
+  }
+)
+  .use(authMiddleware())
+  .use(requireHousehold())
+  .use(requireAdmin());
 
 // POST /billing/top-up/checkout
 //
@@ -658,6 +708,7 @@ export const handler = createRouter({
   'GET /billing/plans': listPlans,
   'GET /billing/me': getCurrentSubscription,
   'POST /billing/checkout': checkout,
+  'POST /billing/checkout/release': checkoutRelease,
   'POST /billing/top-up/checkout': topUpCheckout,
   'POST /billing/gift/checkout': giftCheckout,
   'POST /billing/gift/redeem': giftRedeem,

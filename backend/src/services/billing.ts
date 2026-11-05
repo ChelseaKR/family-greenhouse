@@ -604,7 +604,11 @@ export function staleCheckoutMarker(
 async function claimPendingCheckout(
   householdId: string,
   sessionId: string,
-  now: Date
+  now: Date,
+  /** The Session this one replaces: one Stripe has just confirmed can never
+   * be paid (expired by `settlePendingCheckout`). Admitted only by its exact
+   * id, so a marker another request wrote in the meantime still wins. */
+  replacing?: string
 ): Promise<void> {
   const staleBefore = new Date(now.getTime() - PENDING_CHECKOUT_WINDOW_MS).toISOString();
   try {
@@ -617,7 +621,8 @@ async function claimPendingCheckout(
         // chronological order, which is what makes `< :staleBefore` a date
         // comparison rather than a lexical accident.
         ConditionExpression:
-          'attribute_not_exists(#pendingCheckoutSessionId) OR #pendingCheckoutSessionId = :id OR #pendingCheckoutAt < :staleBefore',
+          'attribute_not_exists(#pendingCheckoutSessionId) OR #pendingCheckoutSessionId = :id OR #pendingCheckoutAt < :staleBefore' +
+          (replacing ? ' OR #pendingCheckoutSessionId = :replacing' : ''),
         ExpressionAttributeNames: {
           '#pendingCheckoutSessionId': 'pendingCheckoutSessionId',
           '#pendingCheckoutAt': 'pendingCheckoutAt',
@@ -626,6 +631,7 @@ async function claimPendingCheckout(
           ':id': sessionId,
           ':at': now.toISOString(),
           ':staleBefore': staleBefore,
+          ...(replacing ? { ':replacing': replacing } : {}),
         },
       })
     );
@@ -677,6 +683,113 @@ async function clearPendingCheckout(householdId: string, sessionId: string): Pro
     if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return false;
     throw err;
   }
+}
+
+/**
+ * The refusal for a held checkout this code could not check with Stripe. Not
+ * CHECKOUT_PENDING: nothing says the household paid, and nothing says it did
+ * not. The buyer is told to try again; nothing new was started.
+ */
+export const CHECKOUT_HOLD_UNVERIFIED = 'CHECKOUT_HOLD_UNVERIFIED';
+
+function holdUnverified(cause: unknown): Error {
+  return new Error(
+    `${CHECKOUT_HOLD_UNVERIFIED}: Could not confirm the earlier checkout with Stripe. Nothing new was started.`,
+    { cause }
+  );
+}
+
+/**
+ * What Stripe says about the Session a FRESH marker names, after making sure
+ * it can never be paid if it was left open.
+ *
+ *   expired       — it can never be paid (it already was expired, or this call
+ *                   just expired it). The caller may replace it.
+ *   same_attempt  — still open, and minted by this very click
+ *                   (`metadata.checkoutAttempt` equals the idempotency key): a
+ *                   safe HTTP retry. Left open; Stripe hands the same Session
+ *                   back and the claim admits its own id.
+ *   complete      — the buyer finished paying (or chose a method that settles
+ *                   later). Never replaced.
+ *
+ * Fails CLOSED. A Session that cannot be retrieved, an expire call that
+ * fails (including the race where the buyer completes it in the same
+ * instant: Stripe refuses to expire a completed Session), or an expire that
+ * does not come back `expired` all throw CHECKOUT_HOLD_UNVERIFIED, and no
+ * second Session is created. An open Session is only ever replaced after
+ * Stripe itself confirms it is expired, which is what keeps one household
+ * from holding two payable Sessions at once.
+ */
+async function settlePendingCheckout(
+  stripe: Stripe,
+  householdId: string,
+  sessionId: string,
+  attemptKey?: string
+): Promise<'expired' | 'same_attempt' | 'complete'> {
+  let held: Stripe.Checkout.Session;
+  try {
+    held = await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (err) {
+    logger.error(
+      { err, householdId, stripeSessionId: sessionId },
+      'pending_checkout_retrieve_failed'
+    );
+    throw holdUnverified(err);
+  }
+  if (held.status === 'expired') return 'expired';
+  if (held.status !== 'open') return 'complete';
+  if (attemptKey && held.metadata?.checkoutAttempt === attemptKey) return 'same_attempt';
+  let expired: Stripe.Checkout.Session;
+  try {
+    expired = await stripe.checkout.sessions.expire(sessionId);
+  } catch (err) {
+    logger.error(
+      { err, householdId, stripeSessionId: sessionId },
+      'pending_checkout_expire_failed'
+    );
+    throw holdUnverified(err);
+  }
+  if (expired?.status !== 'expired') {
+    logger.error(
+      { householdId, stripeSessionId: sessionId, status: expired?.status },
+      'pending_checkout_expire_unconfirmed'
+    );
+    throw holdUnverified(undefined);
+  }
+  logger.info(
+    { householdId, stripeSessionId: sessionId },
+    'pending_checkout_expired_for_new_checkout'
+  );
+  return 'expired';
+}
+
+/**
+ * POST /billing/checkout/release: the buyer came back from Stripe through
+ * `cancel_url`. If the Session the row holds is still open, expire it now so
+ * it can never be paid from a stale tab, and so the next plan click goes
+ * straight through (`createCheckoutSession` reads it as expired and replaces
+ * it).
+ *
+ * The marker itself is left in place on purpose. The checkout is still the
+ * household's most recent unfinished one: the webhook's
+ * `checkout.session.expired` clears it if the endpoint is subscribed, and
+ * otherwise it goes stale on its usual clock. Removing it here would change
+ * when, and whether, the abandoned-checkout email goes out.
+ *
+ * Nothing pending, an undated marker, or a stale one: nothing to do. A
+ * completed Session is reported, never touched.
+ */
+export async function releasePendingCheckout(
+  householdId: string
+): Promise<{ state: 'released' | 'nothing_pending' | 'completed' }> {
+  assertPaymentActivityAllowed();
+  const sub = await getHouseholdBillingState(householdId);
+  if (pendingCheckoutState(sub) !== 'fresh' || !sub.pendingCheckoutSessionId) {
+    return { state: 'nothing_pending' };
+  }
+  const stripe = await getStripe();
+  const outcome = await settlePendingCheckout(stripe, householdId, sub.pendingCheckoutSessionId);
+  return { state: outcome === 'complete' ? 'completed' : 'released' };
 }
 
 /**
@@ -855,12 +968,31 @@ export async function createCheckoutSession(args: {
       'pending_checkout_marker_undated_refusing'
     );
   }
-  if (pending === 'fresh' || pending === 'undated') {
+  if (pending === 'undated') {
     throw new Error(
       'CHECKOUT_PENDING: A checkout for this household is already in progress. Do not check out again.'
     );
   }
   const stripe = await getStripe();
+  // A fresh marker used to be a flat refusal for up to 45 minutes, which
+  // locked out a buyer who backed out of Stripe to pick another plan. Ask
+  // Stripe instead: an open Session is expired (it can never be paid) and
+  // replaced, a completed one is refused as before, and any doubt refuses.
+  let replacing: string | undefined;
+  if (pending === 'fresh' && sub.pendingCheckoutSessionId) {
+    const outcome = await settlePendingCheckout(
+      stripe,
+      args.householdId,
+      sub.pendingCheckoutSessionId,
+      args.idempotencyKey
+    );
+    if (outcome === 'complete') {
+      throw new Error(
+        'CHECKOUT_PENDING: A checkout for this household is already in progress. Do not check out again.'
+      );
+    }
+    if (outcome === 'expired') replacing = sub.pendingCheckoutSessionId;
+  }
   // Never charge an amount the UI did not publish. The configured price id is
   // resolved from env above, but an id is not evidence of a price: a
   // transposed `price_…` in tfvars charges whatever it charges, on whatever
@@ -894,7 +1026,12 @@ export async function createCheckoutSession(args: {
     success_url: args.successUrl,
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
-    metadata,
+    // `checkoutAttempt` is on the Session only (not the subscription): it is
+    // how `settlePendingCheckout` tells a safe retry of this click from a
+    // new click, so a retry is never expired out from under itself.
+    metadata: args.idempotencyKey
+      ? { ...metadata, checkoutAttempt: args.idempotencyKey }
+      : metadata,
     // Bound how long this Session can be paid, so the refusal above has a
     // bound too. See CHECKOUT_SESSION_LIFETIME_SECONDS for why the minimum.
     expires_at: Math.floor(now.getTime() / 1000) + CHECKOUT_SESSION_LIFETIME_SECONDS,
@@ -946,7 +1083,25 @@ export async function createCheckoutSession(args: {
   // A Session this row cannot name is a Session the guard cannot see; it is
   // not handed out. Nobody has its URL, and it expires on its own.
   if (!session.id) throw new Error('Stripe did not return a checkout session id');
-  await claimPendingCheckout(args.householdId, session.id, now);
+  try {
+    await claimPendingCheckout(args.householdId, session.id, now, replacing);
+  } catch (err) {
+    // Lost the claim to another request: its Session is the one in the
+    // buyer's hands. Expire this one too, so the household never holds two
+    // payable Sessions, even unreachable ones. Best effort: its URL never
+    // left this function and `expires_at` retires it regardless.
+    if (err instanceof Error && err.message.startsWith('CHECKOUT_PENDING')) {
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+      } catch (expireErr) {
+        logger.warn(
+          { err: expireErr, householdId: args.householdId, stripeSessionId: session.id },
+          'checkout_claim_lost_expire_failed'
+        );
+      }
+    }
+    throw err;
+  }
   return { url: session.url };
 }
 

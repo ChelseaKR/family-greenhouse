@@ -18,6 +18,7 @@ vi.mock('../../../src/services/billing.js', async () => {
     getHouseholdSubscription: vi.fn(),
     createCheckoutSession: vi.fn(),
     createPortalSession: vi.fn(),
+    releasePendingCheckout: vi.fn(),
     applyStripeEvent: vi.fn(),
     getStripe: vi.fn(),
   };
@@ -874,6 +875,50 @@ describe('billing handler', () => {
       expect(body.message).toContain(
         `within ${Math.ceil(billing.PENDING_CHECKOUT_WINDOW_MS / 60_000)} minutes`
       );
+    });
+  });
+
+  describe('a held checkout Stripe could not confirm (CHECKOUT_HOLD_UNVERIFIED)', () => {
+    const post = () =>
+      buildEvent({
+        body: JSON.stringify({ planId: 'garden' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    it('maps the checkout refusal to a retryable 503 with its own code — never "payments paused" or a 409', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkout } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.createCheckoutSession).mockRejectedValueOnce(
+        new Error('CHECKOUT_HOLD_UNVERIFIED: Could not confirm the earlier checkout with Stripe.')
+      );
+      const res = (await checkout(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(503);
+      const body = JSON.parse(res.body);
+      expect(body.details).toEqual({ code: 'CHECKOUT_HOLD_UNVERIFIED' });
+      expect(body.message).toMatch(/No new charge was made/);
+      expect(body.message).toMatch(/try again/i);
+      expect(body.message).not.toMatch(/paused/i);
+    });
+
+    it('POST /billing/checkout/release returns what the service found', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkoutRelease } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.releasePendingCheckout).mockResolvedValueOnce({ state: 'released' });
+      const res = (await checkoutRelease(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ state: 'released' });
+      expect(billing.releasePendingCheckout).toHaveBeenCalledWith(expect.any(String));
+    });
+
+    it('POST /billing/checkout/release fails closed with the same retryable 503', async () => {
+      const billing = await import('../../../src/services/billing.js');
+      const { checkoutRelease } = await import('../../../src/handlers/billing/handler.js');
+      vi.mocked(billing.releasePendingCheckout).mockRejectedValueOnce(
+        new Error('CHECKOUT_HOLD_UNVERIFIED: Could not confirm the earlier checkout with Stripe.')
+      );
+      const res = (await checkoutRelease(post(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(503);
+      expect(JSON.parse(res.body).details).toEqual({ code: 'CHECKOUT_HOLD_UNVERIFIED' });
     });
   });
 

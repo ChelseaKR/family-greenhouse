@@ -6964,6 +6964,18 @@ app.get('/billing/gift/purchases', authMiddleware, requireHousehold, (_req, res)
   res.json({ purchases: [] });
 });
 
+// Mirrors checkoutRelease in handlers/billing/handler.ts. The mock never
+// hands out a Session, so there is never one to release.
+app.post(
+  '/billing/checkout/release',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (_req, res) => {
+    res.json({ state: 'nothing_pending' });
+  }
+);
+
 app.post('/billing/portal', authMiddleware, requireHousehold, requireAdmin, (_req, res) => {
   res.status(503).json({ message: 'Billing access is currently paused.' });
 });

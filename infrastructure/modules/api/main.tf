@@ -1327,15 +1327,16 @@ locals {
     "POST /notifications/email/unsubscribe" = { group = "notifications", auth = "none" }
 
     # --- billing (plans + webhook public; webhook is Stripe-signed) ---
-    "GET /billing/plans"            = { group = "billing", auth = "none" }
-    "GET /billing/me"               = { group = "billing", auth = "jwt" }
-    "POST /billing/checkout"        = { group = "billing", auth = "jwt" }
-    "POST /billing/top-up/checkout" = { group = "billing", auth = "jwt" }
-    "POST /billing/gift/checkout"   = { group = "billing", auth = "jwt" }
-    "POST /billing/gift/redeem"     = { group = "billing", auth = "jwt" }
-    "GET /billing/gift/purchases"   = { group = "billing", auth = "jwt" }
-    "POST /billing/portal"          = { group = "billing", auth = "jwt" }
-    "POST /billing/webhook"         = { group = "billing", auth = "none" }
+    "GET /billing/plans"             = { group = "billing", auth = "none" }
+    "GET /billing/me"                = { group = "billing", auth = "jwt" }
+    "POST /billing/checkout"         = { group = "billing", auth = "jwt" }
+    "POST /billing/checkout/release" = { group = "billing", auth = "jwt" }
+    "POST /billing/top-up/checkout"  = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/checkout"    = { group = "billing", auth = "jwt" }
+    "POST /billing/gift/redeem"      = { group = "billing", auth = "jwt" }
+    "GET /billing/gift/purchases"    = { group = "billing", auth = "jwt" }
+    "POST /billing/portal"           = { group = "billing", auth = "jwt" }
+    "POST /billing/webhook"          = { group = "billing", auth = "none" }
 
     # Apple In-App Purchase (ADR 0041). 404 until app_store_billing_enabled is
     # "1". The notifications route is public: Apple signs its body (a JWS the

@@ -6,18 +6,27 @@ import { isPriceReconciliationError } from '../../../src/services/stripePrices.j
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
 // is hoisted (vi.mock factories run before module init) and shared so tests can
 // assert what was sent to Stripe.
-const { sessionsCreate, portalSessionsCreate, subscriptionsCancel, pricesRetrieve } = vi.hoisted(
-  () => ({
-    sessionsCreate: vi.fn(),
-    portalSessionsCreate: vi.fn(),
-    subscriptionsCancel: vi.fn(),
-    pricesRetrieve: vi.fn(),
-  })
-);
+const {
+  sessionsCreate,
+  sessionsRetrieve,
+  sessionsExpire,
+  portalSessionsCreate,
+  subscriptionsCancel,
+  pricesRetrieve,
+} = vi.hoisted(() => ({
+  sessionsCreate: vi.fn(),
+  sessionsRetrieve: vi.fn(),
+  sessionsExpire: vi.fn(),
+  portalSessionsCreate: vi.fn(),
+  subscriptionsCancel: vi.fn(),
+  pricesRetrieve: vi.fn(),
+}));
 vi.mock('stripe', () => ({
   default: vi.fn(function () {
     return {
-      checkout: { sessions: { create: sessionsCreate } },
+      checkout: {
+        sessions: { create: sessionsCreate, retrieve: sessionsRetrieve, expire: sessionsExpire },
+      },
       billingPortal: { sessions: { create: portalSessionsCreate } },
       subscriptions: { cancel: subscriptionsCancel },
       prices: { retrieve: pricesRetrieve },
@@ -2607,12 +2616,20 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
     process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     sessionsCreate.mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.test/cs' });
+    // clearAllMocks keeps implementations; these tests set them per case.
+    sessionsRetrieve.mockReset();
+    sessionsExpire.mockReset();
     seedCatalogPrices();
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers();
+    // The race tests below install a stateful fake; never let it leak.
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    vi.mocked(dynamodb.send).mockReset();
+    sessionsRetrieve.mockReset();
+    sessionsExpire.mockReset();
   });
 
   type Sent = { kind: string; input: Record<string, any> };
@@ -2735,7 +2752,8 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
     });
   });
 
-  it('refuses a second plan checkout while the marker is fresh — before the price is read or Stripe is touched', async () => {
+  it('refuses a second plan checkout while the marker names a Session Stripe reports complete — before the price is read', async () => {
+    sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'complete' });
     await expect(
       runCheckout({
         planId: 'seedling',
@@ -2743,10 +2761,249 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
         pendingCheckoutAt: new Date(NOW - 5 * 60_000).toISOString(),
       })
     ).rejects.toThrow(/^CHECKOUT_PENDING:/);
+    expect(sessionsRetrieve).toHaveBeenCalledWith('cs_pending');
+    // A buyer who paid is never expired out from under their payment.
+    expect(sessionsExpire).not.toHaveBeenCalled();
     expect(pricesRetrieve).not.toHaveBeenCalled();
     expect(sessionsCreate).not.toHaveBeenCalled();
     // The household read, and nothing written.
     expect(await sentCalls()).toHaveLength(1);
+  });
+
+  describe('a buyer who backed out of Stripe is not locked out (the fresh marker is checked with Stripe)', () => {
+    const fresh = {
+      planId: 'seedling',
+      pendingCheckoutSessionId: 'cs_pending',
+      pendingCheckoutAt: new Date(NOW - 5 * 60_000).toISOString(),
+    };
+
+    it('expires a Session that is still open, then hands out a new one that replaces it by exact id', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'open', metadata: {} });
+      sessionsExpire.mockResolvedValue({ id: 'cs_pending', status: 'expired' });
+      const result = await runCheckout(fresh);
+      expect(result.url).toBe('https://checkout.stripe.test/cs');
+      expect(sessionsExpire).toHaveBeenCalledWith('cs_pending');
+      // Expired BEFORE the new one exists: there is never a moment with two
+      // payable Sessions.
+      expect(sessionsExpire.mock.invocationCallOrder[0]).toBeLessThan(
+        sessionsCreate.mock.invocationCallOrder[0]
+      );
+      const claim = (await sentCalls())[1];
+      expect(claim.kind).toBe('Update');
+      expect(claim.input.ConditionExpression).toBe(
+        'attribute_not_exists(#pendingCheckoutSessionId) OR #pendingCheckoutSessionId = :id OR #pendingCheckoutAt < :staleBefore OR #pendingCheckoutSessionId = :replacing'
+      );
+      expect(claim.input.ExpressionAttributeValues[':replacing']).toBe('cs_pending');
+      expect(claim.input.ExpressionAttributeValues[':id']).toBe('cs_new');
+    });
+
+    it('replaces a Session Stripe already reports expired without calling expire again', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'expired' });
+      const result = await runCheckout(fresh);
+      expect(result.url).toBe('https://checkout.stripe.test/cs');
+      expect(sessionsExpire).not.toHaveBeenCalled();
+      expect((await sentCalls())[1].input.ExpressionAttributeValues[':replacing']).toBe(
+        'cs_pending'
+      );
+    });
+
+    it('leaves open a Session minted by this same click, so a safe retry gets it back instead of a dead link', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: fresh });
+      sessionsRetrieve.mockResolvedValue({
+        id: 'cs_pending',
+        status: 'open',
+        metadata: { checkoutAttempt: 'checkout:hh-1:attempt-1' },
+      });
+      sessionsCreate.mockResolvedValue({ id: 'cs_pending', url: 'https://checkout.stripe.test/p' });
+      const { createCheckoutSession } = await import('../../../src/services/billing.js');
+      const result = await createCheckoutSession({
+        ...checkoutArgs,
+        idempotencyKey: 'checkout:hh-1:attempt-1',
+      });
+      expect(result.url).toBe('https://checkout.stripe.test/p');
+      expect(sessionsExpire).not.toHaveBeenCalled();
+      const claim = (await sentCalls())[1];
+      expect(claim.input.ExpressionAttributeValues[':replacing']).toBeUndefined();
+      // The attempt is stamped on the Session, never on the subscription.
+      const params = sessionsCreate.mock.calls[0][0] as {
+        metadata: Record<string, string>;
+        subscription_data: { metadata: Record<string, string> };
+      };
+      expect(params.metadata.checkoutAttempt).toBe('checkout:hh-1:attempt-1');
+      expect(params.subscription_data.metadata.checkoutAttempt).toBeUndefined();
+    });
+
+    it('fails closed with a retryable refusal when Stripe cannot be read — nothing created, nothing written', async () => {
+      sessionsRetrieve.mockRejectedValue(new Error('stripe down'));
+      await expect(runCheckout(fresh)).rejects.toThrow(/^CHECKOUT_HOLD_UNVERIFIED:/);
+      expect(sessionsExpire).not.toHaveBeenCalled();
+      expect(sessionsCreate).not.toHaveBeenCalled();
+      expect(await sentCalls()).toHaveLength(1);
+    });
+
+    it('fails closed when the expire call fails — the race where the buyer completes it in the same instant', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'open', metadata: {} });
+      sessionsExpire.mockRejectedValue(
+        Object.assign(new Error('Only Checkout Sessions with a status of open can be expired.'), {
+          type: 'StripeInvalidRequestError',
+        })
+      );
+      await expect(runCheckout(fresh)).rejects.toThrow(/^CHECKOUT_HOLD_UNVERIFIED:/);
+      expect(sessionsCreate).not.toHaveBeenCalled();
+      expect(await sentCalls()).toHaveLength(1);
+    });
+
+    it('fails closed when Stripe answers the expire with anything but expired', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'open', metadata: {} });
+      sessionsExpire.mockResolvedValue({ id: 'cs_pending', status: 'complete' });
+      await expect(runCheckout(fresh)).rejects.toThrow(/^CHECKOUT_HOLD_UNVERIFIED:/);
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a Session whose status Stripe does not state, the same as a completed one', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: null });
+      await expect(runCheckout(fresh)).rejects.toThrow(/^CHECKOUT_PENDING:/);
+      expect(sessionsExpire).not.toHaveBeenCalled();
+      expect(sessionsCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('negative control: a double-click never leaves two live Sessions', () => {
+    // A small stateful Stripe + DynamoDB fake shared by two concurrent
+    // requests, so the test measures what Stripe ends up holding rather than
+    // which mocks ran. The schedule is forced, not left to microtask luck:
+    // click A expires the held Session before click B reads it (so B sees it
+    // expired and also goes on), and neither claims until both have minted a
+    // Session. That is the one schedule in which two payable Sessions could
+    // exist; every other schedule refuses B earlier (its expire fails, which
+    // is the fail-closed case tested above).
+    it('two concurrent clicks after a back-out: one URL, and Stripe holds exactly one open Session', async () => {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      const sessions = new Map<string, { status: string; metadata?: Record<string, string> }>([
+        ['cs_old', { status: 'open', metadata: {} }],
+      ]);
+      const row: Record<string, unknown> = {
+        planId: 'seedling',
+        pendingCheckoutSessionId: 'cs_old',
+        pendingCheckoutAt: new Date(NOW - 2 * 60_000).toISOString(),
+      };
+      let resolveFirstExpire!: () => void;
+      const firstExpired = new Promise<void>((r) => (resolveFirstExpire = r));
+      let releaseCreates!: () => void;
+      const bothMinted = new Promise<void>((r) => (releaseCreates = r));
+      let retrieves = 0;
+      let minted = 0;
+      sessionsRetrieve.mockImplementation(async (id: string) => {
+        if (retrieves++ > 0) await firstExpired;
+        return { id, ...sessions.get(id) };
+      });
+      sessionsExpire.mockImplementation(async (id: string) => {
+        const held = sessions.get(id);
+        if (!held || held.status !== 'open') throw new Error('Only open Sessions can be expired.');
+        held.status = 'expired';
+        if (id === 'cs_old') resolveFirstExpire();
+        return { id, status: 'expired' };
+      });
+      sessionsCreate.mockImplementation(async (params: { metadata: Record<string, string> }) => {
+        const id = `cs_${++minted}`;
+        sessions.set(id, { status: 'open', metadata: params.metadata });
+        if (minted === 2) releaseCreates();
+        await bothMinted;
+        return { id, url: `https://checkout.stripe.test/${id}` };
+      });
+      vi.mocked(dynamodb.send).mockImplementation((async (cmd: Sent) => {
+        if (cmd.kind === 'Get') return { Item: { ...row } };
+        if (cmd.kind === 'Update') {
+          const v = cmd.input.ExpressionAttributeValues;
+          const held = row.pendingCheckoutSessionId;
+          const ok =
+            held === undefined ||
+            held === v[':id'] ||
+            (v[':replacing'] !== undefined && held === v[':replacing']);
+          if (!ok) throw conditionErr();
+          row.pendingCheckoutSessionId = v[':id'];
+          row.pendingCheckoutAt = v[':at'];
+          return {};
+        }
+        throw new Error(`unexpected ${cmd.kind}`);
+      }) as never);
+      const { createCheckoutSession, getStripe } = await import('../../../src/services/billing.js');
+      // Build the (mocked) client once before the race. Two first-ever
+      // concurrent `import('stripe')` calls can resolve the real SDK for one
+      // of them under vitest, which would reach the network.
+      const client = await getStripe();
+      expect(client.checkout.sessions.retrieve).toBe(sessionsRetrieve);
+      const results = await Promise.allSettled([
+        createCheckoutSession({ ...checkoutArgs, idempotencyKey: 'checkout:hh-1:a' }),
+        createCheckoutSession({ ...checkoutArgs, idempotencyKey: 'checkout:hh-1:b' }),
+      ]);
+      // The schedule really happened: both clicks minted a Session.
+      expect(minted).toBe(2);
+      const handedOut = results.filter((r) => r.status === 'fulfilled');
+      expect(handedOut).toHaveLength(1);
+      const refused = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+      expect(String(refused.reason)).toMatch(/CHECKOUT_PENDING/);
+      // The measured outcome: Stripe holds exactly one payable Session, it is
+      // the one the row names, and it is the one whose URL was handed out.
+      const open = [...sessions].filter(([, v]) => v.status === 'open').map(([id]) => id);
+      expect(open).toEqual([row.pendingCheckoutSessionId]);
+      expect((handedOut[0] as PromiseFulfilledResult<{ url: string }>).value.url).toBe(
+        `https://checkout.stripe.test/${row.pendingCheckoutSessionId}`
+      );
+      expect(sessions.get('cs_old')?.status).toBe('expired');
+    });
+  });
+
+  describe('releasePendingCheckout — the cancel return', () => {
+    async function runRelease(item: Record<string, unknown> | undefined) {
+      const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+      vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: item });
+      const { releasePendingCheckout } = await import('../../../src/services/billing.js');
+      return releasePendingCheckout('hh-1');
+    }
+    const fresh = {
+      planId: 'seedling',
+      pendingCheckoutSessionId: 'cs_pending',
+      pendingCheckoutAt: new Date(NOW - 60_000).toISOString(),
+    };
+
+    it('expires an open Session and keeps the marker (the abandoned-checkout email keeps its clock)', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'open', metadata: {} });
+      sessionsExpire.mockResolvedValue({ id: 'cs_pending', status: 'expired' });
+      await expect(runRelease(fresh)).resolves.toEqual({ state: 'released' });
+      expect(sessionsExpire).toHaveBeenCalledWith('cs_pending');
+      // Read only; no write to the row.
+      expect(await sentCalls()).toHaveLength(1);
+    });
+
+    it('never touches a completed Session', async () => {
+      sessionsRetrieve.mockResolvedValue({ id: 'cs_pending', status: 'complete' });
+      await expect(runRelease(fresh)).resolves.toEqual({ state: 'completed' });
+      expect(sessionsExpire).not.toHaveBeenCalled();
+    });
+
+    it('does nothing, and asks Stripe nothing, with no fresh marker', async () => {
+      await expect(runRelease({ planId: 'seedling' })).resolves.toEqual({
+        state: 'nothing_pending',
+      });
+      await expect(
+        runRelease({ planId: 'seedling', pendingCheckoutSessionId: 'cs_mystery' })
+      ).resolves.toEqual({ state: 'nothing_pending' });
+      expect(sessionsRetrieve).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when Stripe cannot be read', async () => {
+      sessionsRetrieve.mockRejectedValue(new Error('stripe down'));
+      await expect(runRelease(fresh)).rejects.toThrow(/^CHECKOUT_HOLD_UNVERIFIED:/);
+    });
+
+    it('is behind the payment-activity gate', async () => {
+      process.env.PAYMENTS_ENABLED = '0';
+      const { releasePendingCheckout } = await import('../../../src/services/billing.js');
+      await expect(releasePendingCheckout('hh-1')).rejects.toThrow(/disabled/i);
+      expect(sessionsRetrieve).not.toHaveBeenCalled();
+    });
   });
 
   it('lets a household through once the marker is older than the window — an abandoned checkout is not a ban', async () => {
@@ -2825,8 +3082,9 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
     const { createCheckoutSession } = await import('../../../src/services/billing.js');
     await expect(createCheckoutSession(checkoutArgs)).rejects.toThrow(/^CHECKOUT_PENDING:/);
     // A Session was minted and is now unreachable: its URL never left this
-    // function, and `expires_at` retires it.
+    // function. It is expired at once, and `expires_at` retires it anyway.
     expect(sessionsCreate).toHaveBeenCalledTimes(1);
+    expect(sessionsExpire).toHaveBeenCalledWith('cs_new');
   });
 
   it('hands out no Session its row could not record — a failed marker write is a refusal, not "nothing pending"', async () => {
