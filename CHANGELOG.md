@@ -133,6 +133,23 @@ this release's.
 - **The sitter page says so when Done fails (#1093).** A failed Done
   stopped the spinner and said nothing. It now announces "That didn't save.
   Check your connection and tap Done again.", and the task stays undone.
+- **Saving a plant or task while offline fails right away instead of
+  spinning (#1095).** Offline, Add Plant, Edit Plant, Add Task and Edit Task
+  spun with no end, and Snooze closed its sheet with nothing changed and
+  nothing said. A save left behind by Cancel could still land on reconnect, so
+  a plant added again came back twice. These saves, and Snooze on the Tasks
+  page and on plant rows, now send nothing while offline and say "You're
+  offline. Nothing was saved. Try again once you're connected." What you typed
+  stays in the form, and nothing is sent later. Care marked done still waits
+  for the connection, and the offline notice now says which is which. English
+  and Spanish.
+- **Care and pet-safety pages read correctly with a screen reader (#1094).**
+  The "At a glance" list on every care guide was malformed, so a screen
+  reader could not pair each label with its value; it is now a valid list
+  under its own heading (WCAG 1.3.1). The sign-up box on `/care` has a
+  heading, and the emergency box on each pet-safety page no longer puts a
+  heading ahead of the page title. On phones, the first link after "Skip to
+  main content" is no longer hidden under the sticky header (WCAG 2.4.11).
 
 <!-- internal: #1082 #1084 -->
 
