@@ -41,6 +41,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   14-day Garden trial, and it no longer mentions the removed "See how it
   works" link. Both locales. The page's effective date is set by the release
   that ships it.
+- **Care guides are no longer in the JavaScript bundle.** The 41 guides were
+  one 53 kB (brotli) chunk that every `/care` and `/pet-safe` visitor
+  downloaded in full. The browser now gets a 2.5 kB index of names and
+  quick facts, and each guide page carries its own guide as JSON in its
+  prerendered HTML (about 0.4 kB more per page). Navigating to a guide from
+  inside the app fetches that page. The prerendered pages are otherwise
+  unchanged. All JS combined drops from 718.4 to 667.6 kB, so new guides no
+  longer spend that budget.
 
 ## [0.47.0] - 2026-11-03
 

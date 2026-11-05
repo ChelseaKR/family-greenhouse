@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
-import { CARE_GUIDES } from './careGuides';
+import { CARE_GUIDE_INDEX } from './careGuideContent';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
@@ -27,7 +27,7 @@ export function CareIndex() {
       />
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {CARE_GUIDES.map((g) => (
+        {CARE_GUIDE_INDEX.map((g) => (
           <li key={g.slug}>
             <Link
               to={`/care/${g.slug}`}

@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
+import { careGuideContent } from './vite.careGuideContent';
 import { manualChunks } from './vite.manualChunks';
 import { NAVIGATE_FALLBACK_DENYLIST } from './vite.navigationFallback';
 
@@ -167,6 +168,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     react(),
     apiOrigin(),
     fontPreload(),
+    careGuideContent(),
     // The SSR pass (`vite build --ssr src/entry-server.tsx`) exists only to
     // produce a Node bundle for the prerender to import. Running the PWA plugin
     // over it would regenerate a service worker from the server bundle and

@@ -1,4 +1,4 @@
-import { CARE_GUIDES } from '@/features/care/careGuides';
+import { CARE_GUIDE_INDEX } from '@/features/care/careGuideContent';
 import { careToxicity } from '@/features/care/careToxicity';
 
 /**
@@ -63,7 +63,7 @@ export function petSafetyLevel(toxicity: string): PetSafetyLevel {
   return 'unclear';
 }
 
-const SPECIES: PetSafeSpecies[] = CARE_GUIDES.map((guide) => ({
+const SPECIES: PetSafeSpecies[] = CARE_GUIDE_INDEX.map((guide) => ({
   slug: guide.slug,
   commonName: guide.commonName,
   scientificName: guide.scientificName,

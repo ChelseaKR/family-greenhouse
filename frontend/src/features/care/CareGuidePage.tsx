@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { use, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
@@ -16,7 +16,12 @@ import { formatContentDate } from '@/utils/contentDate';
 import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
-import { careGuideHeading, findCareGuide, type CareGuide } from './careGuides';
+import { careGuideHeading, type CareGuide } from './careGuides';
+import {
+  careGuideResource,
+  findCareGuideEntry,
+  type CareGuideIndexEntry,
+} from './careGuideContent';
 import {
   ASPCA_POISON_CONTROL_PHONE,
   careToxicity,
@@ -185,7 +190,11 @@ function Paragraphs({ items }: { items: string[] }) {
  */
 export function CareGuidePage() {
   const { slug } = useParams<{ slug: string }>();
-  const guide = slug ? findCareGuide(slug) : undefined;
+  // The index says whether the slug is published; only then is the full
+  // guide asked for. `use` returns at once when the guide is in the bundle or
+  // in the prerendered page, and suspends on a fetch otherwise.
+  const entry = slug ? findCareGuideEntry(slug) : undefined;
+  const guide = entry ? use(careGuideResource(entry.slug)) : undefined;
   const toxicity = guide ? careToxicity(guide) : undefined;
   // Every FAQ shown on the page, in order: the guide's care questions, then
   // the generated pet question. Only the sourced ones go into FAQPage.
@@ -281,8 +290,8 @@ export function CareGuidePage() {
   // it with, or the one that suits the same spot. This replaced a rotation
   // through the array, which spread links evenly but paired plants at random.
   const related = guide.related
-    .map((relatedSlug) => findCareGuide(relatedSlug))
-    .filter((g): g is CareGuide => g !== undefined);
+    .map((relatedSlug) => findCareGuideEntry(relatedSlug))
+    .filter((g): g is CareGuideIndexEntry => g !== undefined);
 
   // Both sign-up links carry the plant to the first run when it can offer it
   // (features/onboarding/guidePlantHandoff), and both are counted in GA4

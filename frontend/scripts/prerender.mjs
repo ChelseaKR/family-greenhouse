@@ -42,7 +42,7 @@ const HEAD_START = '<!--head:start-->';
 const HEAD_END = '<!--head:end-->';
 const ROOT_DIV = '<div id="root"></div>';
 
-const { renderNotFound, renderRoute, shellHead } = await import(
+const { renderNotFound, renderRoute, routeData, shellHead } = await import(
   pathToFileURL(join(FRONTEND_ROOT, 'dist-ssr', 'entry-server.js')).href
 );
 
@@ -68,15 +68,21 @@ if (template.includes('__API_ORIGIN__')) {
  * build scaffolding ships). `body` goes inside #root; passing '' leaves the
  * root empty, which is how the SPA shell is produced. `path` is stamped on the
  * root element so main.tsx can tell whether the markup it received actually
- * belongs to the URL being loaded before it tries to hydrate it.
+ * belongs to the URL being loaded before it tries to hydrate it. `data`, when
+ * given, goes at the end of <body>: the care guide a /care/<slug> page
+ * hydrates from (see `routeData` in entry-server.tsx).
  */
-function buildPage({ head, body, path }) {
+function buildPage({ head, body, path, data = '' }) {
   const headStart = template.indexOf(HEAD_START);
   const headEnd = template.indexOf(HEAD_END) + HEAD_END.length;
 
   const rootAttr = path === null ? '' : ` data-prerendered="${path}"`;
   const page = template.slice(0, headStart) + head + template.slice(headEnd);
-  const withRoot = page.replace(ROOT_DIV, `<div id="root"${rootAttr}>${body}</div>`);
+  // Function replacements, so a `$&` or `$'` in rendered text or guide prose
+  // is not read as a replacement pattern.
+  const withRoot = page
+    .replace(ROOT_DIV, () => `<div id="root"${rootAttr}>${body}</div>`)
+    .replace('</body>', () => (data ? `${data}\n  </body>` : '</body>'));
 
   if (withRoot.includes(HEAD_START) || withRoot.includes(HEAD_END)) {
     throw new Error(`head markers survived into the output for ${path ?? 'app-shell'}`);
@@ -105,7 +111,7 @@ for (const routePath of routes) {
   // would recreate the exact bug this script exists to fix, silently.
   if (!html.trim()) throw new Error(`empty render for ${routePath}`);
 
-  const page = buildPage({ head, body: html, path: routePath });
+  const page = buildPage({ head, body: html, path: routePath, data: routeData(routePath) });
   const file = outputFile(routePath);
   await mkdir(join(file, '..'), { recursive: true });
   await writeFile(file, page);
