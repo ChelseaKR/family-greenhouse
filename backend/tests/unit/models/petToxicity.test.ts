@@ -180,6 +180,13 @@ describe('per-plant ASPCA listings', () => {
         // Read off the live ASPCA page on 2026-11-03 for the peperomia care
         // guide: the "Baby Rubber Plant" listing (Peperomia obtusifolia).
         'peperomia',
+        // Read off the live ASPCA pages on 2026-11-04 for the holiday care
+        // guides: "Barbados Lily" (Hippeastrum spp.), "Australian Pine"
+        // (Araucaria heterophylla), "Cyclamen" and "Kalanchoe" (both spp).
+        'amaryllis',
+        'norfolk-island-pine',
+        'cyclamen',
+        'kalanchoe',
       ].sort()
     );
   });

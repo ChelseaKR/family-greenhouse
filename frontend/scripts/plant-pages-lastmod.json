@@ -160,6 +160,22 @@
     "schefflera": {
       "content": "sha256-b5decdc32bd3a5e83d7223274b7e684bdadde960aa56e7c397b06301dc0f350c",
       "lastmod": "2026-10-22"
+    },
+    "amaryllis": {
+      "content": "sha256-9c8706b68e5eefa0f71802f162861ec406f2c7a481b5fdb28d12ec7917a4db5a",
+      "lastmod": "2026-11-05"
+    },
+    "norfolk-island-pine": {
+      "content": "sha256-cfd9413f68093076ebc843dc758258617198f1756b30d38abe83f80bb7970067",
+      "lastmod": "2026-11-05"
+    },
+    "cyclamen": {
+      "content": "sha256-7aee8f8f486f6ffe0debf9b52562e94776e1cc0142f235645d3bc0387667988c",
+      "lastmod": "2026-11-05"
+    },
+    "kalanchoe": {
+      "content": "sha256-3ccb58af306a96064309316c8f0308704299da8633597cdcf911a45514f23dbf",
+      "lastmod": "2026-11-05"
     }
   }
 }
