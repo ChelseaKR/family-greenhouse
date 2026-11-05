@@ -161,6 +161,38 @@ describe('SitPage', () => {
   });
 });
 
+describe('SitPage when Done does not save', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Anything other than "link inactive" (a 5xx, a timeout, no signal) used
+  // to stop the spinner and leave the row with no word about why.
+  it('says it did not save, inside the live region, and leaves the task to retry', async () => {
+    getView.mockResolvedValue(view);
+    completeTask.mockRejectedValueOnce(new Error('Service unavailable'));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /as done/i }));
+
+    const message = await screen.findByText(
+      'That didn’t save. Check your connection and tap Done again.'
+    );
+    expect(message.closest('[aria-live="polite"]')).not.toBeNull();
+    // Still undone, still actionable.
+    const retry = screen.getByRole('button', { name: /mark .*Water the Monstera.* as done/i });
+    expect(retry).toBeEnabled();
+    expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument();
+
+    // A retry that works clears the error.
+    completeTask.mockResolvedValueOnce(undefined as never);
+    await user.click(retry);
+    expect(await screen.findByText(/all caught up/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText('That didn’t save. Check your connection and tap Done again.')
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('SitPage completion hands the sitter something to hold on to', () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -228,13 +228,18 @@ export function EmergencyAside() {
       data-plant-emergency=""
       className="rounded-xl border border-primary-200 bg-primary-50/60 p-5"
     >
-      <h2
+      {/* Not a heading: this aside must come before the page's h1 (the
+          build gate requires it to be the first text in <main>), and an h2
+          there put the outline out of order. It still names the aside, so
+          it is announced and reachable as the "If your pet may have eaten
+          some" landmark, and it is the first thing after the skip link. */}
+      <p
         id="plant-safety-emergency"
         data-chrome="plantSafetyPage.emergencyHeading"
         className="font-serif text-lg text-ink"
       >
         {t('plantSafetyPage.emergencyHeading')}
-      </h2>
+      </p>
       <p data-chrome="plantSafetyPage.emergencyBody" className="mt-2 text-sm text-gray-700">
         {t('plantSafetyPage.emergencyBody')}
       </p>

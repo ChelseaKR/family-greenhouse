@@ -235,6 +235,16 @@ html[data-text-size='large'] .whitespace-nowrap {
   html {
     @apply antialiased;
     background-color: #173404;
+    /* WCAG 2.4.11 Focus Not Obscured: keep whatever the skip link,
+       Tab or an in-page anchor scrolls to clear of the sticky site header
+       (PublicShell, about 77px on a phone; Layout's mobile bar is 64px).
+       Both `scrollIntoView` and focus scrolling honor this. */
+    scroll-padding-top: calc(5rem + env(safe-area-inset-top));
+  }
+
+  /* The native shells hide both sticky headers, so nothing covers the top. */
+  html[data-native-frame] {
+    scroll-padding-top: 0;
   }
 
   /* Warm paper default so any surface that forgets an explicit background

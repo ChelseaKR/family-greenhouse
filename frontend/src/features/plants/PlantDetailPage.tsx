@@ -133,6 +133,16 @@ export function PlantDetailPage() {
   const lastWatered = plant?.recentCompletions.find(
     (completion) => completion.taskType === 'water'
   );
+  // The window holds only the newest completions across ALL tasks, so a run
+  // of misting can push the last watering out of it. The water task's own
+  // `lastCompleted` still knows the date (not who), so "no watering logged"
+  // is said only when no water task has ever been done.
+  const lastWateredAt = lastWatered
+    ? null
+    : ((plant?.upcomingTasks ?? [])
+        .filter((task) => task.type === 'water' && task.lastCompleted)
+        .map((task) => task.lastCompleted as string)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null);
 
   // Deleting moves the plant into the household trash (#670). The toast
   // offers Undo; Settings → Trash is the durable route back for 30 days, so
@@ -765,7 +775,9 @@ export function PlantDetailPage() {
                 when: formatRelativeDay(lastWatered.completedAt),
                 name: lastWatered.completedByName,
               })
-            : t('plants.noWateringYet')}
+            : lastWateredAt
+              ? t('plants.lastWateredOn', { when: formatRelativeDay(lastWateredAt) })
+              : t('plants.noWateringYet')}
         </p>
 
         {plant.recentCompletions.length === 0 ? (
