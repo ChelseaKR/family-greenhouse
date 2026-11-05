@@ -131,7 +131,7 @@ var PREFIXED = '/pet-safe/';
 
 // --- generated from App.tsx: do not edit by hand -----------------------------
 var APP_EXACT =
-  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
+  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /redeem /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
 var APP_PATTERNS =
   '/caretaker/* /join/* /kiosk/* /plants/* /plants/*/passport /shared/* /sit/* /sit/*/brief /tag/*';
 // --- end generated App.tsx ---------------------------------------------------
