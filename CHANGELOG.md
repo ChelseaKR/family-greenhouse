@@ -39,6 +39,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The six holiday care guides now link to each other.** The poinsettia,
+  Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and kalanchoe
+  guides each name the other five in a line under "Keeping it alive when you
+  share a home". The poinsettia's related plants now include the amaryllis,
+  and the Christmas cactus's include the kalanchoe.
 - **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.

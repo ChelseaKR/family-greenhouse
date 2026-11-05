@@ -309,13 +309,17 @@ describe('CARE_GUIDES content dates', () => {
     // #651 were re-reviewed against cited sources on 2026-11-03. The five
     // guides from #1022 were reviewed on 2026-10-22 and then gained their
     // sources block on 2026-11-03 without a new review, so they carry the drift now.
+    // The poinsettia and Christmas cactus were reviewed on 2026-11-03 and gained
+    // their links to the other holiday guides on 2026-11-04, a copy edit.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
     expect(drifted.map((g) => g.slug).sort()).toEqual([
       'begonia',
       'blue-echeveria',
       'burros-tail',
+      'christmas-cactus',
       'haworthia',
       'lily',
+      'poinsettia',
     ]);
   });
 });
@@ -885,5 +889,65 @@ describe('holiday guides', () => {
       const from = CARE_GUIDES.filter((g) => g.slug !== slug && g.related.includes(slug));
       expect(from.length, slug).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * The six holiday guides (the four above plus the poinsettia and Christmas
+ * cactus) link to each other. `related` holds three cards, so the full set is
+ * an inline line in each guide's shared-care section, the same markdown links
+ * the other guides use in prose. The two older guides also show a new guide
+ * in their "Related plants" cards.
+ */
+describe('holiday guide links', () => {
+  const SIX = [
+    'poinsettia',
+    'christmas-cactus',
+    'amaryllis',
+    'norfolk-island-pine',
+    'cyclamen',
+    'kalanchoe',
+  ] as const;
+  const NEW = ['amaryllis', 'norfolk-island-pine', 'cyclamen', 'kalanchoe'];
+
+  /** The holiday slugs a guide links to inline in its shared-care section. */
+  const linkedInline = (g: CareGuide) =>
+    SIX.filter((slug) => g.sections.sharedCare.some((t) => t.includes(`](/care/${slug})`)));
+
+  it('links each holiday guide to the other five in its shared-care section', () => {
+    for (const slug of SIX) {
+      const g = findCareGuide(slug)!;
+      expect(linkedInline(g), slug).toEqual(SIX.filter((s) => s !== slug));
+    }
+  });
+
+  it('shows a new holiday guide in the poinsettia and Christmas cactus related cards', () => {
+    for (const slug of ['poinsettia', 'christmas-cactus']) {
+      const g = findCareGuide(slug)!;
+      expect(
+        g.related.some((r) => NEW.includes(r)),
+        slug
+      ).toBe(true);
+      // The link is a content change, so the page's lastmod moved with it.
+      expect(g.updated >= '2026-11-04', slug).toBe(true);
+    }
+  });
+
+  it('negative control: dropping one link from the line fails the check', () => {
+    const real = findCareGuide('poinsettia')!;
+    const line = real.sections.sharedCare.find((t) => t.includes('](/care/cyclamen)'))!;
+    const broken: CareGuide = {
+      ...real,
+      sections: {
+        ...real.sections,
+        sharedCare: real.sections.sharedCare.map((t) =>
+          t === line ? t.replace('[cyclamen](/care/cyclamen)', 'cyclamen') : t
+        ),
+      },
+    };
+    // The sabotage landed on the copy only.
+    expect(linkedInline(broken)).not.toContain('cyclamen');
+    expect(linkedInline(real)).toContain('cyclamen');
+    expect(linkedInline(broken)).not.toEqual(SIX.filter((s) => s !== 'poinsettia'));
   });
 });
