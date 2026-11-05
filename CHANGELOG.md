@@ -18,6 +18,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **"When did you last water it?" in the first run.** Tapping a common
+  houseplant now asks one question before it is saved: "In the last few
+  days" keeps the first reminder one interval out, "A week or more ago"
+  checks the soil in 2 days, and "Not sure" checks it tomorrow and says why.
+  A ZZ plant from its care guide no longer gets its first reminder on the
+  day the 14-day trial ends. /register now names the guide's plant under the
+  subtitle, and the header's "Try the app" link on a care or pet-safe page
+  carries the plant the way the page's own links do.
 - **Eight new care guides that answer "how often to water".** String of
   pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
   peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant

@@ -256,14 +256,17 @@
       "created": "{{name}} is in your greenhouse.",
       "createdWithSchedule": "{{name}} is in, with its care schedule set up.",
       "createdWithStartingPoint": "{{name}} is in, with a watering reminder every {{days}} days to start.",
-      "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
+      "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page.",
+      "createdCheckRecent": "{{name}} is in. We'll remind you to check the soil in {{soon}} days, then every {{days}} days.",
+      "createdCheckSoon": "{{name}} is in. Since it's been a while, we'll remind you to check the soil in {{soon}} days, then every {{days}} days.",
+      "createdCheckUnsure": "{{name}} is in. Since you're not sure when it was last watered, we'll remind you to check the soil tomorrow, then every {{days}} days."
     },
     "picker": {
       "heading": "Pick a common houseplant",
-      "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
+      "hint": "Tap your plant, then say when you last watered it. We'll set a reminder to check the soil, and you can change it any time.",
       "saving": "Adding your plant…",
       "somethingElse": "Something else? Type its name",
-      "fromGuide": "You came from our {{name}} care guide, so it's first. One tap adds it with a reminder to check the soil every {{days}} days.",
+      "fromGuide": "You came from our {{name}} care guide, so it's first. Tap it, say when you last watered it, and we'll remind you to check the soil every {{days}} days from there.",
       "plants": {
         "pothos": "Pothos",
         "snake-plant": "Snake plant",
@@ -275,6 +278,14 @@
         "orchid": "Moth orchid",
         "fiddle-leaf-fig": "Fiddle leaf fig",
         "jade-plant": "Jade plant"
+      },
+      "lastWatered": {
+        "question": "{{name}}: when did you last water it?",
+        "hint": "Your answer only sets the first reminder to check the soil. After that it repeats on the plant's usual rhythm.",
+        "recent": "In the last few days",
+        "whileAgo": "A week or more ago",
+        "unsure": "Not sure",
+        "back": "Pick a different plant"
       }
     },
     "invite": {
@@ -369,6 +380,7 @@
     "signUpTitle": "Sign up",
     "registerTitle": "Start your greenhouse",
     "registerSubtitle": "Free for one home, up to 2 household members and 8 plants. No credit card. Your household starts with 14 days of Garden.",
+    "guidePlantNext": "Next: add your {{name}} and pick when you last watered it.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
     "showPassword": "Show password",
