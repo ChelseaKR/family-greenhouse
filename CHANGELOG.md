@@ -36,9 +36,27 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   listing. The amaryllis row cites "Barbados Lily" (Hippeastrum), the genus
   sold for the holidays, and not ASPCA's "Amaryllis" listing, which names a
   different genus.
+- **Care guides for air plant, rosemary, ponytail palm, areca palm and
+  schefflera.** Each answers "how often to water" first and cites the Clemson,
+  UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension pages it was
+  written from, read on 2026-11-05. Only two state a day count, because only
+  their sources give one: the air plant (about once a week, every two weeks in
+  cool, dim months) and the holiday rosemary tree (about once a week, when the
+  soil is dry). The rosemary guide links the six holiday guides.
+- **A pet-safety page for rosemary**, citing the ASPCA's "Rosemary" listing
+  (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant has no
+  ASPCA listing, so its pet line reads "Unknown".
+- **Sign-up from the rosemary guide keeps the plant.** A visitor who signs up
+  from `/care/rosemary` sees rosemary first in the first run, with a 7-day
+  reminder (the low end of its cited interval). It is not one of the ten
+  tiles, so the grid is unchanged for everyone else.
 
 ### Changed
 
+- **The pet checker no longer answers "air plant" with the spider plant's
+  verdict.** Its loose word match found "air" inside the spider plant's
+  "airplane plant" name and returned non-toxic for a different plant. Each
+  word of a multi-word search must now match a whole word of a plant's name.
 - **The six holiday care guides now link to each other.** The poinsettia,
   Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and kalanchoe
   guides each name the other five in a line under "Keeping it alive when you
