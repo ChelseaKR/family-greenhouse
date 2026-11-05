@@ -464,6 +464,96 @@ describe('authStore — verifySession with an unreachable server', () => {
     expect(state.isLoading).toBe(false);
   });
 
+  const signedIn = () => {
+    useAuthStore.getState().setTokens('id-1', 'access-1', 'refresh-1');
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: 'u1', email: 'someone@example.invalid', name: 'Someone' },
+    } as never);
+  };
+
+  const expectKept = () => {
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.idToken).toBe('id-1');
+    expect(state.refreshToken).toBe('refresh-1');
+    expect(state.isLoading).toBe(false);
+    expect(localStorage.getItem('auth-storage')).toContain('id-1');
+  };
+
+  it.each([500, 503, 429])('keeps the session when /auth/me answers %i', async (status) => {
+    let refreshCalls = 0;
+    server.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'down' }, { status })),
+      http.post(`${API}/auth/refresh`, () => {
+        refreshCalls += 1;
+        return HttpResponse.json({ message: 'no' }, { status: 401 });
+      })
+    );
+    signedIn();
+
+    await useAuthStore.getState().verifySession();
+
+    expectKept();
+    // An outage is not an expired bearer: nothing to refresh.
+    expect(refreshCalls).toBe(0);
+  });
+
+  it.each([500, 502, 429])(
+    'keeps the session when the refresh after a 401 answers %i',
+    async (status) => {
+      server.use(
+        http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 })),
+        http.post(`${API}/auth/refresh`, () => HttpResponse.json({ message: 'down' }, { status }))
+      );
+      signedIn();
+
+      await useAuthStore.getState().verifySession();
+
+      expectKept();
+    }
+  );
+
+  it('keeps the session when an expired bearer goes straight to a refresh that answers 503', async () => {
+    // A JWT whose exp is long past, so verifySession skips /auth/me.
+    const b64 = (o: object) => btoa(JSON.stringify(o)).replace(/=+$/, '');
+    const expired = `${b64({ alg: 'none' })}.${b64({ exp: 1 })}.sig`;
+    let meCalls = 0;
+    server.use(
+      http.get(`${API}/auth/me`, () => {
+        meCalls += 1;
+        return HttpResponse.json({ message: 'nope' }, { status: 401 });
+      }),
+      http.post(`${API}/auth/refresh`, () =>
+        HttpResponse.json({ message: 'down' }, { status: 503 })
+      )
+    );
+    useAuthStore.getState().setTokens(expired, 'access-1', 'refresh-1');
+    useAuthStore.setState({ isAuthenticated: true } as never);
+
+    await useAuthStore.getState().verifySession();
+
+    const state = useAuthStore.getState();
+    expect(meCalls).toBe(0);
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.idToken).toBe(expired);
+    expect(state.refreshToken).toBe('refresh-1');
+    expect(state.isLoading).toBe(false);
+  });
+
+  it('still ends the session when the refresh answers 400 (unknown refresh token)', async () => {
+    server.use(
+      http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 })),
+      http.post(`${API}/auth/refresh`, () => HttpResponse.json({ message: 'bad' }, { status: 400 }))
+    );
+    signedIn();
+
+    await useAuthStore.getState().verifySession();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().idToken).toBeNull();
+  });
+
   it('still ends the session when the server answers and refuses', async () => {
     server.use(
       http.get(`${API}/auth/me`, () => HttpResponse.json({ message: 'nope' }, { status: 401 })),
