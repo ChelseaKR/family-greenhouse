@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { PlantsPage } from '@/features/plants/PlantsPage';
 import { Toaster } from '@/components/Toaster';
 import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
@@ -136,6 +136,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   server.events.removeAllListeners();
   vi.useRealTimers();
   window.matchMedia = realMatchMedia;
@@ -329,6 +330,24 @@ describe('the row menu (long press, right click)', () => {
         body: { days: 3, expectedNextDue: TASKS[0].nextDue },
       },
     ]);
+  });
+
+  it('Snooze offline says nothing was saved, and sends nothing on reconnect', async () => {
+    const u = user();
+    renderPlants();
+    let sheet = await openMenu(/^Peace Lily/);
+    act(() => onlineManager.setOnline(false));
+    await u.click(within(sheet).getByRole('button', { name: 'Snooze…' }));
+    sheet = await screen.findByRole('dialog', { name: 'Snooze' });
+    await u.click(within(sheet).getByRole('button', { name: '3 days' }));
+    expect(
+      await screen.findByText("You're offline. Nothing was saved. Try again once you're connected.")
+    ).toBeInTheDocument();
+    expect(writes).toEqual([]);
+    // No queue: coming back online does not send the refused snooze.
+    act(() => onlineManager.setOnline(true));
+    await pass(200);
+    expect(writes).toEqual([]);
   });
 
   it('I’ll do it claims an open task', async () => {

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Plant } from '@/services/plantService';
 import { taskService, type TaskWithCoverage } from '@/services/taskService';
-import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import { playHaptic } from '@/services/nativeHaptics';
 import { toast } from '@/store/toastStore';
 import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
@@ -33,14 +33,17 @@ export function usePlantRowActions(householdId: string | null, myUserId: string 
   const { pending, schedule, undo, taskName } = useDeferredCompletion(householdId);
   const claimMutation = useClaimTaskMutation(householdId);
   const snoozeMutation = useMutation({
-    mutationFn: ({ task, days }: { task: TaskWithCoverage; days: number }) =>
-      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue }),
+    // Not optimistic, so a paused snooze changed nothing on screen and said
+    // nothing. Offline it now refuses at once (services/failFastSave.ts).
+    ...failFastSave(({ task, days }: { task: TaskWithCoverage; days: number }) =>
+      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue })
+    ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       playHaptic('snoozed');
       toast.info(t('plants.list.snoozedToast'));
     },
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError: (err) => toast.error(saveErrorMessage(err)),
   });
   const [movePlant, setMovePlant] = useState<Plant | null>(null);
   const { choose, element: chooserElement } = useActionChooser();

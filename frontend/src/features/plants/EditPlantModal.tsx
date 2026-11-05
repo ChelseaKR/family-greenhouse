@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { CARE_RULE_MAX_LENGTH, Plant, plantService } from '@/services/plantService';
-import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -94,7 +94,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
   }, [isOpen, plant, reset]);
 
   const mutation = useMutation({
-    mutationFn: (data: PlantFormData) =>
+    // Offline, refuse at once instead of pausing (services/failFastSave.ts).
+    ...failFastSave((data: PlantFormData) =>
       plantService.updatePlant(plant.id, {
         name: data.name,
         species: data.species || undefined,
@@ -109,7 +110,8 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
         // backend's existing link untouched and reintroduce stale care/
         // toxicity data after the species text is edited away from it.
         perenualSpeciesId,
-      }),
+      })
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       onClose();
@@ -173,7 +175,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                 {mutation.isError && (
                   <Alert variant="error" className="mb-4">
-                    {getErrorMessage(mutation.error)}
+                    {saveErrorMessage(mutation.error)}
                   </Alert>
                 )}
 
