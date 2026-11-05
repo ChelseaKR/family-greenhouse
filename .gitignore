@@ -19,6 +19,8 @@ frontend/vite.manualChunks.js
 frontend/vite.manualChunks.d.ts
 frontend/vite.navigationFallback.js
 frontend/vite.navigationFallback.d.ts
+frontend/vite.careGuideContent.js
+frontend/vite.careGuideContent.d.ts
 dist/
 # SSR bundle for the marketing prerender (frontend/scripts/prerender.mjs).
 # Build artifact of `vite build --ssr`; regenerate it, never commit it.
