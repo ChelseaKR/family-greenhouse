@@ -882,6 +882,37 @@ describe('me handler', () => {
       expect(taskService.getTasks).toHaveBeenCalledWith('hh-1');
     });
 
+    it("labels the feed's dates in the caller's own notification zone", async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const notificationPrefs = await import('../../../src/services/notificationPrefs.js');
+      const icsExport = await import('../../../src/services/icsExport.js');
+      const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+      vi.mocked(notificationPrefs.getPreferences).mockResolvedValueOnce({
+        timezone: 'America/Chicago',
+      } as Awaited<ReturnType<typeof notificationPrefs.getPreferences>>);
+
+      const res = (await calendarIcs(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(notificationPrefs.getPreferences).toHaveBeenCalledWith('user-1');
+      expect(vi.mocked(icsExport.buildIcs).mock.lastCall?.[3]).toBe('America/Chicago');
+    });
+
+    it('still serves the feed, on UTC days, when the zone cannot be read', async () => {
+      const taskService = await import('../../../src/services/taskService.js');
+      const notificationPrefs = await import('../../../src/services/notificationPrefs.js');
+      const icsExport = await import('../../../src/services/icsExport.js');
+      const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+      vi.mocked(notificationPrefs.getPreferences).mockRejectedValueOnce(new Error('ddb down'));
+
+      const res = (await calendarIcs(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(icsExport.buildIcs).mock.lastCall?.[3]).toBe('UTC');
+    });
+
     it('returns 403 when the caller has no active household', async () => {
       const { calendarIcs } = await import('../../../src/handlers/me/handler.js');
       const res = (await calendarIcs(
@@ -1205,6 +1236,37 @@ describe('me handler', () => {
       expect(taskService.getTasks).toHaveBeenCalledWith('hh-1');
     });
 
+    it("labels the public feed's dates in the token owner's zone, not the requester's", async () => {
+      const calendarTokens = await import('../../../src/services/calendarTokens.js');
+      const householdService = await import('../../../src/services/householdService.js');
+      const taskService = await import('../../../src/services/taskService.js');
+      const notificationPrefs = await import('../../../src/services/notificationPrefs.js');
+      const icsExport = await import('../../../src/services/icsExport.js');
+      const { calendarFeed } = await import('../../../src/handlers/me/handler.js');
+      vi.mocked(calendarTokens.resolveCalendarToken).mockResolvedValueOnce(GRANT);
+      vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce({
+        householdId: 'hh-1',
+        userId: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        role: 'member',
+        joinedAt: '',
+      });
+      vi.mocked(taskService.getTasks).mockResolvedValueOnce([]);
+      vi.mocked(notificationPrefs.getPreferences).mockResolvedValueOnce({
+        timezone: 'America/Los_Angeles',
+      } as Awaited<ReturnType<typeof notificationPrefs.getPreferences>>);
+
+      const res = (await calendarFeed(
+        anonFeedEvent(TOKEN),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+
+      expect(res.statusCode).toBe(200);
+      expect(notificationPrefs.getPreferences).toHaveBeenCalledWith(GRANT.userId);
+      expect(vi.mocked(icsExport.buildIcs).mock.lastCall?.[3]).toBe('America/Los_Angeles');
+    });
     it('ignores any household the request tries to smuggle in — the grant decides', async () => {
       const calendarTokens = await import('../../../src/services/calendarTokens.js');
       const householdService = await import('../../../src/services/householdService.js');

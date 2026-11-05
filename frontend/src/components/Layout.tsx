@@ -28,6 +28,7 @@ import { PaymentFailedBanner } from '@/features/billing/PaymentFailedBanner';
 import { ConnectionNotice } from './ConnectionNotice';
 import { PullToRefresh } from './PullToRefresh';
 import { useNativeResumeRefresh } from '@/hooks/useNativeResumeRefresh';
+import { useDetectedTimeZone } from '@/hooks/useDetectedTimeZone';
 import { setNativeStatusBarOverDarkSurface } from '@/services/nativeShell';
 import { isNativeApp } from '@/lib/platform';
 import clsx from 'clsx';
@@ -110,6 +111,9 @@ export function Layout() {
   // Native shells: refetch what's on screen when the app comes back from the
   // background (a no-op on the web).
   useNativeResumeRefresh();
+  // Save this browser's zone for reminders and the calendar feed while the
+  // member has none set, without waiting for a visit to Settings.
+  useDetectedTimeZone();
 
   // The drawer is forest green and runs under the status bar in the native
   // shells, where the bar otherwise carries dark icons for the light app.

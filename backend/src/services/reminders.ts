@@ -140,11 +140,11 @@ const DUE_QUERY_HORIZON_MS = 26 * 60 * 60 * 1000;
  * would recreate the disagreement this function exists to remove.
  *
  * The honest limit: `prefs.timezone` reads `'UTC'` for a recipient who never
- * had one saved (#342; `notificationPrefs.ts` has no "never chosen" state for
- * it). For them "today" is the UTC day, so a task due Tuesday morning in New
- * York is sent at 20:00 Monday local — once, instead of the twice it used to
- * be, but still on the evening before. That half closes when their zone is
- * known, not here.
+ * had one saved (#342). The app now fills in the browser's zone on load
+ * while it is unset (`notificationPrefs.applyDetectedTimeZone`), so this is
+ * left to members who have not opened the app since. For them "today" is
+ * still the UTC day, so a task due Tuesday morning in New York is sent at
+ * 20:00 Monday local — once, but on the evening before.
  *
  * ## What it does not decide
  *

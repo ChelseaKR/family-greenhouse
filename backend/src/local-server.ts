@@ -518,6 +518,7 @@ interface NotificationPrefsRecord {
   dndStart: string;
   dndEnd: string;
   timezone: string;
+  timezoneChosen: boolean;
   pestAlerts: boolean;
   weeklyDigest: boolean;
   memberJoined: boolean;
@@ -1722,14 +1723,22 @@ function icsTasksFor(householdId: string) {
   );
 }
 
-async function sendIcs(res: express.Response, householdId: string) {
+async function sendIcs(res: express.Response, householdId: string, userId: string) {
   const { buildIcs } = await import('./services/icsExport.js');
   res
     .status(200)
     .type('text/calendar; charset=utf-8')
     .set('Content-Disposition', 'attachment; filename="family-greenhouse.ics"')
     .set('Cache-Control', 'private, max-age=300')
-    .send(buildIcs(icsTasksFor(householdId)));
+    // Dates in the reader's notification zone, as handlers/me/handler.ts does.
+    .send(
+      buildIcs(
+        icsTasksFor(householdId),
+        new Date(),
+        null,
+        db.notificationPrefs.get(userId)?.timezone ?? 'UTC'
+      )
+    );
 }
 
 // GET /me/calendar.ics
@@ -1739,7 +1748,7 @@ app.get('/me/calendar.ics', authMiddleware, async (req, res) => {
   const user = (req as any).user;
   // 403 (not 400) — matches handlers/me/handler.ts + requireHousehold.
   if (!user.householdId) return res.status(403).json({ message: 'No household selected' });
-  await sendIcs(res, user.householdId);
+  await sendIcs(res, user.householdId, user.userId);
 });
 
 // --- Calendar-feed link (mirrors handlers/me/handler.ts) -------------------
@@ -1815,7 +1824,7 @@ app.get('/calendar/:token/family-greenhouse.ics', async (req, res) => {
     return res.status(404).json({ message: 'This calendar link is invalid or has been revoked.' });
   }
   grant.lastUsedAt = new Date().toISOString();
-  await sendIcs(res, grant.householdId);
+  await sendIcs(res, grant.householdId, grant.userId);
 });
 
 // Get current user - used to verify session
@@ -7085,6 +7094,7 @@ function defaultPrefs(userId: string): NotificationPrefsRecord {
     dndStart: '',
     dndEnd: '',
     timezone: 'UTC',
+    timezoneChosen: false,
     pestAlerts: false,
     // Mirrors production read-defaulting: weeklyDigest on iff email is on.
     weeklyDigest: true,
@@ -7130,6 +7140,7 @@ const prefsSchema = z
         }
       }, 'Unknown timezone')
       .default('UTC'),
+    timezoneSource: z.literal('detected').optional(),
     pestAlerts: z.boolean().default(false),
     weeklyDigest: z.boolean().optional(),
     memberJoined: z.boolean().optional(),
@@ -7253,6 +7264,25 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     return res.status(400).json({ message: 'A phone number is required to enable SMS reminders' });
   }
   const current = db.notificationPrefs.get(user.userId) ?? defaultPrefs(user.userId);
+  // Mirrors notificationPrefs.applyDetectedTimeZone: the browser's zone fills
+  // an unset one and changes nothing else.
+  if (body.timezoneSource === 'detected') {
+    const unset =
+      !current.timezoneChosen && (current.timezone === '' || current.timezone === 'UTC');
+    const alias = ['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT', 'Etc/Universal', 'Universal'].includes(
+      body.timezone
+    );
+    const next =
+      unset && !alias
+        ? { ...current, timezone: body.timezone, updatedAt: new Date().toISOString() }
+        : current;
+    db.notificationPrefs.set(user.userId, next);
+    return res.json({
+      ...withEmailDeliverability(next, user.email),
+      smsAvailable: true,
+      devicePush: localDevicePush(),
+    });
+  }
   // Mirrors notificationPrefs.setPreferences: verified status carries over
   // only while the number is unchanged; enabling SMS requires a verified
   // number unless SMS was already on for that same number (grandfathered).
@@ -7271,6 +7301,7 @@ app.put('/notifications/prefs', authMiddleware, validateBody(prefsSchema), (req,
     dndStart: body.dndStart,
     dndEnd: body.dndEnd,
     timezone: body.timezone,
+    timezoneChosen: current.timezoneChosen || body.timezone !== current.timezone,
     pestAlerts: body.pestAlerts,
     weeklyDigest: body.weeklyDigest ?? current.weeklyDigest,
     memberJoined: body.memberJoined ?? current.memberJoined,
