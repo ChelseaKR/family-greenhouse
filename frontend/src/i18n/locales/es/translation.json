@@ -854,6 +854,7 @@
       "unavailableBody": "No pudimos cargar la guía de cuidados de esta especie en este momento. Nada ha cambiado en la planta: inténtalo de nuevo más tarde."
     },
     "lastWateredBy": "Regada por última vez {{when}} por {{name}}.",
+    "lastWateredOn": "Regada por última vez {{when}}.",
     "noWateringYet": "Todavía no se ha registrado ningún riego para esta planta.",
     "list": {
       "eyebrow": "Invernadero",
@@ -1490,6 +1491,7 @@
     "allDoneBody": "Ya se atendió todo lo de la lista. ¡Muchísimas gracias por echar una mano!",
     "nothingDueTitle": "Ahora mismo no hay nada que hacer",
     "nothingDueBody": "El hogar no tiene nada programado en este momento. ¡Gracias por pasarte a mirar!",
+    "completeFailed": "No se guardó. Revisa tu conexión e inténtalo de nuevo.",
     "markedDone": "Marcado como hecho: {{plant}}.",
     "photo": {
       "heading": "Envía una foto a casa",

@@ -840,6 +840,7 @@
       "unavailableBody": "We couldn’t load this species’ care guide just now. Nothing about the plant has changed — try again in a little while."
     },
     "lastWateredBy": "Last watered {{when}} by {{name}}.",
+    "lastWateredOn": "Last watered {{when}}.",
     "noWateringYet": "No watering has been logged for this plant yet.",
     "list": {
       "eyebrow": "Greenhouse",
@@ -1443,6 +1444,7 @@
     "allDoneBody": "Everything on the list has been looked after. Thank you so much for helping out!",
     "nothingDueTitle": "Nothing to do right now",
     "nothingDueBody": "There’s nothing on the household’s schedule at the moment. Thanks for checking!",
+    "completeFailed": "That didn’t save. Check your connection and tap Done again.",
     "markedDone": "Marked as done: {{plant}}.",
     "photo": {
       "heading": "Send a photo home",
