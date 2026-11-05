@@ -1684,13 +1684,13 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Christmas Cactus',
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
-    related: ['blue-echeveria', 'jade-plant', 'poinsettia'],
+    related: ['poinsettia', 'kalanchoe', 'blue-echeveria'],
     metaTitle: 'How to Care for a Christmas Cactus: When to Water It',
     heading: 'How to care for a Christmas cactus',
     metaDescription:
       'Water a Christmas cactus when the top inch of soil is dry, in bright, filtered light. Why it drops buds and how to make it bloom again.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-04',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1720,7 +1720,8 @@ export const CARE_GUIDES: CareGuide[] = [
       ],
       sharedCare: [
         'Christmas cactus is the plant most likely to be inherited. They live for decades and get handed down, which means the one in your house may well have a routine that predates you — worth asking about, because these plants really do settle into a spot.',
-        'The shared-care rule here is a seasonal one: from autumn, don’t move it and don’t leave a light on in its room at night. That’s a request other people in the house cannot possibly guess at, so it needs saying rather than assuming. Once the buds are set, it can come back somewhere everyone can see it. The [poinsettia](/care/poinsettia) is the other seasonal plant that tends to arrive as a gift for the whole house.',
+        'The shared-care rule here is a seasonal one: from autumn, don’t move it and don’t leave a light on in its room at night. That’s a request other people in the house cannot possibly guess at, so it needs saying rather than assuming. Once the buds are set, it can come back somewhere everyone can see it.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [poinsettia](/care/poinsettia), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe).',
       ],
       honestBit: [
         'My take: the reason your Christmas cactus doesn’t flower is almost never the watering. It’s that its room has a lamp on in the evening. Six weeks of genuinely dark nights in autumn is the whole trick, and it costs nothing.',
@@ -2154,12 +2155,12 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Poinsettia',
     scientificName: 'Euphorbia pulcherrima',
     alsoKnownAs: ['Christmas Flower', 'Christmas Star', 'Euphorbia'],
-    related: ['christmas-cactus', 'anthurium', 'rubber-plant'],
+    related: ['christmas-cactus', 'amaryllis', 'anthurium'],
     metaTitle: 'Poinsettia Care and Pet Safety: Past the Holidays',
     metaDescription:
       'How to water a poinsettia, the light it needs, how to keep it alive after the holidays, and what the ASPCA says about poinsettias and cats and dogs.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-04',
     summary:
       'A poinsettia is the one houseplant most people bring home in December and lose by February, usually from too much water or a cold drafty doorway. It can last for months with a bright window and a careful hand, and the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
@@ -2190,6 +2191,7 @@ export const CARE_GUIDES: CareGuide[] = [
       sharedCare: [
         'A poinsettia usually arrives as a gift for the whole house, so name one person who waters it, because a plant everyone waters is how the pot ends up soggy.',
         'It is also one to decide about where the pets are, since the ASPCA lists it as toxic to cats and dogs. Put it on a shelf or table the animals do not use, and tell guests who bring one over that it is not a plant to leave at nose height.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe).',
       ],
       honestBit: [
         'My take: treat a poinsettia as a lovely seasonal plant that happens to live through the winter if you are careful, and do not feel bad if it does not survive to next Christmas. Most of the disappointment comes from a pot that sat wet in its foil.',
@@ -3402,6 +3404,7 @@ export const CARE_GUIDES: CareGuide[] = [
       sharedCare: [
         'An amaryllis is often a gift for the whole house, and the one thing everyone needs to know is to check the soil before watering, because a bulb watered by three people in one week is a bulb that rots.',
         'Because the ASPCA lists it as toxic to cats and dogs, and says the bulb is the most poisonous part, keep the pot where pets cannot dig in it or chew the leaves.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [Norfolk Island pine](/care/norfolk-island-pine), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe).',
       ],
       honestBit: [
         'My take: the amaryllis is the most generous of the holiday plants. The first bloom runs on energy already stored in the bulb, so the main way to lose it is a pot kept wet. Save your effort for after the flowers, when keeping the leaves growing is what earns a second year.',
@@ -3483,6 +3486,7 @@ export const CARE_GUIDES: CareGuide[] = [
       sharedCare: [
         'In a shared household, a Norfolk Island pine needs one person to turn it and check the soil, because a tree that everyone admired in December is easy for everyone to forget by February.',
         'Iowa State notes that many people decorate one as a living Christmas tree. If yours is, decide who takes the decorations off after the holidays, so it can go back to its bright window.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe).',
       ],
       honestBit: [
         'My take: a Norfolk Island pine is a houseplant first and a Christmas tree second. Treat it as a tree for one month and a bright-window plant for the other eleven, and it will outlast a lot of holidays.',
@@ -3565,6 +3569,7 @@ export const CARE_GUIDES: CareGuide[] = [
       sharedCare: [
         'In a shared household, a cyclamen needs one person who waters it at the edge of the pot, because a well-meant glass of water poured over the middle is how the tuber rots.',
         'Because the ASPCA lists it as toxic to cats and dogs, set it somewhere the pets do not go, and keep the tuber out of reach if the plant is repotted or thrown out.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine) and [kalanchoe](/care/kalanchoe).',
       ],
       honestBit: [
         'My take: a cyclamen is the winter plant for a cold room. The chilly bedroom or entryway that other plants sulk in is what keeps it blooming, so put it there instead of the warm spot by the heater.',
@@ -3647,6 +3652,7 @@ export const CARE_GUIDES: CareGuide[] = [
       sharedCare: [
         'In a shared household, a kalanchoe needs a house rule more than a schedule: nobody waters it until the soil is dry. A succulent watered on everyone’s good intentions rots.',
         'If you want it to rebloom, the autumn rule is about the lights: whoever uses its room has to leave the lamp off at night for those six weeks. Because the ASPCA lists it as toxic to cats and dogs, pick a room where the pets cannot reach it, too.',
+        'The other plants that tend to arrive as holiday gifts have their own guides: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine) and [cyclamen](/care/cyclamen).',
       ],
       honestBit: [
         'My take: kalanchoe is the low-effort holiday plant. It forgives a missed watering far more readily than an extra one, and Iowa State says it is fine to throw it out after it blooms if reblooming feels like too much work.',

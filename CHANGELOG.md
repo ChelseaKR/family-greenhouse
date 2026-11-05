@@ -39,6 +39,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The six holiday care guides now link to each other.** The poinsettia,
+  Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and kalanchoe
+  guides each name the other five in a line under "Keeping it alive when you
+  share a home". The poinsettia's related plants now include the amaryllis,
+  and the Christmas cactus's include the kalanchoe.
 - **The spider plant care guide's title now leads with "How often to water a
   spider plant".** That query put the page at about position 5 in the week to
   2026-11-03, with no clicks, and it was the only ranking watering guide whose
