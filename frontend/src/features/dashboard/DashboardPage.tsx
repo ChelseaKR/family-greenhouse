@@ -60,7 +60,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
-import { formatDueDate, isOverdue, isToday } from '@/utils/date';
+import { formatDate, formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
 const filterLabels: Record<ActivityFilter, string> = {
@@ -91,22 +91,16 @@ export function DashboardPage() {
     queryFn: taskService.getUpcomingTasks,
     enabled: Boolean(householdId),
   });
-  // The whole schedule, read only when the 7-day window came back empty. An
-  // empty window is not "no tasks": a household whose first plant was just
-  // added with a two-week reminder has a task, it is just not due this week.
-  // Same key as SharedCarePulse and /tasks, so it is one shared read, not a
-  // new request.
-  const upcomingEmpty = upcomingTasks !== undefined && upcomingTasks.length === 0;
-  const {
-    data: allTasks,
-    isLoading: allTasksLoading,
-    error: allTasksError,
-  } = useQuery({
-    queryKey: ['tasks', householdId],
-    queryFn: () => taskService.getTasks(),
-    enabled: Boolean(householdId) && upcomingEmpty,
-  });
-  const nextTask = useMemo(() => earliestDue(allTasks), [allTasks]);
+  // The whole schedule, not just this week. `/tasks/upcoming` stops at seven
+  // days, so an empty week said "No tasks yet" to households whose every task
+  // is further out (succulents, monthly feeding, the day after a round of
+  // care). Same key as SharedCarePulse, so this is one shared request.
+  const { data: allTasks } = useQuery(
+    householdQuery(
+      (hh) => ['tasks', hh],
+      () => taskService.getTasks()
+    )
+  );
   const { byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
   // A failed rooms read must not render as "Unplaced" — that is a placement
   // claim nobody computed. `locationUnknown` says which of the two it is.
@@ -221,6 +215,19 @@ export function DashboardPage() {
    */
   const actionableTasks = [...overdueTasks, ...todayTasks];
 
+  // The soonest task on the whole schedule, for the empty week. Only a loaded
+  // list that is really empty may say "No tasks yet".
+  const nextScheduledTask = useMemo(() => {
+    let next: TaskWithCoverage | null = null;
+    for (const task of allTasks ?? []) {
+      const due = new Date(task.nextDue).getTime();
+      if (!Number.isFinite(due)) continue;
+      if (!next || due < new Date(next.nextDue).getTime()) next = task;
+    }
+    return next;
+  }, [allTasks]);
+  const reallyNoTasks = allTasks !== undefined && allTasks.length === 0;
+
   // `undefined` data covers loading AND a failed fetch. Keying on the loading
   // flag alone published a failed plants/tasks read as the number 0 — "you
   // have no plants", "nothing is overdue" — which is the same
@@ -297,27 +304,53 @@ export function DashboardPage() {
           <div className="p-6">
             <Alert variant="error">{getErrorMessage(tasksError)}</Alert>
           </div>
-        ) : upcomingEmpty ? (
-          <NothingThisWeek
-            loading={allTasksLoading}
-            failed={Boolean(allTasksError)}
-            hasTasks={allTasks === undefined ? null : allTasks.length > 0}
-            nextTask={nextTask}
-          />
         ) : !upcomingTasks || actionableTasks.length === 0 ? (
-          /* Work is scheduled this week, just not now. "All caught up! Add
-             tasks to your plants" would be wrong twice over — they have tasks,
-             and more are coming — so it says what is actually true and points
-             at where the rest lives. An empty week is NothingThisWeek above. */
-          <EmptyState
-            title={t('dashboardEmpty.nothingNowTitle')}
-            description={t('dashboardEmpty.laterThisWeek', { count: laterTasks.length })}
-            action={
-              <Link to="/tasks">
-                <Button>{t('dashboardEmpty.viewAllTasks')}</Button>
-              </Link>
-            }
-          />
+          /* Two different empty states, because they mean different things and
+             one of them used to lie. With work still scheduled this week,
+             "All caught up! Add tasks to your plants" is wrong twice over —
+             they have tasks, and more are coming — so it says what is actually
+             true and points at where the rest lives. */
+          laterTasks.length > 0 ? (
+            <EmptyState
+              title={t('dashboardTasksEmpty.laterTitle')}
+              description={t('dashboardTasksEmpty.laterBody', { count: laterTasks.length })}
+              action={
+                <Link to="/tasks">
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                </Link>
+              }
+            />
+          ) : reallyNoTasks ? (
+            <EmptyState
+              title={t('dashboardTasksEmpty.noneTitle')}
+              description={t('dashboardTasksEmpty.noneBody')}
+              action={
+                <Link to="/plants">
+                  <Button>{t('dashboardTasksEmpty.viewPlants')}</Button>
+                </Link>
+              }
+            />
+          ) : (
+            /* Tasks exist, just none in the next seven days (or the full list
+               has not loaded, in which case this is still true). */
+            <EmptyState
+              title={t('dashboardTasksEmpty.notThisWeekTitle')}
+              description={
+                nextScheduledTask
+                  ? t('dashboardTasksEmpty.notThisWeekNext', {
+                      task: nextScheduledTask.customType || taskTypeLabels[nextScheduledTask.type],
+                      plant: nextScheduledTask.plantName,
+                      date: formatDate(nextScheduledTask.nextDue),
+                    })
+                  : t('dashboardTasksEmpty.notThisWeekBody')
+              }
+              action={
+                <Link to="/tasks">
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                </Link>
+              }
+            />
+          )
         ) : (
           <ul className="divide-y divide-primary-100/60">
             {/* Overdue and today only — `laterTasks` is deliberately not here.
@@ -933,91 +966,5 @@ function TaskItem({
         </Button>
       </div>
     </li>
-  );
-}
-
-/** The task due soonest, by `nextDue`; undefined for none or no readable date. */
-function earliestDue<T extends { nextDue: string }>(tasks: T[] | undefined): T | undefined {
-  let best: T | undefined;
-  let bestAt = Infinity;
-  for (const task of tasks ?? []) {
-    const at = Date.parse(task.nextDue);
-    if (Number.isFinite(at) && at < bestAt) {
-      best = task;
-      bestAt = at;
-    }
-  }
-  return best;
-}
-
-interface NothingThisWeekProps {
-  loading: boolean;
-  failed: boolean;
-  /** `null` when the full schedule has not been read (loading or failed). */
-  hasTasks: boolean | null;
-  nextTask: TaskWithCoverage | undefined;
-}
-
-/**
- * The "To do now" card when nothing is due in the next 7 days.
- *
- * Decided from the whole schedule, never from the 7-day read alone (quality
- * audit 2026-11-05, finding 5). Before, a household that had just added its
- * first plant with a 14-day reminder was told "No tasks yet. Add tasks to
- * your plants", the first thing a new household saw, and false. Now:
- *
- *  - full schedule still loading: a skeleton, not a claim either way;
- *  - full schedule read failed: "Nothing is due in the next 7 days", which
- *    the 7-day read did establish, and a link to /tasks; no "no tasks";
- *  - tasks exist: "Nothing due this week. Next: {plant}, {date}";
- *  - the schedule is really empty: the old "No tasks yet".
- */
-function NothingThisWeek({ loading, failed, hasTasks, nextTask }: NothingThisWeekProps) {
-  const { t } = useTranslation();
-
-  if (loading) {
-    return (
-      <div className="px-6 py-2" data-testid="dashboard-next-task-loading">
-        <ListSkeleton rows={1} />
-      </div>
-    );
-  }
-
-  if (hasTasks === false) {
-    return (
-      <EmptyState
-        title={t('dashboardEmpty.noTasksTitle')}
-        description={t('dashboardEmpty.noTasks')}
-        action={
-          <Link to="/plants">
-            <Button>{t('dashboardEmpty.viewPlants')}</Button>
-          </Link>
-        }
-      />
-    );
-  }
-
-  const date =
-    nextTask &&
-    new Date(nextTask.nextDue).toLocaleDateString(i18n.language, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-
-  return (
-    <EmptyState
-      title={t('dashboardEmpty.nothingThisWeekTitle')}
-      description={
-        !failed && nextTask?.plantName && date
-          ? t('dashboardEmpty.nextTask', { plant: nextTask.plantName, date })
-          : t('dashboardEmpty.nothingThisWeek')
-      }
-      action={
-        <Link to="/tasks">
-          <Button>{t('dashboardEmpty.viewAllTasks')}</Button>
-        </Link>
-      }
-    />
   );
 }

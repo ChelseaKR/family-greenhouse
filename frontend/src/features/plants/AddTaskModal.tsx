@@ -9,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { taskService } from '@/services/taskService';
-import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -55,7 +55,8 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const taskType = watch('type');
 
   const mutation = useMutation({
-    mutationFn: taskService.createTask,
+    // Offline, refuse at once instead of pausing (services/failFastSave.ts).
+    ...failFastSave(taskService.createTask),
     onSuccess: () => {
       playHaptic('added');
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
@@ -115,7 +116,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
           notes: chosen.notes || undefined,
         });
       } catch (err) {
-        if (!gone) await ask(chosen, getErrorMessage(err));
+        if (!gone) await ask(chosen, saveErrorMessage(err));
       }
     };
     void ask({ type: 'water', customType: '', frequency: 7, notes: '' });
@@ -179,7 +180,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
 
                 {mutation.isError && (
                   <Alert variant="error" className="mb-4">
-                    {getErrorMessage(mutation.error)}
+                    {saveErrorMessage(mutation.error)}
                   </Alert>
                 )}
 

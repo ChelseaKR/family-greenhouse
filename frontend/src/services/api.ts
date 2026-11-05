@@ -25,6 +25,7 @@ import { planLimitHitContext, track } from '@/services/analytics';
 import i18n from '@/i18n';
 import { isNativeApp } from '@/lib/platform';
 import { sessionVaultAvailable } from '@/services/sessionVault';
+import { isAuthRejectionStatus } from '@/lib/authRejection';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -114,7 +115,13 @@ async function usableRefreshToken(): Promise<string | null> {
  * code rather than a verdict on the session, so it is not a refusal either.
  */
 function refreshWasRefused(error: unknown): boolean {
-  return axios.isAxiosError(error) && Boolean(error.response);
+  // An answer is a refusal only when it says no to the session (400/401/403).
+  // A 5xx or 429 is the server failing to judge it, not a verdict.
+  return (
+    axios.isAxiosError(error) &&
+    error.response !== undefined &&
+    isAuthRejectionStatus(error.response.status)
+  );
 }
 
 function startRefresh(refreshToken: string): Promise<string> {
@@ -199,7 +206,8 @@ api.interceptors.response.use(
         }
         return api(originalRequest);
       } catch {
-        // Refresh failed — logout already happened inside startRefresh.
+        // Refresh failed. A refusal already logged out inside startRefresh;
+        // a 5xx or network failure kept the session for a retry.
         // Reject with the original 401 so callers see a consistent error.
       }
     }

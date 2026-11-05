@@ -77,11 +77,6 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
-- **The dashboard no longer says "No tasks yet" when the household has
-  tasks.** With nothing due in the next 7 days, the "To do now" card now
-  reads the whole schedule and says "Nothing due this week. Next: {plant},
-  {date}". It says "No tasks yet" only when there are none, and if the
-  schedule can't be read it says only that nothing is due this week.
 - **Google Analytics no longer credits a purchase to Stripe.** The page a
   buyer returns to after Stripe Checkout or the billing portal now reports
   our own site as its referrer instead of `checkout.stripe.com`, so the

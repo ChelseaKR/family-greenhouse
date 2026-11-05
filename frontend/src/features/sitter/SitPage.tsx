@@ -85,6 +85,10 @@ export function SitPage() {
   const [done, setDone] = useState<Set<string>>(new Set());
   // What the live region says when a row disappears, and where focus goes.
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  // A Done that did not save. It used to fail in silence: the spinner
+  // stopped, the row stayed, and the sitter could not tell whether the
+  // household saw it.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [justCompleted, setJustCompleted] = useState<{ taskId: string; seq: number } | null>(null);
   const completionSeq = useRef(0);
   const doneButtons = useRef(new Map<string, HTMLButtonElement>());
@@ -112,6 +116,7 @@ export function SitPage() {
   const handleComplete = useCallback(
     async (taskId: string) => {
       // Optimistic: mark pending immediately; revert on failure.
+      setActionError(null);
       setPending((p) => new Set(p).add(taskId));
       try {
         const task = tasks.find((candidate) => candidate.taskId === taskId);
@@ -134,7 +139,9 @@ export function SitPage() {
           setStatus('inactive');
           return;
         }
-        // Otherwise leave the task actionable so the sitter can retry.
+        // Otherwise leave the task actionable so the sitter can retry, and
+        // say so: nothing was saved.
+        setActionError(t('sitter.completeFailed'));
       } finally {
         setPending((p) => {
           const next = new Set(p);
@@ -233,6 +240,11 @@ export function SitPage() {
                 content. Plain <p>, no role — a second live region nested in
                 this one is the defect #531 fixed. */}
             {statusMessage && <p className="sr-only">{statusMessage}</p>}
+            {actionError && (
+              <Alert variant="error" live="off">
+                {actionError}
+              </Alert>
+            )}
             {allDone ? (
               <div ref={summaryRef} tabIndex={-1} className="focus:outline-hidden">
                 {finishedSomething ? (

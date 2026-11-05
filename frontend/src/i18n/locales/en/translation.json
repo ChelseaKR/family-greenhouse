@@ -303,17 +303,19 @@
     }
   },
   "dashboardEmpty": {
-    "somethingElse": "Something else? Add any plant, with photos and details",
-    "nothingThisWeekTitle": "Nothing due this week",
-    "nextTask": "Next: {{plant}}, {{date}}.",
-    "nothingThisWeek": "Nothing is due in the next 7 days.",
-    "viewAllTasks": "View all tasks",
-    "noTasksTitle": "No tasks yet",
-    "noTasks": "Add tasks to your plants to see them here.",
-    "viewPlants": "View plants",
-    "nothingNowTitle": "Nothing to do right now",
-    "laterThisWeek_one": "Nothing is overdue or due today. {{count}} task is coming up later this week.",
-    "laterThisWeek_other": "Nothing is overdue or due today. {{count}} tasks are coming up later this week."
+    "somethingElse": "Something else? Add any plant, with photos and details"
+  },
+  "dashboardTasksEmpty": {
+    "laterTitle": "Nothing to do right now",
+    "laterBody_one": "Nothing is overdue or due today. {{count}} task is coming up later this week.",
+    "laterBody_other": "Nothing is overdue or due today. {{count}} tasks are coming up later this week.",
+    "noneTitle": "No tasks yet",
+    "noneBody": "Add tasks to your plants to see them here.",
+    "notThisWeekTitle": "Nothing due this week",
+    "notThisWeekNext": "Next up: {{task}} {{plant}} on {{date}}.",
+    "notThisWeekBody": "Nothing is overdue or due in the next seven days.",
+    "viewTasks": "View all tasks",
+    "viewPlants": "View plants"
   },
   "goingAwaySoon": {
     "title": "Going away soon?",
@@ -862,6 +864,7 @@
       "unavailableBody": "We couldn’t load this species’ care guide just now. Nothing about the plant has changed — try again in a little while."
     },
     "lastWateredBy": "Last watered {{when}} by {{name}}.",
+    "lastWateredOn": "Last watered {{when}}.",
     "noWateringYet": "No watering has been logged for this plant yet.",
     "list": {
       "eyebrow": "Greenhouse",
@@ -1465,6 +1468,7 @@
     "allDoneBody": "Everything on the list has been looked after. Thank you so much for helping out!",
     "nothingDueTitle": "Nothing to do right now",
     "nothingDueBody": "There’s nothing on the household’s schedule at the moment. Thanks for checking!",
+    "completeFailed": "That didn’t save. Check your connection and tap Done again.",
     "markedDone": "Marked as done: {{plant}}.",
     "photo": {
       "heading": "Send a photo home",
@@ -2021,11 +2025,12 @@
     "lastSyncedAt": "What you see was last updated at {{time}}.",
     "lastSyncedOn": "What you see was last updated on {{date}}.",
     "neverSynced": "Nothing has loaded yet.",
-    "offlineChanges": "Changes you make now are sent once you're back online, as long as the app stays open.",
+    "offlineChanges": "Care you mark done is sent once you're back online, as long as the app stays open. Adding or editing a plant or task, and snoozing, won't save until then.",
     "unreachableChanges": "Changes you make now won't save until Family Greenhouse can be reached again.",
     "refreshing": "Refreshing",
     "refreshed": "Updated",
-    "requestUnreachable": "Can't reach Family Greenhouse. Check your connection and try again."
+    "requestUnreachable": "Can't reach Family Greenhouse. Check your connection and try again.",
+    "saveOffline": "You're offline. Nothing was saved. Try again once you're connected."
   },
   "validation": {
     "nameRequired": "Name is required",
