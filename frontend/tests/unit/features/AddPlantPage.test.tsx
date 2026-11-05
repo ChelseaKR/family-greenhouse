@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { AddPlantPage } from '@/features/plants/AddPlantPage';
 import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
@@ -713,5 +713,53 @@ describe('AddPlantPage identification confidence and provenance', () => {
     const payload = vi.mocked(plantService.createPlant).mock.calls[0][0];
     expect(payload.species).toBe('Aglaonema commutatum');
     expect(payload.identifiedSpecies).toBeUndefined();
+  });
+});
+
+describe('AddPlantPage offline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue({
+      id: 'plant-created',
+      householdId: 'household-1',
+      name: 'Saved Fern',
+      species: null,
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: 'user-1',
+      updatedAt: '',
+    } as never);
+  });
+  afterEach(() => onlineManager.setOnline(true));
+
+  it('refuses at once, keeps what was typed, and saves on a retry once online', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/plant name/i), 'Saved Fern');
+    act(() => onlineManager.setOnline(false));
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+
+    expect(
+      await screen.findByText("You're offline. Nothing was saved. Try again once you're connected.")
+    ).toBeInTheDocument();
+    // Nothing was sent, not even the first-plant lookup, and nothing spins.
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+    expect(plantService.getPlants).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /add plant/i })).toBeEnabled();
+    expect(screen.getByLabelText(/plant name/i)).toHaveValue('Saved Fern');
+
+    // No queue: reconnecting does not create the refused plant behind the user's back.
+    act(() => onlineManager.setOnline(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: 'Plant detail destination' });
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
   });
 });
