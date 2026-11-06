@@ -16,6 +16,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
 - **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
   overwatering?" and "Can you overwater a plant?" answer the two generic
   question shapes Search Console showed with no page of their own (24
@@ -23,10 +25,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and Iowa State extension pages it was checked against (the first also
   cites Illinois Extension), and links
   the overwatering post and the relevant care guides. No care guide title,
-  H1 or meta changed. `infrastructure/` changes in one file:
-  `spa-router.js` adds the 2 prerendered routes and moves one comment
-  paragraph to `build-spa-router.mjs`, since the 2 routes put the function
-  81 bytes over CloudFront's 10 KB limit. It is now 10,142 bytes, leaving 98.
+  H1 or meta changed. No `infrastructure/` change: the page router
+  already matches `/blog/` pages by prefix.
+
+### Fixed
+
+- **Room for more care guides at the edge.** The CloudFront function that
+  routes page requests listed every blog post, care guide and help topic, and
+  had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
+  matched by their `/blog/`, `/care/` and `/help/` prefix, as the pet-safety
+  pages already were, so the function is 8,245 bytes and a new guide adds
+  nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalised guide URL now gets the prerendered page instead of the app
+  shell. Ships with the next Terraform apply.
 
 ## [0.48.0] - 2026-11-05
 
