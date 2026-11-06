@@ -20,8 +20,10 @@
  *
  * ## Why generate rather than hand-maintain
  *
- * The list is 50-odd entries and grows with every blog post and care guide,
- * both of which come from TS manifests nobody edits with CloudFront in mind.
+ * The list used to be 80-odd entries and grow with every blog post and care
+ * guide, both of which come from TS manifests nobody edits with CloudFront in
+ * mind. Those namespaces are prefix-served now (see `prefixServedRoutes`), so
+ * the map holds only the dozen static pages, but the reasoning is unchanged.
  * A hand-copied list would drift silently in the direction that hurts: a new
  * marketing page would be prerendered, uploaded, advertised in the sitemap,
  * and served as the empty shell — which is the exact failure ADR 0013 and
