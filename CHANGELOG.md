@@ -27,6 +27,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   event only then. An account whose household already had plants is not
   counted. The event's parameters are unchanged (`method` and the scrubbed
   page address), so the Privacy text needs no change.
+- **Room for more care guides at the edge.** The CloudFront function that
+  routes page requests listed every blog post, care guide and help topic, and
+  had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
+  matched by their `/blog/`, `/care/` and `/help/` prefix, as the pet-safety
+  pages already were, so the function is 8,245 bytes and a new guide adds
+  nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalised guide URL now gets the prerendered page instead of the app
+  shell. Ships with the next Terraform apply.
 
 ## [0.48.0] - 2026-11-05
 
