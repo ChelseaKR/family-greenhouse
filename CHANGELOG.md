@@ -33,6 +33,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   fluminensis, a different species. The pet checker answers "scindapsus",
   "nephthytis" and "ficus benjamina" with the new rows, and still answers no
   tradescantia name, including "spiderwort", with another plant's verdict.
+- **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
+  overwatering?" and "Can you overwater a plant?" answer the two generic
+  question shapes Search Console showed with no page of their own (24
+  phrasings, 73 impressions from August to November). Each cites the Clemson
+  and Iowa State extension pages it was checked against (the first also
+  cites Illinois Extension), and links
+  the overwatering post and the relevant care guides. No care guide title,
+  H1 or meta changed. No `infrastructure/` change: the page router
+  already matches `/blog/` pages by prefix.
 
 ### Fixed
 

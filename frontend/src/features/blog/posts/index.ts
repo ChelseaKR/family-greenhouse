@@ -13,6 +13,8 @@ import MergingCollections from './merging-collections';
 import SignsOfOverwatering from './signs-of-overwatering';
 import YellowLeaves from './yellow-leaves';
 import RoomLight from './room-light';
+import YellowLeavesOverwatering from './yellow-leaves-overwatering';
+import CanYouOverwaterAPlant from './can-you-overwater-a-plant';
 
 /**
  * Blog post manifest. Adding a post means dropping a TSX file in this
@@ -198,6 +200,28 @@ export const POSTS: BlogPost[] = [
     date: '2026-08-12',
     readingMinutes: 6,
     Component: RoomLight,
+  },
+  {
+    slug: 'do-yellow-leaves-mean-overwatering',
+    title: 'Do yellow leaves mean overwatering? Often, not always',
+    description:
+      'Overwatering is the most common cause of yellow houseplant leaves, but thirst, low light, hunger and pests can look the same. Two checks settle it: the soil, then the roots.',
+    metaDescription:
+      'Often, yes: overwatering is the most common cause of yellow houseplant leaves. Check the soil, then the roots, because thirst and low light can look the same.',
+    date: '2026-11-05',
+    readingMinutes: 5,
+    Component: YellowLeavesOverwatering,
+  },
+  {
+    slug: 'can-you-overwater-a-plant',
+    title: 'Can you overwater a plant? Yes. Here is how to avoid it',
+    description:
+      'Clemson Extension calls overwatering the main cause of death of potted plants. What too much water does to roots, why there is no fixed watering interval, and how to water by checking the soil instead.',
+    metaDescription:
+      'Yes, and it is the main cause of death of potted plants. What too much water does to roots, and how to water by checking the soil instead of the calendar.',
+    date: '2026-11-05',
+    readingMinutes: 5,
+    Component: CanYouOverwaterAPlant,
   },
 ];
 
