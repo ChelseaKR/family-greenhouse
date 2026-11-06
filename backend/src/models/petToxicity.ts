@@ -1265,6 +1265,100 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     dogs: 'toxic',
     note: 'Toxic to cats and dogs per the ASPCA, which names bufadienolides and lists vomiting and diarrhea, with an abnormal heart rhythm in rare cases. If your pet has eaten some, call your vet or a poison hotline.',
   },
+  // ---------------------------------------------------------------------
+  // The fifth batch of care guides, 2026-11-05 (fg-next-guides-plan-2026-11-05,
+  // PR 2). Each verdict was read off that plant's own live ASPCA listing that
+  // day. Short form, like the 2026-11-03 and 2026-11-04 rows: no detail
+  // fields. The tradescantia guide in the same batch has no row: ASPCA lists
+  // the inch plant only as Tradescantia fluminensis, a different species from
+  // the T. zebrina the guide covers, so its pet line reads "Unknown".
+  {
+    slug: 'satin-pothos',
+    commonName: 'Satin pothos',
+    scientificName: 'Scindapsus pictus',
+    aspcaListing: {
+      title: 'Satin Pothos',
+      scientificName: 'Scindapsus pictus',
+      path: '/toxic-and-non-toxic-plants/satin-pothos',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // Never the bare 'pothos', which is the Epipremnum row. 'silver pothos'
+    // is NC State's name for this plant, not ASPCA's, and names no other.
+    aliases: ['silk pothos', 'silver pothos', 'scindapsus'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists mouth pain and swelling, drooling, vomiting and difficulty swallowing. It is not a true pothos, but the verdict is the same. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'dragon-tree',
+    commonName: 'Dragon tree',
+    // NC State now files it as Dracaena reflexa var. angustifolia; ASPCA and
+    // the plant tag still say Dracaena marginata.
+    scientificName: 'Dracaena marginata',
+    aspcaListing: {
+      title: 'Madagascar Dragon Tree',
+      scientificName: 'Dracaena marginata',
+      path: '/toxic-and-non-toxic-plants/madagascar-dragon-tree',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // No bare 'dracaena': it already routes to the snake plant row.
+    aliases: ['madagascar dragon tree', 'red edge dracaena'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names saponins and lists vomiting (sometimes with blood), depression, loss of appetite and drooling, with dilated pupils in cats. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'arrowhead-plant',
+    commonName: 'Arrowhead plant',
+    scientificName: 'Syngonium podophyllum',
+    // ASPCA also lists it as "Nephthytis"; this row cites the "Arrow-Head
+    // Vine" listing only, and 'nephthytis' is an alias.
+    aspcaListing: {
+      title: 'Arrow-Head Vine',
+      scientificName: 'Syngonium podophyllum',
+      path: '/toxic-and-non-toxic-plants/arrow-head-vine',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['arrowhead vine', 'arrow head vine', 'nephthytis', 'syngonium', 'trileaf wonder'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists mouth pain and swelling, drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'weeping-fig',
+    commonName: 'Weeping fig',
+    scientificName: 'Ficus benjamina',
+    // The genus-level listing the fiddle-leaf fig and rubber plant rows also
+    // cite. 'ficus' and 'fig' stay on the fiddle-leaf fig row, and the
+    // listing's 'indian rubber plant' is left out as too close to the rubber
+    // plant.
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['weeping ficus', 'benjamin fig', 'ficus benjamina'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Ficus listing names two compounds in the plant, ficin and ficusin. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'polka-dot-plant',
+    commonName: 'Polka dot plant',
+    scientificName: 'Hypoestes phyllostachya',
+    aspcaListing: {
+      title: 'Polka Dot Plant',
+      scientificName: 'Hypoestes phyllostachya',
+      path: '/toxic-and-non-toxic-plants/polka-dot-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // Not 'baby's tears', a listed name that also belongs to Soleirolia.
+    aliases: ['hypoestes', 'freckle face', 'measles plant', 'pink polka dot plant'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, which still lists mild vomiting and diarrhea if some is eaten. Non-toxic is not the same as safe to eat in quantity.',
+  },
 ];
 
 /** Normalize a query/name for fuzzy matching: lowercase, strip punctuation,

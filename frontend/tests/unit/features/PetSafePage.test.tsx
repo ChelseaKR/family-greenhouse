@@ -254,6 +254,7 @@ describe('PetSafePage directory caution', () => {
       'croton',
       'prayer-plant',
       'string-of-pearls',
+      'tradescantia',
       'zz-plant',
     ]);
     expect(cautions.map((c) => c.textContent)).toEqual(expected.map((s) => s.caution));

@@ -187,6 +187,16 @@ describe('per-plant ASPCA listings', () => {
         'norfolk-island-pine',
         'cyclamen',
         'kalanchoe',
+        // Read off the live ASPCA pages on 2026-11-05 for the fifth batch of
+        // care guides: "Satin Pothos" (Scindapsus pictus), "Madagascar Dragon
+        // Tree" (Dracaena marginata), "Arrow-Head Vine" (Syngonium
+        // podophyllum), "Weeping Fig" (Ficus sp.) and "Polka Dot Plant"
+        // (Hypoestes phyllostachya).
+        'satin-pothos',
+        'dragon-tree',
+        'arrowhead-plant',
+        'weeping-fig',
+        'polka-dot-plant',
       ].sort()
     );
   });
@@ -315,6 +325,44 @@ describe('lookupToxicity', () => {
   });
 });
 
+describe('batch-5 guide names route to their own row, or to none', () => {
+  it('keeps the old names on their old rows', () => {
+    // The new rows must not take over a name another row already answers.
+    expect(lookupToxicity('pothos')[0]?.slug).toBe('pothos');
+    expect(lookupToxicity('golden pothos')[0]?.slug).toBe('pothos');
+    expect(lookupToxicity('ficus')[0]?.slug).toBe('fiddle-leaf-fig');
+    expect(lookupToxicity('fig')[0]?.slug).toBe('fiddle-leaf-fig');
+    expect(lookupToxicity('dracaena')[0]?.slug).toBe('snake-plant');
+    expect(lookupToxicity('ribbon plant')[0]?.slug).toBe('spider-plant');
+  });
+
+  it('answers no tradescantia name with another plant’s verdict', () => {
+    // ASPCA lists the inch plant only as Tradescantia fluminensis, not the
+    // T. zebrina the guide covers, so the honest answer is "not in the
+    // checker". "Spiderwort" must not reach the spider plant, nor "zebra
+    // plant" anything else.
+    for (const query of [
+      'tradescantia',
+      'Tradescantia zebrina',
+      'inch plant',
+      'silver inch plant',
+      'wandering dude',
+      'spiderwort',
+      'zebra plant',
+    ]) {
+      expect(lookupToxicity(query, 10), query).toEqual([]);
+    }
+    // Negative control: the matcher is live, and a near name still finds its row.
+    expect(lookupToxicity('spider plant')[0]?.slug).toBe('spider-plant');
+  });
+
+  it('does not route "baby’s tears" to the polka dot plant', () => {
+    // A listed name of Hypoestes that also belongs to Soleirolia.
+    expect(lookupToxicity('baby’s tears', 10).map((m) => m.slug)).not.toContain('polka-dot-plant');
+    expect(lookupToxicity('freckle face')[0]?.slug).toBe('polka-dot-plant');
+  });
+});
+
 describe('care-guide coverage (#384)', () => {
   // Every /care/<plant> guide must resolve in the checker, or /pet-safe says
   // "we don't have that one yet" for a plant the site publishes a full guide
@@ -348,6 +396,22 @@ describe('care-guide coverage (#384)', () => {
     ['orchid', 'orchid'],
     ['hoya', 'hoya'],
     ['nerve plant', 'nerve-plant'],
+    // Batch-5 guides of 2026-11-05 whose plant has its own ASPCA listing, by
+    // name and by the aliases a searcher is likely to type. Tradescantia has
+    // none, so it is not here: see the tradescantia test below.
+    ['satin pothos', 'satin-pothos'],
+    ['scindapsus', 'satin-pothos'],
+    ['silk pothos', 'satin-pothos'],
+    ['dragon tree', 'dragon-tree'],
+    ['madagascar dragon tree', 'dragon-tree'],
+    ['dracaena marginata', 'dragon-tree'],
+    ['arrowhead plant', 'arrowhead-plant'],
+    ['arrowhead vine', 'arrowhead-plant'],
+    ['nephthytis', 'arrowhead-plant'],
+    ['weeping fig', 'weeping-fig'],
+    ['ficus benjamina', 'weeping-fig'],
+    ['polka dot plant', 'polka-dot-plant'],
+    ['hypoestes', 'polka-dot-plant'],
   ];
 
   it.each(GUIDE_QUERIES)('“%s” resolves to the %s row', (query, expectedSlug) => {
