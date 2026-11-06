@@ -72,8 +72,12 @@ describe('content-page sign-up links are counted', () => {
   it('counts the care guide answer link and the care guide box, with the plant', async () => {
     const glance = await clickOn('/care/zz-plant', () => screen.getByTestId('care-glance-cta'));
     expect(glance.href).toBe('/register?plant=zz-plant');
+    // Once the page has loaded, the "your next watering" tool holds the water
+    // row's link, so a click there is counted as `tool`. (`glance` is the
+    // same link as served, before the tool replaces it; see
+    // NextWateringTool.test.tsx.)
     expect(glance.sent).toEqual([
-      { name: 'landing_cta_click', source: 'care_guide', placement: 'glance', plant: 'zz-plant' },
+      { name: 'landing_cta_click', source: 'care_guide', placement: 'tool', plant: 'zz-plant' },
     ]);
     const box = await clickOn('/care/zz-plant', () =>
       within(screen.getByTestId('care-cta')).getByRole('link')

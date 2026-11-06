@@ -15,6 +15,11 @@ import { expect, test } from '@playwright/test';
  * eight guides with three-line headings (anthurium, hoya and others) end
  * 13-61px below; that case is checked for the near-page-one guides, the
  * 2026-11-03 watering guides and the 2026-11-04 holiday guides only.
+ *
+ * The link is measured after the "your next watering" tool has taken the
+ * water row (NextWateringTool). The tool keeps the link first in the row and
+ * puts its question under it: with the question above, the ZZ plant's link
+ * ended at 617px on the 548px screen.
  */
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 375, height: 667 },
@@ -76,6 +81,7 @@ test.describe('care guide sign-up link above the fold', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const slug of slugs) {
         await page.goto(`/care/${slug}`);
+        await expect(page.getByTestId('next-watering-tool'), slug).toBeAttached();
         const link = page.getByTestId('care-glance-cta');
         await expect(link, slug).toBeVisible();
         const box = await link.boundingBox();

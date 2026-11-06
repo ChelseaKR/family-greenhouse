@@ -17,6 +17,7 @@ import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { careGuideHeading, type CareGuide } from './careGuides';
+import { NextWateringTool } from './NextWateringTool';
 import {
   careGuideResource,
   findCareGuideEntry,
@@ -297,9 +298,10 @@ export function CareGuidePage() {
 
   // Both sign-up links carry the plant to the first run when it can offer it
   // (features/onboarding/guidePlantHandoff), and both are counted in GA4
-  // under the content-page parameters, never the home page's `cta`.
+  // under the content-page parameters, never the home page's `cta`. The
+  // water row's link lives in NextWateringTool, which counts it itself.
   const registerHref = registerHrefForPlant(guide.slug);
-  const trackCareCta = (placement: 'glance' | 'body') =>
+  const trackCareCta = (placement: 'body') =>
     trackGoogleConversion({
       name: 'landing_cta_click',
       source: 'care_guide',
@@ -385,18 +387,15 @@ export function CareGuidePage() {
                     about, so it is on the first screen of a phone and a
                     laptop. The sign-up box below sat just under the fold
                     on both (2026-10-30 audit: y=900 against a 664px phone
-                    screen, 778 against 768 on a laptop). */}
-                {label === 'Water' && PUBLIC_REGISTRATION_AVAILABLE && (
-                  <dd className="mt-1 text-sm">
-                    <Link
-                      to={registerHref}
-                      data-testid="care-glance-cta"
-                      className="inline-flex min-h-touch items-center font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800"
-                      onClick={() => trackCareCta('glance')}
-                    >
-                      Remind me to water my {sentenceName(guide.commonName)} →
-                    </Link>
-                  </dd>
+                    screen, 778 against 768 on a laptop). Once the page has
+                    loaded, the "your next watering" tool takes the link's
+                    place and keeps the link as its email action. */}
+                {label === 'Water' && (
+                  <NextWateringTool
+                    slug={guide.slug}
+                    commonName={guide.commonName}
+                    guideUrl={`${SITE}/care/${guide.slug}`}
+                  />
                 )}
               </div>
             ))}

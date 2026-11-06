@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearPendingGuidePlant,
+  getPendingGuideLastWatered,
   getPendingGuidePlant,
   guidePlant,
   registerHrefForPlant,
+  setPendingGuideLastWatered,
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
@@ -35,6 +37,28 @@ describe('guidePlantHandoff', () => {
     expect(registerHrefForPlant('aloe-vera')).toBe('/register?plant=aloe-vera');
     expect(registerHrefForPlant('bird-of-paradise')).toBe('/register');
     expect(registerHrefForPlant('not a plant & more')).toBe('/register');
+  });
+
+  it('adds the care guide tool’s answer only beside a carried plant', () => {
+    expect(registerHrefForPlant('zz-plant', 'week')).toBe('/register?plant=zz-plant&last=week');
+    expect(registerHrefForPlant('orchid', 'unsure')).toBe('/register?plant=orchid&last=unsure');
+    expect(registerHrefForPlant('bird-of-paradise', 'today')).toBe('/register');
+    expect(registerHrefForPlant('zz-plant', 'yesterday' as never)).toBe('/register?plant=zz-plant');
+  });
+
+  it('keeps the tool’s answer for the visit only beside a known plant', () => {
+    setPendingGuideLastWatered('bird-of-paradise', 'week');
+    expect(getPendingGuideLastWatered()).toBeUndefined();
+    setPendingGuideLastWatered('zz-plant', '"><script>');
+    expect(getPendingGuideLastWatered()).toBeUndefined();
+    setPendingGuideLastWatered('zz-plant', 'two_weeks');
+    expect(getPendingGuideLastWatered()).toBe('two_weeks');
+    // A tampered stored value reads back as nothing.
+    sessionStorage.setItem('fg.pendingGuideLastWatered', 'often');
+    expect(getPendingGuideLastWatered()).toBeUndefined();
+    setPendingGuideLastWatered('zz-plant', 'today');
+    clearPendingGuidePlant();
+    expect(getPendingGuideLastWatered()).toBeUndefined();
   });
 
   it('keeps a known plant for the visit and reads it back', () => {

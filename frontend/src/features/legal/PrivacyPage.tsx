@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
-import { LegalShell } from './LegalShell';
+import { LegalShell, UNRELEASED_EFFECTIVE_DATE } from './LegalShell';
 import { HELLO_EMAIL, HELLO_MAILTO, SUPPORT_EMAIL, SUPPORT_MAILTO } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
@@ -43,7 +43,7 @@ export function PrivacyPage() {
   const supportLink = <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>;
 
   return (
-    <LegalShell title={t('legal.privacy.title')} effectiveDate="2026-11-05">
+    <LegalShell title={t('legal.privacy.title')} effectiveDate={UNRELEASED_EFFECTIVE_DATE}>
       <p className="lead">
         <Trans
           i18nKey="legal.privacy.lead"

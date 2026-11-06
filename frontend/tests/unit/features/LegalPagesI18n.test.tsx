@@ -81,8 +81,10 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    // The Google Analytics wording (#1085) and the time-zone line changed in 0.48.0.
-    ...termsEffectiveText('2026-11-05'),
+    // The Google Analytics wording changed again for the care guides'
+    // "your next watering" tool (`care_calendar_add`); the release that ships
+    // it sets the date.
+    ...termsEffectiveText('UNRELEASED'),
   },
   {
     name: 'terms',

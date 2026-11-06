@@ -676,6 +676,61 @@ describe('conversion events', () => {
     expect(JSON.stringify(conversions())).not.toMatch(/reader@|hero_signup/u);
   });
 
+  it('counts the care guide tool’s email link as placement `tool`', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    ga.trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'care_guide',
+      placement: 'tool',
+      plant: 'orchid',
+    });
+    expect(conversions()).toEqual([
+      [
+        'event',
+        'landing_cta_click',
+        { cta_source: 'care_guide', cta_placement: 'tool', page_location, cta_plant: 'orchid' },
+      ],
+    ]);
+  });
+
+  it('sends care_calendar_add with only the guide slug, and never anything else', async () => {
+    const { ga } = await load();
+    ga.initGoogleAnalytics();
+    const page_location = `${window.location.origin}/`;
+    ga.trackGoogleConversion({ name: 'care_calendar_add', plant: 'zz-plant' });
+    // Anything that is not a published guide slug is left out, and fields a
+    // caller adds never pass through: the answer, the date, an email.
+    ga.trackGoogleConversion({
+      name: 'care_calendar_add',
+      plant: 'reader@example.org',
+      last: 'week',
+      date: '2026-12-16',
+    } as never);
+    expect(conversions()).toEqual([
+      ['event', 'care_calendar_add', { page_location, cta_plant: 'zz-plant' }],
+      ['event', 'care_calendar_add', { page_location }],
+    ]);
+    expect(JSON.stringify(conversions())).not.toMatch(/reader@|week|2026-12-16/u);
+  });
+
+  it('sends care_calendar_add under no opt-out, and nothing under GPC', async () => {
+    const control = await load();
+    control.ga.initGoogleAnalytics();
+    control.ga.trackGoogleConversion({ name: 'care_calendar_add', plant: 'orchid' });
+    expect(conversions()).toHaveLength(1);
+
+    delete window.dataLayer;
+    for (const script of gtagScripts()) script.remove();
+    setGpc(true);
+    const gpc = await load();
+    expect(gpc.analytics.analyticsOptedOut()).toBe(true);
+    gpc.ga.initGoogleAnalytics();
+    gpc.ga.trackGoogleConversion({ name: 'care_calendar_add', plant: 'orchid' });
+    expect(window.dataLayer).toBeUndefined();
+  });
+
   it.each([
     ['an unlisted page type', { name: 'landing_cta_click', source: 'checkout', placement: 'body' }],
     ['an unlisted placement', { name: 'landing_cta_click', source: 'blog', placement: 'footer' }],
