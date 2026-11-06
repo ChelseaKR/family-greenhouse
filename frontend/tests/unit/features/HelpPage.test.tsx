@@ -195,7 +195,7 @@ describe('HelpPage', () => {
     renderAt('/help');
     // The cancellation answer must be present without anyone opening anything.
     expect(
-      screen.getByText(/only place a live subscription can be changed or cancelled/i)
+      screen.getByText(/only place a live subscription can be changed or canceled/i)
     ).toBeInTheDocument();
   });
 

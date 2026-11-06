@@ -148,7 +148,7 @@ describe('HouseholdTimeZoneCard', () => {
     const input = screen.getByLabelText('IANA time zone');
     await userEvent.clear(input);
     await userEvent.type(input, 'Pacific Standard Time');
-    expect(await screen.findByText(/not a time zone name this app recognises/)).toBeInTheDocument();
+    expect(await screen.findByText(/not a time zone name this app recognizes/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save time zone' })).toBeDisabled();
     expect(calls).toBe(0);
   });

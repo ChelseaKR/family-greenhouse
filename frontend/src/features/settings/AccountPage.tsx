@@ -32,7 +32,7 @@ export function AccountPage() {
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 sm:py-12">
         <PageHeader
           eyebrow="Your account"
-          title="Account & data"
+          title={t('settings.account.pageTitle')}
           description="Manage your profile, download your data, or permanently delete your account."
         />
         <AccountSettings />
