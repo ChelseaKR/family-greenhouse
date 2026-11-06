@@ -18,7 +18,10 @@ import { AuthShell } from './AuthShell';
 import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
 import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
-import { setPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
+import {
+  setPendingGuideLastWatered,
+  setPendingGuidePlant,
+} from '@/features/onboarding/guidePlantHandoff';
 
 // Three fields, not four. The form used to ask for the password twice. A
 // "Show password" toggle catches a typo the same way without a fourth field,
@@ -61,10 +64,14 @@ export function RegisterPage() {
   // the first run can offer that plant first (features/onboarding/
   // guidePlantHandoff). Anything not on the first run's plant list is
   // ignored there, and the value is never rendered.
+  // `&last=<bucket>` is the guide tool's "When did you last water it?"
+  // answer, kept beside the plant the same way.
   const guidePlantSlug = searchParams.get('plant');
+  const guideLastWatered = searchParams.get('last');
   useEffect(() => {
     setPendingGuidePlant(guidePlantSlug);
-  }, [guidePlantSlug]);
+    setPendingGuideLastWatered(guidePlantSlug, guideLastWatered);
+  }, [guidePlantSlug, guideLastWatered]);
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (

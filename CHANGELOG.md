@@ -16,6 +16,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **"Your next watering" on the care guides.** Once a guide has loaded, its
+  "At a glance" water row asks "When did you last water it?" and answers with
+  a day to check the soil, counted from the number of days that guide's own
+  water line states. Seven guides state one (ZZ plant, orchid, nerve plant,
+  haworthia, blue echeveria, air plant, rosemary); every other guide says in
+  words that it gives no set number of days, and shows no date. "Not sure" is
+  always "Check the soil today". An **Add to my calendar** button saves a repeating "check the
+  soil" event built in the browser, linking back to the guide, and the
+  reminder link carries the answer to sign-up (`&last=`). The served page is
+  unchanged until it loads. GA4 counts the calendar file as
+  `care_calendar_add` with the guide's slug only, and the reminder link as
+  `cta_placement: 'tool'`; the privacy page says so in English and Spanish
+  and takes effect with the next release.
+
 ### Fixed
 
 - **Room for more care guides at the edge.** The CloudFront function that

@@ -1,4 +1,5 @@
 import { COMMON_PLANTS, type CommonPlant } from './commonPlants';
+import { isLastWateredBucket, type LastWateredBucket } from '@/features/care/nextWatering';
 import { GUIDE_HANDOFF_PLANTS } from './guideHandoffPlants';
 
 /**
@@ -27,6 +28,14 @@ import { GUIDE_HANDOFF_PLANTS } from './guideHandoffPlants';
  * broken sign-up.
  */
 const KEY = 'fg.pendingGuidePlant';
+/**
+ * The answer to the care guide tool's "When did you last water it?", when
+ * the visitor answered before following its email link
+ * (`/register?plant=<slug>&last=<bucket>`). Kept the same way as the plant,
+ * only beside a carried plant, and only one of `LAST_WATERED_BUCKETS`, so the
+ * first run can pre-select it.
+ */
+const LAST_KEY = 'fg.pendingGuideLastWatered';
 
 /** The first-run plant for a slug, or undefined for anything not on the list. */
 export function guidePlant(slug: string | null | undefined): CommonPlant | undefined {
@@ -39,11 +48,15 @@ export function guidePlant(slug: string | null | undefined): CommonPlant | undef
 
 /**
  * Where a guide's sign-up link should point: `/register?plant=<slug>` when the
- * first run can offer that plant, otherwise plain `/register`.
+ * first run can offer that plant, otherwise plain `/register`. With the
+ * tool's answer, `&last=<bucket>` follows the plant; without a carried plant
+ * there is nothing for it to describe, so it is dropped.
  */
-export function registerHrefForPlant(slug: string): string {
+export function registerHrefForPlant(slug: string, last?: LastWateredBucket): string {
   const plant = guidePlant(slug);
-  return plant ? `/register?plant=${encodeURIComponent(plant.slug)}` : '/register';
+  if (!plant) return '/register';
+  const href = `/register?plant=${encodeURIComponent(plant.slug)}`;
+  return isLastWateredBucket(last) ? `${href}&last=${last}` : href;
 }
 
 export function setPendingGuidePlant(slug: string | null | undefined): void {
@@ -53,6 +66,28 @@ export function setPendingGuidePlant(slug: string | null | undefined): void {
     sessionStorage.setItem(KEY, plant.slug);
   } catch {
     // Storage unavailable: the plant simply isn't offered first.
+  }
+}
+
+/** Keep the tool's answer for this visit, only beside a plant that was carried. */
+export function setPendingGuideLastWatered(
+  slug: string | null | undefined,
+  last: string | null | undefined
+): void {
+  if (!guidePlant(slug) || !isLastWateredBucket(last)) return;
+  try {
+    sessionStorage.setItem(LAST_KEY, last);
+  } catch {
+    // Storage unavailable: the first run simply asks.
+  }
+}
+
+export function getPendingGuideLastWatered(): LastWateredBucket | undefined {
+  try {
+    const value = sessionStorage.getItem(LAST_KEY);
+    return isLastWateredBucket(value) ? value : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -67,6 +102,7 @@ export function getPendingGuidePlant(): CommonPlant | undefined {
 export function clearPendingGuidePlant(): void {
   try {
     sessionStorage.removeItem(KEY);
+    sessionStorage.removeItem(LAST_KEY);
   } catch {
     // no-op
   }

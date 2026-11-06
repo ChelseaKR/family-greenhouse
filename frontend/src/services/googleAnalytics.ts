@@ -365,15 +365,17 @@ export type LandingCta = (typeof LANDING_CTAS)[number];
  *   (`/pet-safe/<slug>`), `blog` (`/blog/<slug>`) or `other` (any other page
  *   that shows the shared header).
  * - `cta_placement`: `header` (the shared header's "Try the app" link),
- *   `glance` (the care guide's link inside its "At a glance" water row) or
- *   `body` (the page's own sign-up box).
+ *   `glance` (the care guide's link inside its "At a glance" water row, as
+ *   the page is first served), `tool` (the same link once the "your next
+ *   watering" tool has replaced it in the browser) or `body` (the page's own
+ *   sign-up box).
  * - `cta_plant`: the page's plant slug, sent only when it is one of the
  *   published care-guide slugs. Anything else is left out, so the parameter
  *   can only ever carry one of our own page names.
  */
 export const CONTENT_CTA_SOURCES = ['care_guide', 'pet_safe', 'blog', 'other'] as const;
 export type ContentCtaSource = (typeof CONTENT_CTA_SOURCES)[number];
-export const CONTENT_CTA_PLACEMENTS = ['header', 'glance', 'body'] as const;
+export const CONTENT_CTA_PLACEMENTS = ['header', 'glance', 'tool', 'body'] as const;
 export type ContentCtaPlacement = (typeof CONTENT_CTA_PLACEMENTS)[number];
 
 /**
@@ -447,6 +449,11 @@ const TRIAL_DAYS = 14;
  *   carrying only HOW the plant was added (`FIRST_PLANT_METHODS`), so the
  *   first run's houseplant shortcut can be judged against typing a name.
  *   Never which plant: the slug of a tapped plant is not sent.
+ * - `care_calendar_add`: a care guide's "your next watering" tool saved its
+ *   calendar file. The file is made in the browser; GA gets only the event
+ *   and `cta_plant`, the guide's slug when it is one of the published
+ *   care-guide slugs. Never the answer given, the date, or anything about
+ *   the visitor's calendar.
  */
 export type GoogleConversion =
   | { name: 'sign_up' }
@@ -467,7 +474,8 @@ export type GoogleConversion =
       source: ContentCtaSource;
       placement: ContentCtaPlacement;
       plant?: string;
-    };
+    }
+  | { name: 'care_calendar_add'; plant: string };
 
 const TRANSACTION_ID_PATTERN = /^[0-9a-f]{32}$/u;
 
@@ -530,6 +538,13 @@ export function conversionParams(
       };
       // Only one of our own published slugs; anything else is left out, not
       // passed through.
+      if (typeof conversion.plant === 'string' && CARE_GUIDE_SLUGS.has(conversion.plant)) {
+        params.cta_plant = conversion.plant;
+      }
+      return params;
+    }
+    case 'care_calendar_add': {
+      const params: Record<string, unknown> = { page_location: pageLocation };
       if (typeof conversion.plant === 'string' && CARE_GUIDE_SLUGS.has(conversion.plant)) {
         params.cta_plant = conversion.plant;
       }
