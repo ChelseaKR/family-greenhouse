@@ -1266,6 +1266,29 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     note: 'Toxic to cats and dogs per the ASPCA, which names bufadienolides and lists vomiting and diarrhea, with an abnormal heart rhythm in rare cases. If your pet has eaten some, call your vet or a poison hotline.',
   },
   // ---------------------------------------------------------------------
+  // The rosemary care guide of 2026-11-05 (the holiday rosemary tree). The
+  // verdict was read off ASPCA's own "Rosemary" listing that day. Short form,
+  // like the 2026-11-03 and 2026-11-04 rows: no detail fields.
+  {
+    slug: 'rosemary',
+    commonName: 'Rosemary',
+    // The current name; ASPCA's listing still uses Rosmarinus officinalis,
+    // which is kept as an alias so a plant saved under either name matches.
+    scientificName: 'Salvia rosmarinus',
+    aspcaListing: {
+      title: 'Rosemary',
+      scientificName: 'Rosmarinus officinalis',
+      path: '/toxic-and-non-toxic-plants/rosemary',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // 'anthos', the listing's other name, is left out: nobody searches it,
+    // and it is not a name on the plant's tag.
+    aliases: ['rosmarinus officinalis', 'rosemary tree', 'rosemary topiary'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  // ---------------------------------------------------------------------
   // The fifth batch of care guides, 2026-11-05 (fg-next-guides-plan-2026-11-05,
   // PR 2). Each verdict was read off that plant's own live ASPCA listing that
   // day. Short form, like the 2026-11-03 and 2026-11-04 rows: no detail
@@ -1509,11 +1532,14 @@ function toxicFirst(bucket: PetToxicityEntry[]): PetToxicityEntry[] {
  *   1. exact name/alias hit
  *   2. query is a prefix of a name/alias (typeahead)
  *   3. any name/alias contains the query (substring)
- *   4. every query word (individually) appears in some name/alias (loose
- *      word overlap) — deliberately requires ALL words, not just one: a
+ *   4. every query word (individually) is a whole word of some name/alias
+ *      (loose word overlap) — deliberately requires ALL words, not just one: a
  *      single generic alias word (e.g. Boston fern's bare "fern" alias)
  *      must not alone satisfy a multi-word query like "asparagus fern" and
  *      hand back an unrelated species' (possibly wrong) toxicity verdict.
+ *      Whole words, not substrings: "air plant" (Tillandsia, no ASPCA
+ *      listing) used to match the spider plant's "airplane plant" alias,
+ *      because "air" sits inside "airplane", and came back non-toxic.
  * Ties inside a tier are broken toxic-first — see `toxicFirst`.
  */
 export function lookupToxicity(
@@ -1536,13 +1562,14 @@ export function lookupToxicity(
   const qWords = q.split(' ').filter((w) => w.length >= 3);
 
   for (const { entry, names } of indexed) {
+    const words = new Set(names.flatMap((n) => n.split(' ')));
     if (names.some((n) => n === q)) {
       exact.push(entry);
     } else if (names.some((n) => n.startsWith(q))) {
       prefix.push(entry);
     } else if (names.some((n) => n.includes(q))) {
       substring.push(entry);
-    } else if (qWords.length > 0 && qWords.every((w) => names.some((n) => n.includes(w)))) {
+    } else if (qWords.length > 0 && qWords.every((w) => words.has(w))) {
       word.push(entry);
     }
   }

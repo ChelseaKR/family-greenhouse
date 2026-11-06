@@ -187,6 +187,9 @@ describe('per-plant ASPCA listings', () => {
         'norfolk-island-pine',
         'cyclamen',
         'kalanchoe',
+        // Read off the live ASPCA page on 2026-11-05 for the rosemary care
+        // guide: the "Rosemary" listing (Rosmarinus officinalis).
+        'rosemary',
         // Read off the live ASPCA pages on 2026-11-05 for the fifth batch of
         // care guides: "Satin Pothos" (Scindapsus pictus), "Madagascar Dragon
         // Tree" (Dracaena marginata), "Arrow-Head Vine" (Syngonium
@@ -323,6 +326,23 @@ describe('lookupToxicity', () => {
     // should NOT match on the strength of the one real word alone.
     expect(lookupToxicity('zzznotaword fern').map((m) => m.slug)).not.toContain('boston-fern');
   });
+
+  it('"air plant" does not borrow the spider plant’s verdict through "airplane plant"', () => {
+    // Tillandsia has no ASPCA listing, so the honest answer is "not in the
+    // checker". The word tier used to match "air" inside the spider plant's
+    // "airplane plant" alias and answer non-toxic for a different plant.
+    for (const query of ['air plant', 'Air Plant', 'air plants', 'tillandsia']) {
+      expect(
+        lookupToxicity(query, 10).map((m) => m.slug),
+        query
+      ).not.toContain('spider-plant');
+    }
+    // Negative control: the spider plant's own alias still finds it, so the
+    // check above is not passing because the alias went missing.
+    expect(lookupToxicity('airplane plant')[0]?.slug).toBe('spider-plant');
+    // And the word tier still matches whole words in any order.
+    expect(lookupToxicity('fern boston')[0]?.slug).toBe('boston-fern');
+  });
 });
 
 describe('batch-5 guide names route to their own row, or to none', () => {
@@ -396,6 +416,13 @@ describe('care-guide coverage (#384)', () => {
     ['orchid', 'orchid'],
     ['hoya', 'hoya'],
     ['nerve plant', 'nerve-plant'],
+    // Guides added 2026-11-05 whose plant has its own ASPCA listing. The air
+    // plant guide has none, so it is not here: see 'air plant' below.
+    ['rosemary', 'rosemary'],
+    ['rosemary tree', 'rosemary'],
+    ['ponytail palm', 'ponytail-palm'],
+    ['areca palm', 'areca-palm'],
+    ['schefflera', 'schefflera'],
     // Batch-5 guides of 2026-11-05 whose plant has its own ASPCA listing, by
     // name and by the aliases a searcher is likely to type. Tradescantia has
     // none, so it is not here: see the tradescantia test below.
