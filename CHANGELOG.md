@@ -40,6 +40,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   routes.** The second paragraph of its `/.well-known` comment moved to
   `build-spa-router.mjs`, the same change as on the batch-4 guides branch.
 
+### Fixed
+
+- **Room for more care guides at the edge.** The CloudFront function that
+  routes page requests listed every blog post, care guide and help topic, and
+  had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
+  matched by their `/blog/`, `/care/` and `/help/` prefix, as the pet-safety
+  pages already were, so the function is 8,245 bytes and a new guide adds
+  nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalised guide URL now gets the prerendered page instead of the app
+  shell. Ships with the next Terraform apply.
+
 ## [0.48.0] - 2026-11-05
 
 **Twelve new care guides, reminders on your own time zone, and a fuller

@@ -101,8 +101,15 @@ export const STATIC_ROUTES = [
  *
  * Every route under a prefix must be exactly one segment below it, since that
  * is all the edge rule maps; `build-spa-router.mjs` refuses anything else.
+ *
+ * `/blog/`, `/care/` and `/help/` joined `/pet-safe/` here when the per-page
+ * map had grown to 10,232 of the 10,240 bytes CloudFront allows, with two
+ * care-guide batches still waiting. Each guide had cost the function about
+ * 30 bytes; under a prefix it costs nothing. The 404 for an unpublished slug is
+ * unchanged (S3 has no such object either way), and `spa-router.test.mjs`
+ * replays every route against the function as it stood before this change.
  */
-export const PREFIX_SERVED_NAMESPACES = [PLANT_PAGE_PREFIX];
+export const PREFIX_SERVED_NAMESPACES = [PLANT_PAGE_PREFIX, '/blog/', '/care/', '/help/'];
 
 /** Human-readable name of the plant-page lastmod ledger, for error messages. */
 const LEDGER_NAME = 'frontend/scripts/plant-pages-lastmod.json';
