@@ -16,6 +16,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
+  polka dot plant and tradescantia.** Each answers "how often to water" first
+  and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin extension
+  pages it was written from, read on 2026-11-05. None of those pages gives a
+  day count, so no guide states one: each gives the source's soil rule
+  instead. The satin pothos guide says plainly that it is a Scindapsus, not a
+  true pothos, and is watered differently.
+- **Pet-safety pages for satin pothos, dragon tree, arrowhead plant, weeping
+  fig and polka dot plant**, each citing that plant's own ASPCA listing
+  ("Satin Pothos", "Madagascar Dragon Tree", "Arrow-Head Vine", the
+  genus-level "Weeping Fig" and "Polka Dot Plant"). The tradescantia's pet
+  line reads "Unknown": the ASPCA lists the inch plant only as Tradescantia
+  fluminensis, a different species. The pet checker answers "scindapsus",
+  "nephthytis" and "ficus benjamina" with the new rows, and still answers no
+  tradescantia name, including "spiderwort", with another plant's verdict.
+
 ### Fixed
 
 - **Room for more care guides at the edge.** The CloudFront function that
