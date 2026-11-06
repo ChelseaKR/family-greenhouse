@@ -24,23 +24,33 @@
  * claims it the same way and is not counted either; `first_plant_added` is
  * about a new household getting started.
  *
- * Best-effort, like the activity feed: any failure answers false and the
- * plant create still succeeds. A lost event is better than a failed save, and
- * far better than a double count.
+ * A failure is its own answer, `'unknown'` (ADR 0010), never folded into
+ * `'not_first'`. The caller fails closed on it: the create still succeeds and
+ * no flag is sent. A lost event is better than a failed save, and far better
+ * than a double count.
  */
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
-import { logger } from '../utils/logger.js';
 
 export const FIRST_PLANT_MILESTONE_SK = 'MILESTONE#FIRST_PLANT';
 
 /**
- * Claim the account's first-plant milestone after a plant was created in
- * `householdId`. True only for the create that both wins the claim and left
- * the household with exactly one active plant. Call it after the plant is
- * saved, never before.
+ * `first`: this create won the claim and left its household with one active
+ * plant. `not_first`: the account had claimed it already, or the household
+ * already had plants. `unknown`: DynamoDB failed, so nobody knows.
  */
-export async function claimFirstPlant(userId: string, householdId: string): Promise<boolean> {
+export type FirstPlantClaim = 'first' | 'not_first' | 'unknown';
+
+/**
+ * Claim the account's first-plant milestone after a plant was created in
+ * `householdId`. `'first'` only for the create that both wins the claim and
+ * left the household with exactly one active plant. Call it after the plant
+ * is saved, never before.
+ */
+export async function claimFirstPlant(
+  userId: string,
+  householdId: string
+): Promise<FirstPlantClaim> {
   try {
     try {
       await dynamodb.send(
@@ -58,7 +68,9 @@ export async function claimFirstPlant(userId: string, householdId: string): Prom
     } catch (err) {
       // Already claimed: this is not the account's first plant. The common
       // case for every plant after the first, so it is not logged.
-      if ((err as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+      if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+        return 'not_first';
+      }
       throw err;
     }
 
@@ -71,9 +83,8 @@ export async function claimFirstPlant(userId: string, householdId: string): Prom
         ProjectionExpression: 'plantCount',
       })
     );
-    return meta.Item?.plantCount === 1;
-  } catch (err) {
-    logger.warn({ err }, 'first_plant_milestone_failed');
-    return false;
+    return meta.Item?.plantCount === 1 ? 'first' : 'not_first';
+  } catch {
+    return 'unknown';
   }
 }

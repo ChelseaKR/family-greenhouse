@@ -466,12 +466,13 @@ export const createPlant = createHandler(
     // Whether this was the account's first plant, decided once per account
     // on the server (services/accountMilestones.ts), so the web app's GA4
     // `first_plant_added` counts accounts, not screens or reloads. Present
-    // only when true; best-effort and never fails the create.
-    const firstPlantForAccount = await accountMilestones.claimFirstPlant(
-      user.userId,
-      user.householdId!
+    // only when true. A failed read fails CLOSED: the plant is saved, no flag
+    // is sent, and the miss is logged (ADR 0010).
+    const firstPlant = await accountMilestones.claimFirstPlant(user.userId, user.householdId!);
+    if (firstPlant === 'unknown') logger.warn('first_plant_milestone_unknown');
+    return createdResponse(
+      firstPlant === 'first' ? { ...plant, firstPlantForAccount: true } : plant
     );
-    return createdResponse(firstPlantForAccount ? { ...plant, firstPlantForAccount: true } : plant);
   }
 )
   .use(authMiddleware())

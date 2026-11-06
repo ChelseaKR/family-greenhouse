@@ -294,18 +294,25 @@ describe('plants handler', () => {
       });
 
     vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
-    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce(true);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('first');
     const first = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
     expect(first.statusCode).toBe(201);
     expect(JSON.parse(first.body)).toEqual({ ...created, firstPlantForAccount: true });
     expect(accountMilestones.claimFirstPlant).toHaveBeenCalledWith('user-1', 'hh-1');
 
     vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
-    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce(false);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('not_first');
     const later = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
     expect(later.statusCode).toBe(201);
     // Absent, not false: the field exists only on the one create that counts.
     expect(JSON.parse(later.body)).toEqual(created);
+
+    // Unknown (DynamoDB failed) fails closed: saved, no flag.
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('unknown');
+    const unknown = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(unknown.statusCode).toBe(201);
+    expect(JSON.parse(unknown.body)).toEqual(created);
   });
 
   it('createPlant creates a plant with valid input, passing the plan cap to the service', async () => {
