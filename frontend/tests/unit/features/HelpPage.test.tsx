@@ -77,6 +77,23 @@ describe('help content', () => {
     expect(visibleSections(true).some((s) => s.id === 'billing')).toBe(false);
   });
 
+  // docs/mobile.md, "Store payment rules": nothing in the apps sends a reader
+  // to the website to pay. The limits topic is shown in the apps, and its
+  // mobile-apps answer once ended "Use the website for anything to do with
+  // billing."
+  it('never points a reader in the apps to the website for billing', () => {
+    for (const section of visibleSections(true)) {
+      for (const article of section.articles) {
+        expect(article.text, `${section.id}#${article.id}`).not.toMatch(
+          /\b(use|on|visit|go to|open) (the|our) (website|web)\b|in a (web )?browser to (pay|buy|upgrade)/i
+        );
+      }
+    }
+    expect(articleText('limits', 'mobile-apps')).toMatch(
+      /plans aren’t bought or changed in the app/
+    );
+  });
+
   // The plan facts in these answers are also published as FAQPage JSON-LD, so
   // a stale number here is a wrong answer served to search engines as well as
   // to the person who came looking for it. Both articles below had drifted
