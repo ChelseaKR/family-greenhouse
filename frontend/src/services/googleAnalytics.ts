@@ -443,8 +443,11 @@ const TRIAL_DAYS = 14;
  * - `household_activated`: the household's first plant was saved. That is the
  *   product's own definition of activation (docs/analytics.md, funnel stage 3,
  *   PostHog `plant_added` with `ordinal: 'first'`). Neither carries a field.
- * - `first_plant_added`: the same moment, fired beside `household_activated`,
- *   carrying only HOW the plant was added (`FIRST_PLANT_METHODS`), so the
+ * - `first_plant_added`: the ACCOUNT's first plant, once per account. Callers
+ *   send it only when `POST /plants` answered `firstPlantForAccount: true`
+ *   (backend services/accountMilestones.ts), so a second household, a reload
+ *   or a second device does not count again. It carries only HOW the plant
+ *   was added (`FIRST_PLANT_METHODS`), so the
  *   first run's houseplant shortcut can be judged against typing a name.
  *   Never which plant: the slug of a tapped plant is not sent.
  */

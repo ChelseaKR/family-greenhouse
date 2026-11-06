@@ -28,9 +28,16 @@ interface Setup {
   /** The Cognito-claim role the store falls back to while that list loads. */
   claimRole?: 'admin' | 'member' | null;
   plants?: unknown[];
+  /** What `POST /plants` says about the account's first plant. */
+  firstPlantForAccount?: boolean;
 }
 
-function renderDashboard({ role = 'admin', claimRole = 'admin', plants = [] }: Setup = {}) {
+function renderDashboard({
+  role = 'admin',
+  claimRole = 'admin',
+  plants = [],
+  firstPlantForAccount = true,
+}: Setup = {}) {
   useAuthStore.setState({
     user: {
       id: 'user-1',
@@ -61,7 +68,9 @@ function renderDashboard({ role = 'admin', claimRole = 'admin', plants = [] }: S
       created.push(body);
       const plant = { id: 'p-new', householdId: 'hh-1', ...body };
       plantList = [plant];
-      return HttpResponse.json(plant);
+      return HttpResponse.json(
+        firstPlantForAccount ? { ...plant, firstPlantForAccount: true } : plant
+      );
     }),
     http.post(`${API}/tasks`, async ({ request }) => {
       const body = (await request.json()) as Record<string, unknown>;
@@ -132,6 +141,21 @@ describe('dashboard empty state: common-plant picker', () => {
     expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
       [{ name: 'household_activated' }],
       [{ name: 'first_plant_added', method: 'dashboard_empty' }],
+    ]);
+  });
+
+  it('sends no first_plant_added when the account already had its first plant', async () => {
+    const user = userEvent.setup();
+    const { created } = renderDashboard({ firstPlantForAccount: false });
+
+    const picker = await screen.findByTestId('dashboard-empty-picker');
+    await user.click(within(picker).getByRole('button', { name: 'ZZ plant' }));
+
+    await waitFor(() => expect(screen.queryByTestId('dashboard-empty-picker')).toBeNull());
+    // The sabotage applied: the plant really was saved.
+    expect(created).toHaveLength(1);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
     ]);
   });
 

@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **GA4 `first_plant_added` counts accounts, not screens.** It was sent
+  whenever the first run or the empty dashboard saved a plant, so a second
+  household, a repeated first run or a second device counted again. The
+  server now records an account's first plant once (a timestamp row in the
+  account's own partition, erased with the account) and says so on that one
+  `POST /plants` answer as `firstPlantForAccount: true`; the web app sends the
+  event only then. An account whose household already had plants is not
+  counted. The event's parameters are unchanged (`method` and the scrubbed
+  page address), so the Privacy text needs no change.
+
 ## [0.48.0] - 2026-11-05
 
 **Twelve new care guides, reminders on your own time zone, and a fuller

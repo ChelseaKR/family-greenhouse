@@ -42,6 +42,7 @@ import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
 import * as trashService from '../../services/trashService.js';
 import * as householdAudit from '../../services/householdAudit.js';
+import * as accountMilestones from '../../services/accountMilestones.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -462,7 +463,15 @@ export const createPlant = createHandler(
       logger.warn({ err }, 'activity_record_failed');
     });
 
-    return createdResponse(plant);
+    // Whether this was the account's first plant, decided once per account
+    // on the server (services/accountMilestones.ts), so the web app's GA4
+    // `first_plant_added` counts accounts, not screens or reloads. Present
+    // only when true; best-effort and never fails the create.
+    const firstPlantForAccount = await accountMilestones.claimFirstPlant(
+      user.userId,
+      user.householdId!
+    );
+    return createdResponse(firstPlantForAccount ? { ...plant, firstPlantForAccount: true } : plant);
   }
 )
   .use(authMiddleware())
