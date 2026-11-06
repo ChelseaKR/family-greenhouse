@@ -96,10 +96,13 @@ export function CommonPlantPicker({
       // the funnel counts a tapped plant and a typed one as the same step.
       track('plant_added', { ordinal: 'first' });
       trackGoogleConversion({ name: 'household_activated' });
-      trackGoogleConversion({
-        name: 'first_plant_added',
-        method: suggested?.slug === pick.slug ? 'guide_handoff' : method,
-      });
+      // Once per account, as the server decided; see AddPlantPage.
+      if (plant.firstPlantForAccount === true) {
+        trackGoogleConversion({
+          name: 'first_plant_added',
+          method: suggested?.slug === pick.slug ? 'guide_handoff' : method,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       if (scheduleFailed) {

@@ -6,6 +6,7 @@ vi.mock('../../../src/services/trashService.js');
 vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
+vi.mock('../../../src/services/accountMilestones.js');
 vi.mock('../../../src/services/enrichment.js', () => ({
   getSpeciesCached: vi.fn(),
   lookupSpeciesCached: vi.fn(),
@@ -267,6 +268,51 @@ describe('plants handler', () => {
     });
     const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(400);
+  });
+
+  it("createPlant marks the account's first plant only when the milestone service says so", async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const accountMilestones = await import('../../../src/services/accountMilestones.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    const created = {
+      id: 'p2',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      species: null,
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+    };
+    const event = () =>
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Pothos' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('first');
+    const first = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(first.statusCode).toBe(201);
+    expect(JSON.parse(first.body)).toEqual({ ...created, firstPlantForAccount: true });
+    expect(accountMilestones.claimFirstPlant).toHaveBeenCalledWith('user-1', 'hh-1');
+
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('not_first');
+    const later = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(later.statusCode).toBe(201);
+    // Absent, not false: the field exists only on the one create that counts.
+    expect(JSON.parse(later.body)).toEqual(created);
+
+    // Unknown (DynamoDB failed) fails closed: saved, no flag.
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('unknown');
+    const unknown = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(unknown.statusCode).toBe(201);
+    expect(JSON.parse(unknown.body)).toEqual(created);
   });
 
   it('createPlant creates a plant with valid input, passing the plan cap to the service', async () => {
