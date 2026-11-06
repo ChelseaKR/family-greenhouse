@@ -32,6 +32,8 @@ export const STATED_INTERVALS: Readonly<Record<string, StatedInterval>> = {
   'nerve-plant': { days: 3, stated: 'About twice a week' },
   haworthia: { days: 7, stated: 'Weekly in summer' },
   'blue-echeveria': { days: 7, stated: 'about weekly or less' },
+  'air-plant': { days: 7, stated: 'About once a week' },
+  rosemary: { days: 7, stated: 'about once a week' },
 };
 
 export function statedInterval(slug: string): StatedInterval | undefined {

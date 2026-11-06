@@ -1,5 +1,6 @@
 import { COMMON_PLANTS, type CommonPlant } from './commonPlants';
 import { isLastWateredBucket, type LastWateredBucket } from '@/features/care/nextWatering';
+import { GUIDE_HANDOFF_PLANTS } from './guideHandoffPlants';
 
 /**
  * Carrying a plant from its care guide through sign-up.
@@ -12,10 +13,10 @@ import { isLastWateredBucket, type LastWateredBucket } from '@/features/care/nex
  * defaults the list always uses. Nothing is added for them: they still tap
  * it, or pick something else, or skip.
  *
- * Only the first run's own plants (`COMMON_PLANTS`) can be carried, because
- * those are the plants it already knows how to add in one tap, with the
- * guide's own watering range. Any other value, including a real guide that
- * is not in that list, is ignored, both when it is read from the address and
+ * Only the first run's own plants (`COMMON_PLANTS`) and the few guide plants
+ * listed in `GUIDE_HANDOFF_PLANTS` can be carried, because those are the
+ * plants it knows how to add in one tap, with the guide's own watering range.
+ * Any other value, including a real guide that is on neither list, is ignored, both when it is read from the address and
  * when it is read back from storage. The slug itself is never shown: the
  * page shows the plant's translated name, looked up by a slug that has
  * already matched the list.
@@ -39,7 +40,10 @@ const LAST_KEY = 'fg.pendingGuideLastWatered';
 /** The first-run plant for a slug, or undefined for anything not on the list. */
 export function guidePlant(slug: string | null | undefined): CommonPlant | undefined {
   if (typeof slug !== 'string') return undefined;
-  return COMMON_PLANTS.find((plant) => plant.slug === slug);
+  return (
+    COMMON_PLANTS.find((plant) => plant.slug === slug) ??
+    GUIDE_HANDOFF_PLANTS.find((plant) => plant.slug === slug)
+  );
 }
 
 /**

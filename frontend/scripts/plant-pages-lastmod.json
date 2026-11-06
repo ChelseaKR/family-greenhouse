@@ -176,6 +176,10 @@
     "kalanchoe": {
       "content": "sha256-3ccb58af306a96064309316c8f0308704299da8633597cdcf911a45514f23dbf",
       "lastmod": "2026-11-05"
+    },
+    "rosemary": {
+      "content": "sha256-0433ebb3aa9223a87b2c8cb9a6bd97d2ec5ae2cd4c87a4657a40ebcc4bf25636",
+      "lastmod": "2026-11-05"
     }
   }
 }
