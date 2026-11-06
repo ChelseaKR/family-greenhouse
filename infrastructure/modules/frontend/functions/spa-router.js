@@ -71,6 +71,8 @@ var PRERENDERED = {
   '/blog/signs-of-overwatering-and-how-to-fix-it': 1,
   '/blog/why-are-my-plant-leaves-turning-yellow': 1,
   '/blog/how-much-light-does-my-room-get': 1,
+  '/blog/do-yellow-leaves-mean-overwatering': 1,
+  '/blog/can-you-overwater-a-plant': 1,
   '/care/pothos': 1,
   '/care/snake-plant': 1,
   '/care/monstera': 1,

@@ -17,7 +17,7 @@
   </url>
   <url>
     <loc>https://familygreenhouse.net/blog</loc>
-    <lastmod>2026-08-12</lastmod>
+    <lastmod>2026-11-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -149,6 +149,18 @@
   <url>
     <loc>https://familygreenhouse.net/blog/how-much-light-does-my-room-get</loc>
     <lastmod>2026-08-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/blog/do-yellow-leaves-mean-overwatering</loc>
+    <lastmod>2026-11-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://familygreenhouse.net/blog/can-you-overwater-a-plant</loc>
+    <lastmod>2026-11-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

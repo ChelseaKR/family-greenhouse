@@ -16,6 +16,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+- **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
+  overwatering?" and "Can you overwater a plant?" answer the two generic
+  question shapes Search Console showed with no page of their own (24
+  phrasings, 73 impressions from August to November). Each cites the Clemson,
+  Iowa State and Illinois extension pages it was checked against, and links
+  the overwatering post and the relevant care guides. No care guide title,
+  H1 or meta changed. `infrastructure/` changes in one file:
+  `spa-router.js` adds the 2 prerendered routes.
+
 ## [0.48.0] - 2026-11-05
 
 **Twelve new care guides, reminders on your own time zone, and a fuller
