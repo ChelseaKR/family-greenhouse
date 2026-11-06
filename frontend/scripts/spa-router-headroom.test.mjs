@@ -15,9 +15,9 @@
  * a description of it: `fixtures/spa-router.before-headroom.js.txt` is a byte
  * copy of main's spa-router.js before this change (a `.txt` so no linter,
  * formatter or deploy step mistakes it for a live function). Every public
- * route on main, plus every route #1102 and #1103 add, is replayed through
- * both functions against a model of the bucket, and the viewer-visible result
- * must match.
+ * route on main, plus every route #1102, #1103 and feat/blog-answer-first
+ * add, is replayed through both functions against a model of the bucket, and
+ * the viewer-visible result must match.
  *
  * Run: `npm run test:edge`.
  */
@@ -83,7 +83,13 @@ const PR_1103_ROUTES = [
   '/pet-safe/polka-dot-plant',
 ];
 
-const PENDING_ROUTES = [...PR_1102_ROUTES, ...PR_1103_ROUTES];
+/** Routes feat/blog-answer-first (head fdb42fbe, no PR yet) adds to the sitemap. */
+const BLOG_ANSWER_FIRST_ROUTES = [
+  '/blog/do-yellow-leaves-mean-overwatering',
+  '/blog/can-you-overwater-a-plant',
+];
+
+const PENDING_ROUTES = [...PR_1102_ROUTES, ...PR_1103_ROUTES, ...BLOG_ANSWER_FIRST_ROUTES];
 
 /** Every page that exists once main, #1102 and #1103 are all deployed. */
 const ALL_ROUTES = [...new Set([...publicRoutePaths(), ...PENDING_ROUTES])];
@@ -112,8 +118,9 @@ function handlerFrom(source, mutate = () => {}) {
 }
 
 /**
- * The BEFORE function: main's bytes, with #1102's and #1103's care guides
- * added to its map the way their own regenerated spa-router.js adds them.
+ * The BEFORE function: main's bytes, with the pending branches' care guides
+ * and blog posts added to its map the way their own regenerated spa-router.js
+ * adds them.
  * (Their `/pet-safe/` pages needed no entry; that prefix was already served.)
  */
 const before = handlerFrom(BEFORE_SOURCE, (sandbox) => {
@@ -233,7 +240,7 @@ function differences(a, b, urls = corpus()) {
     .filter((row) => row.before !== row.after);
 }
 
-test('the corpus actually covers main, #1102 and #1103', () => {
+test('the corpus actually covers main, #1102, #1103 and feat/blog-answer-first', () => {
   const urls = corpus();
   for (const route of [...publicRoutePaths(), ...PENDING_ROUTES]) {
     assert.ok(urls.includes(route), `corpus is missing ${route}`);
@@ -243,6 +250,7 @@ test('the corpus actually covers main, #1102 and #1103', () => {
     '/care/monstera',
     '/care/air-plant',
     '/care/tradescantia',
+    '/blog/can-you-overwater-a-plant',
     '/care/not-a-real-slug',
   ]) {
     assert.ok(urls.includes(url), `corpus is missing ${url}`);
