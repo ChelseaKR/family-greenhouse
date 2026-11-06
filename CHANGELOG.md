@@ -23,7 +23,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Iowa State and Illinois extension pages it was checked against, and links
   the overwatering post and the relevant care guides. No care guide title,
   H1 or meta changed. `infrastructure/` changes in one file:
-  `spa-router.js` adds the 2 prerendered routes.
+  `spa-router.js` adds the 2 prerendered routes and moves one comment
+  paragraph to `build-spa-router.mjs`, since the 2 routes put the function
+  81 bytes over CloudFront's 10 KB limit. It is now 10,142 bytes, leaving 98.
 
 ## [0.48.0] - 2026-11-05
 

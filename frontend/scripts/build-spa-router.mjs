@@ -18,6 +18,14 @@
  * needing it, and that means the function must be able to tell a prerendered
  * page from an app route without asking S3.
  *
+ * ## Why kind (4) of the function exists (issue #719)
+ *
+ * Moved here from `spa-router.js`, which has a 10 KB source limit. Kind (3),
+ * the app-shell rewrite, used to take every extensionless path, so every url
+ * answered 200. Kinds (3) and (4) now split on App.tsx's routes, so a url
+ * that 404s at the edge already rendered "Nothing growing here" in the app.
+ * See app-routes.mjs.
+ *
  * ## Why generate rather than hand-maintain
  *
  * The list is 50-odd entries and grows with every blog post and care guide,
