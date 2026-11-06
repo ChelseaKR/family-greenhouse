@@ -15,13 +15,14 @@
  * eight watering guides added 2026-11-03 (string of pearls through corn plant)
  * cite extension and RHS pages read that day; the four holiday guides added
  * 2026-11-04 (amaryllis, Norfolk Island pine, cyclamen, kalanchoe) cite
- * extension pages read that day; and since #1079 every guide
+ * extension pages read that day; the five added 2026-11-05 (air plant through
+ * schefflera) cite extension pages read that day; and since #1079 every guide
  * records its sources in `careSources`, so no water, light or humidity line
  * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 45 now, still short
+ * architecture could be judged before scaling; there are 50 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -3691,6 +3692,421 @@ export const CARE_GUIDES: CareGuide[] = [
         title: 'Kalanchoe blossfeldiana (Florist Kalanchoe)',
         url: 'https://plants.ces.ncsu.edu/plants/kalanchoe-blossfeldiana/',
         accessed: '2026-11-04',
+      },
+    ],
+  },
+  {
+    slug: 'air-plant',
+    commonName: 'Air Plant',
+    scientificName: 'Tillandsia',
+    alsoKnownAs: ['Tillandsia'],
+    related: ['string-of-pearls', 'haworthia', 'ponytail-palm'],
+    metaTitle: 'How Often to Water an Air Plant: About Once a Week',
+    metaDescription:
+      'Water an air plant about once a week by soaking or misting the whole plant, then shake it out and let it dry. In cool, dim months, less is enough.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'An air plant is a Tillandsia, a small bromeliad that grows without soil, clinging to bark, rocks or anything else that holds it up. It takes in water through scales on its leaves, so you water the whole plant, about once a week, and then let it dry.',
+    quickFacts: {
+      water: 'About once a week; every 2 weeks in cool, dim months',
+      light: 'Bright light; the sources differ on direct sun',
+      difficulty: 'Easy, if it dries well after each watering',
+      toxicity: 'Unknown: the ASPCA plant list has no entry for air plants',
+      humidity: 'Likes humid air; a dry home makes watering matter more',
+    },
+    sections: {
+      watering: [
+        'Water an air plant about once a week. Clemson Cooperative Extension, UF/IFAS Gardening Solutions and Iowa State University Extension and Outreach all give that interval, and North Carolina State Extension says it needs water at least once a week to thrive. Iowa State adds that in cooler, darker months, every two weeks can be enough.',
+        'The sources differ on how. Clemson says to mist it well or sink it in water for 20 to 30 minutes, and UF/IFAS says to mist it until water runs off. Iowa State says regular misting alone does not give it enough water, and soaks it for 30 to 60 minutes in room-temperature water that has stood overnight so the chlorine can escape.',
+        'Whichever you choose, the drying matters as much as the water. Clemson and Iowa State both say to shake the plant gently and turn it upside down so no water sits in the center, where rot starts. Iowa State leaves it upside down for 30 minutes to 3 hours before it goes back on display.',
+      ],
+      light: [
+        'Give it bright light, but the sources disagree about direct sun. Clemson and UF/IFAS say bright, filtered light near an east, south or west window, and Clemson says to keep it out of direct sunlight. NC State says most species take full sun in nature, so even the sunniest window in a home is not too much, and that high light is what makes them flower.',
+        'Air needs to move around it, too. Clemson says good air circulation helps the plant dry between waterings and helps prevent disease. Iowa State says air plants do best with steady moisture, which they get from humid air and rain in the wild, and which a dry home does not supply, so a dry room is a reason to keep up the soaking.',
+      ],
+      problems: [
+        'Rot is the main way to lose one. Clemson and Iowa State warn about water left pooled between the leaves at the center, and a holder that stays wet does the same harm: Clemson and UF/IFAS both say whatever it sits on must not hold water.',
+        'Too little water shows in the leaves. Clemson says they curl or roll, turn dull and brown at the tips, and UF/IFAS says curled or rolled leaves mean the plant is dehydrated. Iowa State says chlorine in tap water can also brown the tips. NC State lists mealybugs, scale and crown rot, the problems it shares with most houseplants.',
+      ],
+      propagation: [
+        'Air plants make their own replacements. Clemson says a mature plant dies after it flowers, and small new plants called pups grow from its base. Iowa State says the pups can be gently separated to start new plants, or to give away.',
+        'Seed is possible but slow. NC State calls it a very slow process, and Iowa State says the seeds rarely form indoors. Clemson and UF/IFAS add a buying rule: wild air plants are threatened by collecting, so buy nursery-grown ones.',
+      ],
+      sharedCare: [
+        'In a shared household, an air plant needs one person on soaking day, because it hangs on a wall or sits in a glass globe where nobody else thinks to check it.',
+        'Agree on the day and on the drying step, since a plant soaked twice and put back wet is in more danger than one that missed a week. Curled leaves are the sign it was missed.',
+      ],
+      honestBit: [
+        'My take: “air plant” is the most misleading name in the shop. It does not live on air; it lives on a weekly bath and a good shake. Give it those, and it is about as easy as houseplants get.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has no entry for air plants or Tillandsia, and we won’t borrow the verdict of a different bromeliad listed there. If you have a pet that chews, keep it out of reach, or pick a plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an air plant?',
+        a: 'About once a week, by soaking or misting the whole plant, then shaking it out and letting it dry upside down. Iowa State University Extension and Outreach says every two weeks can be enough in cooler, darker months.',
+      },
+      {
+        q: 'Should I soak or mist my air plant?',
+        a: 'The sources differ. Clemson Cooperative Extension says either a good misting or a 20 to 30 minute soak, and UF/IFAS Gardening Solutions says to mist until water runs off. Iowa State University Extension and Outreach says misting alone is not enough and soaks for 30 to 60 minutes.',
+      },
+      {
+        q: 'Why is my air plant dying after it bloomed?',
+        a: 'That is normal. Clemson Cooperative Extension says the mother plant dies after flowering, and new pups grow from its base to replace it. Keep watering it until the pups are big enough to separate.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Air Plants',
+        url: 'https://hgic.clemson.edu/factsheet/air-plants/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Air Plants',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/air-plants/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'All About Air Plants',
+        url: 'https://yardandgarden.extension.iastate.edu/how-to/all-about-air-plants',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Tillandsia (Air Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/tillandsia/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'rosemary',
+    commonName: 'Rosemary',
+    scientificName: 'Salvia rosmarinus',
+    alsoKnownAs: ['Rosemary Tree', 'Rosemary Topiary', 'Rosmarinus officinalis'],
+    related: ['norfolk-island-pine', 'poinsettia', 'air-plant'],
+    metaTitle: 'How Often to Water a Rosemary Tree: About Weekly, When Dry',
+    metaDescription:
+      'Water a rosemary tree when the soil is dry to the touch, about once a week, and never let it sit in a foil wrap full of water. Give it full sun indoors.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'A rosemary tree is the herb rosemary, Salvia rosmarinus, pruned into a small cone and sold as a living Christmas tree in late fall and December. It is a Mediterranean shrub from dry, rocky places, so it wants your sunniest window and soil kept on the dry side, with water about once a week, when the surface is dry. The ASPCA lists rosemary as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the soil is dry to the touch, about once a week',
+      light: 'Full sun; your sunniest window, turned each week',
+      difficulty: 'Moderate; winter indoors is the hard part',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Sources differ; use a pebble tray, not more water',
+    },
+    sections: {
+      watering: [
+        'Water a rosemary tree when the soil is dry to the touch. UF/IFAS Gardening Solutions, writing about the rosemary topiaries sold for the holidays, says that works out to “about once every week or so,” and calls rosemary a desert native that does best with soil kept on the dry side. Illinois Extension also says to keep the soil on the dry side indoors.',
+        'Check the foil. UF/IFAS warns that the festive wrap on a holiday pot can trap more water than the plant likes, so keep a close eye on the soil, swap the foil for a bow, or take it off so the pot can drain.',
+        'Overwatering is the usual killer. North Carolina State Extension says rosemary has a low tolerance for wet conditions and names overwatering as the common cause of decline or death, and Wisconsin Horticulture says the same. Wisconsin differs on the target, saying to keep the soil moist, but it also calls good drainage a requirement, and every source agrees on that.',
+      ],
+      light: [
+        'Give it full sun, which indoors means the sunniest window in the house. UF/IFAS says to keep it in full sun indoors and to turn the pot weekly so every side gets light. Illinois Extension notes that it does little growing in the short, dim days of winter.',
+        'Cool is better than warm: Illinois says that indoors it prefers a cool, even cold, sunny spot. On humidity the sources pull in different directions. Illinois says indoor air dries it out, causing brown tips and dieback, and suggests a saucer of pebbles and water and frequent misting rather than more water in the pot. NC State says it has a low tolerance for humid conditions and that poor air circulation with high humidity invites powdery mildew. Wisconsin also stresses good air circulation.',
+      ],
+      problems: [
+        'Brown needle tips and dieback indoors usually mean dry air, according to Illinois Extension, which says the answer is not more water in the pot, because that leads to root rot.',
+        'Root rot and botrytis are the common diseases NC State and Wisconsin name, and both trace most losses to overwatering. The pests to look for, NC State says, are aphids, mealybugs, whiteflies and spider mites, especially indoors.',
+        'The cone shape will not last on its own. UF/IFAS says holiday topiaries are carefully pruned into shape, and that the shape changes as the plant grows and as you cut sprigs for cooking. Wisconsin says frequent pinching of the tips keeps a young topiary in shape.',
+      ],
+      propagation: [
+        'Stem cuttings are the way to make more. Wisconsin Horticulture says to take 4 to 6 inch tip cuttings from a shoot without flowers in late spring or early summer, strip the lower leaves, and root them in perlite. Illinois Extension says cuttings root easily, while seed is very slow.',
+        'After the holidays, the tree can live on. UF/IFAS says it can be planted outdoors in full sun and good drainage where winters are mild. Illinois says rosemary is not reliably hardy in zone 6 or colder, so in much of the country it stays a pot plant that comes inside before frost.',
+      ],
+      sharedCare: [
+        'In a shared household, a rosemary tree needs one person to check the soil, because a holiday plant that everyone waters a little ends up standing in a foil wrap full of water.',
+        'It keeps company with the other holiday plants we cover: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe). UF/IFAS expects you to cut sprigs for the kitchen, so agree on who trims it and the shape changes evenly.',
+      ],
+      honestBit: [
+        'My take: a rosemary tree is the one holiday plant that earns its keep after New Year’s. Treat it as a sun-loving Mediterranean shrub that happens to be shaped like a tree, keep it dry and bright, and you get to cook with it all winter.',
+        'The ASPCA lists rosemary (Rosmarinus officinalis) as non-toxic to cats and dogs. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for rosemary](/pet-safe/rosemary) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a rosemary tree?',
+        a: 'When the soil is dry to the touch, which UF/IFAS Gardening Solutions says is about once every week or so. Check before you water rather than going by the calendar, and pour off any water caught in the foil wrap.',
+      },
+      {
+        q: 'Why is my rosemary tree turning brown?',
+        a: 'Indoors, usually dry air. Illinois Extension says rosemary dries out quickly inside, which causes brown tips and dieback, and that more water in the pot is not the fix. Keep it cool and sunny, on a tray of pebbles and water.',
+      },
+      {
+        q: 'Can I plant my rosemary tree outside after the holidays?',
+        a: 'Yes, where winters are mild: UF/IFAS Gardening Solutions says full sun and good drainage. Illinois Extension says rosemary is not reliably hardy in zone 6 or colder, so in colder places keep it in a pot and bring it in before frost.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Rosemary Topiaries',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/edibles/vegetables/rosemary/rosemary-topiaries/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Rosemary',
+        url: 'https://extension.illinois.edu/herbs/rosemary',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Salvia rosmarinus (Rosemary)',
+        url: 'https://plants.ces.ncsu.edu/plants/salvia-rosmarinus/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Rosemary, Salvia rosmarinus',
+        url: 'https://hort.extension.wisc.edu/articles/rosemary-rosemarinus-officinalis/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'ponytail-palm',
+    commonName: 'Ponytail Palm',
+    scientificName: 'Beaucarnea recurvata',
+    alsoKnownAs: ['Elephant’s Foot Tree', 'Nolina recurvata'],
+    related: ['jade-plant', 'zz-plant', 'rosemary'],
+    metaTitle: 'How Often to Water a Ponytail Palm: Let It Dry Out First',
+    metaDescription:
+      'Water a ponytail palm deeply, then let the soil dry out before the next drink, and cut back sharply in winter. It is a succulent that stores water.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'A ponytail palm is not a palm at all but a succulent tree from Mexico, with a swollen base that stores water and a fountain of long, thin leaves on top. It wants as much light as you can give it, a fast-draining cactus mix, and much less water than most houseplants. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Deeply, then let it dry; much less in winter',
+      light: 'As much light as possible; a sunny window',
+      difficulty: 'Easy; a good first plant',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Copes with the dry air of a heated home',
+    },
+    sections: {
+      watering: [
+        'Water a ponytail palm deeply, then let the soil dry out before you water again. North Carolina State Extension and Wisconsin Horticulture both give that rule for the growing season, and Iowa State University Extension and Outreach puts it plainly: water it less often than most houseplants. None of the sources gives a number of days.',
+        'In winter, cut back hard. NC State says to reduce watering greatly, and Wisconsin explains why: in the wild it gets summer rain and stays dry through most of the winter, and its swollen base stores water to ride out drought. Wisconsin calls overwatering the most common reason the plant fails.',
+      ],
+      light: [
+        'Give it as much light as you can. Wisconsin says to place it where it gets as much light as possible, NC State says a sunny window, and Iowa State says an east or west window usually works. If it spends the summer outside, Wisconsin says to move it out gradually so it does not sunburn.',
+        'Pot it in a mix that drains fast, the kind sold for cactus and succulents. Wisconsin suggests adding sharp sand or small gravel to regular potting mix. NC State notes that it does well even in the dry air of a heated home, which many houseplants do not.',
+      ],
+      problems: [
+        'Too much water is the big one. Wisconsin names overwatering as the most common cause of failure, and NC State lists stem rot among its diseases, along with bacterial leaf streak and leaf spots.',
+        'Brown leaf tips are common indoors. Wisconsin says they can come from too much or too little water, too much fertilizer, or salts built up in the pot, and that the dead ends can be trimmed off. Older leaves that yellow and dry are normal and can be removed.',
+        'For pests, Wisconsin names mealybugs and scale, and NC State adds spider mites.',
+      ],
+      propagation: [
+        'Seed is the way it is propagated, and Wisconsin says the seed is not commonly available. The small offsets that sometimes form on the base will not root, according to Wisconsin, though they can be left to grow into branches.',
+        'The plant you have can last a long time. Wisconsin says ponytail palms can outlive their owners and go many years before needing a bigger pot, and that a small pot keeps the plant small.',
+      ],
+      sharedCare: [
+        'In a shared household, a ponytail palm needs everyone to agree to leave it alone, because its swollen base is a water tank and a second watering is the one thing it cannot use.',
+        'Pick one person to water it, deeply and rarely, and give it the brightest window, where nobody has to move it.',
+      ],
+      honestBit: [
+        'My take: the ponytail palm is the plant for the household that forgets. Most of the ones that die were loved too much, not too little.',
+        'The ASPCA lists the ponytail palm (under “Pony Tail”, Beaucarnea recurvata) as non-toxic to cats and dogs. It is not a true palm, and the verdict does not carry over to palms: the [sago palm](/care/sago-palm) is severely toxic. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for ponytail palm](/pet-safe/ponytail-palm) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a ponytail palm?',
+        a: 'Deeply, and only after the soil has dried out, with much less water in winter. North Carolina State Extension, Wisconsin Horticulture and Iowa State University Extension and Outreach all give a dryness rule rather than a number of days.',
+      },
+      {
+        q: 'Is a ponytail palm a real palm?',
+        a: 'No. Wisconsin Horticulture says it is a succulent and not a member of the palm family, and North Carolina State Extension places it in the asparagus family. Its swollen base stores water, which is why it needs so little.',
+      },
+      {
+        q: 'Why are my ponytail palm’s leaf tips brown?',
+        a: 'Wisconsin Horticulture names too much or too little water, too much fertilizer, and salts built up in the pot. Check the watering first, and trim the brown ends off if you like.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Beaucarnea recurvata (Ponytail Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/beaucarnea-recurvata/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for a ponytail palm?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-ponytail-palm',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Ponytail Palm, Beaucarnea recurvata',
+        url: 'https://hort.extension.wisc.edu/articles/ponytail-palm-beaucarnea-recurvata/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'areca-palm',
+    commonName: 'Areca Palm',
+    scientificName: 'Dypsis lutescens',
+    alsoKnownAs: ['Butterfly Palm', 'Golden Cane Palm', 'Chrysalidocarpus lutescens'],
+    related: ['parlor-palm', 'ponytail-palm', 'schefflera'],
+    metaTitle: 'How Often to Water an Areca Palm: Moist, Never Soggy',
+    metaDescription:
+      'Keep an areca palm moist but never soggy while it is growing, in bright, indirect light with humid air. The source gives a moisture rule, not a day count.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'An areca palm is a clumping palm from Madagascar, with several bamboo-like stems and arching, feathery fronds, and one of the most popular palms grown indoors. It wants bright, indirect light, humid air and soil kept moist but never soggy. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Keep it moist but not soggy while it is growing',
+      light: 'Bright, indirect light in a warm room',
+      difficulty: 'Moderate; humid air is the hard part',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'High; use a humidifier if the air is dry',
+    },
+    sections: {
+      watering: [
+        'Keep an areca palm’s soil moist but not soggy while it is actively growing. That is North Carolina State Extension’s rule, and it is the only extension source we found for this palm indoors, so this guide gives no number of days. Check the soil rather than the calendar: water before it dries out, and never so much that it stays wet.',
+        'Drainage is the other half. NC State says to grow it in well-drained potting soil, so use a pot with a drainage hole and empty the saucer after watering. NC State ties the moist-soil rule to the growing season and gives no separate rule for winter.',
+      ],
+      light: [
+        'Give it bright, indirect light in a warm to average room, which is what NC State recommends indoors. Outdoors in frost-free climates, NC State says it tolerates full sun but prefers partial shade.',
+        'It wants humid air. NC State says it prefers high humidity indoors and suggests a humidifier if the air is too dry.',
+      ],
+      problems: [
+        'NC State lists scale, whiteflies and spider mites as its pests, so check the undersides of the fronds when you water.',
+        'NC State also says the heart of palm, the growing tip, contains cyanide compounds and should not be eaten.',
+      ],
+      propagation: [
+        'NC State lists division and seed. An areca palm grows as a clump of stems from one base, and as a houseplant it rarely flowers or sets fruit, so dividing the clump is the practical route.',
+        'NC State says to repot it every 2 or 3 years. It is a big plant in the wild, up to 30 feet tall, but stays much smaller in a pot.',
+      ],
+      sharedCare: [
+        'In a shared household, an areca palm needs one person watching the soil, because it is a palm that minds drying out as much as it minds sitting wet.',
+        'If the household runs a humidifier in winter, put the palm near it, and tell whoever fills it that the palm counts on it too.',
+      ],
+      honestBit: [
+        'My take: an areca palm tells you plainly what it needs: bright light, steady moisture and humid air. If your home is dim and dry, it is the palm to skip, not the one to fight with.',
+        'The ASPCA lists the areca palm (Dypsis lutescens) as non-toxic to cats and dogs. Do not let that carry over to other palms: the [sago palm](/care/sago-palm), sold alongside it, is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for areca palm](/pet-safe/areca-palm) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an areca palm?',
+        a: 'Often enough that the soil stays moist but never soggy while it is growing. North Carolina State Extension gives that rule and no number of days, so check the soil rather than the calendar.',
+      },
+      {
+        q: 'How much light does an areca palm need?',
+        a: 'Bright, indirect light, in a warm to average room. North Carolina State Extension says it also wants high humidity, raised with a humidifier if needed.',
+      },
+      {
+        q: 'How big does an areca palm get?',
+        a: 'Up to 30 feet tall in its native range, North Carolina State Extension says, but much smaller as a houseplant, where it rarely flowers or fruits.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Chrysalidocarpus lutescens (Areca Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/chrysalidocarpus-lutescens/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'schefflera',
+    commonName: 'Schefflera',
+    scientificName: 'Schefflera arboricola',
+    alsoKnownAs: ['Dwarf Umbrella Tree', 'Umbrella Tree', 'Heptapleurum arboricola'],
+    related: ['money-tree', 'rubber-plant', 'areca-palm'],
+    metaTitle: 'How Often to Water a Schefflera: When the Top ½ Inch Is Dry',
+    metaDescription:
+      'Water a schefflera thoroughly, then wait until the top ½ inch of soil is dry, and never leave it standing in the saucer. Give it medium to bright light.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'Schefflera, the umbrella tree, is a tropical shrub whose leaflets spread from each stalk like the spokes of an umbrella. The dwarf kind, Schefflera arboricola, and the larger umbrella tree, S. actinophylla, are both common houseplants with the same basic care: a thorough drink once the top of the soil dries, medium to bright light, and steady warmth. The ASPCA lists schefflera as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Thoroughly, once the top ½ inch of soil is dry',
+      light: 'Medium to bright, filtered light; no harsh direct sun',
+      difficulty: 'Easy, if it stays warm and out of drafts',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Likes humid air; a pebble tray helps',
+    },
+    sections: {
+      watering: [
+        'Water a schefflera thoroughly, then let the top half inch of soil dry before you water again. That is Clemson Cooperative Extension’s rule, and it adds: never let the plant sit with water in its saucer. North Carolina State Extension says much the same, to let the soil dry and then soak it thoroughly.',
+        'Iowa State University Extension and Outreach and Illinois Extension, writing about the larger umbrella tree, say to let the soil dry moderately between waterings, and Iowa State says to water less often in fall and winter. None of the sources gives a number of days.',
+      ],
+      light: [
+        'Medium to bright light suits it, Clemson says. NC State recommends a south, west or east window with filtered light, such as through a sheer curtain, and warns that bright, direct light indoors burns the leaves. Iowa State gives bright, indirect light near an east, west or south window for the umbrella tree. Low light, Clemson says, brings yellowing leaves and spindly, weak stems.',
+        'Keep it warm and steady. Clemson gives 65 to 75°F by day and above 60°F at night, and says to keep it away from heat vents, radiators, open windows and air conditioners. NC State says it likes high humidity and suggests a tray of wet pebbles, with the water line below the top of the pebbles so the pot does not sit in water.',
+      ],
+      problems: [
+        'Leaf drop is the classic complaint. Clemson names overwatering, low humidity and chilling as causes, and NC State says the leaves drop when the soil is either too wet or too dry. Clemson adds that dead patches show up on the leaves a few days after a cold spell, so keep it above 50°F.',
+        'Root rot, Clemson says, usually comes from a mix that drains slowly or from watering too often. Clemson and NC State both name spider mites, mealybugs and scale as its pests. Illinois Extension says spider mites attack in warm, dry rooms, and that raising the humidity and washing both sides of the leaves helps.',
+      ],
+      propagation: [
+        'Clemson lists seed, cuttings and air layering, and NC State lists seed and stem cuttings. To keep a plant small, Clemson says to prune just above a leaf, and Illinois Extension says tip pruning keeps it bushy.',
+        'Clemson says an overcrowded plant can be repotted in any season, in general-purpose potting soil. In a container, NC State says, a dwarf schefflera reaches about 4 to 6 feet, and Clemson says the larger umbrella tree grows to 8 to 10 feet indoors.',
+      ],
+      sharedCare: [
+        'In a shared household, a schefflera needs one person checking that top half inch, because a plant that drops leaves when it is too wet and when it is too dry gets the blame for both.',
+        'Because the ASPCA lists it as toxic to cats and dogs, keep it where pets cannot chew the leaves, and pick up fallen leaves rather than leaving them on the floor.',
+      ],
+      honestBit: [
+        'My take: a schefflera is a forgiving, long-lived plant whose one bad habit is dramatic leaf drop. It is almost always telling you about a draft, a soggy pot or a dry spell, so check those before anything else.',
+        'The ASPCA lists schefflera as toxic to cats and dogs. It names calcium oxalate crystals, which irritate the mouth and can cause drooling, vomiting and trouble swallowing. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for schefflera](/pet-safe/schefflera) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a schefflera?',
+        a: 'Thoroughly, once the top half inch of soil is dry, and less often in fall and winter. Clemson Cooperative Extension gives the half-inch rule and says never to leave the pot sitting in water. None of the sources gives a number of days.',
+      },
+      {
+        q: 'Why is my schefflera dropping leaves?',
+        a: 'Usually water, drafts or cold. Clemson Cooperative Extension names overwatering, low humidity and chilling, and North Carolina State Extension says leaves drop when the soil is too wet or too dry.',
+      },
+      {
+        q: 'Is an umbrella tree the same as a schefflera?',
+        a: 'Both names cover the two common houseplant species. Clemson Cooperative Extension calls Schefflera actinophylla the umbrella tree and S. arboricola the dwarf schefflera, and gives one set of care for both.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Schefflera',
+        url: 'https://hgic.clemson.edu/factsheet/schefflera-2/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Heptapleurum arboricola (Dwarf Umbrella Tree)',
+        url: 'https://plants.ces.ncsu.edu/plants/heptapleurum-arboricola/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for an umbrella tree?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-umbrella-tree',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Umbrella tree',
+        url: 'https://extension.illinois.edu/houseplants/umbrella-tree',
+        accessed: '2026-11-05',
       },
     ],
   },
