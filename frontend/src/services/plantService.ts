@@ -4,6 +4,14 @@ import { track } from './analytics';
 import type { IdentifyCreditBalance } from './billingService';
 import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
 
+/**
+ * `POST /plants` answers with the plant, plus `firstPlantForAccount: true`
+ * on the one create that was this account's first plant (decided once per
+ * account on the server, backend services/accountMilestones.ts). It is what
+ * gates GA4 `first_plant_added`; it is absent on every other create.
+ */
+export type CreatedPlant = Plant & { firstPlantForAccount?: true };
+
 export type { SeasonalCadence };
 
 export type PlantStatus = 'active' | 'died' | 'gave_away' | 'archived';
@@ -310,8 +318,8 @@ export const plantService = {
     return response.data;
   },
 
-  async createPlant(data: CreatePlantData): Promise<Plant> {
-    const response = await api.post<Plant>('/plants', data);
+  async createPlant(data: CreatePlantData): Promise<CreatedPlant> {
+    const response = await api.post<CreatedPlant>('/plants', data);
     return response.data;
   },
 

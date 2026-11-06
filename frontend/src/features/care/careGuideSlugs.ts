@@ -52,6 +52,17 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'norfolk-island-pine',
   'cyclamen',
   'kalanchoe',
+  'air-plant',
+  'rosemary',
+  'ponytail-palm',
+  'areca-palm',
+  'schefflera',
+  'satin-pothos',
+  'dragon-tree',
+  'arrowhead-plant',
+  'weeping-fig',
+  'polka-dot-plant',
+  'tradescantia',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */

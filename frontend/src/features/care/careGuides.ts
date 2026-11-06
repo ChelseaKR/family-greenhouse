@@ -15,13 +15,15 @@
  * eight watering guides added 2026-11-03 (string of pearls through corn plant)
  * cite extension and RHS pages read that day; the four holiday guides added
  * 2026-11-04 (amaryllis, Norfolk Island pine, cyclamen, kalanchoe) cite
- * extension pages read that day; and since #1079 every guide
+ * extension pages read that day; the five added 2026-11-05 (air plant through
+ * schefflera) and the six added 2026-11-05 in batch 5 (satin pothos through
+ * tradescantia) cite extension pages read that day; and since #1079 every guide
  * records its sources in `careSources`, so no water, light or humidity line
  * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 45 now, still short
+ * architecture could be judged before scaling; there are 56 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -3691,6 +3693,895 @@ export const CARE_GUIDES: CareGuide[] = [
         title: 'Kalanchoe blossfeldiana (Florist Kalanchoe)',
         url: 'https://plants.ces.ncsu.edu/plants/kalanchoe-blossfeldiana/',
         accessed: '2026-11-04',
+      },
+    ],
+  },
+  {
+    slug: 'air-plant',
+    commonName: 'Air Plant',
+    scientificName: 'Tillandsia',
+    alsoKnownAs: ['Tillandsia'],
+    related: ['string-of-pearls', 'haworthia', 'ponytail-palm'],
+    metaTitle: 'How Often to Water an Air Plant: About Once a Week',
+    metaDescription:
+      'Water an air plant about once a week by soaking or misting the whole plant, then shake it out and let it dry. In cool, dim months, less is enough.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'An air plant is a Tillandsia, a small bromeliad that grows without soil, clinging to bark, rocks or anything else that holds it up. It takes in water through scales on its leaves, so you water the whole plant, about once a week, and then let it dry.',
+    quickFacts: {
+      water: 'About once a week; every 2 weeks in cool, dim months',
+      light: 'Bright light; the sources differ on direct sun',
+      difficulty: 'Easy, if it dries well after each watering',
+      toxicity: 'Unknown: the ASPCA plant list has no entry for air plants',
+      humidity: 'Likes humid air; a dry home makes watering matter more',
+    },
+    sections: {
+      watering: [
+        'Water an air plant about once a week. Clemson Cooperative Extension, UF/IFAS Gardening Solutions and Iowa State University Extension and Outreach all give that interval, and North Carolina State Extension says it needs water at least once a week to thrive. Iowa State adds that in cooler, darker months, every two weeks can be enough.',
+        'The sources differ on how. Clemson says to mist it well or sink it in water for 20 to 30 minutes, and UF/IFAS says to mist it until water runs off. Iowa State says regular misting alone does not give it enough water, and soaks it for 30 to 60 minutes in room-temperature water that has stood overnight so the chlorine can escape.',
+        'Whichever you choose, the drying matters as much as the water. Clemson and Iowa State both say to shake the plant gently and turn it upside down so no water sits in the center, where rot starts. Iowa State leaves it upside down for 30 minutes to 3 hours before it goes back on display.',
+      ],
+      light: [
+        'Give it bright light, but the sources disagree about direct sun. Clemson and UF/IFAS say bright, filtered light near an east, south or west window, and Clemson says to keep it out of direct sunlight. NC State says most species take full sun in nature, so even the sunniest window in a home is not too much, and that high light is what makes them flower.',
+        'Air needs to move around it, too. Clemson says good air circulation helps the plant dry between waterings and helps prevent disease. Iowa State says air plants do best with steady moisture, which they get from humid air and rain in the wild, and which a dry home does not supply, so a dry room is a reason to keep up the soaking.',
+      ],
+      problems: [
+        'Rot is the main way to lose one. Clemson and Iowa State warn about water left pooled between the leaves at the center, and a holder that stays wet does the same harm: Clemson and UF/IFAS both say whatever it sits on must not hold water.',
+        'Too little water shows in the leaves. Clemson says they curl or roll, turn dull and brown at the tips, and UF/IFAS says curled or rolled leaves mean the plant is dehydrated. Iowa State says chlorine in tap water can also brown the tips. NC State lists mealybugs, scale and crown rot, the problems it shares with most houseplants.',
+      ],
+      propagation: [
+        'Air plants make their own replacements. Clemson says a mature plant dies after it flowers, and small new plants called pups grow from its base. Iowa State says the pups can be gently separated to start new plants, or to give away.',
+        'Seed is possible but slow. NC State calls it a very slow process, and Iowa State says the seeds rarely form indoors. Clemson and UF/IFAS add a buying rule: wild air plants are threatened by collecting, so buy nursery-grown ones.',
+      ],
+      sharedCare: [
+        'In a shared household, an air plant needs one person on soaking day, because it hangs on a wall or sits in a glass globe where nobody else thinks to check it.',
+        'Agree on the day and on the drying step, since a plant soaked twice and put back wet is in more danger than one that missed a week. Curled leaves are the sign it was missed.',
+      ],
+      honestBit: [
+        'My take: “air plant” is the most misleading name in the shop. It does not live on air; it lives on a weekly bath and a good shake. Give it those, and it is about as easy as houseplants get.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has no entry for air plants or Tillandsia, and we won’t borrow the verdict of a different bromeliad listed there. If you have a pet that chews, keep it out of reach, or pick a plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an air plant?',
+        a: 'About once a week, by soaking or misting the whole plant, then shaking it out and letting it dry upside down. Iowa State University Extension and Outreach says every two weeks can be enough in cooler, darker months.',
+      },
+      {
+        q: 'Should I soak or mist my air plant?',
+        a: 'The sources differ. Clemson Cooperative Extension says either a good misting or a 20 to 30 minute soak, and UF/IFAS Gardening Solutions says to mist until water runs off. Iowa State University Extension and Outreach says misting alone is not enough and soaks for 30 to 60 minutes.',
+      },
+      {
+        q: 'Why is my air plant dying after it bloomed?',
+        a: 'That is normal. Clemson Cooperative Extension says the mother plant dies after flowering, and new pups grow from its base to replace it. Keep watering it until the pups are big enough to separate.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Air Plants',
+        url: 'https://hgic.clemson.edu/factsheet/air-plants/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Air Plants',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/air-plants/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'All About Air Plants',
+        url: 'https://yardandgarden.extension.iastate.edu/how-to/all-about-air-plants',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Tillandsia (Air Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/tillandsia/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'rosemary',
+    commonName: 'Rosemary',
+    scientificName: 'Salvia rosmarinus',
+    alsoKnownAs: ['Rosemary Tree', 'Rosemary Topiary', 'Rosmarinus officinalis'],
+    related: ['norfolk-island-pine', 'poinsettia', 'air-plant'],
+    metaTitle: 'How Often to Water a Rosemary Tree: About Weekly, When Dry',
+    metaDescription:
+      'Water a rosemary tree when the soil is dry to the touch, about once a week, and never let it sit in a foil wrap full of water. Give it full sun indoors.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'A rosemary tree is the herb rosemary, Salvia rosmarinus, pruned into a small cone and sold as a living Christmas tree in late fall and December. It is a Mediterranean shrub from dry, rocky places, so it wants your sunniest window and soil kept on the dry side, with water about once a week, when the surface is dry. The ASPCA lists rosemary as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'When the soil is dry to the touch, about once a week',
+      light: 'Full sun; your sunniest window, turned each week',
+      difficulty: 'Moderate; winter indoors is the hard part',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Sources differ; use a pebble tray, not more water',
+    },
+    sections: {
+      watering: [
+        'Water a rosemary tree when the soil is dry to the touch. UF/IFAS Gardening Solutions, writing about the rosemary topiaries sold for the holidays, says that works out to “about once every week or so,” and calls rosemary a desert native that does best with soil kept on the dry side. Illinois Extension also says to keep the soil on the dry side indoors.',
+        'Check the foil. UF/IFAS warns that the festive wrap on a holiday pot can trap more water than the plant likes, so keep a close eye on the soil, swap the foil for a bow, or take it off so the pot can drain.',
+        'Overwatering is the usual killer. North Carolina State Extension says rosemary has a low tolerance for wet conditions and names overwatering as the common cause of decline or death, and Wisconsin Horticulture says the same. Wisconsin differs on the target, saying to keep the soil moist, but it also calls good drainage a requirement, and every source agrees on that.',
+      ],
+      light: [
+        'Give it full sun, which indoors means the sunniest window in the house. UF/IFAS says to keep it in full sun indoors and to turn the pot weekly so every side gets light. Illinois Extension notes that it does little growing in the short, dim days of winter.',
+        'Cool is better than warm: Illinois says that indoors it prefers a cool, even cold, sunny spot. On humidity the sources pull in different directions. Illinois says indoor air dries it out, causing brown tips and dieback, and suggests a saucer of pebbles and water and frequent misting rather than more water in the pot. NC State says it has a low tolerance for humid conditions and that poor air circulation with high humidity invites powdery mildew. Wisconsin also stresses good air circulation.',
+      ],
+      problems: [
+        'Brown needle tips and dieback indoors usually mean dry air, according to Illinois Extension, which says the answer is not more water in the pot, because that leads to root rot.',
+        'Root rot and botrytis are the common diseases NC State and Wisconsin name, and both trace most losses to overwatering. The pests to look for, NC State says, are aphids, mealybugs, whiteflies and spider mites, especially indoors.',
+        'The cone shape will not last on its own. UF/IFAS says holiday topiaries are carefully pruned into shape, and that the shape changes as the plant grows and as you cut sprigs for cooking. Wisconsin says frequent pinching of the tips keeps a young topiary in shape.',
+      ],
+      propagation: [
+        'Stem cuttings are the way to make more. Wisconsin Horticulture says to take 4 to 6 inch tip cuttings from a shoot without flowers in late spring or early summer, strip the lower leaves, and root them in perlite. Illinois Extension says cuttings root easily, while seed is very slow.',
+        'After the holidays, the tree can live on. UF/IFAS says it can be planted outdoors in full sun and good drainage where winters are mild. Illinois says rosemary is not reliably hardy in zone 6 or colder, so in much of the country it stays a pot plant that comes inside before frost.',
+      ],
+      sharedCare: [
+        'In a shared household, a rosemary tree needs one person to check the soil, because a holiday plant that everyone waters a little ends up standing in a foil wrap full of water.',
+        'It keeps company with the other holiday plants we cover: the [poinsettia](/care/poinsettia), [Christmas cactus](/care/christmas-cactus), [amaryllis](/care/amaryllis), [Norfolk Island pine](/care/norfolk-island-pine), [cyclamen](/care/cyclamen) and [kalanchoe](/care/kalanchoe). UF/IFAS expects you to cut sprigs for the kitchen, so agree on who trims it and the shape changes evenly.',
+      ],
+      honestBit: [
+        'My take: a rosemary tree is the one holiday plant that earns its keep after New Year’s. Treat it as a sun-loving Mediterranean shrub that happens to be shaped like a tree, keep it dry and bright, and you get to cook with it all winter.',
+        'The ASPCA lists rosemary (Rosmarinus officinalis) as non-toxic to cats and dogs. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for rosemary](/pet-safe/rosemary) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a rosemary tree?',
+        a: 'When the soil is dry to the touch, which UF/IFAS Gardening Solutions says is about once every week or so. Check before you water rather than going by the calendar, and pour off any water caught in the foil wrap.',
+      },
+      {
+        q: 'Why is my rosemary tree turning brown?',
+        a: 'Indoors, usually dry air. Illinois Extension says rosemary dries out quickly inside, which causes brown tips and dieback, and that more water in the pot is not the fix. Keep it cool and sunny, on a tray of pebbles and water.',
+      },
+      {
+        q: 'Can I plant my rosemary tree outside after the holidays?',
+        a: 'Yes, where winters are mild: UF/IFAS Gardening Solutions says full sun and good drainage. Illinois Extension says rosemary is not reliably hardy in zone 6 or colder, so in colder places keep it in a pot and bring it in before frost.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Rosemary Topiaries',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/edibles/vegetables/rosemary/rosemary-topiaries/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Rosemary',
+        url: 'https://extension.illinois.edu/herbs/rosemary',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Salvia rosmarinus (Rosemary)',
+        url: 'https://plants.ces.ncsu.edu/plants/salvia-rosmarinus/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Rosemary, Salvia rosmarinus',
+        url: 'https://hort.extension.wisc.edu/articles/rosemary-rosemarinus-officinalis/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'ponytail-palm',
+    commonName: 'Ponytail Palm',
+    scientificName: 'Beaucarnea recurvata',
+    alsoKnownAs: ['Elephant’s Foot Tree', 'Nolina recurvata'],
+    related: ['jade-plant', 'zz-plant', 'rosemary'],
+    metaTitle: 'How Often to Water a Ponytail Palm: Let It Dry Out First',
+    metaDescription:
+      'Water a ponytail palm deeply, then let the soil dry out before the next drink, and cut back sharply in winter. It is a succulent that stores water.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'A ponytail palm is not a palm at all but a succulent tree from Mexico, with a swollen base that stores water and a fountain of long, thin leaves on top. It wants as much light as you can give it, a fast-draining cactus mix, and much less water than most houseplants. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Deeply, then let it dry; much less in winter',
+      light: 'As much light as possible; a sunny window',
+      difficulty: 'Easy; a good first plant',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Copes with the dry air of a heated home',
+    },
+    sections: {
+      watering: [
+        'Water a ponytail palm deeply, then let the soil dry out before you water again. North Carolina State Extension and Wisconsin Horticulture both give that rule for the growing season, and Iowa State University Extension and Outreach puts it plainly: water it less often than most houseplants. None of the sources gives a number of days.',
+        'In winter, cut back hard. NC State says to reduce watering greatly, and Wisconsin explains why: in the wild it gets summer rain and stays dry through most of the winter, and its swollen base stores water to ride out drought. Wisconsin calls overwatering the most common reason the plant fails.',
+      ],
+      light: [
+        'Give it as much light as you can. Wisconsin says to place it where it gets as much light as possible, NC State says a sunny window, and Iowa State says an east or west window usually works. If it spends the summer outside, Wisconsin says to move it out gradually so it does not sunburn.',
+        'Pot it in a mix that drains fast, the kind sold for cactus and succulents. Wisconsin suggests adding sharp sand or small gravel to regular potting mix. NC State notes that it does well even in the dry air of a heated home, which many houseplants do not.',
+      ],
+      problems: [
+        'Too much water is the big one. Wisconsin names overwatering as the most common cause of failure, and NC State lists stem rot among its diseases, along with bacterial leaf streak and leaf spots.',
+        'Brown leaf tips are common indoors. Wisconsin says they can come from too much or too little water, too much fertilizer, or salts built up in the pot, and that the dead ends can be trimmed off. Older leaves that yellow and dry are normal and can be removed.',
+        'For pests, Wisconsin names mealybugs and scale, and NC State adds spider mites.',
+      ],
+      propagation: [
+        'Seed is the way it is propagated, and Wisconsin says the seed is not commonly available. The small offsets that sometimes form on the base will not root, according to Wisconsin, though they can be left to grow into branches.',
+        'The plant you have can last a long time. Wisconsin says ponytail palms can outlive their owners and go many years before needing a bigger pot, and that a small pot keeps the plant small.',
+      ],
+      sharedCare: [
+        'In a shared household, a ponytail palm needs everyone to agree to leave it alone, because its swollen base is a water tank and a second watering is the one thing it cannot use.',
+        'Pick one person to water it, deeply and rarely, and give it the brightest window, where nobody has to move it.',
+      ],
+      honestBit: [
+        'My take: the ponytail palm is the plant for the household that forgets. Most of the ones that die were loved too much, not too little.',
+        'The ASPCA lists the ponytail palm (under “Pony Tail”, Beaucarnea recurvata) as non-toxic to cats and dogs. It is not a true palm, and the verdict does not carry over to palms: the [sago palm](/care/sago-palm) is severely toxic. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for ponytail palm](/pet-safe/ponytail-palm) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a ponytail palm?',
+        a: 'Deeply, and only after the soil has dried out, with much less water in winter. North Carolina State Extension, Wisconsin Horticulture and Iowa State University Extension and Outreach all give a dryness rule rather than a number of days.',
+      },
+      {
+        q: 'Is a ponytail palm a real palm?',
+        a: 'No. Wisconsin Horticulture says it is a succulent and not a member of the palm family, and North Carolina State Extension places it in the asparagus family. Its swollen base stores water, which is why it needs so little.',
+      },
+      {
+        q: 'Why are my ponytail palm’s leaf tips brown?',
+        a: 'Wisconsin Horticulture names too much or too little water, too much fertilizer, and salts built up in the pot. Check the watering first, and trim the brown ends off if you like.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Beaucarnea recurvata (Ponytail Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/beaucarnea-recurvata/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for a ponytail palm?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-ponytail-palm',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Ponytail Palm, Beaucarnea recurvata',
+        url: 'https://hort.extension.wisc.edu/articles/ponytail-palm-beaucarnea-recurvata/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'areca-palm',
+    commonName: 'Areca Palm',
+    scientificName: 'Dypsis lutescens',
+    alsoKnownAs: ['Butterfly Palm', 'Golden Cane Palm', 'Chrysalidocarpus lutescens'],
+    related: ['parlor-palm', 'ponytail-palm', 'schefflera'],
+    metaTitle: 'How Often to Water an Areca Palm: Moist, Never Soggy',
+    metaDescription:
+      'Keep an areca palm moist but never soggy while it is growing, in bright, indirect light with humid air. The source gives a moisture rule, not a day count.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'An areca palm is a clumping palm from Madagascar, with several bamboo-like stems and arching, feathery fronds, and one of the most popular palms grown indoors. It wants bright, indirect light, humid air and soil kept moist but never soggy. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Keep it moist but not soggy while it is growing',
+      light: 'Bright, indirect light in a warm room',
+      difficulty: 'Moderate; humid air is the hard part',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'High; use a humidifier if the air is dry',
+    },
+    sections: {
+      watering: [
+        'Keep an areca palm’s soil moist but not soggy while it is actively growing. That is North Carolina State Extension’s rule, and it is the only extension source we found for this palm indoors, so this guide gives no number of days. Check the soil rather than the calendar: water before it dries out, and never so much that it stays wet.',
+        'Drainage is the other half. NC State says to grow it in well-drained potting soil, so use a pot with a drainage hole and empty the saucer after watering. NC State ties the moist-soil rule to the growing season and gives no separate rule for winter.',
+      ],
+      light: [
+        'Give it bright, indirect light in a warm to average room, which is what NC State recommends indoors. Outdoors in frost-free climates, NC State says it tolerates full sun but prefers partial shade.',
+        'It wants humid air. NC State says it prefers high humidity indoors and suggests a humidifier if the air is too dry.',
+      ],
+      problems: [
+        'NC State lists scale, whiteflies and spider mites as its pests, so check the undersides of the fronds when you water.',
+        'NC State also says the heart of palm, the growing tip, contains cyanide compounds and should not be eaten.',
+      ],
+      propagation: [
+        'NC State lists division and seed. An areca palm grows as a clump of stems from one base, and as a houseplant it rarely flowers or sets fruit, so dividing the clump is the practical route.',
+        'NC State says to repot it every 2 or 3 years. It is a big plant in the wild, up to 30 feet tall, but stays much smaller in a pot.',
+      ],
+      sharedCare: [
+        'In a shared household, an areca palm needs one person watching the soil, because it is a palm that minds drying out as much as it minds sitting wet.',
+        'If the household runs a humidifier in winter, put the palm near it, and tell whoever fills it that the palm counts on it too.',
+      ],
+      honestBit: [
+        'My take: an areca palm tells you plainly what it needs: bright light, steady moisture and humid air. If your home is dim and dry, it is the palm to skip, not the one to fight with.',
+        'The ASPCA lists the areca palm (Dypsis lutescens) as non-toxic to cats and dogs. Do not let that carry over to other palms: the [sago palm](/care/sago-palm), sold alongside it, is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for areca palm](/pet-safe/areca-palm) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an areca palm?',
+        a: 'Often enough that the soil stays moist but never soggy while it is growing. North Carolina State Extension gives that rule and no number of days, so check the soil rather than the calendar.',
+      },
+      {
+        q: 'How much light does an areca palm need?',
+        a: 'Bright, indirect light, in a warm to average room. North Carolina State Extension says it also wants high humidity, raised with a humidifier if needed.',
+      },
+      {
+        q: 'How big does an areca palm get?',
+        a: 'Up to 30 feet tall in its native range, North Carolina State Extension says, but much smaller as a houseplant, where it rarely flowers or fruits.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Chrysalidocarpus lutescens (Areca Palm)',
+        url: 'https://plants.ces.ncsu.edu/plants/chrysalidocarpus-lutescens/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'schefflera',
+    commonName: 'Schefflera',
+    scientificName: 'Schefflera arboricola',
+    alsoKnownAs: ['Dwarf Umbrella Tree', 'Umbrella Tree', 'Heptapleurum arboricola'],
+    related: ['money-tree', 'rubber-plant', 'areca-palm'],
+    metaTitle: 'How Often to Water a Schefflera: When the Top ½ Inch Is Dry',
+    metaDescription:
+      'Water a schefflera thoroughly, then wait until the top ½ inch of soil is dry, and never leave it standing in the saucer. Give it medium to bright light.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'Schefflera, the umbrella tree, is a tropical shrub whose leaflets spread from each stalk like the spokes of an umbrella. The dwarf kind, Schefflera arboricola, and the larger umbrella tree, S. actinophylla, are both common houseplants with the same basic care: a thorough drink once the top of the soil dries, medium to bright light, and steady warmth. The ASPCA lists schefflera as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Thoroughly, once the top ½ inch of soil is dry',
+      light: 'Medium to bright, filtered light; no harsh direct sun',
+      difficulty: 'Easy, if it stays warm and out of drafts',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Likes humid air; a pebble tray helps',
+    },
+    sections: {
+      watering: [
+        'Water a schefflera thoroughly, then let the top half inch of soil dry before you water again. That is Clemson Cooperative Extension’s rule, and it adds: never let the plant sit with water in its saucer. North Carolina State Extension says much the same, to let the soil dry and then soak it thoroughly.',
+        'Iowa State University Extension and Outreach and Illinois Extension, writing about the larger umbrella tree, say to let the soil dry moderately between waterings, and Iowa State says to water less often in fall and winter. None of the sources gives a number of days.',
+      ],
+      light: [
+        'Medium to bright light suits it, Clemson says. NC State recommends a south, west or east window with filtered light, such as through a sheer curtain, and warns that bright, direct light indoors burns the leaves. Iowa State gives bright, indirect light near an east, west or south window for the umbrella tree. Low light, Clemson says, brings yellowing leaves and spindly, weak stems.',
+        'Keep it warm and steady. Clemson gives 65 to 75°F by day and above 60°F at night, and says to keep it away from heat vents, radiators, open windows and air conditioners. NC State says it likes high humidity and suggests a tray of wet pebbles, with the water line below the top of the pebbles so the pot does not sit in water.',
+      ],
+      problems: [
+        'Leaf drop is the classic complaint. Clemson names overwatering, low humidity and chilling as causes, and NC State says the leaves drop when the soil is either too wet or too dry. Clemson adds that dead patches show up on the leaves a few days after a cold spell, so keep it above 50°F.',
+        'Root rot, Clemson says, usually comes from a mix that drains slowly or from watering too often. Clemson and NC State both name spider mites, mealybugs and scale as its pests. Illinois Extension says spider mites attack in warm, dry rooms, and that raising the humidity and washing both sides of the leaves helps.',
+      ],
+      propagation: [
+        'Clemson lists seed, cuttings and air layering, and NC State lists seed and stem cuttings. To keep a plant small, Clemson says to prune just above a leaf, and Illinois Extension says tip pruning keeps it bushy.',
+        'Clemson says an overcrowded plant can be repotted in any season, in general-purpose potting soil. In a container, NC State says, a dwarf schefflera reaches about 4 to 6 feet, and Clemson says the larger umbrella tree grows to 8 to 10 feet indoors.',
+      ],
+      sharedCare: [
+        'In a shared household, a schefflera needs one person checking that top half inch, because a plant that drops leaves when it is too wet and when it is too dry gets the blame for both.',
+        'Because the ASPCA lists it as toxic to cats and dogs, keep it where pets cannot chew the leaves, and pick up fallen leaves rather than leaving them on the floor.',
+      ],
+      honestBit: [
+        'My take: a schefflera is a forgiving, long-lived plant whose one bad habit is dramatic leaf drop. It is almost always telling you about a draft, a soggy pot or a dry spell, so check those before anything else.',
+        'The ASPCA lists schefflera as toxic to cats and dogs. It names calcium oxalate crystals, which irritate the mouth and can cause drooling, vomiting and trouble swallowing. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for schefflera](/pet-safe/schefflera) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a schefflera?',
+        a: 'Thoroughly, once the top half inch of soil is dry, and less often in fall and winter. Clemson Cooperative Extension gives the half-inch rule and says never to leave the pot sitting in water. None of the sources gives a number of days.',
+      },
+      {
+        q: 'Why is my schefflera dropping leaves?',
+        a: 'Usually water, drafts or cold. Clemson Cooperative Extension names overwatering, low humidity and chilling, and North Carolina State Extension says leaves drop when the soil is too wet or too dry.',
+      },
+      {
+        q: 'Is an umbrella tree the same as a schefflera?',
+        a: 'Both names cover the two common houseplant species. Clemson Cooperative Extension calls Schefflera actinophylla the umbrella tree and S. arboricola the dwarf schefflera, and gives one set of care for both.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Schefflera',
+        url: 'https://hgic.clemson.edu/factsheet/schefflera-2/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Heptapleurum arboricola (Dwarf Umbrella Tree)',
+        url: 'https://plants.ces.ncsu.edu/plants/heptapleurum-arboricola/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Iowa State University Extension and Outreach',
+        title: 'How do I care for an umbrella tree?',
+        url: 'https://yardandgarden.extension.iastate.edu/faq/how-do-i-care-umbrella-tree',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Umbrella tree',
+        url: 'https://extension.illinois.edu/houseplants/umbrella-tree',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'satin-pothos',
+    commonName: 'Satin Pothos',
+    scientificName: 'Scindapsus pictus',
+    alsoKnownAs: ['Silk Pothos', 'Silver Pothos', 'Scindapsus'],
+    related: ['pothos', 'heartleaf-philodendron', 'arrowhead-plant'],
+    metaTitle: 'How Often to Water a Satin Pothos: Moist, Well Drained',
+    metaDescription:
+      'Keep a satin pothos in moist, well-drained potting mix, in bright, indirect light and away from cold air. It is a Scindapsus, not a true pothos.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'Satin pothos is Scindapsus pictus, a climbing vine from tropical Asia with dark green, heart-shaped leaves splashed with silver. It is sold beside pothos and shares the name, but it belongs to a different genus. It wants bright, indirect light, warmth, and potting mix kept moist but well drained. The ASPCA lists satin pothos as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Keep the potting mix moist and well drained',
+      light: 'Bright, indirect light; no direct sun',
+      difficulty: 'Moderate; keep it warm and out of cold drafts',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Not covered by the extension source',
+    },
+    sections: {
+      watering: [
+        'Keep a satin pothos in potting mix that stays moist but drains well. That is North Carolina State Extension’s rule, and it is the only extension source we found for this plant, so this guide gives no number of days. Check the mix with a finger before you water rather than going by the calendar.',
+        'The leaves tell you which way you have drifted. NC State says yellow leaves may be a sign of overwatering and curling leaves a sign of underwatering, and that root rot can set in when the soil is poorly drained or wet. Use a pot with a drainage hole and empty the saucer.',
+        'It is not watered quite like a pothos. Our [pothos guide](/care/pothos) says to let the soil dry out between waterings, while NC State asks for a moist mix for this plant, so don’t copy one routine to the other just because the names match.',
+      ],
+      light: [
+        'Give it bright, indirect light. NC State says it does not tolerate direct sunlight, so keep it back from a sunny window or behind a sheer curtain.',
+        'Keep it warm. NC State gives 65 to 85°F as the best room temperatures and says cooler air is not tolerated, so keep it away from cold windows and winter drafts. The source gives no humidity figure.',
+      ],
+      problems: [
+        'Watering mistakes are the usual trouble: yellow leaves for too much water and curled leaves for too little, NC State says, and root rot in soggy soil.',
+        'NC State says it has no serious insect or disease problems, but to watch for scale, mites, mealybugs and thrips, and for fungal leaf spot and botrytis.',
+      ],
+      propagation: [
+        'Stem cuttings are the method NC State recommends. Pinching the stems, it says, also keeps the plant tidy, and the pinched tips give you the cuttings.',
+        'Indoors it grows 1.5 to 3 feet, NC State says, and can be trained up a stake or left to trail from a hanging basket. Indoor plants rarely flower or fruit, so seed is not a practical route.',
+      ],
+      sharedCare: [
+        'In a shared household, a satin pothos needs one person who knows it is not the pothos, because the two often sit side by side and end up on the same watering routine.',
+        'Agree on a finger test of the mix before anyone waters, and on what yellow or curled leaves mean, so the fix goes in the right direction.',
+      ],
+      honestBit: [
+        'My take: satin pothos is a slow-growing trailing vine with a borrowed name. Treat it as its own plant, keep it warm and evenly moist, and those silver leaves are your reward.',
+        'The ASPCA lists satin pothos (Scindapsus pictus) as toxic to cats and dogs. It names insoluble calcium oxalates, which cause mouth pain and swelling, drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for satin pothos](/pet-safe/satin-pothos) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a satin pothos?',
+        a: 'Often enough that the potting mix stays moist but never waterlogged. North Carolina State Extension gives that rule and no number of days, so check the mix rather than the calendar.',
+      },
+      {
+        q: 'Is satin pothos a real pothos?',
+        a: 'No. It is Scindapsus pictus, a different genus from the pothos, Epipremnum aureum, though both are in the arum family. North Carolina State Extension lists satin pothos, silk pothos and silver pothos as its common names.',
+      },
+      {
+        q: 'Why are my satin pothos leaves curling?',
+        a: 'North Carolina State Extension says curling leaves may be a sign of underwatering, and yellow leaves a sign of overwatering. Check how wet the mix is before changing anything.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Scindapsus pictus (Satin Pothos)',
+        url: 'https://plants.ces.ncsu.edu/plants/scindapsus-pictus/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'dragon-tree',
+    commonName: 'Dragon Tree',
+    scientificName: 'Dracaena marginata',
+    alsoKnownAs: [
+      'Madagascar Dragon Tree',
+      'Red-Edge Dracaena',
+      'Dracaena reflexa var. angustifolia',
+    ],
+    related: ['corn-plant', 'snake-plant', 'weeping-fig'],
+    metaTitle: 'How Often to Water a Dragon Tree: Once the Surface Is Dry',
+    metaDescription:
+      'Water a dragon tree thoroughly once the soil surface is dry, then let it dry again, using distilled or fluoride-free water. Bright, indirect light suits it.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'The dragon tree, Dracaena marginata, is a slow-growing, drought-tolerant shrub from Madagascar, with thin, often bending stems topped by tufts of narrow leaves edged in red or purple. It is an easygoing indoor tree: water it thoroughly once the surface of the soil is dry, give it bright, indirect light, and use water low in fluoride. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Thoroughly, once the soil surface is dry to the touch',
+      light: 'Bright, indirect light; tolerates lower light',
+      difficulty: 'Easy; fluoride in tap water is the catch',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Sources differ; Clemson mists it below 30 to 40%',
+    },
+    sections: {
+      watering: [
+        'Water a dragon tree thoroughly once the surface of the soil is dry to the touch. That is Clemson Cooperative Extension’s rule for dracaenas, and UF/IFAS Gardening Solutions says the same for this one: water thoroughly, then let it dry out before watering again. North Carolina State Extension adds a limit: let it dry between waterings, but not severely. None of the sources gives a number of days.',
+        'Illinois Extension differs, saying to keep the soil moist at all times, though it also says never to let the pot sit in water. Clemson says root rot usually comes from a mix that drains slowly or from watering too often, so when in doubt, wait for the surface to dry.',
+        'Mind the water itself. NC State says this species is sensitive to fluoride, which discolors the leaves, and suggests distilled or non-fluorinated water. Clemson says to avoid watering with cold water.',
+      ],
+      light: [
+        'Bright, indirect light is ideal, NC State and Clemson agree, and Clemson says most dracaenas also tolerate lower light. UF/IFAS calls dracaena one of the best indoor trees for low-light areas, and says a young plant can grow as much as 18 inches a year with enough light.',
+        'Clemson gives 60 to 70°F by day, about 10°F cooler at night, and says that when winter humidity falls below 30 to 40 percent, an occasional misting helps. Illinois Extension, on the other hand, lists low humidity among the conditions it does best in.',
+      ],
+      problems: [
+        'Brown or yellow leaf tips are the classic complaint. Clemson says dry tips and edges usually come from low humidity, that fluoride causes yellow tips or margins and dead, scorched patches, and that too much fertilizer burns the tips too. Against fluoride it suggests potting soil without much perlite, a soil pH of 6.0 to 6.5, and no fertilizer containing superphosphate.',
+        'A sudden loss of many leaves, Clemson says, can follow a temperature change, drafts, too much water, poor drainage or a heavy pest infestation. For pests, Clemson names scale and mites, NC State adds thrips, and UF/IFAS mentions mealybugs and scale.',
+      ],
+      propagation: [
+        'Stem cuttings are NC State’s recommended method, and Clemson adds air layering and rooting the basal shoots in spring or late summer. Illinois Extension says to take cuttings or air layer once the bare stems beneath the leaves get too long.',
+        'Cutting it back is also how you shape it. NC State says a pruned stem usually grows two or more branches, and that the stems can be trained into braids or spirals. As a houseplant it reaches about 6 feet, NC State says, and it rarely blooms indoors.',
+      ],
+      sharedCare: [
+        'In a shared household, a dragon tree needs one person who checks the soil surface first, because it is drought-tolerant and the usual way to lose one is watering too often.',
+        'If the household keeps a jug of distilled water for the plants, tell everyone this is the plant it is for, so nobody tops it up from the tap.',
+      ],
+      honestBit: [
+        'My take: the dragon tree is the office plant that survives the office. Its one real demand is water low in fluoride, and brown tips can come from the tap as much as from the watering schedule.',
+        'The ASPCA lists the Madagascar dragon tree (Dracaena marginata) as toxic to cats and dogs. It names saponins and lists vomiting, sometimes with blood, depression, loss of appetite and drooling, with dilated pupils in cats. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for dragon tree](/pet-safe/dragon-tree) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a dragon tree?',
+        a: 'Thoroughly, once the surface of the soil is dry to the touch. Clemson Cooperative Extension and UF/IFAS Gardening Solutions both say to let it dry before the next watering, and North Carolina State Extension says not to let it dry severely. None of the sources gives a number of days.',
+      },
+      {
+        q: 'Why are my dragon tree’s leaf tips brown?',
+        a: 'Clemson Cooperative Extension names dry air, fluoride and too much fertilizer. North Carolina State Extension says the plant is sensitive to fluoride and suggests distilled or non-fluorinated water.',
+      },
+      {
+        q: 'Can a dragon tree grow in low light?',
+        a: 'Yes, within limits. Clemson Cooperative Extension says many dracaenas tolerate lower light, and UF/IFAS Gardening Solutions calls dracaena one of the best indoor trees for low-light areas, though North Carolina State Extension calls bright, indirect light ideal.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Dracaena',
+        url: 'https://hgic.clemson.edu/factsheet/dracaena/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Dracaena Marginata',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/houseplants/dracaena-marginata/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Dracaena reflexa var. angustifolia (Dragon Tree)',
+        url: 'https://plants.ces.ncsu.edu/plants/dracaena-reflexa-var-angustifolia/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Dragon Tree',
+        url: 'https://extension.illinois.edu/houseplants/dragon-tree',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'arrowhead-plant',
+    commonName: 'Arrowhead Plant',
+    scientificName: 'Syngonium podophyllum',
+    alsoKnownAs: ['Arrowhead Vine', 'Nephthytis', 'Syngonium'],
+    related: ['pothos', 'satin-pothos', 'chinese-evergreen'],
+    metaTitle: 'How Often to Water an Arrowhead Plant: Slightly Dry First',
+    metaDescription:
+      'Water an arrowhead plant once the potting mix has dried out slightly, and give it medium to bright indirect light. Too little light fades the variegation.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'The arrowhead plant, Syngonium podophyllum, is a tropical vine from Mexico, the Caribbean and Central and South America, sold young for its arrow-shaped leaves, plain green or splashed with pink or white. It is an adaptable houseplant: let the mix dry slightly between waterings, give it medium to bright indirect light, and trim it to keep it bushy. The ASPCA lists it as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Let the mix dry out slightly between waterings',
+      light: 'Medium to bright indirect light; no direct sun',
+      difficulty: 'Easy; it adapts to most rooms',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Sources differ; Clemson says average rooms are fine',
+    },
+    sections: {
+      watering: [
+        'Let the potting mix dry out slightly between waterings. That is Clemson Cooperative Extension’s answer to how often to water an arrowhead vine, and it gives no number of days. Illinois Extension, which calls the plant nephthytis, says to keep the soil barely moist, which is close to the same rule: water before it dries out completely, not while it is still wet.',
+        'Drainage matters. Clemson suggests a mix of equal parts peat moss or coir, vermiculite and perlite, and names stem rot among its diseases, and North Carolina State Extension lists soft rot. Empty the saucer after watering.',
+      ],
+      light: [
+        'Medium to bright, indirect light suits it best. Clemson says it tolerates low light, and suggests an east window or a spot a few feet from a west one; a north window works, but the leaf color may dull. NC State warns that direct sun burns or bleaches the leaves.',
+        'On humidity the sources disagree. NC State says the ideal spot is warm with high humidity, Illinois Extension lists low humidity, and Clemson says it tolerates average home temperatures and humidity, with 65 to 75°F as its range.',
+      ],
+      problems: [
+        'Leaves turning plain green mean too little light, Clemson says. Move the plant somewhere brighter, and the variegation returns on new growth.',
+        'Clemson names aphids, mealybugs and spider mites as its pests, and bacterial blight, bacterial leaf spot and stem rot as its diseases. NC State lists the same pests, plus bacterial leaf spots and soft rot.',
+      ],
+      propagation: [
+        'Stem cuttings are the easy way, and Illinois Extension recommends them too. NC State also lists division and layering.',
+        'It changes shape as it grows. NC State says young plants are bushy and older ones vine, with longer, divided leaves, and that cutting off the climbing stems as they form keeps the arrowhead leaves and the shrubby shape. Clemson says a mature plant can be trained up a moss pole, trellis or stake.',
+      ],
+      sharedCare: [
+        'In a shared household, an arrowhead plant needs one person checking that the top of the mix has dried slightly, because it is easy to water and just as easy to water twice.',
+        'Because the ASPCA lists it as toxic to cats and dogs, hang it or shelve it out of reach of pets that chew, and pick up trimmed stems rather than leaving them on the floor.',
+      ],
+      honestBit: [
+        'My take: the arrowhead plant is a good first vine. It copes with a dimmer room, and it tells you plainly when it wants more light by turning green.',
+        'The ASPCA lists the arrowhead vine (Syngonium podophyllum) as toxic to cats and dogs. It names insoluble calcium oxalates, which cause mouth pain and swelling, drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for arrowhead plant](/pet-safe/arrowhead-plant) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water an arrowhead plant?',
+        a: 'Once the potting mix has dried out slightly. Clemson Cooperative Extension gives that rule and no number of days, and Illinois Extension says to keep the soil barely moist.',
+      },
+      {
+        q: 'Why is my arrowhead plant turning green?',
+        a: 'Too little light. Clemson Cooperative Extension says variegated arrowhead vines need brighter light to keep their color, and that moving the plant somewhere brighter brings the variegation back on new growth.',
+      },
+      {
+        q: 'Is nephthytis the same as an arrowhead plant?',
+        a: 'Yes. Illinois Extension lists it as nephthytis, or white-veined arrowhead vine, and North Carolina State Extension lists arrowhead plant and arrowhead vine among the common names of Syngonium podophyllum.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Arrowhead Vine (Syngonium spp.) Indoor Care, Growing Tips & Plant Guide',
+        url: 'https://hgic.clemson.edu/factsheet/arrowhead-vine/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Nephthytis',
+        url: 'https://extension.illinois.edu/houseplants/nephthytis',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Syngonium podophyllum (Arrowhead Vine)',
+        url: 'https://plants.ces.ncsu.edu/plants/syngonium-podophyllum/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'weeping-fig',
+    commonName: 'Weeping Fig',
+    scientificName: 'Ficus benjamina',
+    alsoKnownAs: ['Weeping Ficus', 'Benjamin Tree'],
+    related: ['fiddle-leaf-fig', 'rubber-plant', 'dragon-tree'],
+    metaTitle: 'How Often to Water a Weeping Fig: Before It Dries Out',
+    metaDescription:
+      'Water a weeping fig often enough that the soil never dries out completely, and a little less in winter. Steady light and no drafts help stop leaf drop.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'The weeping fig, Ficus benjamina, is a small indoor tree with arching branches and glossy, pointed leaves, often sold with braided trunks. It is easy to grow once it settles, but known for dropping leaves whenever something changes. Keep the soil from drying out completely, give it bright, indirect light, and move it as little as you can. The ASPCA lists the Ficus genus as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Often enough that the soil never dries out fully',
+      light: 'Bright, indirect or curtain-filtered light',
+      difficulty: 'Moderate; it drops leaves at any change',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Prefers humid air but copes with average rooms',
+    },
+    sections: {
+      watering: [
+        'Water a weeping fig often enough that the soil never dries out completely. That is North Carolina State Extension’s rule. Clemson Cooperative Extension says to keep the soil evenly moist while it is growing, and Illinois Extension says to keep it minimally moist at all times. None of them gives a number of days.',
+        'Ease off in winter. Clemson says to let the soil dry slightly between waterings in winter and other times of slow growth, and never to let the plant sit waterlogged or with water in its saucer. Root rot, Clemson says, comes from a slow-draining mix or from watering too often.',
+      ],
+      light: [
+        'Give it bright, indirect or curtain-filtered light, as Clemson and Illinois recommend. NC State says it does best in bright, indirect light but survives shade, and Clemson says it handles some direct sun if the humidity is high.',
+        'Pick a spot and leave it there. NC State says it is very sensitive to light, so a moved plant may drop leaves and grow new ones suited to the new spot. Clemson gives 75 to 85°F by day and 65 to 70°F at night as ideal, and NC State says to keep it away from drafts. Clemson says it prefers high humidity, and Illinois says it does fairly well in ordinary household humidity.',
+      ],
+      problems: [
+        'Leaf drop is the problem everyone meets. Clemson says it sheds leaves in reaction to almost any stress: overwatering, underwatering, drafts, too little nitrogen, low light, a move or a repotting. If conditions are good, Clemson says, it adjusts and grows healthy new leaves. Illinois adds chilling to the list.',
+        'For pests, Clemson names spider mites and scale as frequent, along with mealybugs, aphids and thrips, and NC State lists the same. Clemson suggests washing the leaves now and then with plain warm water.',
+      ],
+      propagation: [
+        'Clemson says to propagate it by air layering in any season, or by cuttings, which are best taken in summer. NC State recommends stem cuttings.',
+        'It takes pruning well. Clemson says it tolerates hard pruning to reduce its size, with less water afterward, and NC State says light pruning for shape is best done in late fall or winter. Clemson says it can stay slightly root-bound, and to repot it in late winter or early spring once it gets crowded.',
+      ],
+      sharedCare: [
+        'In a shared household, a weeping fig needs everyone to agree on where it lives, because a move to a new spot is one of the things that sets it dropping leaves.',
+        'Name one person to water it, and agree that falling leaves mean checking the soil, the light and the drafts before anyone adds more water.',
+      ],
+      honestBit: [
+        'My take: a weeping fig is less fussy than its reputation. It sulks after every change and then settles, so the trick is to stop changing things.',
+        'The ASPCA lists the weeping fig, under its genus-level Ficus listing, as toxic to cats and dogs, and names two compounds in the plant, ficin and ficusin. It is the same listing behind our [fiddle-leaf fig](/care/fiddle-leaf-fig) and [rubber plant](/care/rubber-plant) pet lines. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for weeping fig](/pet-safe/weeping-fig) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a weeping fig?',
+        a: 'Often enough that the soil never dries out completely, and a little less in winter. North Carolina State Extension and Clemson Cooperative Extension give that rule and no number of days, so check the soil rather than the calendar.',
+      },
+      {
+        q: 'Why is my weeping fig dropping leaves?',
+        a: 'Almost any stress does it, Clemson Cooperative Extension says: too much or too little water, drafts, low light, too little nitrogen, a move or a repotting. Fix the cause, and it usually settles and grows new leaves.',
+      },
+      {
+        q: 'Can I braid a weeping fig’s trunks?',
+        a: 'Yes, while the stems are young and flexible. Clemson Cooperative Extension says they can be braided, spiraled or twisted into shapes, and weeping figs are often sold trained that way.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Ficus benjamina (Weeping Fig)',
+        url: 'https://plants.ces.ncsu.edu/plants/ficus-benjamina/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Weeping Ficus',
+        url: 'https://hgic.clemson.edu/factsheet/weeping-ficus/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Illinois Extension',
+        title: 'Weeping Fig',
+        url: 'https://extension.illinois.edu/houseplants/weeping-fig',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'polka-dot-plant',
+    commonName: 'Polka Dot Plant',
+    scientificName: 'Hypoestes phyllostachya',
+    alsoKnownAs: ['Freckle Face', 'Measles Plant', 'Hypoestes'],
+    related: ['nerve-plant', 'prayer-plant', 'tradescantia'],
+    metaTitle: 'How Often to Water a Polka Dot Plant: Slightly Dry First',
+    metaDescription:
+      'Water a polka dot plant well while it is growing, then let the soil dry slightly. Bright, filtered light keeps the spots bright and the stems short.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'The polka dot plant, Hypoestes phyllostachya, is a small, bushy plant from Madagascar grown for its leaves, which are splashed with pink, red or white. It roots quickly but is short-lived as a houseplant: water it well, let the soil dry slightly, keep it in bright, filtered light, and pinch it back so it does not get leggy. The ASPCA lists it as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Water well; let it dry slightly between waterings',
+      light: 'Bright, filtered light; too dim makes it leggy',
+      difficulty: 'Easy, though it gets leggy with age',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA)',
+      humidity: 'Likes humid air; mist it in dry winter rooms',
+    },
+    sections: {
+      watering: [
+        'Water a polka dot plant well while it is actively growing, then let the soil dry slightly before the next watering. That is Wisconsin Horticulture’s rule, and it gives no number of days. Wisconsin says the plant is somewhat drought-tolerant but grows better with plenty of water.',
+        'Use a porous mix high in organic matter, as Wisconsin suggests, so the soil drains between waterings. Wisconsin and North Carolina State Extension both list root rot among its problems.',
+      ],
+      light: [
+        'Bright, filtered light gives the best color, NC State and Wisconsin agree. It tolerates some direct sun, but NC State says too much makes the leaves crinkle and curl, and too little fades them and stretches the plant toward the light.',
+        'It likes humid air. Wisconsin says that indoors in winter it may need periodic misting, and that it can also be grown under artificial light.',
+      ],
+      problems: [
+        'Legginess is the common complaint. Wisconsin says the plants get leggy as they age, especially in low light, and that regular pinching keeps them compact, though a houseplant eventually needs replacing. NC State says cutting off the flower spikes keeps the plant’s energy in the leaves.',
+        'Wisconsin and NC State list powdery mildew and root rot, and whiteflies, aphids and mealybugs. NC State suggests insecticidal soap or neem oil if they need treating.',
+      ],
+      propagation: [
+        'Stem cuttings root easily. Wisconsin says to take 4-inch cuttings, remove the lower leaves, and root them in water or stick them straight into moist potting mix, sand or vermiculite, especially in spring and summer. NC State also roots cuttings in water, in a bright spot.',
+        'It also grows from seed. Wisconsin says seeds can sprout within days at 68°F, and that the first true leaves already show the color.',
+      ],
+      sharedCare: [
+        'In a shared household, a polka dot plant needs one person to pinch it back, because a plant everyone admires and nobody trims turns leggy.',
+        'Agree on watering it well and then letting the top dry slightly, and keep a few rooted cuttings going so there is a replacement when the old plant gives out.',
+      ],
+      honestBit: [
+        'My take: think of a polka dot plant as a long-running bouquet rather than a forever plant. Keep cuttings going, and you will always have a fresh one.',
+        'The ASPCA lists the polka dot plant (Hypoestes phyllostachya) as non-toxic to cats and dogs, though its listing still notes mild vomiting and diarrhea if a pet eats some. Non-toxic is not the same as safe to eat in quantity, so if a pet eats a lot and seems unwell, call your vet. The [pet-safety page for polka dot plant](/pet-safe/polka-dot-plant) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a polka dot plant?',
+        a: 'Water it well while it is growing, then let the soil dry slightly before watering again. Wisconsin Horticulture gives that rule and no number of days.',
+      },
+      {
+        q: 'Why is my polka dot plant leggy?',
+        a: 'Usually age and low light. Wisconsin Horticulture says the plants stretch as they age, especially in dim spots, and that regular pinching keeps them compact. Brighter, filtered light helps too.',
+      },
+      {
+        q: 'Why are my polka dot plant’s spots fading?',
+        a: 'Too little light, North Carolina State Extension says; bright, filtered light gives the best color. Too much direct sun can crinkle and curl the leaves instead.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Polka Dot Plant, Hypoestes phyllostachya',
+        url: 'https://hort.extension.wisc.edu/articles/polka-dot-plant-hypoestes-phyllostachya/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Hypoestes phyllostachya (Polka Dot Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/hypoestes-phyllostachya/',
+        accessed: '2026-11-05',
+      },
+    ],
+  },
+  {
+    slug: 'tradescantia',
+    commonName: 'Tradescantia',
+    scientificName: 'Tradescantia zebrina',
+    alsoKnownAs: ['Inch Plant', 'Wandering Dude', 'Silver Inch Plant'],
+    related: ['polka-dot-plant', 'string-of-pearls', 'pothos'],
+    metaTitle: 'How Often to Water a Tradescantia: When the Soil Is Dry',
+    metaDescription:
+      'Water a tradescantia (inch plant, wandering dude) regularly, but let the soil dry between waterings, and water less in winter. Bright light keeps its stripes.',
+    reviewed: '2026-11-05',
+    updated: '2026-11-05',
+    summary:
+      'Tradescantia zebrina, the inch plant or wandering dude, is a fast-growing trailing plant from Mexico to Colombia with striped silver, green and purple leaves. It is a tough, easy houseplant and an easy one to share: water it once the soil has dried, give it bright light for the best color, and trim it often. The ASPCA does not list this species, so we give no pet verdict.',
+    quickFacts: {
+      water: 'Let the soil dry between waterings; less in winter',
+      light: 'Bright light indoors keeps the stripes',
+      difficulty: 'Easy; Wisconsin calls it very tough',
+      toxicity: 'Unknown: the ASPCA lists a different species, not this one',
+      humidity: 'Average home humidity is fine, NC State says',
+    },
+    sections: {
+      watering: [
+        'Water a tradescantia regularly, but let the soil dry out between waterings, and water less in winter. That is North Carolina State Extension’s rule, and Wisconsin Horticulture agrees: regular water, with the soil allowed to dry between waterings. Neither gives a number of days.',
+        'Don’t let it sit wet. NC State says root and stem rot can occur in soggy soil, and that wetting the leaves when you water can lead to leaf spot, so water the soil rather than the plant.',
+      ],
+      light: [
+        'Give it bright light indoors. Wisconsin says that is what it needs inside, and both sources say low light costs it its lower leaves and much of its color. NC State says it does best in filtered sun, and both say full sun gives the strongest color in the north but can wash it out farther south.',
+        'NC State gives 65 to 75°F as its range and says it tolerates average home humidity as well as high humidity. If it summers outside, Wisconsin says to move it into brighter light gradually so it does not sunburn.',
+      ],
+      problems: [
+        'Bare, straggly stems are the usual complaint, and both sources tie them to low light. Wisconsin says the trailing stems get straggly, especially in low light, and that cutting them back or replanting tip cuttings keeps the pot full.',
+        'NC State lists aphids, mealybugs, scale, whiteflies and spider mites, plus root and stem rot in soggy soil and leaf spot when plants are crowded or the leaves get wet. The stems break easily at the joints, Wisconsin says, and the watery sap can irritate the skin of sensitive people.',
+      ],
+      propagation: [
+        'It is one of the easiest plants to root. Wisconsin says cuttings root readily in water or moist potting mix with no rooting hormone, and that stems lying on moist soil root at the joints too. NC State recommends stem cuttings.',
+        'Rooted pieces are how many people get one: Wisconsin says plenty come from friends or plant sales, since each piece of stem can grow into a new plant. NC State says it can be cut back hard every spring, and that trimming keeps it dense.',
+      ],
+      sharedCare: [
+        'In a shared household, a tradescantia needs one person with scissors, because it grows fast and a plant nobody trims turns into long bare strings.',
+        'Agree to let the soil dry before anyone waters, and keep a jar of cuttings rooting on a windowsill so a straggly plant can be replanted rather than replaced.',
+      ],
+      honestBit: [
+        'My take: tradescantia is the plant to give away. It roots in a glass of water, grows fast, and forgives most mistakes except soggy soil and a dark corner.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, lists the inch plant only as Tradescantia fluminensis, a different species, and we won’t borrow another plant’s verdict. If you have a pet that chews, keep it out of reach, or pick a plant with a cited answer from the [free pet-safe checker](/pet-safe).',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a tradescantia?',
+        a: 'Regularly, but only once the soil has dried out, and less often in winter. North Carolina State Extension and Wisconsin Horticulture both give that rule and no number of days.',
+      },
+      {
+        q: 'Why is my tradescantia losing its color?',
+        a: 'Too little light, North Carolina State Extension and Wisconsin Horticulture both say: in low light the stems drop their lower leaves and the rest lose color. Move it somewhere brighter, but strong southern sun can wash the color out too.',
+      },
+      {
+        q: 'Is wandering dude the same plant as inch plant?',
+        a: 'Yes, for Tradescantia zebrina: North Carolina State Extension lists inch plant, silver inch plant, wandering dude and zebra plant as its common names. Wisconsin Horticulture says the similar, all-green T. fluminensis is a different, more robust species, so check the label.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Tradescantia zebrina (Zebra Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/tradescantia-zebrina/',
+        accessed: '2026-11-05',
+      },
+      {
+        publisher: 'Wisconsin Horticulture, University of Wisconsin–Madison Division of Extension',
+        title: 'Tradescantia zebrina, Zebra Plant',
+        url: 'https://hort.extension.wisc.edu/articles/tradescantia-zebrina/',
+        accessed: '2026-11-05',
       },
     ],
   },

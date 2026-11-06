@@ -106,7 +106,9 @@ describe('careToxicity over the real table', () => {
   it('cites every guide except the plants the ASPCA does not list', () => {
     // ZZ plant, plus four 2026-11-03 guides with no listing of their own:
     // string of pearls, prayer plant (Maranta leuconeura), croton and
-    // Chinese money plant (Pilea peperomioides).
+    // Chinese money plant (Pilea peperomioides), the 2026-11-05 air plant
+    // (Tillandsia), and the 2026-11-05 tradescantia (T. zebrina; ASPCA lists
+    // only T. fluminensis).
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
     expect(unsourced).toEqual([
       'zz-plant',
@@ -114,6 +116,8 @@ describe('careToxicity over the real table', () => {
       'prayer-plant',
       'croton',
       'chinese-money-plant',
+      'air-plant',
+      'tradescantia',
     ]);
   });
 

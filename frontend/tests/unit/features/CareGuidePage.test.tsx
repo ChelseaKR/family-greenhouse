@@ -296,6 +296,8 @@ describe('CareGuidePage pet toxicity', () => {
       'prayer-plant',
       'croton',
       'chinese-money-plant',
+      'air-plant',
+      'tradescantia',
     ]);
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);

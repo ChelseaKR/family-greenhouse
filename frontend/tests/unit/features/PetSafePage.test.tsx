@@ -250,10 +250,12 @@ describe('PetSafePage directory caution', () => {
     const expected = PET_SAFE_SPECIES.filter((s) => s.caution !== null);
     // The guides whose plant has no ASPCA listing of its own, in directory order.
     expect(expected.map((s) => s.slug)).toEqual([
+      'air-plant',
       'chinese-money-plant',
       'croton',
       'prayer-plant',
       'string-of-pearls',
+      'tradescantia',
       'zz-plant',
     ]);
     expect(cautions.map((c) => c.textContent)).toEqual(expected.map((s) => s.caution));

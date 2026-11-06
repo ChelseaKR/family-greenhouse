@@ -18,6 +18,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
+  polka dot plant and tradescantia.** Each answers "how often to water" first
+  and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin extension
+  pages it was written from, read on 2026-11-05. None of those pages gives a
+  day count, so no guide states one: each gives the source's soil rule
+  instead. The satin pothos guide says plainly that it is a Scindapsus, not a
+  true pothos, and is watered differently.
+- **Pet-safety pages for satin pothos, dragon tree, arrowhead plant, weeping
+  fig and polka dot plant**, each citing that plant's own ASPCA listing
+  ("Satin Pothos", "Madagascar Dragon Tree", "Arrow-Head Vine", the
+  genus-level "Weeping Fig" and "Polka Dot Plant"). The tradescantia's pet
+  line reads "Unknown": the ASPCA lists the inch plant only as Tradescantia
+  fluminensis, a different species. The pet checker answers "scindapsus",
+  "nephthytis" and "ficus benjamina" with the new rows, and still answers no
+  tradescantia name, including "spiderwort", with another plant's verdict.
 - **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
   overwatering?" and "Can you overwater a plant?" answer the two generic
   question shapes Search Console showed with no page of their own (24
@@ -30,6 +45,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **GA4 `first_plant_added` counts accounts, not screens.** It was sent
+  whenever the first run or the empty dashboard saved a plant, so a second
+  household, a repeated first run or a second device counted again. The
+  server now records an account's first plant once (a timestamp row in the
+  account's own partition, erased with the account) and says so on that one
+  `POST /plants` answer as `firstPlantForAccount: true`; the web app sends the
+  event only then. An account whose household already had plants is not
+  counted. The event's parameters are unchanged (`method` and the scrubbed
+  page address), so the Privacy text needs no change.
 - **Room for more care guides at the edge.** The CloudFront function that
   routes page requests listed every blog post, care guide and help topic, and
   had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
@@ -84,9 +108,27 @@ this release's.
   own ASPCA listing. The amaryllis row cites "Barbados Lily" (Hippeastrum),
   the genus sold for the holidays, and not ASPCA's "Amaryllis" listing, which
   names a different genus.
+- **Care guides for air plant, rosemary, ponytail palm, areca palm and
+  schefflera.** Each answers "how often to water" first and cites the Clemson,
+  UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension pages it was
+  written from, read on 2026-11-05. Only two state a day count, because only
+  their sources give one: the air plant (about once a week, every two weeks in
+  cool, dim months) and the holiday rosemary tree (about once a week, when the
+  soil is dry). The rosemary guide links the six holiday guides.
+- **A pet-safety page for rosemary**, citing the ASPCA's "Rosemary" listing
+  (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant has no
+  ASPCA listing, so its pet line reads "Unknown".
+- **Sign-up from the rosemary guide keeps the plant.** A visitor who signs up
+  from `/care/rosemary` sees rosemary first in the first run, with a 7-day
+  reminder (the low end of its cited interval). It is not one of the ten
+  tiles, so the grid is unchanged for everyone else.
 
 ### Changed
 
+- **The pet checker no longer answers "air plant" with the spider plant's
+  verdict.** Its loose word match found "air" inside the spider plant's
+  "airplane plant" name and returned non-toxic for a different plant. Each
+  word of a multi-word search must now match a whole word of a plant's name.
 - **The six holiday care guides now link to each other (#1091).** The
   poinsettia, Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and
   kalanchoe guides each name the other five in a line under "Keeping it alive

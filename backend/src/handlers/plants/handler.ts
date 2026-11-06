@@ -42,6 +42,7 @@ import * as householdService from '../../services/householdService.js';
 import * as enrichment from '../../services/enrichment.js';
 import * as trashService from '../../services/trashService.js';
 import * as householdAudit from '../../services/householdAudit.js';
+import * as accountMilestones from '../../services/accountMilestones.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
 import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
@@ -462,7 +463,16 @@ export const createPlant = createHandler(
       logger.warn({ err }, 'activity_record_failed');
     });
 
-    return createdResponse(plant);
+    // Whether this was the account's first plant, decided once per account
+    // on the server (services/accountMilestones.ts), so the web app's GA4
+    // `first_plant_added` counts accounts, not screens or reloads. Present
+    // only when true. A failed read fails CLOSED: the plant is saved, no flag
+    // is sent, and the miss is logged (ADR 0010).
+    const firstPlant = await accountMilestones.claimFirstPlant(user.userId, user.householdId!);
+    if (firstPlant === 'unknown') logger.warn('first_plant_milestone_unknown');
+    return createdResponse(
+      firstPlant === 'first' ? { ...plant, firstPlantForAccount: true } : plant
+    );
   }
 )
   .use(authMiddleware())
