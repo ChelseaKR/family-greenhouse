@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { buttonStyles } from '@/components/buttonStyles';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
@@ -68,7 +68,9 @@ export function NextWateringTool({
   const [enhanced, setEnhanced] = useState(false);
   const [last, setLast] = useState<LastWateredBucket | undefined>(undefined);
   const [saved, setSaved] = useState<'idle' | 'saved' | 'failed'>('idle');
-  const selectId = useId();
+  // A fixed id, not useId(): one tool per page, and the markup stays the same
+  // from one render to the next (PlantShopLink.test compares two renders).
+  const selectId = `next-watering-last-${slug}`;
   useEffect(() => setEnhanced(true), []);
 
   const name = sentenceName(commonName);
