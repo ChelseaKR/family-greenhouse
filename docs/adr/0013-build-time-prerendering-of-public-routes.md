@@ -160,6 +160,13 @@ resolved to its `*` route, so nothing that rendered a page stops rendering it.
 from `APP_PATTERNS`: every valid member is manifest-driven and already in
 `PRERENDERED`, which is what makes `/care/no-such-plant` answerable at all.
 
+Update, 2026-11-05: those three namespaces are now served by prefix, like
+`/pet-safe/`, instead of one `PRERENDERED` entry per page; the per-page list
+had brought the function to 10,232 of CloudFront's 10,240 bytes. The function
+maps any one segment under the prefix onto `<path>/index.html`, and the
+prerender writes that object only for a published page, so `/care/no-such-plant`
+is still S3's 404. They remain excluded from `APP_PATTERNS`.
+
 What this still does not fix: the 404 **body** is S3's error document rather
 than a branded page. Serving the shell there needs a distribution-wide
 `error_code = 404` rule, which would also answer for `/assets/` — where the

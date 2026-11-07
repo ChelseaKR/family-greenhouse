@@ -194,11 +194,21 @@ paths:
               $ref: '#/components/schemas/CreatePlantRequest'
       responses:
         '201':
-          description: Plant created
+          description: >-
+            Plant created. `firstPlantForAccount` is present, and true, only on
+            the one create that was this account's first plant in a household
+            that had no active plants (backend services/accountMilestones.ts);
+            the web app sends GA4 `first_plant_added` on it.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Plant'
+                allOf:
+                  - $ref: '#/components/schemas/Plant'
+                  - type: object
+                    properties:
+                      firstPlantForAccount:
+                        type: boolean
+                        enum: [true]
 
   /plants/move:
     post:

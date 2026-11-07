@@ -775,8 +775,11 @@ export let seedTaskId = '';
  */
 const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
 const identifyUsage = new Map<string, number>(); // `${yyyy-mm}#${bucketId}`
+/** Accounts that have claimed the first-plant milestone (services/accountMilestones.ts). */
+const firstPlantClaimedBy = new Set<string>();
 
 export function resetDb(): void {
+  firstPlantClaimedBy.clear();
   db.users.clear();
   db.households.clear();
   db.invites.clear();
@@ -4183,7 +4186,14 @@ app.post(
         : { plantId, plantName: plant.name },
     });
 
-    res.status(201).json(plant);
+    // Mirrors services/accountMilestones.claimFirstPlant: the account's first
+    // plant, once per account, and only when it starts an empty household.
+    let firstPlantForAccount = false;
+    if (!firstPlantClaimedBy.has(user.userId)) {
+      firstPlantClaimedBy.add(user.userId);
+      firstPlantForAccount = existing.length === 0;
+    }
+    res.status(201).json(firstPlantForAccount ? { ...plant, firstPlantForAccount: true } : plant);
   }
 );
 

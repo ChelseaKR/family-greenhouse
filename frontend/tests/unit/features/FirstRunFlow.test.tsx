@@ -232,7 +232,12 @@ describe('WelcomeFlow activation path', () => {
       http.post(`${API}/plants`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>;
         created.push(body);
-        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+        return HttpResponse.json({
+          id: 'p-new',
+          name: body.name,
+          householdId: 'hh-1',
+          firstPlantForAccount: true,
+        });
       })
     );
 
@@ -251,6 +256,33 @@ describe('WelcomeFlow activation path', () => {
     expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
       [{ name: 'household_activated' }],
       [{ name: 'first_plant_added', method: 'typed' }],
+    ]);
+  });
+
+  it("sends first_plant_added only when the server says it is the account's first plant", async () => {
+    const user = userEvent.setup();
+    let creates = 0;
+    newHouseholdHandlers();
+    server.use(
+      // No `firstPlantForAccount`: this account already had a first plant (a
+      // second household, or a run repeated on another device).
+      http.post(`${API}/plants`, async ({ request }) => {
+        creates += 1;
+        const body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+      })
+    );
+
+    renderFirstRun();
+
+    await user.type(await screen.findByLabelText(/plant name/i), 'Kitchen monstera');
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+
+    expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
+    // The sabotage applied: the plant really was saved.
+    expect(creates).toBe(1);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
     ]);
   });
 
@@ -460,7 +492,12 @@ describe('WelcomeFlow always leaves with a schedule (#477)', () => {
     server.use(
       http.post(`${API}/plants`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+        return HttpResponse.json({
+          id: 'p-new',
+          name: body.name,
+          householdId: 'hh-1',
+          firstPlantForAccount: true,
+        });
       })
     );
     renderFirstRun();
@@ -569,7 +606,12 @@ describe('WelcomeFlow common-plant shortcut', () => {
         const body = (await request.json()) as Record<string, unknown>;
         created.push(body);
         return status === 200
-          ? HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' })
+          ? HttpResponse.json({
+              id: 'p-new',
+              name: body.name,
+              householdId: 'hh-1',
+              firstPlantForAccount: true,
+            })
           : HttpResponse.json({ message: 'The plant could not be saved.' }, { status });
       })
     );
@@ -671,7 +713,12 @@ describe('WelcomeFlow plant carried from a care guide', () => {
       http.post(`${API}/plants`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>;
         created.push(body);
-        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+        return HttpResponse.json({
+          id: 'p-new',
+          name: body.name,
+          householdId: 'hh-1',
+          firstPlantForAccount: true,
+        });
       })
     );
     return created;

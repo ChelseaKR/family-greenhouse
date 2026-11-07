@@ -176,6 +176,54 @@
     "kalanchoe": {
       "content": "sha256-3ccb58af306a96064309316c8f0308704299da8633597cdcf911a45514f23dbf",
       "lastmod": "2026-11-05"
+    },
+    "rosemary": {
+      "content": "sha256-0433ebb3aa9223a87b2c8cb9a6bd97d2ec5ae2cd4c87a4657a40ebcc4bf25636",
+      "lastmod": "2026-11-05"
+    },
+    "satin-pothos": {
+      "content": "sha256-364eee5c0f78dd90faf24022404890abb29128443100fb3ca09a6c40bdc94c16",
+      "lastmod": "2026-11-06"
+    },
+    "dragon-tree": {
+      "content": "sha256-9d6e341de1f3118c63d0330efc45ea9f0b8d46b63008d1760aaa6cd8f19ef1f0",
+      "lastmod": "2026-11-06"
+    },
+    "arrowhead-plant": {
+      "content": "sha256-817f5fb6e12852bc3b205c65907b2e081b15aedf8e15939ee149dc20bc1a81d4",
+      "lastmod": "2026-11-06"
+    },
+    "weeping-fig": {
+      "content": "sha256-24a246e7b7cedac0947c01d58b1997e316d30f7779aa027978f90cc24e61df35",
+      "lastmod": "2026-11-06"
+    },
+    "polka-dot-plant": {
+      "content": "sha256-13397f191569686937b47bb4fd052224836883faef873aa9e3f90bc01061bcad",
+      "lastmod": "2026-11-06"
+    },
+    "lucky-bamboo": {
+      "content": "sha256-1202016777158b0ba7ff83b9604625e94fe5a2b6bb94ced8e2e5162df52fcad1",
+      "lastmod": "2026-11-07"
+    },
+    "venus-flytrap": {
+      "content": "sha256-6addb451b43414cd1c98da72b7bbcc759b7296a408b654ab4570b82114efc87f",
+      "lastmod": "2026-11-07"
+    },
+    "majesty-palm": {
+      "content": "sha256-ca19def9b38df128679228a73e376d6f23c98db5740e5cbe222f30e11e930d83",
+      "lastmod": "2026-11-07"
+    },
+    "kentia-palm": {
+      "content": "sha256-e89d5d6d6d8518bcb58c3caf3bd6775eea0351bd137edebb0d331578a87712d1",
+      "lastmod": "2026-11-07"
+    },
+    "paperwhite": {
+      "content": "sha256-26109208d6a52270b95e58ecc6bb6b8d40b8eac5f9605bc8874ebd38fe4b0e10",
+      "lastmod": "2026-11-07"
+    },
+    "purple-shamrock": {
+      "content": "sha256-0eebbbf952b383e1852e3efd870b979e82f549cce59eaff574c8d70223228d64",
+      "lastmod": "2026-11-07"
     }
   }
 }

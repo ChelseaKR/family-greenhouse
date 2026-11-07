@@ -15,7 +15,7 @@ export function AccountDeletionPage() {
   });
 
   return (
-    <LegalShell title={t('legal.accountDeletion.title')} effectiveDate="2026-09-02">
+    <LegalShell title={t('legal.accountDeletion.title')} effectiveDate="2026-11-05">
       <p className="lead">{t('legal.accountDeletion.lead')}</p>
       <h2>{t('legal.accountDeletion.self.heading')}</h2>
       <ol>

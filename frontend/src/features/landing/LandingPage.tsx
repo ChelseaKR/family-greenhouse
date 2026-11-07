@@ -211,6 +211,17 @@ const featuredGuides = [
   { slug: 'monstera', name: 'Monstera' },
 ];
 
+// The ranked and list-style blog posts, linked by name from the same band so
+// the home page reaches them directly. Slugs match features/blog/posts/index.ts
+// (LandingGuideLists.test.tsx fails if one stops resolving). The labels are
+// the posts' own titles, shortened, so the links promise nothing the posts
+// don't say. The posts are English-only, which the Spanish heading says.
+const featuredLists = [
+  { slug: 'low-maintenance-houseplants-for-forgetful-people', key: 'forgiving' },
+  { slug: 'pet-safe-houseplants-that-are-hard-to-kill', key: 'petSafe' },
+  { slug: 'most-common-toxic-houseplants-and-safer-swaps', key: 'toxicSwaps' },
+] as const;
+
 /** Shown in the mock browser's address bar. */
 const MOCK_HOST = 'familygreenhouse.net';
 
@@ -899,6 +910,21 @@ export function LandingPage() {
                           aria-hidden="true"
                         />
                         {guide.nameKey ? t(guide.nameKey) : guide.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.startWithList')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {featuredLists.map((list) => (
+                    <li key={list.slug}>
+                      <Link
+                        to={`/blog/${list.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.lists.${list.key}`)}
                       </Link>
                     </li>
                   ))}
