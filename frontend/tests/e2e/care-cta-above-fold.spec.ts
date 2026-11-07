@@ -15,7 +15,8 @@ import { expect, test } from '@playwright/test';
  * eight guides with three-line headings (anthurium, hoya and others) end
  * 13-61px below; that case is checked for the near-page-one guides, the
  * 2026-11-03 watering guides, the 2026-11-04 holiday guides, the 2026-11-05
- * batch and the 2026-11-05 batch-5 guides only.
+ * batch, the 2026-11-05 batch-5 guides and the 2026-11-07 watering batch 2
+ * only.
  */
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 375, height: 667 },
@@ -59,6 +60,17 @@ const BATCH_5 = [
   'polka-dot-plant',
   'tradescantia',
 ];
+/** The eight watering guides of batch 2, added 2026-11-07, written to fit the smallest case too. */
+const WATERING_BATCH_2 = [
+  'jasmine',
+  'lucky-bamboo',
+  'venus-flytrap',
+  'majesty-palm',
+  'kentia-palm',
+  'paperwhite',
+  'birds-nest-fern',
+  'purple-shamrock',
+];
 /** Plus the guides with the longest headings, which push the link lowest. */
 const GUIDES = [
   ...NEAR_PAGE_ONE,
@@ -70,6 +82,7 @@ const GUIDES = [
   ...HOLIDAY_GUIDES,
   ...BATCH_4,
   ...BATCH_5,
+  ...WATERING_BATCH_2,
 ];
 
 const SMALLEST = { name: 'iPhone SE in Safari', width: 375, height: 548 } as const;
@@ -83,7 +96,14 @@ test.describe('care guide sign-up link above the fold', () => {
     ...VIEWPORTS.map((viewport) => ({ viewport, slugs: GUIDES })),
     {
       viewport: SMALLEST,
-      slugs: [...NEAR_PAGE_ONE, ...WATERING_BATCH_1, ...HOLIDAY_GUIDES, ...BATCH_4, ...BATCH_5],
+      slugs: [
+        ...NEAR_PAGE_ONE,
+        ...WATERING_BATCH_1,
+        ...HOLIDAY_GUIDES,
+        ...BATCH_4,
+        ...BATCH_5,
+        ...WATERING_BATCH_2,
+      ],
     },
   ];
   for (const { viewport, slugs } of cases) {

@@ -18,6 +18,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
+  kentia palm, paperwhite, bird's nest fern and purple shamrock.** Each
+  answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,
+  Iowa State, Wisconsin and RHS pages it was written from, read on
+  2026-11-07. The only interval any of those pages gives is NC State's "change
+  the water weekly" for lucky bamboo grown in water, so that is the only one
+  stated; the others give the source's soil rule instead.
+- **Pet-safety pages for lucky bamboo, Venus flytrap, majesty palm, kentia
+  palm, paperwhite and purple shamrock**, each citing an ASPCA listing that
+  names the plant ("Ribbon Plant" for Dracaena, "Venus Fly Trap", "Majesty
+  Palm", "Kentia Palm", "Paper White" and "Shamrock Plant" for Oxalis). The
+  jasmine guide reads the existing Jasminum row. The bird's nest fern's pet
+  line reads "Unknown": the ASPCA has no listing for Asplenium nidus, and its
+  "Golden Bird's Nest" is a snake plant.
 - **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
   polka dot plant and tradescantia.** Each answers "how often to water" first
   and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin extension

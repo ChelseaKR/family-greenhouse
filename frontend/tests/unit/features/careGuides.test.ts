@@ -100,8 +100,9 @@ describe('CARE_GUIDES registry', () => {
     // contradict that in either direction. Link anchors are stripped first,
     // so "[free pet-safe checker](/pet-safe)" is not read as a verdict. Four
     // of the 2026-11-03 watering guides have no listing of their own either,
-    // and neither do the 2026-11-05 air plant (Tillandsia) and the batch-5
-    // tradescantia (T. zebrina).
+    // and neither do the 2026-11-05 air plant (Tillandsia), the batch-5
+    // tradescantia (T. zebrina) and the 2026-11-07 bird’s nest fern (Asplenium
+    // nidus).
     const unknown = CARE_GUIDES.filter((g) => !careToxicity(g).sourced);
     expect(unknown.map((g) => g.slug)).toEqual([
       'zz-plant',
@@ -111,6 +112,7 @@ describe('CARE_GUIDES registry', () => {
       'chinese-money-plant',
       'air-plant',
       'tradescantia',
+      'birds-nest-fern',
     ]);
     for (const g of unknown) {
       const prose = [
@@ -479,6 +481,7 @@ describe('pet-safety test guides', () => {
       'chinese-money-plant',
       'air-plant',
       'tradescantia',
+      'birds-nest-fern',
     ]);
   });
 });
@@ -679,6 +682,7 @@ describe('third-batch pet-safety guides', () => {
       'chinese-money-plant',
       'air-plant',
       'tradescantia',
+      'birds-nest-fern',
     ]);
   });
 });
@@ -1369,5 +1373,213 @@ describe('guides batch 5 (2026-11-05)', () => {
     const g = findCareGuide('satin-pothos')!;
     expect(g.metaDescription).toMatch(/not a true pothos/);
     expect(g.faqs.some((f) => /real pothos/.test(f.q))).toBe(true);
+  });
+});
+
+/**
+ * Watering guides batch 2, added 2026-11-07: jasmine, lucky bamboo, Venus
+ * flytrap, majesty palm, kentia palm, paperwhite, bird’s nest fern and purple
+ * shamrock. Each cites the extension and RHS pages it was written from, read
+ * that day. The only interval any of those sources gives is North Carolina
+ * State Extension’s “change the water weekly” for lucky bamboo grown in water,
+ * so that is the only interval any of these guides states. Six plants get a
+ * short-form row from their own ASPCA listing, jasmine reads its existing
+ * genus-level row, and the bird’s nest fern has no listing, so its pet line
+ * reads "Unknown".
+ *
+ * Until the 12-01 title read no existing guide links to these, so they link
+ * to each other and every one of them still has an inbound related card.
+ */
+describe('watering guides batch 2 (2026-11-07)', () => {
+  const BATCH = [
+    'jasmine',
+    'lucky-bamboo',
+    'venus-flytrap',
+    'majesty-palm',
+    'kentia-palm',
+    'paperwhite',
+    'birds-nest-fern',
+    'purple-shamrock',
+  ] as const;
+  const NEW_ROWS = [
+    'lucky-bamboo',
+    'venus-flytrap',
+    'majesty-palm',
+    'kentia-palm',
+    'paperwhite',
+    'purple-shamrock',
+  ] as const;
+  const guides = BATCH.map((slug) => findCareGuide(slug)!);
+
+  /** A stated watering interval: "every 7 days", "2 to 3 weeks", "once a week". */
+  const INTERVAL =
+    /\b(?:\d+\s*(?:to|-|–)?\s*\d*\s*(?:days?|weeks?)|every\s+(?:day|week|other|few|couple)|once\s+a\s+(?:day|week)|(?:once\s+or\s+)?twice\s+a\s+(?:day|week|month)|weekly|daily)\b/i;
+
+  /** Every place a guide could state how often to water. */
+  const wateringText = (g: CareGuide) => [
+    g.quickFacts.water,
+    g.metaTitle,
+    g.metaDescription,
+    ...g.sections.watering,
+    ...g.faqs.map((f) => f.a),
+  ];
+
+  it('publishes all eight, reviewed and updated on the day the sources were read', () => {
+    for (const [i, slug] of BATCH.entries()) {
+      const g = guides[i];
+      expect(g, slug).toBeDefined();
+      expect(g!.reviewed, slug).toBe('2026-11-07');
+      expect(g!.updated, slug).toBe('2026-11-07');
+      for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-07');
+      expect(g!.heading, slug).toBeUndefined();
+    }
+    // Only the majesty palm rests on one source (NC State); no second page
+    // that names the species was found. The others cite at least two.
+    for (const g of guides) {
+      expect(g.careSources.length, g.slug).toBeGreaterThanOrEqual(
+        g.slug === 'majesty-palm' ? 1 : 2
+      );
+    }
+  });
+
+  it('answers "how often to water" first, in the title and the first FAQ', () => {
+    for (const g of guides) {
+      expect(g.metaTitle, g.slug).toMatch(/^How Often to Water /);
+      expect(g.faqs[0]!.q, g.slug).toMatch(/^How often should I water /);
+    }
+  });
+
+  it('keeps every water and light line short enough for the first screen', () => {
+    for (const g of guides) expect(g.quickFacts.water.length, g.slug).toBeLessThanOrEqual(55);
+    for (const g of guides) expect(g.quickFacts.light.length, g.slug).toBeLessThanOrEqual(56);
+  });
+
+  it('has titles and descriptions unique across all guides', () => {
+    for (const g of guides) {
+      expect(
+        CARE_GUIDES.filter((o) => o.metaTitle === g.metaTitle),
+        g.slug
+      ).toHaveLength(1);
+      expect(
+        CARE_GUIDES.filter((o) => o.metaDescription === g.metaDescription),
+        g.slug
+      ).toHaveLength(1);
+    }
+  });
+
+  it('states no watering interval, except the one lucky bamboo source gives', () => {
+    for (const g of guides) {
+      if (g.slug === 'lucky-bamboo') continue;
+      for (const text of wateringText(g)) expect(text, g.slug).not.toMatch(INTERVAL);
+    }
+    // Lucky bamboo's only interval is NC State's weekly water change, and the
+    // guide cites that page.
+    const lucky = findCareGuide('lucky-bamboo')!;
+    for (const text of wateringText(lucky)) {
+      if (INTERVAL.test(text)) expect(text).toMatch(/change (?:the water|it) weekly/i);
+    }
+    expect(lucky.careSources.map((s) => s.url)).toContain(
+      'https://plants.ces.ncsu.edu/plants/dracaena-sanderiana/'
+    );
+  });
+
+  it('negative control: an unsourced interval fails the interval check', () => {
+    const real = findCareGuide('kentia-palm')!;
+    const doctored = { ...real, quickFacts: { ...real.quickFacts, water: 'Every 10 days' } };
+    expect(wateringText(real).some((t) => INTERVAL.test(t))).toBe(false);
+    expect(wateringText(doctored).some((t) => INTERVAL.test(t))).toBe(true);
+  });
+
+  it('reads the cited row for every plant with an ASPCA listing of its own', () => {
+    const LISTING: Record<(typeof NEW_ROWS)[number] | 'jasmine', { title: string; path: string }> =
+      {
+        jasmine: { title: 'Jasmine', path: '/toxic-and-non-toxic-plants/jasmine' },
+        'lucky-bamboo': { title: 'Ribbon Plant', path: '/toxic-and-non-toxic-plants/ribbon-plant' },
+        'venus-flytrap': {
+          title: 'Venus Fly Trap',
+          path: '/toxic-and-non-toxic-plants/venus-fly-trap',
+        },
+        'majesty-palm': { title: 'Majesty Palm', path: '/toxic-and-non-toxic-plants/majesty-palm' },
+        'kentia-palm': { title: 'Kentia Palm', path: '/toxic-and-non-toxic-plants/kentia-palm' },
+        paperwhite: { title: 'Paper White', path: '/toxic-and-non-toxic-plants/paper-white' },
+        'purple-shamrock': {
+          title: 'Shamrock Plant',
+          path: '/toxic-and-non-toxic-plants/shamrock-plant',
+        },
+      };
+    for (const slug of [...NEW_ROWS, 'jasmine'] as const) {
+      const g = findCareGuide(slug)!;
+      const row = PET_TOXICITY.find((e) => e.slug === slug)!;
+      expect(row, slug).toBeDefined();
+      expect(row.aspcaListing, slug).toMatchObject(LISTING[slug]);
+      expect(row.aspcaListing!.detailsRead, slug).toBeUndefined();
+      const view = careToxicity(g);
+      expect(view.sourced, slug).toBe(true);
+      expect(view.petSafePath, slug).toBe(`/pet-safe/${slug}`);
+      expect(petSafetyLevel(g.quickFacts.toxicity), slug).toBe(
+        row.cats === 'toxic' ? 'toxic' : 'safe'
+      );
+      const pet = g.sections.honestBit.join(' ');
+      expect(pet, slug).toContain(`](/pet-safe/${slug})`);
+      expect(pet, slug).toContain('[free pet-safe checker](/pet-safe)');
+      expect(pet, slug).toMatch(
+        row.cats === 'toxic'
+          ? /call your vet or a poison hotline/
+          : /Non-toxic is not the same as safe to eat in quantity/
+      );
+    }
+    // The paperwhite listing says the bulbs are the worst part; the row and the
+    // guide both say so.
+    expect(PET_TOXICITY.find((e) => e.slug === 'paperwhite')!.note).toMatch(/bulbs/);
+    expect(findCareGuide('paperwhite')!.quickFacts.toxicity).toMatch(/bulbs/);
+  });
+
+  it('reads "Unknown" for the bird’s nest fern, which has no listing and no row', () => {
+    const g = findCareGuide('birds-nest-fern')!;
+    expect(PET_TOXICITY.some((e) => e.slug === 'birds-nest-fern')).toBe(false);
+    expect(careToxicity(g).sourced).toBe(false);
+    expect(careToxicity(g).petSafePath).toBeNull();
+    expect(g.quickFacts.toxicity).toMatch(/^Unknown\b/);
+    // No row reaches it through a name: ASPCA's "Golden Bird's Nest" is a
+    // snake plant, and must stay off every row's names.
+    const names = (e: (typeof PET_TOXICITY)[number]) =>
+      [e.commonName, e.scientificName, ...e.aliases].map((n) => n.toLowerCase());
+    for (const e of PET_TOXICITY) {
+      for (const n of [
+        'bird’s nest fern',
+        "bird's nest fern",
+        'birds nest fern',
+        'asplenium nidus',
+      ]) {
+        expect(names(e), `${e.slug}: ${n}`).not.toContain(n);
+      }
+    }
+  });
+
+  it('adds no name to the pet table that already routes to another row', () => {
+    for (const slug of NEW_ROWS) {
+      const row = PET_TOXICITY.find((e) => e.slug === slug)!;
+      const mine = [row.commonName, row.scientificName, ...row.aliases].map((n) => n.toLowerCase());
+      for (const e of PET_TOXICITY) {
+        if (e.slug === slug) continue;
+        const theirs = [e.commonName, e.scientificName, ...e.aliases].map((n) => n.toLowerCase());
+        for (const n of mine) expect(theirs, `${n} is already ${e.slug}`).not.toContain(n);
+      }
+    }
+  });
+
+  it('is linked from another new guide’s related cards', () => {
+    // Existing guides stay untouched until the 12-01 title read, so the
+    // inbound link every guide needs comes from inside the batch.
+    for (const slug of BATCH) {
+      const from = guides.filter((g) => g.slug !== slug && g.related.includes(slug));
+      expect(from.length, slug).toBeGreaterThan(0);
+    }
+  });
+
+  it('tells the lucky bamboo reader it is not a bamboo', () => {
+    const g = findCareGuide('lucky-bamboo')!;
+    expect(g.metaDescription).toMatch(/Not a real bamboo/);
+    expect(g.summary).toMatch(/not a bamboo/);
   });
 });
