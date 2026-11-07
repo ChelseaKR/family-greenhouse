@@ -155,7 +155,20 @@ describe('CARE_GUIDES registry', () => {
     // 22 for "how often to water <plant>", and nearly every result above them
     // is titled with that phrase. A title that opens with "<Plant> Care" made
     // the spider plant the odd one out at position 5.
-    for (const slug of ['zz-plant', 'monstera', 'spider-plant', 'aloe-vera', 'pothos']) {
+    // The 28 days to 2026-11-06 added five more at positions 7 to 16 with no
+    // clicks, so their titles lead the same way.
+    for (const slug of [
+      'zz-plant',
+      'monstera',
+      'spider-plant',
+      'aloe-vera',
+      'pothos',
+      'english-ivy',
+      'heartleaf-philodendron',
+      'money-tree',
+      'nerve-plant',
+      'rubber-plant',
+    ]) {
       expect(findCareGuide(slug)!.metaTitle, slug).toMatch(/^How Often to Water /);
     }
   });
@@ -328,14 +341,23 @@ describe('CARE_GUIDES content dates', () => {
     // The poinsettia and Christmas cactus were reviewed on 2026-11-03 and gained
     // their links to the other holiday guides on 2026-11-04, a copy edit.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
+    // Seven guides got new search titles or descriptions on 2026-11-06, a copy
+    // edit with no new facts, so they drift too.
     expect(drifted.map((g) => g.slug).sort()).toEqual([
       'begonia',
+      'bird-of-paradise',
       'blue-echeveria',
       'burros-tail',
       'christmas-cactus',
+      'english-ivy',
       'haworthia',
+      'heartleaf-philodendron',
       'lily',
+      'money-tree',
+      'monstera',
+      'nerve-plant',
       'poinsettia',
+      'rubber-plant',
     ]);
   });
 });

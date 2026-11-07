@@ -57,6 +57,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   H1 or meta changed. No `infrastructure/` change: the page router
   already matches `/blog/` pages by prefix.
 
+### Changed
+
+- **Search titles for seven care guides now show the watering answer.** Search
+  Console's 28 days to 2026-11-06 had monstera, English ivy, heartleaf
+  philodendron, money tree, nerve plant, rubber plant and bird of paradise at
+  positions 3 to 16 with 0 or 1 clicks. Six titles now open with "How often to
+  water" and the guide's own rule, and bird of paradise leads with light and
+  bloom age. Every phrase comes from the guide and its cited sources.
+
 ### Fixed
 
 - **GA4 `first_plant_added` counts accounts, not screens.** It was sent
