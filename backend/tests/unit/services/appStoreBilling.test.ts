@@ -222,6 +222,30 @@ describe('applyVerifiedTransaction', () => {
     expect(row('hh-1').appStore).toBeUndefined();
   });
 
+  it('grants a Sandbox purchase by default, and ignores it once production is narrowed', async () => {
+    const saved = process.env.APP_STORE_ENVIRONMENTS;
+    try {
+      delete process.env.APP_STORE_ENVIRONMENTS;
+      const sandbox = tx({ environment: 'Sandbox' });
+      expect(await applyVerifiedTransaction(sandbox, null, 'hh-1', NOW)).toMatchObject({
+        outcome: 'applied',
+        planId: 'garden',
+      });
+
+      process.env.APP_STORE_ENVIRONMENTS = 'Production';
+      const other = tx({
+        environment: 'Sandbox',
+        originalTransactionId: '4000000000',
+        transactionId: '4000000001',
+      });
+      expect((await applyVerifiedTransaction(other, null, 'hh-2', NOW)).outcome).toBe('ignored');
+      expect(row('hh-2').appStore).toBeUndefined();
+    } finally {
+      if (saved === undefined) delete process.env.APP_STORE_ENVIRONMENTS;
+      else process.env.APP_STORE_ENVIRONMENTS = saved;
+    }
+  });
+
   it('cannot place a notification with no binding and no token', async () => {
     expect((await applyVerifiedTransaction(tx(), null, null, NOW)).outcome).toBe(
       'unknown_household'
@@ -262,6 +286,36 @@ describe('notifications and signed transactions', () => {
       householdId: 'hh-2',
       notificationType: 'SUBSCRIBED',
     });
+  });
+
+  it('applies a Sandbox notification, which carries no appAppleId (App Review buys in Sandbox against production)', async () => {
+    const token = await getOrCreateAccountToken('hh-1');
+    const signedDate = Date.now();
+    const signedTransactionInfo = signJws(chain, {
+      ...tx({
+        appAccountToken: token,
+        environment: 'Sandbox',
+        signedDate,
+        expiresDate: signedDate + 30 * DAY,
+      }),
+    });
+    const signedPayload = signJws(chain, {
+      notificationType: 'SUBSCRIBED',
+      subtype: 'INITIAL_BUY',
+      signedDate,
+      data: {
+        bundleId: 'net.familygreenhouse.app',
+        environment: 'Sandbox',
+        signedTransactionInfo,
+      },
+    });
+    const result = await applyNotification(
+      signedPayload,
+      { trustedRootsPem: [chain.rootPem] },
+      new Date(signedDate)
+    );
+    expect(result).toMatchObject({ outcome: 'applied', householdId: 'hh-1', planId: 'garden' });
+    expect(row('hh-1').appStore).toMatchObject({ environment: 'Sandbox' });
   });
 
   it('refuses a notification for another app id', async () => {
