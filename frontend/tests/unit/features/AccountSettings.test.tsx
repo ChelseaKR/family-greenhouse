@@ -29,6 +29,15 @@ vi.mock('@/services/taskService', async () => {
   };
 });
 
+// The App Store question is answered by the build and the iOS bridge; the
+// deletion note's tests set it directly.
+vi.mock('@/services/appStoreAvailability', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appStoreAvailability')>(
+    '@/services/appStoreAvailability'
+  );
+  return { ...actual, appStorePurchasesAvailable: vi.fn(() => false) };
+});
+
 // Stub the actual DOM download side-effect (Blob/anchor-click/URL APIs);
 // we only care about what content was handed to it.
 vi.mock('@/utils/csv', async () => {
@@ -297,5 +306,39 @@ describe('AccountSettings — calendar feed link', () => {
     expect(
       screen.queryByRole('button', { name: 'Generate calendar link' })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('AccountSettings — deletion and App Store subscriptions', () => {
+  beforeEach(() => {
+    useAuthStore.setState({
+      user: {
+        id: 'u-1',
+        email: 'a@b.com',
+        name: 'Alice',
+        householdId: null,
+        householdRole: null,
+      },
+    } as never);
+  });
+
+  it('tells the person in the iPhone app that deletion does not cancel an App Store subscription', async () => {
+    const { appStorePurchasesAvailable } = await import('@/services/appStoreAvailability');
+    vi.mocked(appStorePurchasesAvailable).mockReturnValue(true);
+    renderSettings();
+
+    expect(screen.getByTestId('delete-app-store-note')).toHaveTextContent(
+      'Deleting your account does not cancel an App Store subscription.'
+    );
+    expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+  });
+
+  it('says nothing about the App Store where it sells nothing (website, Android)', async () => {
+    const { appStorePurchasesAvailable } = await import('@/services/appStoreAvailability');
+    vi.mocked(appStorePurchasesAvailable).mockReturnValue(false);
+    renderSettings();
+
+    expect(screen.queryByTestId('delete-app-store-note')).not.toBeInTheDocument();
+    expect(screen.queryByText(/App Store/)).not.toBeInTheDocument();
   });
 });

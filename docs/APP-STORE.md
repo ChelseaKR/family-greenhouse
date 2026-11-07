@@ -196,7 +196,8 @@ it's the source of truth. It gained the analytics types with PR #791
 push (#851), and Crash Data for 0.37.1: the first-party error rail had been
 sending error summaries from the shells without a manifest entry.
 `scripts/validate-store-release.mjs` fails a store build whose manifest
-drops any of these. The manifest currently declares 11 data types:
+drops any of these. Purchase History joined it with App Store purchases
+(ADR 0041). The manifest currently declares 12 data types:
 
 | Data type                  | Linked to identity | Used to track you | Purpose                      |
 | -------------------------- | ------------------ | ----------------- | ---------------------------- |
@@ -211,6 +212,7 @@ drops any of these. The manifest currently declares 11 data types:
 | Performance Data           | No                 | No                | Analytics                    |
 | Crash Data                 | No                 | No                | App Functionality            |
 | Coarse Location (optional) | Yes                | No                | App Functionality            |
+| Purchase History           | Yes                | No                | App Functionality            |
 
 **"Data Used to Track You": No.** `NSPrivacyTracking` is `false` and
 `NSPrivacyTrackingDomains` is empty in the manifest. There is no
@@ -248,6 +250,13 @@ What each row actually is, for whoever fills out the questionnaire:
   — the app never requests precise location. It's used to fetch local
   weather for climate-aware care tips (`legal.json`, "Optional household
   location").
+- **Purchase History** — with App Store purchases on (ADR 0041), the
+  server keeps each household's App Store subscription: product, original
+  transaction id, expiry and renewal state, from the app's signed
+  transactions and Apple's notifications. It is linked to the household
+  that bought it and used only to give that household its plan. Plans
+  bought on the website are kept by Stripe and are not collected by the
+  app.
 - **User ID, Product Interaction, Performance Data (Analytics)** — the
   first-party product analytics shipped today in PR #791. It is
   cookieless by construction (no cookie, `localStorage`, or

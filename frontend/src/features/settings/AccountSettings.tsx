@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { downloadCsv, toCsv } from '@/utils/csv';
 import { track } from '@/services/analytics';
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { ArchiveImportCard } from './ArchiveImportCard';
 
 /**
@@ -325,6 +326,15 @@ export function AccountSettings() {
           title="Delete account"
           description="Permanently removes your login and your household membership. If you're the only admin in a multi-member household, promote someone else first."
         />
+        {/* Deleting the account cannot cancel an App Store subscription: Apple
+            bills it, and only the subscriber can cancel it (Apple's account
+            deletion guidance; the Terms say the same). Said where the person
+            decides, only in the iPhone app that sells it. */}
+        {appStorePurchasesAvailable() && (
+          <p className="mb-4 text-sm text-gray-700" data-testid="delete-app-store-note">
+            {t('settings.account.deleteAppStoreNote')}
+          </p>
+        )}
         {deleteMe.isError && (
           <Alert variant="error" className="mb-4">
             {getErrorMessage(deleteMe.error)}
