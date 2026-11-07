@@ -30,6 +30,12 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDynamo } from './support/inMemoryDynamo.js';
 import { invokeHandler } from './support/invokeHandler.js';
+import {
+  couldOccurInTimestamp,
+  HOUSEHOLD_LATITUDE,
+  HOUSEHOLD_LONGITUDE,
+  LOCATION_SENTINELS,
+} from './support/locationSentinels.js';
 import { seedHousehold, setHouseholdPlan } from './support/seed.js';
 
 const store = createInMemoryDynamo();
@@ -107,8 +113,8 @@ async function seedEverything(): Promise<Seeded> {
   await setHouseholdPlan(store, householdId, 'greenhouse');
   await householdService.setHouseholdLocation(householdId, {
     city: HOUSEHOLD_CITY,
-    latitude: 34.05,
-    longitude: -118.24,
+    latitude: HOUSEHOLD_LATITUDE,
+    longitude: HOUSEHOLD_LONGITUDE,
   });
 
   const space = await spaceService.createSpace({ name: SPACE_NAME }, householdId, ADMIN.userId);
@@ -281,8 +287,12 @@ describe('what a sitter link exposes, measured against that paragraph', () => {
     const seeded = await seedEverything();
     const { wire } = await readAsSitter(seeded.token);
     expect(wire).not.toContain(HOUSEHOLD_CITY);
-    expect(wire).not.toContain('34.05');
-    expect(wire).not.toContain('-118.24');
+    // A response carries timestamps, so a coordinate that fits in a seconds
+    // field would fail this with no leak at all (support/locationSentinels.ts).
+    expect(LOCATION_SENTINELS.filter(couldOccurInTimestamp)).toEqual([]);
+    for (const sentinel of LOCATION_SENTINELS) {
+      expect(wire, `a sitter payload must not contain "${sentinel}"`).not.toContain(sentinel);
+    }
   });
 
   it('"do not expose ... household member identity and contact details"', async () => {

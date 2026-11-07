@@ -486,7 +486,7 @@ function cardExpiring(
     body.push('happens, and if it stays unpaid the subscription ends and your household');
     body.push('moves to the free plan. No plants and no history are lost.');
     body.push('');
-    body.push('You can replace it under "Manage subscription" whenever suits you.');
+    body.push('You can replace it under "Manage subscription" whenever it suits you.');
   }
 
   return {
@@ -788,8 +788,9 @@ export function composeAccountDeletionEmail(
     body.push('    retención; caducan solas.');
     body.push('  - Un registro de auditoría que dice que se produjo una eliminación.');
     body.push('');
-    body.push('No hace falta que hagas nada más. Si crees que esto ha sido un error,');
-    body.push(`escríbenos a support@familygreenhouse.net.`);
+    body.push('No hace falta que hagas nada más. Una cuenta eliminada no se puede');
+    body.push('recuperar. Si no pediste esto, o se te sigue cobrando, escríbenos a');
+    body.push('support@familygreenhouse.net.');
   } else {
     body.push("We've deleted your Family Greenhouse account. Here is exactly what happened.");
     body.push('');
@@ -801,7 +802,7 @@ export function composeAccountDeletionEmail(
         `  - ${formatCount(soleMemberHouseholds, locale)} household(s) where you were the only member — their plants,`
       );
       body.push('    tasks, photos, spaces, API keys and sitter links.');
-      body.push('  - Any subscription those households had, cancelled at Stripe.');
+      body.push('  - Any subscription those households had, canceled at Stripe.');
     }
     body.push('');
     body.push('What we did NOT delete, and why:');
@@ -818,7 +819,8 @@ export function composeAccountDeletionEmail(
     body.push('    contain earlier data for their retention window. They expire on their own.');
     body.push('  - An audit log entry recording that a deletion took place.');
     body.push('');
-    body.push('There is nothing else for you to do. If this was a mistake, write to us at');
+    body.push('There is nothing else for you to do. A deleted account cannot be restored.');
+    body.push('If you did not ask for this, or you are still being charged, write to us at');
     body.push('support@familygreenhouse.net.');
   }
 

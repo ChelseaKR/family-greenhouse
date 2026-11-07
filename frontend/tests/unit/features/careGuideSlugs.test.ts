@@ -10,6 +10,6 @@ describe('CARE_GUIDE_SLUGS', () => {
 
   it('answers membership', () => {
     expect(hasCareGuide('pothos')).toBe(true);
-    expect(hasCareGuide('lily')).toBe(false);
+    expect(hasCareGuide('tulip')).toBe(false);
   });
 });

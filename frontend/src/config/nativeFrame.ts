@@ -6,8 +6,9 @@ import {
 } from '@/features/settings/settingsSections';
 
 /**
- * The iOS app's native frame: which tab each route belongs to, and the
- * messages the web and Swift send each other through the NativeChrome plugin.
+ * The apps' native frame: which tab each route belongs to, and the messages
+ * the web and the native side (Swift on iOS, Kotlin on Android) send each
+ * other through the NativeChrome plugin.
  *
  * The frame is Apple's own UITabBar and UINavigationBar, drawn by Swift
  * (ios/App/App/NativeFrame*.swift) around the ONE web view the app has. Swift
@@ -126,7 +127,8 @@ export const UNMAPPED_PREFIXES: readonly string[] = [
 /**
  * Sign-in and first-run setup: no tab bar and no navigation bar, the screen
  * is the whole screen. The same list as BackSwipePolicy.signInAndSetupPaths
- * in MainViewController.swift (the contract test holds the two together).
+ * in MainViewController.swift and BackPolicy.signInAndSetupPaths in the
+ * Android app's BackPolicy.kt (the contract tests hold the three together).
  */
 export const SIGN_IN_AND_SETUP_PATHS: readonly string[] = [
   '/login',

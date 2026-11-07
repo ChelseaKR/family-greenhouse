@@ -149,7 +149,8 @@ if (
 // moment that limit is re-cut — and it did: #422 raised Seedling to 20 plants
 // on 2026-09-04 while the card, last rendered 2026-07-19, kept saying 10.
 // Every unfurl of all 59 URLs then undersold the free tier by half, directly
-// contradicting the og:description beside it.
+// contradicting the og:description beside it. It moved again on 2026-10-23,
+// down to 8 (ADR 0040), and this check is what made the card move with it.
 //
 // The hash pair below could not catch that. It binds the raster to its SVG —
 // it proves the picture matches its source, not that either matches the plan
@@ -180,8 +181,8 @@ if (!seedlingPlants) {
 // a deliberate social-card edit must regenerate the raster and update both
 // values in the same change.
 const reviewedSocialCardHashes = {
-  source: '761e0b41aed3faca93ea818ec4a88c13deb340abc41dc471d56ce77666e0f5e1',
-  raster: '19efd007a98c6dfcbf60c7cd59febc5062e5366ec16cb4af1a6857c6fec26f2a',
+  source: '47edb7c073ae8cd9d2c465d80d05666e97b7287bf27c7b923c14003abae8dcc7',
+  raster: 'f6dbe829a961549b3e15ef67dfe413119720d997cb8f08a1a3346a6261ba3394',
 };
 const actualSocialCardHashes = {
   source: sha256(readFileSync(socialSourcePath)),

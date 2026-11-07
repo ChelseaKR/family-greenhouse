@@ -42,19 +42,23 @@ export function markNativePlatform(): void {
   document.documentElement.dataset.native = getNativePlatform();
 }
 
-/** The name the iOS app's native frame registers its plugin under. */
+/** The name both apps' native frame registers its plugin under. */
 export const NATIVE_CHROME_PLUGIN = 'NativeChrome';
 
 /**
- * True inside the iOS app when its native frame is there: Apple's own tab bar
- * and navigation bar around the web content (ios/App/App/NativeFrame*.swift).
+ * True inside the app when its native frame is there: on iOS, Apple's own tab
+ * bar and navigation bar around the web content
+ * (ios/App/App/NativeFrame*.swift); on Android, Material 3's top app bar and
+ * navigation bar (android/app/src/main/java/net/familygreenhouse/app/frame/).
  * The app registers the NativeChrome plugin before the page loads, and the
  * bridge lists every registered plugin in `Capacitor.PluginHeaders` at
  * document start, so this is answered synchronously, before the first paint.
- * Never true on the website or on Android.
+ * An app built without the plugin keeps the web's header and drawer. Never
+ * true on the website.
  */
 export function hasNativeFrame(): boolean {
-  if (getNativePlatform() !== 'ios') return false;
+  const platform = getNativePlatform();
+  if (platform !== 'ios' && platform !== 'android') return false;
   const headers = (capacitorGlobal() as { PluginHeaders?: Array<{ name?: string }> } | undefined)
     ?.PluginHeaders;
   return Array.isArray(headers) && headers.some((h) => h?.name === NATIVE_CHROME_PLUGIN);
@@ -72,32 +76,35 @@ export function markNativeFrame(): void {
 }
 
 /**
- * True inside the iOS app when its native frame can show Apple's own alerts
- * and action sheets for the web (NativeChrome's `present`): confirmations
- * and choices then open as UIAlertController, over the native bars, instead
- * of a web dialog between them. Read from the plugin's own method list, so
- * it is answered before the first paint. Never true on the website.
+ * True inside the app when its native frame can show the platform's own
+ * alerts and action sheets for the web (NativeChrome's `present`):
+ * confirmations and choices then open as UIAlertController on iOS, and as a
+ * Material dialog or modal bottom sheet on Android, over the native bars,
+ * instead of a web dialog between them. Read from the plugin's own method
+ * list, so it is answered before the first paint. Never true on the website.
  */
 export function hasNativePresent(): boolean {
   return hasNativeChromeMethod('present');
 }
 
 /**
- * True inside the iOS app when a web form can be drawn as a native sheet
- * (NativeChrome's `presentForm`): Add care task then opens as one. An app
- * built before the method existed answers false and keeps the web dialog.
- * Never true on the website.
+ * True inside the app when a web form can be drawn as a native sheet
+ * (NativeChrome's `presentForm`): Add care task then opens as one (an iOS
+ * form sheet, a Material modal bottom sheet on Android). An app built before
+ * the method existed answers false and keeps the web dialog. Never true on
+ * the website.
  */
 export function hasNativeFormSheet(): boolean {
   return hasNativeChromeMethod('presentForm');
 }
 
 /**
- * True inside the iOS app when the navigation bar can carry a screen's own
- * menus and search field (NativeChrome's `setBarTools`): the Plants list
- * then puts its Filter and More menus and its search in the native bar
- * instead of a row of web controls. An app built before the method existed
- * answers false and keeps the web row. Never true on the website.
+ * True inside the app when the navigation bar (iOS) or top app bar (Android)
+ * can carry a screen's own menus and search field (NativeChrome's
+ * `setBarTools`): the Plants list then puts its Filter and More menus and its
+ * search in the native bar instead of a row of web controls. An app built
+ * before the method existed answers false and keeps the web row. Never true
+ * on the website.
  */
 export function hasNativeBarTools(): boolean {
   return hasNativeChromeMethod('setBarTools');
@@ -141,8 +148,9 @@ function hasNativeChromeMethod(method: string): boolean {
 
 /**
  * For the checkbox of a true on/off setting (one that saves the moment it
- * changes): inside the iOS app's native frame it becomes `role="switch"`,
- * which index.css draws as an iOS switch and VoiceOver reads as "switch, on".
+ * changes): inside the app's native frame it becomes `role="switch"`, which
+ * index.css draws as the platform's switch (iOS, or Material 3 on Android)
+ * and screen readers read as "switch, on".
  * It stays the same `<input type="checkbox">`, with the same `checked` and
  * `onChange`, so it writes exactly what it wrote before. On the website it
  * adds nothing.

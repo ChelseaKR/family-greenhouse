@@ -1,5 +1,5 @@
 import { api } from './api';
-import { isNativeApp, getNativePlatform } from '@/lib/platform';
+import { isNativeApp, getNativePlatform, hasNativePlugin } from '@/lib/platform';
 import { performPushAction, pushActionFromId, readPushTaskRef } from './pushActions';
 
 /**
@@ -306,48 +306,86 @@ function inAppPath(url: unknown): string | null {
 }
 
 /**
+ * The Android app's own reminder plugin (android/.../push/NativePushActionsPlugin.kt):
+ * the app draws reminders itself, with Done and Snooze for a single task,
+ * and reports a tap or a button as `pushAction`. Used only when the bridge
+ * lists it; an Android build without it keeps the Capacitor plugin's taps.
+ */
+export const NATIVE_PUSH_ACTIONS_PLUGIN = 'NativePushActions';
+
+/** Whether this Android build draws reminders with buttons and reports them itself. */
+export function hasNativePushActions(): boolean {
+  return getNativePlatform() === 'android' && hasNativePlugin(NATIVE_PUSH_ACTIONS_PLUGIN);
+}
+
+/**
+ * A tap or a button on a notification, from either platform: Done or Snooze
+ * acts on the task it names, a tap opens its link in the app. `clearDelivered`
+ * takes the platform's delivered notifications and badge down after an
+ * action that changed what is due.
+ */
+export function handleNotificationAction(
+  actionId: unknown,
+  data: unknown,
+  clearDelivered: () => Promise<void>
+): void {
+  const action = pushActionFromId(actionId);
+  if (action) {
+    // A button on a single-task reminder. The ids come from the
+    // notification; the server checks everything about them.
+    const task = readPushTaskRef(data);
+    if (!task) return;
+    void performPushAction({ action, ...task }).then((outcome) => {
+      if (outcome === 'failed') return;
+      // The reminder named one task and it is no longer open today, so the
+      // count it put on the icon is stale: clear it with the notification.
+      // (Rejects before this launch has registered, in which case the sync at
+      // launch clears both.)
+      void clearDelivered().catch(() => undefined);
+    });
+    return;
+  }
+  if (actionId !== 'tap') return; // 'dismiss', or an action this build does not know.
+  const path = inAppPath((data as { url?: unknown } | undefined)?.url);
+  if (!path) return;
+  // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
+  window.history.pushState(null, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/**
  * Wire native push into the running app: act on a notification's Done or
  * Snooze button, open a tapped notification's link in the app, and sync
  * registration now and on every return to the foreground. Nothing is loaded
  * unless this is a shell built with push.
  *
- * The action listener is attached before anything else so that an event the
- * plugin retained from a launch it caused (iOS starts the app in the
- * background for a notification action) is consumed at once.
+ * The action listeners are attached before anything else so that an event
+ * the plugin retained from a launch it caused (iOS starts the app in the
+ * background for a notification action; Android opens it) is consumed at once.
  */
 export function initNativePush(): void {
   if (!isNativeApp() || !nativePushBuildEnabled()) return;
 
   void (async () => {
     const { PushNotifications } = await import('@capacitor/push-notifications');
+    const clearDelivered = () => PushNotifications.removeAllDeliveredNotifications();
     await PushNotifications.addListener(
       'pushNotificationActionPerformed',
-      ({ actionId, notification }) => {
-        const data: unknown = notification.data;
-        const action = pushActionFromId(actionId);
-        if (action) {
-          // A button on a single-task reminder. The ids come from the
-          // notification; the server checks everything about them.
-          const task = readPushTaskRef(data);
-          if (!task) return;
-          void performPushAction({ action, ...task }).then((outcome) => {
-            if (outcome === 'failed') return;
-            // The reminder named one task and it is no longer open today, so
-            // the count it put on the icon is stale: clear it with the
-            // notification. (Rejects before this launch has registered, in
-            // which case the sync at launch clears both.)
-            void PushNotifications.removeAllDeliveredNotifications().catch(() => undefined);
-          });
-          return;
-        }
-        if (actionId !== 'tap') return; // 'dismiss', or an action this build does not know.
-        const path = inAppPath((data as { url?: unknown } | undefined)?.url);
-        if (!path) return;
-        // Same navigation as nativeDeepLinks.ts: <BrowserRouter> re-syncs on popstate.
-        window.history.pushState(null, '', path);
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
+      ({ actionId, notification }) =>
+        handleNotificationAction(actionId, notification.data, clearDelivered)
     );
+    if (hasNativePushActions()) {
+      const { registerPlugin } = await import('@capacitor/core');
+      const plugin = registerPlugin<{
+        addListener(
+          event: 'pushAction',
+          listener: (event: { actionId?: unknown; data?: unknown }) => void
+        ): Promise<{ remove: () => Promise<void> }>;
+      }>(NATIVE_PUSH_ACTIONS_PLUGIN);
+      await plugin.addListener('pushAction', ({ actionId, data }) =>
+        handleNotificationAction(actionId, data, clearDelivered)
+      );
+    }
 
     const { App } = await import('@capacitor/app');
     await App.addListener('appStateChange', ({ isActive }) => {

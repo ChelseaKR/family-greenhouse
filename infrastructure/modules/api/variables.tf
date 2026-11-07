@@ -173,6 +173,15 @@ variable "payments_enabled" {
   default     = "0"
 }
 
+# Apple In-App Purchase for the iPhone app (ADR 0041). Off by default; the
+# backend compares it to the exact string "1" and also requires payments to be
+# available (payments_enabled above and the repository commercial status).
+variable "app_store_billing_enabled" {
+  description = "Set to the exact string \"1\" to open the /billing/app-store/* routes (App Store purchase intent, signed transactions, App Store Server Notifications v2). Any other value answers 404. Subscriptions already recorded keep their entitlement either way."
+  type        = string
+  default     = "0"
+}
+
 # --- Notification delivery ---
 variable "ses_identity_arn" {
   description = "ARN of the verified SES identity (domain) reminder emails are sent from. Used to scope the Lambda role's ses:SendEmail/SendRawEmail grant. Empty (no domain provisioned) falls back to Resource \"*\"."
@@ -513,6 +522,12 @@ variable "posthog_host" {
   description = "PostHog ingestion host for server-side analytics. Empty lets the code default (https://us.i.posthog.com) apply."
   type        = string
   default     = ""
+}
+
+variable "trial_lifecycle_emails_enabled" {
+  description = "Turn on the two no-card-trial lifecycle emails (ADR 0039): day 10 \"your trial ends in 4 days\" and day 14 \"you are back on Seedling\". OFF by default and in every committed tfvars. When off, TRIAL_LIFECYCLE_EMAILS_ENABLED is not set on the digests Lambda and the daily EventBridge rule is DISABLED; the code also returns immediately without it. Turning it on needs the digests Lambda to have shipped the trialEmails job first (the rule would otherwise run the weekly digest routine)."
+  type        = bool
+  default     = false
 }
 
 variable "passkeys_enabled" {

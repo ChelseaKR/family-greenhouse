@@ -248,11 +248,23 @@ describe('PetSafePage directory caution', () => {
     const { container } = renderPage();
     const cautions = [...container.querySelectorAll('[data-testid="species-caution"]')];
     const expected = PET_SAFE_SPECIES.filter((s) => s.caution !== null);
-    expect(expected.map((s) => s.slug)).toEqual(['zz-plant']);
+    // The guides whose plant has no ASPCA listing of its own, in directory order.
+    expect(expected.map((s) => s.slug)).toEqual([
+      'air-plant',
+      'birds-nest-fern',
+      'chinese-money-plant',
+      'croton',
+      'prayer-plant',
+      'string-of-pearls',
+      'tradescantia',
+      'zz-plant',
+    ]);
     expect(cautions.map((c) => c.textContent)).toEqual(expected.map((s) => s.caution));
-    const card = cautions[0]!.closest('a')!;
-    expect(card.getAttribute('href')).toBe('/care/zz-plant');
-    expect(card.textContent).not.toMatch(/non-toxic|pet-safe/i);
+    for (const [i, species] of expected.entries()) {
+      const card = cautions[i]!.closest('a')!;
+      expect(card.getAttribute('href')).toBe(`/care/${species.slug}`);
+      expect(card.textContent, species.slug).not.toMatch(/non-toxic|pet-safe/i);
+    }
   });
 });
 

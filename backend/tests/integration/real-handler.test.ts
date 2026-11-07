@@ -299,12 +299,13 @@ describe('real-handler: task create → complete idempotency', () => {
 });
 
 describe('real-handler: plan-cap enforcement (402)', () => {
-  it('enforces the free seedling plan 20-plant cap with a real 402 from the real handler', async () => {
+  it('enforces the free seedling plan 8-plant cap with a real 402 from the real handler', async () => {
     const plantsHandler = await import('../../src/handlers/plants/handler.js');
     const { householdId } = await seedHousehold(store, { admin: ADMIN });
-    // Default plan is "seedling" (20 plants, ADR 0014). Fill it via the real
-    // create handler so the transactional counter increments as in prod.
-    for (let i = 0; i < 20; i++) {
+    // Default plan is "seedling" (8 plants since ADR 0040; the household is
+    // created now, after the cut). Fill it via the real create handler so the
+    // transactional counter increments as in prod.
+    for (let i = 0; i < 8; i++) {
       const res = await invokeHandler(plantsHandler.createPlant, {
         method: 'POST',
         routeKey: 'POST /plants',
@@ -314,7 +315,7 @@ describe('real-handler: plan-cap enforcement (402)', () => {
       expect(res.statusCode).toBe(201);
     }
 
-    // The 21st create must trip the cap. The service throws PlanLimitError;
+    // The 9th create must trip the cap. The service throws PlanLimitError;
     // the REAL handler maps it to a 402 with the upgrade copy.
     const overflow = await invokeHandler(plantsHandler.createPlant, {
       method: 'POST',
@@ -324,7 +325,7 @@ describe('real-handler: plan-cap enforcement (402)', () => {
     });
     expect(overflow.statusCode).toBe(402);
     expect(overflow.body).toMatchObject({
-      message: expect.stringMatching(/limited to 20 plants/),
+      message: expect.stringMatching(/limited to 8 plants/),
     });
   });
 
@@ -345,6 +346,90 @@ describe('real-handler: plan-cap enforcement (402)', () => {
       });
       expect(res.statusCode).toBe(201);
     }
+  });
+});
+
+describe('real-handler: households created before the 2026-10-23 Seedling cut (ADR 0040)', () => {
+  /** Rewrite the METADATA row's createdAt, and prove the rewrite landed. */
+  function backdate(householdId: string, createdAt: string): void {
+    const meta = store
+      .all()
+      .find((i) => i.PK === `HOUSEHOLD#${householdId}` && i.SK === 'METADATA');
+    if (!meta) throw new Error(`No METADATA row for household ${householdId}`);
+    store.put({ ...meta, createdAt });
+    const after = store
+      .all()
+      .find((i) => i.PK === `HOUSEHOLD#${householdId}` && i.SK === 'METADATA');
+    // A negative control that silently did not apply reads as a pass.
+    expect(after?.createdAt).toBe(createdAt);
+  }
+
+  async function addPlant(householdId: string, name: string) {
+    const plantsHandler = await import('../../src/handlers/plants/handler.js');
+    return invokeHandler(plantsHandler.createPlant, {
+      method: 'POST',
+      routeKey: 'POST /plants',
+      identity: { ...ADMIN, householdId },
+      body: { name },
+    });
+  }
+
+  it('a 9-plant household from September keeps 20 plants, can edit what it has, and is told its own cap', async () => {
+    const plantsHandler = await import('../../src/handlers/plants/handler.js');
+    const billingHandler = await import('../../src/handlers/billing/handler.js');
+    const { householdId } = await seedHousehold(store, { admin: ADMIN });
+    // The shape of the real outside household: signed up 2026-09-20.
+    backdate(householdId, '2026-09-20T18:00:00.000Z');
+
+    const ids: string[] = [];
+    for (let i = 0; i < 9; i++) {
+      const res = await addPlant(householdId, `Existing ${i}`);
+      expect(res.statusCode).toBe(201);
+      ids.push((res.body as { id: string }).id);
+    }
+
+    // Editing an existing plant is never capped.
+    const edited = await invokeHandler(plantsHandler.updatePlant, {
+      method: 'PUT',
+      routeKey: 'PUT /plants/{id}',
+      pathParameters: { id: ids[0]! },
+      identity: { ...ADMIN, householdId },
+      body: { name: 'Renamed' },
+    });
+    expect(edited.statusCode).toBe(200);
+
+    // The meters publish the cap this household is actually held to.
+    const me = await invokeHandler(billingHandler.getCurrentSubscription, {
+      method: 'GET',
+      routeKey: 'GET /billing/me',
+      identity: { ...ADMIN, householdId },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.body).toMatchObject({
+      usageDetail: { plantCount: 9, maxPlants: 20, maxMembers: 3 },
+    });
+    expect(me.body).not.toHaveProperty('householdCreatedAt');
+
+    for (let i = 9; i < 20; i++) {
+      expect((await addPlant(householdId, `Room ${i}`)).statusCode).toBe(201);
+    }
+    const overflow = await addPlant(householdId, 'Twenty-first');
+    expect(overflow.statusCode).toBe(402);
+    expect(overflow.body).toMatchObject({
+      message: expect.stringMatching(/limited to 20 plants/),
+    });
+  });
+
+  it('negative control: the same household created AT the cut is held to 8', async () => {
+    const { SEEDLING_LIMITS_CUT_AT } = await import('../../src/models/plans.js');
+    const { householdId } = await seedHousehold(store, { admin: ADMIN });
+    backdate(householdId, SEEDLING_LIMITS_CUT_AT);
+    for (let i = 0; i < 8; i++) {
+      expect((await addPlant(householdId, `Plant ${i}`)).statusCode).toBe(201);
+    }
+    const ninth = await addPlant(householdId, 'Ninth');
+    expect(ninth.statusCode).toBe(402);
+    expect(ninth.body).toMatchObject({ message: expect.stringMatching(/limited to 8 plants/) });
   });
 });
 

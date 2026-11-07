@@ -82,7 +82,9 @@ describe('LandingPage hero while the experiment is paused', () => {
   it('renders the control (A) household hero', () => {
     localStorage.setItem(KEY, '0.2');
     renderLanding();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('I thought');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(
+      'Plant care for your whole household.'
+    );
     expect(screen.getAllByRole('link', { name: /sign up free/i }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/ask the care assistant/i)).not.toBeInTheDocument();
   });
@@ -95,7 +97,7 @@ describe('LandingPage hero while the experiment is paused', () => {
     localStorage.setItem(KEY, '0.8');
     renderLanding();
     const heading = screen.getByRole('heading', { level: 1 }).textContent ?? '';
-    expect(heading).toContain('I thought');
+    expect(heading).toContain('whole household');
     expect(heading).not.toContain('plant alive');
     expect(screen.getAllByRole('link', { name: /sign up free/i }).length).toBeGreaterThan(0);
   });

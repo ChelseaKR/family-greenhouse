@@ -15,8 +15,8 @@ test.describe('Register flow', () => {
     await page.goto('/register');
     await page.getByLabel(/full name/i).fill('Test Newcomer');
     await page.getByLabel(/email/i).fill(email);
-    await page.locator('input[autocomplete="new-password"]').first().fill(password);
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill(password);
+    // One password field: the form no longer asks for it twice.
+    await page.locator('input[autocomplete="new-password"]').fill(password);
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page).toHaveURL(/\/confirm-email/);
@@ -42,8 +42,8 @@ test.describe('Register flow', () => {
     await page.goto('/register');
     await page.getByLabel(/full name/i).fill('Bad Code User');
     await page.getByLabel(/email/i).fill(email);
-    await page.locator('input[autocomplete="new-password"]').first().fill(password);
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill(password);
+    // One password field: the form no longer asks for it twice.
+    await page.locator('input[autocomplete="new-password"]').fill(password);
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page).toHaveURL(/\/confirm-email/);

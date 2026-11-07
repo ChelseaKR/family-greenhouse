@@ -7,6 +7,7 @@ import { PricingGrid } from './PricingGrid';
 import { pricingJsonLd } from './pricingJsonLd';
 import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
+import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 
 /**
@@ -40,6 +41,8 @@ const WHY_PAID_POINTS = [
 export function PricingPage() {
   const { t } = useTranslation();
   const native = isNativeApp();
+  // The gift link below appears only while a gift can actually be bought.
+  const giftsOffered = useGiftAvailability() === 'available';
   // Which of the three commercial states the hero and metadata describe. The
   // copy is `pricingPage.*` in the catalogs (#467).
   const state = COMMERCIAL_HOLD_ACTIVE
@@ -99,13 +102,15 @@ export function PricingPage() {
             <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
               {t('pricing.howToBuyNote')}
             </p>
-            <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
-              {t('pricing.giftNote')}{' '}
-              <Link to="/gift" className="font-medium text-primary-700 hover:underline">
-                {t('giftLanding.navLink')}
-              </Link>
-              .
-            </p>
+            {giftsOffered && (
+              <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-6 text-gray-600">
+                {t('pricing.giftNote')}{' '}
+                <Link to="/gift" className="font-medium text-primary-700 hover:underline">
+                  {t('giftLanding.navLink')}
+                </Link>
+                .
+              </p>
+            )}
           </>
         }
       />

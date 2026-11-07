@@ -350,6 +350,15 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
         container.addSubview(bareHost)
         moveWebView(into: bareHost)
 
+        // On iPad the tab bar floats above the navigation bar, so the bars
+        // are taller than the soft scroll-edge fade under them: a scrolled
+        // page's text showed through, faded, behind the screen's title. The
+        // hard edge style puts an opaque backdrop under the whole bar area.
+        // iPhone keeps the system's soft fade.
+        if #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom == .pad {
+            webView.scrollView.topEdgeEffect.style = .hard
+        }
+
         // The page decides where its own scrolling ends; remember where it
         // settled so a screen left behind keeps an up-to-date picture.
         scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in

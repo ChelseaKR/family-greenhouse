@@ -14,6 +14,7 @@ import {
   planRank,
   PLANS,
   isIntervalWithdrawn,
+  HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
 import { capture } from '../utils/serverAnalytics.js';
@@ -32,6 +33,15 @@ import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSub
 import { grantGiftPurchase } from './giftCodes.js';
 import { assertPriceMatchesCatalog } from './stripePrices.js';
 import { recordBillingTransition } from './householdAudit.js';
+import {
+  TRIAL_PERIOD_DAYS,
+  CHECKOUT_SESSION_LIFETIME_SECONDS,
+  STRIPE_MIN_TRIAL_END_LEAD_MS,
+  CHECKOUT_TRIAL_END_MIN_LEAD_MS,
+  checkoutTrialFor,
+  type CheckoutTrial,
+} from '../models/checkoutTrial.js';
+import { readAppStoreSubscription, type AppStoreSubscription } from '../models/appStore.js';
 
 let cachedClient: Stripe | null = null;
 
@@ -70,6 +80,15 @@ export interface HouseholdSubscription {
    */
   lifetimePlanId?: PlanId;
   /**
+   * The household's App Store subscription, bought in the iPhone app (ADR
+   * 0041). Written only by services/appStoreBilling.ts from Apple's signed
+   * transactions and notifications; no Stripe path writes or clears it
+   * (`SubscriptionWriteField` excludes it). Entitlement reads it through
+   * `appStoreState` in models/appStore.ts. Published as is by GET
+   * /billing/me: it carries no transaction id.
+   */
+  appStore?: AppStoreSubscription;
+  /**
    * True once the household has cancelled but the paid period has not yet
    * elapsed. Stripe does not delete a cancelled subscription immediately — it
    * sets `cancel_at_period_end` and keeps serving until the period ends, so
@@ -80,8 +99,9 @@ export interface HouseholdSubscription {
   cancelAtPeriodEnd?: boolean;
   /**
    * Whether a NEW subscription checkout for this household would include the
-   * free trial. Derived from the internal `trialConsumedAt` below, and the
-   * only thing about it that ever reaches a client.
+   * free trial: either the full 14 days, or (with `checkoutTrialEndsAt`) the
+   * rest of a running no-card trial. Derived by `checkoutTrialFor` from the
+   * internal `trialConsumedAt` below and `noCardTrialEndsAt`.
    *
    * It exists because the trial is once per HOUSEHOLD, not once per checkout
    * (see `markTrialConsumed` and the `subscription_data` guard in
@@ -91,8 +111,9 @@ export interface HouseholdSubscription {
    * its trial and would be charged at once. The UI could not qualify that
    * sentence because there was no field to branch on.
    *
-   * The TIMESTAMP stays internal. A client has no use for the date, and the
-   * answer to "would this purchase be free for 14 days?" is a boolean.
+   * The `trialConsumedAt` TIMESTAMP stays internal. A client has no use for
+   * that date; the date it does need, the first charge, is
+   * `checkoutTrialEndsAt`.
    *
    * Optional on the type so a caller that describes a subscription it has not
    * read this from is not forced to invent an answer — `undefined` means
@@ -101,6 +122,15 @@ export interface HouseholdSubscription {
    * `getHouseholdSubscription` always sets it.
    */
   trialAvailable?: boolean;
+  /**
+   * When a NEW subscription checkout started now would first charge, ISO
+   * 8601, for a household on its no-card Garden trial: the checkout's Stripe
+   * trial ends on the no-card trial's end date instead of adding 14 days
+   * (owner decision, 2026-10-23). Present only in that case — see
+   * `checkoutTrialFor`. With `trialAvailable: true` and no date, the
+   * checkout carries the full `TRIAL_PERIOD_DAYS`. Derived; never stored.
+   */
+  checkoutTrialEndsAt?: string;
   /**
    * End of the household's no-card Garden trial (ADR 0027), ISO 8601.
    *
@@ -176,6 +206,15 @@ export interface HouseholdSubscription {
    * can back up on its own.
    */
   staleCheckout?: { startedAt: string };
+  /**
+   * The household row's `createdAt`, or `HOUSEHOLD_CREATED_AT_UNKNOWN` for a
+   * row that exists without a readable one. Read only by entitlement
+   * (`withSeedlingGrandfather` in models/plans.ts): a household created before
+   * the 2026-10-23 Seedling cut keeps 20 plants and 3 members (ADR 0040).
+   * Never written through here (`SubscriptionWriteField` excludes it) and
+   * never published by GET /billing/me, which publishes the resulting caps.
+   */
+  householdCreatedAt?: string;
 }
 
 interface HouseholdBillingState extends HouseholdSubscription {
@@ -228,6 +267,7 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     status: item.subscriptionStatus as string | undefined,
     currentPeriodEnd: item.subscriptionCurrentPeriodEnd as string | undefined,
     lifetimePlanId: item.lifetimePlanId as PlanId | undefined,
+    appStore: readAppStoreSubscription(item.appStore),
     cancelAtPeriodEnd: item.subscriptionCancelAtPeriodEnd as boolean | undefined,
     pendingStripeCancellationId: item.pendingStripeCancellationId as string | undefined,
     pendingCheckoutSessionId: item.pendingCheckoutSessionId as string | undefined,
@@ -237,13 +277,17 @@ async function getHouseholdBillingState(householdId: string): Promise<HouseholdB
     giftPlanId: isPlanId(item.giftPlanId) ? item.giftPlanId : undefined,
     giftEndsAt: item.giftEndsAt as string | undefined,
     giftSource: item.giftSource === 'referral' ? 'referral' : undefined,
+    householdCreatedAt:
+      typeof item.createdAt === 'string' ? item.createdAt : HOUSEHOLD_CREATED_AT_UNKNOWN,
   };
 }
 
 export async function getHouseholdSubscription(
-  householdId: string
+  householdId: string,
+  now: Date = new Date()
 ): Promise<HouseholdSubscription> {
   const state = await getHouseholdBillingState(householdId);
+  const checkoutTrial = checkoutTrialFor(state, now);
   return {
     planId: state.planId,
     stripeCustomerId: state.stripeCustomerId,
@@ -251,12 +295,17 @@ export async function getHouseholdSubscription(
     status: state.status,
     currentPeriodEnd: state.currentPeriodEnd,
     lifetimePlanId: state.lifetimePlanId,
+    appStore: state.appStore,
     cancelAtPeriodEnd: state.cancelAtPeriodEnd,
     // Derived here, at the one boundary where the internal row becomes the
     // published shape, so there is a single place that decides what a client
     // learns about the trial: the answer, never the date. This is exactly the
-    // condition `createCheckoutSession` applies below, read off the same row.
-    trialAvailable: !state.trialConsumedAt,
+    // condition `createCheckoutSession` applies below, read off the same row
+    // through the same `checkoutTrialFor`.
+    trialAvailable: checkoutTrial.kind !== 'none',
+    ...(checkoutTrial.kind === 'until_no_card_trial_end'
+      ? { checkoutTrialEndsAt: checkoutTrial.endsAt.toISOString() }
+      : {}),
     noCardTrialEndsAt: state.noCardTrialEndsAt,
     giftPlanId: state.giftPlanId,
     giftEndsAt: state.giftEndsAt,
@@ -266,15 +315,16 @@ export async function getHouseholdSubscription(
     // what a client learns about an abandoned checkout — see
     // `HouseholdSubscription.staleCheckout`.
     staleCheckout: staleCheckoutMarker(state),
+    householdCreatedAt: state.householdCreatedAt,
   };
 }
 
 /**
  * Fields `updateHouseholdSubscription` can write onto the metadata row.
  *
- * `trialAvailable` is excluded because it is DERIVED at read time from
- * `trialConsumedAt` and has no attribute of its own. Leaving it in would let a
- * caller persist a second, staler copy of the same fact — and the row already
+ * `trialAvailable` and `checkoutTrialEndsAt` are excluded because they are
+ * DERIVED at read time (`checkoutTrialFor`) and have no attribute of their
+ * own. Leaving them in would let a caller persist a second, staler copy of the same fact — and the row already
  * has one authority for it, written write-once by `markTrialConsumed`.
  *
  * `noCardTrialEndsAt` is excluded because no Stripe path may write or clear it
@@ -296,11 +346,14 @@ type SubscriptionWriteField =
   | Exclude<
       keyof HouseholdSubscription,
       | 'trialAvailable'
+      | 'checkoutTrialEndsAt'
+      | 'appStore'
       | 'noCardTrialEndsAt'
       | 'giftPlanId'
       | 'giftEndsAt'
       | 'giftSource'
       | 'staleCheckout'
+      | 'householdCreatedAt'
     >
   | 'pendingStripeCancellationId'
   // The pending-checkout marker is CLEARED through here (null → REMOVE) so
@@ -440,22 +493,17 @@ export function hasLiveStripeSubscription(sub: {
   );
 }
 
-/** Length of the free trial offered on a household's FIRST paid subscription. */
-export const TRIAL_PERIOD_DAYS = 14;
-
-/**
- * How long a plan Checkout Session this code creates stays completable.
- *
- * Stripe's default is 24 hours; 30 minutes is the shortest it allows
- * (`expires_at` must fall 30 minutes to 24 hours after creation). It is set
- * to the minimum because a Session that is still open is a Session the
- * household can still pay, so the refusal below has to hold for at least as
- * long as any Session lives — and the only signal that a household simply
- * closed the Stripe tab is that no signal ever comes. At the 24-hour default
- * the same reasoning would lock a household that abandoned a checkout out of
- * buying for a day.
- */
-export const CHECKOUT_SESSION_LIFETIME_SECONDS = 30 * 60;
+// The trial length, the Session lifetime and the no-stacking rule live in
+// models/checkoutTrial.ts so the trial emails (which must not import this
+// module's AWS clients) can name the same first-charge date checkout uses.
+export {
+  TRIAL_PERIOD_DAYS,
+  CHECKOUT_SESSION_LIFETIME_SECONDS,
+  STRIPE_MIN_TRIAL_END_LEAD_MS,
+  CHECKOUT_TRIAL_END_MIN_LEAD_MS,
+  checkoutTrialFor,
+};
+export type { CheckoutTrial };
 
 /**
  * How long `createCheckoutSession` refuses a second plan checkout after
@@ -864,6 +912,25 @@ export async function createCheckoutSession(args: {
     args.idempotencyKey
       ? stripe.checkout.sessions.create(params, { idempotencyKey: args.idempotencyKey })
       : stripe.checkout.sessions.create(params);
+  // The free trial is once per household, not once per checkout, and it does
+  // not stack on the no-card trial. Without the `trialConsumedAt` guard a
+  // household could cancel, check out again, and collect another 14 free
+  // days, forever — the resubscribe itself is deliberate (see the
+  // ALREADY_SUBSCRIBED guard above, which permits a canceled household to
+  // return), only the trial is not. `trialConsumedAt` is written by the
+  // webhook the first time Stripe confirms a trial and is never cleared by
+  // cancellation. A household on its no-card trial gets a Stripe trial that
+  // ends when the no-card trial does, not 14 days more (2026-10-23).
+  const trial = checkoutTrialFor(sub, now);
+  const trialParams: Pick<
+    Stripe.Checkout.SessionCreateParams.SubscriptionData,
+    'trial_period_days' | 'trial_end'
+  > =
+    trial.kind === 'card_trial'
+      ? { trial_period_days: trial.days }
+      : trial.kind === 'until_no_card_trial_end'
+        ? { trial_end: Math.floor(trial.endsAt.getTime() / 1000) }
+        : {};
   const session =
     interval === 'lifetime'
       ? await createSession({ mode: 'payment', ...common })
@@ -872,15 +939,7 @@ export async function createCheckoutSession(args: {
           ...common,
           subscription_data: {
             metadata,
-            // The free trial is once per household, not once per checkout.
-            // Without this guard a household could cancel, check out again,
-            // and collect another 14 free days, forever — the resubscribe
-            // itself is deliberate (see the ALREADY_SUBSCRIBED guard above,
-            // which permits a canceled household to return), only the trial
-            // is not. `trialConsumedAt` is written by the webhook the first
-            // time Stripe confirms a trial and is never cleared by
-            // cancellation.
-            ...(sub.trialConsumedAt ? {} : { trial_period_days: TRIAL_PERIOD_DAYS }),
+            ...trialParams,
           },
         });
   if (!session.url) throw new Error('Stripe did not return a checkout URL');
@@ -1109,7 +1168,7 @@ export function deltaForStripeEvent(event: Stripe.Event): SubscriptionDelta | nu
       // Only two payment_status values mean the household is entitled:
       //   'paid'                → money settled; the subscription is active.
       //   'no_payment_required' → nothing was owed at checkout, which in
-      //                           subscription mode is the 14-day trial (a
+      //                           subscription mode is a trial (a
       //                           100%-off coupon looks the same and is
       //                           corrected within seconds by the
       //                           customer.subscription.created event, which
@@ -1840,11 +1899,12 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     // once a household actually completes checkout on a paid plan. The Stripe
     // webhook is the source of truth.
     //
-    // NOT a revenue number for recurring plans. `createCheckoutSession` sets
-    // `trial_period_days: 14` on a household's FIRST subscription, so at the
-    // moment this fires that household has started a free trial and no money
-    // has moved. A household that already consumed its trial gets no
-    // `trial_period_days` and its first invoice is charged at checkout — that
+    // NOT a revenue number for recurring plans. `createCheckoutSession` gives
+    // a household's FIRST subscription a trial (`trial_period_days: 14`, or a
+    // `trial_end` on the no-card trial's end date — see `checkoutTrialFor`),
+    // so at the moment this fires that household has usually started a free
+    // trial and no money has moved. A household with no trial left gets
+    // neither, and its first invoice is charged at checkout — that
     // case reaches here only with `payment_status: 'paid'`, because an
     // unsettled session now grants nothing at all.
     // `interval: 'lifetime'` is the exception: a `mode: 'payment'` one-time
@@ -1923,10 +1983,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<void> {
     //    subscription to `active`, so it would count here as a paid conversion
     //    for zero cents. We issue no coupons today; if that changes, this is
     //    the line to revisit.
-    //  - A subscription created ALREADY `active` (no trial — which no checkout
-    //    of ours produces) never makes this transition and so records nothing.
-    //    That matches the existing, deliberate stance that a subscription
-    //    minted outside checkout is not a conversion.
+    //  - A subscription created ALREADY `active` (no trial: a household that
+    //    already had a card trial, or whose no-card trial has ended or ends
+    //    within two days — see `checkoutTrialFor`) never makes this transition
+    //    and so records nothing here. Its checkout completion is recorded by
+    //    `subscription_activated` above, with `payment_status: 'paid'`.
     //
     // Renewals, plan changes, metadata edits and `cancel_at_period_end` toggles
     // all arrive as `customer.subscription.updated` with `status` absent from

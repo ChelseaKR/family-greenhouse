@@ -1202,13 +1202,14 @@ describe('invite + join flow', () => {
   });
 
   it('402s a join that would exceed the plan member cap', async () => {
-    // Seed household stays on seedling (3 members, ADR 0014). It starts with
-    // the seed admin; fill it to the cap so the next join trips the limit.
+    // Seed household stays on seedling (2 members since the ADR 0040 cut; it
+    // is created now, so it is not grandfathered). It starts with the seed
+    // admin; fill it to the cap so the next join trips the limit.
     const adminToken = await loginAsSeed();
     const invite = await request(app)
       .post(`/households/${seedHouseholdId}/invites`)
       .set('Authorization', `Bearer ${adminToken}`);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 1; i++) {
       seedMember(`cap-fill-${i}`, `cap-fill-${i}@example.com`, 'member');
     }
     db.households.get(seedHouseholdId)!.planId = 'seedling';
@@ -1217,7 +1218,7 @@ describe('invite + join flow', () => {
       .post(`/households/join/${invite.body.code}`)
       .set('Authorization', `Bearer ${joinerToken}`);
     expect(join.status).toBe(402);
-    expect(join.body.message).toMatch(/limited to 3 members/);
+    expect(join.body.message).toMatch(/limited to 2 members/);
   });
 
   it('400s a double-join into the same household', async () => {
@@ -2162,10 +2163,10 @@ describe('billing', () => {
 });
 
 describe('plan limits', () => {
-  it('Seedling plan caps plant creation at 20', async () => {
+  it('Seedling plan caps plant creation at 8', async () => {
     const token = await loginAsSeed();
-    // The seed already has 1 plant. Add 19 more to hit the cap (ADR 0014).
-    for (let i = 0; i < 19; i++) {
+    // The seed already has 1 plant. Add 7 more to hit the cap (ADR 0040).
+    for (let i = 0; i < 7; i++) {
       const r = await request(app)
         .post('/plants')
         .set('Authorization', `Bearer ${token}`)
@@ -2181,8 +2182,8 @@ describe('plan limits', () => {
 
   it('a retained Garden entitlement lifts the cap', async () => {
     const token = await loginAsSeed();
-    // Cap out on Seedling (20 plants, ADR 0014).
-    for (let i = 0; i < 19; i++) {
+    // Cap out on Seedling (8 plants, ADR 0040).
+    for (let i = 0; i < 7; i++) {
       await request(app)
         .post('/plants')
         .set('Authorization', `Bearer ${token}`)

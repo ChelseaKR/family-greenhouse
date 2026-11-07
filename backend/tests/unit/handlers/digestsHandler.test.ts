@@ -32,6 +32,10 @@ vi.mock('../../../src/services/trashService.js', () => ({
   })),
 }));
 
+vi.mock('../../../src/services/trialLifecycleEmails.js', () => ({
+  runTrialLifecycleEmails: vi.fn(async () => ({ enabled: false, sent: 0 })),
+}));
+
 const context = { getRemainingTimeInMillis: () => 30_000 };
 
 describe('digests handler dispatch', () => {
@@ -52,6 +56,23 @@ describe('digests handler dispatch', () => {
     expect(summary).toMatchObject({ purged: { plants: 1 } });
     expect(digest.runWeeklyDigests).not.toHaveBeenCalled();
     expect(digest.runYearRecaps).not.toHaveBeenCalled();
+  });
+
+  it('runs the trial lifecycle emails for { job: "trialEmails" } and nothing else', async () => {
+    const { handler } = await import('../../../src/handlers/digests/handler.js');
+    const digest = await import('../../../src/services/digest.js');
+    const trash = await import('../../../src/services/trashService.js');
+    const trial = await import('../../../src/services/trialLifecycleEmails.js');
+
+    await handler({ job: 'trialEmails' }, context);
+
+    expect(trial.runTrialLifecycleEmails).toHaveBeenCalledTimes(1);
+    const [now, options] = vi.mocked(trial.runTrialLifecycleEmails).mock.calls[0];
+    expect(now).toBeInstanceOf(Date);
+    expect(options?.deadlineAt).toBeGreaterThan(Date.now());
+    expect(digest.runWeeklyDigests).not.toHaveBeenCalled();
+    expect(digest.runYearRecaps).not.toHaveBeenCalled();
+    expect(trash.runTrashPurge).not.toHaveBeenCalled();
   });
 
   it('still routes the recap and defaults everything else to the weekly digest', async () => {

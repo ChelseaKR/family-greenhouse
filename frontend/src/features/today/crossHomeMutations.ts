@@ -19,6 +19,7 @@ import {
 } from '@/services/crossHomeTodayService';
 import { getErrorMessage } from '@/services/api';
 import { playHaptic } from '@/services/nativeHaptics';
+import { noteCareDoneInBackground } from '@/services/nativeReview';
 import { toast } from '@/store/toastStore';
 
 export interface RowTarget {
@@ -90,6 +91,7 @@ export function useCrossHomeCompleteMutation() {
       );
       markHomeStale(queryClient, householdId);
       playHaptic('completed');
+      noteCareDoneInBackground();
       toast.success(t('today.completedToast', { plant: task.plantName, name: task.householdName }));
     },
     onError: (err) => toast.error(getErrorMessage(err)),

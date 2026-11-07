@@ -69,6 +69,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { EmptyTasks } from '@/components/illustrations/EmptyTasks';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
+import { failFastSave, saveErrorMessage } from '@/services/failFastSave';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
@@ -487,14 +488,17 @@ export function TasksPage() {
   };
 
   const snoozeMutation = useMutation({
-    mutationFn: ({ task, days }: { task: TaskWithCoverage; days: number }) =>
-      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue }),
+    // Not optimistic, so a paused snooze changed nothing on screen and said
+    // nothing. Offline it now refuses at once (services/failFastSave.ts).
+    ...failFastSave(({ task, days }: { task: TaskWithCoverage; days: number }) =>
+      taskService.snoozeTask(task.id, days, { expectedNextDue: task.nextDue })
+    ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       playHaptic('snoozed');
       toast.info(t('plants.list.snoozedToast'));
     },
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError: (err) => toast.error(saveErrorMessage(err)),
   });
   /** How long, as the Plants list asks it; nothing happens without a choice. */
   const snoozeTask = async (task: TaskWithCoverage, from: Element | null) => {

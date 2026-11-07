@@ -31,6 +31,11 @@ vi.mock('../../../src/services/deviceTokens.js', () => ({
 vi.mock('../../../src/services/notificationPrefs.js', () => ({
   getPreferences: vi.fn(),
   setPreferences: vi.fn(),
+  applyDetectedTimeZone: vi.fn(async (userId: string, timezone: string) => ({
+    userId,
+    timezone,
+    timezoneChosen: false,
+  })),
   isValidTimeZone: vi.fn((timezone: string) => {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: timezone });
@@ -584,6 +589,66 @@ describe('notifications phone verification routes', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).message).toBe('Validation failed');
     expect(prefs.setPreferences).not.toHaveBeenCalled();
+  });
+
+  it('routes a browser-detected zone to applyDetectedTimeZone and saves nothing else', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { updatePrefs } = await import('../../../src/handlers/notifications/handler.js');
+    const res = (await updatePrefs(
+      buildEvent({
+        httpMethod: 'PUT',
+        path: '/notifications/prefs',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          browser: false,
+          email: false,
+          sms: false,
+          phone: '',
+          dndStart: '',
+          dndEnd: '',
+          timezone: 'America/New_York',
+          timezoneSource: 'detected',
+          pestAlerts: false,
+          weeklyDigest: true,
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(200);
+    expect(prefs.applyDetectedTimeZone).toHaveBeenCalledWith('user-1', 'America/New_York');
+    // The stale `email: false` in the body must not reach the stored row.
+    expect(prefs.setPreferences).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body)).toMatchObject({ timezone: 'America/New_York' });
+  });
+
+  it('rejects an unknown detected zone before it reaches the service', async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const { updatePrefs } = await import('../../../src/handlers/notifications/handler.js');
+    const res = (await updatePrefs(
+      buildEvent({
+        httpMethod: 'PUT',
+        path: '/notifications/prefs',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          browser: false,
+          email: true,
+          sms: false,
+          phone: '',
+          dndStart: '',
+          dndEnd: '',
+          timezone: 'Not/A_Timezone',
+          timezoneSource: 'detected',
+          pestAlerts: false,
+        }),
+      }),
+      ctx,
+      () => {}
+    )) as APIGatewayProxyResult;
+
+    expect(res.statusCode).toBe(400);
+    expect(prefs.applyDetectedTimeZone).not.toHaveBeenCalled();
   });
 
   it('confirm-verification returns the updated (verified) prefs', async () => {

@@ -199,6 +199,25 @@ html[data-text-size='large'] .whitespace-nowrap {
   }
 }
 
+/* A time field in iOS WebKit (Safari and the iOS app) is a native control:
+   it keeps its own minimum width, so in a grid column narrower than that it
+   ran under the field beside it (the quiet-hours Start under End on iPad),
+   and with no value it drew shorter than the text fields in the same row.
+   Without the native appearance it sizes like `.input`; one line plus the
+   field's padding and border keeps an empty one as tall as a filled one.
+   `-webkit-touch-callout` is supported only by iOS WebKit, so desktop and
+   Android time fields keep their native look. */
+@supports (-webkit-touch-callout: none) {
+  @layer base {
+    input.input[type='time'] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      min-height: calc(1lh + 1rem + 2px);
+    }
+  }
+}
+
 /* Scrolling dialog overlays (`fixed inset-0 overflow-y-auto`): keep the
    panel's title and close button out from under the status bar and its
    buttons above the home indicator when a tall dialog is scrolled to either
@@ -216,6 +235,16 @@ html[data-text-size='large'] .whitespace-nowrap {
   html {
     @apply antialiased;
     background-color: #173404;
+    /* WCAG 2.4.11 Focus Not Obscured: keep whatever the skip link,
+       Tab or an in-page anchor scrolls to clear of the sticky site header
+       (PublicShell, about 77px on a phone; Layout's mobile bar is 64px).
+       Both `scrollIntoView` and focus scrolling honor this. */
+    scroll-padding-top: calc(5rem + env(safe-area-inset-top));
+  }
+
+  /* The native shells hide both sticky headers, so nothing covers the top. */
+  html[data-native-frame] {
+    scroll-padding-top: 0;
   }
 
   /* Warm paper default so any surface that forgets an explicit background
@@ -342,8 +371,8 @@ html[data-text-size='large'] .whitespace-nowrap {
 }
 
 /* ---------------------------------------------------------------------
-   Inside the iOS app's native frame (`html[data-native-frame]`). The
-   navigation bar shows the screen's title. When it shows the same words as
+   Inside the app's native frame (`html[data-native-frame]`; iOS and Android).
+   The navigation bar (the top app bar on Android) shows the screen's title. When it shows the same words as
    the page's h1, NativeFrameBridge marks that h1 `data-native-title="bar"`:
    it is then hidden from sight but stays in the page, so VoiceOver still
    reads it and the launch screen still finds `#main-content h1`. Its eyebrow
@@ -383,9 +412,9 @@ html[data-text-size='large'] .whitespace-nowrap {
 }
 
 /* In the frame, a true on/off setting's checkbox (`role="switch"`, from
-   `nativeSwitchRole()` in lib/platform.ts) is drawn as an iOS switch: 51 by
-   31 points, the knob sliding right and the track turning the app's green
-   when on. Only the drawing changes; it is the same checkbox. In utilities,
+   `nativeSwitchRole()` in lib/platform.ts) is drawn as an iOS switch: 51 by 31
+   points, the knob sliding right and the track turning the app's green when
+   on (the Android app draws a Material 3 switch instead, below). Only the drawing changes; it is the same checkbox. In utilities,
    so it outranks the h-5 / w-5 / accent-* utilities on the same input. */
 @layer utilities {
   html[data-native-frame] input[type='checkbox'][role='switch'] {
@@ -426,6 +455,25 @@ html[data-text-size='large'] .whitespace-nowrap {
   html[data-native-frame] input[type='checkbox'][role='switch']:focus-visible {
     outline: 2px solid var(--color-primary-500);
     outline-offset: 2px;
+  }
+
+  /* The Android app's frame draws the same checkbox as a Material 3 switch:
+     a 52 by 32 track with an outline and a small thumb when off, filled with
+     the app's green and a larger white thumb when on. */
+  html[data-native='android'][data-native-frame] input[type='checkbox'][role='switch'] {
+    width: 52px;
+    height: 32px;
+    border: 2px solid #74806a;
+    background-color: #e2e7d8;
+    background-image: radial-gradient(circle, #74806a 0 8px, transparent 8.5px);
+    background-size: 28px 28px;
+  }
+
+  html[data-native='android'][data-native-frame] input[type='checkbox'][role='switch']:checked {
+    border-color: var(--color-primary-700);
+    background-color: var(--color-primary-700);
+    background-image: radial-gradient(circle, #fff 0 12px, transparent 12.5px);
+    background-position: 20px 0;
   }
 }
 

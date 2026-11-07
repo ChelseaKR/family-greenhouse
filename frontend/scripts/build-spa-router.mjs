@@ -18,10 +18,20 @@
  * needing it, and that means the function must be able to tell a prerendered
  * page from an app route without asking S3.
  *
+ * ## Why kind (4) of the function exists (issue #719)
+ *
+ * Moved here from `spa-router.js`, which has a 10 KB source limit. Kind (3),
+ * the app-shell rewrite, used to take every extensionless path, so every url
+ * answered 200. Kinds (3) and (4) now split on App.tsx's routes, so a url
+ * that 404s at the edge already rendered "Nothing growing here" in the app.
+ * See app-routes.mjs.
+ *
  * ## Why generate rather than hand-maintain
  *
- * The list is 50-odd entries and grows with every blog post and care guide,
- * both of which come from TS manifests nobody edits with CloudFront in mind.
+ * The list used to be 80-odd entries and grow with every blog post and care
+ * guide, both of which come from TS manifests nobody edits with CloudFront in
+ * mind. Those namespaces are prefix-served now (see `prefixServedRoutes`), so
+ * the map holds only the dozen static pages, but the reasoning is unchanged.
  * A hand-copied list would drift silently in the direction that hurts: a new
  * marketing page would be prerendered, uploaded, advertised in the sitemap,
  * and served as the empty shell — which is the exact failure ADR 0013 and
@@ -39,6 +49,16 @@
  * that repairs the artifact it is judging heals drift on the contributor's disk
  * while the committed bytes stay stale. Same reasoning as
  * `build-sitemap.mjs --check`, and the same reason it is a separate gate step.
+ *
+ * ## Why /.well-known passes through untouched (rule 1b in spa-router.js)
+ *
+ * Moved here from the function, which sits against CloudFront's 10 KB limit.
+ * Passing it through also means a MISSING association file answers 404
+ * rather than 200-with-the-shell, which is the difference between Android's
+ * verifier reporting "no such file" and reporting a JSON parse error on a
+ * page of HTML. Same reasoning as `/assets/`, and it works for the same
+ * reason: the frontend bucket grants `s3:ListBucket`, so a missing object is
+ * a 404 that no `custom_error_response` turns into a 200.
  *
  * Usage:
  *   node scripts/build-spa-router.mjs           # rewrite the generated block

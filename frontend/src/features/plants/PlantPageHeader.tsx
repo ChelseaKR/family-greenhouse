@@ -148,7 +148,11 @@ export function PlantPageHeader({
                   className="grow"
                   onClick={() => onDone(task)}
                   leftIcon={<CheckIcon className="h-5 w-5" aria-hidden="true" />}
-                  aria-label={t('plants.detail.doAria', { task: taskName, plant: plant.name })}
+                  aria-label={t('plants.detail.doAria', {
+                    label: task.type === 'water' ? t('plants.detail.watered') : t('tasks.complete'),
+                    task: taskName,
+                    plant: plant.name,
+                  })}
                 >
                   {task.type === 'water' ? t('plants.detail.watered') : t('tasks.complete')}
                 </Button>

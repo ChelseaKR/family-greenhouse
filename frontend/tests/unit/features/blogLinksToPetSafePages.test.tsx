@@ -62,4 +62,12 @@ describe('blog posts link the plant safety pages', () => {
     // 23 links when this landed; zero would mean the matching broke, not the content.
     expect(links).toBeGreaterThanOrEqual(20);
   });
+
+  it('the toxic-houseplants post links the anthurium and bird of paradise pages both ways', () => {
+    const post = rendered.find((r) => r.slug === 'most-common-toxic-houseplants-and-safer-swaps')!;
+    for (const slug of ['anthurium', 'bird-of-paradise']) {
+      expect(post.html).toContain(`href="/pet-safe/${slug}"`);
+      expect(post.html).toContain(`href="/care/${slug}"`);
+    }
+  });
 });

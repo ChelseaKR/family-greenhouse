@@ -54,7 +54,7 @@ describe('deferred legal catalog', () => {
     expect(leafKeys(esTranslation).filter((k) => k.startsWith('legal.'))).toEqual([]);
   });
 
-  it('carries the same 128 keys in both locales, all rooted at `legal.`', () => {
+  it('carries the same 130 keys in both locales, all rooted at `legal.`', () => {
     const en = leafKeys(enLegal).sort();
     const es = leafKeys(esLegal).sort();
     expect(en).toEqual(es);
@@ -69,8 +69,11 @@ describe('deferred legal catalog', () => {
     // named third party, +1 for the household audit log's collection bullet
     // (#675), +1 for the failed-payment retry window in the renewal section
     // (#593), +1 for the shell line a legal page shows before the release that
-    // ships its text names a day (#593).
-    expect(en).toHaveLength(128);
+    // ships its text names a day (#593), +2 for the Apple purchases section
+    // of the Terms (ADR 0041), +5 for the Terms' operator section, its
+    // paid-links section (ADR 0038), and the not-veterinary-advice line, +1
+    // for the time-zone collection bullet (0.48.0).
+    expect(en).toHaveLength(136);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 

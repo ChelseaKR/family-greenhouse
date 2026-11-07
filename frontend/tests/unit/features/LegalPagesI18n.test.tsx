@@ -81,8 +81,8 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    effectiveEn: 'Effective September 18, 2026.',
-    effectiveEs: 'Vigente desde el 18 de septiembre de 2026.',
+    // The Google Analytics wording (#1085) and the time-zone line changed in 0.48.0.
+    ...termsEffectiveText('2026-11-05'),
   },
   {
     name: 'terms',
@@ -108,8 +108,8 @@ const PAGES = [
     Page: AccountDeletionPage,
     en: 'Delete your account',
     es: 'Eliminar tu cuenta',
-    effectiveEn: 'Effective September 2, 2026.',
-    effectiveEs: 'Vigente desde el 2 de septiembre de 2026.',
+    // The paid-plan cancellation line (#1096) changed in 0.48.0.
+    ...termsEffectiveText('2026-11-05'),
   },
 ] as const;
 
@@ -228,6 +228,17 @@ describe('legal pages: link targets survive localization', () => {
       expect(english, phrase).toContain(phrase);
     }
     expect(english).not.toContain('We do not record general page views');
+    // The steps toward a paid plan, as the code sends them since 0.47.0.
+    for (const phrase of [
+      'which plant the page is about, such as zz-plant',
+      'with how it was added',
+      'never which plant',
+      'its 14-day Garden trial',
+    ]) {
+      expect(english, phrase).toContain(phrase);
+    }
+    expect(english).not.toContain('six steps');
+    expect(english).not.toContain('See how it works');
     cleanup();
 
     const spanish = renderSpanish(PrivacyPage).container.textContent ?? '';
@@ -239,9 +250,14 @@ describe('legal pages: link targets survive localization', () => {
       'Volver a activarla',
       'Google Signals y la personalización de anuncios están deshabilitadas',
       '14 meses',
+      'de qué planta trata la página, por ejemplo zz-plant',
+      'pero nunca qué planta',
+      'la prueba de 14 días de Garden',
     ]) {
       expect(spanish, phrase).toContain(phrase);
     }
+    expect(spanish).not.toContain('seis pasos');
+    expect(spanish).not.toContain('Mira cómo funciona');
   });
 
   it('privacy discloses the household audit log, what it never holds, and its 30 days, in both locales', () => {

@@ -13,6 +13,8 @@ import MergingCollections from './merging-collections';
 import SignsOfOverwatering from './signs-of-overwatering';
 import YellowLeaves from './yellow-leaves';
 import RoomLight from './room-light';
+import YellowLeavesOverwatering from './yellow-leaves-overwatering';
+import CanYouOverwaterAPlant from './can-you-overwater-a-plant';
 
 /**
  * Blog post manifest. Adding a post means dropping a TSX file in this
@@ -93,9 +95,9 @@ export const POSTS: BlogPost[] = [
     slug: 'pet-safe-houseplants-that-are-hard-to-kill',
     title: 'Pet-safe houseplants that are genuinely hard to kill',
     description:
-      '“Pet-safe” and “hard to kill” knock out most of the plants the listicles name — pothos, ZZ, snake plant, aloe are all toxic. Here’s the shorter, honest list that clears both bars, ranked by how much neglect it forgives.',
+      '“Pet-safe” and “hard to kill” knock out most of the plants the listicles name — pothos, snake plant and aloe are all toxic. Here’s the shorter, honest list that clears both bars, ranked by how much neglect it forgives.',
     metaDescription:
-      'Pothos, ZZ, snake plant and aloe are all toxic. Here is the shorter, honest list of plants that clear both bars, ranked by how much neglect they forgive.',
+      'Pothos, snake plant and aloe are all toxic. Here is the shorter, honest list of plants that clear both bars, ranked by how much neglect they forgive.',
     date: '2026-06-15',
     readingMinutes: 6,
     Component: PetSafeHardToKill,
@@ -124,11 +126,11 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: 'how-to-water-plants-while-on-vacation',
-    title: 'How to keep your plants alive while you’re away',
+    title: 'How to keep indoor plants alive while on vacation',
     description:
       'Five days is a non-problem; two weeks is a real one. What actually works at each trip length, which popular hacks quietly fail, and the handover mistake that kills plants after you get home.',
     metaDescription:
-      'What actually works at each trip length, which popular watering hacks quietly fail, and the handover mistake that kills plants after you get home.',
+      'Water well and go for up to five days. For one to two weeks, group plants together or use a wick or bath tray. Past two weeks, you need a person.',
     date: '2026-07-01',
     readingMinutes: 6,
     Component: WateringWhileOnVacation,
@@ -168,11 +170,11 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: 'signs-of-overwatering-and-how-to-fix-it',
-    title: 'Signs of overwatering (and how to fix it)',
+    title: 'How to fix an overwatered plant: signs and a 2-minute check',
     description:
       'An overwatered plant looks exactly like a thirsty one, which is why people keep watering it. How to tell them apart in two minutes, what to do about root rot, and the shared-household version nobody warns you about.',
     metaDescription:
-      'An overwatered plant looks exactly like a thirsty one. How to tell them apart in two minutes, what to do about root rot, and how to stop it recurring.',
+      'Overwatering causes soft yellow lower leaves and wilting in wet soil, so it looks like thirst. How to tell in two minutes and fix an overwatered plant.',
     date: '2026-07-29',
     readingMinutes: 6,
     Component: SignsOfOverwatering,
@@ -198,6 +200,28 @@ export const POSTS: BlogPost[] = [
     date: '2026-08-12',
     readingMinutes: 6,
     Component: RoomLight,
+  },
+  {
+    slug: 'do-yellow-leaves-mean-overwatering',
+    title: 'Do yellow leaves mean overwatering? Often, not always',
+    description:
+      'Overwatering is the most common cause of yellow houseplant leaves, but thirst, low light, hunger and pests can look the same. Two checks settle it: the soil, then the roots.',
+    metaDescription:
+      'Often, yes: overwatering is the most common cause of yellow houseplant leaves. Check the soil, then the roots, because thirst and low light can look the same.',
+    date: '2026-11-05',
+    readingMinutes: 5,
+    Component: YellowLeavesOverwatering,
+  },
+  {
+    slug: 'can-you-overwater-a-plant',
+    title: 'Can you overwater a plant? Yes. Here is how to avoid it',
+    description:
+      'Clemson Extension calls overwatering the main cause of death of potted plants. What too much water does to roots, why there is no fixed watering interval, and how to water by checking the soil instead.',
+    metaDescription:
+      'Yes, and it is the main cause of death of potted plants. What too much water does to roots, and how to water by checking the soil instead of the calendar.',
+    date: '2026-11-05',
+    readingMinutes: 5,
+    Component: CanYouOverwaterAPlant,
   },
 ];
 

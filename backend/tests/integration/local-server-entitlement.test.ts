@@ -464,10 +464,11 @@ describe('starting: what a household may begin (#476)', () => {
   });
 
   describe('member cap — POST /households/join/:inviteCode', () => {
-    it('refuses the fourth hand while the card is failing and takes it once it is good', async () => {
+    it('refuses the third hand while the card is failing and takes it once it is good', async () => {
       const admin = await loginAsSeed();
+      // The seed household is created now, after the 2026-10-23 cut, so
+      // Seedling holds two people (ADR 0040): the admin and one more.
       seedMember('cap-fill-1', 'cap-fill-1@example.com');
-      seedMember('cap-fill-2', 'cap-fill-2@example.com');
 
       onPlan('garden', 'unpaid');
       const invite = await request(app)
@@ -475,12 +476,12 @@ describe('starting: what a household may begin (#476)', () => {
         .set(auth(admin));
       expect(invite.status).toBe(201);
 
-      const joiner = await createConfirmedUser('fourth@example.com');
+      const joiner = await createConfirmedUser('third@example.com');
       const refused = await request(app)
         .post(`/households/join/${invite.body.code}`)
         .set(auth(joiner));
       expect(refused.status).toBe(402);
-      expect(refused.body.message).toMatch(/limited to 3 members/);
+      expect(refused.body.message).toMatch(/limited to 2 members/);
 
       onPlan('garden', 'active');
       const accepted = await request(app)
@@ -529,9 +530,9 @@ describe('starting: what a household may begin (#476)', () => {
       expect(dunning.body.planId).toBe('garden');
       expect(dunning.body.status).toBe('unpaid');
       // The caps they may currently USE. Advertising 200 here while the next
-      // POST /plants is refused at 20 is the mint-vs-use disagreement again.
-      expect(dunning.body.usage.maxPlants).toBe(20);
-      expect(dunning.body.usageDetail.maxPlants).toBe(20);
+      // POST /plants is refused at 8 is the mint-vs-use disagreement again.
+      expect(dunning.body.usage.maxPlants).toBe(8);
+      expect(dunning.body.usageDetail.maxPlants).toBe(8);
 
       onCancelledLifetime('garden');
       expect((await get()).body.usage.maxPlants).toBe(200);
@@ -541,11 +542,11 @@ describe('starting: what a household may begin (#476)', () => {
   describe('plant cap — POST /plants', () => {
     it('refuses at the free tier’s cap while the card is failing', async () => {
       const token = await loginAsSeed();
-      // Seedling allows 20 active plants; seed the household just over it so
-      // the gate is reached without twenty round trips.
+      // Seedling allows 8 active plants; seed the household up to it so
+      // the gate is reached without eight round trips.
       const existing = [...db.plants.values()].filter((p) => p.householdId === seedHouseholdId);
       const template = existing[0]!;
-      for (let i = existing.length; i < 20; i += 1) {
+      for (let i = existing.length; i < 8; i += 1) {
         const id = `cap-plant-${i}`;
         db.plants.set(id, { ...template, id, name: `Filler ${i}` });
       }
@@ -556,7 +557,7 @@ describe('starting: what a household may begin (#476)', () => {
         .set(auth(token))
         .send({ name: 'One more' });
       expect(refused.status).toBe(402);
-      expect(refused.body.message).toMatch(/limited to 20 plants/);
+      expect(refused.body.message).toMatch(/limited to 8 plants/);
 
       onPlan('garden', 'active');
       const accepted = await request(app)
@@ -568,11 +569,11 @@ describe('starting: what a household may begin (#476)', () => {
   });
 
   describe('the retry window — a failed payment keeps the plan until Stripe gives up (#593)', () => {
-    /** Twenty active plants: exactly Seedling's cap, well under Garden's. */
+    /** Eight active plants: exactly Seedling's cap, well under Garden's. */
     function fillToSeedlingCap(): void {
       const existing = [...db.plants.values()].filter((p) => p.householdId === seedHouseholdId);
       const template = existing[0]!;
-      for (let i = existing.length; i < 20; i += 1) {
+      for (let i = existing.length; i < 8; i += 1) {
         const id = `retry-plant-${i}`;
         db.plants.set(id, { ...template, id, name: `Filler ${i}` });
       }
@@ -595,10 +596,10 @@ describe('starting: what a household may begin (#476)', () => {
 
       // Retries exhausted, Stripe marks it unpaid: the free tier's caps apply.
       onPlan('garden', 'unpaid');
-      expect((await meters()).usage.maxPlants).toBe(20);
+      expect((await meters()).usage.maxPlants).toBe(8);
       const refused = await addPlant('Refused once retries end');
       expect(refused.status).toBe(402);
-      expect(refused.body.message).toMatch(/limited to 20 plants/);
+      expect(refused.body.message).toMatch(/limited to 8 plants/);
 
       // The card is fixed and the open invoice paid: past_due/unpaid -> active.
       onPlan('garden', 'active');
@@ -612,7 +613,7 @@ describe('starting: what a household may begin (#476)', () => {
         const token = await loginAsSeed();
         onPlan('garden', status);
         const body = (await request(app).get('/billing/me').set(auth(token))).body;
-        expect(body.usage.maxPlants).toBe(20);
+        expect(body.usage.maxPlants).toBe(8);
       }
     );
 

@@ -89,11 +89,16 @@ export interface DevicePushMessage {
    * The one task this notification is about, when there is exactly one, so
    * an action on the notification can act on that occurrence. Ids only. On
    * iOS it also selects the actionable category (apnsNotifier.ts); on
-   * Android it rides in `data` for the shell, which shows no action buttons
-   * (an FCM `notification` message is rendered by the system, and buttons
-   * would need a native notification builder the shell does not have).
+   * Android it rides in `data`, and the app draws Done and Snooze buttons
+   * for it (frontend/android/.../push/ReminderNotifications.kt).
    */
   task?: { taskId: string; plantId: string; expectedNextDue?: string };
+  /**
+   * The Done and Snooze button labels, in the recipient's language, for a
+   * notification with a `task`. Android draws them; iOS ignores them and
+   * shows the titles its registered category carries.
+   */
+  actions?: { done: string; snooze: string };
 }
 
 /** Whether a Firebase service account is named at all. Reads no secret. */
@@ -322,21 +327,36 @@ const fcmErrorSchema = z.object({
  */
 const DEAD_TOKEN_ERROR_CODES = new Set(['UNREGISTERED', 'NOT_FOUND']);
 
-/** The FCM v1 message body for one Android device. */
+/**
+ * Marks a data message the Android app draws itself
+ * (`ReminderMessage.KIND` in frontend/android/.../push/ReminderMessage.kt).
+ */
+export const ANDROID_REMINDER_KIND = 'fg.reminder.v1';
+
+/**
+ * The FCM v1 message body for one Android device.
+ *
+ * A DATA message, not a `notification` message. FCM draws a `notification`
+ * message itself whenever the app is in the background, and the system's
+ * notification has no buttons; a data message wakes the app's own
+ * messaging service (`FgMessagingService.kt`), which draws the reminder with
+ * Done and Snooze for a single task, the same buttons iOS shows. HIGH
+ * priority because every one of these is shown to the person at once, which
+ * is what FCM asks high priority to be used for.
+ *
+ * Every value in `data` is a string: FCM rejects any other JSON type there.
+ */
 export function messageBody(message: DevicePushMessage): Record<string, unknown> {
   const collapseId = message.tag ? truncateToBytes(message.tag, MAX_COLLAPSE_ID_BYTES) : undefined;
-  const androidNotification = {
+  const data: Record<string, string> = {
+    kind: ANDROID_REMINDER_KIND,
+    title: message.title,
+    body: message.body,
+    ...(message.url ? { url: message.url } : {}),
+    // Replaces an unread older notification with the same tag on the device.
     ...(collapseId ? { tag: collapseId } : {}),
     // The launcher's badge / notification-dot count, where the launcher shows one.
-    ...(typeof message.badge === 'number'
-      ? { notification_count: Math.max(0, message.badge) }
-      : {}),
-  };
-  // `data` is what the shell reads on tap. Strings only — FCM rejects any
-  // other JSON type in this map. The task ids let a future Android action
-  // handler act on the right occurrence; today the shell only follows `url`.
-  const data: Record<string, string> = {
-    ...(message.url ? { url: message.url } : {}),
+    ...(typeof message.badge === 'number' ? { badge: String(Math.max(0, message.badge)) } : {}),
     ...(message.task
       ? {
           taskId: message.task.taskId,
@@ -344,22 +364,20 @@ export function messageBody(message: DevicePushMessage): Record<string, unknown>
           ...(message.task.expectedNextDue
             ? { expectedNextDue: message.task.expectedNextDue }
             : {}),
+          ...(message.actions
+            ? { doneLabel: message.actions.done, snoozeLabel: message.actions.snooze }
+            : {}),
         }
       : {}),
   };
   return {
     message: {
       token: message.token,
-      notification: { title: message.title, body: message.body },
-      ...(Object.keys(data).length > 0 ? { data } : {}),
-      ...(collapseId || Object.keys(androidNotification).length > 0
-        ? {
-            android: {
-              ...(collapseId ? { collapse_key: collapseId } : {}),
-              notification: androidNotification,
-            },
-          }
-        : {}),
+      data,
+      android: {
+        priority: 'HIGH',
+        ...(collapseId ? { collapse_key: collapseId } : {}),
+      },
     },
   };
 }

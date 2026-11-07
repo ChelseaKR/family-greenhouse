@@ -18,7 +18,7 @@ export function AccountPage() {
     <div className="min-h-screen bg-paper">
       <header className="border-b border-dew/60 bg-paper/95 native-frame:hidden!">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link to="/" aria-label="Family Greenhouse home">
+          <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
             <BrandMark variant="wordmark" size="sm" compactOnMobile />
           </Link>
           <Link
@@ -32,7 +32,7 @@ export function AccountPage() {
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 sm:py-12">
         <PageHeader
           eyebrow="Your account"
-          title="Account & data"
+          title={t('settings.account.pageTitle')}
           description="Manage your profile, download your data, or permanently delete your account."
         />
         <AccountSettings />

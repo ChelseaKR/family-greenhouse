@@ -341,6 +341,7 @@ describe('no-card trial lifecycle (ADR 0027)', () => {
           currentPeriodEnd: '2026-09-17T02:00:00.000Z',
           trialAvailable: false,
           noCardTrialEndsAt: planted.noCardTrialEndsAt,
+          householdCreatedAt: '2026-07-10T09:00:00.000Z',
         });
         expect(plans.hasStripeEntitlementState(sub)).toBe(true);
         expect(plans.noCardTrialState(sub)).toBe('none');

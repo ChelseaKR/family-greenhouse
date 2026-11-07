@@ -411,7 +411,7 @@ describe('billing handler', () => {
 
       const body = JSON.parse(res.body);
       const usage = body.usage;
-      expect(usage).toEqual({ plantCount: 25, maxPlants: 20, memberCount: 8, maxMembers: 3 });
+      expect(usage).toEqual({ plantCount: 25, maxPlants: 8, memberCount: 8, maxMembers: 2 });
       expect(body.usageDetail).toEqual(usage);
       expect(usage.plantCount).toBeGreaterThan(usage.maxPlants);
       expect(usage.memberCount).toBeGreaterThan(usage.maxMembers);
@@ -437,9 +437,9 @@ describe('billing handler', () => {
       expect(body).not.toHaveProperty('usage');
       expect(body.usageDetail).toEqual({
         plantCount: 25,
-        maxPlants: 20,
+        maxPlants: 8,
         memberCount: null,
-        maxMembers: 3,
+        maxMembers: 2,
       });
     });
 
@@ -1683,8 +1683,8 @@ describe('billing handler', () => {
         // planId stays truthful — it is the plan they are ON. The caps are
         // what they may currently USE, and those must match POST /plants.
         expect(body.planId).toBe('greenhouse');
-        expect(body.usageDetail.maxPlants).toBe(20);
-        expect(body.usageDetail.maxMembers).toBe(3);
+        expect(body.usageDetail.maxPlants).toBe(8);
+        expect(body.usageDetail.maxMembers).toBe(2);
       }
     );
 

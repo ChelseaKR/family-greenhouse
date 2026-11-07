@@ -236,6 +236,22 @@ internal-testing build), work through each of these:
 11. Deny the permission in the phone's Settings and reopen the app. The row
     explains how to turn it back on, and the device is removed server-side.
 
+On a Play internal-testing build, also check what is Android's own:
+
+- A one-task reminder shows **Done** and **Snooze until tomorrow** under it
+  (expand it if the shade shows it collapsed). The app draws it from a data
+  message (`FgMessagingService.kt`); a reminder with no buttons, or none at
+  all, means the build is missing that service or the backend is still
+  sending `notification` messages.
+- Tapping **Done** opens the app, which posts it and takes the notification
+  down; the task is logged as completed. On Android the app comes to the
+  front to act, unlike iOS.
+- With the app swiped away, a reminder still arrives (high-priority data
+  message), and **Snooze** from it opens the app and moves the task to
+  tomorrow.
+- Settings → Apps → Family Greenhouse → Notifications lists a channel named
+  **Care reminders** ("Recordatorios de cuidado" on a phone set to Spanish).
+
 Logs to watch (CloudWatch, notification Lambdas):
 
 - `apns_send_failed` with `reason`: `BadDeviceToken` means the build's APNs

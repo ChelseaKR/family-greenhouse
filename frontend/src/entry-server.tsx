@@ -21,6 +21,8 @@ import App from './App';
 import './i18n';
 import { MetaSinkContext, type MetaSink } from './hooks/metaSink';
 import { headToTags, notFoundHeadToTags, resolveHead, type MetaTags } from './config/seo';
+import { careGuideDataElement } from './features/care/careGuideContent';
+import { bundledCareGuide } from './features/care/careGuideSource';
 
 /** Rendered HTML for a route plus the <head> tags the route asked for. */
 export interface RenderedRoute {
@@ -121,6 +123,21 @@ export async function renderRoute(url: string): Promise<RenderedRoute> {
   const { body, hoisted, meta } = await renderApp(url);
   const head = headToTags(resolveHead(meta, url));
   return { html: body, head: hoisted ? `${head}\n    ${hoisted}` : head };
+}
+
+/**
+ * Markup for the end of <body> on the page for `url`: today, a care guide's
+ * JSON on `/care/<slug>`, and nothing anywhere else.
+ *
+ * The browser bundle does not carry the guides (vite.careGuideContent.ts), so
+ * a guide page hydrates from this element, and a reader who navigates to a
+ * guide from elsewhere in the app fetches the page and reads it from there.
+ * It sits outside #root, so it is not part of what React hydrates.
+ */
+export function routeData(url: string): string {
+  const slug = /^\/care\/([^/]+)$/.exec(url)?.[1];
+  const guide = slug ? bundledCareGuide(slug) : undefined;
+  return guide ? careGuideDataElement(guide) : '';
 }
 
 /**

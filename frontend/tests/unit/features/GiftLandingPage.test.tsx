@@ -128,7 +128,8 @@ describe('GiftLandingPage', () => {
     renderPage();
 
     expect(await screen.findByText('Give a Family Greenhouse gift')).toBeInTheDocument();
-    const signIn = screen.getByRole('link', { name: 'Sign in' });
+    // The sign-in prompt waits for the plan catalog (it says whether gifts are for sale).
+    const signIn = await screen.findByRole('link', { name: 'Sign in' });
     const register = screen.getByRole('link', { name: 'Create a free account' });
     expect(signIn).toHaveAttribute('href', '/login?redirect=%2Fgift');
     expect(register).toHaveAttribute('href', '/register?redirect=%2Fgift');
@@ -173,6 +174,52 @@ describe('GiftLandingPage', () => {
       )
     ).toBeInTheDocument();
     expect(await screen.findByText('FG-0123-4567-89AB-CDEF')).toBeInTheDocument();
+  });
+
+  describe('while no gift price id is configured', () => {
+    const unset: PlanCatalog = {
+      ...CATALOG,
+      giftSubscriptions: {
+        ...CATALOG.giftSubscriptions!,
+        plans: CATALOG.giftSubscriptions!.plans.map((p) => ({ ...p, available: false })),
+      },
+    };
+
+    it('says gifts are not available yet and offers no sign-in or buy path', async () => {
+      // The sabotage applied: the catalog differs from the configured one.
+      expect(unset.giftSubscriptions!.plans.every((p) => !p.available)).toBe(true);
+      expect(CATALOG.giftSubscriptions!.plans.every((p) => p.available)).toBe(true);
+      vi.mocked(billingService.listPlans).mockResolvedValue(unset);
+      renderPage();
+
+      expect(await screen.findByText('Gifts are not available yet')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Create a free account' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Buy gift/ })).not.toBeInTheDocument();
+      expect(screen.queryByText('How it works')).not.toBeInTheDocument();
+    });
+
+    it('also hides the buy form from a signed-in buyer', async () => {
+      signIn(null);
+      vi.mocked(billingService.listPlans).mockResolvedValue(unset);
+      renderPage();
+
+      expect(await screen.findByText('Gifts are not available yet')).toBeInTheDocument();
+      expect(screen.queryByTestId('gift-landing-purchase-form')).not.toBeInTheDocument();
+      expect(billingService.listGiftPurchases).not.toHaveBeenCalled();
+    });
+
+    it('does not say so when the gifts are configured (the control for the two above)', async () => {
+      renderPage();
+      expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+      expect(screen.queryByText('Gifts are not available yet')).not.toBeInTheDocument();
+    });
+
+    it('fails closed when the catalog cannot be read', async () => {
+      vi.mocked(billingService.listPlans).mockRejectedValue(new Error('network'));
+      renderPage();
+      expect(await screen.findByText('Gifts are not available yet')).toBeInTheDocument();
+    });
   });
 
   it('is not offered in the native app', async () => {

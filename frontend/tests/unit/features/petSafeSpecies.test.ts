@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CARE_GUIDES } from '@/features/care/careGuides';
+import { careToxicity } from '@/features/care/careToxicity';
 import { POSTS } from '@/features/blog/posts';
 import {
   PET_SAFE_GROUPS,
@@ -87,9 +88,16 @@ describe('PET_SAFETY_POSTS', () => {
 
 describe('the directory caution line', () => {
   it('carries the care page caution for every unknown species, and only those', () => {
+    // The caution is for an unknown animal. A guide whose cats and dogs verdicts
+    // are both cited but differ (the true lily) is also 'unclear', because no
+    // single opening word describes it, and carries no caution.
     for (const species of PET_SAFE_SPECIES) {
-      expect(species.caution !== null, species.slug).toBe(species.level === 'unclear');
+      const guide = CARE_GUIDES.find((g) => g.slug === species.slug)!;
+      expect(species.caution !== null, species.slug).toBe(!careToxicity(guide).sourced);
     }
+    const lily = PET_SAFE_SPECIES.find((s) => s.slug === 'lily')!;
+    expect(lily.level).toBe('unclear');
+    expect(lily.caution).toBeNull();
     const zz = PET_SAFE_SPECIES.find((s) => s.slug === 'zz-plant')!;
     expect(zz.level).toBe('unclear');
     expect(zz.caution).toBe(

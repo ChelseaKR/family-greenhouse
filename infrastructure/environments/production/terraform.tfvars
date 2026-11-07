@@ -11,9 +11,14 @@ email_from_address             = "Family Greenhouse <hello@familygreenhouse.net>
 email_reply_to                 = "support@familygreenhouse.net"
 dmarc_rua_email                = "dmarc@familygreenhouse.net"
 
-# Perenual: only the secret NAME goes through Terraform. The actual API key
-# was put into SSM Parameter Store via the AWS CLI and is never tracked by IAC.
-perenual_api_key_parameter_name = "/family-greenhouse/perenual-api-key"
+# Perenual: OFF in production. Its free plan is licensed for personal use only,
+# and Family Greenhouse is a paid product (data license audit, 2026-11-03). With
+# perenual_api_key_parameter_name left at its default (""), the Lambdas get an
+# empty PERENUAL_API_KEY_PARAMETER_NAME, every Perenual path reports "unset",
+# no call is made, and the app falls back to its own species catalog and care
+# guides. Turning it back on needs a plan whose terms allow commercial use.
+# The SSM parameter /family-greenhouse/perenual-api-key is not managed here;
+# deleting it is a separate owner step.
 
 # CI/CD: provisions the GitHub OIDC provider + deploy role (modules/cicd).
 # The role ARN goes into the AWS_DEPLOY_ROLE_ARN + AWS_PRODUCTION_ROLE_ARN
@@ -224,3 +229,12 @@ payments_enabled = "1"
 # passkey made on familygreenhouse.net works there (and on subdomains).
 passkeys_enabled         = false
 passkey_relying_party_id = "familygreenhouse.net"
+
+# No-card-trial lifecycle emails (ADR 0039): the day-10 and day-14 messages.
+# ON by the owner's decision of 2026-10-23. This sets
+# TRIAL_LIFECYCLE_EMAILS_ENABLED=true on the digests Lambda and turns the daily
+# trial-emails rule from DISABLED to ENABLED. The deployed digests build must
+# already contain the trialEmails job (0.44.0 or later): an older build reads
+# the rule's input as the weekly digest. See docs/billing.md, "The trial
+# lifecycle emails". Set back to false to stop them; send markers are kept.
+trial_lifecycle_emails_enabled = true

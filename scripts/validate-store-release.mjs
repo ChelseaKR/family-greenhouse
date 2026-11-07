@@ -219,6 +219,84 @@ for (const name of installedPlugins) {
   }
 }
 
+// The plugins that live in the iOS app target instead of npm (Print,
+// NativeChrome, NativeIntro): each Swift class that declares a `jsName` must
+// be registered by MainViewController, built by the Xcode project, and named
+// in docs/mobile.md's app-target table, and the table may name no other. An
+// unregistered plugin is the failure the web cannot see: the bridge never
+// lists it, so its feature silently falls back (ADR 0035).
+const iosAppDir = 'frontend/ios/App/App';
+const mainViewController = read(`${iosAppDir}/MainViewController.swift`);
+const appXcodeProject = read('frontend/ios/App/App.xcodeproj/project.pbxproj');
+const appTargetPlugins = readdirSync(resolve(root, iosAppDir))
+  .filter((file) => file.endsWith('.swift'))
+  .flatMap((file) => {
+    const source = read(`${iosAppDir}/${file}`);
+    const jsName = source.match(/\bjsName\s*=\s*"([A-Za-z0-9]+)"/);
+    const className = source.match(/@objc\((\w+)\)\s*public class/);
+    return jsName && className ? [{ file, jsName: jsName[1], className: className[1] }] : [];
+  });
+// The Android app's own plugins (NativeChrome, and the rest as they land):
+// each Kotlin class annotated `@CapacitorPlugin(name = "…")` must be
+// registered by MainActivity.kt before the bridge loads, and named in the
+// same table. The web asks for each one's PluginHeaders entry before driving
+// it, so an unregistered one silently keeps the web's version.
+const androidAppDir = 'frontend/android/app/src/main/java/net/familygreenhouse/app';
+const mainActivity = read(`${androidAppDir}/MainActivity.kt`);
+const androidAppPlugins = readdirSync(resolve(root, androidAppDir), { recursive: true })
+  .filter((file) => String(file).endsWith('.kt'))
+  .flatMap((file) => {
+    const source = read(`${androidAppDir}/${file}`);
+    const jsName = source.match(/@CapacitorPlugin\(\s*name\s*=\s*"([A-Za-z0-9]+)"/);
+    const className = source.match(/@CapacitorPlugin\([^)]*\)\s*class\s+(\w+)/);
+    return jsName && className
+      ? [{ file: String(file), jsName: jsName[1], className: className[1] }]
+      : [];
+  });
+const appPluginTable = mobileDoc.match(
+  /<!--\s*app-target-plugins:start\s*-->([\s\S]*?)<!--\s*app-target-plugins:end\s*-->/
+);
+if (!appPluginTable) {
+  fail('docs/mobile.md is missing the app-target-plugins table markers');
+} else {
+  const documented = [...appPluginTable[1].matchAll(/^\|\s*`([A-Za-z0-9]+)`\s*\|/gm)]
+    .map((row) => row[1])
+    .sort();
+  for (const plugin of appTargetPlugins) {
+    if (!documented.includes(plugin.jsName)) {
+      fail(
+        `docs/mobile.md app-target plugin table does not list ${plugin.jsName} (${plugin.file})`
+      );
+    }
+    if (!mainViewController.includes(`${plugin.className}()`)) {
+      fail(`MainViewController.swift does not register ${plugin.className} (${plugin.file})`);
+    }
+    if (!appXcodeProject.includes(`/* ${plugin.file} in Sources */,`)) {
+      fail(`the Xcode project does not build ${plugin.file}`);
+    }
+  }
+  for (const plugin of androidAppPlugins) {
+    if (!documented.includes(plugin.jsName)) {
+      fail(
+        `docs/mobile.md app-target plugin table does not list ${plugin.jsName} (${plugin.file})`
+      );
+    }
+    if (!mainActivity.includes(`registerPlugin(${plugin.className}::class.java)`)) {
+      fail(`MainActivity.kt does not register ${plugin.className} (${plugin.file})`);
+    }
+  }
+  for (const name of documented) {
+    if (
+      !appTargetPlugins.some((plugin) => plugin.jsName === name) &&
+      !androidAppPlugins.some((plugin) => plugin.jsName === name)
+    ) {
+      fail(
+        `docs/mobile.md app-target plugin table claims ${name}, which no Swift or Kotlin file declares`
+      );
+    }
+  }
+}
+
 // Photos (docs/mobile.md, "Photos"). iOS terminates the app the moment the
 // camera or a photo picker opens without its purpose string, and both the
 // @capacitor/camera screens and the WebView file inputs open them. Android is
@@ -493,6 +571,16 @@ if (templateValues.get('VITE_NATIVE_PUSH_ANDROID_ENABLED') !== 'false') {
     `${envExamplePath} must set VITE_NATIVE_PUSH_ANDROID_ENABLED=false; Android push is turned ` +
       'on per build, in the local .env.mobile.production, once the Firebase steps in ' +
       'docs/native-push-setup.md are done'
+  );
+}
+// Apple In-App Purchase (ADR 0041) is turned on per build, like push: the
+// template every release env is copied from keeps it off, so a build sells
+// through the App Store only when someone set it deliberately.
+if (templateValues.get('VITE_APP_STORE_PURCHASES') !== 'false') {
+  fail(
+    `${envExamplePath} must set VITE_APP_STORE_PURCHASES=false; App Store purchases are ` +
+      'turned on per build, in the local .env.mobile.production, once the App Store Connect ' +
+      'products and the server switch are in place (docs/mobile.md, "In-App Purchase")'
   );
 }
 

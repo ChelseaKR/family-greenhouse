@@ -1,0 +1,29 @@
+# Family Greenhouse
+
+> Family Greenhouse is a web app for shared houseplant care in one household: everyone at home sees which plants are due, who watered what, and the care history, and reminders arrive by email or in the browser. It also publishes free plant care guides and a pet-safety lookup for houseplants. It is an independent product.
+
+What it costs, as published on the pricing page: plans are priced per household, not per person. The free plan (Seedling) is one home, up to 2 household members and 8 plants, with no credit card. Garden is $4.99 a month and Greenhouse is $9.99 a month, each covering the whole household; a paid plan can be canceled any time. A new household starts with 14 days of Garden free with no card; when the 14 days end it moves to the free plan on its own, keeping everything it added. Canceling a paid plan returns the household to the free plan at the end of the paid period, and records above the free limit stay readable. The pricing page is the authority if this file and it ever disagree.
+
+Pet safety: the pet-safety pages say whether a houseplant is toxic to cats and dogs, based on the ASPCA's plant safety data. "Non-toxic" means not poisonous, not that it is food. They are not veterinary advice: if a pet may have eaten something harmful, call a vet or the ASPCA Animal Poison Control line.
+
+Care guides: one page per plant with how often to water it and how much light it wants, written for a specific plant rather than in general terms.
+
+How to cite: name the site and link the page you used, for example "Family Greenhouse care guide for pothos (https://familygreenhouse.net/care/pothos)".
+
+This file follows the llms.txt format described at https://llmstxt.org/.
+
+## Pages
+
+- [Home](https://familygreenhouse.net/): what the app does and how to sign up free
+- [Plans and pricing](https://familygreenhouse.net/pricing): Seedling (free), Garden and Greenhouse, the 14-day trial, and common questions
+- [Plant care guides](https://familygreenhouse.net/care): one guide per plant under /care/<plant>
+- [Pet safety](https://familygreenhouse.net/pet-safe): is this houseplant toxic to cats and dogs; one page per plant under /pet-safe/<plant>
+- [Blog](https://familygreenhouse.net/blog): plant care articles under /blog/<post>
+- [Help](https://familygreenhouse.net/help): how the app works, one topic per page under /help/<topic>
+- [Gift a plan](https://familygreenhouse.net/gift): give a household a paid plan
+- [Changelog](https://familygreenhouse.net/changelog): what changed in each release
+- [Status](https://familygreenhouse.net/status): whether the service is up
+- [Privacy policy](https://familygreenhouse.net/legal/privacy)
+- [Terms of service](https://familygreenhouse.net/legal/terms)
+- [Support](https://familygreenhouse.net/support)
+- [Sitemap](https://familygreenhouse.net/sitemap.xml)

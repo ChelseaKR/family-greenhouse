@@ -78,6 +78,9 @@ import { jobBudget, peers as countPeers } from './gate-census.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/** A `skippable` step exits with this to say it could not run (sysexits EX_CONFIG). */
+const SKIP_EXIT = 78;
+
 // --- argv ------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
@@ -257,9 +260,14 @@ function runStep(step, sharing) {
       // `code` is null when the child died from a signal. Treating that as
       // anything but a failure is how a gate stops being a gate.
       const ok = code === 0 && signal === null;
+      // 78 from a step that declared `skippable` means "could not run here"
+      // (greenlight not buildable on this machine). It is neither a pass nor a
+      // failure, and the summary says so.
+      const skipped = code === SKIP_EXIT && signal === null && step.skippable === true;
       finish({
         step,
-        ok,
+        ok: ok || skipped,
+        skipped,
         code,
         signal,
         ms: Date.now() - started,
@@ -446,12 +454,13 @@ async function main() {
   let used = 0;
 
   const report = (r) => {
-    const label = r.ok ? c.green(' PASS ') : c.red(' FAIL ');
+    const label = r.skipped ? c.red(' SKIP ') : r.ok ? c.green(' PASS ') : c.red(' FAIL ');
     const detail = r.ok
       ? ''
       : c.red(r.signal ? ` (killed by ${r.signal})` : ` (exit ${r.code ?? '?'})`);
     console.log(`${label} ${secs(r.ms).padStart(6)}  ${r.step.id}${detail}`);
-    if (VERBOSE && r.ok && r.output.trim()) {
+    if (r.skipped && r.output.trim()) console.log(r.output.replace(/^/gm, '        '));
+    if (VERBOSE && r.ok && !r.skipped && r.output.trim()) {
       console.log(r.output.replace(/^/gm, '        '));
     }
   };
@@ -523,6 +532,18 @@ async function main() {
   const failed = results.filter((r) => !r.ok);
 
   if (failed.length === 0) {
+    const skipped = results.filter((r) => r.skipped);
+    if (skipped.length > 0) {
+      // Not "N steps": a step that did not run is not a step that passed.
+      console.log(
+        c.green(`\ngate PASSED`) +
+          c.dim(
+            ` — ${steps.length - skipped.length} of ${steps.length} steps in ${secs(elapsed)}; `
+          ) +
+          c.red(`${skipped.length} SKIPPED, NOT RUN: ${skipped.map((r) => r.step.id).join(', ')}`)
+      );
+      return 0;
+    }
     console.log(c.green(`\ngate PASSED`) + c.dim(` — ${steps.length} steps in ${secs(elapsed)}`));
     return 0;
   }

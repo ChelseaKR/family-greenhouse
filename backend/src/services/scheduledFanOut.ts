@@ -97,6 +97,10 @@ export type ScheduledJob =
   // deletes entries past their 30-day window. A skipped household is only
   // purged a day late, so the rotating start is enough.
   | 'trashPurge'
+  // Trial lifecycle emails (services/trialLifecycleEmails.ts, ADR 0039): once
+  // a day, mails the admins of a household whose no-card trial is in its last
+  // days or has just ended. Off unless TRIAL_LIFECYCLE_EMAILS_ENABLED is true.
+  | 'trialEmails'
   // Household chat-channel posts (services/householdChannelRun.ts, #674):
   // visits only households with a configured channel, on the hourly
   // reminder schedule, after the other three passes.

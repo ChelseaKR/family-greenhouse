@@ -534,6 +534,7 @@ locals {
     STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH = var.stripe_price_id_gift_greenhouse_month
     STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                      = var.payments_enabled
+    APP_STORE_BILLING_ENABLED             = var.app_store_billing_enabled
     POSTHOG_KEY                           = var.posthog_key
     POSTHOG_HOST                          = var.posthog_host
   }
@@ -687,8 +688,11 @@ locals {
     # simply omits the line — it never asserts "no rain expected".
     # Cost: the forecast is read at most once per household per reminder run,
     # cached for an hour per ~10km cell and shared with the climate endpoint.
-    reminders   = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.channel_webhook_environment, local.reply_environment)
-    digests     = local.email_environment
+    reminders = merge(local.notification_environment, local.perenual_environment, local.weather_environment, local.channel_webhook_environment, local.reply_environment)
+    # The digests function also runs the trialEmails job (ADR 0039). The
+    # variable is added only when on, so with it off this Lambda's
+    # environment, and the plan for it, are unchanged.
+    digests     = merge(local.email_environment, var.trial_lifecycle_emails_enabled ? { TRIAL_LIFECYCLE_EMAILS_ENABLED = "true" } : {})
     emailEvents = {}
     chat        = local.chat_environment
     # SES only — reads billing.getHouseholdSubscription (DynamoDB) and mails
@@ -1328,6 +1332,14 @@ locals {
     "POST /billing/portal"          = { group = "billing", auth = "jwt" }
     "POST /billing/webhook"         = { group = "billing", auth = "none" }
 
+    # Apple In-App Purchase (ADR 0041). 404 until app_store_billing_enabled is
+    # "1". The notifications route is public: Apple signs its body (a JWS the
+    # handler verifies against Apple's pinned root), the way Stripe signs the
+    # webhook.
+    "POST /billing/app-store/purchase-intent" = { group = "billing", auth = "jwt" }
+    "POST /billing/app-store/transactions"    = { group = "billing", auth = "jwt" }
+    "POST /billing/app-store/notifications"   = { group = "billing", auth = "none" }
+
     # --- species ---
     "GET /species/search" = { group = "species", auth = "jwt" }
     # Public, no-auth pet-toxicity lookup behind the free "is this plant safe
@@ -1622,6 +1634,43 @@ resource "aws_lambda_permission" "trash_purge_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.trash_purge.arn
 }
 
+# Trial lifecycle emails (ADR 0039): the day-10 "your trial ends in 4 days" and
+# day-14 "you are back on Seedling" messages. Rides the `digests` function like
+# the trash purge, as a third rule with a constant input. The rule is DISABLED
+# unless var.trial_lifecycle_emails_enabled, so an environment that has not
+# switched it on never invokes the function for this job, and a digests build
+# that predates the job can never receive it (it would fall through to the
+# weekly digest routine). Mid-day Pacific, so a recipient is rarely in quiet
+# hours; the code skips quiet hours without consuming the send.
+resource "aws_cloudwatch_event_rule" "trial_emails" {
+  name                = "${var.project_name}-trial-emails-${var.environment}"
+  description         = "Daily no-card-trial lifecycle emails (day 10 and day 14)"
+  schedule_expression = "cron(30 17 * * ? *)"
+  state               = var.trial_lifecycle_emails_enabled ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_cloudwatch_event_target" "trial_emails" {
+  rule  = aws_cloudwatch_event_rule.trial_emails.name
+  arn   = aws_lambda_function.handlers["digests"].arn
+  input = jsonencode({ job = "trialEmails" })
+
+  retry_policy {
+    maximum_retry_attempts       = 4
+    maximum_event_age_in_seconds = 3600
+  }
+  dead_letter_config {
+    arn = aws_sqs_queue.lambda_dlq.arn
+  }
+}
+
+resource "aws_lambda_permission" "trial_emails_eventbridge" {
+  statement_id  = "AllowEventBridgeInvokeTrialEmails"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.handlers["digests"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.trial_emails.arn
+}
+
 # --- SES delivery feedback ---------------------------------------------------
 # The configuration set (modules/email) publishes bounce/complaint/delivery
 # events to an SNS topic; this subscribes the emailEvents Lambda to it. The
@@ -1786,6 +1835,7 @@ resource "aws_sqs_queue_policy" "lambda_dlq" {
             aws_cloudwatch_event_rule.year_recap.arn,
             aws_cloudwatch_event_rule.checkout_recovery.arn,
             aws_cloudwatch_event_rule.trash_purge.arn,
+            aws_cloudwatch_event_rule.trial_emails.arn,
           ]
         }
       }

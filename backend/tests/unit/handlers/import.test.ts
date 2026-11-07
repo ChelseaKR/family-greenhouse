@@ -139,13 +139,13 @@ describe('POST /plants/import', () => {
       { index: 0, status: 'created', plantId: 'p1' },
       { index: 1, status: 'created', plantId: 'p2' },
     ]);
-    // Reuses the single-create path — seedling plan cap (20) handed down.
+    // Reuses the single-create path — seedling plan cap (8) handed down.
     expect(plantService.createPlant).toHaveBeenNthCalledWith(
       1,
       { name: 'Pothos', tags: ['trailing'] },
       'hh-1',
       'user-1',
-      20
+      8
     );
   });
 
@@ -260,7 +260,7 @@ describe('POST /plants/import', () => {
     async (status) => {
       // Import shares POST /plants' cap. Resolving it off planId alone let a
       // household that had stopped paying import its way to Garden's 200
-      // plants while single-plant creation refused it at Seedling's 20.
+      // plants while single-plant creation refused it at Seedling's cap.
       const plantService = await import('../../../src/services/plantService.js');
       const billing = await import('../../../src/services/billing.js');
       const { importPlants } = await import('../../../src/handlers/plants/import.js');
@@ -271,12 +271,7 @@ describe('POST /plants/import', () => {
       vi.mocked(plantService.createPlant).mockResolvedValueOnce(fakePlant('p1', 'One'));
       const event = buildEvent({ plants: [{ name: 'One' }] });
       await importPlants(event, fakeContext, () => {});
-      expect(plantService.createPlant).toHaveBeenCalledWith(
-        expect.anything(),
-        'hh-1',
-        'user-1',
-        20
-      );
+      expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 8);
     }
   );
 
@@ -329,7 +324,7 @@ describe('POST /plants/import', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toMatchObject({ created: 1, skipped: 0 });
     // The plan cap still bounds a member's import exactly as an admin's.
-    expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 20);
+    expect(plantService.createPlant).toHaveBeenCalledWith(expect.anything(), 'hh-1', 'user-1', 8);
   });
 
   it("keeps an imported row's notes private: they reach `notes`, never the house rule a token surface shows (#668)", async () => {

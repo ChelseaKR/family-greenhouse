@@ -1,4 +1,6 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 def uploadKeystore = System.getenv('ANDROID_UPLOAD_KEYSTORE')
 def uploadKeystorePassword = System.getenv('ANDROID_UPLOAD_KEYSTORE_PASSWORD')
@@ -14,8 +16,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Deterministic SemVer mapping: 0.23.0 -> 2300. Increment this for
         // every store upload; Play never accepts a reused versionCode.
-        versionCode 4100
-        versionName "0.41.0"
+        versionCode 4800
+        versionName "0.48.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -33,6 +35,14 @@ android {
             }
         }
     }
+    buildFeatures {
+        compose true
+    }
+    testOptions {
+        // The frame's routing, alert, form-sheet and review rules are plain
+        // Kotlin (no Android types), so they run as local JVM tests.
+        unitTests.returnDefaultValues = true
+    }
     buildTypes {
         release {
             if (uploadKeystore) {
@@ -41,6 +51,13 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        // Matches capacitor.build.gradle's Java 21.
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
     }
 }
 
@@ -56,6 +73,20 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // The native frame, Settings list and sheets (Material 3 in
+    // Jetpack Compose), drawn around and over the one WebView.
+    implementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.activity:activity-compose:$androidxActivityVersion"
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
+    // Google Play's in-app review card (review/NativeReviewPlugin.kt, ADR 0036).
+    implementation "com.google.android.play:review:$playReviewVersion"
+    // The reminder notifications the app draws itself (push/): the Firebase
+    // messaging classes FgMessagingService extends. The same version the
+    // Capacitor push plugin compiles against (firebaseMessagingVersion).
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

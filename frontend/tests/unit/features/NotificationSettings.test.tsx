@@ -370,6 +370,16 @@ describe('NotificationSettings', () => {
       expect(notificationService.updatePreferences).not.toHaveBeenCalled();
     });
 
+    it('keeps a UTC the member chose, even in a browser in another zone', async () => {
+      stubBrowserTimeZone('America/Chicago');
+      const { notificationService } = await renderSettings(
+        prefs({ timezone: 'UTC', timezoneChosen: true, emailLocale: 'en' })
+      );
+
+      expect(screen.getByLabelText('Timezone')).toHaveValue('UTC');
+      expect(notificationService.updatePreferences).not.toHaveBeenCalled();
+    });
+
     it('writes nothing when the browser zone is UTC or an alias of it', async () => {
       for (const zone of ['UTC', 'Etc/UTC']) {
         stubBrowserTimeZone(zone);

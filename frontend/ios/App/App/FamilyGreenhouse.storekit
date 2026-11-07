@@ -1,0 +1,85 @@
+{
+  "identifier" : "4F6A2C1E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6812185914",
+    "_developerTeamID" : "6X5YH93QNM",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21540001",
+      "localizations" : [
+
+      ],
+      "name" : "Family Greenhouse plans",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6740000002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Many homes, many hands: every home and every person in one plan.",
+              "displayName" : "Greenhouse",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "net.familygreenhouse.app.greenhouse.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Greenhouse monthly",
+          "subscriptionGroupID" : "21540001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6740000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "For a household that shares the care, with plant care chat.",
+              "displayName" : "Garden",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "net.familygreenhouse.app.garden.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Garden monthly",
+          "subscriptionGroupID" : "21540001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

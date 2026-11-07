@@ -593,6 +593,57 @@ resource "aws_cloudfront_cache_policy" "frontend" {
   }
 }
 
+# STAGING ONLY, KEPT ON PURPOSE (2026-10-30), although nothing references it.
+#
+# This is the same ordering trap 0.38.1 (#900) and #940 handled for production.
+# The policy used to back the distribution's /plants/* behavior. #855 removed
+# that behavior and #940 removed this resource. Staging skipped every apply
+# between 2026-09-04 and 2026-10-30, so cd-staging run 41136306730 got both
+# removals at once. Terraform 1.5.7 destroys a removed resource before it
+# updates the resource that used to depend on it. It tried to delete this
+# policy while the staging distribution still named it, and CloudFront refused
+# with 409 CachePolicyInUse. The distribution was never updated.
+#
+# Keeping it in staging lets the next cd-staging plan update the distribution
+# in place and leave this policy alone. `count` keeps it out of production,
+# which deleted its copy under #940 and must not get a new one. Going from no
+# `count` to `count` moves the staging object to [0] automatically, and the
+# moved block below states that explicitly. Every argument must stay exactly
+# as it is, or the plan modifies it.
+#
+# Delete this block and the moved block once staging's distribution no longer
+# names the policy. Also check for unmanaged distributions: on 2026-10-30 an
+# older staging distribution outside Terraform state (E1PPN0H3W7GEFI) still
+# used this policy, so that destroy would fail with the same 409 until it is
+# removed.
+resource "aws_cloudfront_cache_policy" "images" {
+  count = var.environment == "staging" ? 1 : 0
+
+  name        = "${var.project_name}-images-${var.environment}"
+  min_ttl     = 86400    # 1 day
+  default_ttl = 604800   # 1 week
+  max_ttl     = 31536000 # 1 year
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config {
+      cookie_behavior = "none"
+    }
+    headers_config {
+      header_behavior = "none"
+    }
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+  }
+}
+
+moved {
+  from = aws_cloudfront_cache_policy.images
+  to   = aws_cloudfront_cache_policy.images[0]
+}
+
 data "aws_cloudfront_origin_request_policy" "cors_s3" {
   name = "Managed-CORS-S3Origin"
 }

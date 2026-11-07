@@ -117,6 +117,7 @@ test('files with extensions pass through untouched', () => {
     '/brand/favicon.ico',
     '/sitemap.xml',
     '/robots.txt',
+    '/llms.txt',
     '/sw.js',
     '/manifest.webmanifest',
     '/app-shell.html',
@@ -155,31 +156,36 @@ test('app routes with no prerendered page are rewritten to the shell by name', (
 
 test('a path that is not a route is left alone, so S3 answers 404', () => {
   // Exactly the paths the crawl measured returning 200 on the live host.
-  for (const uri of [
-    '/definitely-not-a-page',
-    '/blog/no-such-post',
-    '/care/no-such-plant',
-    '/help/no-such-topic',
-    '/pricinng',
-    '/a/b/c/d',
-  ]) {
+  // `/blog/no-such-post`, `/care/no-such-plant` and `/help/no-such-topic` were
+  // in this list too; they are prefix-served now and asserted just below.
+  for (const uri of ['/definitely-not-a-page', '/pricinng', '/a/b/c/d']) {
     assert.equal(rewrite(uri), uri, `not-a-route ${uri}`);
   }
   // A trailing slash is the same non-route. The URI is returned unchanged
   // rather than normalised: either way S3 has no such object.
-  assert.equal(rewrite('/care/no-such-plant/'), '/care/no-such-plant/');
+  assert.equal(rewrite('/pricinng/'), '/pricinng/');
 });
 
 // The namespaces #719 calls out as where a stale external link lands. Every
-// valid member is manifest-driven and prerendered, so "not in PRERENDERED"
-// under one of these means "does not exist" — which is why they are excluded
-// from APP_PATTERNS even though App.tsx declares them as :param routes.
-test('the enumerated content namespaces 404 for a slug that is not published', () => {
+// valid member is manifest-driven and prerendered, so they are excluded from
+// APP_PATTERNS even though App.tsx declares them as :param routes. They used
+// to be listed page by page in PRERENDERED, and an unpublished slug was left
+// alone; they are prefix-served now (the 10 KB limit), so an unpublished slug
+// is mapped onto an object the prerender never wrote — still S3's 404, never
+// the shell. spa-router-headroom.test.mjs replays both versions to prove it.
+test('the content namespaces 404 for a slug that is not published', () => {
+  const published = new Set(publicRoutePaths());
   for (const prefix of ['/blog/', '/care/', '/help/']) {
     const real = publicRoutePaths().find((route) => route.startsWith(prefix));
     assert.ok(real, `no published page under ${prefix}`);
     assert.equal(rewrite(real), `${real}/index.html`);
-    assert.equal(rewrite(`${prefix}not-a-real-slug`), `${prefix}not-a-real-slug`);
+    const missing = `${prefix}not-a-real-slug`;
+    assert.ok(!published.has(missing));
+    assert.equal(rewrite(missing), `${missing}/index.html`);
+    assert.equal(rewrite(`${missing}/`), `${missing}/index.html`);
+    assert.notEqual(rewrite(missing), '/app-shell.html');
+    // Nested or dotted under the prefix is not a page: left alone, S3's 404.
+    assert.equal(rewrite(`${real}/extra`), `${real}/extra`);
   }
 });
 

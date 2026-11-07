@@ -178,6 +178,11 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
   const CONTENT_ROUTES = [
     ['blog index', '/blog'],
     ['care guide index', '/care'],
+    // One page per slug template: 33 care guides and 39 pet-safe pages each
+    // render from a single component, and before 2026-11-05 no slug page was
+    // scanned, so a malformed "At a glance" <dl> shipped on all 33 guides.
+    ['care guide', '/care/monstera'],
+    ['pet-safe plant page', '/pet-safe/pothos'],
     ['changelog', '/changelog'],
     ['privacy policy', '/legal/privacy'],
     ['terms', '/legal/terms'],
@@ -192,6 +197,40 @@ test.describe('A11y — public routes (WCAG 2.0/2.1/2.2 AA)', () => {
       await page.goto(path);
       await page.waitForLoadState('networkidle');
       await expectNoA11yViolations(page, label);
+    });
+  }
+
+  // WCAG 2.4.11 Focus Not Obscured. On a phone the sticky site header is
+  // about 77px tall, and the skip link scrolls <main> to the top of the
+  // viewport, so without `scroll-padding-top` on <html> (index.css) the
+  // first link in <main> ("All care guides") sat entirely behind the header.
+  // axe cannot see this; it needs layout, so it is measured here.
+  for (const path of ['/care/monstera', '/pet-safe/pothos']) {
+    test(`first focus after the skip link clears the sticky header on a phone (${path})`, async ({
+      page,
+      browserName,
+    }) => {
+      // WebKit's Tab skips links unless Safari's "Press Tab to highlight each
+      // item" is on, so the keyboard walk below cannot run there.
+      test.skip(browserName === 'webkit', 'WebKit does not Tab to links by default');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+
+      await page.keyboard.press('Tab');
+      await expect(page.locator('a.skip-link')).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('main')).toBeFocused();
+      await page.keyboard.press('Tab');
+
+      const focused = page.locator(':focus');
+      await expect(focused).toHaveCount(1);
+      expect(await focused.evaluate((el) => el.closest('main') !== null)).toBe(true);
+      const header = await page.getByRole('banner').boundingBox();
+      const target = await focused.boundingBox();
+      expect(header, 'sticky header box').not.toBeNull();
+      expect(target, 'focused element box').not.toBeNull();
+      expect(target!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
     });
   }
 

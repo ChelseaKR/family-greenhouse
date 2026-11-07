@@ -139,6 +139,7 @@ describe('categories', () => {
       'weekly_digest',
       'year_recap',
       'pest_alerts',
+      'trial_notices',
     ]);
     expect(capability.isEmailCategory('welcome')).toBe(false);
     expect(capability.isEmailCategory('weekly_digest')).toBe(true);

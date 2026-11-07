@@ -1,4 +1,4 @@
-import { Suspense, lazy, type MouseEvent } from 'react';
+import { Suspense, lazy, useEffect, type MouseEvent } from 'react';
 import { Routes, Route, Navigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -13,8 +13,10 @@ import { NativeLaunchReady } from '@/components/NativeLaunchReady';
 import { NativeFrame } from '@/components/NativeFrame';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useNativeTextSize } from '@/hooks/useNativeTextSize';
+import { useAppStoreTransactionSync } from '@/hooks/useAppStoreTransactionSync';
 import { loadLegalCatalog } from '@/i18n/legalCatalog';
 import { isNativeApp } from '@/lib/platform';
+import { noteSignedIn } from '@/lib/nativeIntroState';
 
 // Route-level code splitting. Each feature module compiles into its own
 // chunk; the initial bundle drops by ~150 KB because the marketing landing
@@ -193,6 +195,14 @@ function App() {
   const hasHousehold = user?.householdId != null;
   // iOS shell: honor the system text size (Dynamic Type). No-op elsewhere.
   useNativeTextSize();
+  // iPhone app with App Store purchases on: keep the server current with
+  // StoreKit (ADR 0041). No-op elsewhere.
+  useAppStoreTransactionSync(isAuthenticated && hasHousehold);
+  // Inside the shells, being signed in ends the intro's story for this
+  // install and lets the next sign-out show its last page (ADR 0035).
+  useEffect(() => {
+    if (isAuthenticated && isNativeApp()) noteSignedIn();
+  }, [isAuthenticated]);
 
   return (
     <>

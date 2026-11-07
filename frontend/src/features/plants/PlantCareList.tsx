@@ -105,7 +105,7 @@ export function PlantCareList({
                           🌱
                         </span>
                       )}
-                    </span>
+                    </span>{' '}
                     {/* The status is the row's most important words: it never
                         truncates. The space name gives way first (truncated,
                         then gone); at the accessibility sizes both wrap. */}

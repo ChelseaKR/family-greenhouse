@@ -204,3 +204,31 @@ win? Nothing should be applied to either repository until that is settled.
    intent is that a failed deploy leaves no record, that is defensible and
    should be written down; the baseline currently accounts for them alongside
    the successful ones, which understates the distinction.
+
+## Tags added after the first measurement
+
+Added 2026-10-20 to `.github/release-record-baseline.txt`. The weekly
+`Release record` check had failed since 2026-10-11 on these two tags, once they
+passed the seven-day grace period. Their `cd-production.yml` runs were read in
+full before deciding. Neither tag shipped cleanly, and neither shipped nothing.
+
+- `v0.38.0` (tagged 2026-10-02). Terraform Apply failed with a CloudFront 409
+  while deleting the `images` cache policy. The frontend and backend deploys were
+  skipped. The apply was partial: the log shows API routes created and the Lambda
+  IAM policy modified before the failure, and the auto-rollback restored only the
+  Cognito registration policy.
+- `v0.38.1` (tagged 2026-10-02). Terraform Apply and Deploy Backend succeeded,
+  including the backend smoke test, so the 0.38.1 backend did reach production.
+  Deploy Frontend then synced to S3 and its prune step refused to delete 1202 of
+  1617 objects, and the auto-rollback restored the previous frontend and Lambdas.
+  The `0.38.2` entry in `CHANGELOG.md` records that the 18 Lambdas were restored
+  to the 0.38.1 code by hand, so production ran the 0.38.1 infrastructure and
+  backend with the 0.37.0 frontend until `v0.38.2` shipped the same day.
+
+`v0.38.2` is the first complete deploy of these changes, and it has a release.
+Neither run concluded `success`, so a release for either tag would claim a deploy
+that did not happen, the same defect as `v0.3.0` above. They are listed in the
+baseline for that reason, not because a release is still owed.
+
+`v0.42.0` is not covered by this section. Its deploy succeeded on 2026-10-13 and
+it still needs a GitHub Release.

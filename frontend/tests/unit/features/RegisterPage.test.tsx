@@ -8,6 +8,7 @@ import { track } from '@/services/analytics';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { server } from '../../msw/server';
 import { getPendingReferralCode } from '@/features/referrals/pendingReferralCode';
+import { getPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
 
 vi.mock('@/services/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/analytics')>();
@@ -30,6 +31,26 @@ describe('RegisterPage', () => {
     );
   }
 
+  it('keeps a care guide’s plant for the first run, and leaves the form unchanged', () => {
+    sessionStorage.clear();
+    const { container } = renderPage('/register?plant=zz-plant');
+    expect(getPendingGuidePlant()?.slug).toBe('zz-plant');
+    // The same three fields: the sign-up steps themselves do not change.
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+    expect(container.textContent).not.toContain('zz-plant');
+    sessionStorage.clear();
+  });
+
+  it('ignores a plant value that is not one of the first run’s plants', () => {
+    sessionStorage.clear();
+    const { container } = renderPage(
+      `/register?plant=${encodeURIComponent('<img src=x onerror=alert(1)>')}`
+    );
+    expect(getPendingGuidePlant()).toBeUndefined();
+    expect(sessionStorage.getItem('fg.pendingGuidePlant')).toBeNull();
+    expect(container.innerHTML).not.toContain('onerror');
+  });
+
   it('renders the free-account signup form and existing-account sign-in', () => {
     renderPage();
 
@@ -37,13 +58,56 @@ describe('RegisterPage', () => {
       screen.getByRole('heading', { level: 1, name: /start your greenhouse/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/free for one home, up to 3 household members and 20 plants/i)
+      screen.getByText(/free for one home, up to 2 household members and 8 plants/i)
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password\s*\*?$/i)).toHaveAttribute('minlength', '12');
     expect(screen.getByRole('button', { name: /create account/i })).toBeEnabled();
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+  });
+
+  it('asks for the password once, with a toggle to check it instead of a second field', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Three fields: name, email, one password. No "Confirm password".
+    expect(screen.queryByLabelText(/confirm password/i)).not.toBeInTheDocument();
+    expect(document.querySelectorAll('input[autocomplete="new-password"]')).toHaveLength(1);
+    expect(screen.getAllByRole('textbox')).toHaveLength(2);
+
+    const password = screen.getByLabelText(/^password\s*\*?$/i);
+    const toggle = screen.getByRole('checkbox', { name: /show password/i });
+    expect(password).toHaveAttribute('type', 'password');
+    expect(toggle).not.toBeChecked();
+
+    await user.type(password, 'Password1234');
+    await user.click(toggle);
+    expect(password).toHaveAttribute('type', 'text');
+    expect(password).toHaveValue('Password1234');
+
+    await user.click(toggle);
+    expect(password).toHaveAttribute('type', 'password');
+  });
+
+  it('still enforces the password policy without a confirmation field', async () => {
+    let signupCalls = 0;
+    server.use(
+      http.post(`${API}/auth/signup`, () => {
+        signupCalls += 1;
+        return HttpResponse.json({ message: 'Check your email' }, { status: 201 });
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByLabelText(/full name/i), 'Ada Lovelace');
+    await user.type(screen.getByLabelText(/email address/i), 'ada@example.com');
+    await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'password1234');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByText(/at least one uppercase letter/i)).toBeInTheDocument();
+    expect(signupCalls).toBe(0);
   });
 
   it('keeps deep-link intent when switching from registration to login', () => {
@@ -81,7 +145,6 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText(/full name/i), name);
     await user.type(screen.getByLabelText(/email address/i), 'valid@example.com');
     await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'Password1234');
-    await user.type(screen.getByLabelText(/confirm password/i), 'Password1234');
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     expect(await screen.findByText(errorText)).toBeInTheDocument();
@@ -102,7 +165,6 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText(/full name/i), '  Ada Lovelace  ');
     await user.type(screen.getByLabelText(/email address/i), 'ada@example.com');
     await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'Password1234');
-    await user.type(screen.getByLabelText(/confirm password/i), 'Password1234');
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     await waitFor(() => {
@@ -130,7 +192,6 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText(/full name/i), 'Ada Lovelace');
     await user.type(screen.getByLabelText(/email address/i), 'ada@example.com');
     await user.type(screen.getByLabelText(/^password\s*\*?$/i), 'Password1234');
-    await user.type(screen.getByLabelText(/confirm password/i), 'Password1234');
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/already exists/i);

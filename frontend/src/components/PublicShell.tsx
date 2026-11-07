@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import clsx from 'clsx';
 import { BrandMark } from './BrandMark';
 import { Footer } from './Footer';
@@ -7,6 +7,7 @@ import { TitleUnderline } from './brand/TitleUnderline';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { isNativeApp } from '@/lib/platform';
+import { contentCtaContext, trackGoogleConversion } from '@/services/googleAnalytics';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -39,6 +40,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
   // The apps have no plans page (it opens Settings → Plan status), so the
   // header does not offer one: see WEB_ONLY_LINKS in Footer.tsx.
   const showPricing = !isNativeApp();
+  const { pathname } = useLocation();
 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
@@ -55,7 +57,7 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
           )}
           aria-label={t('publicShell.siteNavLabel')}
         >
-          <Link to="/" aria-label={t('publicShell.homeLabel')}>
+          <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
             <BrandMark variant="wordmark" size="sm" compactOnMobile />
           </Link>
           {!plainHeader && (
@@ -114,6 +116,15 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
               <Link
                 to={PUBLIC_REGISTRATION_AVAILABLE ? '/register' : '/login'}
                 className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
+                onClick={() => {
+                  // Only the sign-up link is a sign-up CTA; "Sign in" is not.
+                  if (!PUBLIC_REGISTRATION_AVAILABLE) return;
+                  trackGoogleConversion({
+                    name: 'landing_cta_click',
+                    ...contentCtaContext(pathname),
+                    placement: 'header',
+                  });
+                }}
               >
                 {PUBLIC_REGISTRATION_AVAILABLE ? t('publicShell.tryApp') : t('auth.signIn')} →
               </Link>

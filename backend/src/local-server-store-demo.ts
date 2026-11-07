@@ -170,8 +170,9 @@ export const STORE_DEMO_LOGIN = {
 type MemberKey = keyof typeof MEMBER_IDS;
 
 /**
- * Three members, not four: the free Seedling plan caps a household at three
- * (`models/plans.ts`), and the demo household is deliberately left on the free
+ * Three members, not four: the household was created 384 days ago, before the
+ * 2026-10-23 cut (ADR 0040), so it keeps the earlier free cap of three members
+ * (`withSeedlingGrandfather` in `models/plans.ts`), and the demo household is deliberately left on the free
  * plan so no frame can show an upgrade nudge or any other billing surface —
  * the store listing states the app collects no payment.
  */

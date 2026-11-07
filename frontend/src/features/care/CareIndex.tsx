@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
-import { CARE_GUIDES } from './careGuides';
+import { CARE_GUIDE_INDEX } from './careGuideContent';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
 /**
@@ -27,7 +27,7 @@ export function CareIndex() {
       />
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {CARE_GUIDES.map((g) => (
+        {CARE_GUIDE_INDEX.map((g) => (
           <li key={g.slug}>
             <Link
               to={`/care/${g.slug}`}
@@ -44,11 +44,18 @@ export function CareIndex() {
       </ul>
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
-        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-          <p className="font-serif text-xl text-ink">Knowing the schedule is the easy part</p>
+        <aside
+          aria-labelledby="care-index-cta"
+          className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center"
+        >
+          {/* A real heading, as on /pet-safe, so it is reachable by heading
+              navigation and names the aside landmark. */}
+          <h2 id="care-index-cta" className="font-serif text-xl text-ink">
+            Knowing the schedule is the easy part
+          </h2>
           <p className="mt-2 text-sm text-gray-600">
             The hard part is remembering — and not assuming someone else did it. Family Greenhouse
-            handles both. Free for up to 20 plants.
+            handles both. Free for up to 8 plants.
           </p>
           <div className="mt-4">
             <Link

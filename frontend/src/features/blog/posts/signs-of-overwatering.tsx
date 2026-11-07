@@ -85,7 +85,7 @@ export default function SignsOfOverwatering() {
         brown or black, slimy, and come apart between your fingers. The smell confirms it.
       </p>
 
-      <h2>Fixing it</h2>
+      <h2>How to fix an overwatered plant</h2>
       <ol>
         <li>
           <strong>Stop watering.</strong> Obvious, and still the step people skip. Nothing else

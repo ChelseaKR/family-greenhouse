@@ -14,12 +14,21 @@
  *     rather than getting its own so that shipping it adds a schedule, not a
  *     Lambda (and not an entry in cd-production.yml's hardcoded list).
  *
+ *   - daily   → `{ "job": "trialEmails" }` — the two no-card-trial lifecycle
+ *     emails (ADR 0039). Rides this function for the same reason the trash
+ *     purge does, and does nothing at all unless TRIAL_LIFECYCLE_EMAILS_ENABLED
+ *     is the string `true`.
+ *
  * The admin-facing manual triggers live on the notifications HTTP group
  * (`POST /notifications/run-digests`, `POST /notifications/run-year-recap`)
  * and share the same per-household service routines.
  */
 import { runWeeklyDigests, runYearRecaps } from '../../services/digest.js';
 import { deadlineFrom } from '../../services/scheduledFanOut.js';
+import {
+  runTrialLifecycleEmails,
+  type TrialEmailRunSummary,
+} from '../../services/trialLifecycleEmails.js';
 import {
   runTrashPurge as purgeTrash,
   type TrashPurgeRunSummary,
@@ -55,17 +64,24 @@ export const runYearRecap = (
 export const runTrashPurge = (context?: Countdown): Promise<TrashPurgeRunSummary> =>
   purgeTrash(new Date(), { deadlineAt: deadlineFrom(context) });
 
+/** Daily trial lifecycle emails (day 10 and day 14 of the no-card trial). */
+export const runTrialEmails = (context?: Countdown): Promise<TrialEmailRunSummary> =>
+  runTrialLifecycleEmails(new Date(), { deadlineAt: deadlineFrom(context) });
+
 /**
  * Default export used by the deployed Lambda (Terraform configures every
  * function as `handler.handler`). EventBridge rules pass a constant input
  * `{ "job": "weekly" }`, `{ "job": "yearRecap", "year"?: number }` or
- * `{ "job": "trashPurge" }` to pick the routine; anything else defaults to the
+ * `{ "job": "trashPurge" }` or `{ "job": "trialEmails" }` to pick the routine; anything else defaults to the
  * weekly digest, matching the original higher-frequency schedule.
  */
 export const handler = (
   event?: { job?: string; year?: number } | null,
   context?: Countdown
-): Promise<(DigestRunSummary & { year?: number }) | TrashPurgeRunSummary> => {
+): Promise<
+  (DigestRunSummary & { year?: number }) | TrashPurgeRunSummary | TrialEmailRunSummary
+> => {
   if (event?.job === 'trashPurge') return runTrashPurge(context);
+  if (event?.job === 'trialEmails') return runTrialEmails(context);
   return event?.job === 'yearRecap' ? runYearRecap(event, context) : runDigests(context);
 };

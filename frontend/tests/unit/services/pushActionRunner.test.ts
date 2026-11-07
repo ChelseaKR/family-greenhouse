@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   snoozeTask: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
   playHaptic: vi.fn(),
+  noteCareDone: vi.fn(),
   t: vi.fn((key: string, options?: { plant?: string }) =>
     options?.plant ? `${key}:${options.plant}` : key
   ),
@@ -17,6 +18,7 @@ vi.mock('@/services/taskService', () => ({
 }));
 vi.mock('@/store/toastStore', () => ({ toast: mocks.toast }));
 vi.mock('@/services/nativeHaptics', () => ({ playHaptic: mocks.playHaptic }));
+vi.mock('@/services/nativeReview', () => ({ noteCareDoneInBackground: mocks.noteCareDone }));
 vi.mock('@/i18n', () => ({ default: { t: mocks.t } }));
 
 import { completionLanded, runPushAction, snoozeLanded } from '@/services/pushActionRunner';
@@ -92,6 +94,8 @@ describe('running a push action', () => {
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['tasks'] });
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['plants'] });
     expect(mocks.playHaptic).toHaveBeenCalledWith('completed');
+    // A Done that landed is a good moment for the rating ask (ADR 0036).
+    expect(mocks.noteCareDone).toHaveBeenCalledOnce();
     expect(mocks.toast.success).toHaveBeenCalledWith('pushActions.done:Fern');
     expect(mocks.toast.error).not.toHaveBeenCalled();
   });
@@ -107,6 +111,7 @@ describe('running a push action', () => {
     expect(outcome).toBe('snoozed');
     expect(mocks.snoozeTask).toHaveBeenCalledWith('t1', 1, { expectedNextDue: DUE });
     expect(mocks.playHaptic).toHaveBeenCalledWith('snoozed');
+    expect(mocks.noteCareDone).not.toHaveBeenCalled();
     expect(mocks.toast.success).toHaveBeenCalledWith('pushActions.snoozed:Fern');
   });
 
@@ -123,6 +128,7 @@ describe('running a push action', () => {
 
     expect(outcome).toBe('already');
     expect(mocks.playHaptic).not.toHaveBeenCalled();
+    expect(mocks.noteCareDone).not.toHaveBeenCalled();
     expect(mocks.toast.info).toHaveBeenCalledWith('pushActions.already:Fern');
     expect(mocks.toast.success).not.toHaveBeenCalled();
     // The screen still refreshes: whatever it showed is out of date either way.

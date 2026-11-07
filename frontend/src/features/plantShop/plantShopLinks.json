@@ -1,0 +1,239 @@
+{
+  "$comment": "One hand-checked product page per plant and merchant, for the optional 'Buy this plant' link on /care/<slug> and /pet-safe/<slug>. An entry exists only when the merchant's own product page, read on checkedOn, names the same species as our page (or, for a genus-level guide, a plant in that genus), the page answered 200 and the plant was not marked sold out. No entry means no link: a near match is never listed. Rejected on 2026-10-12: Bloomscape's bird of paradise is Strelitzia nicolai, not S. reginae; its heartleaf philodendron is labeled Philodendron cordatum; its African violet is labeled Streptocarpus spp.; its Aglaonema Silver Bay, white orchid and asparagus fern were sold out; The Sill's spider plant, bird of paradise, red anthurium, parlor palm and Boston fern pages name no botanical name. Nerve plant, Boston fern, asparagus fern, African violet, true lily, sago palm and poinsettia have no entry. See docs/adr/0038-plant-pages-may-carry-a-labeled-paid-link-to-a-plant-shop.md.",
+  "links": {
+    "pothos": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/golden-pothos",
+        "botanicalNameOnPage": "Epipremnum aureum",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/golden-pothos-xs/",
+        "botanicalNameOnPage": "Epipremnum aureum",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "snake-plant": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/snake-plant-laurentii",
+        "botanicalNameOnPage": "Dracaena trifasciata 'Laurentii'",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/snake-plant/",
+        "botanicalNameOnPage": "Dracaena trifasciata",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "monstera": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/monstera-deliciosa",
+        "botanicalNameOnPage": "Monstera deliciosa",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/monstera/",
+        "botanicalNameOnPage": "Monstera deliciosa",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "spider-plant": [
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/spider-plant/",
+        "botanicalNameOnPage": "Chlorophytum comosum",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "peace-lily": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/peace-lily",
+        "botanicalNameOnPage": "Spathiphyllum",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/peace-lily-md/",
+        "botanicalNameOnPage": "Spathiphyllum 'Sweet Pablo'",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "heartleaf-philodendron": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/heartleaf-philodendron",
+        "botanicalNameOnPage": "Philodendron hederaceum",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "zz-plant": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/zz-plant",
+        "botanicalNameOnPage": "Zamioculcas zamiifolia",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/zz-plant/",
+        "botanicalNameOnPage": "Zamioculcas zamiifolia",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "aloe-vera": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/aloe-vera",
+        "botanicalNameOnPage": "Aloe vera",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "dieffenbachia": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/dieffenbachia-star-bright",
+        "botanicalNameOnPage": "Dieffenbachia 'Star Bright'",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/dieffenbachia-xl/",
+        "botanicalNameOnPage": "Dieffenbachia sp.",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "calathea": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/calathea-medallion",
+        "botanicalNameOnPage": "Calathea (Goeppertia) 'Medallion'",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/calathea-pinstripe/",
+        "botanicalNameOnPage": "Goeppertia ornata",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "fiddle-leaf-fig": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/fiddle-leaf-fig",
+        "botanicalNameOnPage": "Ficus lyrata",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/fiddle-leaf-fig/",
+        "botanicalNameOnPage": "Ficus lyrata",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "rubber-plant": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/large-rubber-tree",
+        "botanicalNameOnPage": "Ficus elastica",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/burgundy-rubber-tree-lg/",
+        "botanicalNameOnPage": "Ficus elastica 'Burgundy'",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "anthurium": [
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/red-anthurium/",
+        "botanicalNameOnPage": "Anthurium andraeanum",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "chinese-evergreen": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/aglaonema-silver-bay",
+        "botanicalNameOnPage": "Aglaonema 'Silver Bay'",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "jade-plant": [
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/jade-plant/",
+        "botanicalNameOnPage": "Crassula ovata",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "english-ivy": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/english-ivy-hanging-basket",
+        "botanicalNameOnPage": "Hedera helix",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/english-ivy/",
+        "botanicalNameOnPage": "Hedera helix 'Glacier'",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "money-tree": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/money-tree",
+        "botanicalNameOnPage": "Pachira aquatica",
+        "checkedOn": "2026-10-12"
+      },
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/money-tree/",
+        "botanicalNameOnPage": "Pachira aquatica",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "christmas-cactus": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/christmas-cactus-hanging-basket",
+        "botanicalNameOnPage": "Schlumbergera bridgesii",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "parlor-palm": [
+      {
+        "merchant": "bloomscape",
+        "url": "https://bloomscape.com/product/parlor-palm/",
+        "botanicalNameOnPage": "Chamaedorea elegans",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "orchid": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/white-orchid",
+        "botanicalNameOnPage": "Phalaenopsis",
+        "checkedOn": "2026-10-12"
+      }
+    ],
+    "hoya": [
+      {
+        "merchant": "theSill",
+        "url": "https://www.thesill.com/products/hoya-carnosa-tricolor",
+        "botanicalNameOnPage": "Hoya carnosa 'Tricolor'",
+        "checkedOn": "2026-10-12"
+      }
+    ]
+  }
+}

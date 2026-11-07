@@ -84,7 +84,8 @@ not seen a reason to.
 9. **The household is told in the app, and only there.** `NoCardTrialNotice` shows on the
    dashboard and in Settings → Billing: at the start, what the trial includes, that no card
    is needed and the end date; in the last three days, the date and what changes; after it
-   ends, what changed. No email is sent. A trial ending moves no price, charge or
+   ends, what changed. No email is sent (amended by [ADR 0039](0039-trial-lifecycle-emails.md):
+   two emails, off by default). A trial ending moves no price, charge or
    subscription, so it is not a price change and the price-change notice rules do not apply.
 
 10. **Success is measured from logs that already exist.** No analytics, beacon, pixel or
@@ -161,7 +162,10 @@ cannot do any of those.
   unchanged, so a household that has not consumed the card trial gets
   `trial_period_days: 14` from the day it subscribes. The first charge can therefore come up
   to 28 days after the household was created. Changing that is a pricing decision and is left
-  open.
+  open. _Superseded 2026-10-23 by the owner's decision: the card trial now ends on the
+  no-card trial's end date, or is skipped inside the last 48 h 30 min and after the trial
+  (`checkoutTrialFor` in `backend/src/models/checkoutTrial.ts`; docs/billing.md, "The free
+  trial is once per household, and does not stack")._
 - **The Terms are unchanged.** They describe paid subscriptions, and every sentence in them
   is still true. Whether to add a sentence about the no-card trial is left until the
   price-change notice work in #710 has landed.

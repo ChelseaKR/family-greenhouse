@@ -10,6 +10,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
 import { isNativeApp } from '@/lib/platform';
+import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { useAuthStore } from '@/store/authStore';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { householdService } from '@/services/householdService';
@@ -200,6 +201,11 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
   // app keeps the full ask — this is the one surface LockedFeature renders
   // differently by platform (see docs/mobile.md "Store payment rules").
   const native = isNativeApp();
+  // With App Store purchases on in the iPhone app (ADR 0041), the card names
+  // the plan (never a price: the App Store's price is shown on the plans
+  // screen, from StoreKit) and sends an admin to Settings → Plan, where
+  // Apple's purchase sheet is.
+  const appStoreInApp = native && appStorePurchasesAvailable();
 
   const includedWith =
     !native && ask.targetPlan
@@ -209,7 +215,9 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
             price: formatCurrency(ask.targetPlan.monthlyPrice),
           })
         : t('locked.includedWith', { plan: ask.targetPlan.name })
-      : null;
+      : appStoreInApp && ask.targetPlan
+        ? t('locked.includedWith', { plan: ask.targetPlan.name })
+        : null;
 
   return (
     <Card variant="paper" className={className}>
@@ -229,7 +237,15 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
           )}
           {children && <p className="mt-2 text-sm text-gray-700">{children}</p>}
           <div className="mt-4">
-            {native ? (
+            {appStoreInApp ? (
+              ask.role === 'admin' ? (
+                <Link to="/settings/billing" className={buttonStyles({})}>
+                  {t('appStore.lockedSeePlans')}
+                </Link>
+              ) : (
+                <p className="text-sm text-gray-600">{t('appStore.lockedMember')}</p>
+              )
+            ) : native ? (
               <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
             ) : ask.role === 'admin' ? (
               <div className="space-y-2">

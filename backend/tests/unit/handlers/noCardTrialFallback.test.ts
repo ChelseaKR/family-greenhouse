@@ -205,7 +205,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('no-card trial fallback: plants beyond Seedling’s 20 (ADR 0027)', () => {
+describe('no-card trial fallback: plants beyond Seedling’s 8 (ADR 0027, ADR 0040)', () => {
   it('during the trial the plant cap is Garden’s 200', async () => {
     await at(DURING);
     vi.mocked(plantService.createPlant).mockRejectedValueOnce(
@@ -251,12 +251,12 @@ describe('no-card trial fallback: plants beyond Seedling’s 20 (ADR 0027)', () 
       'hh-trial',
       'plant-25',
       expect.objectContaining({ name: 'Renamed Synthetic Plant' }),
-      20
+      8
     );
     expect(destructiveCalls()).toEqual([]);
   });
 
-  it('past day 14 a 26th plant is refused with a 402 naming Seedling’s 20, and nothing is removed to make room', async () => {
+  it('past day 14 a 26th plant is refused with a 402 naming Seedling’s 8, and nothing is removed to make room', async () => {
     await at(PAST);
     vi.mocked(plantService.createPlant).mockRejectedValueOnce(
       Object.assign(new Error('Plan limit'), { name: 'PlanLimitError' })
@@ -268,8 +268,8 @@ describe('no-card trial fallback: plants beyond Seedling’s 20 (ADR 0027)', () 
       () => {}
     )) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
-    expect(vi.mocked(plantService.createPlant).mock.calls[0][3]).toBe(20);
-    expect(JSON.parse(res.body).message).toMatch(/Seedling plan is limited to 20 plants/);
+    expect(vi.mocked(plantService.createPlant).mock.calls[0][3]).toBe(8);
+    expect(JSON.parse(res.body).message).toMatch(/Seedling plan is limited to 8 plants/);
     expect(destructiveCalls()).toEqual([]);
   });
 });

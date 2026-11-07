@@ -36,8 +36,24 @@ export interface NotificationPreferences {
    */
   dndStart: string;
   dndEnd: string;
-  /** IANA timezone (e.g. "America/New_York") to evaluate DND against. */
+  /** IANA timezone (e.g. "America/New_York") to evaluate DND against. It is
+   *  also the zone of the daily reminder's slot and of the calendar feed's
+   *  dates. */
   timezone: string;
+  /**
+   * True once the person set `timezone` themselves: a PUT that changed it.
+   * False while it is the server default (`'UTC'`) or a zone the app filled in
+   * from the browser (`applyDetectedTimeZone`).
+   *
+   * This is the "never chosen" state `timezone` lacked on its own. Without it
+   * 'UTC' meant both "nobody told us" and "I chose UTC", so the app could not
+   * fill in the browser's zone without risking overwriting a real choice, and
+   * everyone who never opened Notification settings got reminders on UTC
+   * time (about 3-4 a.m. Eastern). Rows written before this field existed
+   * read as false: a stored 'UTC' is treated as unset and filled on the next
+   * app load (see docs/notifications.md, "Time zone").
+   */
+  timezoneChosen: boolean;
   /** Opt-in to seasonal pest pressure heads-ups. Off by default — these
    *  alerts are coarse and we want explicit consent before adding to the
    *  notification volume. */
@@ -65,14 +81,19 @@ export interface NotificationPreferences {
    */
   yearRecap: boolean;
   /**
+   * The two emails about the no-card Garden trial ending (ADR 0039): day 10
+   * and day 14. Defaults ON whenever email is on, like `yearRecap`; one-click
+   * unsubscribe in those emails turns it off.
+   */
+  trialNotices: boolean;
+  /**
    * Language outbound email is written in: `'en'`, `'es'`, or `''` for
    * "never chosen".
    *
-   * The empty sentinel is load-bearing. `timezone` has no such state — it
-   * reads `'UTC'` both for a row nobody ever wrote and for a user who
-   * genuinely chose UTC, which is the documented sharp edge behind quiet
-   * hours silently being evaluated in the wrong zone. Keeping "unset"
-   * distinguishable lets the settings page back-fill the detected language
+   * The empty sentinel is load-bearing. `timezone` needed a separate flag
+   * (`timezoneChosen`) for the same state, because it reads `'UTC'` both for
+   * a row nobody ever wrote and for a user who genuinely chose UTC. Keeping
+   * "unset" distinguishable lets the settings page back-fill the detected language
    * without waiting for a Save the user may never press, and lets
    * `services/email/locale.ts` fall back to the household's language
    * explicitly rather than defaulting to English in silence.
@@ -114,6 +135,7 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   dndStart: '',
   dndEnd: '',
   timezone: 'UTC',
+  timezoneChosen: false,
   pestAlerts: false,
   weeklyDigest: true, // default-on iff email is on; DEFAULTS.email is true
   // Same rule as weeklyDigest: default-on iff email is on. Each of these is
@@ -125,6 +147,7 @@ const DEFAULTS: Omit<NotificationPreferences, 'userId' | 'updatedAt'> = {
   coverageUpdates: true,
   careCredit: true,
   yearRecap: true, // same rule as weeklyDigest
+  trialNotices: true, // same rule as weeklyDigest
   emailLocale: '', // never guessed; '' means "nobody has told us"
   phoneVerified: false,
 };
@@ -141,6 +164,13 @@ function normalizeEmailLocale(raw: unknown): NotificationPreferences['emailLocal
  * of truth for "what channels should we send to."
  */
 export async function getPreferences(userId: string): Promise<NotificationPreferences> {
+  return (await readPreferences(userId)).prefs;
+}
+
+/** `getPreferences`, plus whether a row was actually stored. */
+async function readPreferences(
+  userId: string
+): Promise<{ prefs: NotificationPreferences; stored: boolean }> {
   const result = await dynamodb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -150,11 +180,18 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
   const item = result.Item;
   if (!item) {
     return {
-      userId,
-      ...DEFAULTS,
-      updatedAt: new Date().toISOString(),
+      prefs: {
+        userId,
+        ...DEFAULTS,
+        updatedAt: new Date().toISOString(),
+      },
+      stored: false,
     };
   }
+  return { prefs: preferencesFromItem(item), stored: true };
+}
+
+function preferencesFromItem(item: Record<string, unknown>): NotificationPreferences {
   return {
     userId: item.userId as string,
     browser: Boolean(item.browser),
@@ -164,6 +201,9 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     dndStart: (item.dndStart as string) ?? '',
     dndEnd: (item.dndEnd as string) ?? '',
     timezone: (item.timezone as string) ?? 'UTC',
+    // Absent on every row written before the flag existed: read as "not
+    // chosen", so a stored 'UTC' default can be filled in from the browser.
+    timezoneChosen: item.timezoneChosen === true,
     pestAlerts: Boolean(item.pestAlerts),
     // Read-time defaulting for rows written before the digest pref existed:
     // default-on only when the user already accepts email notifications.
@@ -180,6 +220,8 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
     // Those users were receiving the recap on `email` alone, so default-on
     // preserves what they already had.
     yearRecap: item.yearRecap === undefined ? Boolean(item.email) : Boolean(item.yearRecap),
+    trialNotices:
+      item.trialNotices === undefined ? Boolean(item.email) : Boolean(item.trialNotices),
     emailLocale: normalizeEmailLocale(item.emailLocale),
     phoneVerified: Boolean(item.phoneVerified),
     updatedAt: (item.updatedAt as string) ?? '',
@@ -250,13 +292,16 @@ export type PreferencesInput = Omit<
   NotificationPreferences,
   | 'updatedAt'
   | 'phoneVerified'
+  | 'timezoneChosen'
   | 'weeklyDigest'
   | 'yearRecap'
+  | 'trialNotices'
   | 'emailLocale'
   | HouseholdEmailPrefKey
 > & {
   weeklyDigest?: boolean;
   yearRecap?: boolean;
+  trialNotices?: boolean;
   /** Optional so a client that predates the field cannot wipe a stored
    *  language by round-tripping a payload that never carried it. */
   emailLocale?: '' | 'en' | 'es';
@@ -294,11 +339,17 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
   const householdEmailPrefs = Object.fromEntries(
     HOUSEHOLD_EMAIL_PREF_KEYS.map((key) => [key, prefs[key] ?? existing[key]])
   ) as Record<HouseholdEmailPrefKey, boolean>;
+  // Changing the zone is choosing it. Re-sending the stored value is not:
+  // every toggle on the settings page, and the native push opt-in, round-trips
+  // the whole record, so an untouched 'UTC' default must stay unset.
+  const timezoneChosen = existing.timezoneChosen || timezone !== existing.timezone;
   const updated: NotificationPreferences = {
     ...prefs,
+    timezoneChosen,
     weeklyDigest: prefs.weeklyDigest ?? existing.weeklyDigest,
     ...householdEmailPrefs,
     yearRecap: prefs.yearRecap ?? existing.yearRecap,
+    trialNotices: prefs.trialNotices ?? existing.trialNotices,
     emailLocale: normalizeEmailLocale(prefs.emailLocale ?? existing.emailLocale),
     phoneVerified,
     timezone,
@@ -314,6 +365,93 @@ export async function setPreferences(prefs: PreferencesInput): Promise<Notificat
         ...updated,
       },
     })
+  );
+  return updated;
+}
+
+/** Zones equivalent to the UTC default; filling one in would change nothing. */
+const UTC_ALIASES = new Set(['UTC', 'Etc/UTC', 'Etc/GMT', 'GMT', 'Etc/Universal', 'Universal']);
+
+/**
+ * Whether `prefs.timezone` is still unset: never chosen by the person, and
+ * still the server default. `''` is included for rows a legacy client wrote
+ * with an empty zone.
+ */
+export function isTimeZoneUnset(
+  prefs: Pick<NotificationPreferences, 'timezone' | 'timezoneChosen'>
+): boolean {
+  return !prefs.timezoneChosen && (prefs.timezone === '' || prefs.timezone === 'UTC');
+}
+
+/**
+ * Fill in the zone the person's browser reports, but only while their zone is
+ * still unset (`isTimeZoneUnset`). Called on app load, so reminders and the
+ * calendar feed use the person's real day without waiting for a visit to
+ * Notification settings.
+ *
+ * - Never overwrites a chosen zone, and never one that was already filled in:
+ *   a phone in another zone does not move the household's reminders.
+ * - Touches `timezone` only. Every other field is written back as stored, so
+ *   a stale client cannot reset a toggle through this path.
+ * - Validated here, the authority: an unknown zone is a 400. A UTC alias is a
+ *   no-op, since it is what the row already says.
+ * - Conditional on the row being unchanged since the read, so a Save that
+ *   lands in between wins. On that race it returns the fresh row.
+ *
+ * Does not set `timezoneChosen`: the person did not choose this zone, so a
+ * later, deliberate pick of any zone (UTC included) still counts as a choice.
+ */
+export async function applyDetectedTimeZone(
+  userId: string,
+  timezone: string,
+  now: Date = new Date()
+): Promise<NotificationPreferences> {
+  if (!isValidTimeZone(timezone)) {
+    throw createHttpError(400, `Unknown timezone: ${timezone}`);
+  }
+  const { prefs: existing, stored } = await readPreferences(userId);
+  if (!isTimeZoneUnset(existing) || UTC_ALIASES.has(timezone)) return existing;
+
+  const updated: NotificationPreferences = {
+    ...existing,
+    timezone,
+    timezoneChosen: false,
+    updatedAt: now.toISOString(),
+  };
+  const condition = !stored
+    ? { ConditionExpression: 'attribute_not_exists(PK)' }
+    : existing.updatedAt
+      ? {
+          ConditionExpression: 'updatedAt = :prev',
+          ExpressionAttributeValues: { ':prev': existing.updatedAt },
+        }
+      : { ConditionExpression: 'attribute_not_exists(updatedAt)' };
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `USER#${userId}`,
+          SK: 'PREFS',
+          entityType: 'NotificationPreferences',
+          ...updated,
+        },
+        ...condition,
+      })
+    );
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      logger.info(
+        { userId, msg: 'notification_prefs.detected_timezone_raced' },
+        'notification_prefs.detected_timezone_raced'
+      );
+      return getPreferences(userId);
+    }
+    throw err;
+  }
+  logger.info(
+    { userId, timezone, msg: 'notification_prefs.detected_timezone_applied' },
+    'notification_prefs.detected_timezone_applied'
   );
   return updated;
 }
@@ -477,6 +615,7 @@ const CATEGORY_FIELD = {
   weekly_digest: 'weeklyDigest',
   year_recap: 'yearRecap',
   pest_alerts: 'pestAlerts',
+  trial_notices: 'trialNotices',
 } as const;
 
 export type UnsubscribableCategory = keyof typeof CATEGORY_FIELD;

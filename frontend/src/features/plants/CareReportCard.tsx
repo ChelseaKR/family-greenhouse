@@ -29,10 +29,14 @@ export function CareReportCard({ plant }: CareReportCardProps) {
   const totalTasks = plant.upcomingTasks.length;
   const totalCompletions = completions.length;
 
-  const lastCompletion = completions
-    .map((c) => c.completedAt)
-    .sort()
-    .at(-1);
+  // "Last care" is not bounded by the window: every task carries its own
+  // `lastCompleted`, so a fertilize that fell out of the newest
+  // RECENT_COMPLETIONS_LIMIT rows still counts here. "Never" only when no
+  // task has ever been done.
+  const lastCompletion = newest([
+    ...completions.map((c) => c.completedAt),
+    ...plant.upcomingTasks.map((t) => t.lastCompleted),
+  ]);
 
   const overallBestStreak = plant.upcomingTasks.reduce(
     (max, t) => Math.max(max, longestStreak(t, completions)),
@@ -43,7 +47,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
     <Card>
       <CardHeader
         title="Care report"
-        description={`How this plant has been cared for across its last ${RECENT_COMPLETIONS_LIMIT} logged completions. Older care is not counted here.`}
+        description={`Counts and streaks cover this plant's last ${RECENT_COMPLETIONS_LIMIT} logged completions. Last care covers all of its history.`}
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm large-text:grid-cols-1">
@@ -93,22 +97,39 @@ function TaskRow({
 }) {
   const own = completions.filter((c) => c.taskId === task.id);
   const best = longestStreak(task, completions);
-  const last = own
-    .map((c) => c.completedAt)
-    .sort()
-    .at(-1);
+  // The task's own `lastCompleted` is the true last date; the window only
+  // holds the newest RECENT_COMPLETIONS_LIMIT rows across all tasks, so a
+  // rare task next to a frequent one drops out of it within weeks.
+  const last = newest([task.lastCompleted, ...own.map((c) => c.completedAt)]);
   const label = task.customType ?? task.type;
+  const doneLabel =
+    own.length > 0 || !last ? `${own.length} done` : `none in last ${RECENT_COMPLETIONS_LIMIT}`;
 
   return (
     <li className="flex items-center justify-between py-2">
       <span className="font-medium capitalize text-gray-900">{label}</span>
       <div className="flex gap-4 text-gray-600">
-        <span>{own.length} done</span>
+        <span>{doneLabel}</span>
         <span>best {best >= 2 ? `${best}×` : '—'}</span>
         <span className="hidden sm:inline">last {last ? formatRelative(last) : 'never'}</span>
       </div>
     </li>
   );
+}
+
+/** The latest of the given ISO timestamps, ignoring missing or unreadable ones. */
+function newest(isos: Array<string | null | undefined>): string | undefined {
+  let best: string | undefined;
+  let bestMs = -Infinity;
+  for (const iso of isos) {
+    if (!iso) continue;
+    const ms = new Date(iso).getTime();
+    if (Number.isFinite(ms) && ms > bestMs) {
+      best = iso;
+      bestMs = ms;
+    }
+  }
+  return best;
 }
 
 function formatRelative(iso: string): string {

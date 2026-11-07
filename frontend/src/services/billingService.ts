@@ -173,13 +173,20 @@ export interface SubscriptionState {
    *  active/trialing throughout, so this is the only signal that the plan is
    *  ending — without it a cancellation is invisible in the UI. */
   cancelAtPeriodEnd?: boolean;
-  /** Whether a NEW subscription checkout for this household would include the
-   *  14-day free trial. The trial is once per household, not once per
-   *  checkout, so a household that had one before and resubscribes is charged
-   *  at once. `undefined` is UNKNOWN — an older backend, or a response cached
-   *  before the field existed — and must never be read as `false`; go through
+  /** Whether a NEW subscription checkout for this household would include a
+   *  free trial: the 14-day card trial, or, with `checkoutTrialEndsAt`, the
+   *  rest of a running no-card Garden trial. Trials are once per household
+   *  and do not stack, so a household that had a card trial before, or whose
+   *  no-card trial has ended or ends within two days, is charged at once.
+   *  `undefined` is UNKNOWN — an older backend, or a response cached before
+   *  the field existed — and must never be read as `false`; go through
    *  `resolveTrialOffer`, which keeps the three states apart. */
   trialAvailable?: boolean;
+  /** When a new subscription checkout started now would first charge, for a
+   *  household on its no-card Garden trial: the subscription's trial ends with
+   *  the no-card trial rather than adding 14 days. Present only then. Absent
+   *  from older backends. */
+  checkoutTrialEndsAt?: string;
   /** Legacy shape: present only when both counters are known. */
   usage?: PlanUsage;
   /** Additive nullable shape. Older backends do not send it. */
@@ -203,6 +210,21 @@ export interface SubscriptionState {
    *  or an undated one an operator edited by hand. Absent from older
    *  backends too. See `StaleCheckout` for what it does and does not prove. */
   staleCheckout?: StaleCheckout;
+  /** The household's App Store subscription, bought in the iPhone app (ADR
+   *  0041). `state` is decided by the server's clock. `null` when none was
+   *  ever recorded; absent from older backends. */
+  appStore?: AppStoreSubscriptionView | null;
+}
+
+/** `SubscriptionState.appStore` as GET /billing/me publishes it. */
+export interface AppStoreSubscriptionView {
+  planId: Exclude<PlanId, 'seedling'>;
+  productId: string;
+  expiresAt: string;
+  willRenew?: boolean;
+  revoked?: boolean;
+  environment: string;
+  state: 'active' | 'ended';
 }
 
 /**
@@ -255,6 +277,13 @@ export function effectivePlanId(subscription?: SubscriptionState | null): PlanId
     (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < (PLAN_RANK[subscription.gift.planId] ?? 0)
   ) {
     effective = subscription.gift.planId;
+  }
+  // A running App Store subscription raises it the same way (ADR 0041).
+  if (
+    subscription.appStore?.state === 'active' &&
+    (PLAN_RANK[effective] ?? PLAN_RANK.seedling) < (PLAN_RANK[subscription.appStore.planId] ?? 0)
+  ) {
+    effective = subscription.appStore.planId;
   }
   if (
     subscription.noCardTrial?.state === 'active' &&

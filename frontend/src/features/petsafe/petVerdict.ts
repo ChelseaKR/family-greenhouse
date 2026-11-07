@@ -1,5 +1,6 @@
 import {
   ASPCA_POISON_CONTROL_PHONE,
+  PET_POISON_HELPLINE_PHONE,
   sentenceName,
   sentenceStartName,
 } from '@/features/care/plantNames';
@@ -138,6 +139,9 @@ export function petCaution(
 
 /** A dialable link for the caution's number. */
 export const ASPCA_POISON_CONTROL_TEL = `tel:+1${ASPCA_POISON_CONTROL_PHONE.replace(/-/g, '')}`;
+
+/** A dialable link for Pet Poison Helpline, which the /pet-safe/<slug> emergency aside lists. */
+export const PET_POISON_HELPLINE_TEL = `tel:+1${PET_POISON_HELPLINE_PHONE.replace(/-/g, '')}`;
 
 /**
  * The one-line summary the sitter brief and the plant passport print above a

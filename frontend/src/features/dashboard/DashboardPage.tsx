@@ -35,10 +35,13 @@ import { careRuleFor, useCareRuleGate } from '@/features/tasks/useCareRuleGate';
 import { useDeferredCompletion } from '@/features/plants/useDeferredCompletion';
 import { useOverdueAlerts } from '@/hooks/useOverdueAlerts';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
+import { useActiveHouseholdRole } from '@/hooks/useActiveHouseholdRole';
+import { CommonPlantPicker } from '@/features/onboarding/CommonPlantPicker';
 import { YearInReviewCard } from './YearInReviewCard';
 import { ClimateCard } from './ClimateCard';
 import { MoveDayCard } from './MoveDayCard';
 import { SharedCarePulse } from './SharedCarePulse';
+import { GoingAwaySoonCard } from './GoingAwaySoonCard';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
@@ -57,7 +60,7 @@ import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
-import { formatDueDate, isOverdue, isToday } from '@/utils/date';
+import { formatDate, formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
 const filterLabels: Record<ActivityFilter, string> = {
@@ -72,6 +75,12 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
+  // Who may add a plant: any member of the active household, admin or not
+  // (POST /plants has no admin check). A role we could not resolve is not
+  // permission, so the one-tap picker waits for it; the plain "Add your first
+  // plant" link stays either way and the server still decides.
+  const role = useActiveHouseholdRole();
+  const canAddPlants = role === 'admin' || role === 'member';
 
   const {
     data: upcomingTasks,
@@ -82,6 +91,16 @@ export function DashboardPage() {
     queryFn: taskService.getUpcomingTasks,
     enabled: Boolean(householdId),
   });
+  // The whole schedule, not just this week. `/tasks/upcoming` stops at seven
+  // days, so an empty week said "No tasks yet" to households whose every task
+  // is further out (succulents, monthly feeding, the day after a round of
+  // care). Same key as SharedCarePulse, so this is one shared request.
+  const { data: allTasks } = useQuery(
+    householdQuery(
+      (hh) => ['tasks', hh],
+      () => taskService.getTasks()
+    )
+  );
   const { byId: spacesById, unavailable: spacesUnavailable } = useSpaces();
   // A failed rooms read must not render as "Unplaced" — that is a placement
   // claim nobody computed. `locationUnknown` says which of the two it is.
@@ -196,6 +215,19 @@ export function DashboardPage() {
    */
   const actionableTasks = [...overdueTasks, ...todayTasks];
 
+  // The soonest task on the whole schedule, for the empty week. Only a loaded
+  // list that is really empty may say "No tasks yet".
+  const nextScheduledTask = useMemo(() => {
+    let next: TaskWithCoverage | null = null;
+    for (const task of allTasks ?? []) {
+      const due = new Date(task.nextDue).getTime();
+      if (!Number.isFinite(due)) continue;
+      if (!next || due < new Date(next.nextDue).getTime()) next = task;
+    }
+    return next;
+  }, [allTasks]);
+  const reallyNoTasks = allTasks !== undefined && allTasks.length === 0;
+
   // `undefined` data covers loading AND a failed fetch. Keying on the loading
   // flag alone published a failed plants/tasks read as the number 0 — "you
   // have no plants", "nothing is overdue" — which is the same
@@ -278,21 +310,55 @@ export function DashboardPage() {
              "All caught up! Add tasks to your plants" is wrong twice over —
              they have tasks, and more are coming — so it says what is actually
              true and points at where the rest lives. */
-          <EmptyState
-            title={laterTasks.length > 0 ? 'Nothing to do right now' : 'No tasks yet'}
-            description={
-              laterTasks.length > 0
-                ? `Nothing is overdue or due today. ${laterTasks.length} ${
-                    laterTasks.length === 1 ? 'task is' : 'tasks are'
-                  } coming up later this week.`
-                : 'Add tasks to your plants to see them here.'
-            }
-            action={
-              <Link to={laterTasks.length > 0 ? '/tasks' : '/plants'}>
-                <Button>{laterTasks.length > 0 ? 'View all tasks' : 'View plants'}</Button>
-              </Link>
-            }
-          />
+          laterTasks.length > 0 ? (
+            <EmptyState
+              title={t('dashboardTasksEmpty.laterTitle')}
+              description={t('dashboardTasksEmpty.laterBody', { count: laterTasks.length })}
+              action={
+                <Link to="/tasks">
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                </Link>
+              }
+            />
+          ) : reallyNoTasks ? (
+            <EmptyState
+              title={t('dashboardTasksEmpty.noneTitle')}
+              description={t('dashboardTasksEmpty.noneBody')}
+              action={
+                <Link to="/plants">
+                  <Button>{t('dashboardTasksEmpty.viewPlants')}</Button>
+                </Link>
+              }
+            />
+          ) : (
+            /* Tasks exist, just none in the next seven days (or the full list
+               has not loaded, in which case this is still true). */
+            <EmptyState
+              title={t('dashboardTasksEmpty.notThisWeekTitle')}
+              description={
+                nextScheduledTask
+                  ? t('dashboardTasksEmpty.notThisWeekNext', {
+                      // The translated task type, so a Spanish screen never
+                      // embeds the English "Water"; a custom name is the
+                      // household's own words and stays as typed.
+                      task:
+                        nextScheduledTask.customType ||
+                        t(
+                          `tasks.types.${nextScheduledTask.type}`,
+                          taskTypeLabels[nextScheduledTask.type] ?? nextScheduledTask.type
+                        ),
+                      plant: nextScheduledTask.plantName,
+                      date: formatDate(nextScheduledTask.nextDue),
+                    })
+                  : t('dashboardTasksEmpty.notThisWeekBody')
+              }
+              action={
+                <Link to="/tasks">
+                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                </Link>
+              }
+            />
+          )
         ) : (
           <ul className="divide-y divide-primary-100/60">
             {/* Overdue and today only — `laterTasks` is deliberately not here.
@@ -334,6 +400,28 @@ export function DashboardPage() {
           <PlantGridSkeleton count={8} />
         ) : plantsError ? (
           <Alert variant="error">{getErrorMessage(plantsError)}</Alert>
+        ) : plants && plants.length === 0 && householdId && canAddPlants ? (
+          // A household that skipped (or predates) the first run lands here
+          // with nothing in it: 37 of 43 on 2026-10-23. The same one-tap
+          // houseplant shortcut the first run opens with, so the first plant
+          // is a tap away here too. Shown only for a settled empty read: a
+          // failed one is the error above, and a loading one the skeleton.
+          <div data-testid="dashboard-empty-picker">
+            <CommonPlantPicker
+              householdId={householdId}
+              onAdded={() => undefined}
+              method="dashboard_empty"
+              headingAs="h3"
+            />
+            <p className="mt-5 text-sm text-gray-600">
+              <Link
+                to="/plants/new"
+                className="font-medium text-primary-700 underline underline-offset-2 hover:text-primary-800"
+              >
+                {t('dashboardEmpty.somethingElse')}
+              </Link>
+            </p>
+          </div>
         ) : !plants || plants.length === 0 ? (
           <EmptyState
             title="Let's add your first plant"
@@ -370,6 +458,10 @@ export function DashboardPage() {
           </div>
         )}
       </Card>
+
+      {/* Going away soon? — a way into sitter links; hides itself when one is
+          live, when there are no plants, or for 30 days after "Not now". */}
+      <GoingAwaySoonCard />
 
       {/* Seasonal Move Day — renders only when a list exists */}
       <MoveDayCard />

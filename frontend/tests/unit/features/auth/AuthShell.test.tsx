@@ -77,7 +77,7 @@ describe('AuthShell', () => {
         <p>x</p>
       </AuthShell>
     );
-    const link = screen.getByRole('link', { name: /family greenhouse home/i });
+    const link = screen.getByRole('link', { name: /family greenhouse, grow together, home/i });
     expect(link).toHaveAttribute('href', '/');
     // The wordmark text + tagline should be inside that link.
     expect(link).toHaveTextContent('Family Greenhouse');

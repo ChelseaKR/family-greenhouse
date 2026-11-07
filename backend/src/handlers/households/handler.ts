@@ -558,7 +558,7 @@ export const joinHousehold = createHandler(
       if (err instanceof Error && err.name === 'PlanLimitError') {
         throw createHttpError(
           402,
-          `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members.`
+          `This household is on the ${plan.name} plan, limited to ${limitOf(plan, 'members')} members. Ask the person who invited you to make room for you.`
         );
       }
       throw err;

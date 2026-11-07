@@ -43,6 +43,12 @@ const plugin = read('ios/App/App/NativeChromePlugin.swift');
 const main = read('ios/App/App/MainViewController.swift');
 const controller = read('ios/App/App/NativeFrameController.swift');
 const model = read('ios/App/App/NativeFrameModel.swift');
+// The Android frame's Kotlin (android/app/src/main/java/net/familygreenhouse/app/frame/).
+const kotlinDir = 'android/app/src/main/java/net/familygreenhouse/app/frame';
+const kotlinPlugin = read(`${kotlinDir}/NativeChromePlugin.kt`);
+const kotlinConfig = read(`${kotlinDir}/FrameConfiguration.kt`);
+const kotlinModel = read(`${kotlinDir}/NativeFrameModel.kt`);
+const mainActivity = read('android/app/src/main/java/net/familygreenhouse/app/MainActivity.kt');
 const t = (key: string) => key;
 
 const routes = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
@@ -348,6 +354,71 @@ describe('the Swift side reads the same messages', () => {
   });
 });
 
+describe('the Kotlin side reads the same messages', () => {
+  it('registers as NativeChrome with the same methods as the Swift plugin', () => {
+    expect(kotlinPlugin).toMatch(/@CapacitorPlugin\(name = "NativeChrome"\)/);
+    const methods = [...kotlinPlugin.matchAll(/@PluginMethod\s+fun (\w+)/g)].map((m) => m[1]);
+    const swift = [...plugin.matchAll(/CAPPluginMethod\(name: "([^"]+)"/g)].map((m) => m[1]);
+    expect(methods.sort()).toEqual(swift.sort());
+    expect(mainActivity).toContain('registerPlugin(NativeChromePlugin::class.java)');
+  });
+
+  it('reads every update and configure field the web sends, by the same name', () => {
+    const update = buildUpdate({
+      pathname: '/plants',
+      search: '',
+      key: 'k',
+      navigationType: 'PUSH',
+      pageTitle: 'Plants',
+      session: { signedIn: true, hasHousehold: true },
+      t,
+    });
+    const body = kotlinConfig.slice(kotlinConfig.indexOf('fun parseReport('));
+    for (const key of [...Object.keys(update), 'rightButton'])
+      expect(body, `update.${key}`).toContain(`raw["${key}"]`);
+    for (const field of ['id', 'symbol', 'label']) expect(body).toContain(`b["${field}"]`);
+
+    const config = buildConfiguration(t, [{ householdId: 'a', name: 'A' }], 'a');
+    for (const key of Object.keys(config))
+      expect(kotlinConfig, `configure.${key}`).toContain(`raw["${key}"]`);
+    for (const key of Object.keys(config.tabs[0]))
+      expect(kotlinConfig, `tabs[].${key}`).toContain(`t["${key}"]`);
+    for (const key of Object.keys(config.moreSections[0].items[0]))
+      expect(kotlinConfig, `items[].${key}`).toContain(`item["${key}"]`);
+    for (const key of Object.keys(config.signOutConfirm))
+      expect(kotlinConfig).toContain(`confirm["${key}"]`);
+    for (const key of Object.keys(config.settings))
+      expect(kotlinConfig).toContain(`settings["${key}"]`);
+  });
+
+  it('sends exactly the events the web listens for, with the same fields', () => {
+    const sent = [
+      ...kotlinPlugin.matchAll(/notifyListeners\(\s*"([^"]+)",([^)]*\)[^\n]*(?:\n[^\n]*){0,2})/g),
+    ];
+    const events: Record<keyof (NativeChromeEvents & NativeBarToolsEvents), string[]> = {
+      tabSelect: ['tab', 'path', 'reselect'],
+      back: ['path'],
+      moreSelect: [],
+      rightButton: ['id'],
+      barMenuSelect: ['path', 'id'],
+      barSearch: ['path', 'text'],
+    };
+    expect(sent.map((m) => m[1]).sort()).toEqual(Object.keys(events).sort());
+    for (const [name, fields] of Object.entries(events)) {
+      const at = kotlinPlugin.indexOf(`"${name}"`);
+      const near = kotlinPlugin.slice(at - 200, at + 200);
+      for (const field of fields) expect(near, `${name}.${field}`).toContain(`put("${field}"`);
+    }
+    expect(kotlinPlugin).toContain('JSObject().put("id", id)');
+    expect(kotlinPlugin).toContain('if (path != null) data.put("path", path)');
+  });
+
+  it('opens Settings by the same native path', () => {
+    expect(kotlinConfig).toContain(`SETTINGS_LIST_PATH = "${SETTINGS_LIST_PATH}"`);
+    expect(kotlinModel).toContain('NATIVE_LIST_PREFIX = "native:"');
+  });
+});
+
 describe('hasNativeFrame / markNativeFrame', () => {
   afterEach(() => {
     delete (window as unknown as { Capacitor?: unknown }).Capacitor;
@@ -369,10 +440,20 @@ describe('hasNativeFrame / markNativeFrame', () => {
     expect(document.documentElement.hasAttribute('data-native-frame')).toBe(true);
   });
 
-  it('never on the website, on Android, or in an iOS build without the plugin', () => {
+  it('marks it in the Android app when its frame plugin is registered', () => {
+    shell('android', ['SecureStorage', 'NativeChrome']);
+    expect(hasNativeFrame()).toBe(true);
+    markNativeFrame();
+    expect(document.documentElement.hasAttribute('data-native-frame')).toBe(true);
+  });
+
+  it('never on the website, or in an app build without the plugin', () => {
     markNativeFrame();
     expect(document.documentElement.hasAttribute('data-native-frame')).toBe(false);
-    shell('android', ['NativeChrome']);
+    shell('android', ['SecureStorage']);
+    markNativeFrame();
+    expect(document.documentElement.hasAttribute('data-native-frame')).toBe(false);
+    shell('web', ['NativeChrome']);
     markNativeFrame();
     expect(document.documentElement.hasAttribute('data-native-frame')).toBe(false);
     shell('ios', ['Print']);
@@ -427,12 +508,18 @@ describe('nativeSwitchRole', () => {
     delete (window as unknown as { Capacitor?: unknown }).Capacitor;
   });
 
-  it('is a switch inside the frame, and nothing on the website, on Android or without the frame', () => {
+  it('is a switch inside either frame, and nothing on the website or without the frame', () => {
     expect(nativeSwitchRole()).toEqual({});
     (window as unknown as { Capacitor?: unknown }).Capacitor = {
       isNativePlatform: () => true,
       getPlatform: () => 'android',
       PluginHeaders: [{ name: 'NativeChrome', methods: [] }],
+    };
+    expect(nativeSwitchRole()).toEqual({ role: 'switch' });
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      PluginHeaders: [],
     };
     expect(nativeSwitchRole()).toEqual({});
     (window as unknown as { Capacitor?: unknown }).Capacitor = {

@@ -18,24 +18,24 @@ import { AuthShell } from './AuthShell';
 import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
 import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
+import { setPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
 
+// Three fields, not four. The form used to ask for the password twice. A
+// "Show password" toggle catches a typo the same way without a fourth field,
+// and a forgotten password is recoverable from the sign-in page. Most
+// visitors who reach this form arrive cold from search, so each extra field
+// is a chance to leave (docs/analytics.md, "The funnel").
 const makeRegisterSchema = (t: TFunction) =>
-  z
-    .object({
-      name: z.string().trim().min(2, t('auth.nameMin')).max(100, t('auth.nameMax')),
-      email: z.string().email(t('auth.invalidEmail')),
-      password: z
-        .string()
-        .min(12, t('auth.passwordMin'))
-        .regex(/[A-Z]/, t('auth.passwordUppercase'))
-        .regex(/[a-z]/, t('auth.passwordLowercase'))
-        .regex(/[0-9]/, t('auth.passwordNumber')),
-      confirmPassword: z.string(),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-      message: t('auth.passwordMismatch'),
-      path: ['confirmPassword'],
-    });
+  z.object({
+    name: z.string().trim().min(2, t('auth.nameMin')).max(100, t('auth.nameMax')),
+    email: z.string().email(t('auth.invalidEmail')),
+    password: z
+      .string()
+      .min(12, t('auth.passwordMin'))
+      .regex(/[A-Z]/, t('auth.passwordUppercase'))
+      .regex(/[a-z]/, t('auth.passwordLowercase'))
+      .regex(/[0-9]/, t('auth.passwordNumber')),
+  });
 
 type RegisterFormData = z.infer<ReturnType<typeof makeRegisterSchema>>;
 
@@ -57,6 +57,14 @@ export function RegisterPage() {
   useEffect(() => {
     if (referralCode) setPendingReferralCode(referralCode);
   }, [referralCode]);
+  // `?plant=<slug>` from a care guide's sign-up link: kept for this visit so
+  // the first run can offer that plant first (features/onboarding/
+  // guidePlantHandoff). Anything not on the first run's plant list is
+  // ignored there, and the value is never rendered.
+  const guidePlantSlug = searchParams.get('plant');
+  useEffect(() => {
+    setPendingGuidePlant(guidePlantSlug);
+  }, [guidePlantSlug]);
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (
@@ -98,6 +106,7 @@ function RegistrationForm({
   // register → confirm → login so an invite-accept flow resumes after signup.
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const registerSchema = useMemo(() => makeRegisterSchema(t), [t]);
 
   const {
@@ -178,26 +187,27 @@ function RegistrationForm({
           {...register('email')}
         />
 
-        <Input
-          label={t('auth.password')}
-          type="password"
-          autoComplete="new-password"
-          minLength={12}
-          required
-          error={errors.password?.message}
-          helperText={t('auth.passwordHelper')}
-          {...register('password')}
-        />
-
-        <Input
-          label={t('auth.confirmPassword')}
-          type="password"
-          autoComplete="new-password"
-          minLength={12}
-          required
-          error={errors.confirmPassword?.message}
-          {...register('confirmPassword')}
-        />
+        <div>
+          <Input
+            label={t('auth.password')}
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            minLength={12}
+            required
+            error={errors.password?.message}
+            helperText={t('auth.passwordHelper')}
+            {...register('password')}
+          />
+          <label className="mt-2 inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary-700"
+              checked={showPassword}
+              onChange={(event) => setShowPassword(event.target.checked)}
+            />
+            <span className="text-sm text-gray-700">{t('auth.showPassword')}</span>
+          </label>
+        </div>
 
         <Button type="submit" className="w-full" isLoading={isLoading}>
           {t('auth.createAccount')}

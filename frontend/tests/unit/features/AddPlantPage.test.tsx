@@ -1,12 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { AddPlantPage } from '@/features/plants/AddPlantPage';
 import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
 import { taskService } from '@/services/taskService';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
 
 vi.mock('@/services/plantService', async () => {
   const actual =
@@ -61,6 +62,11 @@ vi.mock('@/services/taskService', () => ({
 // jsdom has no real image decoder, so the canvas pipeline never resolves —
 // mock the module to hand the picked file through. The real pipeline
 // (downscale + metadata strip) is covered by tests/unit/utils/imageMetadata.test.ts.
+vi.mock('@/services/googleAnalytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
+  return { ...actual, trackGoogleConversion: vi.fn() };
+});
+
 vi.mock('@/utils/image', () => ({
   prepareImageForUpload: vi.fn(async (file: Blob) => file),
 }));
@@ -320,6 +326,76 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
     await user.click(screen.getByRole('button', { name: /back in history/i }));
     expect(screen.getByRole('heading', { name: 'Plant detail destination' })).toBeVisible();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AddPlantPage activation event', () => {
+  const plant = {
+    id: 'plant-created',
+    householdId: 'household-1',
+    name: 'Saved Fern',
+    species: null,
+    location: null,
+    spaceId: null,
+    placementNote: null,
+    summerSpaceId: null,
+    winterSpaceId: null,
+    imageUrl: null,
+    notes: null,
+    status: 'active' as const,
+    statusChangedAt: null,
+    tags: [],
+    perenualSpeciesId: null,
+    parentPlantId: null,
+    createdAt: '2026-04-25T00:00:00.000Z',
+    createdBy: 'user-1',
+    updatedAt: '2026-04-25T00:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue(plant);
+  });
+
+  async function addPlant() {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/plant name/i), 'Saved Fern');
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: 'Plant detail destination' });
+  }
+
+  it('sends household_activated and first_plant_added, with no plant data, for the first plant', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue({ ...plant, firstPlantForAccount: true });
+    await addPlant();
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+      [{ name: 'first_plant_added', method: 'full_form' }],
+    ]);
+  });
+
+  it('sends nothing for a later plant (negative control: the household already had one)', async () => {
+    vi.mocked(plantService.getPlants).mockResolvedValue([plant]);
+    await addPlant();
+    // The sabotage applied: the page did create a plant, it just was not the first.
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(plantService.getPlants).toHaveBeenCalled();
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
+  });
+
+  it('sends no first_plant_added when the server says the account already had its first plant', async () => {
+    // An empty household (a second home, say) is still activated, but the
+    // account's first plant was counted already.
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    await addPlant();
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+    ]);
   });
 });
 
@@ -649,5 +725,53 @@ describe('AddPlantPage identification confidence and provenance', () => {
     const payload = vi.mocked(plantService.createPlant).mock.calls[0][0];
     expect(payload.species).toBe('Aglaonema commutatum');
     expect(payload.identifiedSpecies).toBeUndefined();
+  });
+});
+
+describe('AddPlantPage offline', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(speciesService.careSuggestions).mockResolvedValue(null);
+    vi.mocked(taskService.listTemplates).mockResolvedValue([]);
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue({
+      id: 'plant-created',
+      householdId: 'household-1',
+      name: 'Saved Fern',
+      species: null,
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: 'user-1',
+      updatedAt: '',
+    } as never);
+  });
+  afterEach(() => onlineManager.setOnline(true));
+
+  it('refuses at once, keeps what was typed, and saves on a retry once online', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/plant name/i), 'Saved Fern');
+    act(() => onlineManager.setOnline(false));
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+
+    expect(
+      await screen.findByText("You're offline. Nothing was saved. Try again once you're connected.")
+    ).toBeInTheDocument();
+    // Nothing was sent, not even the first-plant lookup, and nothing spins.
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+    expect(plantService.getPlants).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /add plant/i })).toBeEnabled();
+    expect(screen.getByLabelText(/plant name/i)).toHaveValue('Saved Fern');
+
+    // No queue: reconnecting does not create the refused plant behind the user's back.
+    act(() => onlineManager.setOnline(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(plantService.createPlant).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /add plant/i }));
+    await screen.findByRole('heading', { name: 'Plant detail destination' });
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
   });
 });

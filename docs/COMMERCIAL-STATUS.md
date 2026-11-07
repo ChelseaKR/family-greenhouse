@@ -7,13 +7,15 @@
 **Annual and lifetime withdrawn from sale:** September 2, 2026 — [ADR 0012](adr/0012-plant-id-unit-cost-withdraws-annual-and-lifetime.md); `withdrawnIntervals` in `backend/src/models/plans.ts`
 **Status:** Free accounts open; paid Garden and Greenhouse plans on sale on the web, **monthly only**
 
-Family Greenhouse accepts free Seedling accounts for one home with up to 3
-people and 20 plants; no credit card is required. Paid Garden and Greenhouse
+Family Greenhouse accepts free Seedling accounts for one home with up to 2
+people and 8 plants; no credit card is required. Paid Garden and Greenhouse
 plans are sold on the hosted web app through Stripe Checkout as **monthly
-subscriptions, a household's first of which starts with a 14-day trial** (the
-trial is once per household — `trialConsumedAt` in
-`backend/src/services/billing.ts` survives cancellation, so a household that
-resubscribes is charged at once), and a household admin manages
+subscriptions**, with free trials that never stack: a household on its
+no-card trial (below) that subscribes is first charged when that trial ends; one
+that never had it gets a 14-day trial on its first subscription; the trial is
+once per household (`trialConsumedAt` survives cancellation, so a household that
+resubscribes is charged at once; see `checkoutTrialFor` in
+`backend/src/models/checkoutTrial.ts`), and a household admin manages
 the plan from Settings → Billing via the Stripe customer portal. Paid plans are
 not sold inside the mobile apps.
 

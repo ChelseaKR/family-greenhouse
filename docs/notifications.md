@@ -298,11 +298,11 @@ occurrence's `expectedNextDue`; ids only) and the labels of two actions,
 **Done** and **Snooze until tomorrow** ("Hecho", "Posponer hasta mañana").
 Where the platform shows them:
 
-| Platform | Buttons                                                                                                                                | What a chosen button does                                                                                                                                                    |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down. | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
-| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                            | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
-| Android  | None: an FCM notification message is rendered by the system, and buttons need a native builder the shell does not have.                | A tap opens the plant. The ids ride in `data` for a future handler.                                                                                                          |
+| Platform | Buttons                                                                                                                                    | What a chosen button does                                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | The registered category `FG_TASK_REMINDER` (`AppDelegate.swift`; `aps.category` is set by `apnsNotifier.ts`). Long-press or pull down.     | `nativePush.ts` receives `actionId` "done" / "snooze" and posts to `POST /tasks/{id}/complete` or `/snooze` with the stored session.                                         |
+| Web push | `actions` on the notification (Chrome, Edge; Firefox and Safari show none).                                                                | `push-handler.js` has no session, so it posts the choice to an open page, or to the page it opens at the plant, as a `fg:push-action` message; `pushActions.ts` performs it. |
+| Android  | Drawn by the app from an FCM data message (`push/ReminderNotifications.kt`), with the labels the backend sent in the recipient's language. | The app opens; `NativePushActionsPlugin.kt` reports `pushAction` with "done" / "snooze" and `nativePush.ts` posts it exactly as for iOS. A tap opens the plant.              |
 
 Every action echoes `expectedNextDue`, so a second tap, a tap from two
 devices, or a tap after someone else did it is a no-op on the server
@@ -357,10 +357,37 @@ PK: USER#{userId}
 SK: PREFS
 entityType: NotificationPreferences
 userId, browser, email, sms, phone, phoneVerified,
-dndStart, dndEnd, timezone, pestAlerts, weeklyDigest, yearRecap,
-emailLocale, memberJoined, taskUpForGrabs, coverageUpdates, careCredit,
-updatedAt
+dndStart, dndEnd, timezone, timezoneChosen, pestAlerts, weeklyDigest,
+yearRecap, trialNotices, emailLocale, memberJoined, taskUpForGrabs,
+coverageUpdates, careCredit, updatedAt
 ```
+
+#### Time zone
+
+`timezone` is the member's IANA zone. Quiet hours, the daily reminder's slot
+and send time, and the calendar feed's all-day dates are all read in it.
+
+It defaults to `'UTC'`, and for a long time it was only set when someone
+opened Notification settings, so most members got reminders around 3-4 a.m.
+Eastern and saw feed dates a day late. Two fields now fix that:
+
+- **`timezoneChosen`** is true once a PUT changes the zone. Re-sending the
+  stored value, as every toggle does, does not count as choosing it.
+- **The app fills in the browser's zone on load** (`useDetectedTimeZone`,
+  mounted in `Layout`). It sends `PUT /notifications/prefs` with
+  `timezoneSource: 'detected'`, and the server
+  (`notificationPrefs.applyDetectedTimeZone`) applies it only while the zone is
+  unset: not chosen, and still `'UTC'` or empty. It validates the zone, writes
+  nothing else, ignores UTC aliases, and is conditional on the row being
+  unchanged since its read. It leaves `timezoneChosen` false.
+
+**Existing rows.** Rows written before `timezoneChosen` existed read it as
+false, so a stored `'UTC'` is treated as unset and gets filled on the member's
+next visit. The data cannot tell those defaults apart from someone who
+deliberately chose UTC before this change. Such a person, if their browser
+reports a different zone, gets switched once. Choosing UTC again then sticks,
+because changing the zone sets `timezoneChosen`. Members who never open the app
+again stay on UTC.
 
 `memberJoined`, `taskUpForGrabs`, `coverageUpdates` and `careCredit` are the
 household-email switches; `yearRecap` gates the annual recap, which used to
@@ -370,6 +397,11 @@ January summary. Like `weeklyDigest`, all of them are optional in the PUT body
 and default-on at read time _only when `email` is on_, so a row written before
 they existed is not silently opted into new mail it never accepted, and an
 older client that omits them keeps the stored value instead of resetting it.
+
+`trialNotices` gates the two no-card-trial emails (ADR 0039, off unless the
+`TRIAL_LIFECYCLE_EMAILS_ENABLED` flag is on). It follows the same default as
+`yearRecap` and is switched off by the one-click unsubscribe link in those emails;
+it is not in the PUT body yet.
 
 `emailLocale` is the exception to that pattern: it defaults to `''`, not to a
 language, because "never chosen" has to stay distinguishable from a choice.
@@ -506,12 +538,16 @@ either arriving counts as the delivery. Quiet hours suppress it exactly like
 every other channel (`sendToUser`), and the reminder rules — the daily slot,
 the per-channel lease, the overdue decay — are the reminder path's own, so
 native push adds none of its own. A reminder carries the number of tasks it
-names as the app-icon badge (`aps.badge` on iOS, `notification_count` on
-Android); the app clears it when opened. The words, the deep link and the
+names as the app-icon badge (`aps.badge` on iOS, the notification's number
+on Android); the app clears it when opened. The words, the deep link and the
 Done / Snooze actions are described under "What a push notification says"
 above; on iOS a single-task reminder sets `aps.category` to
-`FG_TASK_REMINDER` and carries the task ids as custom keys, and on Android the
-same ids ride in `data`.
+`FG_TASK_REMINDER` and carries the task ids as custom keys. On Android every
+reminder is an FCM **data** message (`kind: fg.reminder.v1`, with the title,
+body, link, badge, task ids and button labels as strings), which FCM never
+draws: the app's `FgMessagingService.kt` draws it, so a single-task reminder
+gets Done and Snooze there too. An Android build without that service would
+show nothing, and none has shipped.
 
 **Why iOS goes to APNs directly.** `@capacitor/push-notifications` gives the
 iOS shell a raw APNs token. FCM cannot send to that without the Firebase iOS

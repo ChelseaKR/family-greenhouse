@@ -18,8 +18,10 @@ import { runPushAction, SNOOZE_DAYS } from './pushActionRunner';
  *     worker has no session, so it posts the choice to an open page — or to
  *     the page it opens — as a message of type {@link PUSH_ACTION_MESSAGE_TYPE},
  *     and this module receives it on `navigator.serviceWorker`.
- *   - Android: no buttons yet (an FCM notification message is rendered by the
- *     system); a tap still opens the task's plant.
+ *   - Android: the app draws the reminder itself from an FCM data message,
+ *     with the same two buttons (`android/.../push/ReminderNotifications.kt`);
+ *     a button or a tap opens the app, and `NativePushActionsPlugin.kt`
+ *     reports it to `nativePush.ts` as `pushAction` with the same ids.
  *
  * Either way the request lands in {@link performPushAction}, which posts to
  * the task's own complete / snooze endpoint with the app's stored session.
@@ -41,8 +43,9 @@ import { runPushAction, SNOOZE_DAYS } from './pushActionRunner';
 
 /**
  * The action identifiers, as the service worker names its buttons, as the
- * iOS category names its `UNNotificationAction`s, and as the backend labels
- * them (`notifier.PushActionLabels`). All four must agree.
+ * iOS category names its `UNNotificationAction`s, as the Android app names
+ * its buttons (`ReminderMessage.kt`), and as the backend labels them
+ * (`notifier.PushActionLabels`). All five must agree.
  */
 export const PUSH_ACTION_IDS = ['done', 'snooze'] as const;
 export type PushActionId = (typeof PUSH_ACTION_IDS)[number];

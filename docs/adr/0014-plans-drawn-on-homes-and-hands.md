@@ -11,6 +11,10 @@
 (the catalog, in code), `backend/src/services/homesGate.ts` (the one per-user cap),
 `docs/multi-household.md` (what "a home" is).
 
+> **Amended 2026-10-23 by [ADR 0040](0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md):**
+> Seedling's caps are now 8 plants and 2 members. A household created before the cut keeps the
+> 20 and 3 this ADR set. Everything else here stands.
+
 ## Context
 
 Paid plans went live on 2026-09-01. Two days later the paid-feature ideation
@@ -155,7 +159,7 @@ relearned:
   here is a structural limit on rows that cost nothing to serve. The homes
   gate adds one `GetItem` per household the user belongs to, and only on
   create/join — a fraction of a cent per household per year at any plausible
-  rate. The one AI number that moves (free identifications 3 → 1) *reduces*
+  rate. The one AI number that moves (free identifications 3 → 1) _reduces_
   cost, by up to $0.117 per free household per month at the ADR 0012 price.
 - **Existing Garden subscribers lose nothing.** Members go 6 → unlimited;
   plants go 500 → 200 for new growth only, and a household above 200 keeps

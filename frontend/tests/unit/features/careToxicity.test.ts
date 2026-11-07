@@ -103,9 +103,24 @@ describe('careToxicityFrom', () => {
 });
 
 describe('careToxicity over the real table', () => {
-  it('cites every guide except the ZZ plant, which the ASPCA does not list', () => {
+  it('cites every guide except the plants the ASPCA does not list', () => {
+    // ZZ plant, plus four 2026-11-03 guides with no listing of their own:
+    // string of pearls, prayer plant (Maranta leuconeura), croton and
+    // Chinese money plant (Pilea peperomioides), the 2026-11-05 air plant
+    // (Tillandsia), the 2026-11-05 tradescantia (T. zebrina; ASPCA lists
+    // only T. fluminensis), and the 2026-11-07 bird’s nest fern (Asplenium
+    // nidus).
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
-    expect(unsourced).toEqual(['zz-plant']);
+    expect(unsourced).toEqual([
+      'zz-plant',
+      'string-of-pearls',
+      'prayer-plant',
+      'croton',
+      'chinese-money-plant',
+      'air-plant',
+      'tradescantia',
+      'birds-nest-fern',
+    ]);
   });
 
   it('reads the heartleaf philodendron guide from the genus row and its listing', () => {

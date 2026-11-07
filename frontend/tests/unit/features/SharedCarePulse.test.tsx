@@ -174,7 +174,7 @@ describe('SharedCarePulse', () => {
     renderPulse();
 
     const dismissButton = await screen.findByRole('button', {
-      name: 'Hide shared-care setup for 30 days',
+      name: 'Not now, hide shared-care setup for 30 days',
     });
     await user.click(dismissButton);
 

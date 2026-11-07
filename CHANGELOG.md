@@ -18,6 +18,44 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
+  kentia palm, paperwhite, bird's nest fern and purple shamrock.** Each
+  answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,
+  Iowa State, Wisconsin and RHS pages it was written from, read on
+  2026-11-07. The only interval any of those pages gives is NC State's "change
+  the water weekly" for lucky bamboo grown in water, so that is the only one
+  stated; the others give the source's soil rule instead.
+- **Pet-safety pages for lucky bamboo, Venus flytrap, majesty palm, kentia
+  palm, paperwhite and purple shamrock**, each citing an ASPCA listing that
+  names the plant ("Ribbon Plant" for Dracaena, "Venus Fly Trap", "Majesty
+  Palm", "Kentia Palm", "Paper White" and "Shamrock Plant" for Oxalis). The
+  jasmine guide reads the existing Jasminum row. The bird's nest fern's pet
+  line reads "Unknown": the ASPCA has no listing for Asplenium nidus, and its
+  "Golden Bird's Nest" is a snake plant.
+- **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
+  polka dot plant and tradescantia.** Each answers "how often to water" first
+  and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin extension
+  pages it was written from, read on 2026-11-05. None of those pages gives a
+  day count, so no guide states one: each gives the source's soil rule
+  instead. The satin pothos guide says plainly that it is a Scindapsus, not a
+  true pothos, and is watered differently.
+- **Pet-safety pages for satin pothos, dragon tree, arrowhead plant, weeping
+  fig and polka dot plant**, each citing that plant's own ASPCA listing
+  ("Satin Pothos", "Madagascar Dragon Tree", "Arrow-Head Vine", the
+  genus-level "Weeping Fig" and "Polka Dot Plant"). The tradescantia's pet
+  line reads "Unknown": the ASPCA lists the inch plant only as Tradescantia
+  fluminensis, a different species. The pet checker answers "scindapsus",
+  "nephthytis" and "ficus benjamina" with the new rows, and still answers no
+  tradescantia name, including "spiderwort", with another plant's verdict.
+- **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
+  overwatering?" and "Can you overwater a plant?" answer the two generic
+  question shapes Search Console showed with no page of their own (24
+  phrasings, 73 impressions from August to November). Each cites the Clemson
+  and Iowa State extension pages it was checked against (the first also
+  cites Illinois Extension), and links
+  the overwatering post and the relevant care guides. No care guide title,
+  H1 or meta changed. No `infrastructure/` change: the page router
+  already matches `/blog/` pages by prefix.
 - **An operator backfill that strips location metadata from photos already
   stored — built, not run.** `backfill:photo-metadata` (backend) reads every
   version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
@@ -31,6 +69,1011 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   version, so there's nothing for it to do today. It's for photos
   stored between now and the release that carries #849. Runbook: "Strip
   location metadata from stored photos".
+
+### Changed
+
+- **Search titles for seven care guides now show the watering answer.** Search
+  Console's 28 days to 2026-11-06 had monstera, English ivy, heartleaf
+  philodendron, money tree, nerve plant, rubber plant and bird of paradise at
+  positions 3 to 16 with 0 or 1 clicks. Six titles now open with "How often to
+  water" and the guide's own rule, and bird of paradise leads with light and
+  bloom age. Every phrase comes from the guide and its cited sources.
+
+### Fixed
+
+- **GA4 `first_plant_added` counts accounts, not screens.** It was sent
+  whenever the first run or the empty dashboard saved a plant, so a second
+  household, a repeated first run or a second device counted again. The
+  server now records an account's first plant once (a timestamp row in the
+  account's own partition, erased with the account) and says so on that one
+  `POST /plants` answer as `firstPlantForAccount: true`; the web app sends the
+  event only then. An account whose household already had plants is not
+  counted. The event's parameters are unchanged (`method` and the scrubbed
+  page address), so the Privacy text needs no change.
+- **Room for more care guides at the edge.** The CloudFront function that
+  routes page requests listed every blog post, care guide and help topic, and
+  had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
+  matched by their `/blog/`, `/care/` and `/help/` prefix, as the pet-safety
+  pages already were, so the function is 8,245 bytes and a new guide adds
+  nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalised guide URL now gets the prerendered page instead of the app
+  shell. Ships with the next Terraform apply.
+
+## [0.48.0] - 2026-11-05
+
+**Twelve new care guides, reminders on your own time zone, and a fuller
+Privacy Policy.** Eight watering guides and four holiday plants join the care
+guides, and the six holiday guides link to each other. Reminders and calendar
+dates now use your own time zone instead of UTC. The Privacy Policy says more
+about what website analytics records and names the time zone the app saves.
+The Privacy text changed (#1085, and this release), so its effective date is
+this release's.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.47.0 in
+  one file: `modules/frontend/functions/spa-router.js` adds 12 prerendered
+  `/care` routes (#1083, #1089). Expect an in-place update of the `spa-router`
+  CloudFront function and the usual Lambda updates, with nothing added or
+  destroyed. No stored data is migrated. Notification-settings rows gain a
+  `timezoneChosen` field as they are written (#1092); older rows read as not
+  chosen.
+- **The Privacy effective date is November 5, 2026 (release 0.48.0).** Set by
+  hand in `PrivacyPage.tsx`. The Terms did not change, so `termsEffective.json`
+  stays at November 3, 2026 (release 0.47.0). The account-deletion page's
+  text changed (#1096), so its date moves from September 2 to November 5,
+  2026, also set by hand in `AccountDeletionPage.tsx`.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.48.0, build 4800.
+
+### Added
+
+- **Eight new care guides that answer "how often to water" (#1083).** String of
+  pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
+  peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant
+  now have `/care` pages. Each cites the university extension or RHS pages it
+  was written from, read on 2026-11-03. None gives a day count for watering,
+  because none of those sources does. Each says which dryness check to use.
+- **A pet-safety page for peperomia (#1083),** citing the ASPCA's "Baby Rubber
+  Plant" listing (Peperomia obtusifolia, non-toxic to cats and dogs). String
+  of pearls, prayer plant, croton and Chinese money plant have no ASPCA
+  listing of their own, so their pet line reads "Unknown".
+- **Care guides for four holiday plants: amaryllis, Norfolk Island pine,
+  cyclamen and kalanchoe (#1089).** People search for these in November and
+  December. Each guide answers "how often to water" first and cites the
+  Clemson, Iowa State, UF/IFAS and NC State extension pages it was written
+  from, read on 2026-11-04. Each also has a pet-safety page citing the plant's
+  own ASPCA listing. The amaryllis row cites "Barbados Lily" (Hippeastrum),
+  the genus sold for the holidays, and not ASPCA's "Amaryllis" listing, which
+  names a different genus.
+- **Care guides for air plant, rosemary, ponytail palm, areca palm and
+  schefflera.** Each answers "how often to water" first and cites the Clemson,
+  UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension pages it was
+  written from, read on 2026-11-05. Only two state a day count, because only
+  their sources give one: the air plant (about once a week, every two weeks in
+  cool, dim months) and the holiday rosemary tree (about once a week, when the
+  soil is dry). The rosemary guide links the six holiday guides.
+- **A pet-safety page for rosemary**, citing the ASPCA's "Rosemary" listing
+  (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant has no
+  ASPCA listing, so its pet line reads "Unknown".
+- **Sign-up from the rosemary guide keeps the plant.** A visitor who signs up
+  from `/care/rosemary` sees rosemary first in the first run, with a 7-day
+  reminder (the low end of its cited interval). It is not one of the ten
+  tiles, so the grid is unchanged for everyone else.
+
+### Changed
+
+- **The pet checker no longer answers "air plant" with the spider plant's
+  verdict.** Its loose word match found "air" inside the spider plant's
+  "airplane plant" name and returned non-toxic for a different plant. Each
+  word of a multi-word search must now match a whole word of a plant's name.
+- **The six holiday care guides now link to each other (#1091).** The
+  poinsettia, Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and
+  kalanchoe guides each name the other five in a line under "Keeping it alive
+  when you share a home". The poinsettia's related plants now include the
+  amaryllis, and the Christmas cactus's include the kalanchoe.
+- **The spider plant care guide's title now leads with "How often to water a
+  spider plant" (#1088).** That query put the page at about position 5 in the
+  week to 2026-11-03, with no clicks, and it was the only ranking watering
+  guide whose title still opened with "Spider Plant Care". The page's content
+  is unchanged.
+- **"Prayer plant" and "maranta" now mean Maranta, not calathea (#1083).** The
+  calathea guide and its pet-safety row no longer carry those names, so a
+  search for either no longer answers with calathea's verdict.
+- **The Privacy Policy now lists what Google Analytics records toward a paid
+  plan (#1085).** It said six steps with no detail. It now names the
+  content-page sign-up clicks (the kind of page, where the link was and, on a
+  care guide or pet-safety page, that page's plant), how a first plant was
+  added, and the 14-day Garden trial, and it no longer mentions the removed
+  "See how it works" link. Both locales.
+- **The Privacy Policy says the app saves your time zone.** A new line under
+  "What we collect" says the app saves the time zone your browser or phone
+  reports when you have not picked one, what it is used for (reminder times,
+  quiet hours, dates in our emails, calendar dates), where to change it, and
+  that it is in your data export and deleted with your account. English and
+  Spanish. It describes #1092.
+- **Care guides are no longer in the JavaScript bundle (#1087).** The 41
+  guides were one 53 kB (brotli) chunk that every `/care` and `/pet-safe`
+  visitor downloaded in full. The browser now gets a 2.5 kB index of names and
+  quick facts, and each guide page carries its own guide as JSON in its
+  prerendered HTML (about 0.4 kB more per page). Navigating to a guide from
+  inside the app fetches that page. The prerendered pages are otherwise
+  unchanged. All JS combined drops from 718.4 to 667.6 kB, so new guides no
+  longer spend that budget. A guide your browser has never opened will not
+  open offline.
+- **The dashboard says when nothing is due this week (#1093).** When
+  every task was more than 7 days out, it said "No tasks yet. Add tasks to
+  your plants". It now says "Nothing due this week" with the next task and
+  its date. "No tasks yet" shows only when the household has no tasks.
+  English and Spanish.
+- **Help, email and push text match what the app does (#1096).** The
+  account-deletion email no longer suggests a deleted account can be
+  restored: it says it cannot be, and to write to us if you did not ask for
+  the deletion or are still being charged. Help says the app saves your time
+  zone for quiet hours (#1092), that the app is available in Spanish, and that
+  Preferences has a language picker. The account-deletion page says a paid
+  plan whose household has only you is canceled at once, and the Spanish
+  deletion guide names the buttons a Spanish reader sees. "Settings → Billing"
+  reads "Settings → Plan status" outside the Terms. English and Spanish.
+
+### Fixed
+
+- **Reminders arrive in your own time zone (#1092).** Anyone who never opened
+  Settings, Notifications had reminders on UTC, so the daily email came around
+  3 to 4 a.m. Eastern and counted days by the UTC date. The app now saves the
+  time zone your browser or phone reports, but only while you have not picked
+  one, and it changes no other setting. A zone you pick is never changed.
+  Accounts from before this release that still read UTC count as not picked,
+  so someone who chose UTC on purpose is switched once and keeps UTC if they
+  pick it again.
+- **Calendar dates match the app (#1092).** The calendar link wrote each
+  task's all-day date from the UTC day, so in the US most tasks showed a day
+  late in Google or Apple Calendar. Each date now uses the day in your
+  notification time zone.
+- **Google Analytics no longer credits a purchase to Stripe (#1086).** The
+  page a buyer returns to after Stripe Checkout or the billing portal now
+  reports our own site as its referrer instead of `checkout.stripe.com`, so
+  the `purchase` it records stays with the search, ad or page that brought
+  the buyer.
+- **A server error no longer signs you out (#1093).** A 5xx or 429
+  response at launch or during a token refresh used to end the session, in
+  the iPhone app too. Now only a 400, 401 or 403 does. Other errors keep you
+  signed in, and the page shows its usual error with a way to retry.
+- **Plant pages show each task's real last-care date (#1093).** Care
+  just outside the 10 newest entries read "0 done · last never", and a run of
+  misting could show "No watering has been logged". Each task now shows its
+  real last date, "none in last 10" when that is all the page knows, and
+  "never" only when it is true.
+- **The sitter page says so when Done fails (#1093).** A failed Done
+  stopped the spinner and said nothing. It now announces "That didn't save.
+  Check your connection and tap Done again.", and the task stays undone.
+- **Saving a plant or task while offline fails right away instead of
+  spinning (#1095).** Offline, Add Plant, Edit Plant, Add Task and Edit Task
+  spun with no end, and Snooze closed its sheet with nothing changed and
+  nothing said. A save left behind by Cancel could still land on reconnect, so
+  a plant added again came back twice. These saves, and Snooze on the Tasks
+  page and on plant rows, now send nothing while offline and say "You're
+  offline. Nothing was saved. Try again once you're connected." What you typed
+  stays in the form, and nothing is sent later. Care marked done still waits
+  for the connection, and the offline notice now says which is which. English
+  and Spanish.
+- **Care and pet-safety pages read correctly with a screen reader (#1094).**
+  The "At a glance" list on every care guide was malformed, so a screen
+  reader could not pair each label with its value; it is now a valid list
+  under its own heading (WCAG 1.3.1). The sign-up box on `/care` has a
+  heading, and the emergency box on each pet-safety page no longer puts a
+  heading ahead of the page title. On phones, the first link after "Skip to
+  main content" is no longer hidden under the sticky header (WCAG 2.4.11).
+- **The Spanish dashboard names the next task in Spanish (#1098).** The
+  "Nothing due this week" line from #1093 showed the English task type
+  ("Lo próximo: Water Fern…"). It now uses the app's Spanish task names
+  ("Lo próximo: Regar (Helecho)…"). Custom task names stay as typed.
+- **The care report says what it counts (#1098).** Its header said "Older care
+  is not counted here", though last care now reads each task's own last date.
+  It now says counts and streaks cover the plant's last 10 logged completions
+  and last care covers all of its history.
+
+<!-- internal: #1082 #1084 -->
+
+## [0.47.0] - 2026-11-03
+
+**Perenual is off in production, the pet-safety pages quote the ASPCA less,
+and the Terms name who runs the service.** A data license audit on 2026-11-03
+found that Perenual's free plan and the ASPCA's pages allow personal,
+non-commercial use only, so production stops calling Perenual and the
+pet-safety pages quote only each listing's clinical signs. The Privacy Policy
+says what Plant.id may do with photos. The Terms text changed (#1078), so
+their effective date is this release's. Also in this release: more care guides
+and pet-safety pages answer what people searched, every content sign-up link
+is counted, and four dependency majors.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.46.0 in
+  three files: the production tfvars drop `perenual_api_key_parameter_name`
+  (#1077), the staging tfvars set `app_store_billing_enabled = "1"` (#1064),
+  and `modules/frontend/main.tf` adds a staging-only `images` cache policy
+  with `count` and a `moved` block (#1066), which is `count = 0` in
+  production and plans nothing there. In production, expect the usual Lambda
+  updates, with `PERENUAL_API_KEY_PARAMETER_NAME` going from the parameter
+  name to `""` on `plants`, `notifications`, `species` and `reminders`, and
+  nothing added or destroyed. The inbound mail forwarder's `FORWARD_TO`
+  variable also changes, because its SSM parameter was changed outside
+  Terraform; the plan shows it as a sensitive value. No stored data is
+  migrated.
+- **The Terms effective date is November 3, 2026 (release 0.47.0).**
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.47.0, build 4700.
+
+### Added
+
+- **Seven more pet-safety pages quote their own sources (#1068).** Jade plant,
+  philodendron, calathea, Boston fern, anthurium, Chinese evergreen and money
+  tree are the next pages by Search Console impressions after the first
+  eight (90 days to 2026-10-30, positions 30 to 54, no clicks). Each now
+  quotes its ASPCA listing's plant family, and other common names where the
+  listing gives them. The four toxic ones also show the listing's toxic
+  principles and quote its clinical signs (#1068 also quoted the advice line,
+  which #1077 took back off before release). Each page shows a horse verdict
+  where the listing states one. NC State Extension's Plant Toolbox is added
+  as a second source where it has a matching page, with its poison parts on
+  the three toxic plants that have one. Each page now lists similar plants
+  that the ASPCA cites as non-toxic, and related plants to look up, which
+  adds internal links. Money tree leaves out the listing's "Money Plant"
+  name, because that name usually means pothos or jade, and both are toxic.
+  Every value was read off the live pages on 2026-10-31 and is pinned in
+  `petToxicity.test.ts`. No verdict changes.
+
+- **Every sign-up link on the content pages is counted, and a care guide's
+  plant is carried into the first run (#1062).** The care guide's sign-up box, the
+  pet-safety page's, the blog post's and the shared header's "Try the app"
+  link now send GA4 `landing_cta_click`, as the home page's two buttons
+  already did. They use their own parameters (`cta_source`, `cta_placement`,
+  `cta_plant`) and never the home page's `cta`, and they pass through the
+  same consent, Global Privacy Control and Do Not Track checks. Care guides
+  also get a "Remind me to water my …" link inside the "At a glance" water
+  row, so a sign-up link is on the first screen of a phone and a laptop. A
+  guide or pet-safety link for one of the first run's ten one-tap plants goes
+  to `/register?plant=<slug>`. The first run then lists that plant first and
+  says why. Nothing is added until the person taps it, and the sign-up steps
+  are unchanged. Unknown values are ignored and never shown.
+
+- **The eight most-seen pet-safety pages quote more of their own sources
+  (#1057).**
+  Each plant's ASPCA listing now also gives its other common names and plant
+  family. (#1057 also quoted the six toxic listings' own line on what to do;
+  #1077 took that line back off before release, see Changed.) NC State
+  Extension's "Poison Part" values (which parts of the plant are poisonous)
+  are quoted where its page gives them, and those five pages answer "Which
+  parts of … are poisonous?" in their FAQ. Every value was re-read off the
+  live pages on 2026-10-29.
+
+### Changed
+
+- **Every care guide cites where its advice comes from (#1079).** All 33 care
+  guides list their sources (US extension pages or the RHS) under "Where this
+  care advice comes from", and a test fails if a guide has none. Lines that
+  conflicted with the sources were corrected, and day intervals no source
+  gives were removed, which changed the search title or description on 21
+  guides.
+- **Perenual is off in production, and nothing credits it (#1077).**
+  Perenual's free plan is licensed for personal use only, and Family
+  Greenhouse is a paid product (data license audit, 2026-11-03). The
+  production tfvars no longer name the Perenual key parameter, so the
+  `plants`, `notifications`, `species` and `reminders` Lambdas get an empty
+  `PERENUAL_API_KEY_PARAMETER_NAME`, every Perenual path reports unset, and no
+  key is read and no call is made; the app falls back to its own species
+  catalog and care guides. The cache-only species peek (the Move Day hardiness
+  hint and archive restore) no longer serves rows cached while the key was on.
+  The footer no longer says plant data is powered by Perenual. The SSM
+  parameter that holds the key is not managed by Terraform; deleting it is a
+  separate owner step.
+
+- **The pet-safety pages quote the ASPCA once and say we are not affiliated
+  (#1077).** The ASPCA's terms allow personal, non-commercial use only.
+  Titles no longer end in "ASPCA verdict" and descriptions no longer lead with
+  the ASPCA. The listing's own note and advice lines are no longer reprinted;
+  the clinical signs are the one passage quoted, beside a link to the listing.
+  The plant-list caveat, the FAQ answers and the hotline fee are in our own
+  words, and every page says Family Greenhouse is not affiliated with or
+  endorsed by the ASPCA. A test checks this on every published page. No
+  verdict changes.
+
+- **The Privacy Policy says what Plant.id's terms let it do with photos
+  (#1077).** Plant.id is run by FlowerChecker s.r.o. (Kindwise). Its API terms
+  take a non-exclusive, unlimited and irrevocable license to submitted photos,
+  for commercial use including model training, showing them to its other
+  customers and sharing them under CC BY-SA 4.0. The privacy page now says so,
+  in English and Spanish, and its effective date is November 3, 2026.
+
+- **The Terms name who runs the service, disclose paid links, and say they
+  are not veterinary advice (#1078).** A new "Who runs the service" section names
+  Chelsea Kelly-Reif in California and the support address. A "Paid links"
+  section says plant pages on the website may carry a shop link labeled
+  "Paid link" that earns a commission, and that the apps do not show them
+  (ADR 0038; no program is configured today, so none render). Limitations
+  adds that nothing here is veterinary advice and to call a vet or the ASPCA
+  Animal Poison Control Center if a pet may have eaten a plant. English and
+  Spanish. The Terms text changed, and takes effect with this release.
+- **Staging opens Apple In-App Purchase, ahead of production (#1064).**
+  `infrastructure/environments/staging/terraform.tfvars` sets
+  `app_store_billing_enabled = "1"`, so after the next manual cd-staging run
+  the staging billing Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and the
+  three `/billing/app-store/*` routes stop answering 404 there. This is packet
+  step 11: a Sandbox purchase, restore and cancel against staging before
+  production is touched. Production's tfvars is unchanged, and no secret is
+  added, because Apple's signed data is verified against the pinned Apple
+  Root CA - G3 (ADR 0041).
+- **Third Search Console pass: three more care guides lead with the answer,
+  and four near-page-one guides get links from related guides (#1063).** Search
+  Console page and query data for the 28 days to 2026-10-29 had the heartleaf
+  philodendron (position 14), money tree (10, and 6 in the last 7 days) and
+  nerve plant (8) guides near page one without the answer-first title. Their
+  titles, descriptions and H1s now lead with each guide's own "At a glance"
+  watering line, and the money tree's with its ASPCA pet-safety verdict,
+  which is what its searchers asked. The ZZ plant, monstera, bird of paradise
+  and aloe vera guides, already retitled by the first two passes and being
+  measured until 2026-11-27, are unchanged. They gain one inline link each
+  from the money tree, parlor palm and sago palm guides, where the linked
+  plant shares the watering rhythm or suits the spot being described. No
+  plant facts change.
+- **Search titles answer the question people searched (#1055).** From 90 days of
+  Search Console data (2026-07-31 to 2026-10-28), the ZZ plant, monstera,
+  snake plant and English ivy care guides get titles, descriptions and H1s
+  that lead with what searchers asked ("how often to water zz plant" was 96
+  impressions at position 10 with no clicks). Every answer is the guide's own
+  "At a glance" line. Care guides take an optional `heading`, which is both
+  the H1 and the Article headline. The overwatering post's description says
+  overwatering causes yellow leaves, which the post already states. No plant
+  facts change.
+- **Second Search Console pass: five more care guides and every pet-safety
+  page (#1058).** From the same 90 days (4,043 impressions, 18 clicks), the aloe vera,
+  spider plant and pothos guides lead with the watering answer their searchers
+  asked for, the anthurium guide with why it stops flowering ("anthurium no
+  flowers" was its top query) and the bird of paradise guide with "plant care".
+  The aloe vera and bird of paradise titles no longer ask "Is it pet-safe?",
+  which the pet-safety pages answer. Pet-safety titles, descriptions and H1s
+  read "Is peace lily toxic…" instead of "Is Peace lily toxic…", "African
+  violet" keeps its capital, and each description says the page gives the
+  numbers to call if a pet ate some. Verdicts, their ASPCA sources and the
+  155-character budget are unchanged.
+- **Third Search Console pass: nine more care guides and the vacation post
+  (#1060).**
+  From the same 90 days, ten pages had 213 impressions between them at
+  average positions 24 to 69 and no clicks. The Christmas cactus, jade plant,
+  peace lily, rubber plant, hoya, Chinese evergreen, Boston fern, moth orchid
+  and fiddle leaf fig guides now lead their title, description and H1 with
+  the answer to their top query, taken from their own "At a glance" line
+  (watering, light or the ASPCA pet verdict). The vacation post is now titled
+  "How to keep indoor plants alive while on vacation" ("keeping indoor plants
+  alive while on vacation" was 28 of its 54 impressions), and its description
+  gives the post's answer for each trip length. No plant facts change.
+
+### Fixed
+
+- **Staging can deploy again (#1066).** cd-staging run 41136306730 stopped with
+  CloudFront 409 `CachePolicyInUse`: staging had not applied since
+  2026-09-04, so it got #855's removal of the `/plants/*` behavior and #940's
+  removal of the images cache policy in one apply. Terraform deleted the
+  policy before it updated the distribution that still used it. The
+  `images` cache policy is back, in staging only (`count`, with a `moved`
+  block to `[0]`), so the next staging plan updates the distribution and
+  destroys nothing. Production deleted its copy under #940 and plans no
+  change from this. A later change removes the block once staging's
+  distributions no longer use the policy.
+
+- **Two iPad layout bugs (#1065).** In the iOS app on iPad, a scrolled page's text
+  showed through, faded, behind the screen's title: the tab bar floats above
+  the navigation bar there, so the bars are taller than the system's soft
+  scroll-edge fade. On iPad the app now uses the hard scroll-edge style, an
+  opaque backdrop under the whole bar area; iPhone keeps the soft fade. In
+  Settings > Notifications, the quiet-hours Start, End and Timezone fields
+  sat at three heights at tablet and desktop widths, because the row aligned
+  them to the bottom and their helper text differs in length. They now share
+  a top edge. In iOS WebKit a time field also keeps its native minimum width
+  and draws shorter when empty, so Start ran under End on iPad; on iOS the
+  time fields now size like the text fields beside them. A Playwright spec
+  checks the row at three iPad sizes.
+
+- **Xcode Cloud builds no longer fail before they start (#1061).** Every push to
+  `main` failed at "Could not resolve package dependencies", because the
+  Capacitor plugins that `CapApp-SPM` resolves live in `node_modules`, which a
+  fresh clone does not have. `frontend/ios/App/ci_scripts/ci_post_clone.sh`
+  now installs Node 22, runs `npm ci`, makes the production web build from
+  the committed public values in `.env.mobile.production.example` (with iOS
+  push on, as in local release builds) and runs `npx cap sync ios`, after the
+  same `--production` validation as `npm run mobile:release`. The iOS
+  project's `Package.resolved` is now committed too: Xcode Cloud resolves
+  packages with automatic resolution off and stops without it. Internal, no
+  user-facing change.
+- **`npm run mobile:release` no longer builds an unsigned Android bundle
+  without saying so (#1056).** It used to print "Unsigned Android release bundle
+  built" every time, signed or not, and Gradle builds an unsigned AAB without
+  failing when any `ANDROID_UPLOAD_*` variable is missing. The build now stops
+  before it starts when a signing variable is missing or the keystore file
+  does not exist. `ALLOW_UNSIGNED_RELEASE=1` allows an unsigned local smoke
+  build. After `bundleRelease` it checks the AAB with `jarsigner -verify` and
+  matches the signer's certificate to the configured key alias. It prints
+  whether the bundle is signed and with which alias, and fails on an unsigned
+  or wrongly signed bundle. Secret values are never printed
+  (`scripts/check-android-release-signing.mjs`).
+
+### Security
+
+- **`follow-redirects` 1.16.2 in the frontend (#1067).** Clears
+  GHSA-mrwp-f3q8-3g9p (high), which covers 1.16.0 through 1.16.1. It comes
+  in through `axios`, whose `^1.16.0` range already allows the fix, so only
+  the lockfile changes. The advisory was failing the pre-push `audit` step
+  for every push.
+
+### Dependencies
+
+- **Four major versions, all green in CI on `main` before this release.**
+  `@sentry/react` 10.76.2 to 11.7.0 in the frontend (#991),
+  `@sentry/aws-serverless` 10.76.2 to 11.6.0 in the backend (#989), and the
+  dev-only `msw` 2.15.0 to 3.0.3 (#992) and `vite-plugin-pwa` 1.3.0 to 2.0.0
+  (#978). `react-dom` and `@types/react-dom` go from 19.2.x to 19.3.0 (#973).
+- **Minor and patch bumps.** `qs` 6.16.2 and `express` 4.22.3 (#1053),
+  `fast-uri` 3.1.9 (#1029), `undici` 8.12.3 (#1031), `serialize-javascript`
+  7.1.4 (#1030), Kotlin 2.4.21 for Android (#998), and the 24-package
+  dev-dependencies group (#1059).
+
+<!-- internal: #995 #1015 -->
+
+## [0.46.0] - 2026-10-29
+
+**Free trials no longer stack, and the day-10 and day-14 trial emails go out
+in production.** A household on the 14-day no-card Garden trial that starts a
+paid plan is first charged on the trial's own end date, not 14 days later. The
+Terms of Service now cover buying through Apple In-App Purchase on iPhone, and
+the In-App Purchase code ships with every switch off. The Terms text changed
+(#1048, #1050, #1051), so their effective date is this release's.
+
+- **The Terraform plan is larger than usual.** `infrastructure/` changed since
+  0.45.0: the three `/billing/app-store/*` API routes are new (they answer 404
+  while `app_store_billing_enabled` is "0", as it is in production), the
+  `billing` Lambda gets `APP_STORE_BILLING_ENABLED = "0"`, the `digests` Lambda
+  gets `TRIAL_LIFECYCLE_EMAILS_ENABLED`, and the daily `trial-emails` rule goes
+  from `DISABLED` to `ENABLED`. Expect 3 routes to add and the 19 Lambda
+  updates plus the one rule change, with nothing destroyed. No stored data is
+  migrated.
+- **The trial emails start with this deploy.** At the first daily run, a
+  trial ending in 4 days or fewer gets the day-10 email and a trial that ended
+  in the last 3 days gets the day-14 email; older trials are not mailed. Set
+  `trial_lifecycle_emails_enabled = false` and deploy again to stop them.
+- **The Terms effective date is October 29, 2026 (release 0.46.0).**
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The iPhone app gains the `NativePurchases` StoreKit plugin
+  (#1047), unused while the build's `VITE_APP_STORE_PURCHASES` is false. The
+  next store upload is 0.46.0, build 4600.
+
+### Added
+
+- **Apple In-App Purchase for Garden and Greenhouse in the iPhone app, off by
+  default (#1047).** Garden ($4.99 a month) and Greenhouse ($9.99 a month) can
+  be bought through Apple beside Stripe on the website (ADR 0041). Nothing
+  changes for anyone until three switches are on: `app_store_billing_enabled`
+  in Terraform (the `/billing/app-store/purchase-intent`, `/transactions` and
+  `/notifications` routes answer 404 until it is "1"), the build's
+  `VITE_APP_STORE_PURCHASES`, and the `NativePurchases` plugin, which every
+  build now registers. Apple's state lives on the household row, written only
+  from Apple-signed data verified against Apple's pinned root, and the
+  entitlement is the stronger of Stripe and Apple. A household with a live
+  Stripe subscription cannot buy through Apple, and web checkout refuses a
+  household with an active App Store subscription. Not built: Google Play
+  Billing, annual App Store products and introductory offers.
+
+### Changed
+
+- **The Terms of Service say paid plans can be bought on iPhone through Apple
+  In-App Purchase (#1048).** The Plan status section now reads, in the owner's wording:
+  "Paid plans are available on our website and, on iPhone, through Apple
+  In-App Purchase. Purchases made through Apple are billed and managed by Apple
+  under Apple's terms." It replaces "Paid plans are not sold inside the mobile
+  apps", which would be false once the App Store build sells Garden and
+  Greenhouse (ADR 0041). The Spanish Terms carry the same change. No price
+  changed. In-App Purchase itself stays off until its three switches are
+  turned on. The cancellation section now says that a subscription bought
+  through Apple is cancelled in the iPhone's Settings, under the Apple Account's
+  Subscriptions, and that Apple handles that cancellation and any refund. The
+  Terms text changed, and takes effect with this release.
+
+- **Free trials no longer stack (#1050).** A household on its 14-day no-card Garden
+  trial that starts a paid plan used to get 14 more free days on top, so its
+  first charge could come 28 days after it signed up. Its Stripe trial now ends
+  on the no-card trial's end date: it adds a card at checkout and is first
+  charged that day. With less than 48 hours 30 minutes of the no-card trial
+  left (Stripe's minimum for a trial end, plus the life of the checkout), or
+  after it has ended, checkout charges at once. A household that never had the
+  no-card trial keeps the 14-day card trial on its first subscription. Apple
+  In-App Purchase (still off) is unchanged: its products have no introductory
+  offer, so buying in the iPhone app ends the no-card trial and Apple charges
+  at once.
+  `GET /billing/me` adds `checkoutTrialEndsAt`, and Settings → Billing says
+  "Add a card now; your first charge is on {date}". The pricing FAQ, the
+  pricing and landing pages, the help article and the Terms (Free trials, Plan
+  status, Refunds) say the same in English and Spanish. The Terms text changed,
+  and takes effect with this release.
+
+- **The day-10 and day-14 trial emails are on in production (#1050).**
+  `trial_lifecycle_emails_enabled = true` in the production tfvars sets
+  `TRIAL_LIFECYCLE_EMAILS_ENABLED` on the `digests` Lambda and turns the daily
+  `trial-emails` rule from `DISABLED` to `ENABLED`. The day-10 email now names
+  the first charge the same way checkout does: start Garden before the cutoff
+  date and the first charge is the trial's end date; later, or after the trial,
+  it is the day you start. Production runs 0.45.0, whose digests build has the
+  `trialEmails` job, and the switch takes effect when this release's Terraform
+  apply runs.
+
+- **The Terms of Service say what is different about a purchase made through
+  Apple (#1051).** A new section, "Purchases made through Apple", follows Refunds: a
+  subscription bought in the iPhone app has no free trial (the App Store
+  products have no introductory offer), Apple charges when the purchase is
+  confirmed, and buying ends any no-card Garden trial; Apple bills, renews,
+  retries failed payments, and handles price changes, refunds and
+  cancellations, so the card, failed-payment, price-change and refund sections
+  apply only to subscriptions bought on the website; and deleting an account
+  does not cancel an Apple subscription. The Spanish Terms carry the same
+  section. No price changed and In-App Purchase stays off. The Terms text
+  changed, and takes effect with this release.
+
+## [0.45.0] - 2026-10-24
+
+**The free Seedling plan is now 8 plants and 2 people; households created
+before 2026-10-24 00:00 Pacific keep 20 and 3.** A new household can add its
+first plant with one tap, from the first run or from an empty dashboard, and a
+free household planning a trip is shown what Garden adds. The eight most-seen
+pet-safety pages quote their ASPCA listing and a second extension source. The
+Terms of Service changed (the free limits), so their effective date is this
+release's.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  or `.github/` changed since 0.44.0, so the changes are the 19 Lambda
+  `GIT_SHA` updates: expect `Plan: 0 to add, 19 to change, 0 to destroy.`
+  Anything else means stop. No stored data is migrated: the limits rule reads
+  each household row's own `createdAt`.
+- **The limits cutoff is already in the past when this ships.** The cutoff
+  is fixed at 2026-10-24 00:00 Pacific (`SEEDLING_LIMITS_CUT_AT`), so a free
+  household created earlier today, before the deploy, gets 8 and 2 once this
+  release is live. Tag it today; a later tag widens that window.
+- **The Terms effective date is October 24, 2026 (release 0.45.0).** The
+  Terms text changed in #1044 (the free limits), so
+  `check-terms-effective-date.mjs --fill` set `termsEffective.json` to this
+  release.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** No native iOS or Android code changed. The next store upload
+  is 0.45.0, build 4500.
+
+### Added
+
+- **The houseplant shortcut on an empty dashboard (#1043).** A household with no
+  plants now sees the same one-tap common-houseplant grid in the dashboard's
+  "Your plants" card, with a link to the full Add Plant page beside it. It
+  shows only to a member of the household and only on a settled empty read.
+  GA4 `first_plant_added` reports these taps as `dashboard_empty`.
+
+- **Pick a common houseplant in the first run (#1041).** The first screen after
+  creating a household now opens with ten common houseplants from the care
+  guides. One tap saves the plant with its scientific name as the species and
+  a watering reminder at the low end of its guide's range, starting one
+  interval out. The typed form, the full Add Plant page and Skip are all still
+  there. Plant names are in English and Spanish. Measured before this: 37 of
+  43 households had never added a plant.
+- **"Going away?" on the sitter-link form (#1041).** A free household that types a
+  link longer than its plan allows, already has its one live link, or arrives
+  from the dashboard is shown what Garden adds for a trip (longer and more
+  links, the printable brief, sitter photos, the return recap) with the
+  catalog's monthly price and a button to Settings → Billing. A member gets
+  the existing ask-an-admin button, and the apps show no price. The free
+  7-day link is never blocked: the prompt offers to set the length back.
+- **"Going away soon?" on the dashboard (#1041).** A dismissible card that leads to
+  the sitter-link form, shown when the household has plants and no live link.
+- **GA4 `first_plant_added` (#1041)**, beside `household_activated`, with only how
+  the first plant was added (`common_plant`, `typed` or `full_form`). Same
+  consent rules as every other GA4 event.
+
+### Changed
+
+- **The free Seedling plan is 8 plants and 2 people, and existing households
+  keep 20 and 3 (#1044).** The owner's decision of 2026-10-23 (ADR 0040), after the
+  outside households turned out to hold 5 to 9 plants with one or two people.
+  A household whose row was created before `SEEDLING_LIMITS_CUT_AT`
+  (2026-10-24 00:00 Pacific) keeps 20 plants and 3 members while it is on
+  Seedling; the rule compares the row's own `createdAt` on read, so no
+  production row is migrated. As before, a cap only blocks the next add:
+  nothing is removed, hidden or locked, and every plant stays editable. At the
+  cap, the Add Plant page and the Household page's invite section now show the
+  locked-feature card before the form, with the count, the free way to make
+  room, and Garden at its catalog price ($4.99 a month) through the existing
+  checkout; the apps show no price. Settings → Billing tells a grandfathered
+  household why its meters say 20 and 3, the billing and trial emails name the
+  household's own caps, and a refused join tells the joiner to ask the person
+  who invited them. Every public statement of the free limits (landing, sign-up,
+  pricing, FAQ, help, blog, care guides, page metadata, the social card, and
+  the Terms) says 8 and 2 in English and Spanish. The Terms text changed, and
+  takes effect with this release. Garden and Greenhouse are unchanged.
+- **The eight most-seen pet-safety pages go deeper (#1042).** Aloe vera,
+  snake plant, peace lily, spider plant, pothos, Christmas cactus, monstera
+  and bird of paradise now quote their ASPCA listing's toxic principles and
+  clinical signs word for word, show a horse verdict where the listing states
+  one, add NC State Extension's Plant Toolbox as a second source, list similar
+  plants with cited non-toxic verdicts and related plants with their own
+  verdicts, and answer common questions in an FAQ. Everything new comes from
+  the pet-toxicity table, and a build check rebuilds each element from it. A
+  second source can only agree with an ASPCA non-toxic verdict, never supply
+  one. The hotline box stays first.
+
+## [0.44.0] - 2026-10-23
+
+**The landing page names the product, sign-up asks for the password once,
+and a household on the no-card trial sees Garden as its plan.** Nine new care
+guides and eleven more plants in the pet-toxicity table (39
+`/pet-safe/<plant>` pages, 28 before), each verdict read from its own ASPCA
+listing; every pet-safety page now opens with both poison hotlines, and care
+guides open with the answer. The pricing page prints both monthly prices
+before the plans load, the Gift link is hidden while no gift can be bought,
+and sign-in loads faster on phones. A security update to `zod` (GHSA-mrhx-c7xc-m3w5) ships
+in the frontend and the backend. The no-card trial emails ship switched off.
+
+- **The Terraform plan is not the usual one.** Three PRs changed
+  `infrastructure/` since 0.43.0. Expect `Plan: 3 to add, 21 to change, 0 to
+destroy.`: the 3 adds are the trial-emails EventBridge rule (created
+  `DISABLED`), its target and its Lambda permission (#1008); the 21 changes
+  are the 19 Lambda `GIT_SHA` updates, the Lambda dead-letter queue policy
+  (which now names the new rule, #1008) and the `spa-router` CloudFront
+  function (nine new `/care/<plant>` paths, #1007, #1022). Anything else means
+  stop. No stored data is migrated and no API contract changes. The Terms of
+  Service text is unchanged, so their effective date stays 0.38.2's
+  (October 2, 2026).
+- **The trial lifecycle emails ship off.** `trial_lifecycle_emails_enabled`
+  is `false` in the production tfvars, so the digests Lambda gets no
+  `TRIAL_LIFECYCLE_EMAILS_ENABLED` variable and the daily rule never fires.
+  The owner steps to turn it on are in `docs/billing.md`, "The trial
+  lifecycle emails".
+- **The website gets every change at this tag; the apps get them only with
+  a store build.** No native iOS or Android code changed (the only file under
+  `frontend/ios` or `frontend/android` is the new `.greenlight.yml` scanner
+  baseline, #1033). The next store upload is 0.44.0, build 4400.
+
+### Added
+
+- **Nine cited pet-safety care guides (#1007, #1022).** African violet,
+  poinsettia, sago palm and asparagus fern (#1007), then haworthia, burro's
+  tail, blue echeveria, begonia and lily (#1022), each at `/care/<plant>`
+  with its own title and description, links from older guides and the
+  sitemap. Care facts come from the extension pages named in each pull
+  request; the pet verdicts come only from the pet-toxicity table. Lily is
+  the first guide whose cat and dog verdicts differ. Jasmine has no guide,
+  because its sources are not extension pages.
+- **Eleven more plants in the pet-toxicity table, each with the ASPCA listing it
+  was read from (#1011).** Alocasia, areca palm, corn plant, ponytail palm, begonia,
+  cast iron plant, jasmine (Jasminum), blue echeveria, haworthia, burro's tail
+  and schefflera were added on 2026-10-21 after reading each plant's own ASPCA
+  page. The table now has 40 plants, 39 with a cited listing, so **39 public
+  `/pet-safe/<slug>` pages are generated** (28 before). Verdicts for cats and
+  dogs are exactly the listing's; the clinical signs in a toxic plant's note are
+  the ones the listing names. Candidates with no listing of their own, or whose
+  listing is ambiguous, were not added.
+- **Trial lifecycle emails, off by default (#1008, ADR 0039).** A new
+  household's no-card Garden trial can send two emails: on day 10, "your
+  trial ends in 4 days", and on day 14, "you are back on Seedling, nothing was
+  deleted". The counts in them come from rows the app already stores. Each
+  has a one-click unsubscribe (`trial_notices`) and follows the existing
+  quiet-hours, suppression and send-once rules. This amends ADR 0027
+  decision 9. Nothing is sent in this release; see the note above.
+- **Two more sign-up steps reach Google Analytics (#1012).** `email_confirmed`
+  and `household_activated` go through the same consent check as the other
+  conversion events and carry nothing beyond the scrubbed page address. The
+  privacy page (English and Spanish) and `docs/analytics.md` now list six
+  steps.
+
+### Changed
+
+- **Landing page: the headline names the product, and the hero has one
+  sign-up button (#1035).** The headline now reads "Plant care for your whole
+  household.", and the "I thought you watered it." quote moves into the
+  subhead. The "See how it works" link is gone, and with it the
+  `hero_how_it_works` Google Analytics value. The note beside the button now
+  says there is no card, 14 days of Garden, the free plan's limits and the
+  emailed code, instead of listing the form's fields. The hero sits higher on
+  small phones. Spanish is updated.
+- **Sign-up asks for the password once (#1035).** The register form drops
+  "Confirm password" for a "Show password" toggle; the end-to-end register
+  test and the post-deploy smoke now fill one field. A new test runs the real
+  form with the real Google Analytics module: one `sign_up` on success, none
+  on a refusal and none under Global Privacy Control.
+- **A household on the no-card Garden trial is shown Garden, and its price
+  (#1038).** Settings → Billing used to mark Seedling "Current plan" with a
+  "Switch to Garden" button under the tier the household was already using,
+  and its plan line led with "the free Seedling plan". The grid now marks
+  Garden "Trying free until {date}" with a "Keep Garden" button, and the plan
+  line leads with the trial. On the web, the dashboard trial notice now gives
+  a household admin a "Keep Garden for $4.99 a month" button (or "Get Garden
+  back" after the trial), using the catalog's price; members, the apps and a
+  catalog with no published price get the plain link as before. The checks
+  that decide what a household can buy are unchanged.
+- **Care guides open with the answer (#1036).** On every `/care/<plant>`
+  page the water, light and pets facts now follow the heading, ahead of the
+  summary paragraph, and the page's one sign-up link moves from below the FAQ
+  to just under them, reading "Get watering reminders for your <plant>". On
+  `/pet-safe/<plant>` the hotlines and verdicts stay first, and the sign-up
+  box now names the plant and offers watering reminders, in English and
+  Spanish. The ZZ plant page lists "Zuzu plant" as its other name instead of
+  "ZZ".
+- **Every pet-safety page opens with both poison hotlines (#1034).** The
+  emergency box now comes first on `/pet-safe/<plant>`, ahead of the
+  verdicts, and on the unknown-plant view. It lists ASPCA Poison Control,
+  (888) 426-4435, and Pet Poison Helpline, (855) 764-7661, as tap-to-call
+  links, each with its fee in its own words ("A consultation fee may apply."
+  and "$99 incident fee applies."), the date both pages were read
+  (October 23, 2026), and a note that the ASPCA plant list says nothing about
+  how much a pet ate. Spanish is updated. A build check fails if anything
+  comes before the box, if a number and its link disagree, or if a paid link
+  appears inside it.
+- **Search titles for the overwatering post and the pet-safety pages (#1024).**
+  The overwatering post is now titled "How to fix an overwatered plant: signs
+  and a 2-minute check"; no care advice changed. Pet-safety pages are titled
+  "Is {name} toxic to cats and dogs? ASPCA verdict" and their description asks
+  "poisonous or safe for pets?" before giving the table's own verdict.
+- **The Gift link and the `/gift` page no longer advertise gifts that cannot be
+  bought (#1023).** Production has no gift price ids yet, so a signed-in buyer who
+  pressed "Buy gift" got a `GIFT_NOT_CONFIGURED` error. The footer, the landing
+  page header and footer and the pricing page now show the Gift link only when
+  `GET /billing/plans` says a gift tier is available (the same check the
+  checkout route runs), and `/gift` says "Gifts are not available yet" instead
+  of the steps and the sign-in prompt. When the price ids are set the link and
+  the page come back with no further change. Nothing in the billing code
+  changed.
+- **Sign-in loads faster on phones (#1037).** The sign-in form now loads its
+  validation code when a field is first focused instead of before the page
+  paints. The `zod` update below had pushed the mobile `/login` load past the
+  4.3-second Lighthouse limit; the rules and messages are unchanged.
+- **The gate now preflights the iOS and Android projects for store rejections (#1033).**
+  A `greenlight` step in `npm run verify` and the `Lint` job runs Greenlight
+  v0.2.0 (pinned by commit and module hash, built once with `go install`) as
+  `preflight frontend/ios` and `playscan frontend/android` with `--exit-code`,
+  so a CRITICAL or HIGH finding fails the build. It scans the two app projects
+  only, never the repo root, where it reads test files and worktrees and
+  reported false positives. Each run re-scans temp copies seeded with a missing
+  privacy manifest, a removed baseline and a restricted `READ_SMS` permission to
+  prove the step can fail. If the scanner cannot be built locally the gate says
+  `SKIPPED: greenlight not installed` and does not count the step as passed; in
+  CI a skip fails. One verified false positive is baselined, with its reason, in
+  `frontend/ios/.greenlight.yml`: `import StoreKit` in the rating-sheet plugin
+  matched the in-app-purchase rule, and the app sells nothing through Apple.
+- **Internal, no user-facing change: Dependabot reads the root lockfile
+  (#1013), and the root lockfile is back in sync with `size-limit` 14
+  (#1021).** After #990 left the root `package-lock.json` on `size-limit`
+  13, `npm ci` failed; #1021 moves `size-limit` and `@size-limit/file` to
+  14.2.0 together.
+- **Dependency updates.** `@sentry/react` 10.76.0 → 10.76.2 (#1020) and
+  `size-limit` 13.1.1 → 14.2.0 (#990, development only) in the frontend; the
+  `aws-sdk` group, twelve packages to 3.1147.0 (#1017), and
+  `@middy/http-json-body-parser` 7.7.2 → 7.9.2 (#1018) in the backend; and
+  the GitHub Action `zizmorcore/zizmor-action` 0.6.4 → 0.7.1 (#1016).
+
+### Fixed
+
+- **The pricing page shows the monthly prices before the plans load (#1026).**
+  The plan grid is filled from the plans API, so the prerendered page and the
+  first paint showed a spinner and no price, while the page's structured data
+  said 4.99. A line with both monthly prices now shows while the plans load
+  and is removed when the API answers. If the plans are unavailable or fail to
+  load, the page still shows only the status notice.
+- **Two blog posts no longer say the ZZ plant is toxic (#1025).** The ASPCA
+  plant list has no ZZ plant entry, so its care page and the checker say
+  Unknown (ADR 0011); the posts and the post listing now say there is no
+  verdict. A new test fails if any post states a verdict for a plant the
+  table cannot cite. The home page now links to the pet-safety checker.
+
+### Security
+
+- **`zod` 4.6.7 in the frontend and the backend (#1028).** Clears
+  GHSA-mrhx-c7xc-m3w5 (high), which covers `zod` below 4.6.6 and is in the
+  production dependencies of both. The `zod` 3.25.76 nested under
+  `chromium-bidi` is a development dependency.
+- **`vite` 8.3.5, development only (#1014).** Clears GHSA-587h-7wmj-h5pm,
+  GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and three Vite file-serving
+  advisories from `npm audit`. `vite` is development tooling, and the
+  built site does not include it.
+
+## [0.43.0] - 2026-10-20
+
+**The landing page now says what Family Greenhouse is and that a new
+household gets 14 days of Garden with no card; the Android app gets the iOS
+app's native surfaces; the iOS app asks for a rating at a good moment.** The
+website changes are copy: the screen a visitor lands on, and three plant
+pages (aloe vera, anthurium, bird of paradise). The app work reaches people
+through store builds (0.43.0, build 4300), not through this tag's web
+deploy, and no Android build has shipped. The rest of the release is
+dependency updates and two internal fixes.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  changed since 0.42.0, so the changes are the Lambda `GIT_SHA`
+  updates: 19 at 0.42.0, so expect `Plan: 0 to add, 19 to change, 0 to destroy.` Anything
+  else means stop. No stored data is migrated and no API contract changes.
+  The Terms of Service text is unchanged, so their effective date stays
+  0.38.2's (October 2, 2026).
+- **The paid plant-shop link ships off.** `frontend/src/config/affiliateLinks.json`
+  is empty in this release, so no page shows a "Buy this plant" link until
+  the owner sets an affiliate id (ADR 0038), and with it empty the plant
+  pages render as they did before the link existed.
+- **Android push stays off.** No Firebase credential is configured, so the
+  backend sends nothing to Android and the app offers nothing until the
+  owner's Firebase steps are done.
+
+### Added
+
+- **Plant pages: an optional "Buy this plant" paid link, off by default
+  (ADR 0038).** The `/care/<slug>` guides, and `/pet-safe/<slug>` pages
+  whose every verdict is a cited "non-toxic", can link to a hand-checked
+  product page at The Sill or Bloomscape once an affiliate id is set in
+  `frontend/src/config/affiliateLinks.json`. Each link carries
+  `rel="sponsored noopener"`, a visible "Paid link" label and a one-line
+  disclosure; there is no script or cookie, and it never renders inside
+  the iOS or Android app. The config ships empty, so the site renders
+  exactly as before until a program approves the account.
+- **iOS app: asks for an App Store rating after care is recorded, and a
+  Rate row (ADR 0036).** Once a person has marked care done three times
+  (in the app or from a notification's Done button), the app asks StoreKit
+  for Apple's own rating sheet, 1.5 seconds after the success toast. Never
+  in the launch that recorded the first of those, never on a sign-in or
+  setup screen, at most once per app version and at least 120 days apart;
+  Apple then shows it at most three times a year and never in TestFlight.
+  Nobody is asked whether they like the app first, and nothing is offered
+  for a rating. Settings → About gains **Rate Family Greenhouse** ("Califica
+  Family Greenhouse"), which opens the App Store's review form. Through a
+  new app-target plugin, `NativeReview`, used only when the bridge lists it,
+  so the website and older builds are unchanged (Android: below). All JS combined
+  658.61 kB measured, within the 674 kB budget.
+- **Android app: the native frame (ADR 0037).** The Android app gets what
+  the iOS app's frame does, drawn with Material 3 in Jetpack Compose behind
+  the same `NativeChrome` plugin: a top app bar with the screen's title, the
+  back arrow and the Plants and Tasks menus and search, a navigation bar
+  with Home, Plants, Tasks, Household and More, More and Settings as native
+  lists, confirmations as Material dialogs, choices as modal bottom sheets,
+  and Add care task as a modal bottom sheet. Back goes down a tab's stack,
+  then to Home, then out of the app with predictive back; a web dialog still
+  closes first. Every word still comes from the web's catalogs, in English
+  and Spanish. Only in an Android build whose bridge lists the plugin; the
+  website, iOS and older Android builds are unchanged.
+- **Android app: the signed-out intro (ADR 0035).** The Android app opens
+  signed-out on the same intro as the iOS app, drawn in Jetpack Compose: the
+  three story pages and "Start with your household" with **Create account**
+  and **I already have an account**, the same words in English and Spanish,
+  and the same rules for when it shows. Back goes to the previous page and,
+  from the first, onto the sign-in form. Text follows the system font size,
+  TalkBack reads titles as headings and the dots as one "Page 2 of 4"
+  control, and Remove animations stops the motion. Only in an Android build
+  whose bridge lists the new `NativeIntro` plugin.
+- **Android app: a rating ask after care is recorded, and the Rate row
+  (ADR 0036).** The Android app asks at the same moments and by the same
+  rules as the iOS app, with Google Play's own in-app review card; Play
+  decides whether it shows and never says whether the person rated.
+  Settings → About's **Rate Family Greenhouse** opens the Google Play
+  listing. Only in an Android build whose bridge lists the `NativeReview`
+  plugin.
+- **Android app: Done and Snooze on a reminder, like iOS.** Android
+  reminders now arrive as FCM data messages that the app draws itself, so a
+  reminder about one task shows **Done** and **Snooze until tomorrow** in
+  the person's language. A button opens the app, which acts on the task the
+  same way an iOS button does, and an answered reminder is a no-op on the
+  server. Reminders go in a **Care reminders** notification channel. Android
+  push stays off: no Firebase credential is configured, so the backend sends
+  nothing to Android and the app offers nothing until the owner's Firebase
+  steps are done (`docs/native-push-setup.md`).
+- **The store validator holds the Android app-target plugins.** Every Kotlin
+  class annotated `@CapacitorPlugin` must be registered by `MainActivity.kt`
+  and listed in the app-target table in `docs/mobile.md`.
+
+### Changed
+
+- **Landing page: what the product is, and the 14-day no-card trial, above
+  the fold (#1001).** The hero eyebrow now reads "Shared plant care and
+  watering reminders" ("Plant care and watering reminders" in hero variant
+  B); the headline and subhead are unchanged, so the A/B test stays valid.
+  The sign-up note under the hero button and the subtitle on the register
+  page now say that a new household starts with 14 days of Garden and no
+  card, then stays on the free plan. That trial already existed (ADR 0027);
+  the page had never mentioned it. Spanish is updated with real
+  translations. On phones the hero's top padding drops from 6rem to 3.5rem,
+  which moves the sign-up button up by about 80px; larger screens are
+  unchanged. No payment, billing or tracking code is touched, and the
+  `landing_cta_click`, `sign_up`, `start_trial` and `purchase` events fire as
+  before.
+- **Plant pages: aloe vera, anthurium and bird of paradise expanded (#1002).**
+  The care guides (`/care/<plant>`) and pet-safety pages
+  (`/pet-safe/<plant>`) now state the signs the ASPCA lists, say to call
+  your vet or a poison hotline, and carry new FAQs and links between the
+  guides and their pet-safety pages. The aloe pages no longer say the gel is
+  fine for pets: the ASPCA calls the gel edible but still lists the plant as
+  toxic, so the copy now says the whole plant stays out of reach (guide,
+  table note and the toxic-houseplants post). The anthurium page states that
+  the listing is for Anthurium scherzeranum, and the bird of paradise page
+  keeps its warning about the different shrub Caesalpinia gilliesii and says
+  no listing is recorded for the white bird of paradise. The care guides have no Spanish yet.
+- **Internal, no user-facing change: the trash test pins its clock (#999).**
+  The "finishes an interrupted restore" test in `trashService.test.ts`
+  depended on the real clock: once real time passed 2026-10-18 12:00 UTC the
+  share link it creates (14-day expiry) outlived the test's day-45 purge and
+  its last assertion failed. It now pins `Date` to the test's start. This is a
+  test change.
+- **Internal, no user-facing change: the release-record baseline (#1000).**
+  `.github/release-record-baseline.txt` and `docs/release-record-gap.md`
+  now record `v0.38.0` and `v0.38.1` as incomplete deploys with no GitHub
+  Release, so the weekly Release record check stops failing for them.
+  `v0.42.0` is deliberately not added; it needs a GitHub Release.
+- **Dependency updates.** `react-router` 8.3.1 → 8.4.0 (#972) and
+  `@sentry/react` 10.70.0 → 10.76.0 (#986) in the frontend;
+  `@aws-sdk/client-sns` 3.1116.0 → 3.1142.0 (#975),
+  `@aws-sdk/client-bedrock-runtime` 3.1135.0 → 3.1142.0 (#980) and
+  `@aws-sdk/client-sesv2` 3.1127.0 → 3.1146.0 (#987) in the backend; Android
+  `kotlinVersion` 2.3.21 → 2.4.20 (#981); and the GitHub Actions
+  `codeql-action` group (#883, #993), `ossf/scorecard-action` 2.4.4 → 2.5.0
+  (#996), `actions/upload-artifact` 7.0.1 → 7.0.2 (#997) and
+  `actions/download-artifact` 8.0.1 → 8.0.2 (#994).
+
+## [0.42.0] - 2026-10-12
+
+**The iOS app opens signed-out on a native intro instead of a sign-in
+form.** A new install sees three short pages on what the app is for, then a
+page with two doors, Create account and I already have an account, which
+lead to the same sign-up and sign-in screens as before. The intro is in the
+app binary, so it reaches people through a store build (0.42.0, build 4200),
+not through this tag's web deploy; the website and Android are unchanged.
+The rest of the release is dependency updates, one of them to the Stripe
+library the billing Lambda uses.
+
+- **The Terraform plan is the usual one.** Nothing under `infrastructure/`
+  and nothing under `.github/` changed since 0.41.0, so the only changes are
+  the 19 Lambda `GIT_SHA` updates: expect `Plan: 0 to add, 19 to change, 0
+to destroy.` Anything else means stop. No stored data is migrated, no API
+  contract changes, and the Terms of Service text is unchanged, so their
+  effective date stays 0.38.2's (October 2, 2026).
+- **The intro reaches people through store builds** (0.42.0, build 4200).
+  The web deploy carries its code, which does nothing on the website or in an
+  app whose bridge does not list the `NativeIntro` plugin. An iOS build made
+  with `VITE_NATIVE_PUSH_ENABLED=true` and
+  `VITE_NATIVE_PUSH_ANDROID_ENABLED=false` offers push, as builds 4001 and
+  4100 did.
+
+### Added
+
+- **iOS app: a native intro when no one is signed in (ADR 0035, #966).** A
+  signed-out start used to be the website's sign-in form in a web view.
+  The iOS app now opens on a SwiftUI intro over that form: three pages on
+  what the app is for ("One plant list for the whole house", "Claim it, and
+  nobody waters twice", "Going away? Hand the plants over"), drawn with the
+  brand's greenhouse mark and SF Symbols, then "Start with your household"
+  with **Create account** and **I already have an account**, which open the
+  existing sign-up screen or the sign-in form. Swipe, Next, page dots and
+  Skip; haptics on page changes; Dynamic Type, VoiceOver and Reduce Motion.
+  Light, like the rest of the app. The whole story shows once per install; after that, and
+  after sign-out, only the last page. English and Spanish through the
+  catalogs. Sign-in, sign-up and the session are unchanged. Only in an app
+  whose bridge lists the new `NativeIntro` plugin, so Android, the website
+  and older builds keep the sign-in screen as it was. All JS combined
+  655.83 → 657.25 kB measured, within the 674 kB budget.
+- **The store validator holds the iOS app-target plugins (ADR 0035,
+  #966).** Every Swift class that declares a `jsName` must be registered by
+  `MainViewController`, built by the Xcode project and listed in the new
+  app-target table in `docs/mobile.md`.
+
+### Changed
+
+- **Internal, no user-facing change: runtime dependency updates.** `stripe`
+  22.6.1 → 22.6.2 (#877) in the backend; its one change is that
+  `webhooks.constructEvent` now refuses an empty webhook secret. The billing
+  webhook already answers 500 "Webhook secret not configured" before calling
+  it when the secret is unset, and production's is set, so a signed event is
+  handled as before. `@aws-sdk/client-cognito-identity-provider` 3.1127.0 →
+  3.1137.0 (#876) in the backend and the frontend's development tooling.
+- **Internal, no user-facing change: development dependencies.**
+  `proxy-addr` 2.0.7 → 2.0.8 (#950), `compression` 1.8.1 → 1.8.2 (#951) and
+  `source-map-js` 1.2.1 → 1.2.2 (#952), all lockfile-only and used only by
+  the local server, Lighthouse CI and the CSS build. `brace-expansion`
+  5.0.12, 1.1.21 and 2.1.7 (#894) and `undici` 8.11.2 (#887) merged with no
+  file change, because 0.41.0 already carried those versions.
 
 ## [0.41.0] - 2026-10-10
 
@@ -1806,8 +2849,6 @@ CHECKOUT_PENDING`; the web client says a checkout is already in progress and
   anywhere west of UTC. The renderer that gets this right is
   `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
   blog and changelog can stop making the same mistake.
-  <<<<<<< HEAD
-  \=======
 
 - **The deep-link gates could not tell this account's Enrollment ID from its
   Team ID.** An `appID` is `<Team ID>.<bundle id>`, and

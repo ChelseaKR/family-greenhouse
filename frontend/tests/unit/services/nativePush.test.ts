@@ -417,3 +417,107 @@ describe('acting on a notification', () => {
     expect(nativePlugin.removeAllDeliveredNotifications).not.toHaveBeenCalled();
   });
 });
+
+const androidPlugin = vi.hoisted(() => ({
+  names: [] as string[],
+  listeners: {} as Record<string, (event: { actionId?: unknown; data?: unknown }) => void>,
+}));
+vi.mock('@capacitor/core', () => ({
+  registerPlugin: (name: string) => {
+    androidPlugin.names.push(name);
+    return {
+      addListener: async (
+        event: string,
+        listener: (event: { actionId?: unknown; data?: unknown }) => void
+      ) => {
+        androidPlugin.listeners[event] = listener;
+        return { remove: async () => undefined };
+      },
+    };
+  },
+}));
+
+import { hasNativePushActions, NATIVE_PUSH_ACTIONS_PLUGIN } from '@/services/nativePush';
+
+describe('acting on a notification the Android app drew', () => {
+  const DATA = {
+    url: 'https://familygreenhouse.net/plants/p1?task=t1#care',
+    taskId: 't1',
+    plantId: 'p1',
+    expectedNextDue: '2026-06-01T08:00:00.000Z',
+  };
+
+  function androidShell(plugins: string[]) {
+    (window as unknown as { Capacitor: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      PluginHeaders: plugins.map((name) => ({ name, methods: [{ name: 'addListener' }] })),
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    androidPlugin.names = [];
+    androidPlugin.listeners = {};
+    nativePlugin.callbacks = {};
+    localStorage.clear();
+    vi.stubEnv('VITE_NATIVE_PUSH_ENABLED', 'true');
+    vi.stubEnv('VITE_NATIVE_PUSH_ANDROID_ENABLED', 'true');
+    nativePlugin.addListener.mockImplementation(
+      async (event: string, callback: (value: { value?: string; error?: string }) => void) => {
+        nativePlugin.callbacks[event] = callback;
+        return { remove: async () => undefined };
+      }
+    );
+    nativePlugin.removeAllDeliveredNotifications.mockResolvedValue(undefined);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('listens to the app plugin only when the bridge lists it, and only on Android', () => {
+    androidShell([NATIVE_PUSH_ACTIONS_PLUGIN]);
+    expect(hasNativePushActions()).toBe(true);
+    androidShell([]);
+    expect(hasNativePushActions()).toBe(false);
+    (window as unknown as { Capacitor: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      PluginHeaders: [{ name: NATIVE_PUSH_ACTIONS_PLUGIN, methods: [] }],
+    };
+    expect(hasNativePushActions()).toBe(false);
+  });
+
+  it('posts Done for the task a button names, and opens the link on a tap', async () => {
+    androidShell([NATIVE_PUSH_ACTIONS_PLUGIN]);
+    pushActionsMock.performPushAction.mockResolvedValue('done');
+    const pushState = vi.spyOn(window.history, 'pushState').mockImplementation(() => undefined);
+
+    initNativePush();
+    await vi.waitFor(() => expect(androidPlugin.listeners.pushAction).toBeDefined());
+    expect(androidPlugin.names).toEqual([NATIVE_PUSH_ACTIONS_PLUGIN]);
+
+    androidPlugin.listeners.pushAction({ actionId: 'done', data: DATA });
+    await vi.waitFor(() =>
+      expect(nativePlugin.removeAllDeliveredNotifications).toHaveBeenCalledOnce()
+    );
+    expect(pushActionsMock.performPushAction).toHaveBeenCalledWith({
+      action: 'done',
+      taskId: 't1',
+      plantId: 'p1',
+      expectedNextDue: '2026-06-01T08:00:00.000Z',
+    });
+
+    androidPlugin.listeners.pushAction({ actionId: 'tap', data: DATA });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plants/p1?task=t1#care');
+    pushState.mockRestore();
+  });
+
+  it('never loads the app plugin in an Android build without it', async () => {
+    androidShell([]);
+    initNativePush();
+    await vi.waitFor(() =>
+      expect(nativePlugin.callbacks.pushNotificationActionPerformed).toBeDefined()
+    );
+    await Promise.resolve();
+    expect(androidPlugin.names).toEqual([]);
+  });
+});

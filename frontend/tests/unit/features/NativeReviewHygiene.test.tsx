@@ -13,7 +13,7 @@
  * `window.Capacitor`, which lib/platform.ts reads.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '@/App';
@@ -175,15 +175,32 @@ describe('on the website (unchanged)', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
-  it('the public footer still links to plans and gifts, with the memorial line', () => {
+  it('the public footer still links to plans and, while gifts are for sale, to gifts, with the memorial line', async () => {
+    // The Gift link follows the plan catalog (`useGiftAvailability`); the
+    // catalog says gifts are for sale here. The unset case is covered in
+    // GiftAvailability.test.tsx.
+    vi.spyOn(billingService, 'listPlans').mockResolvedValue({
+      paymentsAvailable: true,
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      plans: [],
+      giftSubscriptions: {
+        minMonths: 1,
+        maxMonths: 12,
+        redeemWindowDays: 365,
+        plans: [{ planId: 'garden', available: true }],
+      },
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <MemoryRouter>
-        <Footer />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Footer />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
+    await waitFor(() => expect(footerHrefs()).toContain('/gift'));
     const hrefs = footerHrefs();
     expect(hrefs).toContain('/pricing');
-    expect(hrefs).toContain('/gift');
     expect(screen.getByText(MEMORIAL)).toBeInTheDocument();
   });
 

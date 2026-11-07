@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { TasksPage } from '@/features/tasks/TasksPage';
 import { Toaster } from '@/components/Toaster';
 import { UNDO_WINDOW_MS, resetDeferredCareQueueForTests } from '@/features/plants/deferredCare';
@@ -188,6 +188,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  onlineManager.setOnline(true);
   await i18n.changeLanguage('en');
   server.events.removeAllListeners();
   vi.useRealTimers();
@@ -456,6 +457,25 @@ describe('Tasks on a phone ("Checklist")', () => {
     await vi.waitFor(() => expect(writes.at(-1)).toBe('POST /tasks/t-fern/unclaim'));
   });
 
+  it('a snooze made offline says nothing was saved and is never sent later', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderTasks();
+    const row = (await screen.findByRole('link', { name: /^Aloe/ })).parentElement!;
+    act(() => onlineManager.setOnline(false));
+    touch('pointerDown', row, 300);
+    touch('pointerMove', row, 260);
+    touch('pointerMove', row, 100);
+    touch('pointerUp', row, 100);
+    await user.click(within(row.closest('li')!).getByRole('button', { name: 'Snooze' }));
+    await user.click(within(await sheetFor('Snooze')).getByRole('button', { name: '3 days' }));
+    expect(
+      await screen.findByText("You're offline. Nothing was saved. Try again once you're connected.")
+    ).toBeInTheDocument();
+    act(() => onlineManager.setOnline(true));
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    expect(writes).toEqual([]);
+  });
+
   it('only one row is open at a time: opening or touching another closes it', async () => {
     renderTasks();
     const rowOf = async (name: RegExp) =>
@@ -558,7 +578,7 @@ describe('Tasks on a phone ("Checklist")', () => {
     expect(await screen.findByRole('group', { name: 'Filtros de tareas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mis tareas' })).toBeInTheDocument();
     expect(screen.getByText('El trabajo de hoy')).toBeInTheDocument();
-    expect(screen.getByText('7 tareas mostradas.')).toBeInTheDocument();
+    expect(await screen.findByText('7 tareas mostradas.')).toBeInTheDocument();
     expect(screen.getAllByText('Regar').length).toBeGreaterThan(0);
     expect(screen.getAllByText('3 días de retraso').length).toBe(1);
     expect(screen.queryByText('Water')).toBeNull();

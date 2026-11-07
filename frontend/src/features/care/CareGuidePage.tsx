@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { use, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
@@ -13,7 +13,16 @@ import { SITE_URL } from '@/config/site';
 import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
-import { findCareGuide, type CareGuide } from './careGuides';
+import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
+import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
+import { trackGoogleConversion } from '@/services/googleAnalytics';
+import { careGuideHeading, type CareGuide } from './careGuides';
+import { wateringAnswer } from './wateringAnswer';
+import {
+  careGuideResource,
+  findCareGuideEntry,
+  type CareGuideIndexEntry,
+} from './careGuideContent';
 import {
   ASPCA_POISON_CONTROL_PHONE,
   careToxicity,
@@ -38,9 +47,11 @@ const SITE = SITE_URL;
  * inbound links from the 24 pages most likely to send it traffic.
  *
  * Paths only, never absolute URLs: an external href would need rel/target
- * handling and a trust decision, and none of this copy wants one.
+ * handling and a trust decision, and none of this copy wants one. That
+ * includes `//host`, which a router reads as another origin, so a path may
+ * not open with two slashes.
  */
-const INLINE_LINK = /\[([^\]]+)\]\((\/[A-Za-z0-9\-._~/]*)\)/g;
+const INLINE_LINK = /\[([^\]]+)\]\((\/(?!\/)[A-Za-z0-9\-._~/]*)\)/g;
 
 function withLinks(text: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -175,19 +186,27 @@ function Paragraphs({ items }: { items: string[] }) {
  *
  * FAQPage carries only questions whose answers are printed on the page, and
  * the pet-toxicity question only when every animal's verdict is cited (see
- * careToxicity.ts). Since 2023 Google shows FAQ rich results only for
- * well-known government and health sites, so the markup describes the page
- * rather than buying a rich result; URL Inspection on 2026-10-02 detected
- * only Breadcrumbs on these pages.
+ * careToxicity.ts). Google stopped showing FAQ rich results on 2026-05-07
+ * and removed their documentation on 2026-06-15 (Search Central changelog),
+ * and HowTo rich results went in 2023, so neither type buys anything in
+ * Google. FAQPage stays because it is valid schema.org that describes the
+ * page and matches its visible text, which is what Google asks of any markup
+ * read for AI features. What Google can quote is the visible answer, so the
+ * watering section opens with it (wateringAnswer.ts).
  */
 export function CareGuidePage() {
   const { slug } = useParams<{ slug: string }>();
-  const guide = slug ? findCareGuide(slug) : undefined;
+  // The index says whether the slug is published; only then is the full
+  // guide asked for. `use` returns at once when the guide is in the bundle or
+  // in the prerendered page, and suspends on a fetch otherwise.
+  const entry = slug ? findCareGuideEntry(slug) : undefined;
+  const guide = entry ? use(careGuideResource(entry.slug)) : undefined;
   const toxicity = guide ? careToxicity(guide) : undefined;
   // Every FAQ shown on the page, in order: the guide's care questions, then
   // the generated pet question. Only the sourced ones go into FAQPage.
   const faqs = guide && toxicity ? [...guide.faqs, toxicity.faq] : [];
   const markedUpFaqs = guide && toxicity ? (toxicity.sourced ? faqs : guide.faqs) : [];
+  const shortWaterAnswer = guide ? wateringAnswer(guide) : undefined;
 
   useMetaTags(
     guide
@@ -209,7 +228,7 @@ export function CareGuidePage() {
                 // Was "<Name> Care Guide" while the visible H1 reads
                 // "<Name> care" and the metaTitle a third thing. Google asks
                 // that headline match the visible headline.
-                headline: `${guide.commonName} care`,
+                headline: careGuideHeading(guide),
                 description: guide.metaDescription,
                 // See the note in BlogPost.tsx — `image` is required for the
                 // Article rich result and all 24 guides omitted it.
@@ -278,8 +297,20 @@ export function CareGuidePage() {
   // it with, or the one that suits the same spot. This replaced a rotation
   // through the array, which spread links evenly but paired plants at random.
   const related = guide.related
-    .map((relatedSlug) => findCareGuide(relatedSlug))
-    .filter((g): g is CareGuide => g !== undefined);
+    .map((relatedSlug) => findCareGuideEntry(relatedSlug))
+    .filter((g): g is CareGuideIndexEntry => g !== undefined);
+
+  // Both sign-up links carry the plant to the first run when it can offer it
+  // (features/onboarding/guidePlantHandoff), and both are counted in GA4
+  // under the content-page parameters, never the home page's `cta`.
+  const registerHref = registerHrefForPlant(guide.slug);
+  const trackCareCta = (placement: 'glance' | 'body') =>
+    trackGoogleConversion({
+      name: 'landing_cta_click',
+      source: 'care_guide',
+      placement,
+      plant: guide.slug,
+    });
 
   return (
     <PublicShell width="article">
@@ -296,7 +327,7 @@ export function CareGuidePage() {
           Plant care guide
         </p>
         <h1 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl">
-          {guide.commonName} care
+          {careGuideHeading(guide)}
         </h1>
         <p className="mt-2 text-lg italic text-gray-600">
           {guide.scientificName}
@@ -309,20 +340,26 @@ export function CareGuidePage() {
         </p>
       </header>
 
-      <p className="prose-fg lead">{guide.summary}</p>
-
       {/* At-a-glance facts, styled as the back of a seed packet:
             parchment ground, a dashed inner frame like a cut line, and a
             hand-drawn icon per fact. The icons mark topics only — the
-            fact text carries the actual answer. */}
+            fact text carries the actual answer.
+
+            They come straight after the heading because they ARE the
+            answer: the searched question is "how often to water <plant>",
+            and the water line used to sit below the summary paragraph,
+            under the fold on a phone. */}
       <aside
         aria-label={`${guide.commonName} at a glance`}
         className="mt-8 rounded-xl border border-primary-200 bg-parchment/70 shadow-journal"
       >
         <div className="m-2 rounded-lg border border-dashed border-primary-300/70 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-800">
+          {/* A heading, so heading navigation lands on the answer and its
+              reminder link rather than jumping from the h1 to the watering
+              section below them. */}
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-800">
             At a glance
-          </p>
+          </h2>
           <dl className="mt-1 divide-y divide-primary-200/50">
             {(
               [
@@ -339,22 +376,70 @@ export function CareGuidePage() {
                 ],
               ] as Array<[string, string, React.ComponentType<{ className?: string }>]>
             ).map(([label, value, Icon]) => (
-              <div key={label} className="flex gap-4 py-3">
-                <Icon className="mt-0.5 h-8 w-8 shrink-0 text-primary-700" />
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-primary-800">
-                    {label}
-                  </dt>
-                  <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
-                </div>
+              // `dt` and `dd` are direct children of the row `div`, the only
+              // wrapper a `dl` allows (WCAG 1.3.1). The icon sits inside the
+              // `dt`, placed in the row's left padding, so the row looks as
+              // it did when the icon and text were flex siblings.
+              <div key={label} className="relative py-3 pl-12">
+                <dt className="text-xs font-medium uppercase tracking-wide text-primary-800">
+                  <Icon className="absolute left-0 top-3.5 h-8 w-8 text-primary-700" />
+                  {label}
+                </dt>
+                <dd className="mt-0.5 text-sm text-gray-900">{value}</dd>
+                {/* A link to the reminder right beside the answer it is
+                    about, so it is on the first screen of a phone and a
+                    laptop. The sign-up box below sat just under the fold
+                    on both (2026-10-30 audit: y=900 against a 664px phone
+                    screen, 778 against 768 on a laptop). */}
+                {label === 'Water' && PUBLIC_REGISTRATION_AVAILABLE && (
+                  <dd className="mt-1 text-sm">
+                    <Link
+                      to={registerHref}
+                      data-testid="care-glance-cta"
+                      className="inline-flex min-h-touch items-center font-semibold text-primary-700 underline underline-offset-2 hover:text-primary-800"
+                      onClick={() => trackCareCta('glance')}
+                    >
+                      Remind me to water my {sentenceName(guide.commonName)} →
+                    </Link>
+                  </dd>
+                )}
               </div>
             ))}
           </dl>
         </div>
       </aside>
 
+      {/* The page's one call to action, directly under the answer it follows
+          from. It sat at the very bottom, after the FAQ and the dates, where
+          the near-100% bounce of these pages meant almost nobody reached it. */}
+      {PUBLIC_REGISTRATION_AVAILABLE && (
+        <aside
+          aria-label="Watering reminders"
+          data-testid="care-cta"
+          className="mt-6 flex flex-col items-start gap-3 rounded-xl border border-primary-200 bg-primary-50 p-5 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p className="text-sm text-gray-700">
+            Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
+            the right person in your household. Free for up to 8 plants, no card.
+          </p>
+          <Link
+            to={registerHref}
+            className={`${buttonStyles()} shrink-0 text-center max-sm:whitespace-normal`}
+            onClick={() => trackCareCta('body')}
+          >
+            Get watering reminders for your {sentenceName(guide.commonName)}
+          </Link>
+        </aside>
+      )}
+
+      <p className="prose-fg lead mt-10">{guide.summary}</p>
+
       <article className="prose-fg mt-12">
         <h2>How often to water {nameInSentence(guide.commonName)}</h2>
+        {/* The short answer first, as one paragraph straight under the
+            question it answers: the shape a results page quotes. It is the
+            guide's own FAQ answer, word for word (see wateringAnswer.ts). */}
+        {shortWaterAnswer && <p data-testid="care-water-answer">{withLinks(shortWaterAnswer)}</p>}
         <Paragraphs items={guide.sections.watering} />
 
         <h2>Light and humidity</h2>
@@ -391,6 +476,30 @@ export function CareGuidePage() {
             </div>
           ))}
         </dl>
+
+        {/* The water, light and humidity lines above were checked against
+            these pages; the pet answer cites the ASPCA in its own section. */}
+        <section aria-labelledby="care-sources" data-testid="care-sources">
+          <h2 id="care-sources">Where this care advice comes from</h2>
+          <p>
+            The watering, light and humidity advice on this page was checked against the following
+            pages. The wording is ours.
+          </p>
+          <ul>
+            {guide.careSources.map((s) => (
+              <li key={s.url}>
+                <a
+                  href={s.url}
+                  className="text-primary-700 underline hover:no-underline"
+                  rel="noopener"
+                >
+                  {s.publisher}, {s.title}
+                </a>{' '}
+                (read <time dateTime={s.accessed}>{formatContentDate(s.accessed)}</time>)
+              </li>
+            ))}
+          </ul>
+        </section>
       </article>
 
       {/* The page's own copy of the dates its markup publishes. Without this
@@ -410,21 +519,10 @@ export function CareGuidePage() {
         )}
       </p>
 
-      {PUBLIC_REGISTRATION_AVAILABLE && (
-        <aside className="mt-16 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
-          <p className="font-serif text-xl text-ink">Stop guessing when you watered it</p>
-          <p className="mt-2 text-sm text-gray-600">
-            Family Greenhouse tracks your {sentenceName(guide.commonName)}’s schedule and reminds
-            the right person — so “I thought you watered it” stops being a thing. Free for up to 20
-            plants, no card.
-          </p>
-          <div className="mt-4">
-            <Link to="/register" className={buttonStyles()}>
-              Add your {sentenceName(guide.commonName)}
-            </Link>
-          </div>
-        </aside>
-      )}
+      {/* Optional paid link to a shop (ADR 0038). Placed after the dates and
+          away from the toxicity section, so it never reads as part of the
+          pet answer. Renders nothing unless a program is configured. */}
+      <PlantShopLink slug={guide.slug} />
 
       {related.length > 0 && (
         <section className="mt-16">

@@ -96,7 +96,7 @@ export function BrandMark({
       >
         <span className={clsx('font-serif tracking-tight', s.title, titleColor)}>
           Family Greenhouse
-        </span>
+        </span>{' '}
         <span className={clsx('uppercase tracking-[0.2em]', s.tagline, taglineColor)}>
           {t('brand.tagline')}
         </span>

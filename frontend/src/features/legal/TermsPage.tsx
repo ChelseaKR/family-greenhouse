@@ -19,7 +19,8 @@ import { useMetaTags } from '@/hooks/useMetaTags';
  * The commercial sections — trial, renewal, cancellation, price changes,
  * one-time purchases and refunds — describe what the billing code actually
  * does, not a policy written ahead of it. Each claim is traceable: the
- * 14-day trial is `trial_period_days: 14` in services/billing.ts,
+ * trial is `checkoutTrialFor` in backend/src/models/checkoutTrial.ts (14 days,
+ * or the rest of a running no-card trial, never both),
  * cancellation runs through the Stripe portal (`createPortalSession`,
  * admin-only) and holds the plan until `customer.subscription.deleted` drops
  * it to seedling, a failed payment keeps the plan while Stripe retries because
@@ -55,6 +56,15 @@ export function TermsPage() {
 
       <h2>{t('legal.terms.agreement.heading')}</h2>
       <p>{t('legal.terms.agreement.body')}</p>
+
+      <h2>{t('legal.terms.operator.heading')}</h2>
+      <p>
+        <Trans
+          i18nKey="legal.terms.operator.body"
+          values={{ supportEmail: SUPPORT_EMAIL }}
+          components={{ supportLink: <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> }}
+        />
+      </p>
 
       <h2>{t('legal.terms.eligibility.heading')}</h2>
       <p>
@@ -165,9 +175,34 @@ export function TermsPage() {
       <p>{t('legal.terms.refunds.oneTime')}</p>
       <p>{t('legal.terms.refunds.statutory')}</p>
 
+      {/*
+        Apple In-App Purchase (ADR 0041). Placed after Refunds because it
+        says "the sections above" do not apply to an Apple subscription.
+        Each claim is the code: the App Store products have no introductory
+        offer (`introductoryOffer: null` in FamilyGreenhouse.storekit, ADR
+        0041), so Apple charges at purchase; `noCardTrialState` in
+        models/plans.ts returns `none` once any App Store subscription is on
+        the row, so buying ends the no-card trial; and account deletion
+        cancels only a Stripe subscription
+        (`accountCleanup.cancelAbandonedHouseholdSubscription`), because an
+        Apple subscription can only be cancelled by the subscriber.
+      */}
+      <h2>{t('legal.terms.applePurchases.heading')}</h2>
+      <p>{t('legal.terms.applePurchases.body')}</p>
+
+      {/*
+        Paid links (ADR 0038). Website only: PlantShopLink renders nothing
+        inside the native apps, and nothing at all while
+        config/affiliateLinks.json is empty, hence "may carry". The label
+        quoted here is the `plantShop.paidLink` catalog string.
+      */}
+      <h2>{t('legal.terms.paidLinks.heading')}</h2>
+      <p>{t('legal.terms.paidLinks.body')}</p>
+
       <h2>{t('legal.terms.limitations.heading')}</h2>
       <p>{t('legal.terms.limitations.asIs')}</p>
       <p>{t('legal.terms.limitations.advice')}</p>
+      <p>{t('legal.terms.limitations.petSafety')}</p>
 
       <h2>{t('legal.terms.disputes.heading')}</h2>
       <p>{t('legal.terms.disputes.body')}</p>

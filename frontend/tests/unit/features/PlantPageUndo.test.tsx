@@ -133,7 +133,7 @@ describe('the status card’s Watered', () => {
   it('writes nothing until the window has passed, then exactly one completion', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     // The button became Undo, and the toast offers it too.
     expect(screen.getByRole('button', { name: 'Undo: Water Peace Lily' })).toBeInTheDocument();
     expect(screen.getByText('Done: Water, Peace Lily')).toBeInTheDocument();
@@ -148,18 +148,18 @@ describe('the status card’s Watered', () => {
   it('an undone water writes NOTHING (the card’s Undo)', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     await pass(1500);
     await u.click(screen.getByRole('button', { name: 'Undo: Water Peace Lily' }));
     await pass(UNDO_WINDOW_MS * 3);
     expect(writes).toEqual([]);
-    expect(screen.getByRole('button', { name: 'Water Peace Lily' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Watered: Water Peace Lily' })).toBeInTheDocument();
   });
 
   it('an undone water writes NOTHING (the toast’s Undo)', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     const toasts = await screen.findByRole('region', { name: 'Notifications' });
     await u.click(await within(toasts).findByRole('button', { name: 'Undo' }));
     await pass(UNDO_WINDOW_MS * 3);
@@ -169,7 +169,7 @@ describe('the status card’s Watered', () => {
   it('the card and the task row are one pending completion, never two', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     // The task row's Done for the same task is now Undo, not a second Done.
     const rowUndo = screen.getAllByRole('button', { name: 'Undo' });
     expect(rowUndo.length).toBeGreaterThan(0);
@@ -181,7 +181,7 @@ describe('the status card’s Watered', () => {
   it('leaving the page still commits exactly once', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     await u.click(screen.getByRole('button', { name: 'leave' }));
     expect(await screen.findByText('Tasks page')).toBeInTheDocument();
     expect(writes).toEqual([]);
@@ -192,7 +192,7 @@ describe('the status card’s Watered', () => {
   it('the app going to the background commits at once, and never again', async () => {
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'));
@@ -211,7 +211,7 @@ describe('the status card’s Watered', () => {
     );
     const u = user();
     renderPlant();
-    await u.click(await screen.findByRole('button', { name: 'Water Peace Lily' }));
+    await u.click(await screen.findByRole('button', { name: 'Watered: Water Peace Lily' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Bottom-water this one.')).toBeInTheDocument();
     await u.click(within(dialog).getByRole('button', { name: /cancel/i }));

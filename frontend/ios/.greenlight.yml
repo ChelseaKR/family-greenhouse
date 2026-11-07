@@ -1,0 +1,15 @@
+# Baseline for `greenlight preflight frontend/ios` (scripts/check-greenlight.mjs).
+# The `# Nothing is ignored. Until 2026-10-24 NativeReviewPlugin.swift was, for the
+# [HIGH] 3.1.1 "In-app purchases without restore functionality" match on its
+# `import StoreKit` while the app sold nothing through Apple. The app now sells
+# through StoreKit (ADR 0041) and has Restore purchases
+# (App/App/NativePurchasesPlugin.swift), so the rule passes on its own, and
+# scripts/check-greenlight.mjs proves it fires again without that file.
+ignore: []
+
+# Not baselined, because no baseline can reach it (privacy scanner) and it does
+# not fail the gate: [INFO] "Privacy manifest declares tracking but no tracking
+# SDKs detected". greenlight tests whether PrivacyInfo.xcprivacy contains the
+# substring NSPrivacyTracking AND any `<true/>` anywhere; our manifest has
+# NSPrivacyTracking = false, and `<true/>` is the NSPrivacyCollectedDataTypeLinked
+# flag. A false positive of the scanner's substring match.
