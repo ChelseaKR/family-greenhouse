@@ -317,12 +317,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Swiss Cheese Plant', 'Split-Leaf Philodendron'],
     related: ['heartleaf-philodendron', 'fiddle-leaf-fig', 'bird-of-paradise'],
-    metaTitle: 'How Often to Water a Monstera + Why No Leaf Holes',
+    metaTitle: 'How Often to Water a Monstera: Once the Top 1–2 Inches Dry',
     heading: 'Monstera care: how often to water it',
     metaDescription:
-      'Water a monstera thoroughly, then let the top 1–2 inches of soil dry. The light it needs to grow leaf holes, and why leaves turn yellow or brown.',
+      'Water a monstera thoroughly once the top 1–2 inches of soil are dry, and less in winter. Plus the light it needs to grow leaf holes, and why leaves turn yellow.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'The monstera is the plant everyone wants for those dramatic split leaves — and the one people are surprised they have to earn. The holes aren’t automatic; they’re a reward for getting the light right.',
     quickFacts: {
@@ -550,12 +550,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Philodendron hederaceum',
     alsoKnownAs: ['Sweetheart Plant', 'Philodendron', 'Philodendron scandens'],
     related: ['pothos', 'monstera', 'hoya'],
-    metaTitle: 'Heartleaf Philodendron Care: Keep It Lightly Moist',
+    metaTitle: 'How Often to Water a Heartleaf Philodendron: Lightly Moist',
     heading: 'Heartleaf philodendron care: how often to water it',
     metaDescription:
-      'Keep a heartleaf philodendron’s soil lightly moist, never soggy, and water less in winter. It copes with low light, and it’s toxic to cats and dogs if chewed.',
+      'Keep a heartleaf philodendron’s soil lightly and evenly moist, never soggy, and water less in winter. It copes with low light; toxic to cats and dogs if chewed.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'The heartleaf philodendron is the plant people confuse with pothos, and for good reason — same trailing habit, same near-indestructible temperament, same forgiving nature. It’s one of the genuinely easy ones, and a great vine for a beginner who wants something prettier than they had to work for.',
     quickFacts: {
@@ -1030,12 +1030,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Ficus elastica',
     alsoKnownAs: ['Rubber Tree', 'Rubber Fig', 'Ficus elastica'],
     related: ['fiddle-leaf-fig', 'money-tree', 'dieffenbachia'],
-    metaTitle: 'Rubber Plant Care: When to Water a Ficus Elastica',
+    metaTitle: 'How Often to Water a Rubber Plant: Once Slightly Dry',
     heading: 'Rubber plant care: how often to water it',
     metaDescription:
       'Water a rubber plant (Ficus elastica) thoroughly, then let the soil dry slightly, and water less in fall and winter. It wants bright light. Why leaves drop.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'A rubber plant is what you buy when you want the drama of a fiddle leaf fig without the temperament. Same big glossy leaves, same architectural shape, a fraction of the sulking — it’s the easiest large statement plant you can own.',
     quickFacts: {
@@ -1107,12 +1107,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Strelitzia reginae',
     alsoKnownAs: ['Crane Flower', 'Strelitzia', 'Bird of Paradise Flower'],
     related: ['monstera', 'fiddle-leaf-fig', 'money-tree'],
-    metaTitle: 'Bird of Paradise Plant Care: Watering, Light + Blooms',
+    metaTitle: 'Bird of Paradise Plant Care: Bright Sun, Slow to Bloom',
     heading: 'Bird of paradise plant care',
     metaDescription:
-      'Water a bird of paradise plant generously in summer and less in winter. It needs as much bright light as you can give it indoors, and may never bloom there.',
+      'Water a bird of paradise plant thoroughly in spring and summer, less in winter. Give it your brightest spot. It flowers only when mature, at 5 to 10 years old.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'A bird of paradise is the closest thing to a small tree that will live in a flat. It’s genuinely easy to keep alive and genuinely hard to make flower indoors — worth knowing which of those you’re buying it for.',
     quickFacts: {
@@ -1458,12 +1458,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Hedera helix',
     alsoKnownAs: ['Common Ivy', 'Hedera', 'Needlepoint Ivy', 'Glacier Ivy'],
     related: ['pothos', 'hoya', 'boston-fern'],
-    metaTitle: 'English Ivy Indoor Care: Watering, Light, and Pet Safety',
+    metaTitle: 'How Often to Water English Ivy: When Top Half-Inch Is Dry',
     heading: 'English ivy care indoors',
     metaDescription:
-      'English ivy indoors wants a cool, bright room and soil that dries only half an inch down between waterings. How to beat pests, and why it is not pet-safe.',
+      'Water English ivy thoroughly when the top half-inch of soil is dry, never soggy. It wants a cool, bright room, and it is toxic to cats and dogs if eaten.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'English ivy is a beautiful trailing plant that is far fussier indoors than its reputation as an unstoppable outdoor weed suggests. It wants a cool, bright room, and in a warm dry living room it is more prone to pests and sulks.',
     quickFacts: {
@@ -1610,12 +1610,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Pachira aquatica',
     alsoKnownAs: ['Pachira', 'Guiana Chestnut', 'Malabar Chestnut', 'Braided Money Tree'],
     related: ['parlor-palm', 'rubber-plant', 'calathea'],
-    metaTitle: 'Money Tree Care: Pet-Safe, Moist but Well-Drained Soil',
+    metaTitle: 'How Often to Water a Money Tree: Before the Soil Dries Out',
     heading: 'Money tree care: watering and pet safety',
     metaDescription:
-      'The ASPCA lists the money tree as non-toxic to cats and dogs. Keep its soil moist but well-drained, never standing in water, in bright, indirect light.',
+      'Water a money tree before its soil dries out completely, then let the pot drain; never leave it in water. The ASPCA lists it as non-toxic to cats and dogs.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'The braided money tree is a genuinely good houseplant hiding behind a gimmicky presentation. It’s easy, it’s forgiving, and — unusually for a plant this size — the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -2005,12 +2005,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Fittonia albivenis',
     alsoKnownAs: ['Fittonia', 'Mosaic Plant', 'Silver Nerve', 'Silver Threads'],
     related: ['calathea', 'begonia', 'african-violet'],
-    metaTitle: 'Nerve Plant Care: Water Twice a Week, Keep It Moist',
+    metaTitle: 'How Often to Water a Nerve Plant: About Twice a Week',
     heading: 'Nerve plant care: how often to water it',
     metaDescription:
       'Water a nerve plant about twice a week; keep the soil moist, not waterlogged. It wilts when thirsty, recovers fast, and it’s non-toxic to cats and dogs.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-06',
     summary:
       'The nerve plant is the drama queen of small houseplants: it faints flat when it gets thirsty and springs back up within hours of a drink. Once you know the fainting is theatre rather than death, it’s easy — and the ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
