@@ -2857,7 +2857,13 @@
       "startWithGuide": "Empieza con una guía",
       "allGuides": "Todas las guías de cuidado (en inglés)",
       "readBlog": "Lee el blog (en inglés)",
-      "petSafeChecker": "Revisa una planta para mascotas"
+      "petSafeChecker": "Revisa una planta para mascotas",
+      "startWithList": "O empieza con una lista (en inglés)",
+      "lists": {
+        "forgiving": "Siete plantas de interior que sobreviven al olvido",
+        "petSafe": "Plantas seguras para mascotas y difíciles de matar",
+        "toxicSwaps": "Plantas de interior tóxicas comunes y alternativas más seguras"
+      }
     },
     "plans": {
       "eyebrow": "Planes",
