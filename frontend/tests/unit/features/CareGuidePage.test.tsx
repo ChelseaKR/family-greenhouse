@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CareGuidePage } from '@/features/care/CareGuidePage';
 import { CARE_GUIDES } from '@/features/care/careGuides';
 import { sentenceName } from '@/features/care/plantNames';
+import { wateringAnswer } from '@/features/care/wateringAnswer';
 import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
 
@@ -428,6 +429,66 @@ describe('CareGuidePage sign-up links carry the plant', () => {
       );
       expect(hrefs, slug).toEqual([expected, expected]);
       unmount();
+    }
+  });
+});
+
+/**
+ * Answer-first watering section (2026-11-07). The care pages rank around 9 to
+ * 10 for "how often to water <plant>" and Google answers that on the results
+ * page, so the page has to offer the passage it quotes: the question as a
+ * heading and, directly under it, one complete paragraph that answers it.
+ */
+describe('CareGuidePage short watering answer', () => {
+  it('has a "How often should I water" FAQ of quotable length on every guide', () => {
+    for (const guide of CARE_GUIDES) {
+      const answer = wateringAnswer(guide);
+      expect(answer, guide.slug).toBeDefined();
+      const words = answer!.split(/\s+/).length;
+      expect(words, `${guide.slug}: ${words} words`).toBeGreaterThanOrEqual(20);
+      expect(words, `${guide.slug}: ${words} words`).toBeLessThanOrEqual(60);
+    }
+  });
+
+  it('prints that answer as the first paragraph under the watering heading', () => {
+    for (const guide of CARE_GUIDES) {
+      const { container, unmount } = renderGuide(guide.slug);
+      const heading = [...container.querySelectorAll('article h2')].find((h) =>
+        h.textContent!.startsWith('How often to water')
+      );
+      expect(heading, guide.slug).toBeDefined();
+      const next = heading!.nextElementSibling!;
+      expect(next.tagName, guide.slug).toBe('P');
+      expect(next.getAttribute('data-testid'), guide.slug).toBe('care-water-answer');
+      const expected = wateringAnswer(guide)!.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+      expect(next.textContent, guide.slug).toBe(expected);
+      // The longer watering prose follows it, unchanged.
+      expect(next.nextElementSibling!.textContent, guide.slug).toBe(
+        guide.sections.watering[0]!.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      );
+
+      // The markup publishes the same words a reader sees under the heading.
+      const script = container.ownerDocument.querySelector('script[type="application/ld+json"]');
+      const graph = JSON.parse(script!.textContent!)['@graph'] as {
+        '@type': string;
+        mainEntity?: { name: string; acceptedAnswer: { text: string } }[];
+      }[];
+      const faq = graph.find((n) => n['@type'] === 'FAQPage')!;
+      const marked = faq.mainEntity!.find((q) => /^how often should i water\b/i.test(q.name));
+      expect(marked?.acceptedAnswer.text, guide.slug).toBe(expected);
+      unmount();
+    }
+  });
+
+  it('prints nothing in its place for a guide without the FAQ entry', () => {
+    const guide = CARE_GUIDES.find((g) => g.slug === 'pothos')!;
+    const saved = guide.faqs;
+    guide.faqs = saved.filter((f) => !/^how often should i water\b/i.test(f.q));
+    try {
+      const { container } = renderGuide(guide.slug);
+      expect(container.querySelector('[data-testid="care-water-answer"]')).toBeNull();
+    } finally {
+      guide.faqs = saved;
     }
   });
 });
