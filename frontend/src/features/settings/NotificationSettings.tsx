@@ -903,7 +903,7 @@ export function NotificationSettings() {
                 ((!!dndStartDraft || !!dndEndDraft) && (!dndStartDraft || !dndEndDraft))
               }
             >
-              Save quiet hours
+              {t('notifications.saveQuietHours')}
             </Button>
           </div>
         </div>

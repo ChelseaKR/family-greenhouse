@@ -552,7 +552,7 @@ describe('reminder push presentation', () => {
 
     expect(push?.title).toBe('Monstera necesita riego');
     expect(push?.body).toBe(
-      'Tocaba ayer. Márcala como hecha cuando la hagas, o pospónla hasta mañana.'
+      'Tocaba ayer. Márcala como hecha cuando la hagas, o posponla hasta mañana.'
     );
     expect(push?.actions).toEqual({ done: 'Hecho', snooze: 'Posponer hasta mañana' });
   });

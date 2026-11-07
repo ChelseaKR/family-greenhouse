@@ -148,8 +148,8 @@ const COPY: Record<ReplyLocale, Copy> = {
     seeAll: (url) => `Todo está en la aplicación: ${url}`,
     robot: (support) =>
       support
-        ? `Esta dirección la lee un ordenador, no una persona. Para hablar con una persona, escribe a ${support}.`
-        : 'Esta dirección la lee un ordenador, no una persona.',
+        ? `Esta dirección la lee una computadora, no una persona. Para hablar con una persona, escribe a ${support}.`
+        : 'Esta dirección la lee una computadora, no una persona.',
 
     helpSubject: 'No pudimos leer tu respuesta',
     helpLead: {

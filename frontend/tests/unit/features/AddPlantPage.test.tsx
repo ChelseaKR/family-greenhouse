@@ -369,6 +369,7 @@ describe('AddPlantPage activation event', () => {
 
   it('sends household_activated and first_plant_added, with no plant data, for the first plant', async () => {
     vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    vi.mocked(plantService.createPlant).mockResolvedValue({ ...plant, firstPlantForAccount: true });
     await addPlant();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
     expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
@@ -384,6 +385,17 @@ describe('AddPlantPage activation event', () => {
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
     expect(plantService.getPlants).toHaveBeenCalled();
     expect(trackGoogleConversion).not.toHaveBeenCalled();
+  });
+
+  it('sends no first_plant_added when the server says the account already had its first plant', async () => {
+    // An empty household (a second home, say) is still activated, but the
+    // account's first plant was counted already.
+    vi.mocked(plantService.getPlants).mockResolvedValue([]);
+    await addPlant();
+    expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(trackGoogleConversion).mock.calls).toEqual([
+      [{ name: 'household_activated' }],
+    ]);
   });
 });
 

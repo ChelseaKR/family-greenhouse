@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
+import { GUIDE_HANDOFF_PLANTS } from '@/features/onboarding/guideHandoffPlants';
 import { CARE_GUIDES } from '@/features/care/careGuides';
 import { sentenceStartName } from '@/features/care/plantNames';
 import en from '@/i18n/locales/en/translation.json';
@@ -70,7 +71,9 @@ describe('COMMON_PLANTS', () => {
   );
 
   it('has a name in both catalogs for every pick, and no stray names', () => {
-    const slugs = COMMON_PLANTS.map((p) => p.slug).sort();
+    // The catalogs also name the guide plants that can be carried through
+    // sign-up without being a tile (guideHandoffPlants.test checks those).
+    const slugs = [...COMMON_PLANTS, ...GUIDE_HANDOFF_PLANTS].map((p) => p.slug).sort();
     expect(Object.keys(enNames).sort()).toEqual(slugs);
     expect(Object.keys(esNames).sort()).toEqual(slugs);
   });

@@ -338,7 +338,15 @@ export function DashboardPage() {
               description={
                 nextScheduledTask
                   ? t('dashboardTasksEmpty.notThisWeekNext', {
-                      task: nextScheduledTask.customType || taskTypeLabels[nextScheduledTask.type],
+                      // The translated task type, so a Spanish screen never
+                      // embeds the English "Water"; a custom name is the
+                      // household's own words and stays as typed.
+                      task:
+                        nextScheduledTask.customType ||
+                        t(
+                          `tasks.types.${nextScheduledTask.type}`,
+                          taskTypeLabels[nextScheduledTask.type] ?? nextScheduledTask.type
+                        ),
                       plant: nextScheduledTask.plantName,
                       date: formatDate(nextScheduledTask.nextDue),
                     })

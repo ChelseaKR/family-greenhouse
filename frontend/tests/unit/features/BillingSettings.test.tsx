@@ -720,7 +720,7 @@ describe('purchase controls once payment activity is available', () => {
     );
 
     expect(screen.queryByText(/Your free trial ends on/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/Canceled/)).toBeInTheDocument();
   });
 
   it('treats an unknown status on a live subscription as live, not as no subscription', async () => {
@@ -753,7 +753,7 @@ describe('purchase controls once payment activity is available', () => {
       { paid: true }
     );
 
-    expect(screen.getByText(/Cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/Canceled/)).toBeInTheDocument();
     expect(screen.getByText(/returns to Seedling/)).toBeInTheDocument();
   });
 
@@ -767,7 +767,7 @@ describe('purchase controls once payment activity is available', () => {
       },
       { paid: true }
     );
-    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Canceled/)).not.toBeInTheDocument();
   });
 
   it('never offers a tier the household already owns outright', async () => {

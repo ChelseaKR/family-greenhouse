@@ -238,7 +238,7 @@
       "nameTooLong": "That name is too long.",
       "speciesLabel": "Species (optional)",
       "speciesPlaceholder": "Monstera deliciosa",
-      "speciesHelp": "If we recognise the species, we can set up its care schedule for you.",
+      "speciesHelp": "If we recognize the species, we can set up its care schedule for you.",
       "speciesTooLong": "That species name is too long.",
       "scheduleNoSpecies": "Add a species and we'll look for a care schedule to go with it.",
       "scheduleChecking": "Checking for a care schedule…",
@@ -277,7 +277,8 @@
         "aloe-vera": "Aloe vera",
         "orchid": "Moth orchid",
         "fiddle-leaf-fig": "Fiddle leaf fig",
-        "jade-plant": "Jade plant"
+        "jade-plant": "Jade plant",
+        "rosemary": "Rosemary"
       },
       "lastWatered": {
         "question": "{{name}}: when did you last water it?",
@@ -474,9 +475,9 @@
     "trialQuestion": "How does the trial work?",
     "trialAnswer": "A new household starts with 14 days of Garden that need no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own, keeping everything it added; each account gets one. If you choose a paid plan during those 14 days, you add a card at checkout and your first charge is on the day the free days end, not 14 days later: the trials do not add up. Choose it in the last two days, or after the free days have ended, and the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead, with nothing charged until it ends. A household that has had a trial before is charged when it subscribes again, and canceling before the first charge costs nothing.",
     "changeQuestion": "Can I change or cancel later?",
-    "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Billing, which opens our payment provider's portal. Cancelling returns your household to the free Seedling tier at the end of the paid period.",
+    "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Plan status, which opens our payment provider's portal. Canceling returns your household to the free Seedling tier at the end of the paid period.",
     "whereQuestion": "Where do I buy?",
-    "whereAnswer": "Plan changes happen inside your account, under Settings → Billing, and are made by a household admin. Purchases are not offered in the mobile apps.",
+    "whereAnswer": "Plan changes happen inside your account, under Settings → Plan status, and are made by a household admin. Purchases are not offered in the mobile apps.",
     "dataQuestion": "What happens to existing data?",
     "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
     "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants, members and homes stay readable and editable — only adding more is blocked until you are back under the limit. Export and your care history are never behind a plan.",
@@ -1084,7 +1085,7 @@
       "title": "Ask the family about {{plant}}?",
       "explainer": "This puts the task up for grabs and tells everyone at home except you, anyone away, and anyone inside their quiet hours.",
       "noteLabel": "Add a note (optional)",
-      "notePlaceholder": "I’m travelling until Sunday",
+      "notePlaceholder": "I’m traveling until Sunday",
       "confirm": "Ask the family"
     },
     "coveringFor": "Covering for {{name}}",
@@ -1379,7 +1380,7 @@
     "timeZoneLabel": "IANA time zone",
     "timeZoneBrowserHint": "This browser reports {{zone}}. Nothing is saved until you choose.",
     "timeZoneNoBrowserZone": "This browser cannot report its own zone, so there is nothing to suggest.",
-    "timeZoneInvalid": "That is not a time zone name this app recognises. Use an IANA name such as America/New_York or Europe/Madrid.",
+    "timeZoneInvalid": "That is not a time zone name this app recognizes. Use an IANA name such as America/New_York or Europe/Madrid.",
     "timeZoneSave": "Save time zone",
     "timeZoneClear": "Clear time zone",
     "timeZoneSaved": "Time zone saved.",
@@ -1399,7 +1400,7 @@
       "confirmLabel": "Leave household",
       "cancel": "Stay",
       "billingTitle": "This household’s paid plan keeps renewing",
-      "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Billing before you leave: once you’ve left, you can’t reach this household’s billing.",
+      "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Plan status before you leave: once you’ve left, you can’t reach this household’s billing.",
       "billingConfirm": "Leave anyway",
       "left": "You left {{household}}."
     }
@@ -1496,7 +1497,7 @@
     "title": "The plant-care brief",
     "titleLabelled": "{{label}}: the plant-care brief",
     "window": "Covering {{start}} to {{end}}.",
-    "intro": "Every care note below was written by the household — nothing here is generated advice. The one thing we add is the pet-safety line, from our verified list. If a plant has no note, it says so, and your judgement is as good as ours.",
+    "intro": "Every care note below was written by the household — nothing here is generated advice. The one thing we add is the pet-safety line, from our verified list. If a plant has no note, it says so, and your judgment is as good as ours.",
     "print": "Print",
     "loading": "Loading the plant-care brief…",
     "backToList": "Back to what needs doing today",
@@ -1696,6 +1697,11 @@
       "analyticsOffBySignal": "Analytics is off: your browser sends a privacy signal.",
       "analyticsPrivacyLink": "Privacy page"
     },
+    "account": {
+      "pageTitle": "Account & data",
+      "exportJson": "Download full data (JSON)",
+      "deleteButton": "Delete my account"
+    },
     "apiKeys": {
       "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",
       "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Nothing changed: a key that was working a moment ago still is, until you revoke it, the member who issued it leaves, or the household leaves Greenhouse.",
@@ -1745,7 +1751,7 @@
         "actionView": "See the details in Settings → Plan status"
       },
       "planUnknownTitle": "We couldn't check which plan you're on",
-      "planUnknownBody": "Your plan didn't load, so we can't say which plan your household is on, or how it stands against its limits. This is a problem reading your plan, not a change to it — your plan and any subscription are exactly as they were, and nothing has been charged or cancelled. Reload the page to try again.",
+      "planUnknownBody": "Your plan didn't load, so we can't say which plan your household is on, or how it stands against its limits. This is a problem reading your plan, not a change to it — your plan and any subscription are exactly as they were, and nothing has been charged or canceled. Reload the page to try again.",
       "changePlanUnavailable": "Plan changes are paused here until we can check which plan your household is already on — offering one now could mean buying a plan you already have. Reload the page to try again.",
       "plantsUsage": "{{n}} of {{max}} plants",
       "plantsUsageUnavailable": "— of {{max}} plants — usage unavailable",
@@ -1782,9 +1788,9 @@
       "ownedForLife": "You own this plan permanently.",
       "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier.",
       "errorCheckoutPending": "A checkout for this household is already in progress. If you just paid, your plan updates here as soon as our payment provider confirms it — please do not check out again, a second purchase would start a second subscription. If you left a checkout unfinished, it releases on its own within the hour.",
-      "cancelPending": "Cancelled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
-      "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
-      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and cancelling any time before it costs nothing.",
+      "cancelPending": "Canceled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
+      "cancelPendingNoDate": "Canceled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
+      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and canceling any time before it costs nothing.",
       "noCardTrial": {
         "startedTitle": "Your household is trying Garden free until {{date}}",
         "endingSoonTitle": "Your household’s Garden trial ends on {{date}}",
@@ -1946,6 +1952,7 @@
     "email": "Email",
     "emailDescription": "A daily roll-up to your account email on the day tasks are due, and each day they stay overdue.",
     "quietHoursDescription": "Nothing is sent during this window: not email, not text messages, not browser notifications. Your daily reminder arrives when it ends. With no quiet hours set, it arrives at 8:00 in the time zone below.",
+    "saveQuietHours": "Save quiet hours",
     "sms": "Text message",
     "deviceTitle": "This device",
     "deviceActive": "Push notifications are enabled on this device.",
@@ -2178,13 +2185,13 @@
     "featureApiAccess": "API access for automation",
     "featureImportExport": "Import, export and calendar feed (CSV, JSON, .ics)",
     "trialNote": "A new household starts with 14 days of Garden, no card needed, then moves to the free plan on its own. Choose a paid plan during those days and checkout collects a card, but your first charge is on the day they end, not 14 days later; with two days or fewer left, or after they end, the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead. Trials are once per household, and canceling before the first charge costs nothing.",
-    "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
+    "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Plan status. Nothing is purchased from this page.",
     "giftNote": "Buying this for someone else?",
     "whyHeading": "Why a paid plan",
     "whyHouseholdTitle": "One bill for the house",
     "whyHouseholdBody": "A plan covers the whole household on a single subscription. The people you share your plants with are members of your plan, not extra seats to buy.",
     "whyLeaveTitle": "Nothing locked away if you leave",
-    "whyLeaveBody": "Cancelling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time.",
+    "whyLeaveBody": "Canceling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time.",
     "capHomesOne": "1 home",
     "capHomes": "{{count}} homes",
     "capHomesUnlimited": "Unlimited homes",
@@ -2437,7 +2444,7 @@
   },
   "giftSubscription": {
     "title": "Give Family Greenhouse as a gift",
-    "body": "Pay once for months of Garden or Greenhouse for another household. You get a code to pass on; they redeem it in Settings → Billing, and the gift runs from the day they do. Nothing renews, and nothing is charged to them.",
+    "body": "Pay once for months of Garden or Greenhouse for another household. You get a code to pass on; they redeem it in Settings → Plan status, and the gift runs from the day they do. Nothing renews, and nothing is charged to them.",
     "activeTitle": "Your household has {{plan}} as a gift until {{date}}",
     "activeBody": "Somebody paid for it. Nothing is charged to your household and nothing renews. On {{date}} the household returns to its own plan, and nothing you added is deleted.",
     "giveTitle": "Give a gift",
@@ -2494,14 +2501,14 @@
   "giftLanding": {
     "eyebrow": "Gifts",
     "title": "Give a Family Greenhouse gift",
-    "lede": "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code to enter in Settings → Billing — you don't need a household of your own to send one.",
+    "lede": "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code to enter in Settings → Plan status — you don't need a household of your own to send one.",
     "howItWorksHeading": "How it works",
     "step1Title": "Choose a plan and length",
     "step1Body": "Garden or Greenhouse, from 1 to 12 months.",
     "step2Title": "Pay once, on your own card",
     "step2Body": "One payment, nothing renews. We send a receipt and a redemption code to pass on.",
     "step3Title": "They redeem it",
-    "step3Body": "Whoever you're gifting it to enters the code in Settings → Billing, and the gift starts that day.",
+    "step3Body": "Whoever you're gifting it to enters the code in Settings → Plan status, and the gift starts that day.",
     "signInHeading": "Sign in to send a gift",
     "signInBody": "Buying a gift charges your own card, so we need an account to send the receipt and code to. It does not need a household of your own — this is the only place gifting works without one.",
     "signInCta": "Sign in",
@@ -2797,7 +2804,13 @@
       "startWithGuide": "Start with a guide",
       "allGuides": "All care guides",
       "readBlog": "Read the blog",
-      "petSafeChecker": "Check a plant for pets"
+      "petSafeChecker": "Check a plant for pets",
+      "startWithList": "Or start with a list",
+      "lists": {
+        "forgiving": "Seven houseplants that survive being forgotten",
+        "petSafe": "Pet-safe houseplants that are hard to kill",
+        "toxicSwaps": "Common toxic houseplants and safer swaps"
+      }
     },
     "plans": {
       "eyebrow": "Plans",

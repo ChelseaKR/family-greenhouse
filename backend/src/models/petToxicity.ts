@@ -1265,6 +1265,236 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     dogs: 'toxic',
     note: 'Toxic to cats and dogs per the ASPCA, which names bufadienolides and lists vomiting and diarrhea, with an abnormal heart rhythm in rare cases. If your pet has eaten some, call your vet or a poison hotline.',
   },
+  // ---------------------------------------------------------------------
+  // The rosemary care guide of 2026-11-05 (the holiday rosemary tree). The
+  // verdict was read off ASPCA's own "Rosemary" listing that day. Short form,
+  // like the 2026-11-03 and 2026-11-04 rows: no detail fields.
+  {
+    slug: 'rosemary',
+    commonName: 'Rosemary',
+    // The current name; ASPCA's listing still uses Rosmarinus officinalis,
+    // which is kept as an alias so a plant saved under either name matches.
+    scientificName: 'Salvia rosmarinus',
+    aspcaListing: {
+      title: 'Rosemary',
+      scientificName: 'Rosmarinus officinalis',
+      path: '/toxic-and-non-toxic-plants/rosemary',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // 'anthos', the listing's other name, is left out: nobody searches it,
+    // and it is not a name on the plant's tag.
+    aliases: ['rosmarinus officinalis', 'rosemary tree', 'rosemary topiary'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  // ---------------------------------------------------------------------
+  // The fifth batch of care guides, 2026-11-05 (fg-next-guides-plan-2026-11-05,
+  // PR 2). Each verdict was read off that plant's own live ASPCA listing that
+  // day. Short form, like the 2026-11-03 and 2026-11-04 rows: no detail
+  // fields. The tradescantia guide in the same batch has no row: ASPCA lists
+  // the inch plant only as Tradescantia fluminensis, a different species from
+  // the T. zebrina the guide covers, so its pet line reads "Unknown".
+  {
+    slug: 'satin-pothos',
+    commonName: 'Satin pothos',
+    scientificName: 'Scindapsus pictus',
+    aspcaListing: {
+      title: 'Satin Pothos',
+      scientificName: 'Scindapsus pictus',
+      path: '/toxic-and-non-toxic-plants/satin-pothos',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // Never the bare 'pothos', which is the Epipremnum row. 'silver pothos'
+    // is NC State's name for this plant, not ASPCA's, and names no other.
+    aliases: ['silk pothos', 'silver pothos', 'scindapsus'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists mouth pain and swelling, drooling, vomiting and difficulty swallowing. It is not a true pothos, but the verdict is the same. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'dragon-tree',
+    commonName: 'Dragon tree',
+    // NC State now files it as Dracaena reflexa var. angustifolia; ASPCA and
+    // the plant tag still say Dracaena marginata.
+    scientificName: 'Dracaena marginata',
+    aspcaListing: {
+      title: 'Madagascar Dragon Tree',
+      scientificName: 'Dracaena marginata',
+      path: '/toxic-and-non-toxic-plants/madagascar-dragon-tree',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    // No bare 'dracaena': it already routes to the snake plant row.
+    aliases: ['madagascar dragon tree', 'red edge dracaena'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names saponins and lists vomiting (sometimes with blood), depression, loss of appetite and drooling, with dilated pupils in cats. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'arrowhead-plant',
+    commonName: 'Arrowhead plant',
+    scientificName: 'Syngonium podophyllum',
+    // ASPCA also lists it as "Nephthytis"; this row cites the "Arrow-Head
+    // Vine" listing only, and 'nephthytis' is an alias.
+    aspcaListing: {
+      title: 'Arrow-Head Vine',
+      scientificName: 'Syngonium podophyllum',
+      path: '/toxic-and-non-toxic-plants/arrow-head-vine',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['arrowhead vine', 'arrow head vine', 'nephthytis', 'syngonium', 'trileaf wonder'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists mouth pain and swelling, drooling, vomiting and difficulty swallowing. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'weeping-fig',
+    commonName: 'Weeping fig',
+    scientificName: 'Ficus benjamina',
+    // The genus-level listing the fiddle-leaf fig and rubber plant rows also
+    // cite. 'ficus' and 'fig' stay on the fiddle-leaf fig row, and the
+    // listing's 'indian rubber plant' is left out as too close to the rubber
+    // plant.
+    aspcaListing: {
+      title: 'Weeping Fig',
+      scientificName: 'Ficus sp.',
+      path: '/toxic-and-non-toxic-plants/weeping-fig',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['weeping ficus', 'benjamin fig', 'ficus benjamina'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Ficus listing names two compounds in the plant, ficin and ficusin. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'polka-dot-plant',
+    commonName: 'Polka dot plant',
+    scientificName: 'Hypoestes phyllostachya',
+    aspcaListing: {
+      title: 'Polka Dot Plant',
+      scientificName: 'Hypoestes phyllostachya',
+      path: '/toxic-and-non-toxic-plants/polka-dot-plant',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // Not 'baby's tears', a listed name that also belongs to Soleirolia.
+    aliases: ['hypoestes', 'freckle face', 'measles plant', 'pink polka dot plant'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA, which still lists mild vomiting and diarrhea if some is eaten. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  // ---------------------------------------------------------------------
+  // Watering guides batch 2, 2026-11-07. Each verdict was read off that
+  // plant's own live ASPCA listing that day (robots.txt checked, 10-second
+  // crawl delay kept). Short form, like the earlier guide rows: no detail
+  // fields. The jasmine guide in the same batch reads the existing `jasmine`
+  // row. The bird's nest fern (Asplenium nidus) has no row: the ASPCA has no
+  // listing for it, and its "Golden Bird's Nest" is a Sansevieria, so the
+  // guide's pet line reads "Unknown".
+  {
+    slug: 'lucky-bamboo',
+    commonName: 'Lucky bamboo',
+    scientificName: 'Dracaena sanderiana',
+    // Genus-level, like the Weeping Fig (Ficus sp.) listing: ASPCA titles its
+    // Dracaena spp. listing "Ribbon Plant", a name NC State also gives D.
+    // sanderiana. No 'ribbon plant' alias (it routes to the spider plant row),
+    // no bare 'dracaena' (snake plant row), and no bare 'bamboo': ASPCA's
+    // "Bamboo" listing is a true bamboo, a different plant.
+    aspcaListing: {
+      title: 'Ribbon Plant',
+      scientificName: 'Dracaena spp.',
+      path: '/toxic-and-non-toxic-plants/ribbon-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['dracaena sanderiana', 'friendship bamboo', 'chinese water bamboo'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Dracaena listing names saponins and lists vomiting (sometimes with blood), depression, loss of appetite and drooling, with dilated pupils in cats. Despite the name it is not a bamboo. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'venus-flytrap',
+    commonName: 'Venus flytrap',
+    scientificName: 'Dionaea muscipula',
+    aspcaListing: {
+      title: 'Venus Fly Trap',
+      scientificName: 'Dionaea muscipula',
+      path: '/toxic-and-non-toxic-plants/venus-fly-trap',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['venus fly trap', 'dionaea', 'flytrap'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'majesty-palm',
+    commonName: 'Majesty palm',
+    scientificName: 'Ravenea rivularis',
+    aspcaListing: {
+      title: 'Majesty Palm',
+      scientificName: 'Ravenea rivularis',
+      path: '/toxic-and-non-toxic-plants/majesty-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // No bare 'palm': the sago palm is severely toxic.
+    aliases: ['majestic palm', 'ravenea'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Do not let that carry over to other palms: the sago palm is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'kentia-palm',
+    commonName: 'Kentia palm',
+    scientificName: 'Howea forsteriana',
+    // ASPCA also lists the same species as "Paradise Palm"; this row cites the
+    // "Kentia Palm" listing only. No 'sentry palm' alias: the Belmore sentry
+    // palm (Howea belmoreana) has its own listing, so no bare 'howea' either.
+    aspcaListing: {
+      title: 'Kentia Palm',
+      scientificName: 'Howea forsteriana',
+      path: '/toxic-and-non-toxic-plants/kentia-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['paradise palm', 'thatch palm', 'forster sentry palm'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Do not let that carry over to other palms: the sago palm is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'paperwhite',
+    commonName: 'Paperwhite',
+    scientificName: 'Narcissus papyraceus',
+    // The "Paper White" listing names Narcissus spp., the same verdict as the
+    // ASPCA "Narcissus" listing. No 'daffodil' or bare 'narcissus' alias: this
+    // row and its page are about the forced paperwhite.
+    aspcaListing: {
+      title: 'Paper White',
+      scientificName: 'Narcissus spp',
+      path: '/toxic-and-non-toxic-plants/paper-white',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['paper white', 'paperwhites', 'paperwhite narcissus'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names lycorine and other alkaloids and lists vomiting, drooling and diarrhea, with convulsions, low blood pressure, tremors and heart rhythm problems after large amounts. It says the bulbs are the most poisonous part. If your pet has chewed one, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'purple-shamrock',
+    commonName: 'Purple shamrock',
+    scientificName: 'Oxalis triangularis',
+    // Genus-level: ASPCA's "Shamrock Plant" listing is Oxalis spp. Not its
+    // "Good Luck Plant" (ASPCA gives that name to the snake plant too) or
+    // "Sorrel".
+    aspcaListing: {
+      title: 'Shamrock Plant',
+      scientificName: 'Oxalis spp.',
+      path: '/toxic-and-non-toxic-plants/shamrock-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['shamrock plant', 'false shamrock', 'oxalis', 'purple wood sorrel'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Oxalis listing names soluble calcium oxalates and lists tremors and drooling, with kidney failure rare in dogs and cats. If your pet has chewed it, call your vet or a poison hotline.',
+  },
 ];
 
 /** Normalize a query/name for fuzzy matching: lowercase, strip punctuation,
@@ -1415,11 +1645,14 @@ function toxicFirst(bucket: PetToxicityEntry[]): PetToxicityEntry[] {
  *   1. exact name/alias hit
  *   2. query is a prefix of a name/alias (typeahead)
  *   3. any name/alias contains the query (substring)
- *   4. every query word (individually) appears in some name/alias (loose
- *      word overlap) — deliberately requires ALL words, not just one: a
+ *   4. every query word (individually) is a whole word of some name/alias
+ *      (loose word overlap) — deliberately requires ALL words, not just one: a
  *      single generic alias word (e.g. Boston fern's bare "fern" alias)
  *      must not alone satisfy a multi-word query like "asparagus fern" and
  *      hand back an unrelated species' (possibly wrong) toxicity verdict.
+ *      Whole words, not substrings: "air plant" (Tillandsia, no ASPCA
+ *      listing) used to match the spider plant's "airplane plant" alias,
+ *      because "air" sits inside "airplane", and came back non-toxic.
  * Ties inside a tier are broken toxic-first — see `toxicFirst`.
  */
 export function lookupToxicity(
@@ -1442,13 +1675,14 @@ export function lookupToxicity(
   const qWords = q.split(' ').filter((w) => w.length >= 3);
 
   for (const { entry, names } of indexed) {
+    const words = new Set(names.flatMap((n) => n.split(' ')));
     if (names.some((n) => n === q)) {
       exact.push(entry);
     } else if (names.some((n) => n.startsWith(q))) {
       prefix.push(entry);
     } else if (names.some((n) => n.includes(q))) {
       substring.push(entry);
-    } else if (qWords.length > 0 && qWords.every((w) => names.some((n) => n.includes(w)))) {
+    } else if (qWords.length > 0 && qWords.every((w) => words.has(w))) {
       word.push(entry);
     }
   }
