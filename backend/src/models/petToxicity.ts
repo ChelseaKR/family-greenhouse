@@ -1382,6 +1382,119 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     dogs: 'non-toxic',
     note: 'Non-toxic to cats and dogs per the ASPCA, which still lists mild vomiting and diarrhea if some is eaten. Non-toxic is not the same as safe to eat in quantity.',
   },
+  // ---------------------------------------------------------------------
+  // Watering guides batch 2, 2026-11-07. Each verdict was read off that
+  // plant's own live ASPCA listing that day (robots.txt checked, 10-second
+  // crawl delay kept). Short form, like the earlier guide rows: no detail
+  // fields. The jasmine guide in the same batch reads the existing `jasmine`
+  // row. The bird's nest fern (Asplenium nidus) has no row: the ASPCA has no
+  // listing for it, and its "Golden Bird's Nest" is a Sansevieria, so the
+  // guide's pet line reads "Unknown".
+  {
+    slug: 'lucky-bamboo',
+    commonName: 'Lucky bamboo',
+    scientificName: 'Dracaena sanderiana',
+    // Genus-level, like the Weeping Fig (Ficus sp.) listing: ASPCA titles its
+    // Dracaena spp. listing "Ribbon Plant", a name NC State also gives D.
+    // sanderiana. No 'ribbon plant' alias (it routes to the spider plant row),
+    // no bare 'dracaena' (snake plant row), and no bare 'bamboo': ASPCA's
+    // "Bamboo" listing is a true bamboo, a different plant.
+    aspcaListing: {
+      title: 'Ribbon Plant',
+      scientificName: 'Dracaena spp.',
+      path: '/toxic-and-non-toxic-plants/ribbon-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['dracaena sanderiana', 'friendship bamboo', 'chinese water bamboo'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Dracaena listing names saponins and lists vomiting (sometimes with blood), depression, loss of appetite and drooling, with dilated pupils in cats. Despite the name it is not a bamboo. If your pet has chewed it, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'venus-flytrap',
+    commonName: 'Venus flytrap',
+    scientificName: 'Dionaea muscipula',
+    aspcaListing: {
+      title: 'Venus Fly Trap',
+      scientificName: 'Dionaea muscipula',
+      path: '/toxic-and-non-toxic-plants/venus-fly-trap',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['venus fly trap', 'dionaea', 'flytrap'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'majesty-palm',
+    commonName: 'Majesty palm',
+    scientificName: 'Ravenea rivularis',
+    aspcaListing: {
+      title: 'Majesty Palm',
+      scientificName: 'Ravenea rivularis',
+      path: '/toxic-and-non-toxic-plants/majesty-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    // No bare 'palm': the sago palm is severely toxic.
+    aliases: ['majestic palm', 'ravenea'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Do not let that carry over to other palms: the sago palm is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'kentia-palm',
+    commonName: 'Kentia palm',
+    scientificName: 'Howea forsteriana',
+    // ASPCA also lists the same species as "Paradise Palm"; this row cites the
+    // "Kentia Palm" listing only. No 'sentry palm' alias: the Belmore sentry
+    // palm (Howea belmoreana) has its own listing, so no bare 'howea' either.
+    aspcaListing: {
+      title: 'Kentia Palm',
+      scientificName: 'Howea forsteriana',
+      path: '/toxic-and-non-toxic-plants/kentia-palm',
+      listed: { cats: 'non-toxic', dogs: 'non-toxic' },
+    },
+    aliases: ['paradise palm', 'thatch palm', 'forster sentry palm'],
+    cats: 'non-toxic',
+    dogs: 'non-toxic',
+    note: 'Non-toxic to cats and dogs per the ASPCA. Do not let that carry over to other palms: the sago palm is severely toxic, so check the specific plant rather than the word “palm”. Non-toxic is not the same as safe to eat in quantity.',
+  },
+  {
+    slug: 'paperwhite',
+    commonName: 'Paperwhite',
+    scientificName: 'Narcissus papyraceus',
+    // The "Paper White" listing names Narcissus spp., the same verdict as the
+    // ASPCA "Narcissus" listing. No 'daffodil' or bare 'narcissus' alias: this
+    // row and its page are about the forced paperwhite.
+    aspcaListing: {
+      title: 'Paper White',
+      scientificName: 'Narcissus spp',
+      path: '/toxic-and-non-toxic-plants/paper-white',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['paper white', 'paperwhites', 'paperwhite narcissus'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, which names lycorine and other alkaloids and lists vomiting, drooling and diarrhea, with convulsions, low blood pressure, tremors and heart rhythm problems after large amounts. It says the bulbs are the most poisonous part. If your pet has chewed one, call your vet or a poison hotline.',
+  },
+  {
+    slug: 'purple-shamrock',
+    commonName: 'Purple shamrock',
+    scientificName: 'Oxalis triangularis',
+    // Genus-level: ASPCA's "Shamrock Plant" listing is Oxalis spp. Not its
+    // "Good Luck Plant" (ASPCA gives that name to the snake plant too) or
+    // "Sorrel".
+    aspcaListing: {
+      title: 'Shamrock Plant',
+      scientificName: 'Oxalis spp.',
+      path: '/toxic-and-non-toxic-plants/shamrock-plant',
+      listed: { cats: 'toxic', dogs: 'toxic' },
+    },
+    aliases: ['shamrock plant', 'false shamrock', 'oxalis', 'purple wood sorrel'],
+    cats: 'toxic',
+    dogs: 'toxic',
+    note: 'Toxic to cats and dogs per the ASPCA, whose genus-level Oxalis listing names soluble calcium oxalates and lists tremors and drooling, with kidney failure rare in dogs and cats. If your pet has chewed it, call your vet or a poison hotline.',
+  },
 ];
 
 /** Normalize a query/name for fuzzy matching: lowercase, strip punctuation,

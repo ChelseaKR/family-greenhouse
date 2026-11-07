@@ -89,7 +89,35 @@ const BLOG_ANSWER_FIRST_ROUTES = [
   '/blog/can-you-overwater-a-plant',
 ];
 
-const PENDING_ROUTES = [...PR_1102_ROUTES, ...PR_1103_ROUTES, ...BLOG_ANSWER_FIRST_ROUTES];
+/**
+ * Routes content/watering-guides-batch2 adds to the sitemap. The fixture is
+ * main's function before the prefix rule, which listed every care guide, so
+ * the BEFORE side needs these added to its map the way that function would
+ * have listed them; the AFTER side serves them by prefix at no cost.
+ */
+const WATERING_BATCH_2_ROUTES = [
+  '/care/jasmine',
+  '/care/lucky-bamboo',
+  '/care/venus-flytrap',
+  '/care/majesty-palm',
+  '/care/kentia-palm',
+  '/care/paperwhite',
+  '/care/birds-nest-fern',
+  '/care/purple-shamrock',
+  '/pet-safe/lucky-bamboo',
+  '/pet-safe/venus-flytrap',
+  '/pet-safe/majesty-palm',
+  '/pet-safe/kentia-palm',
+  '/pet-safe/paperwhite',
+  '/pet-safe/purple-shamrock',
+];
+
+const PENDING_ROUTES = [
+  ...PR_1102_ROUTES,
+  ...PR_1103_ROUTES,
+  ...BLOG_ANSWER_FIRST_ROUTES,
+  ...WATERING_BATCH_2_ROUTES,
+];
 
 /** Every page that exists once main, #1102 and #1103 are all deployed. */
 const ALL_ROUTES = [...new Set([...publicRoutePaths(), ...PENDING_ROUTES])];

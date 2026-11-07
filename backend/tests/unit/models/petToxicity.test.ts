@@ -200,6 +200,17 @@ describe('per-plant ASPCA listings', () => {
         'arrowhead-plant',
         'weeping-fig',
         'polka-dot-plant',
+        // Read off the live ASPCA pages on 2026-11-07 for watering guides
+        // batch 2: the genus-level "Ribbon Plant" (Dracaena spp.), "Venus Fly
+        // Trap" (Dionaea muscipula), "Majesty Palm" (Ravenea rivularis),
+        // "Kentia Palm" (Howea forsteriana), "Paper White" (Narcissus spp) and
+        // the genus-level "Shamrock Plant" (Oxalis spp.).
+        'lucky-bamboo',
+        'venus-flytrap',
+        'majesty-palm',
+        'kentia-palm',
+        'paperwhite',
+        'purple-shamrock',
       ].sort()
     );
   });
@@ -383,6 +394,59 @@ describe('batch-5 guide names route to their own row, or to none', () => {
   });
 });
 
+describe('watering batch 2 names route to their own row, or to none', () => {
+  it('keeps the old names on their old rows', () => {
+    // The new rows must not take over a name another row already answers.
+    expect(lookupToxicity('dracaena')[0]?.slug).toBe('snake-plant');
+    expect(lookupToxicity('ribbon plant')[0]?.slug).toBe('spider-plant');
+    expect(lookupToxicity('corn plant')[0]?.slug).toBe('corn-plant');
+    expect(lookupToxicity('sago palm')[0]?.slug).toBe('sago-palm');
+    expect(lookupToxicity('areca palm')[0]?.slug).toBe('areca-palm');
+    expect(lookupToxicity('parlor palm')[0]?.slug).toBe('parlor-palm');
+  });
+
+  it('answers no bird’s nest fern name with another plant’s verdict', () => {
+    // ASPCA has no Asplenium nidus listing. Its "Golden Bird's Nest" is a
+    // Sansevieria, so the fern must not reach the snake plant row.
+    for (const query of [
+      'bird’s nest fern',
+      "bird's nest fern",
+      'birds nest fern',
+      'asplenium nidus',
+      'nest fern',
+    ]) {
+      expect(lookupToxicity(query, 10), query).toEqual([]);
+    }
+    // Negative control: the matcher is live, and a near name still finds its row.
+    expect(lookupToxicity('boston fern')[0]?.slug).toBe('boston-fern');
+  });
+
+  it('keeps the guarded names off the new rows', () => {
+    const added = [
+      'lucky-bamboo',
+      'venus-flytrap',
+      'majesty-palm',
+      'kentia-palm',
+      'paperwhite',
+      'purple-shamrock',
+    ].flatMap((slug) => PET_TOXICITY.find((e) => e.slug === slug)!.aliases);
+    for (const guarded of [
+      'dracaena',
+      'ribbon plant',
+      'bamboo',
+      'palm',
+      'sentry palm',
+      'howea',
+      'narcissus',
+      'daffodil',
+      'good luck plant',
+      'sorrel',
+    ]) {
+      expect(added, guarded).not.toContain(guarded);
+    }
+  });
+});
+
 describe('care-guide coverage (#384)', () => {
   // Every /care/<plant> guide must resolve in the checker, or /pet-safe says
   // "we don't have that one yet" for a plant the site publishes a full guide
@@ -439,6 +503,23 @@ describe('care-guide coverage (#384)', () => {
     ['ficus benjamina', 'weeping-fig'],
     ['polka dot plant', 'polka-dot-plant'],
     ['hypoestes', 'polka-dot-plant'],
+    // Watering guides batch 2 (2026-11-07) whose plant has its own ASPCA
+    // listing. Jasmine reads its existing row; the bird's nest fern has no
+    // listing, so it is not here: see the batch-2 tests below.
+    ['jasmine', 'jasmine'],
+    ['lucky bamboo', 'lucky-bamboo'],
+    ['dracaena sanderiana', 'lucky-bamboo'],
+    ['venus flytrap', 'venus-flytrap'],
+    ['venus fly trap', 'venus-flytrap'],
+    ['majesty palm', 'majesty-palm'],
+    ['majestic palm', 'majesty-palm'],
+    ['kentia palm', 'kentia-palm'],
+    ['paradise palm', 'kentia-palm'],
+    ['paperwhite', 'paperwhite'],
+    ['paper white', 'paperwhite'],
+    ['purple shamrock', 'purple-shamrock'],
+    ['oxalis triangularis', 'purple-shamrock'],
+    ['shamrock plant', 'purple-shamrock'],
   ];
 
   it.each(GUIDE_QUERIES)('“%s” resolves to the %s row', (query, expectedSlug) => {
