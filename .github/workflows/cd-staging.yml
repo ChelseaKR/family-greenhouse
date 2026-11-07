@@ -223,6 +223,7 @@ jobs:
             --exclude "push-handler.js" \
             --exclude "*.json" \
             --exclude "robots.txt" \
+            --exclude "llms.txt" \
             --exclude "sitemap.xml" \
             --exclude ".well-known/*"
 
@@ -251,6 +252,11 @@ jobs:
           aws s3 cp dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
             --cache-control "max-age=3600,public"
           aws s3 cp dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+            --cache-control "max-age=3600,public"
+          # /llms.txt (llmstxt.org) for AI assistants, typed explicitly. Before
+          # the file existed the path fell through to the 404 page as text/html.
+          aws s3 cp dist/llms.txt "s3://${FRONTEND_BUCKET}/llms.txt" \
+            --content-type "text/plain; charset=utf-8" \
             --cache-control "max-age=3600,public"
 
           # The deep-link association files, when a build carries them. Neither

@@ -117,6 +117,7 @@ test('files with extensions pass through untouched', () => {
     '/brand/favicon.ico',
     '/sitemap.xml',
     '/robots.txt',
+    '/llms.txt',
     '/sw.js',
     '/manifest.webmanifest',
     '/app-shell.html',
