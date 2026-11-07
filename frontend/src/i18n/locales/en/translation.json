@@ -1701,7 +1701,8 @@
     "account": {
       "pageTitle": "Account & data",
       "exportJson": "Download full data (JSON)",
-      "deleteButton": "Delete my account"
+      "deleteButton": "Delete my account",
+      "deleteAppStoreNote": "Deleting your account does not cancel an App Store subscription. Cancel it first: Settings, Plan status, Manage subscription, or your iPhone’s Settings, your name, Subscriptions."
     },
     "apiKeys": {
       "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",

@@ -1751,7 +1751,8 @@
     "account": {
       "pageTitle": "Cuenta y datos",
       "exportJson": "Descargar todos los datos (JSON)",
-      "deleteButton": "Eliminar mi cuenta"
+      "deleteButton": "Eliminar mi cuenta",
+      "deleteAppStoreNote": "Eliminar tu cuenta no cancela una suscripción del App Store. Cancélala antes: Ajustes, Estado del plan, Gestionar suscripción, o en los Ajustes de tu iPhone, tu nombre, Suscripciones."
     },
     "apiKeys": {
       "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza.",

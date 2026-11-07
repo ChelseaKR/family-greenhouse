@@ -400,6 +400,9 @@ for (const dataType of [
   // summaries keyed to a random session id, sent from the shells too. Not
   // linked, not tracking, App Functionality.
   'CrashData',
+  // App Store subscriptions (ADR 0041): the server keeps each household's
+  // App Store transaction state to grant its plan. Linked, App Functionality.
+  'PurchaseHistory',
 ]) {
   if (!privacyManifest.includes(`NSPrivacyCollectedDataType${dataType}`)) {
     fail(`iOS privacy manifest is missing collected data type ${dataType}`);
