@@ -2792,7 +2792,13 @@
       "startWithGuide": "Start with a guide",
       "allGuides": "All care guides",
       "readBlog": "Read the blog",
-      "petSafeChecker": "Check a plant for pets"
+      "petSafeChecker": "Check a plant for pets",
+      "startWithList": "Or start with a list",
+      "lists": {
+        "forgiving": "Seven houseplants that survive being forgotten",
+        "petSafe": "Pet-safe houseplants that are hard to kill",
+        "toxicSwaps": "Common toxic houseplants and safer swaps"
+      }
     },
     "plans": {
       "eyebrow": "Plans",
