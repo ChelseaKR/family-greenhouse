@@ -63,6 +63,14 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'weeping-fig',
   'polka-dot-plant',
   'tradescantia',
+  'jasmine',
+  'lucky-bamboo',
+  'venus-flytrap',
+  'majesty-palm',
+  'kentia-palm',
+  'paperwhite',
+  'birds-nest-fern',
+  'purple-shamrock',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */

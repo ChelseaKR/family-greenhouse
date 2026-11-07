@@ -251,6 +251,7 @@ describe('PetSafePage directory caution', () => {
     // The guides whose plant has no ASPCA listing of its own, in directory order.
     expect(expected.map((s) => s.slug)).toEqual([
       'air-plant',
+      'birds-nest-fern',
       'chinese-money-plant',
       'croton',
       'prayer-plant',

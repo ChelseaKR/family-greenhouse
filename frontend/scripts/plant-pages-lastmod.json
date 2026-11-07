@@ -200,6 +200,30 @@
     "polka-dot-plant": {
       "content": "sha256-13397f191569686937b47bb4fd052224836883faef873aa9e3f90bc01061bcad",
       "lastmod": "2026-11-06"
+    },
+    "lucky-bamboo": {
+      "content": "sha256-1202016777158b0ba7ff83b9604625e94fe5a2b6bb94ced8e2e5162df52fcad1",
+      "lastmod": "2026-11-07"
+    },
+    "venus-flytrap": {
+      "content": "sha256-6addb451b43414cd1c98da72b7bbcc759b7296a408b654ab4570b82114efc87f",
+      "lastmod": "2026-11-07"
+    },
+    "majesty-palm": {
+      "content": "sha256-ca19def9b38df128679228a73e376d6f23c98db5740e5cbe222f30e11e930d83",
+      "lastmod": "2026-11-07"
+    },
+    "kentia-palm": {
+      "content": "sha256-e89d5d6d6d8518bcb58c3caf3bd6775eea0351bd137edebb0d331578a87712d1",
+      "lastmod": "2026-11-07"
+    },
+    "paperwhite": {
+      "content": "sha256-26109208d6a52270b95e58ecc6bb6b8d40b8eac5f9605bc8874ebd38fe4b0e10",
+      "lastmod": "2026-11-07"
+    },
+    "purple-shamrock": {
+      "content": "sha256-0eebbbf952b383e1852e3efd870b979e82f549cce59eaff574c8d70223228d64",
+      "lastmod": "2026-11-07"
     }
   }
 }
