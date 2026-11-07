@@ -68,6 +68,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **"Rosary vine" no longer names string of pearls.** Rosary vine is string
+  of hearts (Ceropegia woodii), per Wisconsin Horticulture, but the string of
+  pearls guide listed it as an alias, on the page and in its structured data.
+  The name now belongs to no guide and no pet-safety row, and a test keeps it
+  that way until a string-of-hearts guide exists.
 - **GA4 `first_plant_added` counts accounts, not screens.** It was sent
   whenever the first run or the empty dashboard saved a plant, so a second
   household, a repeated first run or a second device counted again. The
