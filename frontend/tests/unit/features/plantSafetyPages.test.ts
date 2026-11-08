@@ -206,13 +206,20 @@ const DETAILED = [
   'aloe-vera',
   'jade-plant',
   'philodendron',
+  'rubber-plant',
+  'dieffenbachia',
   'calathea',
   'boston-fern',
+  'orchid',
   'bird-of-paradise',
   'anthurium',
   'chinese-evergreen',
   'money-tree',
   'christmas-cactus',
+  'alocasia',
+  'begonia',
+  'cast-iron-plant',
+  'haworthia',
 ];
 
 /**
@@ -224,6 +231,9 @@ const NO_EXTENSION_SOURCE: Record<string, string> = {
   calathea: 'NC State has no Calathea page; its Goeppertia genus page gives neither',
   'money-tree':
     'the NC State Pachira page quotes poison parts, which this table never records on a plant the ASPCA calls non-toxic',
+  // Read 2026-11-05.
+  'rubber-plant': 'the NC State Ficus elastica page gives no poison fields and no non-toxic tags',
+  haworthia: 'the NC State Haworthia page gives no poison fields and no non-toxic tags',
 };
 
 /** The page's details reduced to what the gate's version also returns. */
@@ -293,15 +303,20 @@ describe('detailed pages', () => {
         plantSafetyDetails(p)!.horses.state !== 'not-assessed'
     ).map((p) => p.slug);
     expect(withHorses.sort()).toEqual([
+      'alocasia',
       'aloe-vera',
       'anthurium',
+      'begonia',
       'bird-of-paradise',
       'calathea',
+      'cast-iron-plant',
       'chinese-evergreen',
       'christmas-cactus',
       'jade-plant',
       'money-tree',
+      'orchid',
       'philodendron',
+      'rubber-plant',
     ]);
   });
 });
