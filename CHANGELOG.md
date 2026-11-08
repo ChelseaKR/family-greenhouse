@@ -34,6 +34,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   "Identification is sold as a 20-identification pack for $1.99; it is not
   included in Garden." Nothing changes in production until the owner creates
   the two Stripe prices and pastes their ids.
+- **Yearly first (ADR 0042).** The pricing page and Settings → Plan status
+  open on the yearly Garden price, $24.99 with the derived "Save ~30%" hint;
+  Monthly is one tap away, and the tap is kept for the page load only, in
+  memory. The iPhone app lists the yearly product first. The day-10 and
+  day-14 trial emails name the yearly price first and then the monthly, each
+  once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
+  a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real
+  checkouts choosing yearly reverts the default.
 - **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
   kentia palm, paperwhite, bird's nest fern and purple shamrock.** Each
   answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,

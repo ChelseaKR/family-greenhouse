@@ -4,7 +4,14 @@ import { CheckIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatCurrency } from '@/i18n/format';
 import type { BillingInterval, Plan, PlanFeatures, PlanId } from '@/services/billingService';
-import { annualSavingPercent, capsLine, intervalIsOffered, priceFor } from './planPricing';
+import {
+  annualSavingPercent,
+  capsLine,
+  initialInterval,
+  intervalIsOffered,
+  priceFor,
+  rememberInterval,
+} from './planPricing';
 
 /** Cadences offered in the toggle, in display order. Labels are catalog keys;
  *  the component resolves them so the grid stays translatable. */
@@ -139,12 +146,20 @@ export function PaidPlanGrid({
 }: PaidPlanGridProps) {
   const { t } = useTranslation();
   const offered = useMemo(() => INTERVALS.filter((i) => intervalIsOffered(plans, i.id)), [plans]);
+  const offeredIds = useMemo(() => offered.map((i) => i.id), [offered]);
   const savingPercent = useMemo(() => annualSavingPercent(plans), [plans]);
-  // Default to the first cadence actually on sale, so a monthly-only launch
-  // doesn't open on an empty "Yearly" tab.
-  const [interval, setInterval] = useState<BillingInterval>(offered[0]?.id ?? 'month');
+  // Opens on yearly when it is on sale (ADR 0042, "Yearly first"), on the
+  // cadence tapped earlier this visit if there was one, and otherwise on the
+  // first cadence actually on sale, so a monthly-only launch doesn't open on
+  // an empty "Yearly" tab. The choice lives in component state plus module
+  // memory for the page load; it is never written to storage.
+  const [interval, setInterval] = useState<BillingInterval>(() => initialInterval(offeredIds));
   // Guard against the selected cadence disappearing when the catalog refetches.
-  const active = offered.some((i) => i.id === interval) ? interval : (offered[0]?.id ?? 'month');
+  const active = offeredIds.includes(interval) ? interval : initialInterval(offeredIds);
+  const choose = (next: BillingInterval) => {
+    rememberInterval(next);
+    setInterval(next);
+  };
 
   if (plans.length === 0) return null;
 
@@ -160,7 +175,7 @@ export function PaidPlanGrid({
             <button
               key={option.id}
               type="button"
-              onClick={() => setInterval(option.id)}
+              onClick={() => choose(option.id)}
               aria-pressed={active === option.id}
               className={clsx(
                 'rounded-lg px-4 py-2 text-sm font-medium transition-colors min-h-touch',

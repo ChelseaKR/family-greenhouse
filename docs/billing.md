@@ -929,6 +929,10 @@ production** (owner decision 2026-10-23, `infrastructure/environments/production
   checkout cutoff (the end minus 48 h 30 min, printed as a date) adds a card then
   and is first charged on the trial's end date; started later, or after the
   trial (day 14), the first charge is the day it starts. Same rule as checkout.
+- **Prices:** both emails name the catalog's Garden prices, the yearly first and then
+  the monthly, each once (ADR 0042 "Yearly first"; ADR 0039 §7 as amended): "If you
+  would like to keep Garden, it is $24.99 a year, or $2.99 a month." When the catalog
+  has no yearly Garden price on sale, the monthly alone is named.
 - **Contents:** the end date, plants added and care tasks done during the trial (read
   from existing rows), what Seedling holds (read from the plan catalog), and that
   everything already made is kept. A household with no plants is told "You have not

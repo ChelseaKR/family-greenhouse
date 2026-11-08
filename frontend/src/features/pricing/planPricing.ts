@@ -29,6 +29,48 @@ export function intervalIsOffered(plans: Plan[], interval: BillingInterval): boo
 }
 
 /**
+ * The cadence the toggle opens on (ADR 0042, "Yearly first"): yearly, when
+ * any paid tier sells it. Every rival app leads with its yearly price, the
+ * yearly Garden price is the lowest in that set, and a yearly charge hands
+ * Stripe about 4% of the year's revenue where twelve monthly charges hand it
+ * about 13%. Monthly stays one tap away.
+ */
+export const DEFAULT_INTERVAL: BillingInterval = 'year';
+
+/**
+ * The cadence the person last tapped, kept in module memory for this page
+ * load only. It is not storage: nothing is written to localStorage,
+ * sessionStorage or a cookie, nothing is sent anywhere, and a reload returns
+ * to the default. The pricing page and Plan status share it, so a household
+ * that chose "Monthly" on one is not shown "Yearly" again on the other a
+ * moment later.
+ */
+let rememberedInterval: BillingInterval | null = null;
+
+export function rememberInterval(interval: BillingInterval): void {
+  rememberedInterval = interval;
+}
+
+/** Test-only: forget the tapped cadence between tests, which share the module. */
+export function resetRememberedIntervalForTests(): void {
+  rememberedInterval = null;
+}
+
+/**
+ * The cadence to show first, given the ones on sale, in order of preference:
+ * the one the person tapped earlier this visit, then the yearly default, then
+ * the first cadence actually offered, so a monthly-only launch does not open
+ * on an empty "Yearly" tab. `offered` is the toggle's own order.
+ */
+export function initialInterval(offered: readonly BillingInterval[]): BillingInterval {
+  if (rememberedInterval !== null && offered.includes(rememberedInterval)) {
+    return rememberedInterval;
+  }
+  if (offered.includes(DEFAULT_INTERVAL)) return DEFAULT_INTERVAL;
+  return offered[0] ?? 'month';
+}
+
+/**
  * The tier's "homes · hands · plants" line (ADR 0014).
  *
  * Three-state, like everything else that reads a cap off the wire: a number

@@ -39,8 +39,10 @@ import {
 const LIVE_STRIPE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 const RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 2 };
 const PAID: PaidPlanId[] = ['garden', 'greenhouse'];
-/** Display order within a tier: the monthly product first, then the yearly. */
-const CADENCES: AppStoreCadence[] = ['month', 'year'];
+/** Display order within a tier: the yearly product first, then the monthly
+ *  (ADR 0042, "Yearly first"). The App Store list has no toggle, so leading
+ *  with the yearly row is its equivalent of the website's default. */
+const CADENCES: AppStoreCadence[] = ['year', 'month'];
 
 interface Purchase {
   plan: PaidPlanId;
@@ -201,7 +203,7 @@ export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlan
     );
   } else {
     // One row per product the App Store returned, tier by tier and the
-    // monthly before the yearly, for the tiers above what the household
+    // yearly before the monthly, for the tiers above what the household
     // already has. A yearly row only exists where StoreKit returned the
     // yearly product (ADR 0042), so a store that has not been given one
     // simply shows the monthly.

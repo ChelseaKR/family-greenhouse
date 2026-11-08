@@ -1,8 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
-import { annualSavingPercent, intervalIsOffered, priceFor } from '@/features/pricing/planPricing';
+import {
+  annualSavingPercent,
+  initialInterval,
+  intervalIsOffered,
+  priceFor,
+  resetRememberedIntervalForTests,
+} from '@/features/pricing/planPricing';
 import type { Plan, PlanFeatures } from '@/services/billingService';
+
+// The tapped cadence is module memory for the page load (ADR 0042, "Yearly
+// first"); tests in this file share the module, so each starts forgetful.
+beforeEach(() => resetRememberedIntervalForTests());
 
 /** Feature map with everything off, so a fixture names only what it grants. */
 const NO_FEATURES: PlanFeatures = {
@@ -309,6 +320,72 @@ describe('feature bullets follow the catalog flags, and only where the tier gain
     expect(card('Garden').getByText('AI care assistant')).toBeInTheDocument();
     expect(card('Greenhouse').queryByText('AI care assistant')).not.toBeInTheDocument();
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
+  });
+});
+
+describe('the toggle opens on yearly (ADR 0042, "Yearly first")', () => {
+  // As the API publishes it after ADR 0042: Garden monthly and yearly,
+  // Greenhouse monthly only (its yearly cadence is still withdrawn).
+  const greenhouseMonthlyOnly: Plan = { ...greenhouse, annualPrice: null, lifetimePrice: null };
+  const catalog = [seedling, garden, greenhouseMonthlyOnly];
+
+  it('opens on Yearly on first render, with the yearly amount and the derived saving', () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(screen.getByText('$24.99')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveTextContent('Save ~30%');
+    expect(screen.queryByText('$2.99')).not.toBeInTheDocument();
+    // Greenhouse sells no yearly cadence: it reads as unavailable, never as
+    // a yearly amount it does not have.
+    expect(screen.getByText('Not available at this interval')).toBeInTheDocument();
+    expect(screen.queryByText('$9.99')).not.toBeInTheDocument();
+  });
+
+  it('keeps Monthly one tap away', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
+    expect(screen.getByText('$9.99')).toBeInTheDocument();
+    expect(screen.queryByText('$24.99')).not.toBeInTheDocument();
+  });
+
+  it('remembers the tapped cadence for this page load, in memory and not in storage', async () => {
+    const localBefore = Object.keys(localStorage).sort();
+    const sessionBefore = Object.keys(sessionStorage).sort();
+    const cookieBefore = document.cookie;
+    const first = render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    first.unmount();
+    // Plan status mounting after the pricing page: the person's tap holds.
+    render(<PaidPlanGrid plans={catalog} />);
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    // Nothing was written anywhere a reload could read it back from.
+    expect(Object.keys(localStorage).sort()).toEqual(localBefore);
+    expect(Object.keys(sessionStorage).sort()).toEqual(sessionBefore);
+    expect(document.cookie).toBe(cookieBefore);
+    // A fresh page load (the module forgets) is back on the default.
+    resetRememberedIntervalForTests();
+    expect(initialInterval(['month', 'year'])).toBe('year');
+  });
+
+  it('falls back to the first cadence on sale when no tier sells yearly', () => {
+    const noYearly: Plan = { ...garden, annualPrice: null };
+    render(<PaidPlanGrid plans={[seedling, noYearly, { ...greenhouse, annualPrice: null }]} />);
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /Yearly/ })).not.toBeInTheDocument();
+    expect(initialInterval(['month', 'lifetime'])).toBe('month');
+    expect(initialInterval([])).toBe('month');
+  });
+
+  it('ignores a remembered cadence the catalog no longer sells', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+    expect(initialInterval(['month', 'year'])).toBe('year');
   });
 });
 

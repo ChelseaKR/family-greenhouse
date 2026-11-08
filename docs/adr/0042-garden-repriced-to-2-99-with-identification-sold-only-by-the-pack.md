@@ -93,6 +93,30 @@ and whether Bedrock's `us.` routing premium applies (the leaf-health figure alre
 A household that does want identifications pays for them: a pack is $1.99 for 20, $0.46 of margin
 through Stripe (ADR 0019).
 
+## Yearly first (added 2026-11-08)
+
+The yearly price is the one a household sees first. The cadence toggle on the pricing page and on
+Settings → Plan status opens on Yearly, showing $24.99 with the saving derived from the amounts
+("Save ~30%"). Monthly is one tap away, and the tap is kept in memory for the page load only:
+nothing is written to storage and nothing is sent anywhere. Greenhouse sells no yearly cadence, so
+on the Yearly tab its card reads "Not available at this interval", as it did whenever a person
+tapped Yearly before. The iPhone app lists products rather than toggling, so its yearly row comes
+first. The day-10 and day-14 trial emails (ADR 0039 §7, amended) name the yearly price first and
+then the monthly, each once: "If you would like to keep Garden, it is $24.99 a year, or $2.99 a
+month." Both amounts are read from the catalog, and a catalog with no yearly Garden price on sale
+names the monthly alone.
+
+Why: every paid rival read on 2026-11-08 (Planta, Greg, PictureThis, Blossom, Gardenia) leads with
+a yearly price between $29.99 and $79.99, and $24.99 is the lowest yearly price in that set. A
+yearly charge hands Stripe $1.02 of $24.99, about 4%, where twelve monthly charges hand it $4.68 of
+$35.88, about 13%; the margin table above already holds at the yearly price. Risk: RevenueCat's
+2026 report puts year-one cancellation of annual subscribers at 72%, a third of it in month one,
+so refund requests are expected; docs/billing.md has the refunds section.
+
+Kill rule: if fewer than 3 of the first 10 real checkouts (owner and test households excluded, as
+the money check excludes them) choose yearly, the default reverts to monthly. Nothing else in this
+ADR changes with it.
+
 ## Owner steps
 
 **Stripe Dashboard, live mode** (repeat in test mode for staging). Do this before any tfvars change.
