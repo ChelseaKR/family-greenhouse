@@ -32,6 +32,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
 
+### Fixed
+
+- **Signing out clears what the app has read.** The next person to sign in on
+  the same browser tab could see the previous account's homes in the switcher
+  and, by choosing one, its cached plants and private notes. The in-memory
+  query cache now empties whenever the signed-in account changes, however the
+  session ended.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**

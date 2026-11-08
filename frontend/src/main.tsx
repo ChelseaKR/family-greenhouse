@@ -9,13 +9,14 @@ import '@/lib/zodConfig';
 import React from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initSentry } from './sentry';
 import { initPwaRegistration } from './services/pwaRegistration';
 import { initNativeDeepLinks } from './services/nativeDeepLinks';
 import { initNativeBackButton } from './services/nativeBackButton';
 import { initPushActions } from './services/pushActions';
+import { createAppQueryClient } from './services/queryClient';
 import { initGoogleAnalytics } from './services/googleAnalytics';
 import './i18n';
 import { isRTL } from './i18n';
@@ -60,15 +61,7 @@ initGoogleAnalytics();
   document.documentElement.dir = isRTL(prefs.language) ? 'rtl' : 'ltr';
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const queryClient = createAppQueryClient();
 // Done / Snooze from a reminder notification (web push messages here; the
 // native shells call in through nativePush.ts). Needs the query client so
 // the lists on screen refresh once an action lands.
