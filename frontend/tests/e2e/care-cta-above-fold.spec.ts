@@ -102,6 +102,9 @@ test.describe('care guide sign-up link above the fold', () => {
   // Layout, not browser behavior: one engine is enough, and the viewports
   // are set here rather than by the project.
   test.skip(({ browserName }) => browserName !== 'chromium', 'layout check runs once');
+  // Each test opens every listed guide in turn: 20 to 23s for 71 guides on
+  // 2026-11-08, and the default 30s ran out on a busy machine.
+  test.describe.configure({ timeout: 60_000 });
 
   const cases = [
     ...VIEWPORTS.map((viewport) => ({ viewport, slugs: GUIDES })),

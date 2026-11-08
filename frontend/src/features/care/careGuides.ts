@@ -5191,9 +5191,9 @@ export const CARE_GUIDES: CareGuide[] = [
   },
   {
     slug: 'thai-constellation-monstera',
-    commonName: 'Thai Constellation Monstera',
-    scientificName: 'Monstera deliciosa ‘Thai Constellation’',
-    alsoKnownAs: ['Thai Constellation', 'Monstera Thai Constellation'],
+    commonName: 'Thai Constellation',
+    scientificName: 'Monstera deliciosa',
+    alsoKnownAs: ['Monstera Thai Constellation'],
     related: ['monstera', 'cebu-blue-pothos', 'satin-pothos'],
     metaTitle: 'How Often to Water a Thai Constellation: Top Third Dry',
     metaDescription:
@@ -5206,7 +5206,7 @@ export const CARE_GUIDES: CareGuide[] = [
       water: 'Water thoroughly; let the top quarter to third dry',
       light: 'More light than a green monstera; no direct sun',
       difficulty: 'Moderate; it wants light, humidity and support',
-      toxicity: 'Toxic to cats and dogs (per the ASPCA, Monstera deliciosa)',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA)',
       humidity: 'High; use a humidifier or a pebble tray',
     },
     sections: {
@@ -5261,8 +5261,8 @@ export const CARE_GUIDES: CareGuide[] = [
   {
     slug: 'cebu-blue-pothos',
     commonName: 'Cebu Blue Pothos',
-    scientificName: 'Epipremnum pinnatum ‘Cebu Blue’',
-    alsoKnownAs: ['Cebu Blue', 'Dragon-Tail Plant', 'Epipremnum pinnatum'],
+    scientificName: 'Epipremnum pinnatum',
+    alsoKnownAs: ['Dragon-Tail Plant'],
     related: ['thai-constellation-monstera', 'pothos', 'satin-pothos'],
     metaTitle: 'How Often to Water a Cebu Blue Pothos: Moist, Well Drained',
     metaDescription:
@@ -5275,7 +5275,7 @@ export const CARE_GUIDES: CareGuide[] = [
       water: 'Keep the soil moist and well drained',
       light: 'Bright, indirect light; away from drafts',
       difficulty: 'Easy; NC State calls it low maintenance',
-      toxicity: 'Unknown: the ASPCA lists golden pothos, a different species',
+      toxicity: 'Unknown: the ASPCA lists a different species, not this one',
       humidity: 'Moderate humidity',
     },
     sections: {
@@ -5331,7 +5331,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'rattlesnake-plant',
     commonName: 'Rattlesnake Plant',
     scientificName: 'Goeppertia insignis',
-    alsoKnownAs: ['Rattlesnake Calathea', 'Calathea lancifolia', 'Calathea insignis'],
+    alsoKnownAs: ['Calathea lancifolia'],
     related: ['peacock-plant', 'zebra-calathea', 'calathea'],
     metaTitle: 'How Often to Water a Rattlesnake Plant: Moist, Not Wet',
     metaDescription:
@@ -5400,7 +5400,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'peacock-plant',
     commonName: 'Peacock Plant',
     scientificName: 'Goeppertia makoyana',
-    alsoKnownAs: ['Peacock Calathea', 'Cathedral Windows', 'Calathea makoyana'],
+    alsoKnownAs: ['Calathea makoyana'],
     related: ['rattlesnake-plant', 'calathea-orbifolia', 'coleus'],
     metaTitle: 'How Often to Water a Peacock Plant: Moist, Not Soggy',
     metaDescription:
@@ -5469,7 +5469,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'zebra-calathea',
     commonName: 'Zebra Calathea',
     scientificName: 'Goeppertia zebrina',
-    alsoKnownAs: ['Zebra Prayer Plant', 'Calathea zebrina', 'Maranta zebrina'],
+    alsoKnownAs: ['Calathea zebrina'],
     related: ['calathea-orbifolia', 'peacock-plant', 'calathea'],
     metaTitle: 'How Often to Water a Zebra Calathea: Moist, Not Soggy',
     metaDescription:
@@ -5538,7 +5538,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'calathea-orbifolia',
     commonName: 'Calathea Orbifolia',
     scientificName: 'Goeppertia orbifolia',
-    alsoKnownAs: ['Goeppertia orbifolia', 'Calathea rotundifolia', 'Maranta orbifolia'],
+    alsoKnownAs: ['Calathea rotundifolia'],
     related: ['zebra-calathea', 'rattlesnake-plant', 'nerve-plant'],
     metaTitle: 'How Often to Water a Calathea Orbifolia: Consistently Moist',
     metaDescription:
@@ -5607,7 +5607,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'coleus',
     commonName: 'Coleus',
     scientificName: 'Coleus scutellarioides',
-    alsoKnownAs: ['Painted Nettle', 'Plectranthus scutellarioides', 'Solenostemon scutellarioides'],
+    alsoKnownAs: ['Painted Nettle'],
     related: ['polka-dot-plant', 'peacock-plant', 'tradescantia'],
     metaTitle: 'How Often to Water Coleus: When the Top Inch Is Dry',
     metaDescription:
@@ -5617,7 +5617,7 @@ export const CARE_GUIDES: CareGuide[] = [
     summary:
       'Coleus, Coleus scutellarioides, is grown for colorful leaves, usually as a tender annual outdoors and sometimes as a houseplant in bright light. Once it is established, water when the entire top inch of soil is dry, and expect containers to need it more often. Good drainage matters most: an overwatered coleus is stunted, with muddy brown leaves and scorched edges.',
     quickFacts: {
-      water: 'When the entire top inch is dry; pots dry out faster',
+      water: 'When the top inch is dry; pots dry out faster',
       light: 'Part shade outdoors; bright light as a houseplant',
       difficulty: 'Easy; UF/IFAS calls it hard to kill',
       toxicity: 'Unknown: the ASPCA lists a different species, not this one',

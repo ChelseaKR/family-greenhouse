@@ -1759,7 +1759,7 @@ describe('care guides batch 6 (2026-11-08)', () => {
     expect(view.claims.dogs.state).toBe('toxic');
     expect(petSafetyLevel(g.quickFacts.toxicity)).toBe('toxic');
     expect(g.sections.honestBit.join(' ')).toMatch(/call your vet or a poison hotline/);
-    expect(view.faq.q).toBe('Is a Thai constellation monstera toxic to cats and dogs?');
+    expect(view.faq.q).toBe('Is a Thai constellation toxic to cats and dogs?');
   });
 
   it('reads "Unknown" for Cebu Blue and coleus, with no borrowed verdict', () => {
