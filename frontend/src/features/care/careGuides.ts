@@ -19,13 +19,15 @@
  * schefflera) and the six added 2026-11-05 in batch 5 (satin pothos through
  * tradescantia) cite extension pages read that day; the eight watering guides of
  * batch 2, added 2026-11-07 (jasmine through purple shamrock), cite extension
- * and RHS pages read that day; and since #1079 every guide
+ * and RHS pages read that day; the seven of care guides batch 6, added
+ * 2026-11-08 (Thai Constellation through coleus), cite extension pages read
+ * that day; and since #1079 every guide
  * records its sources in `careSources`, so no water, light or humidity line
  * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 64 now, still short
+ * architecture could be judged before scaling; there are 71 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -5184,6 +5186,501 @@ export const CARE_GUIDES: CareGuide[] = [
         title: 'Shamrocks, Oxalis spp.',
         url: 'https://hort.extension.wisc.edu/articles/shamrocks-oxalis-spp/',
         accessed: '2026-11-07',
+      },
+    ],
+  },
+  {
+    slug: 'thai-constellation-monstera',
+    commonName: 'Thai Constellation Monstera',
+    scientificName: 'Monstera deliciosa ‘Thai Constellation’',
+    alsoKnownAs: ['Thai Constellation', 'Monstera Thai Constellation'],
+    related: ['monstera', 'cebu-blue-pothos', 'satin-pothos'],
+    metaTitle: 'How Often to Water a Thai Constellation: Top Third Dry',
+    metaDescription:
+      'Water a Thai Constellation monstera thoroughly, then let the top quarter to third of the pot dry. Give it more light than a green monstera and high humidity.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'Thai Constellation is a cultivar of Monstera deliciosa, with leaves marbled and speckled in creamy white and green. North Carolina State Extension gives its care at the species level, with one difference for variegated plants: they need more light than darker green ones. Water thoroughly, then let the top quarter to third of the pot dry. The ASPCA lists Monstera deliciosa as toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Water thoroughly; let the top quarter to third dry',
+      light: 'More light than a green monstera; no direct sun',
+      difficulty: 'Moderate; it wants light, humidity and support',
+      toxicity: 'Toxic to cats and dogs (per the ASPCA, Monstera deliciosa)',
+      humidity: 'High; use a humidifier or a pebble tray',
+    },
+    sections: {
+      watering: [
+        'Water a Thai Constellation thoroughly, then allow the top quarter to one-third of the pot to dry before you water again. That is North Carolina State Extension’s rule for Monstera deliciosa, the species this cultivar belongs to, and it gives no number of days.',
+        'We found no extension page with separate watering advice for this cultivar, so this guide uses the species rule. Check how far down the soil has dried rather than watering on a schedule.',
+      ],
+      light: [
+        'NC State says Monstera deliciosa prefers moderate brightness but not direct sunlight, and that variegated cultivars need more sunlight than darker green ones. So give this one a brighter spot than you would give a green monstera, still out of direct sun.',
+        'NC State gives an average warm temperature of 60 to 85°F and high humidity for the species. A humidifier or a tray of wet pebbles helps in a dry room.',
+      ],
+      problems: [
+        'NC State lists no significant problems for the species and names fern scale as a common insect problem, so check the stems and leaf undersides when you water.',
+        'The stems need sturdy support to keep from breaking, NC State says. It also says to wipe dust off the leaves regularly.',
+      ],
+      propagation: [
+        'NC State says to propagate Monstera deliciosa by layering or stem cutting, and to prune or repot in spring if needed.',
+        'NC State calls this cultivar rare, so take any cutting with care. We found no source on whether the marbling carries over reliably to a cutting, so we won’t promise that it does.',
+      ],
+      sharedCare: [
+        'In a shared household, a Thai Constellation needs one rule everyone follows: push a finger in and check that the top of the pot has really dried before anyone waters.',
+        'Agree on one bright spot for it too, because a plant this rare tends to get moved around by people trying to help.',
+      ],
+      honestBit: [
+        'My take: this is a rarer monstera with the same basic needs, plus a stronger claim on your brightest window.',
+        'The ASPCA lists Monstera deliciosa, under the title Swiss Cheese Plant, as toxic to cats and dogs, and names insoluble calcium oxalates. It lists oral irritation, drooling, vomiting and difficulty swallowing. The listing is for the species, and this cultivar is that species. If your pet has chewed it, call your vet or a poison hotline. The [pet-safety page for monstera](/pet-safe/monstera) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Thai Constellation monstera?',
+        a: 'Water thoroughly, then wait until the top quarter to one-third of the pot has dried. North Carolina State Extension gives that rule for the species and no number of days.',
+      },
+      {
+        q: 'Does a Thai Constellation need more light than a regular monstera?',
+        a: 'Yes. North Carolina State Extension says variegated cultivars need more sunlight than darker green ones, while the species prefers moderate brightness and no direct sun.',
+      },
+      {
+        q: 'Is a Thai Constellation a different species from a monstera?',
+        a: 'No. North Carolina State Extension lists Thai Constellation as a cultivar of Monstera deliciosa, with marbled and speckled creamy white and green leaves.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Monstera deliciosa (Swiss Cheese Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/monstera-deliciosa/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'cebu-blue-pothos',
+    commonName: 'Cebu Blue Pothos',
+    scientificName: 'Epipremnum pinnatum ‘Cebu Blue’',
+    alsoKnownAs: ['Cebu Blue', 'Dragon-Tail Plant', 'Epipremnum pinnatum'],
+    related: ['thai-constellation-monstera', 'pothos', 'satin-pothos'],
+    metaTitle: 'How Often to Water a Cebu Blue Pothos: Moist, Well Drained',
+    metaDescription:
+      'Keep a Cebu Blue pothos in moist, well-drained soil rich in organic matter, in bright, indirect light. Overwatering leads to root rot. Give the vine support.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'Cebu Blue is a cultivar of Epipremnum pinnatum, a climbing vine with narrow, blue-green leaves that typically stay in their juvenile form. It is a close relative of the golden pothos but a separate species. Keep the soil moist and well drained, give it bright, indirect light and moderate humidity, and give the vine something to climb or trail from. North Carolina State Extension calls the cultivars easy to grow and low maintenance.',
+    quickFacts: {
+      water: 'Keep the soil moist and well drained',
+      light: 'Bright, indirect light; away from drafts',
+      difficulty: 'Easy; NC State calls it low maintenance',
+      toxicity: 'Unknown: the ASPCA lists golden pothos, a different species',
+      humidity: 'Moderate humidity',
+    },
+    sections: {
+      watering: [
+        'Keep a Cebu Blue’s soil moist and well drained. North Carolina State Extension says the soil should be moist, well drained and rich in organic matter, and it gives no number of days. Check the soil with a finger before you water.',
+        'Moist is not wet. NC State says overwatering causes fungal and bacterial diseases that can lead to root rot, so use a pot with drainage and empty the saucer.',
+      ],
+      light: [
+        'Give it bright, indirect sunlight and warm temperatures, NC State says, and keep it away from drafts and cold air.',
+        'Moderate humidity is enough. NC State says the soil does best slightly acidic.',
+      ],
+      problems: [
+        'NC State says this plant resists most serious diseases, and lists mealybugs, scale, thrips and spider mites as the pests to watch for. Overwatering is the problem most within your control.',
+        'If the leaves stay small and narrow, that is normal for Cebu Blue. NC State says its leaves typically remain in the juvenile form, and that they mature and become fenestrated if the plant grows up a stake or moss pole.',
+      ],
+      propagation: [
+        'Propagate it with stem cuttings, NC State says. Prune in spring or early summer to keep its size and shape in check.',
+        'NC State says repotting may be needed about every 2 to 3 years, and suggests a wooden stake, bamboo stake or sphagnum moss pole for support.',
+      ],
+      sharedCare: [
+        'In a shared household, a Cebu Blue needs one person checking the soil, because a well-meant extra watering is the main way to lose it.',
+        'Hang it or stake it somewhere everyone can reach the pot, and agree that nobody waters until a finger says the soil needs it.',
+      ],
+      honestBit: [
+        'My take: Cebu Blue is the quiet way to get a more interesting pothos without taking on a harder plant. Give it a pole if you want to see what the leaves can do.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, lists the golden pothos, Epipremnum aureum, and has no listing we could find that names Epipremnum pinnatum, so we won’t borrow a verdict from a relative. If your pet has chewed it, call your vet or a poison hotline. The [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a Cebu Blue pothos?',
+        a: 'Often enough to keep the soil moist and well drained. North Carolina State Extension gives that rule and no number of days, and warns that overwatering can lead to root rot.',
+      },
+      {
+        q: 'Is a Cebu Blue a real pothos?',
+        a: 'It is a close relative. North Carolina State Extension lists Cebu Blue as a cultivar of Epipremnum pinnatum, while golden pothos is Epipremnum aureum, and says botanists treat the two as separate species.',
+      },
+      {
+        q: 'Why doesn’t my Cebu Blue have split leaves?',
+        a: 'North Carolina State Extension says its leaves typically stay in the juvenile form. If it grows on a stake or moss pole, the leaves mature and become fenestrated like the species.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Epipremnum pinnatum (Cebu Blue, Dragon-Tail Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/epipremnum-pinnatum/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'rattlesnake-plant',
+    commonName: 'Rattlesnake Plant',
+    scientificName: 'Goeppertia insignis',
+    alsoKnownAs: ['Rattlesnake Calathea', 'Calathea lancifolia', 'Calathea insignis'],
+    related: ['peacock-plant', 'zebra-calathea', 'calathea'],
+    metaTitle: 'How Often to Water a Rattlesnake Plant: Moist, Not Wet',
+    metaDescription:
+      'Water a rattlesnake plant regularly in spring and summer to keep the soil moist but not wet, and less in winter. It needs high humidity and limited sun.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'The rattlesnake plant, Goeppertia insignis, is still widely sold as Calathea lancifolia. Its long, wavy leaves carry a pattern of green ellipses over purple undersides, and they fold up in the evening. Keep the soil moist but not wet in spring and summer, water less in winter, and give it high humidity and limited sun. The ASPCA lists calatheas as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Moist, not wet, in growth; less in winter',
+      light: 'Limited sun to bright shade; no full sun',
+      difficulty: 'Fussy; NC State says its humidity needs make it hard',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA, genus Calathea)',
+      humidity: 'High; use wet pebbles or a humidified room',
+    },
+    sections: {
+      watering: [
+        'During spring and summer, water a rattlesnake plant regularly to keep the soil moist but not wet. North Carolina State Extension gives that rule and no number of days, so check the soil with a finger rather than keeping to habit.',
+        'Reduce watering in winter, when NC State says growth typically slows. Use a well-drained, peaty potting mix, and aim the water at the soil: NC State says wet leaves can bring fungal leaf spots.',
+      ],
+      light: [
+        'Give it limited sun to bright shade. NC State says it tolerates early morning or diffused sun but not full sun, drafts or sudden temperature changes.',
+        'NC State gives room temperatures of 65 to 75°F and high humidity, and suggests standing the pot in a bed of wet pebbles or growing it in a humidified room.',
+      ],
+      problems: [
+        'Yellow leaves can mean too much water or too little, NC State says, so check the soil before you change anything. Brown or curling edges and tips can come from low humidity, and overwatering can cause root rot.',
+        'NC State lists aphids, scale, mealybugs and spider mites as the pests to watch for. Dust slows photosynthesis, so clean the leaves with a clean cloth.',
+      ],
+      propagation: [
+        'The NC State page for this species does not give a propagation method. Its pages for the closely related peacock plant and zebra plant recommend division, and we can only point you to those.',
+        'Feed it monthly with a balanced fertilizer during the growing season, NC State says, and cut back in winter. It typically reaches about 1½ feet tall indoors.',
+      ],
+      sharedCare: [
+        'In a shared household, a rattlesnake plant needs one person who owns the humidity tray as well as the watering, because the leaves show a dry room before anyone notices it.',
+        'Agree on the spot too: out of full sun, and away from the drafty door and any sudden temperature change.',
+      ],
+      honestBit: [
+        'My take: it is one of the better-looking calatheas, and watching the leaves fold up in the evening is half the fun. NC State is upfront that its humidity needs make it harder than it looks.',
+        'The ASPCA lists calatheas, at the genus level as Calathea spp., as non-toxic to cats and dogs. This plant was long called Calathea insignis or Calathea lancifolia, and it now goes by Goeppertia. Non-toxic is not the same as safe to eat in quantity. The [pet-safety page for calathea](/pet-safe/calathea) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a rattlesnake plant?',
+        a: 'Regularly in spring and summer, enough to keep the soil moist but not wet, and less in winter. North Carolina State Extension gives that rule and no number of days.',
+      },
+      {
+        q: 'Why are my rattlesnake plant’s leaves turning yellow?',
+        a: 'North Carolina State Extension says yellow leaves can come from either too much or too little water, so check the soil first. Brown or curling edges usually point to low humidity.',
+      },
+      {
+        q: 'Is Calathea lancifolia the same as a rattlesnake plant?',
+        a: 'Yes. North Carolina State Extension lists Calathea lancifolia and Calathea insignis as earlier names for Goeppertia insignis, the rattlesnake plant.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Goeppertia insignis (Rattlesnake Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/goeppertia-insignis/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'peacock-plant',
+    commonName: 'Peacock Plant',
+    scientificName: 'Goeppertia makoyana',
+    alsoKnownAs: ['Peacock Calathea', 'Cathedral Windows', 'Calathea makoyana'],
+    related: ['rattlesnake-plant', 'calathea-orbifolia', 'coleus'],
+    metaTitle: 'How Often to Water a Peacock Plant: Moist, Not Soggy',
+    metaDescription:
+      'Keep a peacock plant’s potting mix moist but never soggy, using distilled or rainwater, and water less in winter. It needs about 60% humidity and no direct sun.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'The peacock plant, Goeppertia makoyana, was long sold as Calathea makoyana, and its papery leaves carry a pattern like a peacock’s tail. Keep the mix moist but not wet or soggy, use distilled water or rainwater, water less in winter, and give it bright, indirect light and about 60% humidity. The ASPCA lists calatheas as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Moist, never soggy; less in winter; no tap water',
+      light: 'Bright, indirect light or part shade; no direct sun',
+      difficulty: 'Fussy; it tolerates neither wet nor dry soil',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA, genus Calathea)',
+      humidity: 'About 60%; low humidity rolls and browns the leaves',
+    },
+    sections: {
+      watering: [
+        'Keep a peacock plant’s potting mix moist but not wet or soggy, and water less in winter. North Carolina State Extension gives that rule and no number of days, and it lists both wet soil and dry soil among the things this plant does not tolerate.',
+        'The water matters too. NC State recommends distilled water or rainwater, because the fluoride in tap water can brown the leaves. Use a mix with high organic matter and perlite, so it holds moisture and still drains.',
+      ],
+      light: [
+        'Give it bright, indirect sun or partial shade. NC State says direct sun can burn the leaves, and that too little light fades their color.',
+        'NC State gives temperatures of 65 to 75°F and a humidity level of 60%, and says it does not tolerate low or inconsistent temperatures or cold drafts.',
+      ],
+      problems: [
+        'Rolled or brown leaves point to low humidity, and browning can also come from the fluoride in tap water. Overwatering can cause root rot, NC State says.',
+        'NC State reports no serious pests or diseases, and says to monitor for aphids, scale, mealybugs and spider mites. Dust the leaves gently with a damp, soft cloth as needed.',
+      ],
+      propagation: [
+        'Divide the rhizomatous roots in late spring, which NC State calls the preferred method. It suggests considering division every two years.',
+        'Feed it with a balanced fertilizer every 4 weeks during the growing season and stop in winter, NC State says. It stays about 1 to 2 feet tall.',
+      ],
+      sharedCare: [
+        'In a shared household, a peacock plant needs everyone to know that the tap is off limits, so keep a jug of distilled water or rainwater beside it.',
+        'Pick one person to check the mix, because this plant complains about too much water and too little.',
+      ],
+      honestBit: [
+        'My take: the leaves are the whole reason to own one, and NC State’s list of what it will not tolerate is long. It is for a humid room and a patient owner.',
+        'Careful with the name. The ASPCA’s listing titled “Peacock Plant” is a different plant, Kaempferia, also called peacock ginger, so we don’t use it here. This guide reads the ASPCA’s genus-level Calathea spp. listing, which is non-toxic to cats and dogs, and this plant was long called Calathea makoyana. Non-toxic is not the same as safe to eat in quantity. The [pet-safety page for calathea](/pet-safe/calathea) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a peacock plant?',
+        a: 'Often enough to keep the mix moist but not wet or soggy, and less in winter. North Carolina State Extension gives that rule and no number of days.',
+      },
+      {
+        q: 'Can I use tap water on a peacock plant?',
+        a: 'North Carolina State Extension recommends distilled water or rainwater, because the fluoride in tap water can brown the leaves.',
+      },
+      {
+        q: 'Why are my peacock plant’s leaves rolling?',
+        a: 'Low humidity, North Carolina State Extension says. It gives a humidity level of 60% and says low humidity makes the leaves roll or brown.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Goeppertia makoyana (Peacock Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/goeppertia-makoyana/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'zebra-calathea',
+    commonName: 'Zebra Calathea',
+    scientificName: 'Goeppertia zebrina',
+    alsoKnownAs: ['Zebra Prayer Plant', 'Calathea zebrina', 'Maranta zebrina'],
+    related: ['calathea-orbifolia', 'peacock-plant', 'calathea'],
+    metaTitle: 'How Often to Water a Zebra Calathea: Moist, Not Soggy',
+    metaDescription:
+      'Keep a zebra calathea’s peaty mix moist but not soggy, using distilled or rainwater because tap fluoride browns the leaves. It wants humidity above 60%.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'The zebra calathea, Goeppertia zebrina, was long sold as Calathea zebrina. It has large, velvety, dark green leaves with light green stripes and reddish-purple undersides, and they fold up in the evening. Keep its peat-based mix moist but not soggy, use distilled water or rainwater, and give it bright, indirect light and humidity above 60%. The ASPCA lists calatheas as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Moist, never soggy; use distilled or rainwater',
+      light: 'Bright, indirect light or part shade',
+      difficulty: 'Fussy about humidity and water quality',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA, genus Calathea)',
+      humidity: 'Above 60%, per NC State',
+    },
+    sections: {
+      watering: [
+        'Keep a zebra calathea’s mix moist, and avoid overwatering or soggy soil. North Carolina State Extension gives that rule and no number of days, so check the mix with a finger before you water.',
+        'Use distilled water or rainwater. NC State says the fluoride in tap water can brown the edges and tips of the leaves. It also says to keep water off the leaves, because wetting them can bring leaf spot.',
+      ],
+      light: [
+        'Give it bright, indirect light or partial shade. NC State says direct sun can scorch the leaves, and that too little light fades their color.',
+        'NC State gives a steady 65 to 75°F and humidity above 60%, and says to avoid sudden temperature changes and cold drafts. If it spends the summer outdoors, bring it in before temperatures drop below 60°F.',
+      ],
+      problems: [
+        'Brown edges and tips point to low humidity or fluoride in tap water, and curling leaves to too little water or low humidity, NC State says. Overwatering can cause root rot.',
+        'NC State says to monitor for spider mites, mealybugs, aphids and scale. Poor air circulation and wet leaves can bring leaf spot.',
+      ],
+      propagation: [
+        'Propagate it by division, NC State says, and repot every 2 years.',
+        'Use a peat-based or African violet potting mix, and fertilize monthly during the growing season with a balanced liquid fertilizer. As a houseplant it can grow up to 3 feet tall and wide.',
+      ],
+      sharedCare: [
+        'In a shared household, a zebra calathea needs one person who owns the water, because it wants the distilled jug and not the kitchen tap.',
+        'Agree on who keeps the humidifier or tray going in winter, when a dry room shows up on the leaf edges first.',
+      ],
+      honestBit: [
+        'My take: the velvet leaves are hard to beat, and this plant earns its fussy reputation. NC State’s humidity number is above most living rooms, so plan for a humidifier.',
+        'The ASPCA lists calatheas, at the genus level as Calathea spp., as non-toxic to cats and dogs, and this plant was long called Calathea zebrina. Careful with the name: NC State also lists “peacock plant” and “zebra plant” for it, and other plants share those names, so check the label. Non-toxic is not the same as safe to eat in quantity. The [pet-safety page for calathea](/pet-safe/calathea) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a zebra calathea?',
+        a: 'Often enough to keep the mix moist, without overwatering or letting it turn soggy. North Carolina State Extension gives that rule and no number of days.',
+      },
+      {
+        q: 'Why are my zebra calathea’s leaf tips brown?',
+        a: 'North Carolina State Extension names low humidity and the fluoride in tap water. It says to use distilled water or rainwater and to keep humidity above 60%.',
+      },
+      {
+        q: 'Why are my zebra calathea’s leaves curling?',
+        a: 'North Carolina State Extension says curling comes from too little water or low humidity, so check the mix first and then the air.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Goeppertia zebrina (Zebra Plant)',
+        url: 'https://plants.ces.ncsu.edu/plants/goeppertia-zebrina/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'calathea-orbifolia',
+    commonName: 'Calathea Orbifolia',
+    scientificName: 'Goeppertia orbifolia',
+    alsoKnownAs: ['Goeppertia orbifolia', 'Calathea rotundifolia', 'Maranta orbifolia'],
+    related: ['zebra-calathea', 'rattlesnake-plant', 'nerve-plant'],
+    metaTitle: 'How Often to Water a Calathea Orbifolia: Consistently Moist',
+    metaDescription:
+      'Keep a calathea orbifolia consistently moist but never soggy, with distilled or rainwater, bright, indirect light and humidity of at least 60%.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'Calathea orbifolia, now Goeppertia orbifolia, has round leaves up to 12 inches wide, dark green with silver-green stripes. Keep its mix consistently moist but not wet or soggy, use distilled water or rainwater, and give it bright, indirect light and at least 60% humidity. The ASPCA lists calatheas as non-toxic to cats and dogs.',
+    quickFacts: {
+      water: 'Consistently moist, never soggy; no tap water',
+      light: 'Bright, indirect light or part shade',
+      difficulty: 'Fussy about humidity and water quality',
+      toxicity: 'Non-toxic to cats and dogs (per the ASPCA, genus Calathea)',
+      humidity: 'At least 60%, per NC State',
+    },
+    sections: {
+      watering: [
+        'Keep a calathea orbifolia consistently moist, but not wet or soggy. North Carolina State Extension gives that rule and no number of days, so check the mix with a finger before you water.',
+        'NC State prefers distilled water or rainwater, because the fluoride in tap water can brown the leaf tips. Water the mix and not the plant, since it says wetting the foliage can cause leaf spot.',
+      ],
+      light: [
+        'Give it bright, indirect light or partial shade. NC State says direct sun can scorch the leaves, and insufficient light fades their color.',
+        'NC State gives consistent temperatures of 65 to 75°F and high humidity of at least 60%, using a humidifier or a tray of wet pebbles. Avoid cold drafts and swings in room temperature.',
+      ],
+      problems: [
+        'Brown leaf edges and tips come from low humidity or fluoride in tap water, NC State says. Curling comes from too little water or low humidity, and overwatering can cause root rot.',
+        'NC State reports no serious insect or disease problems, and says to monitor for mealybugs, spider mites, aphids and scale. Wipe the leaves gently with a damp cloth to remove dust.',
+      ],
+      propagation: [
+        'Divide it in spring, which NC State recommends as the way to propagate it.',
+        'Use a moist, well-drained, slightly acidic potting mix, and fertilize monthly during the growing season. It forms clumps about 2 to 3 feet tall.',
+      ],
+      sharedCare: [
+        'In a shared household, a calathea orbifolia needs one person who owns the water, because “consistently moist” falls apart when everyone assumes someone else did it.',
+        'Keep the distilled water beside the plant, and agree that the humidifier stays on through the dry months.',
+      ],
+      honestBit: [
+        'My take: those big striped leaves make it the showpiece of the calathea family, and its 60% humidity floor makes it a poor match for a dry apartment without a humidifier.',
+        'The ASPCA lists calatheas, at the genus level as Calathea spp., as non-toxic to cats and dogs, and this plant was long called Calathea orbifolia. Non-toxic is not the same as safe to eat in quantity. The [pet-safety page for calathea](/pet-safe/calathea) shows the listing, and the [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water a calathea orbifolia?',
+        a: 'Often enough to keep it consistently moist, but not wet or soggy. North Carolina State Extension gives that rule and no number of days.',
+      },
+      {
+        q: 'Why are my calathea orbifolia’s leaf edges brown?',
+        a: 'North Carolina State Extension names low humidity and the fluoride in tap water. It prefers distilled water or rainwater and at least 60% humidity.',
+      },
+      {
+        q: 'Is Calathea orbifolia the same as Goeppertia orbifolia?',
+        a: 'Yes. North Carolina State Extension lists Calathea orbifolia as an earlier name for Goeppertia orbifolia, a member of the prayer plant family.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Goeppertia orbifolia',
+        url: 'https://plants.ces.ncsu.edu/plants/goeppertia-orbifolia/',
+        accessed: '2026-11-08',
+      },
+    ],
+  },
+  {
+    slug: 'coleus',
+    commonName: 'Coleus',
+    scientificName: 'Coleus scutellarioides',
+    alsoKnownAs: ['Painted Nettle', 'Plectranthus scutellarioides', 'Solenostemon scutellarioides'],
+    related: ['polka-dot-plant', 'peacock-plant', 'tradescantia'],
+    metaTitle: 'How Often to Water Coleus: When the Top Inch Is Dry',
+    metaDescription:
+      'Water established coleus when the entire top inch of soil is dry, and more often in containers. Soggy soil stunts it, browns its leaves and scorches the edges.',
+    reviewed: '2026-11-08',
+    updated: '2026-11-08',
+    summary:
+      'Coleus, Coleus scutellarioides, is grown for colorful leaves, usually as a tender annual outdoors and sometimes as a houseplant in bright light. Once it is established, water when the entire top inch of soil is dry, and expect containers to need it more often. Good drainage matters most: an overwatered coleus is stunted, with muddy brown leaves and scorched edges.',
+    quickFacts: {
+      water: 'When the entire top inch is dry; pots dry out faster',
+      light: 'Part shade outdoors; bright light as a houseplant',
+      difficulty: 'Easy; UF/IFAS calls it hard to kill',
+      toxicity: 'Unknown: the ASPCA lists a different species, not this one',
+      humidity: 'Not stated by our sources',
+    },
+    sections: {
+      watering: [
+        'Once coleus is established, water when the entire top inch of soil is dry. That is Clemson Extension’s rule for garden plants, and it says to check below the surface every three to five days. For the first 7 to 10 days after planting, it says to keep the root balls moist but not overly wet.',
+        'Containers run drier, and Clemson says potted coleus are more susceptible to drought and need frequent watering. UF/IFAS puts it a little differently: keep the soil lightly moist at all times. In practice, check a pot more often than a bed, and water before the top inch stays dry for long.',
+      ],
+      light: [
+        'Most coleus grow best in part shade or dappled light, Clemson says, though sun-tolerant cultivars thrive in full, hot sun, and varieties that are not sun tolerant bleach and discolor. UF/IFAS says to check the specifics of your variety.',
+        'As a houseplant it requires bright light, North Carolina State Extension says. Full shade may lead to leggy growth.',
+      ],
+      problems: [
+        'An overwatered coleus is easy to spot. Clemson says plants with “wet feet” are stunted, with muddy brown leaves and scorched leaf margins. Excessive soil moisture and wet foliage can also bring downy mildew, stem rot or root rot, so water at the base and use a very well-drained mix in pots.',
+        'Clemson lists mealybugs, aphids and whiteflies, and NC State adds spider mites, especially on indoor plants. Wilting in full sun is another sign, NC State says, that a plant wants more shade.',
+      ],
+      propagation: [
+        'Stem cuttings are the easy way. UF/IFAS says to cut a two- to six-inch section of stem, trim it a half-inch below the lowest leaves, remove those leaves, and set it in moist potting soil or vermiculite in a shady spot for a couple of weeks. NC State says cuttings also root in water.',
+        'Clemson notes that patented cultivars should not be propagated by cuttings, and that plant labels say so with ‘PP’ or ‘PPAF’. Coleus is killed by the first fall frost, so take cuttings before then to keep a favorite.',
+      ],
+      sharedCare: [
+        'In a shared household, coleus needs one rule: nobody waters until the top inch is dry, because soggy soil does more damage than a brief wilt.',
+        'Pots dry faster than beds, so if it lives on a shared patio, agree on who checks it during a hot spell.',
+      ],
+      honestBit: [
+        'My take: coleus gives you as much color as most flowers, and pinching it back is the only chore that really pays off.',
+        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has a listing titled “Coleus”, but it names a different species, Coleus ampoinicus, also called Indian borage, and we won’t borrow a verdict from a relative. If your pet has chewed it, call your vet or a poison hotline. The [free pet-safe checker](/pet-safe) covers the rest of your plants.',
+      ],
+    },
+    faqs: [
+      {
+        q: 'How often should I water coleus?',
+        a: 'Once established, when the entire top inch of soil is dry, Clemson Extension says, checking below the surface every three to five days. Containers dry out faster and need frequent watering.',
+      },
+      {
+        q: 'What does an overwatered coleus look like?',
+        a: 'Stunted, with muddy brown leaves and scorched leaf margins, Clemson Extension says. Coleus must have good soil drainage, and poorly drained soil and excessive watering both damage it.',
+      },
+      {
+        q: 'Can coleus grow indoors?',
+        a: 'Yes, with bright light, which North Carolina State Extension says it requires as a houseplant. It also says aphids, whiteflies and spider mites are especially a problem on indoor plants.',
+      },
+    ],
+    careSources: [
+      {
+        publisher: 'Clemson Cooperative Extension',
+        title: 'Coleus',
+        url: 'https://hgic.clemson.edu/factsheet/coleus/',
+        accessed: '2026-11-08',
+      },
+      {
+        publisher: 'UF/IFAS Gardening Solutions',
+        title: 'Coleus',
+        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/ornamentals/coleus/',
+        accessed: '2026-11-08',
+      },
+      {
+        publisher: 'North Carolina State Extension',
+        title: 'Coleus scutellarioides (Coleus)',
+        url: 'https://plants.ces.ncsu.edu/plants/coleus-scutellarioides/',
+        accessed: '2026-11-08',
       },
     ],
   },

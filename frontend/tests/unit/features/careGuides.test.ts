@@ -101,8 +101,8 @@ describe('CARE_GUIDES registry', () => {
     // so "[free pet-safe checker](/pet-safe)" is not read as a verdict. Four
     // of the 2026-11-03 watering guides have no listing of their own either,
     // and neither do the 2026-11-05 air plant (Tillandsia), the batch-5
-    // tradescantia (T. zebrina) and the 2026-11-07 bird’s nest fern (Asplenium
-    // nidus).
+    // tradescantia (T. zebrina), the 2026-11-07 bird’s nest fern (Asplenium
+    // nidus), and the 2026-11-08 Cebu Blue and coleus.
     const unknown = CARE_GUIDES.filter((g) => !careToxicity(g).sourced);
     expect(unknown.map((g) => g.slug)).toEqual([
       'zz-plant',
@@ -113,6 +113,8 @@ describe('CARE_GUIDES registry', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
+      'cebu-blue-pothos',
+      'coleus',
     ]);
     for (const g of unknown) {
       const prose = [
@@ -504,6 +506,8 @@ describe('pet-safety test guides', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
+      'cebu-blue-pothos',
+      'coleus',
     ]);
   });
 });
@@ -705,6 +709,8 @@ describe('third-batch pet-safety guides', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
+      'cebu-blue-pothos',
+      'coleus',
     ]);
   });
 });
@@ -1624,5 +1630,165 @@ describe('watering guides batch 2 (2026-11-07)', () => {
     const g = findCareGuide('lucky-bamboo')!;
     expect(g.metaDescription).toMatch(/Not a real bamboo/);
     expect(g.summary).toMatch(/not a bamboo/);
+  });
+});
+
+/**
+ * Care guides batch 6, added 2026-11-08: the plant names Search Console showed
+ * with impressions and no guide in the 28 days to 2026-11-07. Each cites the
+ * extension pages it was written from, read that day. Only Clemson's coleus
+ * page gives an interval, so only the coleus guide states one.
+ *
+ * Existing guides stay untouched until the 12-01 title read, so these link to
+ * each other for their inbound related cards.
+ */
+describe('care guides batch 6 (2026-11-08)', () => {
+  const BATCH = [
+    'thai-constellation-monstera',
+    'cebu-blue-pothos',
+    'rattlesnake-plant',
+    'peacock-plant',
+    'zebra-calathea',
+    'calathea-orbifolia',
+    'coleus',
+  ] as const;
+  const CALATHEAS = [
+    'rattlesnake-plant',
+    'peacock-plant',
+    'zebra-calathea',
+    'calathea-orbifolia',
+  ] as const;
+  const guides = BATCH.map((slug) => findCareGuide(slug)!);
+
+  /** A stated watering interval: "every 7 days", "2 to 3 weeks", "once a week". */
+  const INTERVAL =
+    /\b(?:\d+\s*(?:to|-|–)?\s*\d*\s*(?:days?|weeks?)|every\s+(?:day|week|other|few|couple|three)|once\s+a\s+(?:day|week)|(?:once\s+or\s+)?twice\s+a\s+(?:day|week|month)|weekly|daily)\b/i;
+
+  /** Every place a guide could state how often to water. */
+  const wateringText = (g: CareGuide) => [
+    g.quickFacts.water,
+    g.metaTitle,
+    g.metaDescription,
+    ...g.sections.watering,
+    ...g.faqs.map((f) => f.a),
+  ];
+
+  it('publishes all seven, reviewed and updated on the day the sources were read', () => {
+    for (const [i, slug] of BATCH.entries()) {
+      const g = guides[i];
+      expect(g, slug).toBeDefined();
+      expect(g!.reviewed, slug).toBe('2026-11-08');
+      expect(g!.updated, slug).toBe('2026-11-08');
+      expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(1);
+      for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-08');
+    }
+  });
+
+  it('answers "how often to water" first, in the title and the first FAQ', () => {
+    for (const g of guides) {
+      expect(g.metaTitle, g.slug).toMatch(/^How Often to Water /);
+      expect(g.faqs[0]!.q, g.slug).toMatch(/^How often should I water /);
+    }
+  });
+
+  it('keeps every water and light line short enough for the first screen', () => {
+    for (const g of guides) expect(g.quickFacts.water.length, g.slug).toBeLessThanOrEqual(55);
+    for (const g of guides) expect(g.quickFacts.light.length, g.slug).toBeLessThanOrEqual(56);
+  });
+
+  it('has titles and descriptions unique across all guides', () => {
+    for (const g of guides) {
+      expect(
+        CARE_GUIDES.filter((o) => o.metaTitle === g.metaTitle),
+        g.slug
+      ).toHaveLength(1);
+      expect(
+        CARE_GUIDES.filter((o) => o.metaDescription === g.metaDescription),
+        g.slug
+      ).toHaveLength(1);
+    }
+  });
+
+  it('states no watering interval, except the ones Clemson gives for coleus', () => {
+    for (const g of guides) {
+      if (g.slug === 'coleus') continue;
+      for (const text of wateringText(g)) expect(text, g.slug).not.toMatch(INTERVAL);
+    }
+    const coleus = findCareGuide('coleus')!;
+    for (const text of wateringText(coleus)) {
+      if (INTERVAL.test(text)) expect(text).toMatch(/three to five days|7 to 10 days/);
+    }
+    expect(coleus.careSources.map((s) => s.url)).toContain(
+      'https://hgic.clemson.edu/factsheet/coleus/'
+    );
+  });
+
+  it('negative control: an unsourced interval fails the interval check', () => {
+    const real = findCareGuide('peacock-plant')!;
+    const doctored = { ...real, quickFacts: { ...real.quickFacts, water: 'Every 10 days' } };
+    expect(wateringText(real).some((t) => INTERVAL.test(t))).toBe(false);
+    expect(wateringText(doctored).some((t) => INTERVAL.test(t))).toBe(true);
+  });
+
+  it('reads the genus-level Calathea row for the four calatheas', () => {
+    for (const slug of CALATHEAS) {
+      const g = findCareGuide(slug)!;
+      const view = careToxicity(g);
+      expect(view.sourced, slug).toBe(true);
+      expect(view.petSafePath, slug).toBe('/pet-safe/calathea');
+      expect(view.claims.cats.state, slug).toBe('non-toxic');
+      expect(view.claims.dogs.state, slug).toBe('non-toxic');
+      expect(petSafetyLevel(g.quickFacts.toxicity), slug).toBe('safe');
+      expect(g.sections.honestBit.join(' '), slug).toContain('](/pet-safe/calathea)');
+    }
+  });
+
+  it('never reads the ASPCA "Peacock Plant" listing, which is Kaempferia', () => {
+    for (const e of PET_TOXICITY) {
+      expect(e.aspcaListing?.title, e.slug).not.toBe('Peacock Plant');
+    }
+    expect(findCareGuide('peacock-plant')!.sections.honestBit.join(' ')).toMatch(/Kaempferia/);
+  });
+
+  it('reads the Monstera deliciosa row for its cultivar', () => {
+    const g = findCareGuide('thai-constellation-monstera')!;
+    const view = careToxicity(g);
+    expect(view.sourced).toBe(true);
+    expect(view.petSafePath).toBe('/pet-safe/monstera');
+    expect(view.claims.cats.state).toBe('toxic');
+    expect(view.claims.dogs.state).toBe('toxic');
+    expect(petSafetyLevel(g.quickFacts.toxicity)).toBe('toxic');
+    expect(g.sections.honestBit.join(' ')).toMatch(/call your vet or a poison hotline/);
+    expect(view.faq.q).toBe('Is a Thai constellation monstera toxic to cats and dogs?');
+  });
+
+  it('reads "Unknown" for Cebu Blue and coleus, with no borrowed verdict', () => {
+    for (const slug of ['cebu-blue-pothos', 'coleus']) {
+      const g = findCareGuide(slug)!;
+      expect(PET_TOXICITY.some((e) => e.slug === slug)).toBe(false);
+      expect(careToxicity(g).sourced, slug).toBe(false);
+      expect(careToxicity(g).petSafePath, slug).toBeNull();
+      expect(g.quickFacts.toxicity, slug).toMatch(/^Unknown\b/);
+    }
+    // ASPCA's "Coleus" listing is C. ampoinicus and its golden pothos is E.
+    // aureum, so neither of these plants' names may reach a row.
+    for (const e of PET_TOXICITY) {
+      const names = [e.commonName, e.scientificName, ...e.aliases].map((n) => n.toLowerCase());
+      for (const n of ['coleus', 'coleus scutellarioides', 'cebu blue', 'epipremnum pinnatum']) {
+        expect(names, `${e.slug}: ${n}`).not.toContain(n);
+      }
+    }
+    expect(lookupToxicity('coleus', 10)).toEqual([]);
+  });
+
+  it('says its humidity source is silent rather than inventing a coleus number', () => {
+    expect(findCareGuide('coleus')!.quickFacts.humidity).toBe('Not stated by our sources');
+  });
+
+  it('is linked from another new guide’s related cards', () => {
+    for (const slug of BATCH) {
+      const from = guides.filter((g) => g.slug !== slug && g.related.includes(slug));
+      expect(from.length, slug).toBeGreaterThan(0);
+    }
   });
 });

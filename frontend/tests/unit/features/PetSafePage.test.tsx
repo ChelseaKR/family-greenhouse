@@ -252,7 +252,9 @@ describe('PetSafePage directory caution', () => {
     expect(expected.map((s) => s.slug)).toEqual([
       'air-plant',
       'birds-nest-fern',
+      'cebu-blue-pothos',
       'chinese-money-plant',
+      'coleus',
       'croton',
       'prayer-plant',
       'string-of-pearls',

@@ -46,6 +46,15 @@ export { ASPCA_POISON_CONTROL_PHONE, nameInSentence, sentenceName };
  */
 const TABLE_SLUG_FOR_GUIDE: Readonly<Record<string, string>> = {
   'heartleaf-philodendron': 'philodendron',
+  // A cultivar of Monstera deliciosa, the species the monstera row's listing names.
+  'thai-constellation-monstera': 'monstera',
+  // Each was long sold as a Calathea, and the calathea row's ASPCA listing is
+  // genus-level (Calathea spp.). The peacock plant must not read ASPCA's
+  // "Peacock Plant" listing, which is Kaempferia, a different plant.
+  'rattlesnake-plant': 'calathea',
+  'peacock-plant': 'calathea',
+  'zebra-calathea': 'calathea',
+  'calathea-orbifolia': 'calathea',
 };
 
 export interface CareToxicity {

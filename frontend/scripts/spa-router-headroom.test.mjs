@@ -112,11 +112,23 @@ const WATERING_BATCH_2_ROUTES = [
   '/pet-safe/purple-shamrock',
 ];
 
+/** Routes seo/care-guides-batch-5 adds to the sitemap, listed for the same reason. */
+const CARE_GUIDES_BATCH_6_ROUTES = [
+  '/care/thai-constellation-monstera',
+  '/care/cebu-blue-pothos',
+  '/care/rattlesnake-plant',
+  '/care/peacock-plant',
+  '/care/zebra-calathea',
+  '/care/calathea-orbifolia',
+  '/care/coleus',
+];
+
 const PENDING_ROUTES = [
   ...PR_1102_ROUTES,
   ...PR_1103_ROUTES,
   ...BLOG_ANSWER_FIRST_ROUTES,
   ...WATERING_BATCH_2_ROUTES,
+  ...CARE_GUIDES_BATCH_6_ROUTES,
 ];
 
 /** Every page that exists once main, #1102 and #1103 are all deployed. */

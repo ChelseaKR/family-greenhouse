@@ -15,8 +15,8 @@ import { expect, test } from '@playwright/test';
  * eight guides with three-line headings (anthurium, hoya and others) end
  * 13-61px below; that case is checked for the near-page-one guides, the
  * 2026-11-03 watering guides, the 2026-11-04 holiday guides, the 2026-11-05
- * batch, the 2026-11-05 batch-5 guides and the 2026-11-07 watering batch 2
- * only.
+ * batch, the 2026-11-05 batch-5 guides, the 2026-11-07 watering batch 2 and
+ * the 2026-11-08 batch 6 only.
  */
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 375, height: 667 },
@@ -71,6 +71,16 @@ const WATERING_BATCH_2 = [
   'birds-nest-fern',
   'purple-shamrock',
 ];
+/** The seven guides of batch 6, added 2026-11-08, written to fit the smallest case too. */
+const BATCH_6 = [
+  'thai-constellation-monstera',
+  'cebu-blue-pothos',
+  'rattlesnake-plant',
+  'peacock-plant',
+  'zebra-calathea',
+  'calathea-orbifolia',
+  'coleus',
+];
 /** Plus the guides with the longest headings, which push the link lowest. */
 const GUIDES = [
   ...NEAR_PAGE_ONE,
@@ -83,6 +93,7 @@ const GUIDES = [
   ...BATCH_4,
   ...BATCH_5,
   ...WATERING_BATCH_2,
+  ...BATCH_6,
 ];
 
 const SMALLEST = { name: 'iPhone SE in Safari', width: 375, height: 548 } as const;
@@ -103,6 +114,7 @@ test.describe('care guide sign-up link above the fold', () => {
         ...BATCH_4,
         ...BATCH_5,
         ...WATERING_BATCH_2,
+        ...BATCH_6,
       ],
     },
   ];

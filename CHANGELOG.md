@@ -16,6 +16,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Care guides for Thai Constellation monstera, Cebu Blue pothos, rattlesnake
+  plant, peacock plant, zebra calathea, calathea orbifolia and coleus**, the
+  plant names that Search Console showed with impressions and no guide in the
+  28 days to 2026-11-07. Each answers "how often to water" first and cites the
+  NC State, Clemson and UF/IFAS pages it was written from, read on 2026-11-08.
+  The only intervals stated are Clemson's for coleus. Thai Constellation reads
+  the Monstera deliciosa row, and the four calatheas read the genus-level
+  Calathea row, not ASPCA's "Peacock Plant", which is Kaempferia. The pet lines
+  for Cebu Blue and coleus read "Unknown": ASPCA lists golden pothos and a
+  different Coleus species, not these plants.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
