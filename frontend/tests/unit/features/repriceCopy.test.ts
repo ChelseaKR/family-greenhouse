@@ -115,6 +115,7 @@ describe('yearly first (ADR 0042): the toggle and the trial emails, in both loca
 
   it('has the cadence toggle strings and the derived saving hint in English and Spanish', () => {
     for (const key of [
+      'billedMonthlyNote',
       'intervalLabel',
       'intervalMonthly',
       'intervalYearly',
@@ -129,6 +130,8 @@ describe('yearly first (ADR 0042): the toggle and the trial emails, in both loca
     expect(es.pricing.hintAnnualSaving).toContain('{{percent}}');
     expect(en.pricing.hintAnnualSaving).not.toMatch(/\d/);
     expect(es.pricing.hintAnnualSaving).not.toMatch(/\d/);
+    expect(en.pricing.billedMonthlyNote).toBe('Billed monthly');
+    expect(es.pricing.billedMonthlyNote).toBe('Se factura cada mes');
     expect(en.pricing.intervalYearly).toBe('Yearly');
     expect(es.pricing.intervalYearly).toBe('Anual');
   });

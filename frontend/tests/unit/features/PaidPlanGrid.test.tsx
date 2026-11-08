@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
@@ -339,10 +339,58 @@ describe('the toggle opens on yearly (ADR 0042, "Yearly first")', () => {
     expect(screen.getByText('$24.99')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Yearly/ })).toHaveTextContent('Save ~30%');
     expect(screen.queryByText('$2.99')).not.toBeInTheDocument();
-    // Greenhouse sells no yearly cadence: it reads as unavailable, never as
-    // a yearly amount it does not have.
-    expect(screen.getByText('Not available at this interval')).toBeInTheDocument();
-    expect(screen.queryByText('$9.99')).not.toBeInTheDocument();
+  });
+
+  it('shows a monthly-only tier at its monthly price on the Yearly tab, marked billed monthly', () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+    expect(card('Greenhouse').getByText('$9.99')).toBeInTheDocument();
+    expect(card('Greenhouse').getByText('per month')).toBeInTheDocument();
+    expect(card('Greenhouse').getByText('Billed monthly')).toBeInTheDocument();
+    expect(card('Greenhouse').queryByText('per year')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not available at this interval')).not.toBeInTheDocument();
+    // Only the card that fell back carries the note.
+    expect(card('Garden').queryByText('Billed monthly')).not.toBeInTheDocument();
+    expect(card('Garden').getByText('per year')).toBeInTheDocument();
+    expect(card('Seedling').queryByText('Billed monthly')).not.toBeInTheDocument();
+  });
+
+  it('hands each card the cadence its price belongs to, so checkout matches the card', () => {
+    const cta = vi.fn(() => null);
+    render(<PaidPlanGrid plans={catalog} renderCta={cta} />);
+    expect(cta).toHaveBeenCalledWith(expect.objectContaining({ id: 'garden' }), 'year', 24.99);
+    expect(cta).toHaveBeenCalledWith(expect.objectContaining({ id: 'greenhouse' }), 'month', 9.99);
+    expect(cta).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'greenhouse' }),
+      'year',
+      expect.anything()
+    );
+  });
+
+  it('drops the note on the Monthly tab, where it would say nothing', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    expect(screen.getByText('$9.99')).toBeInTheDocument();
+    expect(screen.queryByText('Billed monthly')).not.toBeInTheDocument();
+  });
+
+  it('still says unavailable for a paid tier with neither price, never $0', () => {
+    const unpriced: Plan = { ...greenhouse, monthlyPrice: null, annualPrice: null };
+    render(<PaidPlanGrid plans={[seedling, garden, unpriced]} />);
+    const card = within(screen.getByRole('heading', { name: 'Greenhouse' }).closest('li')!);
+    expect(card.getByText('Not available at this interval')).toBeInTheDocument();
+    expect(card.queryByText('Billed monthly')).not.toBeInTheDocument();
+    expect(card.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  it('never lends a monthly price to the Lifetime tab', async () => {
+    const withLifetime: Plan = { ...garden, lifetimePrice: 149 };
+    render(<PaidPlanGrid plans={[seedling, withLifetime, greenhouseMonthlyOnly]} />);
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+    const card = within(screen.getByRole('heading', { name: 'Greenhouse' }).closest('li')!);
+    expect(card.getByText('Not available as a one-time purchase')).toBeInTheDocument();
+    expect(card.queryByText('$9.99')).not.toBeInTheDocument();
   });
 
   it('keeps Monthly one tap away', async () => {

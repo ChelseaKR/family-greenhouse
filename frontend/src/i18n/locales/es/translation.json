@@ -2229,6 +2229,7 @@
     "currentPlanBadge": "Plan actual",
     "notAvailableOneTime": "No disponible como pago único",
     "notAvailableInterval": "No disponible en este intervalo",
+    "billedMonthlyNote": "Se factura cada mes",
     "perMonth": "al mes",
     "perYear": "al año",
     "onceOff": "pago único",

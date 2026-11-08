@@ -29,6 +29,29 @@ export function intervalIsOffered(plans: Plan[], interval: BillingInterval): boo
 }
 
 /**
+ * What one tier's card shows, and sells, under the selected toggle tab.
+ *
+ * On the Yearly tab a paid tier with no yearly price but a monthly one shows
+ * that monthly price, marked "billed monthly" (ADR 0042, "Yearly first"):
+ * Yearly is the tab a household lands on, and Greenhouse has no yearly
+ * cadence. The returned `interval` is the cadence the amount belongs to, and
+ * it is what the card's checkout must send, so the price on the card and the
+ * price charged cannot differ. A tier with neither price stays `null`
+ * (unavailable), and so does any other tab: Lifetime never borrows a monthly.
+ */
+export function cadenceShown(
+  plan: Plan,
+  selected: BillingInterval
+): { interval: BillingInterval; price: number | null } {
+  const price = priceFor(plan, selected);
+  if (price !== null || selected !== 'year' || plan.id === 'seedling') {
+    return { interval: selected, price };
+  }
+  const monthly = priceFor(plan, 'month');
+  return monthly === null ? { interval: selected, price } : { interval: 'month', price: monthly };
+}
+
+/**
  * The cadence the toggle opens on (ADR 0042, "Yearly first"): yearly, when
  * any paid tier sells it. Every rival app leads with its yearly price, the
  * yearly Garden price is the lowest in that set, and a yearly charge hands

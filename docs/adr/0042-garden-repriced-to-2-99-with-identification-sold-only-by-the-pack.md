@@ -99,8 +99,9 @@ The yearly price is the one a household sees first. The cadence toggle on the pr
 Settings → Plan status opens on Yearly, showing $24.99 with the saving derived from the amounts
 ("Save ~30%"). Monthly is one tap away, and the tap is kept in memory for the page load only:
 nothing is written to storage and nothing is sent anywhere. Greenhouse sells no yearly cadence, so
-on the Yearly tab its card reads "Not available at this interval", as it did whenever a person
-tapped Yearly before. The iPhone app lists products rather than toggling, so its yearly row comes
+on the Yearly tab its card shows its monthly price with the note "Billed monthly", and its checkout
+sends `interval: 'month'`, so the card and the charge agree (owner decision, 2026-11-08). A paid
+tier with neither price still reads "Not available at this interval". The iPhone app lists products rather than toggling, so its yearly row comes
 first. The day-10 and day-14 trial emails (ADR 0039 §7, amended) name the yearly price first and
 then the monthly, each once: "If you would like to keep Garden, it is $24.99 a year, or $2.99 a
 month." Both amounts are read from the catalog, and a catalog with no yearly Garden price on sale

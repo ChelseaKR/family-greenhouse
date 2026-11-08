@@ -2171,6 +2171,7 @@
     "currentPlanBadge": "Current plan",
     "notAvailableOneTime": "Not available as a one-time purchase",
     "notAvailableInterval": "Not available at this interval",
+    "billedMonthlyNote": "Billed monthly",
     "perMonth": "per month",
     "perYear": "per year",
     "onceOff": "once",

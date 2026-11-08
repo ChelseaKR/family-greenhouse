@@ -108,13 +108,14 @@ async function renderBilling(
     paid = false,
     route = '/settings/billing',
     identifyTopUp,
-  }: { paid?: boolean; route?: string; identifyTopUp?: IdentifyTopUpOffer } = {}
+    plans,
+  }: { paid?: boolean; route?: string; identifyTopUp?: IdentifyTopUpOffer; plans?: Plan[] } = {}
 ) {
   const { billingService } = await import('@/services/billingService');
   vi.mocked(billingService.listPlans).mockResolvedValue({
     paymentsAvailable: paid,
     commercialHold: { active: !paid, effectiveDate: '2026-07-14' },
-    plans: paid ? PRICED_PLANS : PLANS,
+    plans: plans ?? (paid ? PRICED_PLANS : PLANS),
     ...(identifyTopUp ? { identifyTopUp } : {}),
   });
   vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
@@ -441,6 +442,30 @@ describe('purchase controls once payment activity is available', () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       ),
     });
+  });
+
+  it('buys Greenhouse monthly from the Yearly tab, the cadence its card shows (ADR 0042)', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
+    await renderBilling(
+      { planId: 'seedling' },
+      {
+        paid: true,
+        plans: [
+          PRICED_PLANS[0],
+          PRICED_PLANS[1],
+          { ...PRICED_PLANS[2], annualPrice: null, lifetimePrice: null },
+        ],
+      }
+    );
+
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Billed monthly')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Greenhouse' }));
+
+    expect(billingService.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ planId: 'greenhouse', interval: 'month' })
+    );
   });
 
   it('carries the selected interval into checkout when Monthly is tapped', async () => {

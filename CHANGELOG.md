@@ -37,7 +37,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **Yearly first (ADR 0042).** The pricing page and Settings → Plan status
   open on the yearly Garden price, $24.99 with the derived "Save ~30%" hint;
   Monthly is one tap away, and the tap is kept for the page load only, in
-  memory. The iPhone app lists the yearly product first. The day-10 and
+  memory. On the Yearly tab Greenhouse, which has no yearly price, shows its
+  monthly price marked "Billed monthly" and checks out monthly. The iPhone app
+  lists the yearly product first. The day-10 and
   day-14 trial emails name the yearly price first and then the monthly, each
   once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
   a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real

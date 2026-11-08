@@ -6,10 +6,10 @@ import { formatCurrency } from '@/i18n/format';
 import type { BillingInterval, Plan, PlanFeatures, PlanId } from '@/services/billingService';
 import {
   annualSavingPercent,
+  cadenceShown,
   capsLine,
   initialInterval,
   intervalIsOffered,
-  priceFor,
   rememberInterval,
 } from './planPricing';
 
@@ -136,7 +136,9 @@ interface PaidPlanGridProps {
  *
  * A tier that is missing the price for the selected cadence renders as
  * unavailable rather than free — a blank annual id is a valid partial launch
- * (see environments/*.tfvars), and "$0" would be a lie.
+ * (see environments/*.tfvars), and "$0" would be a lie. The one exception is
+ * `cadenceShown`: on the Yearly tab a tier sold only monthly shows its monthly
+ * price, marked "billed monthly", and its call to action gets that cadence.
  */
 export function PaidPlanGrid({
   plans,
@@ -200,7 +202,8 @@ export function PaidPlanGrid({
 
       <ul className="mt-10 grid gap-6 md:grid-cols-3" role="list">
         {plans.map((plan) => {
-          const price = priceFor(plan, active);
+          // The cadence this card actually sells, which is not always the tab.
+          const { interval: cardInterval, price } = cadenceShown(plan, active);
           const isFree = plan.id === 'seedling';
           // Free tier is always purchasable-by-default; a paid tier with no
           // price at this cadence simply isn't sold right now.
@@ -231,7 +234,7 @@ export function PaidPlanGrid({
               <p className="mt-4">
                 {unavailable ? (
                   <span className="text-sm text-gray-500">
-                    {active === 'lifetime'
+                    {cardInterval === 'lifetime'
                       ? t('pricing.notAvailableOneTime')
                       : t('pricing.notAvailableInterval')}
                   </span>
@@ -241,12 +244,17 @@ export function PaidPlanGrid({
                       {formatCurrency(price ?? 0)}
                     </span>
                     <span className="ml-1 text-sm text-gray-600">
-                      {active === 'lifetime'
+                      {cardInterval === 'lifetime'
                         ? t('pricing.onceOff')
-                        : active === 'year'
+                        : cardInterval === 'year'
                           ? t('pricing.perYear')
                           : t('pricing.perMonth')}
                     </span>
+                    {cardInterval !== active && (
+                      <span className="mt-1 block text-xs text-gray-600">
+                        {t('pricing.billedMonthlyNote')}
+                      </span>
+                    )}
                   </>
                 )}
               </p>
@@ -270,7 +278,7 @@ export function PaidPlanGrid({
                 ))}
               </ul>
 
-              {renderCta && <div className="mt-6 pt-2">{renderCta(plan, active, price)}</div>}
+              {renderCta && <div className="mt-6 pt-2">{renderCta(plan, cardInterval, price)}</div>}
             </li>
           );
         })}
