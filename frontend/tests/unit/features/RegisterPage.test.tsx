@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
@@ -41,6 +42,43 @@ describe('RegisterPage', () => {
     sessionStorage.clear();
   });
 
+  it('says under the subtitle that the guide’s plant comes next, by its name only', async () => {
+    sessionStorage.clear();
+    const { container } = renderPage('/register?plant=zz-plant');
+    expect(screen.getByTestId('guide-plant-next').textContent).toBe(
+      'Next: add your ZZ plant and pick when you last watered it.'
+    );
+    expect(container.textContent).not.toContain('zz-plant');
+    sessionStorage.clear();
+  });
+
+  it('says it in Spanish with the translated name', async () => {
+    sessionStorage.clear();
+    await ensureLanguageCatalog('es');
+    await i18n.changeLanguage('es');
+    try {
+      renderPage('/register?plant=monstera');
+      expect(screen.getByTestId('guide-plant-next').textContent).toBe(
+        'Después: añade tu Costilla de Adán y dinos cuándo fue su último riego.'
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+      sessionStorage.clear();
+    }
+  });
+
+  it('shows no plant line without a plant, or for a guide the first run cannot offer (negative control)', () => {
+    sessionStorage.clear();
+    renderPage('/register');
+    expect(screen.queryByTestId('guide-plant-next')).toBeNull();
+    cleanup();
+    renderPage('/register?plant=bird-of-paradise');
+    // The control applied: the page rendered, and the value was not carried.
+    expect(screen.getByRole('heading', { level: 1, name: /start your greenhouse/i })).toBeVisible();
+    expect(screen.queryByTestId('guide-plant-next')).toBeNull();
+    expect(getPendingGuidePlant()).toBeUndefined();
+  });
+
   it('ignores a plant value that is not one of the first run’s plants', () => {
     sessionStorage.clear();
     const { container } = renderPage(
@@ -49,6 +87,7 @@ describe('RegisterPage', () => {
     expect(getPendingGuidePlant()).toBeUndefined();
     expect(sessionStorage.getItem('fg.pendingGuidePlant')).toBeNull();
     expect(container.innerHTML).not.toContain('onerror');
+    expect(screen.queryByTestId('guide-plant-next')).toBeNull();
   });
 
   it('renders the free-account signup form and existing-account sign-in', () => {

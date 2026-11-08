@@ -2763,7 +2763,7 @@ export const CARE_GUIDES: CareGuide[] = [
     slug: 'string-of-pearls',
     commonName: 'String of Pearls',
     scientificName: 'Curio rowleyanus (formerly Senecio rowleyanus)',
-    alsoKnownAs: ['String of Beads', 'Senecio rowleyanus', 'Rosary Vine'],
+    alsoKnownAs: ['String of Beads', 'Senecio rowleyanus'],
     related: ['burros-tail', 'jade-plant', 'peperomia'],
     metaTitle: 'How Often to Water String of Pearls: When It Is Dry',
     metaDescription:
