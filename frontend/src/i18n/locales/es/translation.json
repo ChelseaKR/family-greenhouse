@@ -268,14 +268,17 @@
       "created": "{{name}} ya está en tu invernadero.",
       "createdWithSchedule": "{{name}} ya está, con su calendario de cuidados preparado.",
       "createdWithStartingPoint": "{{name}} ya está, con un recordatorio de riego cada {{days}} días para empezar.",
-      "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página."
+      "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página.",
+      "createdCheckRecent": "{{name}} ya está. Te recordaremos revisar la tierra dentro de {{soon}} días y después cada {{days}} días.",
+      "createdCheckSoon": "{{name}} ya está. Como ha pasado un tiempo, te recordaremos revisar la tierra dentro de {{soon}} días y después cada {{days}} días.",
+      "createdCheckUnsure": "{{name}} ya está. Como no sabes cuándo fue su último riego, te recordaremos revisar la tierra mañana y después cada {{days}} días."
     },
     "picker": {
       "heading": "Elige una planta de interior común",
-      "hint": "Con un toque la añadimos con un recordatorio de riego para empezar. Puedes cambiarlo cuando quieras.",
+      "hint": "Toca tu planta y dinos cuándo la regaste por última vez. Pondremos un recordatorio para revisar la tierra y puedes cambiarlo cuando quieras.",
       "saving": "Añadiendo tu planta…",
       "somethingElse": "¿Otra planta? Escribe su nombre",
-      "fromGuide": "Vienes de nuestra guía de cuidados de {{name}}, así que aparece primero. Con un toque la añadimos con un recordatorio para revisar la tierra cada {{days}} días.",
+      "fromGuide": "Vienes de nuestra guía de cuidados de {{name}}, así que aparece primero. Tócala, dinos cuándo fue su último riego y te recordaremos revisar la tierra cada {{days}} días a partir de ahí.",
       "plants": {
         "pothos": "Poto",
         "snake-plant": "Sansevieria",
@@ -288,6 +291,14 @@
         "fiddle-leaf-fig": "Ficus lira",
         "jade-plant": "Árbol de jade",
         "rosemary": "Romero"
+      },
+      "lastWatered": {
+        "question": "{{name}}: ¿cuándo fue su último riego?",
+        "hint": "Tu respuesta solo fija el primer recordatorio para revisar la tierra. Después se repite con el ritmo habitual de la planta.",
+        "recent": "En los últimos días",
+        "whileAgo": "Hace una semana o más",
+        "unsure": "No lo sé",
+        "back": "Elegir otra planta"
       }
     },
     "invite": {
@@ -383,6 +394,7 @@
     "signUpTitle": "Crear una cuenta",
     "registerTitle": "Empieza tu invernadero",
     "registerSubtitle": "Gratis para un hogar, hasta 2 miembros del hogar y 8 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
+    "guidePlantNext": "Después: añade tu {{name}} y dinos cuándo fue su último riego.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
     "showPassword": "Mostrar contraseña",

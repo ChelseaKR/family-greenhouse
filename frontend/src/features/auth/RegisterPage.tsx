@@ -18,7 +18,12 @@ import { AuthShell } from './AuthShell';
 import { setPendingConfirmation } from './pendingConfirmation';
 import { safeAppRedirect } from './safeRedirect';
 import { setPendingReferralCode } from '@/features/referrals/pendingReferralCode';
-import { setPendingGuidePlant } from '@/features/onboarding/guidePlantHandoff';
+import {
+  getPendingGuidePlant,
+  guidePlant,
+  setPendingGuidePlant,
+} from '@/features/onboarding/guidePlantHandoff';
+import type { CommonPlant } from '@/features/onboarding/commonPlants';
 
 // Three fields, not four. The form used to ask for the password twice. A
 // "Show password" toggle catches a typo the same way without a fourth field,
@@ -65,6 +70,12 @@ export function RegisterPage() {
   useEffect(() => {
     setPendingGuidePlant(guidePlantSlug);
   }, [guidePlantSlug]);
+  // The plant named on the page: the one in the address, or one this tab
+  // already carried here (a visitor who went to /login and came back). Only
+  // a slug that matched the first run's list gets this far, and only its
+  // translated name is shown.
+  const [storedGuidePlant] = useState(getPendingGuidePlant);
+  const carriedPlant = guidePlant(guidePlantSlug) ?? storedGuidePlant;
 
   if (!PUBLIC_REGISTRATION_AVAILABLE) {
     return (
@@ -85,13 +96,21 @@ export function RegisterPage() {
     );
   }
 
-  return <RegistrationForm redirect={redirect} loginHref={loginHref} referred={!!referralCode} />;
+  return (
+    <RegistrationForm
+      redirect={redirect}
+      loginHref={loginHref}
+      referred={!!referralCode}
+      carriedPlant={carriedPlant}
+    />
+  );
 }
 
 function RegistrationForm({
   redirect,
   loginHref,
   referred,
+  carriedPlant,
 }: {
   redirect: string | null;
   loginHref: string;
@@ -99,6 +118,10 @@ function RegistrationForm({
    *  earns a bonus. Purely informational: whether the bonus actually lands
    *  is decided server-side when the household is created. */
   referred: boolean;
+  /** The plant a care guide sent this visitor here for, if the first run can
+   *  offer it. Said once under the subtitle, so the visitor knows the plant
+   *  came along and what happens to it next. */
+  carriedPlant: CommonPlant | undefined;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -146,7 +169,20 @@ function RegistrationForm({
   return (
     <AuthShell
       title={t('auth.registerTitle')}
-      subtitle={t('auth.registerSubtitle')}
+      subtitle={
+        <>
+          {t('auth.registerSubtitle')}
+          {carriedPlant && (
+            // A block inside the shell's subtitle paragraph: one line under
+            // the subtitle, never the slug.
+            <span data-testid="guide-plant-next" className="mt-2 block font-medium text-ink">
+              {t('auth.guidePlantNext', {
+                name: t(`firstRun.picker.plants.${carriedPlant.slug}`),
+              })}
+            </span>
+          )}
+        </>
+      }
       footer={
         <>
           {t('auth.existingAccount')}{' '}

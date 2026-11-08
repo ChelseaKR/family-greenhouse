@@ -244,6 +244,25 @@ Privacy Control or Do Not Track, the same `analyticsOptedOut()` PostHog uses.
 Under an opt-out the loader also deletes any `_ga`/`_ga_*` cookies left from
 before. Test fixtures are excluded by the smoke's GPC declaration (above).
 
+**When the first page view is sent (since 2026-11-07).** From the document,
+not from the app. `frontend/src/googleAnalyticsBoot.ts` is built as its own
+small entry (`frontend/vite.googleAnalyticsBoot.ts`) and placed in the `<head>`
+of every page the production web build emits, ahead of the app bundle. It
+applies the same conditions, pushes the same consent defaults and
+configuration, appends gtag.js, and — on a prerendered public page whose
+`data-prerendered` stamp equals the address being loaded — sends that page's
+view with the build-time title, `utm_*` only, and the referrer reduced to its
+origin. The app's loader then adopts that state (`window.__fgGoogleAnalyticsBoot`)
+instead of repeating it, and the route's own page view is deduplicated. The
+app shell (dashboard, plant pages, anything carrying a token) still gets its
+first page view from the app, scrubbed as before; so does the home page for a
+signed-in browser, which App redirects to `/dashboard`. Measured on the
+throttled phone profile, the care-page `page_view` moved from about 4.0 s
+into the load to well under 2 s, so visits that end sooner than that are now
+counted; expect the session count to rise after the deploy while engaged
+sessions do not, and do not compare session totals across that date as
+like-for-like.
+
 **What it is told.**
 
 - Consent Mode v2 defaults, never updated: `ad_storage`, `ad_user_data` and

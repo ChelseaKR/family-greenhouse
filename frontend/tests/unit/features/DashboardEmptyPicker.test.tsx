@@ -132,6 +132,9 @@ describe('dashboard empty state: common-plant picker', () => {
       within(picker).getByRole('heading', { name: /pick a common houseplant/i })
     ).toBeVisible();
     await user.click(within(picker).getByRole('button', { name: 'ZZ plant' }));
+    // Nothing is saved on the tap itself: it asks when it was last watered.
+    expect(created).toEqual([]);
+    await user.click(within(picker).getByRole('button', { name: /in the last few days/i }));
 
     // The card refills from the refreshed read and the picker goes away.
     await waitFor(() => expect(screen.queryByTestId('dashboard-empty-picker')).toBeNull());
@@ -150,6 +153,8 @@ describe('dashboard empty state: common-plant picker', () => {
 
     const picker = await screen.findByTestId('dashboard-empty-picker');
     await user.click(within(picker).getByRole('button', { name: 'ZZ plant' }));
+    // The tap asks when it was last watered; answering saves the plant.
+    await user.click(within(picker).getByRole('button', { name: /in the last few days/i }));
 
     await waitFor(() => expect(screen.queryByTestId('dashboard-empty-picker')).toBeNull());
     // The sabotage applied: the plant really was saved.

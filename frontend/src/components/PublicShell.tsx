@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { isNativeApp } from '@/lib/platform';
 import { contentCtaContext, trackGoogleConversion } from '@/services/googleAnalytics';
+import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -41,6 +42,15 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
   // header does not offer one: see WEB_ONLY_LINKS in Footer.tsx.
   const showPricing = !isNativeApp();
   const { pathname } = useLocation();
+  // On a care guide or pet-safe page, "Try the app" carries the page's plant
+  // the same way the page's own sign-up links do, so the first run can offer
+  // it first. Any other page, or a plant the first run cannot offer, is plain
+  // /register. The GA4 click below is unchanged.
+  const ctaContext = contentCtaContext(pathname);
+  const registerHref =
+    ctaContext.plant && (ctaContext.source === 'care_guide' || ctaContext.source === 'pet_safe')
+      ? registerHrefForPlant(ctaContext.plant)
+      : '/register';
 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
@@ -114,14 +124,14 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
                 </div>
               </details>
               <Link
-                to={PUBLIC_REGISTRATION_AVAILABLE ? '/register' : '/login'}
+                to={PUBLIC_REGISTRATION_AVAILABLE ? registerHref : '/login'}
                 className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
                 onClick={() => {
                   // Only the sign-up link is a sign-up CTA; "Sign in" is not.
                   if (!PUBLIC_REGISTRATION_AVAILABLE) return;
                   trackGoogleConversion({
                     name: 'landing_cta_click',
-                    ...contentCtaContext(pathname),
+                    ...ctaContext,
                     placement: 'header',
                   });
                 }}

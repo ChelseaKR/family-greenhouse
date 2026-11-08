@@ -135,9 +135,22 @@ export const GENERIC_PAGE_TITLE = 'Family Greenhouse';
 
 type Gtag = (...args: unknown[]) => void;
 
+/**
+ * Who started GA this page load, left on `window` by whichever of the two
+ * did it first: src/googleAnalyticsBoot.ts from the document's <head>, or
+ * `initGoogleAnalytics` below. The ID configured, and the address of the page
+ * view sent at that point, or null when none was (the app shell, or the
+ * loader itself, whose page views come from the router).
+ */
+export interface GoogleAnalyticsBootState {
+  id: string;
+  pageLocation: string | null;
+}
+
 declare global {
   interface Window {
     dataLayer?: unknown[];
+    __fgGoogleAnalyticsBoot?: GoogleAnalyticsBootState;
   }
 }
 
@@ -251,6 +264,15 @@ export function clearGoogleAnalyticsCookies(): void {
 /**
  * Load GA if — and only if — every condition in the header holds. Returns
  * whether it loaded. Idempotent: a second call does nothing.
+ *
+ * On the production website, src/googleAnalyticsBoot.ts has usually done the
+ * loading already, from the document's <head>, before this bundle arrived.
+ * It leaves `window.__fgGoogleAnalyticsBoot` behind; when that names this ID,
+ * the consent defaults, the configuration and the gtag.js script are already
+ * in place and are not repeated, and the page view it sent (if any) becomes
+ * the one `trackGooglePageView` dedupes the first route against. The checks
+ * above still run here: they are cheap, and the boot is an optimisation the
+ * loader must not depend on.
  */
 export function initGoogleAnalytics(): boolean {
   if (gtag) return true;
@@ -279,35 +301,43 @@ export function initGoogleAnalytics(): boolean {
     dataLayer.push(arguments);
   };
 
-  // The more specific default wins where both match, so the order is only for
-  // the reader: denied in the listed regions, analytics granted elsewhere.
-  push('consent', 'default', {
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-    analytics_storage: 'denied',
-    region: CONSENT_DENIED_REGIONS,
-  });
-  push('consent', 'default', {
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-    analytics_storage: 'granted',
-  });
-  push('set', 'ads_data_redaction', true);
-  push('js', new Date());
-  push('config', id, {
-    send_page_view: false,
-    allow_google_signals: false,
-    allow_ad_personalization_signals: false,
-  });
+  const boot = window.__fgGoogleAnalyticsBoot;
+  const booted = boot !== undefined && boot.id === id;
+  if (!booted) {
+    // The more specific default wins where both match, so the order is only
+    // for the reader: denied in the listed regions, analytics granted elsewhere.
+    push('consent', 'default', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'denied',
+      region: CONSENT_DENIED_REGIONS,
+    });
+    push('consent', 'default', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'granted',
+    });
+    push('set', 'ads_data_redaction', true);
+    push('js', new Date());
+    push('config', id, {
+      send_page_view: false,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false,
+    });
 
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = `${GTAG_SRC}?id=${encodeURIComponent(id)}`;
-  document.head.appendChild(script);
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `${GTAG_SRC}?id=${encodeURIComponent(id)}`;
+    document.head.appendChild(script);
+    // Claim the slot, so a boot that arrives after this (it should not: the
+    // document puts it first) finds GA started and does nothing.
+    window.__fgGoogleAnalyticsBoot = { id, pageLocation: null };
+  }
 
   gtag = push;
+  lastPageLocation = booted ? boot.pageLocation : null;
   entryReferrer = gaReferrer(document.referrer, window.location.origin);
   return true;
 }

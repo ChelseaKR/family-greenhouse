@@ -88,7 +88,7 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.6",
-    "@capacitor/core": "^8.5.0",
+    "@capacitor/core": "^8.5.3",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.2",
     "@capacitor/keyboard": "^8.0.5",

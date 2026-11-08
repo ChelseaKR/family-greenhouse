@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { WelcomeFlow } from '@/features/onboarding/WelcomeFlow';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
+import { useToastStore } from '@/store/toastStore';
 import { server } from '../../msw/server';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import {
@@ -105,6 +106,19 @@ function renderFirstRun(entry = '/welcome') {
     </QueryClientProvider>
   );
 }
+
+/** Tap a one-tap plant, then answer "When did you last water it?". */
+async function pickPlant(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  answer: RegExp = /in the last few days/i
+) {
+  await user.click(await screen.findByRole('button', { name }));
+  const question = await screen.findByTestId('last-watered-question');
+  await user.click(within(question).getByRole('button', { name: answer }));
+}
+
+const DAY_MS = 86_400_000;
 
 /** Walk to the invite step with the invite endpoint stubbed. */
 async function goToInviteStep(user: ReturnType<typeof userEvent.setup>) {
@@ -625,12 +639,12 @@ describe('WelcomeFlow common-plant shortcut', () => {
     renderFirstRun();
 
     const before = Date.now();
-    await user.click(await screen.findByRole('button', { name: 'Snake plant' }));
+    await pickPlant(user, 'Snake plant');
 
     expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
     expect(created).toEqual([{ name: 'Snake plant', species: 'Dracaena trifasciata' }]);
-    // The pick's first reminder (14 days for a snake plant), one interval
-    // out, never due today.
+    // Watered in the last few days: the pick's first reminder (14 days for a
+    // snake plant) is one interval out, never due today.
     expect(createdTasks).toHaveLength(1);
     expect(createdTasks[0]).toMatchObject({ plantId: 'p-new', type: 'water', frequency: 14 });
     const dueInDays = (Date.parse(String(createdTasks[0].nextDue)) - before) / 86_400_000;
@@ -664,7 +678,7 @@ describe('WelcomeFlow common-plant shortcut', () => {
     const created = capturePlants(500);
     renderFirstRun();
 
-    await user.click(await screen.findByRole('button', { name: 'Pothos' }));
+    await pickPlant(user, 'Pothos');
 
     // The control reached the server: a create was attempted and refused.
     await waitFor(() => expect(created).toHaveLength(1));
@@ -672,7 +686,9 @@ describe('WelcomeFlow common-plant shortcut', () => {
     expect(screen.getByRole('heading', { name: /add your first plant/i })).toBeVisible();
     expect(createdTasks).toEqual([]);
     expect(trackGoogleConversion).not.toHaveBeenCalled();
-    // And the picker is usable again for a retry.
+    // And the question is usable again for a retry, as is going back.
+    expect(screen.getByRole('button', { name: /in the last few days/i })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: /pick a different plant/i }));
     expect(screen.getByRole('button', { name: 'Pothos' })).toBeEnabled();
   });
 
@@ -683,7 +699,7 @@ describe('WelcomeFlow common-plant shortcut', () => {
     server.use(http.post(`${API}/tasks`, () => new HttpResponse(null, { status: 500 })));
     renderFirstRun();
 
-    await user.click(await screen.findByRole('button', { name: 'Monstera' }));
+    await pickPlant(user, 'Monstera');
 
     expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
     expect(created).toEqual([{ name: 'Monstera', species: 'Monstera deliciosa' }]);
@@ -735,7 +751,7 @@ describe('WelcomeFlow plant carried from a care guide', () => {
     await screen.findByRole('heading', { name: /pick a common houseplant/i });
     const note = screen.getByTestId('guide-plant-note');
     expect(note.textContent).toBe(
-      "You came from our ZZ plant care guide, so it's first. One tap adds it with a reminder to check the soil every 14 days."
+      "You came from our ZZ plant care guide, so it's first. Tap it, say when you last watered it, and we'll remind you to check the soil every 14 days from there."
     );
     const picks = screen
       .getAllByRole('listitem')
@@ -754,7 +770,7 @@ describe('WelcomeFlow plant carried from a care guide', () => {
     const created = capturePlants();
     renderFirstRun();
 
-    await user.click(await screen.findByRole('button', { name: 'ZZ plant' }));
+    await pickPlant(user, 'ZZ plant');
     expect(await screen.findByRole('heading', { name: /share the care/i })).toBeVisible();
     expect(created).toEqual([{ name: 'ZZ plant', species: 'Zamioculcas zamiifolia' }]);
     expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 14 });
@@ -773,7 +789,7 @@ describe('WelcomeFlow plant carried from a care guide', () => {
     capturePlants();
     renderFirstRun();
 
-    await user.click(await screen.findByRole('button', { name: 'Pothos' }));
+    await pickPlant(user, 'Pothos');
     await screen.findByRole('heading', { name: /share the care/i });
     expect(vi.mocked(trackGoogleConversion).mock.calls[1]).toEqual([
       { name: 'first_plant_added', method: 'common_plant' },
@@ -800,5 +816,98 @@ describe('WelcomeFlow plant carried from a care guide', () => {
     expect(container.querySelector('[data-suggested]')).toBeNull();
     expect(container.innerHTML).not.toContain('onerror');
     expect(screen.getAllByRole('listitem')[0]!.textContent).toBe('Pothos');
+  });
+});
+
+/**
+ * "When did you last water it?" (2026-11-05). The answer places only the
+ * first reminder, so a ZZ plant from its care guide gets a soil check inside
+ * the 14-day trial instead of on the day it ends.
+ */
+describe('WelcomeFlow first-watering question', () => {
+  function capturePlants() {
+    const created: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${API}/plants`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        created.push(body);
+        return HttpResponse.json({ id: 'p-new', name: body.name, householdId: 'hh-1' });
+      })
+    );
+    return created;
+  }
+
+  afterEach(() => sessionStorage.clear());
+
+  async function dueInDaysFor(answer: RegExp) {
+    const user = userEvent.setup();
+    setPendingGuidePlant('zz-plant');
+    newHouseholdHandlers();
+    capturePlants();
+    renderFirstRun();
+    const before = Date.now();
+    await pickPlant(user, 'ZZ plant', answer);
+    await screen.findByRole('heading', { name: /share the care/i });
+    expect(createdTasks).toHaveLength(1);
+    // The repeat interval is always the plant's own; only the first date moves.
+    expect(createdTasks[0]).toMatchObject({ type: 'water', frequency: 14 });
+    return (Date.parse(String(createdTasks[0]!.nextDue)) - before) / DAY_MS;
+  }
+
+  it('saves nothing when a plant is tapped, and asks the question first (negative control)', async () => {
+    const user = userEvent.setup();
+    setPendingGuidePlant('zz-plant');
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'ZZ plant' }));
+    const question = await screen.findByTestId('last-watered-question');
+    expect(within(question).getByText('ZZ plant: when did you last water it?')).toHaveFocus();
+    expect(
+      within(question)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['In the last few days', 'A week or more ago', 'Not sure', 'Pick a different plant']);
+    expect(created).toEqual([]);
+    expect(createdTasks).toEqual([]);
+    expect(trackGoogleConversion).not.toHaveBeenCalled();
+  });
+
+  it('checks the soil tomorrow when the visitor is not sure, and says why', async () => {
+    useToastStore.setState({ toasts: [] });
+    const days = await dueInDaysFor(/not sure/i);
+    expect(days).toBeGreaterThan(0.9);
+    expect(days).toBeLessThan(1.1);
+    expect(useToastStore.getState().toasts.map((toast) => toast.message)).toContain(
+      "ZZ plant is in. Since you're not sure when it was last watered, we'll remind you to check the soil tomorrow, then every 14 days."
+    );
+  });
+
+  it('checks the soil in 2 days when it was watered a week or more ago', async () => {
+    const days = await dueInDaysFor(/a week or more ago/i);
+    expect(days).toBeGreaterThan(1.9);
+    expect(days).toBeLessThan(2.1);
+  });
+
+  it('keeps one full interval when it was watered in the last few days', async () => {
+    const days = await dueInDaysFor(/in the last few days/i);
+    expect(days).toBeGreaterThan(13.9);
+    expect(days).toBeLessThan(14.1);
+  });
+
+  it('goes back to the list without saving when the visitor picks another plant', async () => {
+    const user = userEvent.setup();
+    newHouseholdHandlers();
+    const created = capturePlants();
+    renderFirstRun();
+
+    await user.click(await screen.findByRole('button', { name: 'Jade plant' }));
+    await user.click(await screen.findByRole('button', { name: /pick a different plant/i }));
+    expect(screen.queryByTestId('last-watered-question')).toBeNull();
+    await pickPlant(user, 'Pothos', /not sure/i);
+    await screen.findByRole('heading', { name: /share the care/i });
+    expect(created).toEqual([{ name: 'Pothos', species: 'Epipremnum aureum' }]);
+    expect(createdTasks[0]).toMatchObject({ frequency: 7 });
   });
 });
