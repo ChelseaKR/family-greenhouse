@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_GUIDES, findCareGuide, type CareGuide } from '@/features/care/careGuides';
 import { careToxicity, careToxicityFrom } from '@/features/care/careToxicity';
-import { PET_TOXICITY } from '../../../../backend/src/models/petToxicity';
+import { PET_TOXICITY, lookupToxicity } from '../../../../backend/src/models/petToxicity';
 import { petSafetyLevel } from '@/features/petsafe/petSafeSpecies';
 
 /**
@@ -819,6 +819,27 @@ describe('watering guides batch 1', () => {
     const row = PET_TOXICITY.find((e) => e.slug === 'calathea')!;
     expect(row.aliases).not.toContain('prayer plant');
     expect(row.aliases).not.toContain('maranta');
+  });
+
+  /*
+   * "Rosary vine" is string of hearts (Ceropegia woodii). Wisconsin
+   * Horticulture's string-of-hearts article calls it "another commonly used
+   * name for C. woodii"; its string-of-pearls article never uses it. (NC
+   * State's toolbox lists the name under both plants, which is the point: a
+   * name two plants share must not route to one of them.) The string of
+   * pearls guide carried it, so the name was published on that page and in
+   * its JSON-LD alternateName. There is no string-of-hearts guide or
+   * pet-toxicity row yet, so the name must resolve to nothing.
+   */
+  it('gives the name "rosary vine" to no guide and no pet-toxicity row', () => {
+    const names = (g: CareGuide) => [g.commonName, ...g.alsoKnownAs].map((n) => n.toLowerCase());
+    expect(names(findCareGuide('string-of-pearls')!)).not.toContain('rosary vine');
+    expect(CARE_GUIDES.filter((g) => names(g).includes('rosary vine'))).toEqual([]);
+    const rows = PET_TOXICITY.filter((e) =>
+      [e.commonName, ...e.aliases].some((n) => n.toLowerCase() === 'rosary vine')
+    );
+    expect(rows).toEqual([]);
+    expect(lookupToxicity('rosary vine')).toEqual([]);
   });
 });
 
