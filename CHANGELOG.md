@@ -64,6 +64,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
 
+### Fixed
+
+- **A Garden household that tries plant identification is told it isn't
+  included, not that an allowance of 0 resets next month (ADR 0042).** The
+  website names the 20-identification pack, its catalog price and the buy
+  button; the apps name no price or pack. Upgrade wording now points at
+  Greenhouse, since Garden has no allowance, and Spanish matches.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**

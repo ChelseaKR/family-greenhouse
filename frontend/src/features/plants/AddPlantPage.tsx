@@ -13,6 +13,7 @@ import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/out
 import {
   plantService,
   identifyBudgetExhaustedFromError,
+  identifyNotIncludedIn,
   type IdentificationSuggestion,
   type IdentifyBudgetExhausted,
 } from '@/services/plantService';
@@ -253,9 +254,19 @@ export function AddPlantPage() {
         // configured, OR this is the iOS/Android app, which must never offer
         // an in-app purchase outside Apple's/Google's own billing — see
         // `native` above): say what happened and where the allowance comes
-        // from, in the reader's language.
-        if (!exhausted.topUpAvailable || native)
-          setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
+        // from, in the reader's language. A plan that bundles none (ADR 0042)
+        // has nothing used up and no reset to promise; the apps name no pack
+        // and no price (docs/mobile.md, "Store payment rules").
+        if (!exhausted.topUpAvailable || native) {
+          const notIncludedIn = identifyNotIncludedIn(exhausted);
+          setIdentifyNotice(
+            notIncludedIn
+              ? t(native ? 'identifyTopUp.notIncludedInApp' : 'identifyTopUp.notIncludedNoPack', {
+                  plan: notIncludedIn,
+                })
+              : t('identifyTopUp.exhaustedNoPack')
+          );
+        }
         return;
       }
       setError(
@@ -498,6 +509,7 @@ export function AddPlantPage() {
               credits={identifyExhausted.topUp.credits}
               priceUsd={identifyExhausted.topUp.priceUsd}
               balance={identifyExhausted.credits}
+              notIncludedIn={identifyNotIncludedIn(identifyExhausted)}
             />
           </div>
         )}
