@@ -18,6 +18,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Garden goes on sale at $2.99 a month and $24.99 a year at the next
+  production tag (ADR 0042).** Production now names both live Stripe prices and
+  attests them; existing Garden prices are untouched.
 - **Garden is $2.99 a month or $24.99 a year, and plant identification is
   sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
   with 30 identifications. Garden annual returns at $24.99. Garden bundles no
