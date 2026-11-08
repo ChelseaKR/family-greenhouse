@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { QueryClientProvider, useQuery, type QueryClient } from '@tanstack/react-query';
-import { createAppQueryClient } from './queryClient';
+import { createAppQueryClient } from '@/services/queryClient';
 import { useAuthStore, type User } from '@/store/authStore';
 
 const alice: User = {
