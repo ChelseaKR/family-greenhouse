@@ -238,3 +238,17 @@ passkey_relying_party_id = "familygreenhouse.net"
 # the rule's input as the weekly digest. See docs/billing.md, "The trial
 # lifecycle emails". Set back to false to stop them; send markers are kept.
 trial_lifecycle_emails_enabled = true
+
+# Apple In-App Purchase for the iPhone app (ADR 0041), exactly as staging sets
+# it (#1064). It sets APP_STORE_BILLING_ENABLED = "1" on the billing Lambda, so
+# the three /billing/app-store/* routes stop answering 404. App Review buys
+# with a Sandbox Apple Account against this production API; without this line
+# that purchase is refused. It needs payments_enabled = "1" above and
+# commercialHoldActive = false in commercial-status.json, both already true.
+# Sandbox transactions are accepted here on purpose (APP_STORE_ENVIRONMENTS is
+# deliberately not set, so the backend default "Production,Sandbox" applies);
+# narrowing that to "Production" after approval is a separate change. No
+# secret is involved: Apple's signed transactions and notifications are
+# verified against the pinned Apple Root CA - G3. Kill switch: set "0" and
+# ship a tag; a recorded subscription keeps its entitlement.
+app_store_billing_enabled = "1"
