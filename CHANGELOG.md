@@ -63,9 +63,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
-- **Renaming a plant now reaches its tasks.** Task lists, reminders, the sitter,
-  caretaker and kiosk pages and the calendar feed kept using the old name for
-  good, because each task stored its own copy from the day it was created.
+- **Renaming a plant now reaches its tasks.** Task lists, the sitter, caretaker
+  and kiosk pages and the calendar feed kept using the old name for good, because each task stored its own copy from the day it was created.
   Saving a plant now updates those copies, which also repairs any left behind by
   an earlier rename.
 

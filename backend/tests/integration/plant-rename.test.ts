@@ -1,8 +1,7 @@
 /**
  * A task row keeps its own copy of the plant's name, written when the task is
- * created. Task lists, reminder emails and pushes, the sitter, caretaker and
- * kiosk pages and the calendar feed all read that copy, so renaming a plant
- * has to reach it. Real handlers, DynamoDB faked at the SDK boundary.
+ * created. Task lists, the sitter, caretaker and kiosk pages and the calendar
+ * feed all read that copy, so renaming a plant has to reach it. Real handlers, DynamoDB faked at the SDK boundary.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryDynamo } from './support/inMemoryDynamo.js';

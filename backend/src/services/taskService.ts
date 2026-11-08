@@ -1188,10 +1188,10 @@ export async function getTasksForPlant(householdId: string, plantId: string): Pr
 /**
  * Put a plant's current name on its task rows.
  *
- * A task keeps its own copy of the name, written by `createTask`, and every
- * surface that lists tasks reads that copy: the task lists, reminder emails and
- * pushes, the sitter, caretaker and kiosk pages, the calendar feed. Nothing used
- * to write it again, so a renamed plant kept going out under its old name.
+ * A task keeps its own copy of the name, written by `createTask`. The task
+ * lists, the sitter, caretaker and kiosk pages and the calendar feed read that
+ * copy. Nothing used to write it again, so they kept the old name for good
+ * (reminders and the digest look the name up, so they were never affected).
  *
  * Compares each row rather than trusting that the name just changed, so saving
  * the plant again finishes a rename that failed partway and repairs rows left
