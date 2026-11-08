@@ -64,6 +64,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
 
+- **A production release needs one deploy approval, not three.** The reviewer on
+  the `production` environment now approves once, at the `terraform` job, and that
+  approval covers Terraform, the backend deploy and the frontend deploy. Rejecting
+  it stops all three. Re-running a failed deploy job no longer asks again. The
+  `production` deployment record now has one row per release, which turns green
+  when Terraform finishes; the staleness check still takes the live commit from
+  the service worker, so a failed backend or frontend deploy is reported as
+  half-applied, and it now dates a build from when its row succeeded rather than
+  from when approval was requested. This takes effect from the first tag cut after
+  it merges, because a run uses the workflow at its tagged commit.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
