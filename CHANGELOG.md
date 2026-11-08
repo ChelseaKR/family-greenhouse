@@ -56,6 +56,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the overwatering post and the relevant care guides. No care guide title,
   H1 or meta changed. No `infrastructure/` change: the page router
   already matches `/blog/` pages by prefix.
+- **Cited detail on seven short pet-safety pages.** Rubber plant,
+  dieffenbachia, orchid, alocasia, begonia, cast iron plant and haworthia
+  were about 350 words and not indexed (Search Console, 2026-11-05). Each now
+  quotes its ASPCA listing's family and, where they are names, other names;
+  the toxic ones its principles, signs and advice line; a horse verdict where
+  the listing states one; NC State Extension where it has a matching page;
+  and similar and related plants with their own verdicts. Read off the live
+  pages on 2026-11-05 and pinned in petToxicity.test.ts. No verdict, title,
+  H1 or meta description changes.
 - **An operator backfill that strips location metadata from photos already
   stored — built, not run.** `backfill:photo-metadata` (backend) reads every
   version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
@@ -81,6 +90,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **"Rosary vine" no longer names string of pearls.** Rosary vine is string
+  of hearts (Ceropegia woodii), per Wisconsin Horticulture, but the string of
+  pearls guide listed it as an alias, on the page and in its structured data.
+  The name now belongs to no guide and no pet-safety row, and a test keeps it
+  that way until a string-of-hearts guide exists.
 - **GA4 `first_plant_added` counts accounts, not screens.** It was sent
   whenever the first run or the empty dashboard saved a plant, so a second
   household, a repeated first run or a second device counted again. The
