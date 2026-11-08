@@ -118,13 +118,15 @@ export interface CreatePlantData {
 
 export interface UpdatePlantData {
   name?: string;
-  species?: string;
+  /** null clears it; omit to leave it untouched. */
+  species?: string | null;
   location?: string;
   spaceId?: string | null;
   placementNote?: string | null;
   summerSpaceId?: string | null;
   winterSpaceId?: string | null;
-  notes?: string;
+  /** null clears them; omit to leave them untouched. */
+  notes?: string | null;
   /** null clears the rule; omit to leave it untouched. */
   careRule?: string | null;
   tags?: string[];

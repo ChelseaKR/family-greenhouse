@@ -61,6 +61,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
 
+### Fixed
+
+- **Emptying a field on Edit Plant or Edit Task now clears it.** A plant's notes
+  and species and a task's notes came back after being deleted and saved, and a
+  custom task changed to another type kept showing its custom name.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
