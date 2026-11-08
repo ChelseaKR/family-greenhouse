@@ -248,10 +248,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # `terraform apply -auto-approve` runs FIRST and can replace Cognito / DDB
-    # / CloudFront / IAM. Gate it behind the same `production` environment as
-    # deploy-backend so the prod infra apply requires a reviewer approval too —
-    # otherwise any `v*` tag triggers an unreviewed infrastructure mutation.
+    # The one approval a release needs. `terraform apply -auto-approve` is the
+    # first thing here that touches production, and it can replace Cognito / DDB
+    # / CloudFront / IAM, so the `production` environment's required reviewer sits
+    # on this job. Approving it authorizes the whole release: Terraform, then
+    # deploy-backend, then deploy-frontend, which all `need` this job and carry no
+    # `environment:` of their own. Rejecting it fails this job and skips them.
+    # scripts/production-approval-gate.test.mjs pins this.
     environment: production
     defaults:
       run:
@@ -399,10 +402,10 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # Same `production` approval gate as the terraform + deploy-backend jobs:
-    # an S3 sync + CloudFront invalidation to the live site is a prod mutation
-    # and must not run on an untagged/unreviewed path.
-    environment: production
+    # No `environment:` on purpose: the release's one approval is on `terraform`,
+    # and this job cannot run unless that job succeeded. Its AWS role trusts the
+    # `ref:refs/tags/v*` and `ref:refs/heads/main` subjects
+    # (infrastructure/modules/cicd/variables.tf), the same ones `rollback` uses.
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
@@ -624,10 +627,10 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # The `production` environment requires manual approval per its rule
-    # configuration in GitHub. cd jobs gated on this won't run until a
-    # required reviewer approves the deployment.
-    environment: production
+    # No `environment:` on purpose: the release's one approval is on `terraform`,
+    # and this job cannot run unless that job succeeded. Its AWS role trusts the
+    # `ref:refs/tags/v*` and `ref:refs/heads/main` subjects
+    # (infrastructure/modules/cicd/variables.tf), the same ones `rollback` uses.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

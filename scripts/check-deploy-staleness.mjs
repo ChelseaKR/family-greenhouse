@@ -18,10 +18,27 @@
  *
  * Own infrastructure (brief model 3): S3 + CloudFront for the frontend, Lambda +
  * API Gateway for the backend, all applied by `cd-production.yml` into the
- * `production` environment. Three of its jobs declare `environment: production` —
- * `Terraform Apply`, `Deploy Backend`, `Deploy Frontend` — so every release leaves
- * exactly three rows in `repos/:owner/:repo/deployments?environment=production`,
- * each naming the tagged commit.
+ * `production` environment. One of its jobs declares `environment: production` —
+ * `Terraform Apply`, the first job that touches production and the one a release's
+ * single approval sits on — so a release leaves one row in
+ * `repos/:owner/:repo/deployments?environment=production`, naming the tagged commit.
+ * Releases up to v0.49.0 left three rows, because `Deploy Backend` and `Deploy
+ * Frontend` declared it too; both shapes are in the API window and both read the same.
+ *
+ * ## WHAT A PARTIAL DEPLOY LOOKS LIKE IN THE DEPLOYMENT RECORD
+ *
+ * That one row turns `success` when Terraform finishes, before the backend or the
+ * frontend has shipped anything. So a `success` row at a commit means "approved, and
+ * Terraform applied". It has never meant "this release is live", and nothing below
+ * reads it that way: the Terraform row already said `success` on the three-row
+ * releases that failed later, and no verdict here used the other two rows.
+ *
+ * A partial deploy is caught by the service worker. `Deploy Frontend` needs `Deploy
+ * Backend`, which needs `Terraform Apply`, so the frontend bytes are the last thing a
+ * release changes and new bytes prove the two jobs before them succeeded (that order
+ * is pinned by `scripts/production-approval-gate.test.mjs`). If the backend or the
+ * frontend fails, visitors keep the previous commit while the row names the new one.
+ * That is the `recordDisagrees` verdict, reported as ROLLED BACK OR HALF-APPLIED.
  *
  * ## WHAT A ROLLED-BACK DEPLOY LOOKS LIKE IN THE DEPLOYMENT RECORD
  *
@@ -34,9 +51,9 @@
  * pre-deploy frontend snapshot from S3 (plus a CloudFront invalidation) and the
  * previous Lambda package for every function. Neither `smoke-tests` nor `rollback`
  * declares an `environment:`, so neither creates a deployment row and neither can
- * change one. By the time smoke runs, all three environment jobs have already
- * finished successfully and their three rows already say `success` at the tagged
- * commit. The rollback then quietly puts the previous release's bytes back and the
+ * change one. By the time smoke runs, the environment job has already finished
+ * successfully and its row already says `success` at the tagged commit. The
+ * rollback then quietly puts the previous release's bytes back and the
  * deployment record still reports the new tag as live. Measured on 2026-09-13
  * against every `production` deployment in this repository's history (100 rows) and
  * against the job lists of every `cd-production.yml` run: the `Auto-rollback
@@ -278,8 +295,26 @@ export function published(statuses) {
  * @property {number} id
  * @property {string} sha
  * @property {string} ref
- * @property {Date}   createdAt
+ * @property {Date}   createdAt when the row's job succeeded; see `publishedAt`
  */
+
+/**
+ * When a published row's job finished, not when the row was opened.
+ *
+ * GitHub opens the row when the job starts waiting for its reviewer, so `created_at`
+ * is the moment approval was requested. v0.49.0's Terraform row was opened 4h24m
+ * before it succeeded (16:57 and 21:21 UTC on 2026-11-08). With one row per release
+ * that gap would date the build by the wait, so this takes the `success` status's
+ * time, which is minutes before the frontend ships. Fixtures and old statuses without
+ * a time fall back to the row's own.
+ *
+ * @param {Record<string, unknown>} row
+ * @param {Array<{ state: string, created_at?: string }>} statuses newest first
+ */
+function publishedAt(row, statuses) {
+  const success = statuses.find((status) => status.state === 'success');
+  return new Date(String(success?.created_at ?? row.created_at));
+}
 
 /**
  * Every `production` deployment that published, newest first.
@@ -296,7 +331,7 @@ export function publishedDeployments(deployments, statusesById) {
       id: Number(row.id),
       sha: String(row.sha),
       ref: String(row.ref ?? ''),
-      createdAt: new Date(String(row.created_at)),
+      createdAt: publishedAt(row, statusesById[String(row.id)]),
     }))
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
