@@ -34,7 +34,7 @@ describe('the new free caps (ADR 0040)', () => {
   });
 
   it('the paid tiers did not move', () => {
-    expect(PLANS.garden.monthlyPrice).toBe(4.99);
+    expect(PLANS.garden.monthlyPrice).toBe(2.99); // ADR 0042
     expect(PLANS.greenhouse.monthlyPrice).toBe(9.99);
     expect(PLANS.garden.limits.plants).toBe(200);
     expect(PLANS.garden.limits.members).toBeNull();

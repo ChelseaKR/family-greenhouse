@@ -68,6 +68,30 @@ describe('PricingGrid', () => {
     expect(screen.queryByRole('button', { name: /Switch to|Buy / })).not.toBeInTheDocument();
   });
 
+  it('says plainly that identification is sold as a pack and is not in Garden (ADR 0042)', async () => {
+    await renderGrid({
+      paymentsAvailable: true,
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      plans: PRICED_PLANS,
+      identifyTopUp: { available: true, credits: 20, validityDays: 365, priceUsd: 1.99 },
+    });
+    expect(await screen.findByTestId('identification-note')).toHaveTextContent(
+      'Plant identification is not included in Garden. It is sold as a pack of 20 identifications for $1.99.'
+    );
+  });
+
+  it('names no pack price when the pack is not for sale, but still says Garden has no identification', async () => {
+    await renderGrid({
+      paymentsAvailable: true,
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      plans: PRICED_PLANS,
+      identifyTopUp: { available: false, credits: 20, validityDays: 365 },
+    });
+    const note = await screen.findByTestId('identification-note');
+    expect(note).toHaveTextContent('Plant identification is not included in Garden.');
+    expect(note.textContent).not.toMatch(/\$/);
+  });
+
   it('falls back to the status notice when the API withholds payment activity', async () => {
     // The decisive case for a frontend deployed ahead of its backend, and for
     // any environment whose runtime gate is still shut: the build-time flag

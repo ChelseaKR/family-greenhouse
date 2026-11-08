@@ -4,7 +4,7 @@ import { CheckIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatCurrency } from '@/i18n/format';
 import type { BillingInterval, Plan, PlanFeatures, PlanId } from '@/services/billingService';
-import { capsLine, intervalIsOffered, priceFor } from './planPricing';
+import { annualSavingPercent, capsLine, intervalIsOffered, priceFor } from './planPricing';
 
 /** Cadences offered in the toggle, in display order. Labels are catalog keys;
  *  the component resolves them so the grid stays translatable. */
@@ -42,28 +42,26 @@ const TAGLINE_KEY: Record<PlanId, string> = {
  *  target to read. It was a service commitment sold at $9.99/mo with nothing
  *  behind it. It goes back when something implements it.
  *
- *  Garden's identification bullet says "more each month", not "priority",
- *  because that is what the code does: IDENTIFY_ALLOWANCES in
- *  backend/src/services/identifyBudget.ts gives Seedling 1, Garden 30 and
- *  Greenhouse 100 per calendar month (enforced in production —
- *  identify_metering_enabled = "1"). It is a larger allowance; there is no
- *  queue, and a Garden identification is not faster than a free one. The
- *  numbers stay out of the bullet: they live in one place and a copy here
- *  would be a second one to keep in step. */
+ *  Identification is on NO tier's list since ADR 0042. Garden bundles none
+ *  (IDENTIFY_ALLOWANCES in backend/src/services/identifyBudget.ts gives it
+ *  0; identification is sold by the pack, ADR 0019), so a Seedling bullet
+ *  would read, through "Everything in Seedling", as a Garden claim that is
+ *  false. The free tier's one identification a month is a sample, not a
+ *  selling point, and Greenhouse's 100 is stated on the help page with the
+ *  other metered allowances rather than here. The grid's footer
+ *  (`PricingGrid`) says plainly that identification is sold separately. */
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   seedling: [
     'pricing.featureSharedHousehold',
     'pricing.featureReminders',
     'pricing.featureSitterBasic',
     'pricing.featureAnalytics30',
-    'pricing.featureIdentification',
     'pricing.featureImportExport',
   ],
   garden: [
     'pricing.featureEverythingSeedling',
     'pricing.featureUnlimitedMembers',
     'pricing.featureFullHistory',
-    'pricing.featureMoreIdentification',
   ],
   greenhouse: ['pricing.featureEverythingGarden', 'pricing.featureManyHomes'],
 };
@@ -141,6 +139,7 @@ export function PaidPlanGrid({
 }: PaidPlanGridProps) {
   const { t } = useTranslation();
   const offered = useMemo(() => INTERVALS.filter((i) => intervalIsOffered(plans, i.id)), [plans]);
+  const savingPercent = useMemo(() => annualSavingPercent(plans), [plans]);
   // Default to the first cadence actually on sale, so a monthly-only launch
   // doesn't open on an empty "Yearly" tab.
   const [interval, setInterval] = useState<BillingInterval>(offered[0]?.id ?? 'month');
@@ -169,14 +168,14 @@ export function PaidPlanGrid({
               )}
             >
               {t(option.labelKey)}
-              {option.hintKey && (
+              {option.hintKey && (option.id !== 'year' || savingPercent !== null) && (
                 <span
                   className={clsx(
                     'ml-2 text-xs',
                     active === option.id ? 'text-white/80' : 'text-gray-500'
                   )}
                 >
-                  {t(option.hintKey)}
+                  {t(option.hintKey, { percent: savingPercent ?? undefined })}
                 </span>
               )}
             </button>

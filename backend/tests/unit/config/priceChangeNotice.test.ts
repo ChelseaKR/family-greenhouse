@@ -76,8 +76,8 @@ describe('price changes: every sellable price is pinned', () => {
 
   it.each([
     ['seedling', 'monthlyPrice', 0],
-    ['garden', 'monthlyPrice', 4.99],
-    ['garden', 'annualPrice', 39.99],
+    ['garden', 'monthlyPrice', 2.99], // ADR 0042; was 4.99
+    ['garden', 'annualPrice', 24.99], // ADR 0042; was 39.99 (withdrawn 2026-09-02)
     ['garden', 'lifetimePrice', 149],
     ['greenhouse', 'monthlyPrice', 9.99],
     ['greenhouse', 'annualPrice', 79.99],

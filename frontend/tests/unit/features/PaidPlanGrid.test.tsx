@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
-import { intervalIsOffered, priceFor } from '@/features/pricing/planPricing';
+import { annualSavingPercent, intervalIsOffered, priceFor } from '@/features/pricing/planPricing';
 import type { Plan, PlanFeatures } from '@/services/billingService';
 
 /** Feature map with everything off, so a fixture names only what it grants. */
@@ -63,8 +63,8 @@ const garden: Plan = {
     moveDay: true,
     chat: true,
   },
-  monthlyPrice: 4.99,
-  annualPrice: 39.99,
+  monthlyPrice: 2.99,
+  annualPrice: 24.99,
   lifetimePrice: 149,
 };
 
@@ -102,8 +102,8 @@ const greenhouse: Plan = {
 
 describe('priceFor', () => {
   it('reads the amount for each cadence', () => {
-    expect(priceFor(garden, 'month')).toBe(4.99);
-    expect(priceFor(garden, 'year')).toBe(39.99);
+    expect(priceFor(garden, 'month')).toBe(2.99);
+    expect(priceFor(garden, 'year')).toBe(24.99);
     expect(priceFor(garden, 'lifetime')).toBe(149);
   });
 
@@ -131,7 +131,7 @@ describe('PaidPlanGrid', () => {
     render(<PaidPlanGrid plans={[seedling, monthlyOnly]} />);
 
     expect(screen.queryByRole('group', { name: 'Billing interval' })).not.toBeInTheDocument();
-    expect(screen.getByText('$4.99')).toBeInTheDocument();
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
   });
 
   it('opens on the first cadence actually offered', () => {
@@ -140,7 +140,7 @@ describe('PaidPlanGrid', () => {
     render(<PaidPlanGrid plans={[noMonthly]} />);
 
     expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('$39.99')).toBeInTheDocument();
+    expect(screen.getByText('$24.99')).toBeInTheDocument();
   });
 
   it('marks the household’s current tier', () => {
@@ -166,7 +166,7 @@ describe('PaidPlanGrid', () => {
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
   });
 
-  it('sells no support tier, and calls Garden’s identification difference an allowance', () => {
+  it('lists no identification bullet on any tier: Garden includes none (ADR 0042)', () => {
     // #607. "Priority support" sat on the $9.99 tier with nothing behind it:
     // features/legal/SupportPage.tsx hands the one SUPPORT_EMAIL to every
     // plan, and no queue, routing rule or response-time target exists to
@@ -179,7 +179,10 @@ describe('PaidPlanGrid', () => {
     const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
 
     expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();
-    expect(card('Garden').getByText('More plant identifications each month')).toBeInTheDocument();
+    expect(document.body.textContent ?? '').not.toMatch(/identification/i);
+    expect(
+      card('Garden').queryByText('More plant identifications each month')
+    ).not.toBeInTheDocument();
     // Greenhouse keeps the two differentiators that are enforced.
     expect(card('Greenhouse').getByText('Everything in Garden')).toBeInTheDocument();
     expect(
@@ -224,7 +227,7 @@ describe('withdrawn cadences (annual and lifetime withdrawn from sale)', () => {
     expect(screen.queryByText(/^once$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Not available/)).not.toBeInTheDocument();
     // Both paid tiers still sell monthly, at their monthly amounts.
-    expect(screen.getByText('$4.99')).toBeInTheDocument();
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
     expect(screen.getByText('$9.99')).toBeInTheDocument();
     expect(screen.getAllByText('per month')).toHaveLength(3);
   });
@@ -306,5 +309,18 @@ describe('feature bullets follow the catalog flags, and only where the tier gain
     expect(card('Garden').getByText('AI care assistant')).toBeInTheDocument();
     expect(card('Greenhouse').queryByText('AI care assistant')).not.toBeInTheDocument();
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
+  });
+});
+
+describe('the yearly saving hint is derived from the amounts (ADR 0042)', () => {
+  it('says ~30% for $2.99 monthly against $24.99 yearly, never a typed 33', () => {
+    expect(annualSavingPercent([seedling, garden, greenhouse])).toBe(30);
+    render(<PaidPlanGrid plans={[seedling, garden]} />);
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveTextContent('Save ~30%');
+    expect(document.body.textContent ?? '').not.toContain('33%');
+  });
+
+  it('states no saving when no tier offers both cadences', () => {
+    expect(annualSavingPercent([seedling, { ...garden, annualPrice: null }])).toBeNull();
   });
 });

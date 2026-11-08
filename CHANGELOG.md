@@ -18,6 +18,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Garden is $2.99 a month or $24.99 a year, and plant identification is
+  sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
+  with 30 identifications. Garden annual returns at $24.99. Garden bundles no
+  identifications; Seedling keeps 1 and Greenhouse 100. Garden leaf-health
+  checks drop from 200 to 100 a month, because 200 left $0.04 a month on the
+  yearly price through Apple. Households that bought at $4.99 or $39.99 keep
+  renewing on those Stripe prices (new `legacyPrices` in the catalog; the
+  webhook still maps them to Garden). The new prices are the Terraform
+  variables `stripe_price_id_garden_299` and `stripe_price_id_garden_annual_2499`,
+  blank by default: the pricing page publishes Garden as unavailable while
+  they are blank, and the plan fails if only one of the pair is set. The
+  iPhone app gets a `garden.yearly` product beside `garden.monthly`. The
+  pricing page, FAQ, Terms and llms.txt, in English and Spanish, now say
+  "Identification is sold as a 20-identification pack for $1.99; it is not
+  included in Garden." Nothing changes in production until the owner creates
+  the two Stripe prices and pastes their ids.
 - **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
   kentia palm, paperwhite, bird's nest fern and purple shamrock.** Each
   answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,

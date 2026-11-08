@@ -57,3 +57,22 @@ export function capsLine(plan: Plan, t: TFunction): string {
     parts.push(t('pricing.capPlants', { count: plants.toLocaleString() }));
   return parts.join(' · ');
 }
+
+/**
+ * The yearly toggle's "Save ~N%" figure, derived from the first paid tier
+ * that publishes both a monthly and a yearly price: one minus the yearly
+ * amount over twelve monthly ones, rounded. Computed rather than typed so a
+ * repricing (ADR 0042 took Garden from a 33% to a 30% saving) cannot leave
+ * the hint stating a discount the amounts beside it contradict. `null` when
+ * no tier offers both, in which case the hint is not rendered at all.
+ */
+export function annualSavingPercent(plans: Plan[]): number | null {
+  for (const plan of plans) {
+    if (plan.id === 'seedling') continue;
+    const monthly = priceFor(plan, 'month');
+    const yearly = priceFor(plan, 'year');
+    if (monthly === null || yearly === null || monthly <= 0) continue;
+    return Math.round((1 - yearly / (monthly * 12)) * 100);
+  }
+  return null;
+}

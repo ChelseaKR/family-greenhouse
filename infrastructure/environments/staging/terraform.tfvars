@@ -71,6 +71,15 @@ stripe_price_id_garden_annual     = "price_1UB39YAhnUt8CMG0n38Jx1Ol"
 stripe_price_id_garden_lifetime   = "price_1UB39YAhnUt8CMG0z0D2bIqs"
 stripe_price_id_greenhouse        = "price_1UB3AhAhnUt8CMG0oeGJZKqH"
 stripe_price_id_greenhouse_annual = "price_1UB3A7AhnUt8CMG0kyrXPGtH"
+# Garden repriced 2026-11-07 (ADR 0042): $2.99 a month or $24.99 a year. The
+# `garden` and `garden_annual` ids above are now LEGACY ($4.99 / $39.99) and
+# only resolve renewals. The two CURRENT prices below are blank until the owner
+# creates them in Stripe TEST mode under the Garden product (monthly $2.99,
+# yearly $24.99, metadata plan_id=garden interval=month|year adr=0042) and
+# pastes the ids here. While both are blank Garden publishes as not available;
+# the commercial_gate_guard precondition refuses a plan with exactly one set.
+stripe_price_id_garden_299          = ""
+stripe_price_id_garden_annual_2499  = ""
 # Identification top-up pack (ADR 0019): a ONE-TIME test-mode price for
 # "20 identifications, $1.99". Blank = not for sale; checkout answers 400
 # TOP_UP_NOT_CONFIGURED and nothing is granted. Owner step: create the price in

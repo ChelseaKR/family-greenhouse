@@ -37,7 +37,8 @@ const rank = (id: PlanId) => PLAN_ORDER.indexOf(id);
 /** Features whose tier does not depend on the household's current caps. */
 const FIXED_MINIMUM_PLAN: Partial<Record<UpgradeFeature, PaidPlanId>> = {
   chat: 'garden',
-  identifications: 'garden',
+  // Greenhouse, not Garden: Garden includes no identifications (ADR 0042).
+  identifications: 'greenhouse',
   leaf_health: 'garden',
   api_keys: 'greenhouse',
   away_kit: 'garden',
