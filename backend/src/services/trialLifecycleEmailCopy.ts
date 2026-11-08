@@ -11,8 +11,10 @@
  * ## Rules this copy keeps (and `trialLifecycleEmailCopy.test.ts` pins)
  *
  *   - **No urgency, no incentive.** No countdown language beyond the plain
- *     date, no "last chance", no "hurry", no discount, no code. The only price
- *     named is the one in the plan catalog, and it is named once.
+ *     date, no "last chance", no "hurry", no discount, no code. The only
+ *     prices named are the plan catalog's Garden prices, the yearly first and
+ *     then the monthly (ADR 0042, "Yearly first"), each named once. When the
+ *     catalog has no yearly Garden price, the monthly alone is named, once.
  *   - **Caps, not deletions.** It says what stops being available and that
  *     everything already made is kept. Every figure comes from the plan
  *     catalog (`models/plans.ts`), never a literal.
@@ -26,7 +28,7 @@
  *     recipient's name, goes through `escapeHtml` there.
  */
 import { CHECKOUT_TRIAL_END_MIN_LEAD_MS } from '../models/checkoutTrial.js';
-import { PLANS } from '../models/plans.js';
+import { PLANS, isIntervalWithdrawn } from '../models/plans.js';
 import { t, formatCount, type EmailLocale } from './email/catalog.js';
 import { appUrl, settingsUrl } from './email/links.js';
 import { renderEmail, type EmailBlock } from './email/template.js';
@@ -95,6 +97,10 @@ interface Phrases {
   limitTools: string;
   overPlants: string;
   overMembers: string;
+  /** The `{{prices}}` clause: the yearly Garden price, then the monthly. */
+  pricesYearlyAndMonthly: string;
+  /** The `{{prices}}` clause when the catalog sells Garden monthly only. */
+  pricesMonthlyOnly: string;
   /** Day 10, while a checkout can still defer the first charge to `{{date}}`. */
   keepGardenUntil: string;
   /** Day 10 sent too late for that (inside Stripe's minimum), and day 14. */
@@ -153,12 +159,14 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'You have {{count}} active plants, more than Seedling’s {{limit}}. They all stay. Adding another is paused until you have fewer than {{limit}}.',
     overMembers:
       'Your household has {{count}} people, more than Seedling’s {{limit}}. They all stay. New people cannot join until there is room.',
+    pricesYearlyAndMonthly: '{{yearly}} a year, or {{monthly}} a month',
+    pricesMonthlyOnly: '{{monthly}} a month',
     keepGardenUntil:
-      'If you would like to keep Garden, it is {{price}} a month. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings → Plan status.',
+      'If you would like to keep Garden, it is {{prices}}. If you start it before {{cutoff}}, you add a card then, and your first charge would be on {{date}}, the day the trial ends. If you start it closer to {{date}}, the first charge is the day you start it. You can start it in Settings → Plan status.',
     keepGardenNow:
-      'If you would like to keep Garden, it is {{price}} a month, and the first charge is the day you start it. You can start it in Settings → Plan status.',
+      'If you would like to keep Garden, it is {{prices}}, and the first charge is the day you start it. You can start it in Settings → Plan status.',
     gardenBack:
-      'If you would like Garden back, it is {{price}} a month, and the first charge is the day you start it. You can start it any time in Settings → Plan status.',
+      'If you would like Garden back, it is {{prices}}, and the first charge is the day you start it. You can start it any time in Settings → Plan status.',
     nothingToDo: 'If you would rather stay on Seedling, there is nothing you need to do.',
     cta: 'See plans in Settings',
     reply: 'Questions? Reply to this email and a person will read it.',
@@ -212,12 +220,14 @@ const PHRASES: Record<EmailLocale, Phrases> = {
       'Tienes {{count}} plantas activas, más que las {{limit}} de Seedling. Todas se quedan. No podrás añadir otra hasta tener menos de {{limit}}.',
     overMembers:
       'Tu hogar tiene {{count}} personas, más que las {{limit}} de Seedling. Todas se quedan. Las personas nuevas no pueden unirse hasta que haya sitio.',
+    pricesYearlyAndMonthly: '{{yearly}} al año o {{monthly}} al mes',
+    pricesMonthlyOnly: '{{monthly}} al mes',
     keepGardenUntil:
-      'Si quieres conservar Garden, cuesta {{price}} al mes. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
+      'Si quieres conservar Garden, cuesta {{prices}}. Si lo empiezas antes del {{cutoff}}, añades una tarjeta en ese momento y el primer cobro sería el {{date}}, el día en que termina la prueba. Si lo empiezas más cerca del {{date}}, el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
     keepGardenNow:
-      'Si quieres conservar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
+      'Si quieres conservar Garden, cuesta {{prices}}, y el primer cobro es el día en que lo empiezas. Puedes empezarlo en Ajustes → Estado del plan.',
     gardenBack:
-      'Si quieres recuperar Garden, cuesta {{price}} al mes, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes → Estado del plan.',
+      'Si quieres recuperar Garden, cuesta {{prices}}, y el primer cobro es el día en que lo empiezas. Puedes empezarlo cuando quieras en Ajustes → Estado del plan.',
     nothingToDo: 'Si prefieres quedarte en Seedling, no tienes que hacer nada.',
     cta: 'Ver los planes en Ajustes',
     reply: '¿Preguntas? Responde a este correo y lo leerá una persona.',
@@ -339,7 +349,27 @@ function limitBlocks(ctx: TrialEmailContext, p: Phrases, withOver: boolean): Ema
 }
 
 /**
- * The one sentence that names the price, and the first charge it would bring.
+ * The Garden prices as the email states them: the yearly first, then the
+ * monthly (ADR 0042, "Yearly first"), both read from the plan catalog. A
+ * catalog with no yearly Garden price, or one that has withdrawn it from sale
+ * (as ADR 0012 once did), names the monthly alone rather than printing a
+ * blank, a zero, or a price checkout would refuse.
+ */
+function gardenPrices(locale: EmailLocale, p: Phrases): string {
+  const money = (amount: number) =>
+    new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(amount);
+  const monthly = money(PLANS.garden.monthlyPrice);
+  const annual = PLANS.garden.annualPrice;
+  const yearlyOnSale =
+    typeof annual === 'number' && annual > 0 && !isIntervalWithdrawn(PLANS.garden, 'year');
+  if (yearlyOnSale) {
+    return fill(p.pricesYearlyAndMonthly, { yearly: money(annual), monthly });
+  }
+  return fill(p.pricesMonthlyOnly, { monthly });
+}
+
+/**
+ * The one sentence that names the prices, and the first charge it would bring.
  *
  * No stacked trials (owner decision, 2026-10-23): a household that starts
  * Garden during its no-card trial is first charged when that trial ends, not
@@ -350,23 +380,21 @@ function limitBlocks(ctx: TrialEmailContext, p: Phrases, withOver: boolean): Ema
  * says "before" it, so a reader in any zone who acts before that date is
  * inside the window.
  */
-function keepGardenLine(ctx: TrialEmailContext, p: Phrases, price: string, date: string): string {
-  if (ctx.kind === 'trial_day14') return fill(p.gardenBack, { price });
+function keepGardenLine(ctx: TrialEmailContext, p: Phrases, prices: string, date: string): string {
+  if (ctx.kind === 'trial_day14') return fill(p.gardenBack, { prices });
   const cutoffMs = Date.parse(ctx.endsAt) - CHECKOUT_TRIAL_END_MIN_LEAD_MS;
   if (!Number.isFinite(cutoffMs) || ctx.now.getTime() >= cutoffMs) {
-    return fill(p.keepGardenNow, { price });
+    return fill(p.keepGardenNow, { prices });
   }
   const cutoff = formatEndDate(ctx.locale, new Date(cutoffMs).toISOString(), ctx.timeZone);
-  return fill(p.keepGardenUntil, { price, date, cutoff });
+  return fill(p.keepGardenUntil, { prices, date, cutoff });
 }
 
 export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTrialEmail {
   const { kind, locale } = ctx;
   const p = PHRASES[locale];
   const date = formatEndDate(locale, ctx.endsAt, ctx.timeZone);
-  const price = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(
-    PLANS.garden.monthlyPrice
-  );
+  const prices = gardenPrices(locale, p);
   const name = ctx.recipientName?.trim();
   const greeting = name ? fill(p.greeting, { name }) : p.greetingGeneric;
 
@@ -401,7 +429,7 @@ export function composeTrialLifecycleEmail(ctx: TrialEmailContext): ComposedTria
   }
 
   blocks.push({ kind: 'divider' });
-  blocks.push({ kind: 'text', text: keepGardenLine(ctx, p, price, date) });
+  blocks.push({ kind: 'text', text: keepGardenLine(ctx, p, prices, date) });
   blocks.push({ kind: 'text', text: p.nothingToDo });
   blocks.push({ kind: 'button', label: p.cta, href: appUrl('/settings/billing') });
   blocks.push({ kind: 'text', text: p.reply, tone: 'muted' });

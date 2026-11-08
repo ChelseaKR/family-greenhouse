@@ -115,12 +115,15 @@ describe('help pages: the metered allowances they state', () => {
     const flat = tfvar('leaf_health_monthly_cap') ?? codeDefault;
     const paid = tfvar('leaf_health_monthly_cap_garden') ?? flat;
     const free = tfvar('leaf_health_monthly_cap_seedling') ?? flat;
+    const top = tfvar('leaf_health_monthly_cap_greenhouse') ?? flat;
 
     // The sentence only makes sense while the two differ. If production ever
     // levels them, this fails and the sentence should become one number.
     expect(free, 'production no longer gives Seedling its own leaf-health cap').not.toBe(paid);
     expect(
-      occurrences(`${paid} checks on Garden and Greenhouse, ${free} on the free Seedling plan`),
+      occurrences(
+        `${paid} checks on Garden, ${top} on Greenhouse, ${free} on the free Seedling plan`
+      ),
       'the leaf-health answer must state both caps, re-derived from the production tfvars'
     ).toBe(2); // once in the rendered answer, once in its `text` twin
   });

@@ -296,9 +296,16 @@ export const HELP_SECTIONS: HelpSection[] = [
               percentage. Accepting one fills in the species field for you.
             </p>
             <p>
-              It is metered per household, per calendar month, and resets on the 1st:{' '}
-              <strong>1 identification on Seedling, 30 on Garden, 100 on Greenhouse</strong>. The
-              app does not show a running count, so the first you&rsquo;ll hear of the limit is a
+              Identification is sold as a 20-identification pack for $1.99; it is not included in
+              Garden. A pack is a one-time purchase by a household admin from Settings → Billing,
+              its credits last 12 months and are drawn on once any monthly allowance is spent, and
+              nothing renews on its own.
+            </p>
+            <p>
+              The plans&rsquo; own allowances are metered per household, per calendar month, and
+              reset on the 1st:{' '}
+              <strong>1 identification on Seedling, 0 on Garden, 100 on Greenhouse</strong>. The app
+              does not show a running count, so the first you&rsquo;ll hear of the limit is a
               message when you reach it. An attempt is counted even if the service then fails, so a
               timeout can still use one.
             </p>
@@ -309,7 +316,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. It is metered per household per calendar month and resets on the 1st: 1 identification on Seedling, 30 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
+        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. Identification is sold as a 20-identification pack for $1.99; it is not included in Garden. A pack is a one-time purchase by a household admin from Settings then Billing, its credits last 12 months and are drawn on once any monthly allowance is spent, and nothing renews on its own. The plans own allowances are metered per household per calendar month and reset on the 1st: 1 identification on Seedling, 0 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
       },
       {
         id: 'leaf-health',
@@ -327,7 +334,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
             <p>
               It is available on every plan, including free, and requires a household. It is capped
-              per household per calendar month, resetting on the 1st: 200 checks on Garden and
+              per household per calendar month, resetting on the 1st: 100 checks on Garden, 200 on
               Greenhouse, 20 on the free Seedling plan. Running a check adds an entry to your
               household&rsquo;s activity feed, so other members can see that you ran one and what
               the verdict was.
@@ -341,7 +348,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped per household per calendar month, resetting on the 1st: 200 checks on Garden and Greenhouse, 20 on the free Seedling plan. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analyzed; on a demo or preview server you instead get a clearly labeled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
+        text: 'No, it is not a diagnosis and you should not treat it as one. It is a cosmetic visual check: you photograph one leaf and an AI model reports what is visible in that single photo, such as yellowing, browning edges, wilting, spots or visible pests, as looking healthy, worth monitoring, or needs attention. It does not identify diseases and cannot see roots, soil, or anything outside the frame. Every result carries its own disclaimer saying so. It is available on every plan including free and requires a household. It is capped per household per calendar month, resetting on the 1st: 100 checks on Garden, 200 on Greenhouse, 20 on the free Seedling plan. Running a check adds an entry to your household activity feed, so other members can see that you ran one and what the verdict was. If the server cannot reach the model the check fails with "temporarily unavailable" and nothing is analyzed; on a demo or preview server you instead get a clearly labeled demo result, which you should not act on. Either way you never get an assessment the model did not actually make.',
       },
     ],
   },
@@ -922,12 +929,13 @@ export const HELP_SECTIONS: HelpSection[] = [
               members, 200 plants, your full analytics history, and the AI care assistant.{' '}
               <strong>Greenhouse</strong> is for many homes and many hands: belong to every
               household you help with, unlimited members, 5,000 plants, and API keys on top. Plant
-              identification is available on every plan, with a monthly allowance that grows with
-              the tier. Export and your care history are never behind a plan.
+              identification is not part of the Garden plan: it is sold separately as a pack (see
+              the identification question above). Export and your care history are never behind a
+              plan.
             </p>
           </>
         ),
-        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 2 members and 8 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is available on every plan, with a monthly allowance that grows with the tier. Export and your care history are never behind a plan.',
+        text: 'The free Seedling plan is a real plan, not a trial: a couple and their plants — one home, up to 2 members and 8 plants, with no card required and no expiry. It includes plants and photos, unlimited tasks and reminders, invites and task claiming, one plant-sitter link at a time (up to 7 days), climate tips, the last 30 days of analytics, the calendar feed, data export, and leaf-health checks each month. The paid plans are drawn on homes and hands, not on how many plants you own. Garden is for a household that has to coordinate: one home, unlimited members, 200 plants, your full analytics history, and the AI care assistant. Greenhouse is for many homes and many hands: belong to every household you help with, unlimited members, 5,000 plants, and API keys on top. Plant identification is not part of the Garden plan: it is sold separately as a pack (see the identification question above). Export and your care history are never behind a plan.',
       },
       {
         id: 'who-can-buy',
@@ -947,14 +955,14 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'Can I pay yearly, or once?',
         a: (
           <p>
-            Not any more. Both tiers are sold <strong>monthly only</strong> — Garden at $4.99 a
-            month and Greenhouse at $9.99 a month. Annual billing and the one-off Garden lifetime
-            purchase have been withdrawn from sale. If you already hold an annual or lifetime plan
-            you keep it on the terms and the price you bought it at: annual subscriptions go on
-            renewing, and a lifetime tier stays yours permanently.
+            Garden is <strong>$2.99 a month or $24.99 a year</strong>; Greenhouse is $9.99 a month
+            only. The one-off Garden lifetime purchase and yearly Greenhouse billing have been
+            withdrawn from sale. If you already hold one of those — or a Garden plan bought at an
+            earlier price — you keep it on the terms and the price you bought it at: those
+            subscriptions go on renewing, and a lifetime tier stays yours permanently.
           </p>
         ),
-        text: 'Not any more. Both tiers are sold monthly only: Garden at $4.99 a month and Greenhouse at $9.99 a month. Annual billing and the one-off Garden lifetime purchase have been withdrawn from sale. If you already hold an annual or lifetime plan you keep it on the terms and the price you bought it at: annual subscriptions go on renewing, and a lifetime tier stays yours permanently.',
+        text: 'Garden is $2.99 a month or $24.99 a year; Greenhouse is $9.99 a month only. The one-off Garden lifetime purchase and yearly Greenhouse billing have been withdrawn from sale. If you already hold one of those, or a Garden plan bought at an earlier price, you keep it on the terms and the price you bought it at: those subscriptions go on renewing, and a lifetime tier stays yours permanently.',
       },
       {
         id: 'free-trial',

@@ -81,14 +81,18 @@ describe('/pricing structured data', () => {
     }
   });
 
-  it('says a subscription recurs, so $4.99 is not read as the price of the software', async () => {
+  it('says a subscription recurs, so $2.99 is not read as the price of the software', async () => {
     const payload = await jsonLdWith({ hold: false, registration: true });
-    const monthly = appNode(payload).offers!.filter((offer) => offer.name !== 'Seedling');
+    const paid = appNode(payload).offers!.filter((offer) => offer.name !== 'Seedling');
 
-    expect(monthly.length).toBeGreaterThan(0);
-    for (const offer of monthly) {
-      expect(offer.priceSpecification?.referenceQuantity?.unitCode).toBe('MON');
+    expect(paid.length).toBeGreaterThan(0);
+    for (const offer of paid) {
+      // Garden now sells monthly AND yearly (ADR 0042): the unit code must
+      // match the amount, so $24.99 is never read as a monthly price.
+      const unit = offer.priceSpecification?.referenceQuantity?.unitCode;
+      expect(unit).toBe(offer.price === '24.99' ? 'ANN' : 'MON');
     }
+    expect(paid.map((o) => o.price)).toEqual(expect.arrayContaining(['2.99', '24.99', '9.99']));
   });
 
   it('never advertises a cadence that has been withdrawn from sale', async () => {

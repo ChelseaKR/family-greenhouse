@@ -36,7 +36,7 @@ function fakeStripe(prices: Record<string, Partial<Stripe.Price> | Error>) {
 
 function priceLike(over: Partial<Stripe.Price> = {}): Partial<Stripe.Price> {
   return {
-    unit_amount: 499,
+    unit_amount: 299,
     currency: 'usd',
     active: true,
     recurring: { interval: 'month', interval_count: 1 } as Stripe.Price.Recurring,
@@ -67,7 +67,9 @@ describe('catalog expansion', () => {
     expect(rows.sort()).toEqual([
       'garden:lifetime',
       'garden:month',
+      'garden:month', // the legacy $4.99 price (ADR 0042)
       'garden:year',
+      'garden:year', // the legacy $39.99 price
       'gift-garden-month:one_time',
       'gift-greenhouse-month:one_time',
       'greenhouse:month',
@@ -82,7 +84,7 @@ describe('catalog expansion', () => {
       cadence: 'one_time',
       env: 'STRIPE_PRICE_ID_GIFT_GARDEN_MONTH',
       dollars: PLANS.garden.monthlyPrice,
-      unitAmount: 499,
+      unitAmount: 299, // ADR 0042: a gift month is the monthly price
     });
     expect(giftExpectedPrice('greenhouse')).toMatchObject({
       env: 'STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH',
@@ -108,7 +110,7 @@ describe('catalog expansion', () => {
     // Reading through PLANS is the point: if someone edits the catalog, this
     // reconciliation follows, instead of silently checking a stale copy.
     expect(expectedPriceFor('garden', 'month')).toMatchObject({
-      env: 'STRIPE_PRICE_ID_GARDEN',
+      env: 'STRIPE_PRICE_ID_GARDEN_299',
       dollars: PLANS.garden.monthlyPrice,
       unitAmount: unitAmountFor(PLANS.garden.monthlyPrice),
     });
@@ -136,8 +138,8 @@ describe('comparePriceToCatalog', () => {
     );
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('999 cents');
-    expect(problems[0]).toContain('499 cents');
-    expect(problems[0]).toContain('STRIPE_PRICE_ID_GARDEN');
+    expect(problems[0]).toContain('299 cents');
+    expect(problems[0]).toContain('STRIPE_PRICE_ID_GARDEN_299');
   });
 
   it('catches a foreign currency even when the digits match', () => {
@@ -254,9 +256,15 @@ describe('reconcilePrice — fails closed', () => {
 describe('reconcileConfiguredPrices', () => {
   it('sweeps every configured cadence and names the mismatched one', async () => {
     const { stripe, retrieve } = fakeStripe({
-      p_garden_m: priceLike(),
-      // Transposed: the annual slot points at a monthly-shaped price.
+      // The LEGACY $4.99 / $39.99 slots (ADR 0042) are reconciled at their own
+      // amounts. Transposed: the legacy annual slot points at a monthly shape.
+      p_garden_m: priceLike({ unit_amount: 499 }),
       p_garden_y: priceLike({ unit_amount: 499 }),
+      p_garden_299: priceLike(),
+      p_garden_2499: priceLike({
+        unit_amount: 2499,
+        recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
+      }),
       p_garden_l: priceLike({ unit_amount: 14900, recurring: null }),
       p_gh_m: priceLike({ unit_amount: 999 }),
       p_gh_y: priceLike({
@@ -264,7 +272,7 @@ describe('reconcileConfiguredPrices', () => {
         recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
       }),
       p_topup: priceLike({ unit_amount: 199, recurring: null }),
-      p_gift_garden: priceLike({ unit_amount: 499, recurring: null }),
+      p_gift_garden: priceLike({ unit_amount: 299, recurring: null }),
       // A recurring price in a gift slot would bill the buyer monthly for a
       // one-time gift: a mismatch, not a lifetime tier.
       p_gift_gh: priceLike({ unit_amount: 999 }),
@@ -272,6 +280,8 @@ describe('reconcileConfiguredPrices', () => {
     const results = await reconcileConfiguredPrices(stripe, {
       STRIPE_PRICE_ID_GARDEN: 'p_garden_m',
       STRIPE_PRICE_ID_GARDEN_ANNUAL: 'p_garden_y',
+      STRIPE_PRICE_ID_GARDEN_299: 'p_garden_299',
+      STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: 'p_garden_2499',
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'p_garden_l',
       STRIPE_PRICE_ID_GREENHOUSE: 'p_gh_m',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'p_gh_y',
@@ -280,11 +290,13 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH: 'p_gift_gh',
     });
 
-    expect(retrieve).toHaveBeenCalledTimes(8);
+    expect(retrieve).toHaveBeenCalledTimes(10);
     const byEnv = Object.fromEntries(results.map((r) => [r.env, r.status]));
     expect(byEnv).toEqual({
       STRIPE_PRICE_ID_GARDEN: 'ok',
       STRIPE_PRICE_ID_GARDEN_ANNUAL: 'mismatch',
+      STRIPE_PRICE_ID_GARDEN_299: 'ok',
+      STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: 'ok',
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'ok',
@@ -299,7 +311,7 @@ describe('reconcileConfiguredPrices', () => {
     // production price id is blank on purpose (docs/billing.md).
     const { stripe, retrieve } = fakeStripe({});
     const results = await reconcileConfiguredPrices(stripe, {});
-    expect(results).toHaveLength(8);
+    expect(results).toHaveLength(10);
     expect(results.every((r) => r.status === 'unconfigured')).toBe(true);
     expect(retrieve).not.toHaveBeenCalled();
   });

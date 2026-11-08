@@ -73,6 +73,13 @@ export interface ExpectedPrice {
   dollars: number;
   /** The same amount in cents, which is what Stripe reports as `unit_amount`. */
   unitAmount: number;
+  /**
+   * True for a price the tier WAS sold at and no longer sells (ADR 0042).
+   * Reconciled at its own amount — a transposed id in a legacy slot would
+   * make the webhook map renewals to the wrong tier — but never offered, so
+   * `expectedPriceFor` (the checkout gate) skips it.
+   */
+  legacy?: true;
 }
 
 export type PriceReconciliationStatus = 'ok' | 'mismatch' | 'unretrievable' | 'unconfigured';
@@ -113,6 +120,24 @@ export function expectedPricesForPlan(plan: Plan): ExpectedPrice[] {
   push('year', plan.annualPrice, plan.annualStripePriceEnv);
   push('lifetime', plan.lifetimePrice, plan.lifetimeStripePriceEnv);
   return rows;
+}
+
+/**
+ * The prices a plan USED to be sold at (ADR 0042), one row each, flagged
+ * `legacy`. They are reconciled by the sweep like every other configured
+ * price — the $4.99 Garden slot must hold a $4.99 monthly recurring price,
+ * or renewals on it are being mapped from the wrong object — but they are
+ * not in `expectedPricesForPlan`, so nothing can sell at them.
+ */
+export function legacyPricesForPlan(plan: Plan): ExpectedPrice[] {
+  return (plan.legacyPrices ?? []).map((legacy) => ({
+    itemId: plan.id,
+    cadence: legacy.cadence,
+    env: legacy.env,
+    dollars: legacy.dollars,
+    unitAmount: unitAmountFor(legacy.dollars),
+    legacy: true,
+  }));
 }
 
 /**
@@ -164,6 +189,7 @@ export function giftExpectedPrice(planId: GiftablePlanId): ExpectedPrice {
 export function expectedPrices(): ExpectedPrice[] {
   return [
     ...Object.values(PLANS).flatMap(expectedPricesForPlan),
+    ...Object.values(PLANS).flatMap(legacyPricesForPlan),
     identifyTopUpExpectedPrice(),
     ...GIFTABLE_PLAN_IDS.map(giftExpectedPrice),
   ];
