@@ -54,7 +54,13 @@ const REFUSAL_MESSAGES: Record<string, string> = {
   PLAN_ALREADY_INCLUDED: 'This household already has this plan.',
 };
 
-const purchaseSchema = z.object({ planId: z.enum(['garden', 'greenhouse']) });
+// `interval` picks the product (ADR 0042: Garden has a monthly and a yearly
+// one). Optional and defaulting to monthly so the app build before yearly
+// existed keeps working; a cadence the tier has no product for is a 400.
+const purchaseSchema = z.object({
+  planId: z.enum(['garden', 'greenhouse']),
+  interval: z.enum(['month', 'year']).optional().default('month'),
+});
 type PurchaseInput = z.infer<typeof purchaseSchema>;
 
 // POST /billing/app-store/purchase-intent
@@ -76,8 +82,14 @@ export const purchaseIntent = createHandler(
         details: { code: refusal },
       });
     }
-    const productId = appStoreProductForPlan(validatedBody.planId);
-    if (!productId) throw createHttpError(400, 'Unknown plan');
+    const productId = appStoreProductForPlan(validatedBody.planId, validatedBody.interval);
+    if (!productId) {
+      throw createHttpError(
+        400,
+        `${validatedBody.planId} is not sold ${validatedBody.interval}ly in the App Store`,
+        { expose: true, details: { code: 'APP_STORE_CADENCE_NOT_SOLD' } }
+      );
+    }
     const appAccountToken = await getOrCreateAccountToken(householdId);
     return successResponse({ productId, appAccountToken });
   }

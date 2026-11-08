@@ -17,6 +17,8 @@ import {
   planIncludesAwayKit,
   planRank,
   planSummary,
+  priceEnvFor,
+  allPriceEnvs,
   hasHouseholdToolkit,
   strongestPlan,
   type Plan,
@@ -169,9 +171,9 @@ describe('plan catalog (ADR 0014: the line is homes and hands)', () => {
     }
   });
 
-  it('keeps the monthly prices exactly where they were (price changes are owner decisions)', () => {
+  it('pins the monthly prices (Garden repriced to $2.99 by ADR 0042; changes are owner decisions)', () => {
     expect(PLANS.seedling.monthlyPrice).toBe(0);
-    expect(PLANS.garden.monthlyPrice).toBe(4.99);
+    expect(PLANS.garden.monthlyPrice).toBe(2.99);
     expect(PLANS.greenhouse.monthlyPrice).toBe(9.99);
   });
 
@@ -194,15 +196,15 @@ describe('plan catalog (ADR 0014: the line is homes and hands)', () => {
 
   it('only paid tiers carry a Stripe price env var; free tier has none', () => {
     expect(PLANS.seedling.stripePriceEnv).toBeUndefined();
-    expect(PLANS.garden.stripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN');
+    expect(PLANS.garden.stripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_299');
     expect(PLANS.greenhouse.stripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE');
   });
 
   it('paid tiers carry an annual price + annual Stripe price env; free tier has neither', () => {
     expect(PLANS.seedling.annualPrice).toBeUndefined();
     expect(PLANS.seedling.annualStripePriceEnv).toBeUndefined();
-    expect(PLANS.garden.annualPrice).toBe(39.99);
-    expect(PLANS.garden.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    expect(PLANS.garden.annualPrice).toBe(24.99);
+    expect(PLANS.garden.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_ANNUAL_2499');
     expect(PLANS.greenhouse.annualPrice).toBe(79.99);
     expect(PLANS.greenhouse.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GREENHOUSE_ANNUAL');
   });
@@ -373,14 +375,14 @@ describe('planSummary (what the client receives)', () => {
 describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden lifetime)', () => {
   it('pins exactly which cadences are withdrawn on each tier', () => {
     expect(PLANS.seedling.withdrawnIntervals).toBeUndefined();
-    expect(PLANS.garden.withdrawnIntervals).toEqual(['year', 'lifetime']);
+    expect(PLANS.garden.withdrawnIntervals).toEqual(['lifetime']);
     expect(PLANS.greenhouse.withdrawnIntervals).toEqual(['year']);
   });
 
-  it('offers monthly on both paid tiers and nothing else', () => {
+  it('offers monthly on both paid tiers, yearly on Garden only, and no lifetime (ADR 0042)', () => {
     expect(isIntervalOffered(PLANS.garden, 'month')).toBe(true);
     expect(isIntervalOffered(PLANS.greenhouse, 'month')).toBe(true);
-    expect(isIntervalOffered(PLANS.garden, 'year')).toBe(false);
+    expect(isIntervalOffered(PLANS.garden, 'year')).toBe(true);
     expect(isIntervalOffered(PLANS.garden, 'lifetime')).toBe(false);
     expect(isIntervalOffered(PLANS.greenhouse, 'year')).toBe(false);
     expect(isIntervalOffered(PLANS.greenhouse, 'lifetime')).toBe(false);
@@ -401,8 +403,10 @@ describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden life
     // planIdFromPriceId maps a renewing annual/lifetime price id back to its
     // tier through these env names, so removing them would drop an existing
     // annual household to the free tier at its next renewal.
-    expect(PLANS.garden.annualPrice).toBe(39.99);
-    expect(PLANS.garden.annualStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_ANNUAL');
+    expect(PLANS.garden.legacyPrices).toEqual([
+      { env: 'STRIPE_PRICE_ID_GARDEN', dollars: 4.99, cadence: 'month' },
+      { env: 'STRIPE_PRICE_ID_GARDEN_ANNUAL', dollars: 39.99, cadence: 'year' },
+    ]);
     expect(PLANS.garden.lifetimePrice).toBe(149);
     expect(PLANS.garden.lifetimeStripePriceEnv).toBe('STRIPE_PRICE_ID_GARDEN_LIFETIME');
     expect(PLANS.greenhouse.annualPrice).toBe(79.99);
@@ -411,8 +415,8 @@ describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden life
 
   it('publishes a withdrawn cadence as null while still publishing monthly', () => {
     expect(planSummary(PLANS.garden, true)).toMatchObject({
-      monthlyPrice: 4.99,
-      annualPrice: null,
+      monthlyPrice: 2.99,
+      annualPrice: 24.99,
       lifetimePrice: null,
     });
     expect(planSummary(PLANS.greenhouse, true)).toMatchObject({
@@ -426,7 +430,7 @@ describe('withdrawn cadences (2026-09-02: annual on both paid tiers, Garden life
     const reListed: Plan = { ...PLANS.garden, withdrawnIntervals: [] };
     expect(isIntervalOffered(reListed, 'year')).toBe(true);
     expect(isIntervalOffered(reListed, 'lifetime')).toBe(true);
-    expect(planSummary(reListed, true)).toMatchObject({ annualPrice: 39.99, lifetimePrice: 149 });
+    expect(planSummary(reListed, true)).toMatchObject({ annualPrice: 24.99, lifetimePrice: 149 });
   });
 
   it('never offers a cadence the tier has no price for, withdrawn or not', () => {
@@ -694,5 +698,67 @@ describe('entitlementIsCurrent', () => {
     ]) {
       expect(entitlementIsCurrent(status), status).toBe(false);
     }
+  });
+});
+
+describe('repricing readiness (ADR 0042): a blank current price id is not for sale', () => {
+  const ready = {
+    STRIPE_PRICE_ID_GARDEN_299: 'price_a',
+    STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: 'price_b',
+    STRIPE_PRICE_ID_GREENHOUSE: 'price_c',
+  } as NodeJS.ProcessEnv;
+
+  it('publishes both Garden cadences when both current ids are set', () => {
+    expect(planSummary(PLANS.garden, true, ready)).toMatchObject({
+      monthlyPrice: 2.99,
+      annualPrice: 24.99,
+    });
+  });
+
+  it.each([
+    ['both blank', {}],
+    [
+      'whitespace only',
+      { STRIPE_PRICE_ID_GARDEN_299: '  ', STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: '\t' },
+    ],
+  ])('refuses to publish Garden when %s', (_name, env) => {
+    expect(planSummary(PLANS.garden, true, env as NodeJS.ProcessEnv)).toMatchObject({
+      monthlyPrice: null,
+      annualPrice: null,
+    });
+  });
+
+  it('does not fall back to the legacy $4.99 id when the new one is blank', () => {
+    const env = {
+      STRIPE_PRICE_ID_GARDEN: 'price_old',
+      STRIPE_PRICE_ID_GARDEN_ANNUAL: 'price_old_y',
+    };
+    expect(planSummary(PLANS.garden, true, env as NodeJS.ProcessEnv)).toMatchObject({
+      monthlyPrice: null,
+      annualPrice: null,
+    });
+    expect(priceEnvFor(PLANS.garden, 'month')).toBe('STRIPE_PRICE_ID_GARDEN_299');
+  });
+
+  it('keeps the free tier published at $0 whatever the environment holds', () => {
+    expect(planSummary(PLANS.seedling, true, {} as NodeJS.ProcessEnv).monthlyPrice).toBe(0);
+  });
+
+  it('lists the legacy envs beside the current ones for the webhook reverse map', () => {
+    expect(allPriceEnvs(PLANS.garden)).toEqual(
+      expect.arrayContaining([
+        'STRIPE_PRICE_ID_GARDEN',
+        'STRIPE_PRICE_ID_GARDEN_ANNUAL',
+        'STRIPE_PRICE_ID_GARDEN_299',
+        'STRIPE_PRICE_ID_GARDEN_ANNUAL_2499',
+      ])
+    );
+  });
+
+  it('Garden bundles zero identifications (ADR 0042) while the pack still exists', async () => {
+    const { allowanceForPlan } = await import('../../../src/services/identifyBudget.js');
+    const { IDENTIFY_TOP_UP_PACK } = await import('../../../src/models/identifyTopUp.js');
+    expect(allowanceForPlan('garden')).toBe(0);
+    expect(IDENTIFY_TOP_UP_PACK.credits).toBe(20);
   });
 });

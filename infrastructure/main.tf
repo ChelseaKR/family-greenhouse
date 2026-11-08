@@ -251,6 +251,8 @@ module "api" {
   stripe_webhook_secret                 = var.stripe_webhook_secret
   stripe_price_id_garden                = var.stripe_price_id_garden
   stripe_price_id_garden_annual         = var.stripe_price_id_garden_annual
+  stripe_price_id_garden_299            = var.stripe_price_id_garden_299
+  stripe_price_id_garden_annual_2499    = var.stripe_price_id_garden_annual_2499
   stripe_price_id_garden_lifetime       = var.stripe_price_id_garden_lifetime
   stripe_price_id_greenhouse            = var.stripe_price_id_greenhouse
   stripe_price_id_greenhouse_annual     = var.stripe_price_id_greenhouse_annual
@@ -283,6 +285,8 @@ locals {
   stripe_price_ids_in_use = toset(compact([
     var.stripe_price_id_garden,
     var.stripe_price_id_garden_annual,
+    var.stripe_price_id_garden_299,
+    var.stripe_price_id_garden_annual_2499,
     var.stripe_price_id_garden_lifetime,
     var.stripe_price_id_greenhouse,
     var.stripe_price_id_greenhouse_annual,
@@ -310,16 +314,35 @@ resource "terraform_data" "commercial_gate_guard" {
   lifecycle {
     # Enabling payments with a blank secret key or blank MONTHLY price id would
     # publish buy buttons that fail at Stripe (502) for every household. The
-    # annual and lifetime ids are deliberately not required: a blank one only
-    # hides that cadence, which is a valid partial launch.
+    # Greenhouse annual and Garden lifetime ids are deliberately not required:
+    # a blank one only hides that cadence, which is a valid partial launch.
+    #
+    # Garden is not in this list since ADR 0042: its current prices are the
+    # pair below, GET /billing/plans publishes the tier as unavailable while
+    # they are blank (so no button can 502), and the LEGACY
+    # stripe_price_id_garden ($4.99) is never sold — it only has to resolve
+    # renewals, which a blank value cannot break for anyone.
     precondition {
       condition = var.payments_enabled != "1" || (
         var.stripe_secret_key != "" &&
         var.stripe_webhook_secret != "" &&
-        var.stripe_price_id_garden != "" &&
         var.stripe_price_id_greenhouse != ""
       )
-      error_message = "payments_enabled is \"1\" but Stripe configuration is incomplete. Checkout needs stripe_secret_key, stripe_webhook_secret, stripe_price_id_garden, and stripe_price_id_greenhouse to all be non-empty; without them every checkout attempt returns a 502."
+      error_message = "payments_enabled is \"1\" but Stripe configuration is incomplete. Checkout needs stripe_secret_key, stripe_webhook_secret and stripe_price_id_greenhouse to all be non-empty; without them every checkout attempt returns a 502."
+    }
+
+    # Garden's two CURRENT prices (ADR 0042: $2.99 monthly and $24.99 yearly)
+    # go live together or not at all. They are one repricing, created by the
+    # owner in the Stripe Dashboard and pasted here in one change; a plan with
+    # one set and the other blank is the half-wired state this refuses — the
+    # pricing page would say "$2.99 a month or $24.99 a year" and sell only
+    # one of them. Both blank is allowed and means Garden is not for sale in
+    # this environment yet (the backend publishes it as unavailable); both set
+    # means it is. The pair is enforced whether or not payments are enabled,
+    # because the mistake is in the tfvars, not in the gate.
+    precondition {
+      condition     = (var.stripe_price_id_garden_299 == "") == (var.stripe_price_id_garden_annual_2499 == "")
+      error_message = "Garden's two current Stripe prices (ADR 0042) must be set together: stripe_price_id_garden_299 ($2.99 monthly) and stripe_price_id_garden_annual_2499 ($24.99 yearly) are one repricing. One of them is set and the other is blank. Create both prices under the Garden product in the same Stripe mode as stripe_secret_key, paste both ids in the same change, and add both to stripe_price_ids_attested; or leave both blank to keep Garden off sale here."
     }
 
     # The two gates are independent by design, but opening the runtime half

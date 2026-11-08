@@ -519,14 +519,19 @@ locals {
   }
 
   stripe_environment = {
-    STRIPE_SECRET_KEY                 = var.stripe_secret_key
-    STRIPE_WEBHOOK_SECRET             = var.stripe_webhook_secret
-    STRIPE_PRICE_ID_GARDEN            = var.stripe_price_id_garden
-    STRIPE_PRICE_ID_GARDEN_ANNUAL     = var.stripe_price_id_garden_annual
-    STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
-    STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
-    STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
-    STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
+    STRIPE_SECRET_KEY     = var.stripe_secret_key
+    STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
+    # Garden's two LEGACY prices ($4.99 monthly, $39.99 annual; ADR 0042) stay
+    # in the environment so renewals on them still resolve to Garden. The two
+    # CURRENT prices follow; the backend sells only at those.
+    STRIPE_PRICE_ID_GARDEN             = var.stripe_price_id_garden
+    STRIPE_PRICE_ID_GARDEN_ANNUAL      = var.stripe_price_id_garden_annual
+    STRIPE_PRICE_ID_GARDEN_299         = var.stripe_price_id_garden_299
+    STRIPE_PRICE_ID_GARDEN_ANNUAL_2499 = var.stripe_price_id_garden_annual_2499
+    STRIPE_PRICE_ID_GARDEN_LIFETIME    = var.stripe_price_id_garden_lifetime
+    STRIPE_PRICE_ID_GREENHOUSE         = var.stripe_price_id_greenhouse
+    STRIPE_PRICE_ID_GREENHOUSE_ANNUAL  = var.stripe_price_id_greenhouse_annual
+    STRIPE_PRICE_ID_IDENTIFY_TOP_UP    = var.stripe_price_id_identify_top_up
     # Gift subscriptions (ADR 0028): ONE-TIME prices for one gift month of each
     # paid tier, charged with quantity = months. Blank = that tier cannot be
     # given here; checkout answers 400 GIFT_NOT_CONFIGURED.

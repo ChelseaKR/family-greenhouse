@@ -107,7 +107,7 @@ reactivation runbook before changing any of these controls.
 1. Sign up at https://dashboard.stripe.com/.
 2. **Stay in test mode** until you're done iterating. The toggle's in the top-right of the dashboard.
 3. **Create products + prices**:
-   - Products → Add product → "Garden" → recurring monthly → $4.99 → save. Copy the **Price ID** (`price_…`).
+   - Products → Add product → "Garden" → recurring monthly → $2.99 → save, then add a second recurring price, yearly, $24.99 (ADR 0042). Copy each **Price ID** (`price_…`).
    - Same for "Greenhouse" at $9.99.
 4. **Create a webhook**:
    - Developers → Webhooks → Add endpoint

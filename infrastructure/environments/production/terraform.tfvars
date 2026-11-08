@@ -58,9 +58,14 @@ identify_metering_enabled = "1"
 # Setting any per-tier leaf-health value adds one household read per check
 # (the same read identify already makes). A household already past a newly
 # lowered cap is blocked until the month rolls over, so lower caps on the 1st.
-leaf_health_monthly_cap            = ""
-leaf_health_monthly_cap_seedling   = "20"
-leaf_health_monthly_cap_garden     = ""
+leaf_health_monthly_cap          = ""
+leaf_health_monthly_cap_seedling = "20"
+# Garden: 100, not the flat 200 (ADR 0042). At $2.99 a month / $24.99 a year
+# with identification out of the plan, the tier's AI ceiling is leaf-health
+# plus chat; at 200 checks that ceiling ($1.73) was 98% of what a yearly
+# subscription earns per month through Apple ($1.77 after the 15% cut). At
+# 100 it is $1.14, 64% of that row and under 45% of the monthly ones.
+leaf_health_monthly_cap_garden     = "100"
 leaf_health_monthly_cap_greenhouse = ""
 chat_budget_input_tokens           = ""
 chat_budget_output_tokens          = ""
@@ -138,6 +143,25 @@ stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL"
 stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO"
 stripe_price_id_greenhouse        = "price_1UB7JuAhnUt8CMG05o9ktQLa"
 stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
+# Garden repriced 2026-11-07 (ADR 0042): $2.99 a month or $24.99 a year, with
+# plant identification out of the plan. The two ids above named `garden` and
+# `garden_annual` are now LEGACY ($4.99 / $39.99): keep them, never archive
+# those prices, so a household that bought at the old price keeps renewing on
+# it and the webhook still maps it to Garden. The two below are the CURRENT
+# prices and are BLANK until the owner creates them. While both are blank
+# GET /billing/plans publishes Garden as not available and nothing sells it;
+# the commercial_gate_guard precondition refuses a plan with exactly one of
+# them set, so the repricing goes live whole or not at all.
+# Owner step (Stripe Dashboard, LIVE mode, the existing "Garden" product):
+#   1. Add a recurring price: $2.99 USD, monthly, metadata plan_id=garden
+#      interval=month adr=0042. Paste its id into stripe_price_id_garden_299.
+#   2. Add a recurring price: $24.99 USD, yearly, metadata plan_id=garden
+#      interval=year adr=0042. Paste its id into stripe_price_id_garden_annual_2499.
+#   3. Add both ids to stripe_price_ids_attested below, with comments.
+#   4. Customer Portal: replace the $4.99 Garden monthly price with the $2.99
+#      monthly and the $24.99 yearly in the list a customer may switch to.
+stripe_price_id_garden_299         = ""
+stripe_price_id_garden_annual_2499 = ""
 # Identification top-up pack (ADR 0019): a ONE-TIME price for "20
 # identifications, $1.99", created in Stripe LIVE mode. Blank = not for sale;
 # POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit

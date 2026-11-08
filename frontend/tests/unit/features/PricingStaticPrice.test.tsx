@@ -91,12 +91,14 @@ describe('the /pricing price is in the static text', () => {
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     expect(text).toContain(GARDEN_LINE);
     expect(text).toContain(`$${greenhouse.monthly.toFixed(2)} a month`);
-    expect(garden.monthly).toBe(4.99); // held at the stated price; no change in this PR
+    expect(garden.monthly).toBe(2.99); // ADR 0042
   });
 
   it('names no annual or lifetime price while those cadences are withdrawn', () => {
     const html = renderToString(tree(newClient()));
-    expect(garden.withdrawn).toEqual(expect.arrayContaining(['year', 'lifetime']));
+    expect(garden.withdrawn).toEqual(['lifetime']);
+    // The static line states monthly prices only, so the yearly amount is
+    // absent from the prerendered text even though Garden now sells yearly.
     expect(html).not.toContain(String(garden.annual));
     expect(html).not.toContain(String(garden.lifetime));
     expect(html).not.toMatch(/year|annual|lifetime/i);
