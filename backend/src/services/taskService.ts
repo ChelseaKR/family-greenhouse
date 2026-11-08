@@ -1185,6 +1185,56 @@ export async function getTasksForPlant(householdId: string, plantId: string): Pr
     .sort((a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime());
 }
 
+/**
+ * Put a plant's current name on its task rows.
+ *
+ * A task keeps its own copy of the name, written by `createTask`, and every
+ * surface that lists tasks reads that copy: the task lists, reminder emails and
+ * pushes, the sitter, caretaker and kiosk pages, the calendar feed. Nothing used
+ * to write it again, so a renamed plant kept going out under its old name.
+ *
+ * Compares each row rather than trusting that the name just changed, so saving
+ * the plant again finishes a rename that failed partway and repairs rows left
+ * behind by renames made before this existed. A failed write throws: the caller
+ * says the save failed, and the retry converges. A task deleted in the meantime
+ * stays deleted.
+ */
+export async function syncPlantNameOnTasks(
+  householdId: string,
+  plantId: string,
+  plantName: string
+): Promise<void> {
+  const items = await queryAllPages({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+    ExpressionAttributeValues: {
+      ':pk': `HOUSEHOLD#${householdId}`,
+      ':sk': 'TASK#',
+    },
+    Limit: MAX_QUERY_LIMIT,
+  });
+  const stale = items.filter((item) => item.plantId === plantId && item.plantName !== plantName);
+
+  await Promise.all(
+    stale.map(async (item) => {
+      try {
+        await dynamodb.send(
+          new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: { PK: item.PK, SK: item.SK },
+            UpdateExpression: 'SET #plantName = :plantName',
+            ConditionExpression: 'attribute_exists(PK)',
+            ExpressionAttributeNames: { '#plantName': 'plantName' },
+            ExpressionAttributeValues: { ':plantName': plantName },
+          })
+        );
+      } catch (err) {
+        if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
+      }
+    })
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Task claiming ("up for grabs")
 // ---------------------------------------------------------------------------

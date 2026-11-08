@@ -32,6 +32,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
 
+### Fixed
+
+- **Renaming a plant now reaches its tasks.** Task lists, reminders, the sitter,
+  caretaker and kiosk pages and the calendar feed kept using the old name for
+  good, because each task stored its own copy from the day it was created.
+  Saving a plant now updates those copies, which also repairs any left behind by
+  an earlier rename.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
