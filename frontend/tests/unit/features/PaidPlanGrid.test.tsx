@@ -1,8 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { PaidPlanGrid } from '@/features/pricing/PaidPlanGrid';
-import { intervalIsOffered, priceFor } from '@/features/pricing/planPricing';
+import {
+  annualSavingPercent,
+  initialInterval,
+  intervalIsOffered,
+  priceFor,
+  resetRememberedIntervalForTests,
+} from '@/features/pricing/planPricing';
 import type { Plan, PlanFeatures } from '@/services/billingService';
+
+// The tapped cadence is module memory for the page load (ADR 0042, "Yearly
+// first"); tests in this file share the module, so each starts forgetful.
+beforeEach(() => resetRememberedIntervalForTests());
 
 /** Feature map with everything off, so a fixture names only what it grants. */
 const NO_FEATURES: PlanFeatures = {
@@ -63,8 +74,8 @@ const garden: Plan = {
     moveDay: true,
     chat: true,
   },
-  monthlyPrice: 4.99,
-  annualPrice: 39.99,
+  monthlyPrice: 2.99,
+  annualPrice: 24.99,
   lifetimePrice: 149,
 };
 
@@ -102,8 +113,8 @@ const greenhouse: Plan = {
 
 describe('priceFor', () => {
   it('reads the amount for each cadence', () => {
-    expect(priceFor(garden, 'month')).toBe(4.99);
-    expect(priceFor(garden, 'year')).toBe(39.99);
+    expect(priceFor(garden, 'month')).toBe(2.99);
+    expect(priceFor(garden, 'year')).toBe(24.99);
     expect(priceFor(garden, 'lifetime')).toBe(149);
   });
 
@@ -131,7 +142,7 @@ describe('PaidPlanGrid', () => {
     render(<PaidPlanGrid plans={[seedling, monthlyOnly]} />);
 
     expect(screen.queryByRole('group', { name: 'Billing interval' })).not.toBeInTheDocument();
-    expect(screen.getByText('$4.99')).toBeInTheDocument();
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
   });
 
   it('opens on the first cadence actually offered', () => {
@@ -140,7 +151,7 @@ describe('PaidPlanGrid', () => {
     render(<PaidPlanGrid plans={[noMonthly]} />);
 
     expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('$39.99')).toBeInTheDocument();
+    expect(screen.getByText('$24.99')).toBeInTheDocument();
   });
 
   it('marks the household’s current tier', () => {
@@ -166,7 +177,7 @@ describe('PaidPlanGrid', () => {
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
   });
 
-  it('sells no support tier, and calls Garden’s identification difference an allowance', () => {
+  it('lists no identification bullet on any tier: Garden includes none (ADR 0042)', () => {
     // #607. "Priority support" sat on the $9.99 tier with nothing behind it:
     // features/legal/SupportPage.tsx hands the one SUPPORT_EMAIL to every
     // plan, and no queue, routing rule or response-time target exists to
@@ -179,7 +190,10 @@ describe('PaidPlanGrid', () => {
     const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
 
     expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();
-    expect(card('Garden').getByText('More plant identifications each month')).toBeInTheDocument();
+    expect(document.body.textContent ?? '').not.toMatch(/identification/i);
+    expect(
+      card('Garden').queryByText('More plant identifications each month')
+    ).not.toBeInTheDocument();
     // Greenhouse keeps the two differentiators that are enforced.
     expect(card('Greenhouse').getByText('Everything in Garden')).toBeInTheDocument();
     expect(
@@ -224,7 +238,7 @@ describe('withdrawn cadences (annual and lifetime withdrawn from sale)', () => {
     expect(screen.queryByText(/^once$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Not available/)).not.toBeInTheDocument();
     // Both paid tiers still sell monthly, at their monthly amounts.
-    expect(screen.getByText('$4.99')).toBeInTheDocument();
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
     expect(screen.getByText('$9.99')).toBeInTheDocument();
     expect(screen.getAllByText('per month')).toHaveLength(3);
   });
@@ -306,5 +320,132 @@ describe('feature bullets follow the catalog flags, and only where the tier gain
     expect(card('Garden').getByText('AI care assistant')).toBeInTheDocument();
     expect(card('Greenhouse').queryByText('AI care assistant')).not.toBeInTheDocument();
     expect(card('Greenhouse').getByText('API access for automation')).toBeInTheDocument();
+  });
+});
+
+describe('the toggle opens on yearly (ADR 0042, "Yearly first")', () => {
+  // As the API publishes it after ADR 0042: Garden monthly and yearly,
+  // Greenhouse monthly only (its yearly cadence is still withdrawn).
+  const greenhouseMonthlyOnly: Plan = { ...greenhouse, annualPrice: null, lifetimePrice: null };
+  const catalog = [seedling, garden, greenhouseMonthlyOnly];
+
+  it('opens on Yearly on first render, with the yearly amount and the derived saving', () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(screen.getByText('$24.99')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveTextContent('Save ~30%');
+    expect(screen.queryByText('$2.99')).not.toBeInTheDocument();
+  });
+
+  it('shows a monthly-only tier at its monthly price on the Yearly tab, marked billed monthly', () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+
+    expect(card('Greenhouse').getByText('$9.99')).toBeInTheDocument();
+    expect(card('Greenhouse').getByText('per month')).toBeInTheDocument();
+    expect(card('Greenhouse').getByText('Billed monthly')).toBeInTheDocument();
+    expect(card('Greenhouse').queryByText('per year')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not available at this interval')).not.toBeInTheDocument();
+    // Only the card that fell back carries the note.
+    expect(card('Garden').queryByText('Billed monthly')).not.toBeInTheDocument();
+    expect(card('Garden').getByText('per year')).toBeInTheDocument();
+    expect(card('Seedling').queryByText('Billed monthly')).not.toBeInTheDocument();
+  });
+
+  it('hands each card the cadence its price belongs to, so checkout matches the card', () => {
+    const cta = vi.fn(() => null);
+    render(<PaidPlanGrid plans={catalog} renderCta={cta} />);
+    expect(cta).toHaveBeenCalledWith(expect.objectContaining({ id: 'garden' }), 'year', 24.99);
+    expect(cta).toHaveBeenCalledWith(expect.objectContaining({ id: 'greenhouse' }), 'month', 9.99);
+    expect(cta).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'greenhouse' }),
+      'year',
+      expect.anything()
+    );
+  });
+
+  it('drops the note on the Monthly tab, where it would say nothing', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    expect(screen.getByText('$9.99')).toBeInTheDocument();
+    expect(screen.queryByText('Billed monthly')).not.toBeInTheDocument();
+  });
+
+  it('still says unavailable for a paid tier with neither price, never $0', () => {
+    const unpriced: Plan = { ...greenhouse, monthlyPrice: null, annualPrice: null };
+    render(<PaidPlanGrid plans={[seedling, garden, unpriced]} />);
+    const card = within(screen.getByRole('heading', { name: 'Greenhouse' }).closest('li')!);
+    expect(card.getByText('Not available at this interval')).toBeInTheDocument();
+    expect(card.queryByText('Billed monthly')).not.toBeInTheDocument();
+    expect(card.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  it('never lends a monthly price to the Lifetime tab', async () => {
+    const withLifetime: Plan = { ...garden, lifetimePrice: 149 };
+    render(<PaidPlanGrid plans={[seedling, withLifetime, greenhouseMonthlyOnly]} />);
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+    const card = within(screen.getByRole('heading', { name: 'Greenhouse' }).closest('li')!);
+    expect(card.getByText('Not available as a one-time purchase')).toBeInTheDocument();
+    expect(card.queryByText('$9.99')).not.toBeInTheDocument();
+  });
+
+  it('keeps Monthly one tap away', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('$2.99')).toBeInTheDocument();
+    expect(screen.getByText('$9.99')).toBeInTheDocument();
+    expect(screen.queryByText('$24.99')).not.toBeInTheDocument();
+  });
+
+  it('remembers the tapped cadence for this page load, in memory and not in storage', async () => {
+    const localBefore = Object.keys(localStorage).sort();
+    const sessionBefore = Object.keys(sessionStorage).sort();
+    const cookieBefore = document.cookie;
+    const first = render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    first.unmount();
+    // Plan status mounting after the pricing page: the person's tap holds.
+    render(<PaidPlanGrid plans={catalog} />);
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    // Nothing was written anywhere a reload could read it back from.
+    expect(Object.keys(localStorage).sort()).toEqual(localBefore);
+    expect(Object.keys(sessionStorage).sort()).toEqual(sessionBefore);
+    expect(document.cookie).toBe(cookieBefore);
+    // A fresh page load (the module forgets) is back on the default.
+    resetRememberedIntervalForTests();
+    expect(initialInterval(['month', 'year'])).toBe('year');
+  });
+
+  it('falls back to the first cadence on sale when no tier sells yearly', () => {
+    const noYearly: Plan = { ...garden, annualPrice: null };
+    render(<PaidPlanGrid plans={[seedling, noYearly, { ...greenhouse, annualPrice: null }]} />);
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /Yearly/ })).not.toBeInTheDocument();
+    expect(initialInterval(['month', 'lifetime'])).toBe('month');
+    expect(initialInterval([])).toBe('month');
+  });
+
+  it('ignores a remembered cadence the catalog no longer sells', async () => {
+    render(<PaidPlanGrid plans={catalog} />);
+    await userEvent.click(screen.getByRole('button', { name: /Lifetime/ }));
+    expect(initialInterval(['month', 'year'])).toBe('year');
+  });
+});
+
+describe('the yearly saving hint is derived from the amounts (ADR 0042)', () => {
+  it('says ~30% for $2.99 monthly against $24.99 yearly, never a typed 33', () => {
+    expect(annualSavingPercent([seedling, garden, greenhouse])).toBe(30);
+    render(<PaidPlanGrid plans={[seedling, garden]} />);
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveTextContent('Save ~30%');
+    expect(document.body.textContent ?? '').not.toContain('33%');
+  });
+
+  it('states no saving when no tier offers both cadences', () => {
+    expect(annualSavingPercent([seedling, { ...garden, annualPrice: null }])).toBeNull();
   });
 });

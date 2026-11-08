@@ -4,7 +4,14 @@ import { CheckIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { formatCurrency } from '@/i18n/format';
 import type { BillingInterval, Plan, PlanFeatures, PlanId } from '@/services/billingService';
-import { capsLine, intervalIsOffered, priceFor } from './planPricing';
+import {
+  annualSavingPercent,
+  cadenceShown,
+  capsLine,
+  initialInterval,
+  intervalIsOffered,
+  rememberInterval,
+} from './planPricing';
 
 /** Cadences offered in the toggle, in display order. Labels are catalog keys;
  *  the component resolves them so the grid stays translatable. */
@@ -42,28 +49,26 @@ const TAGLINE_KEY: Record<PlanId, string> = {
  *  target to read. It was a service commitment sold at $9.99/mo with nothing
  *  behind it. It goes back when something implements it.
  *
- *  Garden's identification bullet says "more each month", not "priority",
- *  because that is what the code does: IDENTIFY_ALLOWANCES in
- *  backend/src/services/identifyBudget.ts gives Seedling 1, Garden 30 and
- *  Greenhouse 100 per calendar month (enforced in production —
- *  identify_metering_enabled = "1"). It is a larger allowance; there is no
- *  queue, and a Garden identification is not faster than a free one. The
- *  numbers stay out of the bullet: they live in one place and a copy here
- *  would be a second one to keep in step. */
+ *  Identification is on NO tier's list since ADR 0042. Garden bundles none
+ *  (IDENTIFY_ALLOWANCES in backend/src/services/identifyBudget.ts gives it
+ *  0; identification is sold by the pack, ADR 0019), so a Seedling bullet
+ *  would read, through "Everything in Seedling", as a Garden claim that is
+ *  false. The free tier's one identification a month is a sample, not a
+ *  selling point, and Greenhouse's 100 is stated on the help page with the
+ *  other metered allowances rather than here. The grid's footer
+ *  (`PricingGrid`) says plainly that identification is sold separately. */
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   seedling: [
     'pricing.featureSharedHousehold',
     'pricing.featureReminders',
     'pricing.featureSitterBasic',
     'pricing.featureAnalytics30',
-    'pricing.featureIdentification',
     'pricing.featureImportExport',
   ],
   garden: [
     'pricing.featureEverythingSeedling',
     'pricing.featureUnlimitedMembers',
     'pricing.featureFullHistory',
-    'pricing.featureMoreIdentification',
   ],
   greenhouse: ['pricing.featureEverythingGarden', 'pricing.featureManyHomes'],
 };
@@ -131,7 +136,9 @@ interface PaidPlanGridProps {
  *
  * A tier that is missing the price for the selected cadence renders as
  * unavailable rather than free — a blank annual id is a valid partial launch
- * (see environments/*.tfvars), and "$0" would be a lie.
+ * (see environments/*.tfvars), and "$0" would be a lie. The one exception is
+ * `cadenceShown`: on the Yearly tab a tier sold only monthly shows its monthly
+ * price, marked "billed monthly", and its call to action gets that cadence.
  */
 export function PaidPlanGrid({
   plans,
@@ -141,11 +148,20 @@ export function PaidPlanGrid({
 }: PaidPlanGridProps) {
   const { t } = useTranslation();
   const offered = useMemo(() => INTERVALS.filter((i) => intervalIsOffered(plans, i.id)), [plans]);
-  // Default to the first cadence actually on sale, so a monthly-only launch
-  // doesn't open on an empty "Yearly" tab.
-  const [interval, setInterval] = useState<BillingInterval>(offered[0]?.id ?? 'month');
+  const offeredIds = useMemo(() => offered.map((i) => i.id), [offered]);
+  const savingPercent = useMemo(() => annualSavingPercent(plans), [plans]);
+  // Opens on yearly when it is on sale (ADR 0042, "Yearly first"), on the
+  // cadence tapped earlier this visit if there was one, and otherwise on the
+  // first cadence actually on sale, so a monthly-only launch doesn't open on
+  // an empty "Yearly" tab. The choice lives in component state plus module
+  // memory for the page load; it is never written to storage.
+  const [interval, setInterval] = useState<BillingInterval>(() => initialInterval(offeredIds));
   // Guard against the selected cadence disappearing when the catalog refetches.
-  const active = offered.some((i) => i.id === interval) ? interval : (offered[0]?.id ?? 'month');
+  const active = offeredIds.includes(interval) ? interval : initialInterval(offeredIds);
+  const choose = (next: BillingInterval) => {
+    rememberInterval(next);
+    setInterval(next);
+  };
 
   if (plans.length === 0) return null;
 
@@ -161,7 +177,7 @@ export function PaidPlanGrid({
             <button
               key={option.id}
               type="button"
-              onClick={() => setInterval(option.id)}
+              onClick={() => choose(option.id)}
               aria-pressed={active === option.id}
               className={clsx(
                 'rounded-lg px-4 py-2 text-sm font-medium transition-colors min-h-touch',
@@ -169,14 +185,14 @@ export function PaidPlanGrid({
               )}
             >
               {t(option.labelKey)}
-              {option.hintKey && (
+              {option.hintKey && (option.id !== 'year' || savingPercent !== null) && (
                 <span
                   className={clsx(
                     'ml-2 text-xs',
                     active === option.id ? 'text-white/80' : 'text-gray-500'
                   )}
                 >
-                  {t(option.hintKey)}
+                  {t(option.hintKey, { percent: savingPercent ?? undefined })}
                 </span>
               )}
             </button>
@@ -186,7 +202,8 @@ export function PaidPlanGrid({
 
       <ul className="mt-10 grid gap-6 md:grid-cols-3" role="list">
         {plans.map((plan) => {
-          const price = priceFor(plan, active);
+          // The cadence this card actually sells, which is not always the tab.
+          const { interval: cardInterval, price } = cadenceShown(plan, active);
           const isFree = plan.id === 'seedling';
           // Free tier is always purchasable-by-default; a paid tier with no
           // price at this cadence simply isn't sold right now.
@@ -217,7 +234,7 @@ export function PaidPlanGrid({
               <p className="mt-4">
                 {unavailable ? (
                   <span className="text-sm text-gray-500">
-                    {active === 'lifetime'
+                    {cardInterval === 'lifetime'
                       ? t('pricing.notAvailableOneTime')
                       : t('pricing.notAvailableInterval')}
                   </span>
@@ -227,12 +244,17 @@ export function PaidPlanGrid({
                       {formatCurrency(price ?? 0)}
                     </span>
                     <span className="ml-1 text-sm text-gray-600">
-                      {active === 'lifetime'
+                      {cardInterval === 'lifetime'
                         ? t('pricing.onceOff')
-                        : active === 'year'
+                        : cardInterval === 'year'
                           ? t('pricing.perYear')
                           : t('pricing.perMonth')}
                     </span>
+                    {cardInterval !== active && (
+                      <span className="mt-1 block text-xs text-gray-600">
+                        {t('pricing.billedMonthlyNote')}
+                      </span>
+                    )}
                   </>
                 )}
               </p>
@@ -256,7 +278,7 @@ export function PaidPlanGrid({
                 ))}
               </ul>
 
-              {renderCta && <div className="mt-6 pt-2">{renderCta(plan, active, price)}</div>}
+              {renderCta && <div className="mt-6 pt-2">{renderCta(plan, cardInterval, price)}</div>}
             </li>
           );
         })}

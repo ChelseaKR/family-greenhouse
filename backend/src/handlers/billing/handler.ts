@@ -145,7 +145,11 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
           active: COMMERCIAL_HOLD_ACTIVE,
           effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
         },
-        plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable)),
+        // `process.env` is the readiness gate (ADR 0042): a cadence whose
+        // current Stripe price id is blank here publishes null, the same
+        // "not available" the client renders for a withdrawn cadence, so a
+        // repriced tier is never advertised at an amount checkout refuses.
+        plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable, process.env)),
         // The identification top-up offer, on the same fail-closed terms as
         // the plan prices: `available` is true only when payments are on, a
         // Stripe price is configured, AND this process holds the vendor key

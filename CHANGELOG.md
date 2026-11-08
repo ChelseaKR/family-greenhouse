@@ -16,6 +16,35 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **Garden is $2.99 a month or $24.99 a year, and plant identification is
+  sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
+  with 30 identifications. Garden annual returns at $24.99. Garden bundles no
+  identifications; Seedling keeps 1 and Greenhouse 100. Garden leaf-health
+  checks drop from 200 to 100 a month, because 200 left $0.04 a month on the
+  yearly price through Apple. Households that bought at $4.99 or $39.99 keep
+  renewing on those Stripe prices (new `legacyPrices` in the catalog; the
+  webhook still maps them to Garden). The new prices are the Terraform
+  variables `stripe_price_id_garden_299` and `stripe_price_id_garden_annual_2499`,
+  blank by default: the pricing page publishes Garden as unavailable while
+  they are blank, and the plan fails if only one of the pair is set. The
+  iPhone app gets a `garden.yearly` product beside `garden.monthly`. The
+  pricing page, FAQ, Terms and llms.txt, in English and Spanish, now say
+  "Identification is sold as a 20-identification pack for $1.99; it is not
+  included in Garden." Nothing changes in production until the owner creates
+  the two Stripe prices and pastes their ids.
+- **Yearly first (ADR 0042).** The pricing page and Settings → Plan status
+  open on the yearly Garden price, $24.99 with the derived "Save ~30%" hint;
+  Monthly is one tap away, and the tap is kept for the page load only, in
+  memory. On the Yearly tab Greenhouse, which has no yearly price, shows its
+  monthly price marked "Billed monthly" and checks out monthly. The iPhone app
+  lists the yearly product first. The day-10 and
+  day-14 trial emails name the yearly price first and then the monthly, each
+  once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
+  a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real
+  checkouts choosing yearly reverts the default.
+
 ### Changed
 
 - **Production opens Apple In-App Purchase.**

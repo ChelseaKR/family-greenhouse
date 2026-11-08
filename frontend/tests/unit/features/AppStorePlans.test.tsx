@@ -107,7 +107,7 @@ describe('AppStorePlans', () => {
     expect(screen.getByText('$10.99 a month')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Subscribe to Garden' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Restore purchases' })).toBeInTheDocument();
-    expect(screen.getByText(/renews automatically each month/)).toBeInTheDocument();
+    expect(screen.getByText(/renews automatically at the end of each period/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
       'href',
       '/legal/terms'
@@ -119,6 +119,27 @@ describe('AppStorePlans', () => {
     const text = document.body.textContent ?? '';
     expect(text).not.toMatch(/\$4\.99|\$9\.99/);
     expect(text).not.toMatch(/web|browser|stripe|familygreenhouse\.net/i);
+  });
+
+  it('offers Garden yearly beside monthly, and buys the yearly product (ADR 0042)', async () => {
+    plugin.getProducts.mockResolvedValue([
+      ...STORE_PRODUCTS,
+      {
+        id: 'net.familygreenhouse.app.garden.yearly',
+        displayName: 'Garden (yearly)',
+        description: '',
+        displayPrice: '$26.99',
+        price: '26.99',
+      },
+    ]);
+    renderUi(<AppStorePlans subscription={seedling} isAdmin planNames={NAMES} />);
+    expect(await screen.findByText('$26.99 a year')).toBeInTheDocument();
+    expect(screen.getByTestId('app-store-plan-garden-yearly')).toHaveAttribute(
+      'data-product-id',
+      'net.familygreenhouse.app.garden.yearly'
+    );
+    // Greenhouse has no yearly product: it is not invented.
+    expect(screen.queryByTestId('app-store-plan-greenhouse-yearly')).not.toBeInTheDocument();
   });
 
   it('lets a member see the plans but not buy', async () => {

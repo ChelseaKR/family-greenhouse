@@ -26,8 +26,12 @@ import type { SignedTransaction, StoreProduct } from './appStorePurchasesPlugin'
 
 export type PaidPlanId = Exclude<PlanId, 'seedling'>;
 
+/** How often an App Store product renews. Mirrors `AppStoreCadence` in
+ *  backend/src/models/appStore.ts; Apple's subscriptions have no lifetime. */
+export type AppStoreCadence = 'month' | 'year';
+
 /**
- * The App Store product for each paid tier. Mirrors
+ * The MONTHLY App Store product for each paid tier. Mirrors
  * backend/src/models/appStore.ts `APP_STORE_PRODUCTS` and the local StoreKit
  * configuration; tests/unit/services/appStorePurchases.test.ts holds the three
  * together.
@@ -36,6 +40,27 @@ export const APP_STORE_PRODUCT_IDS: Record<PaidPlanId, string> = {
   garden: 'net.familygreenhouse.app.garden.monthly',
   greenhouse: 'net.familygreenhouse.app.greenhouse.monthly',
 };
+
+/**
+ * The YEARLY products (ADR 0042). Garden only: Greenhouse's annual cadence is
+ * withdrawn on the website too, and the App Store sells nothing the catalog
+ * does not.
+ */
+export const APP_STORE_YEARLY_PRODUCT_IDS: Partial<Record<PaidPlanId, string>> = {
+  garden: 'net.familygreenhouse.app.garden.yearly',
+};
+
+/** The product that sells `plan` at `cadence`, or undefined when there is none. */
+export function appStoreProductId(plan: PaidPlanId, cadence: AppStoreCadence): string | undefined {
+  return cadence === 'year' ? APP_STORE_YEARLY_PRODUCT_IDS[plan] : APP_STORE_PRODUCT_IDS[plan];
+}
+
+/** The App Store's products, by cadence and then by tier. A tier with no
+ *  product at a cadence is simply absent there. */
+export type StoreProductsByCadence = Record<
+  AppStoreCadence,
+  Partial<Record<PaidPlanId, StoreProduct>>
+>;
 
 // Where purchases are offered at all lives in its own small module, so the
 // entry chunk (App, LockedFeature, BillingSettings ask it) does not carry the
@@ -94,9 +119,10 @@ function isRefusal(code: string | undefined): code is PurchaseRefusalCode {
 
 export const appStoreApi = {
   async purchaseIntent(
-    planId: PaidPlanId
+    planId: PaidPlanId,
+    interval: AppStoreCadence = 'month'
   ): Promise<{ productId: string; appAccountToken: string }> {
-    const { data } = await api.post('/billing/app-store/purchase-intent', { planId });
+    const { data } = await api.post('/billing/app-store/purchase-intent', { planId, interval });
     return data;
   },
   async postTransactions(transactions: SignedTransaction[]): Promise<PostResult> {
@@ -125,22 +151,33 @@ async function deliver(transactions: SignedTransaction[]): Promise<PostResult> {
   return result;
 }
 
-/** The App Store's own products for both paid tiers, keyed by tier. */
-export async function loadStoreProducts(): Promise<Partial<Record<PaidPlanId, StoreProduct>>> {
+/** The App Store's own products, keyed by cadence and then by tier. */
+export async function loadStoreProducts(): Promise<StoreProductsByCadence> {
   const plugin = await loadPlugin();
-  const products = await plugin.getProducts(Object.values(APP_STORE_PRODUCT_IDS));
-  const out: Partial<Record<PaidPlanId, StoreProduct>> = {};
-  for (const [plan, id] of Object.entries(APP_STORE_PRODUCT_IDS) as Array<[PaidPlanId, string]>) {
-    const found = products.find((p) => p.id === id);
-    if (found) out[plan] = found;
+  const tables: Array<[AppStoreCadence, Partial<Record<PaidPlanId, string>>]> = [
+    ['month', APP_STORE_PRODUCT_IDS],
+    ['year', APP_STORE_YEARLY_PRODUCT_IDS],
+  ];
+  const products = await plugin.getProducts(
+    tables.flatMap(([, table]) => Object.values(table).filter((id): id is string => !!id))
+  );
+  const out: StoreProductsByCadence = { month: {}, year: {} };
+  for (const [cadence, table] of tables) {
+    for (const [plan, id] of Object.entries(table) as Array<[PaidPlanId, string]>) {
+      const found = products.find((p) => p.id === id);
+      if (found) out[cadence][plan] = found;
+    }
   }
   return out;
 }
 
-export async function buyPlan(planId: PaidPlanId): Promise<BuyOutcome> {
+export async function buyPlan(
+  planId: PaidPlanId,
+  interval: AppStoreCadence = 'month'
+): Promise<BuyOutcome> {
   let intent: { productId: string; appAccountToken: string };
   try {
-    intent = await appStoreApi.purchaseIntent(planId);
+    intent = await appStoreApi.purchaseIntent(planId, interval);
   } catch (err) {
     const code = errorCode(err);
     if (isRefusal(code)) return { kind: 'refused', code };

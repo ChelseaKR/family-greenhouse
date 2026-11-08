@@ -51,6 +51,12 @@ const BANNED = [
   /exclusive/i,
   /only \d+ (days?|hours?) left/i,
   /!/,
+  // Portfolio copy rules: nothing is "unlimited", and Family Greenhouse never
+  // says it has no tracking.
+  /unlimited/i,
+  /ilimitad/i,
+  /no tracking/i,
+  /sin (seguimiento|rastreo)/i,
 ];
 
 describe('day 10', () => {
@@ -78,10 +84,28 @@ describe('day 10', () => {
     expect(email.text).not.toMatch(/delet(e|ed|ion)s? (your|all|them)/i);
   });
 
-  it('prints the plan price from the catalog, once, and no code', () => {
-    const price = `$${PLANS.garden.monthlyPrice}`;
-    expect(email.text.split(price).length - 1).toBe(1);
+  it('names the yearly Garden price first and the monthly once, from the catalog, and no other amount (ADR 0042, "Yearly first")', () => {
+    const yearly = `$${PLANS.garden.annualPrice}`;
+    const monthly = `$${PLANS.garden.monthlyPrice}`;
+    // With the ADR 0042 catalog this is the exact sentence
+    // "If you would like to keep Garden, it is $24.99 a year, or $2.99 a month."
+    const sentence = `If you would like to keep Garden, it is ${yearly} a year, or ${monthly} a month.`;
+    expect(yearly).toBe('$24.99');
+    expect(monthly).toBe('$2.99');
+    expect(email.text.split(sentence).length - 1).toBe(1);
+    expect(email.html.split(sentence).length - 1).toBe(1);
+    expect(email.text.split(yearly).length - 1).toBe(1);
+    expect(email.text.split(monthly).length - 1).toBe(1);
+    // Every dollar amount in the email is one of the two catalog prices.
+    const amounts = email.text.match(/\$\s?\d[\d,]*(?:\.\d+)?/g) ?? [];
+    expect(amounts.sort()).toEqual([yearly, monthly].sort());
     expect(email.text).toContain('Settings');
+  });
+
+  it('names the yearly price before the monthly one', () => {
+    expect(email.text.indexOf(`$${PLANS.garden.annualPrice}`)).toBeLessThan(
+      email.text.indexOf(`$${PLANS.garden.monthlyPrice}`)
+    );
   });
 
   it('shows the counts it read', () => {
@@ -168,26 +192,40 @@ describe('the first charge matches checkout (no stacked trials)', () => {
     expect(email.text).not.toMatch(/14 (more|free) days|another 14/i);
   });
 
-  it('day 10 sent inside the minimum lead says the charge is the day you start', () => {
+  it('day 10 sent inside the minimum lead says the charge is the day you start, with the same prices', () => {
     const late = composeTrialLifecycleEmail(ctx({ now: new Date('2026-10-14T00:00:00.000Z') }));
-    expect(late.text).toContain('the first charge is the day you start it');
+    expect(late.text).toContain(
+      'If you would like to keep Garden, it is $24.99 a year, or $2.99 a month, and the first charge is the day you start it.'
+    );
     expect(late.text).not.toContain('your first charge would be on');
+    expect(late.text.split('$24.99').length - 1).toBe(1);
+    expect(late.text.split('$2.99').length - 1).toBe(1);
   });
 
-  it('day 14 says the first charge is the day Garden starts', () => {
+  it('day 14 says the first charge is the day Garden starts, and names the same prices in the same order', () => {
     const email = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14' }));
-    expect(email.text).toContain('If you would like Garden back');
-    expect(email.text).toContain('the first charge is the day you start it');
+    expect(email.text).toContain(
+      'If you would like Garden back, it is $24.99 a year, or $2.99 a month, and the first charge is the day you start it.'
+    );
     expect(email.text).not.toContain('your first charge would be on');
+    expect(email.text.split('$24.99').length - 1).toBe(1);
+    expect(email.text.split('$2.99').length - 1).toBe(1);
   });
 
   it('says the same in Spanish', () => {
+    // Intl's Spanish currency format puts a no-break space before "US$".
+    const yearly = '24,99 US$';
+    const monthly = '2,99 US$';
     const d10 = composeTrialLifecycleEmail(ctx({ locale: 'es' }));
     expect(d10.text).toContain(
-      'Si lo empiezas antes del 13 de octubre de 2026, añades una tarjeta en ese momento y el primer cobro sería el 15 de octubre de 2026'
+      `Si quieres conservar Garden, cuesta ${yearly} al año o ${monthly} al mes. Si lo empiezas antes del 13 de octubre de 2026, añades una tarjeta en ese momento y el primer cobro sería el 15 de octubre de 2026`
     );
+    expect(d10.text.split(yearly).length - 1).toBe(1);
+    expect(d10.text.split(monthly).length - 1).toBe(1);
     const d14 = composeTrialLifecycleEmail(ctx({ locale: 'es', kind: 'trial_day14' }));
-    expect(d14.text).toContain('el primer cobro es el día en que lo empiezas');
+    expect(d14.text).toContain(
+      `Si quieres recuperar Garden, cuesta ${yearly} al año o ${monthly} al mes, y el primer cobro es el día en que lo empiezas`
+    );
   });
 });
 
@@ -230,6 +268,8 @@ describe('tone', () => {
   it.each([
     ['en', 'trial_day10'],
     ['en', 'trial_day14'],
+    ['es', 'trial_day10'],
+    ['es', 'trial_day14'],
   ] as const)('%s %s has no urgency language, discounts or exclamation marks', (locale, kind) => {
     const e = composeTrialLifecycleEmail(ctx({ locale, kind }));
     for (const re of BANNED) {

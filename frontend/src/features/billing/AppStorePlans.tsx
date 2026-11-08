@@ -9,11 +9,11 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { formatDate } from '@/i18n/format';
 import type { PlanId, SubscriptionState } from '@/services/billingService';
 import {
-  APP_STORE_PRODUCT_IDS,
   buyPlan,
   loadStoreProducts,
   openManageSubscriptions,
   restorePurchases,
+  type AppStoreCadence,
   type BuyOutcome,
   type PaidPlanId,
   type PurchaseRefusalCode,
@@ -22,8 +22,9 @@ import {
 
 /**
  * Settings → Plan inside the iPhone app when App Store purchases are on
- * (ADR 0041): the two paid tiers at the App Store's own prices, Apple's
- * purchase sheet, Restore purchases, and Apple's Manage Subscriptions sheet.
+ * (ADR 0041): the paid tiers at the App Store's own prices — Garden monthly
+ * and yearly (ADR 0042), Greenhouse monthly — Apple's purchase sheet,
+ * Restore purchases, and Apple's Manage Subscriptions sheet.
  *
  * Guideline 3.1.1 and 3.1.2: the prices shown are StoreKit's `displayPrice`
  * and nothing else (never the catalog's, never the website's); nothing here
@@ -38,6 +39,15 @@ import {
 const LIVE_STRIPE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 const RANK: Record<PlanId, number> = { seedling: 0, garden: 1, greenhouse: 2 };
 const PAID: PaidPlanId[] = ['garden', 'greenhouse'];
+/** Display order within a tier: the yearly product first, then the monthly
+ *  (ADR 0042, "Yearly first"). The App Store list has no toggle, so leading
+ *  with the yearly row is its equivalent of the website's default. */
+const CADENCES: AppStoreCadence[] = ['year', 'month'];
+
+interface Purchase {
+  plan: PaidPlanId;
+  interval: AppStoreCadence;
+}
 
 /** The tier this household already has from something other than Apple, if any. */
 function paidOutsideAppStore(sub: SubscriptionState | undefined): {
@@ -95,9 +105,9 @@ export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlan
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['subscription'] });
 
   const buy = useMutation({
-    mutationFn: (plan: PaidPlanId) => buyPlan(plan),
+    mutationFn: ({ plan, interval }: Purchase) => buyPlan(plan, interval),
     onMutate: () => setMessage(null),
-    onSuccess: (outcome: BuyOutcome, plan) => {
+    onSuccess: (outcome: BuyOutcome, { plan }) => {
       switch (outcome.kind) {
         case 'purchased':
           setMessage({ variant: 'success', text: t('appStore.purchased', { plan: name(plan) }) });
@@ -182,41 +192,60 @@ export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlan
         <span>{t('appStore.loading')}</span>
       </div>
     );
-  } else if (!products.data || PAID.every((p) => !products.data[p])) {
+  } else if (
+    !products.data ||
+    PAID.every((p) => CADENCES.every((cadence) => !products.data[cadence][p]))
+  ) {
     body = (
       <p className="mt-4 text-sm text-gray-600" data-testid="app-store-products-unavailable">
         {t('appStore.productsUnavailable')}
       </p>
     );
   } else {
-    const offered = PAID.filter((p) => RANK[p] > RANK[includedUpTo] && products.data[p]);
+    // One row per product the App Store returned, tier by tier and the
+    // yearly before the monthly, for the tiers above what the household
+    // already has. A yearly row only exists where StoreKit returned the
+    // yearly product (ADR 0042), so a store that has not been given one
+    // simply shows the monthly.
+    const loaded = products.data;
+    const offered = PAID.filter((p) => RANK[p] > RANK[includedUpTo]).flatMap((plan) =>
+      CADENCES.flatMap((interval) => {
+        const product = loaded[interval][plan];
+        return product ? [{ plan, interval, product }] : [];
+      })
+    );
     body = (
       <ul className="mt-4 space-y-3">
-        {offered.map((plan) => {
-          const product = products.data[plan]!;
-          return (
-            <li
-              key={plan}
-              className="flex flex-col gap-2 rounded-lg border border-primary-100 p-4 sm:flex-row sm:items-center sm:justify-between"
-              data-testid={`app-store-plan-${plan}`}
-              data-product-id={APP_STORE_PRODUCT_IDS[plan]}
+        {offered.map(({ plan, interval, product }) => (
+          <li
+            key={`${plan}-${interval}`}
+            className="flex flex-col gap-2 rounded-lg border border-primary-100 p-4 sm:flex-row sm:items-center sm:justify-between"
+            data-testid={
+              interval === 'year' ? `app-store-plan-${plan}-yearly` : `app-store-plan-${plan}`
+            }
+            data-product-id={product.id}
+          >
+            <div>
+              <p className="font-serif text-lg text-ink">{product.displayName || name(plan)}</p>
+              <p className="text-sm text-gray-700">
+                {t(interval === 'year' ? 'appStore.perYear' : 'appStore.perMonth', {
+                  price: product.displayPrice,
+                })}
+              </p>
+            </div>
+            <Button
+              onClick={() => buy.mutate({ plan, interval })}
+              isLoading={
+                buy.isPending &&
+                buy.variables?.plan === plan &&
+                buy.variables?.interval === interval
+              }
+              disabled={!isAdmin || busy}
             >
-              <div>
-                <p className="font-serif text-lg text-ink">{product.displayName || name(plan)}</p>
-                <p className="text-sm text-gray-700">
-                  {t('appStore.perMonth', { price: product.displayPrice })}
-                </p>
-              </div>
-              <Button
-                onClick={() => buy.mutate(plan)}
-                isLoading={buy.isPending && buy.variables === plan}
-                disabled={!isAdmin || busy}
-              >
-                {t('appStore.subscribe', { plan: product.displayName || name(plan) })}
-              </Button>
-            </li>
-          );
-        })}
+              {t('appStore.subscribe', { plan: product.displayName || name(plan) })}
+            </Button>
+          </li>
+        ))}
       </ul>
     );
   }
