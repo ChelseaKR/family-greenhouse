@@ -44,45 +44,98 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
   a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real
   checkouts choosing yearly reverts the default.
+
+### Changed
+
+- **Production opens Apple In-App Purchase.**
+  `infrastructure/environments/production/terraform.tfvars` sets
+  `app_store_billing_enabled = "1"`, the way staging does, so at the next
+  production tag the billing Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and
+  the three `/billing/app-store/*` routes stop answering 404. App Review buys
+  with a Sandbox Apple Account against production, and that purchase was
+  refused without it. Production keeps accepting Sandbox transactions (no
+  `APP_STORE_ENVIRONMENTS` is set). No secret, workflow or code change is
+  involved; Apple's signed data is verified against the pinned Apple Root
+  CA - G3 (ADR 0041). Setting it back to `"0"` and shipping a tag closes the
+  routes again, and a recorded subscription keeps its entitlement. A new
+  wiring test pins the switch, its path to the billing Lambda and the Sandbox
+  default.
+
+## [0.49.0] - 2026-11-08
+
+**Eight new watering guides, answers up front, and a smoother first plant.**
+Care guides now open their watering section with the short answer, eight more
+plants have a cited watering guide, eleven others have new care guides, and a
+visitor who arrives from a guide is asked when the plant was last watered. The
+website's analytics now starts from the page head, so short visits to care and
+pet-safety pages are counted. Privacy and Terms text did not change.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.48.0 in
+  one file: `modules/frontend/functions/spa-router.js` matches `/blog/`,
+  `/care/` and `/help/` pages by prefix (#1105). Expect an in-place update of
+  the `spa-router` CloudFront function and the usual Lambda updates, with
+  nothing added or destroyed. No tfvars, price id or payments setting changed.
+  No stored data is migrated; `backfill:photo-metadata` (#852) is an operator
+  script and does not run on deploy.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.49.0, build 4900.
+
+### Added
+
+- **Care guides for air plant, rosemary, ponytail palm, areca palm and
+  schefflera (#1102).** Each answers "how often to water" first and cites the
+  Clemson, UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension
+  pages it was written from, read on 2026-11-05. Only two state a day count,
+  because only their sources give one: the air plant (about once a week, every
+  two weeks in cool, dim months) and the holiday rosemary tree (about once a
+  week, when the soil is dry). The rosemary guide links the six holiday guides.
+- **A pet-safety page for rosemary (#1102),** citing the ASPCA's "Rosemary"
+  listing (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant
+  has no ASPCA listing, so its pet line reads "Unknown".
+- **Sign-up from the rosemary guide keeps the plant (#1102).** A visitor who
+  signs up from `/care/rosemary` sees rosemary first in the first run, with a
+  7-day reminder (the low end of its cited interval). It is not one of the ten
+  tiles, so the grid is unchanged for everyone else.
+- **The home page links the three list-style blog guides (#1110)**, in English
+  and Spanish, with a test that every link resolves to a published post.
 - **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
-  kentia palm, paperwhite, bird's nest fern and purple shamrock.** Each
+  kentia palm, paperwhite, bird's nest fern and purple shamrock (#1112).** Each
   answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,
   Iowa State, Wisconsin and RHS pages it was written from, read on
   2026-11-07. The only interval any of those pages gives is NC State's "change
   the water weekly" for lucky bamboo grown in water, so that is the only one
   stated; the others give the source's soil rule instead.
 - **Pet-safety pages for lucky bamboo, Venus flytrap, majesty palm, kentia
-  palm, paperwhite and purple shamrock**, each citing an ASPCA listing that
-  names the plant ("Ribbon Plant" for Dracaena, "Venus Fly Trap", "Majesty
+  palm, paperwhite and purple shamrock (#1112)**, each citing an ASPCA listing
+  that names the plant ("Ribbon Plant" for Dracaena, "Venus Fly Trap", "Majesty
   Palm", "Kentia Palm", "Paper White" and "Shamrock Plant" for Oxalis). The
   jasmine guide reads the existing Jasminum row. The bird's nest fern's pet
   line reads "Unknown": the ASPCA has no listing for Asplenium nidus, and its
   "Golden Bird's Nest" is a snake plant.
 - **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
-  polka dot plant and tradescantia.** Each answers "how often to water" first
-  and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin extension
-  pages it was written from, read on 2026-11-05. None of those pages gives a
-  day count, so no guide states one: each gives the source's soil rule
+  polka dot plant and tradescantia (#1103).** Each answers "how often to water"
+  first and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin
+  extension pages it was written from, read on 2026-11-05. None of those pages
+  gives a day count, so no guide states one: each gives the source's soil rule
   instead. The satin pothos guide says plainly that it is a Scindapsus, not a
   true pothos, and is watered differently.
 - **Pet-safety pages for satin pothos, dragon tree, arrowhead plant, weeping
-  fig and polka dot plant**, each citing that plant's own ASPCA listing
+  fig and polka dot plant (#1103)**, each citing that plant's own ASPCA listing
   ("Satin Pothos", "Madagascar Dragon Tree", "Arrow-Head Vine", the
   genus-level "Weeping Fig" and "Polka Dot Plant"). The tradescantia's pet
   line reads "Unknown": the ASPCA lists the inch plant only as Tradescantia
   fluminensis, a different species. The pet checker answers "scindapsus",
   "nephthytis" and "ficus benjamina" with the new rows, and still answers no
   tradescantia name, including "spiderwort", with another plant's verdict.
-- **Two answer-first blog posts on overwatering.** "Do yellow leaves mean
-  overwatering?" and "Can you overwater a plant?" answer the two generic
+- **Two answer-first blog posts on overwatering (#1104).** "Do yellow leaves
+  mean overwatering?" and "Can you overwater a plant?" answer the two generic
   question shapes Search Console showed with no page of their own (24
   phrasings, 73 impressions from August to November). Each cites the Clemson
-  and Iowa State extension pages it was checked against (the first also
-  cites Illinois Extension), and links
-  the overwatering post and the relevant care guides. No care guide title,
-  H1 or meta changed. No `infrastructure/` change: the page router
-  already matches `/blog/` pages by prefix.
-- **Cited detail on seven short pet-safety pages.** Rubber plant,
+  and Iowa State extension pages it was checked against (the first also cites
+  Illinois Extension), and links the overwatering post and the relevant care
+  guides. No care guide title, H1 or meta changed. No `infrastructure/` change:
+  the page router already matches `/blog/` pages by prefix.
+- **Cited detail on seven short pet-safety pages (#1101).** Rubber plant,
   dieffenbachia, orchid, alocasia, begonia, cast iron plant and haworthia
   were about 350 words and not indexed (Search Console, 2026-11-05). Each now
   quotes its ASPCA listing's family and, where they are names, other names;
@@ -91,7 +144,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and similar and related plants with their own verdicts. Read off the live
   pages on 2026-11-05 and pinned in petToxicity.test.ts. No verdict, title,
   H1 or meta description changes.
-- **"When did you last water it?" in the first run.** Tapping a common
+- **"When did you last water it?" in the first run (#1099).** Tapping a common
   houseplant now asks one question before it is saved: "In the last few
   days" keeps the first reminder one interval out, "A week or more ago"
   checks the soil in 2 days, and "Not sure" checks it tomorrow and says why.
@@ -100,36 +153,60 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   subtitle, and the header's "Try the app" link on a care or pet-safe page
   carries the plant the way the page's own links do.
 - **An operator backfill that strips location metadata from photos already
-  stored — built, not run.** `backfill:photo-metadata` (backend) reads every
-  version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
+  stored — built, not run (#852).** `backfill:photo-metadata` (backend) reads
+  every version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
   PNG-text place names, IPTC place fields and MPF trailing images, and with
-  `--confirm` rewrites each affected photo in place under the same key. The image data is copied, not re-encoded, and a JPEG keeps its
-  orientation. The write is conditional on the ETag it read, so a photo
-  deleted or replaced mid-run is never brought back. `--delete-old-versions`
-  also removes the versioned originals. It is a dry run by default, and it
-  prints counts and short refs, never keys or coordinates. A read-only census
-  on 2026-09-18 found no location metadata in any stored photo or old
-  version, so there's nothing for it to do today. It's for photos
-  stored between now and the release that carries #849. Runbook: "Strip
-  location metadata from stored photos".
+  `--confirm` rewrites each affected photo in place under the same key. The
+  image data is copied, not re-encoded, and a JPEG keeps its orientation. The
+  write is conditional on the ETag it read, so a photo deleted or replaced
+  mid-run is never brought back. `--delete-old-versions` also removes the
+  versioned originals. It is a dry run by default, and it prints counts and
+  short refs, never keys or coordinates. A read-only census on 2026-09-18 found
+  no location metadata in any stored photo or old version, so there's nothing
+  for it to do today. It's for photos stored between now and the release that
+  carries #849. Runbook: "Strip location metadata from stored photos".
 
 ### Changed
 
-- **Search titles for seven care guides now show the watering answer.** Search
-  Console's 28 days to 2026-11-06 had monstera, English ivy, heartleaf
+- **Search titles for seven care guides now show the watering answer (#1111).**
+  Search Console's 28 days to 2026-11-06 had monstera, English ivy, heartleaf
   philodendron, money tree, nerve plant, rubber plant and bird of paradise at
   positions 3 to 16 with 0 or 1 clicks. Six titles now open with "How often to
   water" and the guide's own rule, and bird of paradise leads with light and
   bloom age. Every phrase comes from the guide and its cited sources.
+- **Every care guide opens its watering section with the short answer
+  (#1113).** The guide's own FAQ answer, word for word, is now the first
+  paragraph under the watering heading. No guide text, title, H1 or meta
+  changed.
+- **Website analytics starts from the page head (#1115).** Google Analytics
+  now loads and sends a prerendered page's view from a small entry ahead of the
+  app bundle, with the same opt-outs, consent defaults and configuration as
+  before. Short visits that left before the app finished loading are now
+  counted, so sessions on care and pet-safety pages step up on release day
+  without any change in real visitors. The header's font (Instrument Sans) is
+  also preloaded so the header no longer shifts when it arrives.
+- **Help no longer sends app readers to the website for billing (#1076).** It
+  says the app shows the household's plan and what it includes, and that plans
+  are not bought or changed in the app.
+- **The pet checker no longer answers "air plant" with the spider plant's
+  verdict (#1102).** Its loose word match found "air" inside the spider plant's
+  "airplane plant" name and returned non-toxic for a different plant. Each
+  word of a multi-word search must now match a whole word of a plant's name.
+- **Android accessibility (#1097).** TalkBack reads form-sheet errors, the
+  sign-out dialog falls back to the item's title, intro page dots are 48 dp
+  touch targets, and the reminder channel is named in the device language.
+- **Dependencies.** AWS SDK 3.1147.0 to 3.1156.0 (#1069), Capacitor core 8.5.3,
+  push-notifications 8.1.3, camera 8.2.6 (#1074, #1073, #1075), eslint 10.13.0
+  (#1072), and the Android Gradle wrapper 8.14.3 to 9.8.0 (#1049).
 
 ### Fixed
 
-- **"Rosary vine" no longer names string of pearls.** Rosary vine is string
-  of hearts (Ceropegia woodii), per Wisconsin Horticulture, but the string of
-  pearls guide listed it as an alias, on the page and in its structured data.
-  The name now belongs to no guide and no pet-safety row, and a test keeps it
-  that way until a string-of-hearts guide exists.
-- **GA4 `first_plant_added` counts accounts, not screens.** It was sent
+- **"Rosary vine" no longer names string of pearls (#1114).** Rosary vine is
+  string of hearts (Ceropegia woodii), per Wisconsin Horticulture, but the
+  string of pearls guide listed it as an alias, on the page and in its
+  structured data. The name now belongs to no guide and no pet-safety row, and
+  a test keeps it that way until a string-of-hearts guide exists.
+- **GA4 `first_plant_added` counts accounts, not screens (#1106).** It was sent
   whenever the first run or the empty dashboard saved a plant, so a second
   household, a repeated first run or a second device counted again. The
   server now records an account's first plant once (a timestamp row in the
@@ -138,14 +215,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   event only then. An account whose household already had plants is not
   counted. The event's parameters are unchanged (`method` and the scrubbed
   page address), so the Privacy text needs no change.
-- **Room for more care guides at the edge.** The CloudFront function that
-  routes page requests listed every blog post, care guide and help topic, and
-  had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are now
-  matched by their `/blog/`, `/care/` and `/help/` prefix, as the pet-safety
-  pages already were, so the function is 8,245 bytes and a new guide adds
-  nothing to it. Every URL gets the same page or the same 404 as before; a
-  mis-capitalised guide URL now gets the prerendered page instead of the app
-  shell. Ships with the next Terraform apply.
+- **Room for more care guides at the edge (#1105).** The CloudFront function
+  that routes page requests listed every blog post, care guide and help topic,
+  and had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are
+  now matched by their `/blog/`, `/care/` and `/help/` prefix, as the
+  pet-safety pages already were, so the function is 8,245 bytes and a new guide
+  adds nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalized guide URL now gets the prerendered page instead of the app
+  shell. Ships with this release's Terraform apply.
+- **A real `/llms.txt` (#1108).** The path fell through to the 404 page as
+  `text/html`; it now serves the file as `text/plain; charset=utf-8`.
 
 ## [0.48.0] - 2026-11-05
 
@@ -192,27 +271,9 @@ this release's.
   own ASPCA listing. The amaryllis row cites "Barbados Lily" (Hippeastrum),
   the genus sold for the holidays, and not ASPCA's "Amaryllis" listing, which
   names a different genus.
-- **Care guides for air plant, rosemary, ponytail palm, areca palm and
-  schefflera.** Each answers "how often to water" first and cites the Clemson,
-  UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension pages it was
-  written from, read on 2026-11-05. Only two state a day count, because only
-  their sources give one: the air plant (about once a week, every two weeks in
-  cool, dim months) and the holiday rosemary tree (about once a week, when the
-  soil is dry). The rosemary guide links the six holiday guides.
-- **A pet-safety page for rosemary**, citing the ASPCA's "Rosemary" listing
-  (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant has no
-  ASPCA listing, so its pet line reads "Unknown".
-- **Sign-up from the rosemary guide keeps the plant.** A visitor who signs up
-  from `/care/rosemary` sees rosemary first in the first run, with a 7-day
-  reminder (the low end of its cited interval). It is not one of the ten
-  tiles, so the grid is unchanged for everyone else.
 
 ### Changed
 
-- **The pet checker no longer answers "air plant" with the spider plant's
-  verdict.** Its loose word match found "air" inside the spider plant's
-  "airplane plant" name and returned non-toxic for a different plant. Each
-  word of a multi-word search must now match a whole word of a plant's name.
 - **The six holiday care guides now link to each other (#1091).** The
   poinsettia, Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and
   kalanchoe guides each name the other five in a line under "Keeping it alive
