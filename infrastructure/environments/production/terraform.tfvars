@@ -58,8 +58,8 @@ identify_metering_enabled = "1"
 # Setting any per-tier leaf-health value adds one household read per check
 # (the same read identify already makes). A household already past a newly
 # lowered cap is blocked until the month rolls over, so lower caps on the 1st.
-leaf_health_monthly_cap            = ""
-leaf_health_monthly_cap_seedling   = "20"
+leaf_health_monthly_cap          = ""
+leaf_health_monthly_cap_seedling = "20"
 # Garden: 100, not the flat 200 (ADR 0042). At $2.99 a month / $24.99 a year
 # with identification out of the plan, the tier's AI ceiling is leaf-health
 # plus chat; at 200 checks that ceiling ($1.73) was 98% of what a yearly
@@ -160,8 +160,8 @@ stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
 #   3. Add both ids to stripe_price_ids_attested below, with comments.
 #   4. Customer Portal: replace the $4.99 Garden monthly price with the $2.99
 #      monthly and the $24.99 yearly in the list a customer may switch to.
-stripe_price_id_garden_299          = ""
-stripe_price_id_garden_annual_2499  = ""
+stripe_price_id_garden_299         = ""
+stripe_price_id_garden_annual_2499 = ""
 # Identification top-up pack (ADR 0019): a ONE-TIME price for "20
 # identifications, $1.99", created in Stripe LIVE mode. Blank = not for sale;
 # POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit
