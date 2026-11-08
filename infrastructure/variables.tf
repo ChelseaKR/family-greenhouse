@@ -564,13 +564,25 @@ variable "stripe_webhook_secret" {
 }
 
 variable "stripe_price_id_garden" {
-  description = "Stripe price ID for the Garden tier MONTHLY ($4.99/mo). Required for /billing/checkout monthly."
+  description = "LEGACY (ADR 0042): the Stripe price ID Garden MONTHLY was sold at until 2026-11-07 ($4.99/mo). Not sold any more; kept so households that bought at $4.99 keep renewing and the webhook still maps the price to Garden. Never archive the price while a subscription is on it."
   type        = string
   default     = ""
 }
 
 variable "stripe_price_id_garden_annual" {
-  description = "Stripe price ID for the Garden tier ANNUAL ($39.99/yr). Required for /billing/checkout with interval=year."
+  description = "LEGACY (ADR 0042): the Stripe price ID Garden ANNUAL was sold at until 2026-09-02 ($39.99/yr, withdrawn by ADR 0012). Not sold any more; kept so households still on it keep renewing and the webhook still maps the price to Garden."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_299" {
+  description = "Stripe price ID for the Garden tier MONTHLY at $2.99/mo (ADR 0042, the current price). Set together with stripe_price_id_garden_annual_2499: the commercial_gate_guard precondition refuses a plan with exactly one of the pair set, and GET /billing/plans publishes Garden as unavailable while this is blank. Create the price under the existing Garden product in Stripe; the amount is in the variable name because a Stripe price's amount can never change."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_annual_2499" {
+  description = "Stripe price ID for the Garden tier ANNUAL at $24.99/yr (ADR 0042, the current price). Set together with stripe_price_id_garden_299; the same precondition refuses a plan with exactly one of the pair set, and GET /billing/plans publishes Garden yearly as unavailable while this is blank."
   type        = string
   default     = ""
 }

@@ -80,7 +80,7 @@ import { isPriceReconciliationError } from '../../../src/services/stripePrices.j
 /** What Stripe reports for a correctly configured gift month of Garden. */
 const GARDEN_GIFT_PRICE = {
   id: 'price_gift_garden',
-  unit_amount: 499,
+  unit_amount: 299,
   currency: 'usd',
   active: true,
   recurring: null,

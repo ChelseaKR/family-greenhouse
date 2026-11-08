@@ -38,6 +38,34 @@ export type PlanId = 'seedling' | 'garden' | 'greenhouse';
 export type BillingInterval = 'month' | 'year' | 'lifetime';
 
 /**
+ * A price a tier WAS sold at and is not sold at any more, which households
+ * that bought at it still renew on (ADR 0042).
+ *
+ * Stripe prices are immutable and a running subscription holds its own price
+ * object, so repricing a tier means creating a NEW Stripe price and leaving
+ * the old one live for the subscriptions already on it — the Terms promise
+ * "the price it was started at". The old price id therefore has to keep
+ * resolving to its tier in the webhook (`planIdFromPriceId`) and keep being
+ * reconciled at its OWN amount (`stripePrices.expectedPrices`), while never
+ * being offered: checkout reads `stripePriceEnv` / `annualStripePriceEnv`,
+ * which name the current price, and nothing reads a legacy env to sell.
+ *
+ * Distinct from `withdrawnIntervals`: a withdrawn cadence is one the tier no
+ * longer sells at all (its price is unchanged, just not for sale); a legacy
+ * price is one the tier sells again, at a different amount.
+ */
+export interface LegacyPrice {
+  /** Env var holding the old Stripe price id. Blank means no household in
+   *  this environment can be on it. */
+  env: string;
+  /** What that price charges, in dollars; the reconciliation sweep checks it. */
+  dollars: number;
+  /** The cadence that price recurs at. Lifetime prices are never legacy —
+   *  they are withdrawn instead, because nothing renews on them. */
+  cadence: 'month' | 'year';
+}
+
+/**
  * A plan cap. A number is the ceiling; `null` is UNLIMITED — there is no
  * ceiling, so there is nothing to compare against.
  *
@@ -183,8 +211,19 @@ export interface Plan {
    * purchase is fully consumed after roughly 41 months. Monthly remains.
    * ADR 0014 records why the re-cut is the precondition for putting annual
    * back on sale, and leaves that as an open owner decision.
+   *
+   * Garden annual came BACK on 2026-11-07 (ADR 0042), at $24.99 rather than
+   * $39.99, once identification left the plan: the AI-cost ceiling that sank
+   * the old annual was mostly identification credits, and without them the
+   * tier's ceiling is leaf-health plus chat.
    */
   withdrawnIntervals?: readonly BillingInterval[];
+  /**
+   * Prices this tier used to be sold at (ADR 0042). See `LegacyPrice`. The
+   * webhook maps them back to the tier; the reconciliation sweep checks them
+   * at their own amount; checkout never sells them.
+   */
+  legacyPrices?: readonly LegacyPrice[];
 }
 
 /**
@@ -233,10 +272,17 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'garden',
     name: 'Garden',
     description: 'A household that has to coordinate',
-    monthlyPrice: 4.99,
-    // ~33% off 12× monthly ($59.88) — "$3.33/mo billed yearly". Sits in the
-    // competitive annual band ($30–48) the market actually pays at.
-    annualPrice: 39.99,
+    // $4.99 until 2026-11-07. Repriced to $2.99 a month / $24.99 a year when
+    // plant identification left the plan (ADR 0042): identification was 30 ×
+    // $0.0585 = $1.76 of the tier's $3.49 monthly AI-cost ceiling, and with it
+    // sold only by the pack (ADR 0019) the ceiling is leaf-health plus chat.
+    // Households that bought at $4.99 keep renewing at $4.99 on the old Stripe
+    // price (`legacyPrices`, below); the Terms promise exactly that.
+    monthlyPrice: 2.99,
+    // ~30% off 12× monthly ($35.88) — "$2.08/mo billed yearly". The old
+    // $39.99 annual was withdrawn on 2026-09-02 (ADR 0012) because the tier's
+    // identification credits alone cost more than it earned per month.
+    annualPrice: 24.99,
     // One-time payment that grants Garden permanently. Stored as planId='garden'
     // with no subscription — entitlement resolves off planId alone.
     lifetimePrice: 149,
@@ -265,12 +311,23 @@ export const PLANS: Record<PlanId, Plan> = {
       chat: true,
       apiKeys: false,
     },
-    stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN',
-    annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL',
+    // The CURRENT prices, created in Stripe on the owner's side for ADR 0042.
+    // The amount is in the name because a Stripe price's amount can never
+    // change, so the slot and the figure are bound for good; a third price
+    // one day gets a third slot, and these two join `legacyPrices`.
+    stripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_299',
+    annualStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_ANNUAL_2499',
     lifetimeStripePriceEnv: 'STRIPE_PRICE_ID_GARDEN_LIFETIME',
-    // Annual ($3.33/mo) and lifetime ($149 once) both earn less per month
-    // than the tier's $3.48 AI-cost ceiling. Existing subscribers keep them.
-    withdrawnIntervals: ['year', 'lifetime'],
+    // Lifetime ($149 once) is still withdrawn: it has no lever to re-price
+    // against its own cost (ADR 0012). Annual is sold again (ADR 0042).
+    withdrawnIntervals: ['lifetime'],
+    // The $4.99 monthly and $39.99 annual prices Garden was sold at before
+    // 2026-11-07. Their env vars keep the names they always had, so no tfvars
+    // value has to move for a renewal to keep resolving to Garden.
+    legacyPrices: [
+      { env: 'STRIPE_PRICE_ID_GARDEN', dollars: 4.99, cadence: 'month' },
+      { env: 'STRIPE_PRICE_ID_GARDEN_ANNUAL', dollars: 39.99, cadence: 'year' },
+    ],
   },
   greenhouse: {
     id: 'greenhouse',
@@ -945,6 +1002,48 @@ function priceAt(plan: Plan, interval: BillingInterval): number | undefined {
 }
 
 /**
+ * The env var naming the CURRENT Stripe price for a tier at one cadence, or
+ * undefined when the tier has no such cadence. Checkout, the catalog
+ * projection and the readiness check all read this, so a repriced slot
+ * (ADR 0042) is renamed in exactly one place: the plan row.
+ */
+export function priceEnvFor(plan: Plan, interval: BillingInterval): string | undefined {
+  if (interval === 'lifetime') return plan.lifetimeStripePriceEnv;
+  if (interval === 'year') return plan.annualStripePriceEnv;
+  return plan.stripePriceEnv;
+}
+
+/**
+ * True when the current price for this cadence has a non-blank id in `env`.
+ *
+ * The readiness half of ADR 0042's repricing: a price nobody has pasted an id
+ * for is not for sale, and must publish as "not available" rather than as an
+ * amount checkout would then refuse with a 502. Whitespace is blank — a
+ * tfvars value of " " is a mistake, not a price.
+ */
+export function priceConfigured(
+  plan: Plan,
+  interval: BillingInterval,
+  env: NodeJS.ProcessEnv
+): boolean {
+  const name = priceEnvFor(plan, interval);
+  if (!name) return false;
+  const raw = env[name];
+  return typeof raw === 'string' && raw.trim() !== '';
+}
+
+/**
+ * Every env var that may hold one of this tier's Stripe price ids — the
+ * current cadences and the legacy prices — so the webhook's reverse lookup
+ * and the reconciliation sweep read one list rather than two.
+ */
+export function allPriceEnvs(plan: Plan): string[] {
+  const envs = [plan.stripePriceEnv, plan.annualStripePriceEnv, plan.lifetimeStripePriceEnv];
+  for (const legacy of plan.legacyPrices ?? []) envs.push(legacy.env);
+  return envs.filter((e): e is string => typeof e === 'string' && e !== '');
+}
+
+/**
  * True when a household may START this cadence today: the tier has a price
  * at it AND that cadence has not been withdrawn. This is the single authority
  * checkout consults, and `planSummary` publishes the same answer as a null
@@ -985,7 +1084,9 @@ export interface PlanSummary {
    *  predate `features` read the toolkit by this name (ADR 0018's
    *  auto-handoff card). Same value as `features.householdToolkit`. */
   householdToolkit: boolean;
-  monthlyPrice?: number;
+  /** `null` (with `env` given) when the tier's monthly price id is blank in
+   *  that environment: the tier is not for sale at that cadence there. */
+  monthlyPrice?: number | null;
   annualPrice?: number | null;
   lifetimePrice?: number | null;
 }
@@ -997,8 +1098,20 @@ export interface PlanSummary {
  * while internal tests can still exercise the retained historical billing
  * implementation without publishing amounts. Limits and features are not
  * prices and are always published.
+ *
+ * `env`, when given, is the second gate (ADR 0042): a cadence whose current
+ * Stripe price id is blank in that environment publishes `null` — the same
+ * "not sold at this cadence" signal a withdrawn cadence sends, which the
+ * client already renders as "not available". Without it, a repriced tier
+ * whose new ids had not been pasted yet would advertise an amount that
+ * checkout then refuses (`Missing STRIPE_PRICE_ID_… for plan garden`). The
+ * handler passes `process.env`; tests of the catalog itself pass nothing.
  */
-export function planSummary(plan: Plan, includePrices = false): PlanSummary {
+export function planSummary(
+  plan: Plan,
+  includePrices = false,
+  env?: NodeJS.ProcessEnv
+): PlanSummary {
   const summary: PlanSummary = {
     id: plan.id,
     name: plan.name,
@@ -1011,17 +1124,22 @@ export function planSummary(plan: Plan, includePrices = false): PlanSummary {
   };
 
   if (includePrices) {
-    summary.monthlyPrice = plan.monthlyPrice;
+    // A cadence is published only when it is offered AND, if the caller gave
+    // an environment to check against, its price id is configured there.
+    // The free tier owns no price env, so with `env` its monthly price is
+    // published from the catalog alone: $0 is a real amount, not a sale.
+    const sellable = (interval: BillingInterval): boolean =>
+      isIntervalOffered(plan, interval) &&
+      (env === undefined || !priceEnvFor(plan, interval) || priceConfigured(plan, interval, env));
+    summary.monthlyPrice = sellable('month') ? plan.monthlyPrice : null;
     // null (not undefined) survives JSON serialization as an explicit
     // "no annual option" signal when payment activity is enabled. A WITHDRAWN
     // cadence publishes as null too — the same "not sold at this cadence"
     // signal the client already renders as "not available" — so a tier keeps
     // its annual/lifetime price for the households already on it without the
     // page offering it to new ones.
-    summary.annualPrice = isIntervalOffered(plan, 'year') ? (plan.annualPrice ?? null) : null;
-    summary.lifetimePrice = isIntervalOffered(plan, 'lifetime')
-      ? (plan.lifetimePrice ?? null)
-      : null;
+    summary.annualPrice = sellable('year') ? (plan.annualPrice ?? null) : null;
+    summary.lifetimePrice = sellable('lifetime') ? (plan.lifetimePrice ?? null) : null;
   }
 
   return summary;

@@ -132,7 +132,7 @@ push paragraph is true of build 4001 onward only (made with
 > • Plant profiles with room, photos, and your own notes.
 > • Watering, feeding, repotting, and custom tasks on the schedules you set.
 > • A photo timeline so you can look back at how a plant has changed.
-> • Identify a plant from a photo (one identification a month on the free plan, more on paid plans), and run a leaf health check when something looks off.
+> • Identify a plant from a photo, and run a leaf health check when something looks off.
 > • Subscribe to upcoming care from your own calendar app.
 >
 > REMINDERS
@@ -170,16 +170,26 @@ Actual current subscription pricing (`backend/src/models/plans.ts`, the
 source of truth — verify there before a submission if pricing may have
 changed since this was written):
 
-| Plan       | Monthly | Annual                                 | Lifetime                                   |
-| ---------- | ------- | -------------------------------------- | ------------------------------------------ |
-| Seedling   | Free    | —                                      | —                                          |
-| Garden     | $4.99   | ~~$39.99/yr~~ withdrawn from new sales | ~~$149 one-time~~ withdrawn from new sales |
-| Greenhouse | $9.99   | ~~$79.99/yr~~ withdrawn from new sales | —                                          |
+| Plan       | Monthly | Annual                                                                          | Lifetime                                   |
+| ---------- | ------- | ------------------------------------------------------------------------------- | ------------------------------------------ |
+| Seedling   | Free    | —                                                                               | —                                          |
+| Garden     | $2.99   | $24.99/yr (ADR 0042; the withdrawn $39.99/yr still renews for households on it) | ~~$149 one-time~~ withdrawn from new sales |
+| Greenhouse | $9.99   | ~~$79.99/yr~~ withdrawn from new sales                                          | —                                          |
+
+Garden was $4.99 a month until 2026-11-07 (ADR 0042); households that bought
+at $4.99 keep renewing at it. Plant identification is not included in Garden
+and is sold on the website as a 20-identification pack (ADR 0019); the App
+Store listing does not mention the pack, because it is not sold in the app
+(Guideline 3.1.1). In App Store Connect the Garden monthly product takes the
+$2.99 USD price point and a new `net.familygreenhouse.app.garden.yearly`
+product at the $24.99 USD price point sits at the same level (ADR 0042).
 
 Annual and lifetime cadences on Garden, and annual on Greenhouse, were
 withdrawn from new sales 2026-09-02 (ADR 0012 — the per-household AI-cost
-ceiling exceeds what those cadences earn per month). Existing subscribers on
-them keep renewing; only monthly is currently offered to a new household.
+ceiling exceeds what those cadences earn per month). Garden annual came back
+at $24.99 on 2026-11-07 once identification left the plan (ADR 0042); the
+Garden lifetime purchase and Greenhouse annual stay withdrawn, and existing
+subscribers on them keep renewing.
 None of this is sold in the app: `BillingSettings.tsx` gates on
 `isNativeApp()` and shows a neutral "Plan changes aren't available in the
 app," with no link, and in the app `/pricing` and `/gift` open Settings →

@@ -108,13 +108,25 @@ variable "stripe_webhook_secret" {
 }
 
 variable "stripe_price_id_garden" {
-  description = "Stripe price ID for the Garden tier MONTHLY ($4.99/mo). Required for /billing/checkout monthly."
+  description = "LEGACY (ADR 0042): Garden MONTHLY at $4.99/mo, sold until 2026-11-07. Renewals only; never sold again."
   type        = string
   default     = ""
 }
 
 variable "stripe_price_id_garden_annual" {
-  description = "Stripe price ID for the Garden tier ANNUAL ($39.99/yr). Required for /billing/checkout with interval=year."
+  description = "LEGACY (ADR 0042): Garden ANNUAL at $39.99/yr, withdrawn 2026-09-02 (ADR 0012). Renewals only; never sold again."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_299" {
+  description = "Stripe price ID for the Garden tier MONTHLY at $2.99/mo (ADR 0042, current). Blank = Garden monthly not for sale in this environment."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_annual_2499" {
+  description = "Stripe price ID for the Garden tier ANNUAL at $24.99/yr (ADR 0042, current). Blank = Garden yearly not for sale in this environment."
   type        = string
   default     = ""
 }

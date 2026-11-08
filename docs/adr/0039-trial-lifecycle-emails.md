@@ -62,8 +62,10 @@ saying plainly that nothing was deleted.
    loaded. None of them prints a zero as a result.
 
 7. **Not marketing pressure.** No discount, no code, no countdown beyond the plain end date, no
-   exclamation marks. The one price named is the catalog's monthly Garden price, once. A test pins
-   the banned phrases.
+   exclamation marks. The prices named are the catalog's Garden prices, the yearly first and then
+   the monthly, each once (amended 2026-11-08 with ADR 0042's "Yearly first"; until then the one
+   price named was the monthly, once). When the catalog has no yearly Garden price on sale, the
+   monthly alone is named, once. A test pins the banned phrases.
 
 8. **The existing mail rules apply.**
    - _Consent._ These are lifecycle mail, not transactional like ADR 0023's, so they honor
