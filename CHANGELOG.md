@@ -103,6 +103,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   including during the plant-tag outage fixed in #931. It now says the log is
   written by hand and has no entries yet.
 
+- **The plant tag outage is posted on the status page.** All six plant tag
+  routes returned a server error from September 4 to October 5, 2026, until
+  #931 reached production in 0.39.0. The entry is in English and Spanish. Incident
+  dates no longer print a day early in United States time zones.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
