@@ -18,6 +18,9 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **Garden goes on sale at $2.99 a month and $24.99 a year at the next
+  production tag (ADR 0042).** Production now names both live Stripe prices and
+  attests them; existing Garden prices are untouched.
 - **Garden is $2.99 a month or $24.99 a year, and plant identification is
   sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
   with 30 identifications. Garden annual returns at $24.99. Garden bundles no
@@ -60,6 +63,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   routes again, and a recorded subscription keeps its entitlement. A new
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
+
+- **A production release needs one deploy approval, not three.** The reviewer on
+  the `production` environment now approves once, at the `terraform` job, and that
+  approval covers Terraform, the backend deploy and the frontend deploy. Rejecting
+  it stops all three. Re-running a failed deploy job no longer asks again. The
+  `production` deployment record now has one row per release, which turns green
+  when Terraform finishes; the staleness check still takes the live commit from
+  the service worker, so a failed backend or frontend deploy is reported as
+  half-applied, and it now dates a build from when its row succeeded rather than
+  from when approval was requested. This takes effect from the first tag cut after
+  it merges, because a run uses the workflow at its tagged commit.
 
 ### Fixed
 
