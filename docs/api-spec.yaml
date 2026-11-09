@@ -3356,8 +3356,9 @@ paths:
             `credits` (IdentifyCreditBalance). Both are omitted when credits were not consulted.
         '402':
           description: >-
-            Monthly allowance exhausted and no top-up credit left. `details` carries
-            `code: IDENTIFY_BUDGET_EXHAUSTED`, `topUpAvailable` (true only when the caller has a household,
+            Monthly allowance exhausted, or none bundled, and no top-up credit left. `details` carries
+            `code: IDENTIFY_BUDGET_EXHAUSTED`, `allowance` (the metered monthly allowance; 0 is a plan that
+            bundles none and has nothing to reset), `planName`, `topUpAvailable` (true only when the caller has a household,
             payments are on, and a top-up price is configured), `credits` (IdentifyCreditBalance with a
             real 0, or null when credits were not consulted), and `topUp` ({ credits, priceUsd } or null).
         '502': { description: Plant.id upstream failed }
@@ -3867,6 +3868,17 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/IdentifyCreditBalance'
+        identifyAllowance:
+          type: object
+          additionalProperties: false
+          required: [monthly, planName]
+          description: >-
+            The monthly identification allowance the household spends against (metered, so a no-card
+            trial reads Seedling's). A `monthly` of 0 is a plan that bundles none (ADR 0042). Absent from
+            older backends.
+          properties:
+            monthly: { type: integer, minimum: 0 }
+            planName: { type: string }
 
     GiftPurchase:
       type: object

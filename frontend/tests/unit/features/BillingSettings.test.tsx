@@ -998,6 +998,41 @@ describe('BillingSettings — identification top-up pack (ADR 0019)', () => {
     );
   });
 
+  it('tells a Garden household identification is not included, not that it needs more', async () => {
+    await renderBilling(
+      {
+        planId: 'garden',
+        identifyAllowance: { monthly: 0, planName: 'Garden' },
+        identifyCredits: { remaining: 12, expiresAt: null },
+      },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    const card = screen.getByTestId('identify-top-up-card');
+    expect(card).toHaveTextContent(
+      'Identification is sold as a 20-identification pack for $1.99; it is not included in Garden.'
+    );
+    expect(card).toHaveTextContent('12 identification credits left');
+    expect(card).not.toHaveTextContent(/Need more|monthly allowance|resets|0 of 0/);
+    expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+    // No identification meter, so nothing can read "0 of 0" or "0 left".
+    expect(screen.queryByText(/\b0 of 0\b|\b0 left\b/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the allowance wording for a plan that has an allowance', async () => {
+    await renderBilling(
+      {
+        planId: 'seedling',
+        identifyAllowance: { monthly: 1, planName: 'Seedling' },
+        identifyCredits: { remaining: 0, expiresAt: null },
+      },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    const card = screen.getByTestId('identify-top-up-card');
+    expect(card).toHaveTextContent('Need more identifications?');
+    expect(card).toHaveTextContent(/monthly allowance/);
+    expect(card).not.toHaveTextContent(/not included/);
+  });
+
   it('renders nothing for the pack when the catalog does not offer it and the household holds no credits', async () => {
     await renderBilling(
       { planId: 'garden', identifyCredits: { remaining: 0, expiresAt: null } },

@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { resolveTargetPlan } from '@/services/upgradeRequestService';
 
 const ROOT = join(__dirname, '../../../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
@@ -64,6 +65,57 @@ describe('the repriced Garden plan, as the public copy states it', () => {
     expect(esT.legal.terms.oneTimePurchases.packs).toContain(
       'La identificación de plantas no está incluida en el plan Garden; se vende como un paquete de 20 identificaciones'
     );
+  });
+
+  it('sends an upgrade ask for identifications to Greenhouse, never to Garden', () => {
+    expect(resolveTargetPlan('identifications', 'seedling', [])).toBe('greenhouse');
+    expect(resolveTargetPlan('identifications', 'garden', [])).toBe('greenhouse');
+    expect(resolveTargetPlan('identifications', 'greenhouse', [])).toBeNull();
+  });
+
+  it('says the Garden identification refusal in both locales, with the same placeholders', () => {
+    const en = json('frontend/src/i18n/locales/en/translation.json') as {
+      identifyTopUp: Record<string, string>;
+    };
+    const es = json('frontend/src/i18n/locales/es/translation.json') as {
+      identifyTopUp: Record<string, string>;
+    };
+    expect(en.identifyTopUp.notIncludedBody).toBe(
+      'Identification is sold as a {{credits}}-identification pack for {{price}}; it is not included in {{plan}}.'
+    );
+    expect(es.identifyTopUp.notIncludedBody).toBe(
+      'La identificación se vende como un paquete de {{credits}} identificaciones por {{price}}; no está incluida en {{plan}}.'
+    );
+    const placeholders = (text: string) => (text.match(/{{\w+}}/g) ?? []).sort();
+    for (const key of [
+      'notIncludedTitle',
+      'notIncludedBody',
+      'notIncludedBodyNoPack',
+      'notIncludedNoPack',
+      'notIncludedInApp',
+      'notIncludedTerms',
+      'notIncludedTermsNoDays',
+    ]) {
+      expect(en.identifyTopUp[key], key).toBeTruthy();
+      expect(es.identifyTopUp[key], key).toBeTruthy();
+      expect(es.identifyTopUp[key], key).not.toBe(en.identifyTopUp[key]);
+      expect(placeholders(es.identifyTopUp[key]), key).toEqual(placeholders(en.identifyTopUp[key]));
+    }
+    // The in-app line is held to the store rule in both languages.
+    for (const l of [en, es]) {
+      expect(l.identifyTopUp.notIncludedInApp).not.toMatch(/credits|price|pack|paquete|\$/i);
+    }
+    // Neither promises an allowance to a plan that has none.
+    for (const l of [en, es]) {
+      for (const key of ['notIncludedBody', 'notIncludedTerms', 'notIncludedInApp']) {
+        expect(l.identifyTopUp[key], key).not.toMatch(/allowance|cuota|resets|restablece/i);
+      }
+    }
+    // A plan with an allowance still reads its reset, in the card too.
+    expect(en.identifyTopUp.exhaustedNoPack).toContain('resets at the start of next month');
+    expect(en.identifyTopUp.exhaustedBody).toContain('resets at the start of next month');
+    expect(es.identifyTopUp.exhaustedNoPack).toContain('se restablece al empezar el mes que viene');
+    expect(es.identifyTopUp.exhaustedBody).toContain('se restablece al empezar el mes que viene');
   });
 
   it('claims no unlimited or bundled Garden identification anywhere a person reads', () => {

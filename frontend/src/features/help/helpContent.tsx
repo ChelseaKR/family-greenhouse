@@ -46,6 +46,12 @@ export interface HelpArticle {
   a: ReactNode;
   /** Plain-text twin of `a`. Feeds search and the FAQPage JSON-LD. */
   text: string;
+  /**
+   * The answer inside the iOS/Android shells, when the website's names a price
+   * or a place to buy (Guideline 3.1.1). `webOnly` hides a whole section; this
+   * keeps a question the app can still answer.
+   */
+  inApp?: Pick<HelpArticle, 'a' | 'text'>;
 }
 
 export interface HelpSection {
@@ -302,12 +308,12 @@ export const HELP_SECTIONS: HelpSection[] = [
               nothing renews on its own.
             </p>
             <p>
-              The plans&rsquo; own allowances are metered per household, per calendar month, and
-              reset on the 1st:{' '}
-              <strong>1 identification on Seedling, 0 on Garden, 100 on Greenhouse</strong>. The app
-              does not show a running count, so the first you&rsquo;ll hear of the limit is a
-              message when you reach it. An attempt is counted even if the service then fails, so a
-              timeout can still use one.
+              Seedling and Greenhouse include a monthly allowance, metered per household, per
+              calendar month, which resets on the 1st:{' '}
+              <strong>1 identification on Seedling, 100 on Greenhouse</strong>. Garden has no
+              monthly allowance, so nothing resets there. The app does not show a running count, so
+              the first you&rsquo;ll hear of the limit is a message when you reach it. An attempt is
+              counted even if the service then fails, so a timeout can still use one.
             </p>
             <p>
               If the feature isn&rsquo;t configured on the server you&rsquo;ll see &ldquo;Photo
@@ -316,7 +322,28 @@ export const HELP_SECTIONS: HelpSection[] = [
             </p>
           </>
         ),
-        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. Identification is sold as a 20-identification pack for $1.99; it is not included in Garden. A pack is a one-time purchase by a household admin from Settings then Billing, its credits last 12 months and are drawn on once any monthly allowance is spent, and nothing renews on its own. The plans own allowances are metered per household per calendar month and reset on the 1st: 1 identification on Seedling, 0 on Garden, 100 on Greenhouse. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
+        inApp: {
+          a: (
+            <>
+              <p>
+                On the Add plant screen, <strong>Identify from photo</strong> sends one photo to an
+                external identification service and offers up to five suggestions with a confidence
+                percentage. Accepting one fills in the species field for you.
+              </p>
+              <p>
+                Plant identification isn&rsquo;t included in Garden. Seedling and Greenhouse include
+                a monthly allowance, metered per household, per calendar month, which resets on the
+                1st: <strong>1 identification on Seedling, 100 on Greenhouse</strong>.
+                Identification credits a household already holds are drawn on once any monthly
+                allowance is spent. An attempt is counted even if the service then fails, so a
+                timeout can still use one.
+              </p>
+              <p>You can always type the species in yourself.</p>
+            </>
+          ),
+          text: "On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. Plant identification isn't included in Garden. Seedling and Greenhouse include a monthly allowance, metered per household, per calendar month, which resets on the 1st: 1 identification on Seedling, 100 on Greenhouse. Identification credits a household already holds are drawn on once any monthly allowance is spent. An attempt is counted even if the service then fails, so a timeout can still use one. You can always type the species in yourself.",
+        },
+        text: 'On the Add plant screen, Identify from photo sends one photo to an external identification service and offers up to five suggestions with a confidence percentage. Accepting one fills in the species field. Identification is sold as a 20-identification pack for $1.99; it is not included in Garden. A pack is a one-time purchase by a household admin from Settings then Billing, its credits last 12 months and are drawn on once any monthly allowance is spent, and nothing renews on its own. Seedling and Greenhouse include a monthly allowance, metered per household, per calendar month, which resets on the 1st: 1 identification on Seedling, 100 on Greenhouse. Garden has no monthly allowance, so nothing resets there. The app does not show a running count, so the first you will hear of the limit is a message when you reach it. An attempt is counted even if the service then fails, so a timeout can still use one. If the feature is not configured on the server you will see Photo identification is unavailable right now and can still type the species yourself.',
       },
       {
         id: 'leaf-health',
@@ -1380,7 +1407,13 @@ export const POPULAR: Array<{ section: string; article: string; label: string }>
  * instructions there answer a question the app cannot act on.
  */
 export function visibleSections(native: boolean): HelpSection[] {
-  return native ? HELP_SECTIONS.filter((section) => !section.webOnly) : HELP_SECTIONS;
+  if (!native) return HELP_SECTIONS;
+  return HELP_SECTIONS.filter((section) => !section.webOnly).map((section) => ({
+    ...section,
+    articles: section.articles.map((article) =>
+      article.inApp ? { ...article, ...article.inApp } : article
+    ),
+  }));
 }
 
 export function findSection(id: string | undefined, native: boolean): HelpSection | undefined {

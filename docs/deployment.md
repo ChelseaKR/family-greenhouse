@@ -260,7 +260,23 @@ git tag -s v1.2.3 -m 'v1.2.3'
 git push origin v1.2.3
 ```
 
-The workflow opens a deploy request that an admin approves before applying.
+The workflow pauses once, at the `terraform` job, for a reviewer on the
+`production` environment. That one approval authorizes the whole release:
+Terraform apply, then the backend deploy, then the frontend deploy, in that order
+with no further pause. Rejecting it fails `terraform`, and every job that changes
+production is skipped.
+
+`terraform` is the only job that declares `environment: production`, and
+`scripts/production-approval-gate.test.mjs` pins that. Two things follow:
+
+- **Re-running a failed deploy job does not ask again.** "Re-run failed jobs" after
+  a failed `deploy-backend` or `deploy-frontend` runs on the original approval,
+  because `terraform` already succeeded and is not re-run. "Re-run all jobs" or a
+  new tag does ask again.
+- **The `production` deployment row turns green when Terraform finishes**, before
+  the backend or frontend ships, so that row does not mean the release is live.
+  Check the run itself. `scripts/check-deploy-staleness.mjs` reads the commit in the
+  live service worker for this reason, and reports a mismatch as half-applied.
 
 **A `v*` tag is a deployment, not a bookmark.** `cd-production.yml` triggers on
 `push: tags: ['v*']`, so pushing the tag is the act that ships to production and
@@ -298,9 +314,11 @@ rollback; a later manual rollback therefore needs a retained build artifact or
 careful S3-version restoration.
 
 The automatic rollback also restores the pre-deploy Cognito registration
-policy. It does not generically reverse other Terraform changes, so inspect the
-plan before approval and use a targeted follow-up plan if infrastructure—not
-application code—must be reverted.
+policy. It does not generically reverse other Terraform changes. The plan runs
+after the approval, inside the `terraform` job, and applies straight away, so
+run the plan locally before approving a release that changes infrastructure, and
+use a targeted follow-up plan if infrastructure—not application code—must be
+reverted.
 
 ## Superseded frontend assets
 

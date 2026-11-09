@@ -57,7 +57,7 @@ describe('plants identify handler', () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     vi.mocked(plantIdentification.isPlantIdentificationConfigured).mockReturnValue(true);
     vi.mocked(identifyBudget.allowanceForPlan).mockImplementation(
-      (planId) => ({ seedling: 1, garden: 30, greenhouse: 100 })[planId]
+      (planId) => ({ seedling: 1, garden: 0, greenhouse: 100 })[planId]
     );
   });
 
@@ -228,11 +228,13 @@ describe('plants identify handler', () => {
     const res = (await identify(buildEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
     const body = JSON.parse(res.body);
-    expect(body.message).toMatch(/Seedling plan is limited to 1 plant identifications/);
-    expect(body.message).toMatch(/Upgrade/);
+    expect(body.message).toMatch(/Seedling plan is limited to 1 plant identification per month/);
+    expect(body.message).toMatch(/Upgrade to Greenhouse/);
     // A householdless caller has nowhere to hold a pack, so none is offered.
     expect(body.details).toEqual({
       code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      allowance: 1,
+      planName: 'Seedling',
       topUpAvailable: false,
       credits: null,
       topUp: null,
@@ -274,7 +276,7 @@ describe('plants identify handler', () => {
       return JSON.parse(res.body) as { message: string };
     }
 
-    it("meters a household on the no-card trial at Seedling's one identification a month, not Garden's thirty", async () => {
+    it("meters a household on the no-card trial at Seedling's one identification a month, not Garden's", async () => {
       const body = await exhaustedFor({
         planId: 'seedling',
         noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
@@ -286,15 +288,15 @@ describe('plants identify handler', () => {
       expect(body.message).not.toMatch(/Garden plan/);
     });
 
-    it("keeps Garden's thirty for a household on a card-based Stripe Garden trial, whatever its row carries", async () => {
+    it('meters a card-based Stripe Garden trial as Garden, whatever its row carries', async () => {
       const body = await exhaustedFor({
         planId: 'garden',
         status: 'trialing',
         stripeSubscriptionId: 'sub_synthetic_card_trial',
         noCardTrialEndsAt: '2999-01-01T00:00:00.000Z',
       });
-      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
-      expect(body.message).toMatch(/Your Garden plan is limited to 30 plant identifications/);
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 0, 'hh-1');
+      expect(body.message).toMatch(/^Identification is not included in Garden\./);
     });
   });
 
@@ -311,17 +313,18 @@ describe('plants identify handler', () => {
     const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
     const body = JSON.parse(res.body);
-    expect(body.message).toMatch(
-      /Garden plan's 30 plant identifications for this month are used up/
+    expect(body.message).toBe(
+      'Identification is not included in Garden. Buy the 20-identification pack for $1.99, or upgrade to Greenhouse for a monthly allowance.'
     );
-    expect(body.message).toMatch(/top-up pack of 20 identifications/);
     expect(body.details).toEqual({
       code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      allowance: 0,
+      planName: 'Garden',
       topUpAvailable: true,
       credits: { remaining: 0, expiresAt: null },
       topUp: { credits: 20, priceUsd: 1.99 },
     });
-    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
+    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 0, 'hh-1');
     expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
   });
 
@@ -336,9 +339,13 @@ describe('plants identify handler', () => {
     const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(402);
     const body = JSON.parse(res.body);
-    expect(body.message).toMatch(/Garden plan is limited to 30 plant identifications per month/);
+    expect(body.message).toBe(
+      'Identification is not included in Garden. Upgrade to Greenhouse for a monthly allowance.'
+    );
     expect(body.details).toEqual({
       code: 'IDENTIFY_BUDGET_EXHAUSTED',
+      allowance: 0,
+      planName: 'Garden',
       topUpAvailable: false,
       credits: { remaining: 0, expiresAt: null },
       topUp: null,
@@ -363,7 +370,7 @@ describe('plants identify handler', () => {
     await warmHousehold();
     const { identify } = await import('../../../src/handlers/plants/identify.js');
     vi.mocked(identifyBudget.reserveIdentification).mockResolvedValueOnce({
-      used: 30,
+      used: 0,
       source: 'credit',
       credits: { remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' },
     });
@@ -375,11 +382,106 @@ describe('plants identify handler', () => {
     const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).usage).toEqual({
-      used: 30,
-      allowance: 30,
+      used: 0,
+      allowance: 0,
       meteringEnabled: true,
       source: 'credit',
       credits: { remaining: 19, expiresAt: '2027-09-03T12:00:00.000Z' },
+    });
+  });
+
+  describe('the refusal says what is true of the plan (ADR 0042)', () => {
+    it('sends an upgrade ask for identifications to Greenhouse, never to Garden', async () => {
+      const { resolveTargetPlan } = await import('../../../src/models/upgradeFeatures.js');
+      expect(resolveTargetPlan('identifications', 'seedling')).toBe('greenhouse');
+      expect(resolveTargetPlan('identifications', 'garden')).toBe('greenhouse');
+      expect(resolveTargetPlan('identifications', 'greenhouse')).toBeNull();
+    });
+
+    async function refusedOn(
+      subscription: Record<string, unknown>,
+      { pack }: { pack: boolean }
+    ): Promise<{ message: string; details: Record<string, unknown> }> {
+      await warmHousehold();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue(subscription as never);
+      if (pack) {
+        process.env.PAYMENTS_ENABLED = '1';
+        process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      }
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+      Object.assign(exceeded, { credits: { remaining: 0, expiresAt: null } });
+      vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+      const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      return JSON.parse(res.body);
+    }
+
+    it.each([{ pack: true }, { pack: false }])(
+      'never tells Garden it has 0 to use up or that an allowance resets (%o)',
+      async ({ pack }) => {
+        const { message, details } = await refusedOn({ planId: 'garden' }, { pack });
+        expect(message).toMatch(/^Identification is not included in Garden\./);
+        expect(message).not.toMatch(/used up|limited to|resets|\b0\b|upgrade to garden/i);
+        expect(details).toMatchObject({ allowance: 0, planName: 'Garden' });
+      }
+    );
+
+    it('tells a Seedling household its allowance resets, and points upgrades at Greenhouse', async () => {
+      const { message, details } = await refusedOn({ planId: 'seedling' }, { pack: true });
+      expect(message).toBe(
+        "Your Seedling plan's 1 plant identification for this month is used up. Your allowance resets at the start of next month. Buy a top-up pack of 20 identifications, or upgrade to Greenhouse for a higher monthly allowance."
+      );
+      expect(message).not.toMatch(/Garden/);
+      expect(details).toMatchObject({ allowance: 1, planName: 'Seedling' });
+    });
+
+    it('tells a Seedling household with no pack on sale the same reset, and Greenhouse', async () => {
+      const { message } = await refusedOn({ planId: 'seedling' }, { pack: false });
+      expect(message).toBe(
+        'Your Seedling plan is limited to 1 plant identification per month. Your allowance resets at the start of next month. Upgrade to Greenhouse for a higher monthly allowance.'
+      );
+    });
+
+    it('does not tell a no-card trial that a paid plan means more, since Garden has none', async () => {
+      const { message, details } = await refusedOn(
+        { planId: 'seedling', noCardTrialEndsAt: '2999-01-01T00:00:00.000Z' },
+        { pack: false }
+      );
+      expect(message).toMatch(/resets at the start of next month/);
+      expect(message).toMatch(/Upgrade to Greenhouse for a higher monthly allowance\.$/);
+      expect(message).not.toMatch(/choose a paid plan/i);
+      expect(details).toMatchObject({ allowance: 1 });
+    });
+
+    it('offers Greenhouse no upgrade, because no plan is above it', async () => {
+      const { message } = await refusedOn({ planId: 'greenhouse' }, { pack: true });
+      expect(message).toBe(
+        "Your Greenhouse plan's 100 plant identifications for this month are used up. Your allowance resets at the start of next month. Buy a top-up pack of 20 identifications."
+      );
+    });
+
+    it('lets a Garden household with pack credits left identify, with no refusal', async () => {
+      const plantIdentification = await import('../../../src/services/plantIdentification.js');
+      await warmHousehold();
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      vi.mocked(identifyBudget.reserveIdentification).mockResolvedValueOnce({
+        used: 0,
+        source: 'credit',
+        credits: { remaining: 12, expiresAt: '2027-09-03T12:00:00.000Z' },
+      });
+      vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+        configured: true,
+        suggestions: [],
+      });
+      const res = (await identify(householdEvent(), ctx, () => {})) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 0, 'hh-1');
+      expect(JSON.parse(res.body).usage).toMatchObject({
+        allowance: 0,
+        source: 'credit',
+        credits: { remaining: 12 },
+      });
     });
   });
 
@@ -417,7 +519,7 @@ describe('plants identify handler', () => {
     expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
   });
 
-  it('applies the per-plan allowance from the household subscription (garden → 30)', async () => {
+  it('applies the per-plan allowance from the household subscription (greenhouse → 100)', async () => {
     const plantIdentification = await import('../../../src/services/plantIdentification.js');
     const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
     const { __resetMembershipCacheForTests } = await import('../../../src/middleware/auth.js');
@@ -425,7 +527,7 @@ describe('plants identify handler', () => {
     setCachedMembership('user-1', 'hh-1', 'member');
     const { identify } = await import('../../../src/handlers/plants/identify.js');
 
-    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'garden' });
+    vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
     vi.mocked(identifyBudget.meteringEnabled).mockReturnValue(true);
     vi.mocked(identifyBudget.reserveIdentification).mockResolvedValue({
       used: 6,
@@ -450,13 +552,13 @@ describe('plants identify handler', () => {
     // key at all, rather than a 0 that was never read.
     expect(JSON.parse(res.body).usage).toEqual({
       used: 6,
-      allowance: 30,
+      allowance: 100,
       meteringEnabled: true,
       source: 'allowance',
     });
     // Household callers meter on the household bucket, not the user, and
     // the household id is what lets a top-up credit be found.
-    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 30, 'hh-1');
+    expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 100, 'hh-1');
     expect(identifyBudget.getUsage).not.toHaveBeenCalled();
     expect(identifyBudget.incrementUsage).not.toHaveBeenCalled();
   });
@@ -494,7 +596,7 @@ describe('plants identify handler', () => {
         } as APIGatewayProxyEvent['requestContext'],
       });
       await identify(event, ctx, () => {});
-      // Seedling's allowance is 1, not Garden's 30 (ADR 0012 decision 2):
+      // Seedling's allowance is 1 (ADR 0012 decision 2), not Garden's:
       // the reservation the paid call is made against is the one entitlement
       // resolves to.
       expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 1, 'hh-1');

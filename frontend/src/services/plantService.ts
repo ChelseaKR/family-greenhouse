@@ -508,9 +508,20 @@ export interface IdentifyResponse {
  */
 export interface IdentifyBudgetExhausted {
   message: string;
+  /** The plan's monthly allowance. 0 is a plan that bundles none (ADR 0042),
+   *  which has nothing to use up and nothing to reset; `null` is a backend
+   *  that did not say. */
+  allowance: number | null;
+  planName: string | null;
   topUpAvailable: boolean;
   credits: IdentifyCreditBalance | null;
   topUp: { credits: number; priceUsd: number | null } | null;
+}
+
+/** The plan's name when the refusal came from a plan that bundles no
+ *  identifications (ADR 0042); `null` for a spent allowance or an unknown one. */
+export function identifyNotIncludedIn(exhausted: IdentifyBudgetExhausted): string | null {
+  return exhausted.allowance === 0 ? exhausted.planName : null;
 }
 
 /**
@@ -543,6 +554,8 @@ export function identifyBudgetExhaustedFromError(error: unknown): IdentifyBudget
       : null;
   return {
     message: typeof data?.message === 'string' ? data.message : '',
+    allowance: typeof details.allowance === 'number' ? details.allowance : null,
+    planName: typeof details.planName === 'string' ? details.planName : null,
     topUpAvailable: details.topUpAvailable === true && topUp !== null,
     credits,
     topUp,
