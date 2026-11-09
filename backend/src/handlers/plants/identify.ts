@@ -19,7 +19,11 @@ import {
   PLANT_ID_CREDITS_PER_IDENTIFICATION,
   PLANT_ID_USD_PER_CREDIT,
 } from '../../config/upstreamCosts.js';
-import { identifyTopUpSummary } from '../../models/identifyTopUp.js';
+import {
+  identifyRefusalMessage,
+  identifyTopUpSummary,
+  identifyUpgradeTargetName,
+} from '../../models/identifyTopUp.js';
 import { paymentsAreAvailable } from '../../config/commercialStatus.js';
 import { logger } from '../../utils/logger.js';
 import { successResponse } from '../../utils/response.js';
@@ -63,7 +67,8 @@ export const identify = createHandler(
     // every identification spends a prepaid Plant.id credit, and a trial earns
     // nothing. For every other household the two are the same tier.
     const onNoCardTrial = sub !== null && noCardTrialState(sub) === 'active';
-    const allowance = identifyBudget.allowanceForPlan(sub ? getMeteredPlanId(sub) : plan.id);
+    const meteredPlanId = sub ? getMeteredPlanId(sub) : plan.id;
+    const allowance = identifyBudget.allowanceForPlan(meteredPlanId);
     const meteringEnabled = identifyBudget.meteringEnabled();
     const upstreamConfigured = plantIdentification.isPlantIdentificationConfigured();
     // `null` = we could not read/write an authoritative total. It is published
@@ -98,19 +103,25 @@ export const identify = createHandler(
             ? identifyTopUpSummary(paymentsAreAvailable(), upstreamConfigured)
             : null;
           const topUpAvailable = topUp?.available === true;
-          const trialAllowance = `During the no-card Garden trial, identifications use the free plan's allowance of ${allowance} a month, and this month's ${allowance === 1 ? 'is' : 'are'} used up.`;
           throw createHttpError(
             402,
-            onNoCardTrial
-              ? topUpAvailable
-                ? `${trialAllowance} Buy a top-up pack of ${topUp.credits} identifications, or choose a paid plan for a higher monthly allowance.`
-                : `${trialAllowance} Choose a paid plan for a higher monthly allowance.`
-              : topUpAvailable
-                ? `Your ${plan.name} plan's ${allowance} plant identifications for this month are used up. Buy a top-up pack of ${topUp.credits} identifications, or upgrade for a higher monthly allowance.`
-                : `Your ${plan.name} plan is limited to ${allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+            identifyRefusalMessage({
+              planName: plan.name,
+              allowance,
+              onNoCardTrial,
+              upgradeTo: identifyUpgradeTargetName(
+                meteredPlanId,
+                identifyBudget.IDENTIFY_ALLOWANCES
+              ),
+              topUp: topUpAvailable ? topUp : null,
+            }),
             {
               details: {
                 code: 'IDENTIFY_BUDGET_EXHAUSTED',
+                // Lets a client tell "the month's allowance is spent, and it
+                // resets" from "this plan bundles none" (ADR 0042).
+                allowance,
+                planName: plan.name,
                 topUpAvailable,
                 credits: err.credits,
                 topUp: topUpAvailable

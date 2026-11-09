@@ -406,7 +406,7 @@ function budgetExhausted(details: Record<string, unknown>) {
     response: {
       status: 402,
       data: {
-        message: 'Your Garden plan is limited to 30 plant identifications per month.',
+        message: 'Your Seedling plan is limited to 1 plant identification per month.',
         details: { code: 'IDENTIFY_BUDGET_EXHAUSTED', ...details },
       },
     },
@@ -445,7 +445,7 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
     expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
     expect(screen.getByText('No identification credits left')).toBeInTheDocument();
     // The raw server message is not shown as a generic failure on top.
-    expect(screen.queryByText(/Garden plan is limited to/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Seedling plan is limited to/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Use' })).not.toBeInTheDocument();
   });
 
@@ -480,6 +480,145 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
+  });
+
+  describe('a plan with no bundled identifications (Garden, ADR 0042)', () => {
+    const GARDEN = { allowance: 0, planName: 'Garden' };
+    const PACK = {
+      topUpAvailable: true,
+      credits: { remaining: 0, expiresAt: null },
+      topUp: { credits: 20, priceUsd: 1.99 },
+    };
+
+    it('says identification is not included, with the catalog price and the buy button', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ ...GARDEN, ...PACK })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+
+      expect(await screen.findByTestId('identify-top-up-card')).toBeInTheDocument();
+      expect(screen.getByText('Plant identification is sold separately')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Identification is sold as a 20-identification pack for $1.99; it is not included in Garden.'
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+      // Old copy, each line of it false for an allowance of 0.
+      expect(screen.queryByText(/used up/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/resets/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/monthly (identification )?allowance/)).not.toBeInTheDocument();
+    });
+
+    it('takes its price from the refusal rather than from the copy', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ ...GARDEN, ...PACK, topUp: { credits: 25, priceUsd: 2.49 } })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+      expect(
+        await screen.findByText(
+          'Identification is sold as a 25-identification pack for $2.49; it is not included in Garden.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('still tells a Garden household whose pack is spent, with the balance', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ ...GARDEN, ...PACK })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+      expect(await screen.findByText('No identification credits left')).toBeInTheDocument();
+      expect(screen.getByText('Plant identification is sold separately')).toBeInTheDocument();
+    });
+
+    it('offers no pack and no reset when none can be bought on the website', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ ...GARDEN, topUpAvailable: false, credits: null, topUp: null })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+
+      expect(
+        await screen.findByText(
+          "Plant identification isn't included in Garden, and identification packs aren't available right now. You can still enter the species yourself."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/resets/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+    });
+
+    it('lets a Garden household with credits left identify, with no refusal copy', async () => {
+      vi.mocked(plantService.identifyPlant).mockResolvedValueOnce({
+        configured: true,
+        suggestions: [
+          { scientificName: 'Monstera deliciosa', commonName: 'Monstera', probability: 0.9 },
+        ],
+        usage: {
+          used: 0,
+          allowance: 0,
+          meteringEnabled: true,
+          source: 'credit',
+          credits: { remaining: 12, expiresAt: null },
+        },
+      } as never);
+      renderPage();
+      await pickPhotoAndTryIdentify();
+
+      expect(await screen.findByRole('button', { name: 'Use' })).toBeInTheDocument();
+      expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+      expect(screen.queryByText(/used up|resets|not included|isn't included/)).toBeNull();
+    });
+  });
+
+  describe('a plan with a monthly allowance still resets (Seedling)', () => {
+    const SEEDLING = { allowance: 1, planName: 'Seedling' };
+
+    it('reads the reset message when no pack can be bought', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ ...SEEDLING, topUpAvailable: false, credits: null, topUp: null })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+      expect(
+        await screen.findByText(
+          "This month's plant identifications are used up. Your allowance resets at the start of next month."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/not included|isn't included/)).toBeNull();
+    });
+
+    it('reads the reset in the pack card too', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({
+          ...SEEDLING,
+          topUpAvailable: true,
+          credits: { remaining: 0, expiresAt: null },
+          topUp: { credits: 20, priceUsd: 1.99 },
+        })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+      expect(
+        await screen.findByText("This month's identifications are used up")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Your allowance resets at the start of next month/)
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+      expect(screen.queryByText(/not included|isn't included/)).toBeNull();
+    });
+
+    it("keeps today's reset copy against a backend that does not send the allowance", async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({ topUpAvailable: false, credits: null, topUp: null })
+      );
+      renderPage();
+      await pickPhotoAndTryIdentify();
+      expect(await screen.findByText(/Your allowance resets/)).toBeInTheDocument();
+    });
   });
 
   describe('inside the native (Capacitor) shells', () => {
@@ -521,6 +660,50 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
       await pickNativePhotoAndTryIdentify('camera');
       expect(pickNativePhoto).toHaveBeenCalledWith('camera');
       await waitFor(() => expect(plantService.identifyPlant).toHaveBeenCalledTimes(1));
+    });
+
+    it('tells Garden identification is not included, with no price, pack or reset (Guideline 3.1.1)', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({
+          allowance: 0,
+          planName: 'Garden',
+          topUpAvailable: true,
+          credits: { remaining: 0, expiresAt: null },
+          topUp: { credits: 20, priceUsd: 1.99 },
+        })
+      );
+      renderPage();
+      await pickNativePhotoAndTryIdentify();
+
+      expect(
+        await screen.findByText(
+          "Plant identification isn't included in Garden. You can still enter the species yourself."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('identify-top-up-card')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
+      expect(screen.queryByText(/\$1\.99|pack|resets|used up/)).toBeNull();
+    });
+
+    it('still reads a Seedling household the reset, with no purchase', async () => {
+      vi.mocked(plantService.identifyPlant).mockRejectedValueOnce(
+        budgetExhausted({
+          allowance: 1,
+          planName: 'Seedling',
+          topUpAvailable: true,
+          credits: { remaining: 0, expiresAt: null },
+          topUp: { credits: 20, priceUsd: 1.99 },
+        })
+      );
+      renderPage();
+      await pickNativePhotoAndTryIdentify();
+
+      expect(
+        await screen.findByText(
+          "This month's plant identifications are used up. Your allowance resets at the start of next month."
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Buy/ })).not.toBeInTheDocument();
     });
 
     it('never offers the top-up purchase, even when the 402 says it can be bought (store payment rules)', async () => {

@@ -104,6 +104,60 @@ describe('IdentifyTopUpCard', () => {
     expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
   });
 
+  it('reads the monthly reset on the exhausted surface of a plan that has an allowance', () => {
+    renderCard({ variant: 'exhausted' });
+    expect(
+      screen.getByText(/Your allowance resets at the start of next month/)
+    ).toBeInTheDocument();
+  });
+
+  describe('a plan with no bundled identifications (ADR 0042)', () => {
+    const FAQ =
+      'Identification is sold as a 20-identification pack for $1.99; it is not included in Garden.';
+
+    it.each(['exhausted', 'billing'] as const)(
+      'on the %s surface says not included, and promises no allowance',
+      (variant) => {
+        renderCard({ variant, notIncludedIn: 'Garden' });
+        expect(screen.getByText('Plant identification is sold separately')).toBeInTheDocument();
+        expect(screen.getByText(FAQ)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Credits are valid for 365 days from purchase/)
+        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+        expect(screen.queryByText(/used up/)).toBeNull();
+        expect(screen.queryByText(/resets/)).toBeNull();
+        expect(screen.queryByText(/monthly allowance/)).toBeNull();
+        expect(screen.queryByText(/Need more identifications/)).toBeNull();
+      }
+    );
+
+    it('states no price and offers no button when the pack is not for sale', () => {
+      renderCard({
+        notIncludedIn: 'Garden',
+        available: false,
+        balance: { remaining: 3, expiresAt: null },
+      });
+      expect(
+        screen.getByText("Plant identification isn't included in Garden.")
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/\$1\.99/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /Buy/ })).toBeNull();
+      expect(screen.getByText('3 identification credits left')).toBeInTheDocument();
+    });
+
+    it('shows the credits a Garden household still holds', () => {
+      renderCard({
+        notIncludedIn: 'Garden',
+        balance: { remaining: 12, expiresAt: '2027-09-03T12:00:00.000Z' },
+      });
+      expect(screen.getByTestId('identify-credit-balance')).toHaveTextContent(
+        /12 identification credits left/
+      );
+      expect(screen.queryByText(/resets/)).toBeNull();
+    });
+  });
+
   it('shows a real balance with its expiry', () => {
     renderCard({ balance: { remaining: 17, expiresAt: '2027-09-03T12:00:00.000Z' } });
     expect(screen.getByTestId('identify-credit-balance')).toHaveTextContent(

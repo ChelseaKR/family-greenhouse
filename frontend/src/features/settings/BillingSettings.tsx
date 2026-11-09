@@ -625,6 +625,11 @@ export function BillingSettings() {
             priceUsd={topUpOffer.priceUsd ?? null}
             validityDays={topUpOffer.validityDays}
             balance={identifyCredits === undefined ? null : identifyCredits}
+            notIncludedIn={
+              subQuery.data?.identifyAllowance?.monthly === 0
+                ? subQuery.data.identifyAllowance.planName
+                : null
+            }
           />
         </div>
       )}

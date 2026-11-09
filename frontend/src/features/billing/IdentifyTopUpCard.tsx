@@ -53,6 +53,13 @@ export interface IdentifyTopUpCardProps {
   /** `exhausted` leads with "this month's identifications are used up";
    *  `billing` leads with the offer. */
   variant: 'exhausted' | 'billing';
+  /**
+   * The name of the household's plan when it bundles no identifications
+   * (Garden, ADR 0042). Nothing was used up and nothing resets, and credits
+   * are not "on top of" anything, so every line says that instead on both
+   * variants.
+   */
+  notIncludedIn?: string | null;
 }
 
 /**
@@ -69,6 +76,7 @@ export function IdentifyTopUpCard({
   available,
   balance,
   variant,
+  notIncludedIn,
 }: IdentifyTopUpCardProps) {
   const { t } = useTranslation();
   const isAdmin = useIsHouseholdAdmin();
@@ -97,10 +105,20 @@ export function IdentifyTopUpCard({
       <Card variant="paper">
         <CardHeader
           title={
-            variant === 'exhausted' ? t('identifyTopUp.exhaustedTitle') : t('identifyTopUp.title')
+            notIncludedIn
+              ? t('identifyTopUp.notIncludedTitle')
+              : variant === 'exhausted'
+                ? t('identifyTopUp.exhaustedTitle')
+                : t('identifyTopUp.title')
           }
           description={
-            variant === 'exhausted' ? t('identifyTopUp.exhaustedBody') : t('identifyTopUp.body')
+            notIncludedIn
+              ? canOffer
+                ? t('identifyTopUp.notIncludedBody', { credits, price, plan: notIncludedIn })
+                : t('identifyTopUp.notIncludedBodyNoPack', { plan: notIncludedIn })
+              : variant === 'exhausted'
+                ? t('identifyTopUp.exhaustedBody')
+                : t('identifyTopUp.body')
           }
         />
         {errorKey && (
@@ -128,9 +146,13 @@ export function IdentifyTopUpCard({
               {t('identifyTopUp.offer', { credits, price })}
             </p>
             <p className="text-xs text-gray-600">
-              {validityDays
-                ? t('identifyTopUp.terms', { days: validityDays })
-                : t('identifyTopUp.termsNoDays')}
+              {notIncludedIn
+                ? validityDays
+                  ? t('identifyTopUp.notIncludedTerms', { days: validityDays })
+                  : t('identifyTopUp.notIncludedTermsNoDays')
+                : validityDays
+                  ? t('identifyTopUp.terms', { days: validityDays })
+                  : t('identifyTopUp.termsNoDays')}
             </p>
             {isAdmin ? (
               <Button
