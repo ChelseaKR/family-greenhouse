@@ -2019,7 +2019,19 @@
     "notActivelyChecked": "Not actively checked",
     "coreApiOperational": "Core API operational",
     "checkingTitle": "Checking live system status…",
-    "checkingBody": "Waiting for a fresh response from the production health endpoint."
+    "checkingBody": "Waiting for a fresh response from the production health endpoint.",
+    "recentIncidents": "Recent incidents",
+    "resolved": "Resolved",
+    "investigating": "Investigating",
+    "historyUnavailable": "Incident history unavailable right now.",
+    "detailsToFollow": "Details for the current issue will be posted here as we learn more.",
+    "emptyLog": "Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.",
+    "incidents": {
+      "plantTags2026": {
+        "title": "Plant tags were unavailable",
+        "body": "From September 4 to October 5, 2026, all six plant tag routes returned a server error. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. The fix (#931) added the plant tag function to the deploy and went live with version 0.39.0 on October 5."
+      }
+    }
   },
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",

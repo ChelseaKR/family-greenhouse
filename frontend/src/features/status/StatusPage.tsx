@@ -9,27 +9,28 @@ import {
 } from '@heroicons/react/24/outline';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { IncidentLog, type Incident } from './IncidentLog';
 import { healthService, type ComponentStatus, type OverallStatus } from '@/services/healthService';
 
 /**
  * Public status page. Pulls /health every 60s and surfaces component-by-
  * component state plus a recent-incident log. Hand-curated incidents for
  * now (a real status page like Statuspage.io would be overkill until
- * traffic justifies). Adding an incident: append to INCIDENTS below.
+ * traffic justifies). Adding an incident: add it to INCIDENTS below, newest
+ * first, with its copy in the en and es catalogs under statusPage.incidents.
  *
  * Design intent: trust signal, not an SLA dashboard. We're transparent
  * about the small number of services we run; we're not making 99.99%
  * uptime promises.
  */
 
-const INCIDENTS: Array<{ date: string; title: string; resolved: boolean; body: string }> = [
-  // Nothing written up yet — leave the array empty rather than fake history.
-  // {
-  //   date: '2026-04-12',
-  //   title: 'Plant photo uploads delayed (resolved)',
-  //   resolved: true,
-  //   body: 'S3 multipart uploads in us-east-1 saw elevated latency for ~30 min …',
-  // },
+const INCIDENTS: Incident[] = [
+  {
+    date: '2026-09-04',
+    resolved: true,
+    titleKey: 'statusPage.incidents.plantTags2026.title',
+    bodyKey: 'statusPage.incidents.plantTags2026.body',
+  },
 ];
 
 const COMPONENT_LABELS: Record<string, string> = {
@@ -215,50 +216,7 @@ export function StatusPage() {
       </section>
 
       {/* Incidents */}
-      <section className="mt-12">
-        <h2 className="font-serif text-2xl tracking-tight text-ink">Recent incidents</h2>
-        {INCIDENTS.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-600">
-            {/* INCIDENTS is written by hand, so an empty list says nobody has
-                  written anything up. It used to say "No incidents in the last
-                  90 days", which nothing measured and which was false: all six
-                  plant-tag routes answered 500 from 2026-09-04 until #931. */}
-            {unreachable
-              ? 'Incident history unavailable right now.'
-              : serverErrored
-                ? 'Details for the current issue will be posted here as we learn more.'
-                : 'Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.'}
-          </p>
-        ) : (
-          <ul className="mt-4 space-y-6">
-            {INCIDENTS.map((inc, i) => (
-              <li
-                key={`${inc.date}-${i}`}
-                className="rounded-xl border border-primary-100/80 bg-white p-5 shadow-journal"
-              >
-                <div className="flex items-center gap-2 text-xs">
-                  <span
-                    className={`rounded-full px-2 py-0.5 font-medium ${
-                      inc.resolved ? 'bg-green-100 text-green-900' : 'bg-amber-100 text-amber-900'
-                    }`}
-                  >
-                    {inc.resolved ? 'Resolved' : 'Investigating'}
-                  </span>
-                  <span className="text-gray-600">
-                    {new Date(inc.date).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </div>
-                <h3 className="mt-2 font-serif text-lg text-ink">{inc.title}</h3>
-                <p className="mt-1 text-sm text-gray-700">{inc.body}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <IncidentLog incidents={INCIDENTS} unreachable={unreachable} serverErrored={serverErrored} />
 
       <p className="mt-12 text-xs text-gray-600">
         Status is checked live against <code>GET /health</code> every 60 seconds. For real-time
