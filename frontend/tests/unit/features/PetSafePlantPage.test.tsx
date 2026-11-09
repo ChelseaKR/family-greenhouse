@@ -286,9 +286,11 @@ describe('/pet-safe links every published plant page', () => {
         <PetSafePage />
       </MemoryRouter>
     );
-    const hrefs = [...container.querySelectorAll('a[href^="/pet-safe/"]')].map((a) =>
-      a.getAttribute('href')
-    );
+    const hrefs = [
+      ...container.querySelectorAll(
+        '[aria-labelledby="pet-safe-cited-heading"] a[href^="/pet-safe/"]'
+      ),
+    ].map((a) => a.getAttribute('href'));
     expect(hrefs).toEqual(PLANT_SAFETY_PAGES.map((page) => `/pet-safe/${page.slug}`));
   });
 });

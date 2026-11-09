@@ -294,6 +294,16 @@ like-for-like.
 Because `set` carries these values, GA's automatic events inherit the scrubbed
 address and title rather than reading `location.href` and `document.title`.
 
+**The sitter page's footer link** goes to `/?utm_source=sitter_link&utm_medium=referral`,
+fixed text with no token. A click is a mid-visit route change, and GA keeps a
+session's source from its first hit, so `sessionSource` will usually not show it.
+Read it by page instead: `pagePathPlusQueryString` containing
+`utm_source=sitter_link`. Measured on 2026-11-08 with the real gtag.js and hits
+captured locally: the sitter page sends `/sit/:token`, the click sends the tagged
+home address with referrer `/sit/:token`, a new-tab open sends the referrer's
+origin only, and the token appears in no hit or `Referer` header. A deliberate
+raw-address hit was caught by the same check.
+
 **Measured against the real gtag.js (2026-09-17),** with every request to
 Google recorded and aborted in a headless browser, so nothing reached the
 property:

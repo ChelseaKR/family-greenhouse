@@ -16,6 +16,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Internal links and one campaign tag.** Home, /care and /help/households link
+  the two household blog posts, home and /pet-safe link the Christmas cactus and
+  poinsettia pet pages by name, and the sitter page's footer link carries a fixed
+  `utm_source` and `utm_medium`, never the sitter token.
+
 ## [0.50.0] - 2026-11-08
 
 **Garden is now $2.99 a month or $24.99 a year, and a production release needs
