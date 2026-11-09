@@ -98,12 +98,13 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
     ...failFastSave((data: PlantFormData) =>
       plantService.updatePlant(plant.id, {
         name: data.name,
-        species: data.species || undefined,
+        // Explicit null clears; an omitted key would leave the old text in place.
+        species: data.species || null,
         spaceId: data.spaceId || null,
         placementNote: data.placementNote || null,
         summerSpaceId: data.summerSpaceId || null,
         winterSpaceId: data.winterSpaceId || null,
-        notes: data.notes || undefined,
+        notes: data.notes || null,
         // Explicit null clears the rule — an omitted key would leave it untouched.
         careRule: data.careRule?.trim() || null,
         // Always explicit, including null — omitting it would leave the

@@ -283,6 +283,36 @@ describe('billing handler', () => {
       expect(getCreditBalance).toHaveBeenCalledWith('hh-1');
     });
 
+    it.each([
+      [
+        { planId: 'garden', status: 'active' },
+        { monthly: 0, planName: 'Garden' },
+      ],
+      [{ planId: 'seedling' }, { monthly: 1, planName: 'Seedling' }],
+      [
+        { planId: 'greenhouse', status: 'active' },
+        { monthly: 100, planName: 'Greenhouse' },
+      ],
+      // The no-card trial has Garden's features and Seedling's allowance.
+      [
+        { planId: 'seedling', noCardTrialEndsAt: '2999-01-01T00:00:00.000Z' },
+        { monthly: 1, planName: 'Garden' },
+      ],
+    ])(
+      'publishes the identification allowance the household spends against: %o',
+      async (sub, want) => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(sub as never);
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(JSON.parse(res.body).identifyAllowance).toEqual(want);
+      }
+    );
+
     it('publishes trialAvailable on the wire, so the UI can qualify its trial copy (#602)', async () => {
       const billing = await import('../../../src/services/billing.js');
       const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');

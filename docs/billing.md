@@ -840,10 +840,15 @@ $1.99**, one-time, valid 12 months from purchase, never auto-renewed.
   a conditional decrement. The success `usage` object gains `source`
   (`allowance` | `credit`) and, after a credit spend, `credits`
   (`{ remaining, expiresAt }`). The 402 gains `details`:
-  `{ code: IDENTIFY_BUDGET_EXHAUSTED, topUpAvailable, credits, topUp }`.
+  `{ code: IDENTIFY_BUDGET_EXHAUSTED, allowance, planName, topUpAvailable, credits, topUp }`.
+  An `allowance` of 0 is a plan that bundles none (Garden, ADR 0042): the
+  clients say identification is not included, never that it is used up or
+  resets, and the apps name no pack or price (`identifyTopUp.notIncludedInApp`).
 - **Balance:** `GET /billing/me` carries `identifyCredits`
   (`{ remaining, expiresAt }`), or `null` when the read failed — unknown is
-  never published as zero.
+  never published as zero. It also carries `identifyAllowance`
+  (`{ monthly, planName }`), the metered allowance Settings reads to pick the
+  same wording.
 
 ## The no-card Garden trial
 
