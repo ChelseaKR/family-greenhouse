@@ -89,10 +89,11 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
     ...failFastSave((data: TaskFormData) =>
       taskService.updateTask(task.id, {
         type: data.type,
-        customType: data.type === 'custom' ? data.customType || undefined : undefined,
+        // Explicit null clears; an omitted key would leave the old text in place.
+        customType: data.type === 'custom' ? data.customType || null : null,
         frequency: data.frequency,
         seasonalCadences: cadencesFromForm(data),
-        notes: data.notes || undefined,
+        notes: data.notes || null,
       })
     ),
     onSuccess: () => {
