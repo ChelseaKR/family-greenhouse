@@ -2028,8 +2028,8 @@
     "emptyLog": "Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.",
     "incidents": {
       "plantTags2026": {
-        "title": "Plant tags were unavailable",
-        "body": "From September 4 to October 5, 2026, all six plant tag routes returned a server error. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. The fix (#931) added the plant tag function to the deploy and went live with version 0.39.0 on October 5."
+        "title": "Plant tags weren’t working",
+        "body": "From September 4 to October 5, 2026, plant tags weren’t working. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. It was fixed in version 0.39.0 on October 5."
       }
     }
   },

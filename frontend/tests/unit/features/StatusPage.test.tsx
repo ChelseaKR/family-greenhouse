@@ -95,12 +95,15 @@ describe('StatusPage', () => {
 
     expect(await screen.findByText('Core API operational')).toBeInTheDocument();
     const entry = screen
-      .getByRole('heading', { name: 'Plant tags were unavailable' })
+      .getByRole('heading', { name: 'Plant tags weren’t working' })
       .closest('li') as HTMLElement;
     expect(within(entry).getByText('Resolved')).toBeInTheDocument();
     expect(entry).toHaveTextContent('From September 4 to October 5, 2026');
-    expect(entry).toHaveTextContent('all six plant tag routes');
-    expect(entry).toHaveTextContent('#931');
+    expect(entry).toHaveTextContent('plant tags weren’t working');
+    expect(entry).toHaveTextContent('We couldn’t load your plant tags');
+    expect(entry).toHaveTextContent('version 0.39.0');
+    // A public page: it says what people lost, in their words, not ours.
+    expect(entry.textContent).not.toMatch(/routes?\b|server error|#931|function|deploy/iu);
     expect(screen.queryByText(/written up by hand/iu)).not.toBeInTheDocument();
   });
 
@@ -112,7 +115,7 @@ describe('StatusPage', () => {
 
     await screen.findByText('Core API operational');
     const entry = screen
-      .getByRole('heading', { name: 'Plant tags were unavailable' })
+      .getByRole('heading', { name: 'Plant tags weren’t working' })
       .closest('li') as HTMLElement;
     expect(within(entry).getByText('Sep 4, 2026')).toBeInTheDocument();
   });
@@ -125,11 +128,13 @@ describe('StatusPage', () => {
 
     await screen.findByText('API principal operativa');
     const entry = screen
-      .getByRole('heading', { name: 'Las etiquetas de plantas no estuvieron disponibles' })
+      .getByRole('heading', { name: 'Las etiquetas de plantas no funcionaban' })
       .closest('li') as HTMLElement;
     expect(within(entry).getByText('Resuelto')).toBeInTheDocument();
     expect(entry).toHaveTextContent('Del 4 de septiembre al 5 de octubre de 2026');
-    expect(entry).toHaveTextContent('#931');
+    expect(entry).toHaveTextContent('No pudimos cargar tus etiquetas de plantas');
+    expect(entry).toHaveTextContent('versión 0.39.0');
+    expect(entry.textContent).not.toMatch(/rutas?\b|servidor|#931|función|despliegue/iu);
   });
 
   it('does not claim the API is healthy before the first health response arrives', () => {

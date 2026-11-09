@@ -2078,8 +2078,8 @@
     "emptyLog": "Los incidentes se redactan a mano y todavía no se ha publicado ninguno aquí. Un registro vacío no mide el tiempo de actividad.",
     "incidents": {
       "plantTags2026": {
-        "title": "Las etiquetas de plantas no estuvieron disponibles",
-        "body": "Del 4 de septiembre al 5 de octubre de 2026, las seis rutas de etiquetas de plantas devolvieron un error del servidor. No se pudieron crear, quitar, listar, escanear ni proteger con PIN las etiquetas, ni completar tareas desde una etiqueta. Se veía «No pudimos cargar tus etiquetas de plantas» en la página de etiquetas, «Eso no funcionó» al cambiar una etiqueta y «Algo salió mal» en la página de escaneo. La corrección (#931) añadió la función de etiquetas de plantas al despliegue y entró en producción con la versión 0.39.0 el 5 de octubre."
+        "title": "Las etiquetas de plantas no funcionaban",
+        "body": "Del 4 de septiembre al 5 de octubre de 2026, las etiquetas de plantas no funcionaron. No se pudieron crear, quitar, listar, escanear ni proteger con PIN las etiquetas, ni completar tareas desde una etiqueta. Se veía «No pudimos cargar tus etiquetas de plantas» en la página de etiquetas, «Eso no funcionó» al cambiar una etiqueta y «Algo salió mal» en la página de escaneo. Se corrigió en la versión 0.39.0 el 5 de octubre."
       }
     }
   },
