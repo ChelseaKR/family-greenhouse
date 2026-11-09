@@ -77,6 +77,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **A Garden household that tries plant identification is told it isn't
+  included, not that an allowance of 0 resets next month (ADR 0042).** The
+  website names the 20-identification pack, its catalog price and the buy
+  button; the apps name no price or pack. Upgrade wording now points at
+  Greenhouse, since Garden has no allowance, and Spanish matches.
+
 - **Signing out clears what the app has read.** The next person to sign in on
   the same browser tab could see the previous account's homes in the switcher
   and, by choosing one, its cached plants and private notes. The in-memory

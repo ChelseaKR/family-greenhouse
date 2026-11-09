@@ -97,12 +97,15 @@ describe('help pages: the plan caps they state', () => {
 describe('help pages: the metered allowances they state', () => {
   it('states the monthly identification allowance for every tier', () => {
     const { seedling, garden, greenhouse } = IDENTIFY_ALLOWANCES;
+    // The website's answer and its plain-text twin, then the apps' pair.
     expect(
-      occurrences(
-        `${seedling} identification on Seedling, ${garden} on Garden, ${greenhouse} on Greenhouse`
-      ),
-      'the identify-photo answer must state all three allowances'
-    ).toBe(2);
+      occurrences(`${seedling} identification on Seedling, ${greenhouse} on Greenhouse`),
+      'the identify-photo answers must state the two allowances that exist'
+    ).toBe(4);
+    // Garden's 0 is no allowance, not a number that resets on the 1st.
+    expect(garden).toBe(0);
+    expect(occurrences('Garden has no monthly allowance')).toBe(2);
+    expect(occurrences('Seedling, 0 on Garden')).toBe(0);
   });
 
   it('states the leaf-health caps that production actually enforces', () => {
