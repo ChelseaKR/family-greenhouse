@@ -507,6 +507,7 @@
     "readingHeading": "More on plants and pets",
     "readingSafeIntro": "Shopping for something new?",
     "readingToxicIntro": "Already living with one from the second list?",
+    "holidayHeading": "Holiday plants",
     "citedPagesHeading": "Plants with a cited verdict page",
     "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
   },
@@ -2830,6 +2831,16 @@
         "forgiving": "Seven houseplants that survive being forgotten",
         "petSafe": "Pet-safe houseplants that are hard to kill",
         "toxicSwaps": "Common toxic houseplants and safer swaps"
+      },
+      "householdHeading": "Sharing the plants at home",
+      "household": {
+        "remember": "How to actually remember to water your plants",
+        "sharing": "Sharing plant care without becoming the household nag"
+      },
+      "holidayHeading": "Holiday plants and pets",
+      "holidayPets": {
+        "christmasCactus": "Christmas cactus and pets",
+        "poinsettia": "Poinsettia and pets"
       }
     },
     "plans": {

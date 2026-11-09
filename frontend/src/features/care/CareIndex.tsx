@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
@@ -11,6 +12,7 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
  * a single page that links them all. Public, no auth.
  */
 export function CareIndex() {
+  const { t } = useTranslation();
   useMetaTags({
     title: 'Plant Care Guides — How Often to Water Common Houseplants',
     description:
@@ -42,6 +44,30 @@ export function CareIndex() {
           </li>
         ))}
       </ul>
+
+      <section aria-labelledby="care-index-household" className="mt-12">
+        <h2 id="care-index-household" className="font-serif text-xl text-ink">
+          {t('landing.care.householdHeading')}
+        </h2>
+        <ul className="mt-3 space-y-2 text-sm">
+          <li>
+            <Link
+              to="/blog/how-to-remember-to-water-plants"
+              className="text-primary-700 underline hover:text-primary-800"
+            >
+              {t('landing.care.household.remember')}
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/blog/sharing-plant-care-without-becoming-the-nag"
+              className="text-primary-700 underline hover:text-primary-800"
+            >
+              {t('landing.care.household.sharing')}
+            </Link>
+          </li>
+        </ul>
+      </section>
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
         <aside

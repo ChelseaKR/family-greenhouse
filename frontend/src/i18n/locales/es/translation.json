@@ -520,6 +520,7 @@
     "readingHeading": "Más sobre plantas y mascotas",
     "readingSafeIntro": "¿Estás buscando una planta nueva?",
     "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?",
+    "holidayHeading": "Plantas navideñas",
     "citedPagesHeading": "Plantas con una página de veredicto citado",
     "citedPagesLede": "Una página por planta, con cada veredicto junto a la ficha de la ASPCA de la que sale."
   },
@@ -2895,6 +2896,16 @@
         "forgiving": "Siete plantas de interior que sobreviven al olvido",
         "petSafe": "Plantas seguras para mascotas y difíciles de matar",
         "toxicSwaps": "Plantas de interior tóxicas comunes y alternativas más seguras"
+      },
+      "householdHeading": "Compartir las plantas en casa (en inglés)",
+      "household": {
+        "remember": "Cómo acordarte de verdad de regar tus plantas",
+        "sharing": "Compartir el cuidado de las plantas sin ser quien regaña en casa"
+      },
+      "holidayHeading": "Plantas navideñas y mascotas (en inglés)",
+      "holidayPets": {
+        "christmasCactus": "El cactus de Navidad y las mascotas",
+        "poinsettia": "La flor de Pascua y las mascotas"
       }
     },
     "plans": {
