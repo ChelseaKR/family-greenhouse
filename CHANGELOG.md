@@ -16,6 +16,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-08
+
+**Garden is now $2.99 a month or $24.99 a year, and a production release needs
+one approval.** Plant identification is sold only by the 20-identification pack.
+Signing out now clears what the app has read, a renamed plant reaches its tasks,
+emptied fields stay empty, and the status page posts the plant tag outage. The
+Terms text changed with the new plan; Privacy did not.
+
+- **What the deploy changes.** Terraform sets the two new Garden price ids, the
+  100-check Garden leaf-health cap and `app_store_billing_enabled = "1"`, which
+  opens the `/billing/app-store/*` routes. No running subscription moves and no
+  stored data is migrated. The apps get these changes only with a store build,
+  and none is planned for this release.
+
 ### Added
 
 - **Garden goes on sale at $2.99 a month and $24.99 a year at the next
