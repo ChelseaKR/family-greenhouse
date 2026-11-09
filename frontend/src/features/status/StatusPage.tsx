@@ -23,7 +23,7 @@ import { healthService, type ComponentStatus, type OverallStatus } from '@/servi
  */
 
 const INCIDENTS: Array<{ date: string; title: string; resolved: boolean; body: string }> = [
-  // No incidents yet — leave the array empty rather than fake history.
+  // Nothing written up yet — leave the array empty rather than fake history.
   // {
   //   date: '2026-04-12',
   //   title: 'Plant photo uploads delayed (resolved)',
@@ -219,14 +219,15 @@ export function StatusPage() {
         <h2 className="font-serif text-2xl tracking-tight text-ink">Recent incidents</h2>
         {INCIDENTS.length === 0 ? (
           <p className="mt-4 text-sm text-gray-600">
-            {/* During a live outage, "No incidents in the last 90 days"
-                  would sit under a red banner and read as a contradiction —
-                  the hand-curated list just hasn't caught up yet. */}
+            {/* INCIDENTS is written by hand, so an empty list says nobody has
+                  written anything up. It used to say "No incidents in the last
+                  90 days", which nothing measured and which was false: all six
+                  plant-tag routes answered 500 from 2026-09-04 until #931. */}
             {unreachable
               ? 'Incident history unavailable right now.'
               : serverErrored
                 ? 'Details for the current issue will be posted here as we learn more.'
-                : 'No incidents in the last 90 days.'}
+                : 'Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.'}
           </p>
         ) : (
           <ul className="mt-4 space-y-6">

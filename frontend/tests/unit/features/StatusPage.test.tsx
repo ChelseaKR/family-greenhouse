@@ -48,6 +48,39 @@ describe('StatusPage', () => {
     expect(screen.getAllByText('Operational')).toHaveLength(1);
   });
 
+  it('does not read an empty hand-kept log as a measure of uptime', async () => {
+    vi.mocked(healthService.check).mockResolvedValue({
+      status: 'ok',
+      version: 'test-version',
+      checkedAt: '2026-07-25T12:00:00.000Z',
+      components: {
+        database: { status: 'ok' },
+        auth: { status: 'ok' },
+        mail: { status: 'ok' },
+      },
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <StatusPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('Core API operational')).toBeInTheDocument();
+    // INCIDENTS is written by hand. An empty list means nobody wrote anything
+    // down, not that nothing happened: all six plant-tag routes answered 500
+    // from 2026-09-04 until #931, while this page said there were no incidents.
+    expect(screen.queryByText(/no incidents/iu)).not.toBeInTheDocument();
+    expect(screen.getByText(/written up by hand/iu)).toBeInTheDocument();
+  });
+
   it('does not claim the API is healthy before the first health response arrives', () => {
     vi.mocked(healthService.check).mockImplementation(() => new Promise(() => undefined));
     const queryClient = new QueryClient({

@@ -98,6 +98,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and species and a task's notes came back after being deleted and saved, and a
   custom task changed to another type kept showing its custom name.
 
+- **The status page no longer claims a clean record it never measured.** It
+  said "No incidents in the last 90 days" because a hand-kept list was empty,
+  including during the plant-tag outage fixed in #931. It now says the log is
+  written by hand and has no entries yet.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**
