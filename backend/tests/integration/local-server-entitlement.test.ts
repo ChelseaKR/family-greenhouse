@@ -501,7 +501,7 @@ describe('starting: what a household may begin (#476)', () => {
           .send({ image: 'a'.repeat(128) });
 
       onPlan('garden', 'active');
-      expect((await identify()).body.usage.allowance).toBe(30);
+      expect((await identify()).body.usage.allowance).toBe(0);
 
       onPlan('garden', 'unpaid');
       const dunning = await identify();
@@ -509,7 +509,35 @@ describe('starting: what a household may begin (#476)', () => {
       expect(dunning.body.usage.allowance).toBe(1);
 
       onCancelledLifetime('garden');
-      expect((await identify()).body.usage.allowance).toBe(30);
+      expect((await identify()).body.usage.allowance).toBe(0);
+    });
+  });
+
+  describe('identification refusal — POST /plants/identify, enforced', () => {
+    const identify = (token: string) =>
+      request(app)
+        .post('/plants/identify')
+        .set(auth(token))
+        .send({ image: 'a'.repeat(128) });
+
+    beforeEach(() => {
+      process.env.IDENTIFY_METERING_ENABLED = '1';
+    });
+    afterEach(() => {
+      delete process.env.IDENTIFY_METERING_ENABLED;
+    });
+
+    it('mirrors production: Garden is told identification is not included, never a reset', async () => {
+      const token = await loginAsSeed();
+      onPlan('garden', 'active');
+      const res = await identify(token);
+      expect(res.status).toBe(402);
+      expect(res.body.message).toBe(
+        'Identification is not included in Garden. Upgrade to Greenhouse for a monthly allowance.'
+      );
+      expect(res.body.details).toMatchObject({ allowance: 0, planName: 'Garden' });
+      const me = await request(app).get('/billing/me').set(auth(token));
+      expect(me.body.identifyAllowance).toEqual({ monthly: 0, planName: 'Garden' });
     });
   });
 

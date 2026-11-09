@@ -160,8 +160,8 @@ stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
 #   3. Add both ids to stripe_price_ids_attested below, with comments.
 #   4. Customer Portal: replace the $4.99 Garden monthly price with the $2.99
 #      monthly and the $24.99 yearly in the list a customer may switch to.
-stripe_price_id_garden_299         = ""
-stripe_price_id_garden_annual_2499 = ""
+stripe_price_id_garden_299         = "price_1UZebQAhnUt8CMG0fKwhJAwy"
+stripe_price_id_garden_annual_2499 = "price_1UZebdAhnUt8CMG0vpZCVGdE"
 # Identification top-up pack (ADR 0019): a ONE-TIME price for "20
 # identifications, $1.99", created in Stripe LIVE mode. Blank = not for sale;
 # POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit
@@ -222,6 +222,8 @@ stripe_price_ids_attested = [
   "price_1UB7JuAhnUt8CMG05o9ktQLa", # Greenhouse monthly
   "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual (withdrawn from sale; existing subscribers still renew)
   "price_1UExJSAhnUt8CMG0fGgIyAzZ", # Identification top-up pack, 20 credits, $1.99 one-time (ADR 0019)
+  "price_1UZebQAhnUt8CMG0fKwhJAwy", # Garden $2.99 monthly (ADR 0042), created by the owner in LIVE mode 2026-11-08
+  "price_1UZebdAhnUt8CMG0vpZCVGdE", # Garden $24.99 yearly (ADR 0042), created by the owner in LIVE mode 2026-11-08
 ]
 
 # Enable only after Stripe Tax registrations and product tax codes are live.
