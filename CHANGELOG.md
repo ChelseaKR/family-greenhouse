@@ -103,6 +103,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   including during the plant-tag outage fixed in #931. It now says the log is
   written by hand and has no entries yet.
 
+- **A caretaker seat now ends when the member who created it leaves or is
+  removed.** Sitter links, plant tags and wall displays already did. A removed
+  admin who kept a seat URL could read tasks and spaces and complete tasks for
+  up to 180 days. The caretaker's visits stay on record, and the confirmations,
+  help pages and audit log now name seats. Seats left live by earlier departures
+  are not changed, because their creator was already scrubbed.
+
 ## [0.49.0] - 2026-11-08
 
 **Eight new watering guides, answers up front, and a smoother first plant.**

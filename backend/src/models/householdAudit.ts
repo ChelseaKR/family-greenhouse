@@ -82,6 +82,7 @@ interface RevokedCounts {
   plantTags?: number;
   kioskLinks?: number;
   cuttingShares?: number;
+  caretakerSeats?: number;
 }
 
 /**
@@ -147,8 +148,16 @@ export const AUDIT_DETAIL_KEYS: DetailKeys = {
     'plantTags',
     'kioskLinks',
     'cuttingShares',
+    'caretakerSeats',
   ],
-  'member.removed': ['role', 'sitterLinks', 'plantTags', 'kioskLinks', 'cuttingShares'],
+  'member.removed': [
+    'role',
+    'sitterLinks',
+    'plantTags',
+    'kioskLinks',
+    'cuttingShares',
+    'caretakerSeats',
+  ],
   'member.role_changed': ['from', 'to'],
   'invite.created': ['channel', 'expiresAt'],
   'sitter_link.created': ['linkId', 'startsAt', 'expiresAt'],

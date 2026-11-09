@@ -423,6 +423,39 @@ export async function listCaretakers(householdId: string): Promise<Caretaker[]> 
 }
 
 /**
+ * Revoke every currently-ACTIVE seat a given member created. Called when that
+ * member leaves or is removed: a seat opens the household's tasks and spaces,
+ * plus completion, photos and notes, for up to 180 days, and its URL was shown
+ * to the person who created it. Visits already recorded stay.
+ *
+ * A read failure PROPAGATES rather than being swallowed into 0 — "we could not
+ * look" must never be reported to the caller as "there was nothing to revoke"
+ * (ADR 0010), because the caller writes the number into an audit line.
+ */
+export async function revokeCaretakersCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<number> {
+  const seats = (await listCaretakers(householdId)).filter(
+    (seat) => seat.createdBy === userId && seat.status === 'active'
+  );
+  for (const seat of seats) {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: caretakerPk(seat.keyToken), SK: 'METADATA' },
+        UpdateExpression: 'SET #status = :revoked',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':revoked': 'revoked' },
+        // Guard against a row swept by TTL between the list read and this write.
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+  }
+  return seats.length;
+}
+
+/**
  * Revoke a seat by its opaque id, scoped to the household so one household
  * can never revoke another's. Returns false when no matching row exists
  * (→ 404). Idempotent: revoking an already-revoked seat succeeds.

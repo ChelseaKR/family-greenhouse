@@ -1393,7 +1393,7 @@
       "blockedLastMember": "You’re the only member, so there’s nobody to leave this household to. Invite someone and make them an admin first. If you’re done with Family Greenhouse altogether, you can delete your account in Settings instead — that removes you from every household.",
       "blockedLastAdmin": "You’re the only admin. Make another member an admin above, and then you can leave.",
       "confirmTitle": "Leave {{household}}?",
-      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags and wall-display links you created stop working. To come back, an admin would have to invite you again.",
+      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags, wall-display links and caretaker seats you created stop working. To come back, an admin would have to invite you again.",
       "confirmTasks_one": "You have {{count}} task with your name on it; it goes back up for grabs.",
       "confirmTasks_other": "You have {{count}} tasks with your name on them; they go back up for grabs.",
       "confirmTasksUnknown": "Any tasks with your name on them go back up for grabs.",
@@ -1455,7 +1455,7 @@
       "unknown": "A change to the household this version of the app can’t describe"
     },
     "detail": {
-      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}}",
+      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}} · caretaker seats {{caretakerSeats}}",
       "scopes": "Access: {{scopes}}",
       "expires": "Expires {{date}}",
       "giftEnds": "Runs until {{date}}",

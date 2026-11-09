@@ -786,6 +786,31 @@ describe('PUT /households/:id/members/:userId/role', () => {
 });
 
 describe('DELETE /households/:householdId/members/:userId', () => {
+  it('ends the caretaker seats the removed member created, as production does', async () => {
+    seedMember('member-r', 'removeme@example.com', 'member');
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse';
+    const token = await loginAsSeed();
+    const mint = async (name: string) => {
+      const res = await request(app)
+        .post(`/households/${seedHouseholdId}/caretakers`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name, expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() });
+      expect(res.status).toBe(201);
+      return res.body.token as string;
+    };
+    const theirs = await mint('Dana');
+    const kept = await mint('Kit');
+    db.caretakers.get(theirs)!.createdBy = 'member-r';
+
+    const res = await request(app)
+      .delete(`/households/${seedHouseholdId}/members/member-r`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(204);
+
+    expect((await request(app).get(`/caretaker/${theirs}`)).status).toBe(404);
+    expect((await request(app).get(`/caretaker/${kept}`)).status).toBe(200);
+  });
+
   it('lets an admin remove a member and clears their default-household claim', async () => {
     seedMember('member-r', 'removeme@example.com', 'member');
     const task = db.tasks.get(seedTaskId)!;

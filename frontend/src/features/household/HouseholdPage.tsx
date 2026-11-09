@@ -578,7 +578,7 @@ export function HouseholdPage() {
         onClose={() => setMemberToRemove(null)}
         onConfirm={() => memberToRemove && removeMemberMutation.mutate(memberToRemove)}
         title="Remove member"
-        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, and any API key they issued."
+        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, their caretaker seats, and any API key they issued."
         confirmLabel="Remove"
         isLoading={removeMemberMutation.isPending}
       />

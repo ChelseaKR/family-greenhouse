@@ -718,12 +718,13 @@ export const HELP_SECTIONS: HelpSection[] = [
               household&rsquo;s care record stays intact, but their name is replaced with{' '}
               <strong>&ldquo;Former member&rdquo;</strong>. Anything currently assigned to them
               becomes unassigned. Worth knowing: removing someone also revokes the credentials they
-              minted — their sitter links, printed plant tags and wall-display links stop working at
-              once, so a helper they had set up will need a new link from whoever stays.
+              minted — their sitter links, printed plant tags, wall-display links and caretaker
+              seats stop working at once, so a helper they had set up will need a new link from
+              whoever stays.
             </p>
           </>
         ),
-        text: 'An admin removes them from the Household page. They immediately lose access to that household plants and tasks; their own account and any other households are untouched. Two rules are enforced: you cannot remove yourself (to go, use Leave household instead), and you cannot remove the last admin of a household that still has other members, so promote someone else first. Their history stays, anonymized: past completions and activity remain so the household care record stays intact, but their name is replaced with Former member, and anything currently assigned to them becomes unassigned. Removing someone also revokes the credentials they minted: their sitter links, printed plant tags and wall-display links stop working at once, so a helper they had set up will need a new link from whoever stays.',
+        text: 'An admin removes them from the Household page. They immediately lose access to that household plants and tasks; their own account and any other households are untouched. Two rules are enforced: you cannot remove yourself (to go, use Leave household instead), and you cannot remove the last admin of a household that still has other members, so promote someone else first. Their history stays, anonymized: past completions and activity remain so the household care record stays intact, but their name is replaced with Former member, and anything currently assigned to them becomes unassigned. Removing someone also revokes the credentials they minted: their sitter links, printed plant tags, wall-display links and caretaker seats stop working at once, so a helper they had set up will need a new link from whoever stays.',
       },
       {
         id: 'leave-household',
@@ -740,9 +741,9 @@ export const HELP_SECTIONS: HelpSection[] = [
               The household keeps its care record: your past completions and activity stay, with
               your name replaced by <strong>&ldquo;Former member&rdquo;</strong>. Tasks with your
               name on them go back up for grabs, you are taken out of any care rotation, and the
-              sitter links, printed plant tags and wall-display links you created stop working. The
-              household&rsquo;s admins are emailed that you left and you get a confirmation, unless
-              you have switched those emails off.
+              sitter links, printed plant tags, wall-display links and caretaker seats you created
+              stop working. The household&rsquo;s admins are emailed that you left and you get a
+              confirmation, unless you have switched those emails off.
             </p>
             <p>It is refused, with the reason on screen, in three situations:</p>
             <ul>
@@ -764,7 +765,7 @@ export const HELP_SECTIONS: HelpSection[] = [
             <p>Changed your mind? An admin of that household can invite you again.</p>
           </>
         ),
-        text: 'Open the Household page for that household and choose Leave household at the bottom. You confirm once and it happens straight away. Your account, and every other household you belong to, are untouched. Leaving means you lose access to that household plants, tasks and activity. The household keeps its care record: your past completions and activity stay, with your name replaced by Former member. Tasks with your name on them go back up for grabs, you are taken out of any care rotation, and the sitter links, printed plant tags and wall-display links you created stop working. The household admins are emailed that you left and you get a confirmation, unless you have switched those emails off. It is refused, with the reason on screen, in three situations: you are the only member (invite someone and make them an admin first, or, if you are done with Family Greenhouse, delete your account, which removes you from every household); you are the only admin of a household that still has other members (make someone else an admin first); or you are an admin and the household has a paid plan that will renew. Leaving never cancels or changes the plan, but if it is billed to your card you cannot reach the household billing once you have gone, so you are asked to confirm first. Changed your mind? An admin of that household can invite you again.',
+        text: 'Open the Household page for that household and choose Leave household at the bottom. You confirm once and it happens straight away. Your account, and every other household you belong to, are untouched. Leaving means you lose access to that household plants, tasks and activity. The household keeps its care record: your past completions and activity stay, with your name replaced by Former member. Tasks with your name on them go back up for grabs, you are taken out of any care rotation, and the sitter links, printed plant tags, wall-display links and caretaker seats you created stop working. The household admins are emailed that you left and you get a confirmation, unless you have switched those emails off. It is refused, with the reason on screen, in three situations: you are the only member (invite someone and make them an admin first, or, if you are done with Family Greenhouse, delete your account, which removes you from every household); you are the only admin of a household that still has other members (make someone else an admin first); or you are an admin and the household has a paid plan that will renew. Leaving never cancels or changes the plan, but if it is billed to your card you cannot reach the household billing once you have gone, so you are asked to confirm first. Changed your mind? An admin of that household can invite you again.',
       },
       {
         id: 'household-full',
