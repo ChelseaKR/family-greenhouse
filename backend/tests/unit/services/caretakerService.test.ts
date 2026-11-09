@@ -631,6 +631,30 @@ describe('caretakerService.revokeCaretakersCreatedBy', () => {
     ]);
   });
 
+  it('records why and when, so the household can be shown what happened', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Items: [row()] } as never)
+      .mockResolvedValue({} as never);
+
+    await svc.revokeCaretakersCreatedBy(HH, 'departing');
+    const write = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) =>
+          c[0] as unknown as {
+            kind: string;
+            input: { ExpressionAttributeValues?: Record<string, unknown> };
+          }
+      )
+      .find((c) => c.kind === 'Update');
+    expect(write?.input.ExpressionAttributeValues).toMatchObject({
+      ':revoked': 'revoked',
+      ':reason': 'creator_left',
+      ':at': expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  });
+
   it('follows pagination, so an older seat cannot survive past the first page', async () => {
     const { dynamodb, svc } = await load();
     vi.mocked(dynamodb.send)

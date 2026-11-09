@@ -2626,6 +2626,11 @@
       "revoke": "Revocar",
       "revokeHint": "Revocar detiene el enlace de inmediato. Las visitas ya registradas se conservan.",
       "loadFailed": "No pudimos cargar tus plazas de cuidador ahora mismo. Eso no significa que no tengas ninguna: las que creaste siguen activas.",
+      "turnedOffHeading": "Desactivadas cuando alguien salió",
+      "turnedOffRow": "{{name}}: desactivada el {{date}}, cuando salió del hogar la persona que creó esta plaza. El enlace anterior ya no funciona, y no podemos avisar a {{name}} por ti.",
+      "turnedOffNextEntitled": "Si sigue ayudando, crea una plaza nueva arriba y envíale el enlace nuevo.",
+      "turnedOffNextLocked": "Una plaza de cuidador nueva requiere Greenhouse, y tu plan no lo incluye. Si sigue ayudando, puedes compartir un enlace de cuidador desde esta página, pero lo que haga no quedará registrado a su nombre.",
+      "turnedOffNextUnknown": "No pudimos comprobar ahora mismo si tu plan permite crear una plaza nueva. Si sigue ayudando, necesitará un enlace nuevo.",
       "reportLink": "Abrir el informe de visitas"
     },
     "page": {

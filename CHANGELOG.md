@@ -107,8 +107,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   removed.** Sitter links, plant tags and wall displays already did. A removed
   admin who kept a seat URL could read tasks and spaces and complete tasks for
   up to 180 days. The caretaker's visits stay on record, and the confirmations,
-  help pages and audit log now name seats. Seats left live by earlier departures
-  are not changed, because their creator was already scrubbed.
+  help pages and audit log now name seats. The product cannot tell the caretaker,
+  so the seat stays on the Household page with why it stopped and what an admin
+  can do next, including when the plan cannot create a new one, and the email to
+  the remaining admins when someone leaves gives the count. Seats left live by
+  earlier departures are not changed, because their creator was already scrubbed.
 
 ## [0.49.0] - 2026-11-08
 

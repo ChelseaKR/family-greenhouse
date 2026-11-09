@@ -387,7 +387,9 @@ export interface RevokedCredentialCounts {
  * on the grounds that a household may rely on them, but a seat URL is shown to
  * the admin who created it and opens the household for up to 180 days. A
  * remaining admin issues a new seat; the caretaker cannot be told by the product
- * (ADR 0020), so the removal and leave confirmations say it will happen.
+ * (ADR 0020), so the removal and leave confirmations say it will happen, the
+ * seat stays on the household's card with why it stopped, and the email to the
+ * remaining admins when someone leaves names the count.
  *
  * API keys are deliberately absent: `middleware/apiKey.ts` re-checks the
  * creator's membership on every use, so the key stops working without the row

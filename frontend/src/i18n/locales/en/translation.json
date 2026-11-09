@@ -2561,6 +2561,11 @@
       "revoke": "Revoke",
       "revokeHint": "Revoking stops the link straight away. Visits already recorded are kept.",
       "loadFailed": "We couldn’t load your caretaker seats just now. That isn’t the same as having none — any seats you created are still active.",
+      "turnedOffHeading": "Turned off when someone left",
+      "turnedOffRow": "{{name}}: turned off on {{date}}, when the person who created this seat left the household. The old link no longer works, and we can’t tell {{name}} for you.",
+      "turnedOffNextEntitled": "If they’re still helping, create a new seat above and send them the new link.",
+      "turnedOffNextLocked": "A new caretaker seat needs Greenhouse, and your plan doesn’t include it. If they’re still helping, you can share a sitter link from this page instead, but what they do won’t be logged under their name.",
+      "turnedOffNextUnknown": "We couldn’t check whether your plan can create a new seat just now. If they’re still helping, they’ll need a new link.",
       "reportLink": "Open the visit report"
     },
     "page": {

@@ -311,6 +311,9 @@ export interface MemberLeftCopyInput {
   /** Tasks that carried their name and are now up for grabs. A real count of
    *  rows the departure rewrote (accountCleanup.DepartureCleanupSummary). */
   releasedTasks: number;
+  /** Caretaker seats the departure revoked. Undefined on a row queued before
+   *  this field existed, which says nothing rather than reading as none. */
+  caretakerSeats?: number;
   householdUrl: string;
   tasksUrl: string;
   settingsUrl: string;
@@ -322,6 +325,7 @@ export function composeMemberLeftEmail(
 ): ComposedEmail {
   const home = input.householdName;
   const n = input.releasedTasks;
+  const seats = input.caretakerSeats ?? 0;
   if (locale === 'es') {
     const subject = input.memberName
       ? home
@@ -346,7 +350,18 @@ export function composeMemberLeftEmail(
     }
     lines.push(
       '',
-      'Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creó han dejado de funcionar.',
+      'Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creó han dejado de funcionar.'
+    );
+    if (seats > 0) {
+      lines.push(
+        '',
+        seats === 1
+          ? 'Se desactivó una plaza de cuidador que creó, y su enlace ya no funciona.'
+          : `Se desactivaron ${formatNumber(seats, 'es')} plazas de cuidador que creó, y sus enlaces ya no funcionan.`,
+        'No podemos avisar al cuidador. Si sigue ayudando, la página del hogar explica qué puedes hacer.'
+      );
+    }
+    lines.push(
       '',
       `Miembros del hogar: ${input.householdUrl}`,
       ...footer(
@@ -380,7 +395,18 @@ export function composeMemberLeftEmail(
   }
   lines.push(
     '',
-    'Sitter links, plant tags and wall-display links they created have stopped working.',
+    'Sitter links, plant tags and wall-display links they created have stopped working.'
+  );
+  if (seats > 0) {
+    lines.push(
+      '',
+      seats === 1
+        ? 'One caretaker seat they created was turned off, and its link no longer works.'
+        : `${formatNumber(seats, 'en')} caretaker seats they created were turned off, and their links no longer work.`,
+      'We can’t tell the caretaker. If they are still helping, the Household page explains what you can do.'
+    );
+  }
+  lines.push(
     '',
     `Household members: ${input.householdUrl}`,
     ...footer(

@@ -456,6 +456,8 @@ interface Caretaker {
   startsAt: string;
   expiresAt: string;
   status: 'active' | 'revoked';
+  revokedReason?: 'creator_left';
+  revokedAt?: string;
 }
 
 /** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
@@ -3683,6 +3685,8 @@ function departLocalHousehold(
   for (const seat of db.caretakers.values()) {
     if (seat.householdId === householdId && seat.createdBy === userId && seat.status === 'active') {
       seat.status = 'revoked';
+      seat.revokedReason = 'creator_left';
+      seat.revokedAt = new Date().toISOString();
       revoked.caretakerSeats += 1;
     }
   }

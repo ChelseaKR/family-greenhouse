@@ -25,9 +25,10 @@ vi.mock('../../src/services/cognitoUsers.js', () => ({
   clearHouseholdClaims: async () => undefined,
   deleteUser: async () => undefined,
 }));
+const notifyMemberLeft = vi.hoisted(() => vi.fn(async () => 0));
 vi.mock('../../src/services/householdEmails.js', async (orig) => ({
   ...(await orig<typeof import('../../src/services/householdEmails.js')>()),
-  notifyMemberLeft: async () => undefined,
+  notifyMemberLeft,
   sendLeaveConfirmation: async () => undefined,
 }));
 
@@ -38,6 +39,7 @@ const inDays = (n: number) => new Date(Date.now() + n * DAY_MS).toISOString();
 
 beforeEach(async () => {
   store.reset();
+  notifyMemberLeft.mockClear();
   vi.stubEnv('FRONTEND_URL', 'https://app.example.invalid');
   const { __resetMembershipCacheForTests } = await import('../../src/middleware/auth.js');
   __resetMembershipCacheForTests();
@@ -112,6 +114,25 @@ describe('a departure and the caretaker seats of the member who left', () => {
     // The household's record of work that happened survives the seat.
     expect(await caretakers.listVisits(householdId, inDays(-1), inDays(1))).toHaveLength(1);
     expect(auditDetails(householdId, 'member.removed')[0]).toMatchObject({ caretakerSeats: 1 });
+
+    // The seat stays listed for the admins who remain, with why it stopped.
+    const management = await import('../../src/handlers/caretakers/management.js');
+    const list = await invokeHandler(management.listCaretakers, {
+      method: 'GET',
+      routeKey: 'GET /households/{id}/caretakers',
+      pathParameters: { id: householdId },
+      identity: { ...STAYING, householdId },
+    });
+    expect(list.statusCode).toBe(200);
+    const seats = list.body as Array<Record<string, unknown>>;
+    expect(seats.find((s) => s.name === 'Dana')).toMatchObject({
+      status: 'revoked',
+      revokedReason: 'creator_left',
+      revokedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    const kept = seats.find((s) => s.name === 'Kit');
+    expect(kept?.status).toBe('active');
+    expect(kept).not.toHaveProperty('revokedReason');
   });
 
   it('leaving ends the leaver’s seat and reports it to the leaver and the audit log', async () => {
@@ -131,5 +152,9 @@ describe('a departure and the caretaker seats of the member who left', () => {
     expect(await caretakers.getActiveCaretaker(theirSeat)).toBeNull();
     expect((await caretakers.getActiveCaretaker(keptSeat))?.name).toBe('Kit');
     expect(auditDetails(householdId, 'member.left')[0]).toMatchObject({ caretakerSeats: 1 });
+    // The remaining admins are told how many, since nothing can tell the caretaker.
+    expect(notifyMemberLeft).toHaveBeenCalledWith(
+      expect.objectContaining({ householdId, caretakerSeats: 1 })
+    );
   });
 });

@@ -808,6 +808,10 @@ describe('DELETE /households/:householdId/members/:userId', () => {
     expect(res.status).toBe(204);
 
     expect((await request(app).get(`/caretaker/${theirs}`)).status).toBe(404);
+    expect(db.caretakers.get(theirs)).toMatchObject({
+      status: 'revoked',
+      revokedReason: 'creator_left',
+    });
     expect((await request(app).get(`/caretaker/${kept}`)).status).toBe(200);
   });
 

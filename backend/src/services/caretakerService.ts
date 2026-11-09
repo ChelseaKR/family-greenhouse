@@ -89,6 +89,11 @@ import { DynamoDBItem } from '../models/types.js';
 
 export type CaretakerStatus = 'active' | 'revoked';
 
+/** Set only when a departure ended the seat, so the household's remaining admins
+ *  can be shown what happened. A seat an admin revoked by hand carries neither
+ *  this nor `revokedAt`: they already know. */
+export type CaretakerRevokedReason = 'creator_left';
+
 /**
  * Everything a caretaker may do, in full. Strictly narrower than `member`.
  * Adding an entry here without an ADR update is a review failure, not a
@@ -151,6 +156,8 @@ export interface Caretaker {
   /** End of the engagement window (ISO). Enforced on every public call. */
   expiresAt: string;
   status: CaretakerStatus;
+  revokedReason?: CaretakerRevokedReason;
+  revokedAt?: string;
 }
 
 /** A caretaker seat as shown to the household — never the token, and never
@@ -274,6 +281,8 @@ function itemToCaretaker(item: Record<string, unknown>): Caretaker {
     startsAt: item.startsAt as string,
     expiresAt: item.expiresAt as string,
     status: item.status as CaretakerStatus,
+    ...(item.revokedReason ? { revokedReason: item.revokedReason as CaretakerRevokedReason } : {}),
+    ...(item.revokedAt ? { revokedAt: item.revokedAt as string } : {}),
   };
 }
 
@@ -444,9 +453,13 @@ export async function revokeCaretakersCreatedBy(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: caretakerPk(seat.keyToken), SK: 'METADATA' },
-        UpdateExpression: 'SET #status = :revoked',
+        UpdateExpression: 'SET #status = :revoked, revokedReason = :reason, revokedAt = :at',
         ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':revoked': 'revoked' },
+        ExpressionAttributeValues: {
+          ':revoked': 'revoked',
+          ':reason': 'creator_left',
+          ':at': new Date().toISOString(),
+        },
         // Guard against a row swept by TTL between the list read and this write.
         ConditionExpression: 'attribute_exists(PK)',
       })
