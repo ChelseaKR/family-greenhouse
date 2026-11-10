@@ -16,6 +16,31 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **The apps ask before sending data to Amazon Bedrock or Plant.id.** In the
+  iPhone and Android apps, the first chat question, leaf health check and photo
+  identification each open a dialog that names the service and what goes to it.
+  Not now sends nothing; Allow is remembered on that device. The website asks
+  nothing new (App Review Guideline 5.1.2(i)).
+- **The App Store plans card says what each plan includes,** from the plan
+  catalog's caps and the App Store's own subscription description (Guideline
+  3.1.2(c)).
+
+### Fixed
+
+- **Nothing in the iPhone app or its listing says the app sells nothing.** The
+  App Store description names the three In-App Purchase subscriptions and their
+  renewal terms. Help no longer says the apps have no notifications and no
+  purchases. Locked features in an iPhone build that sells plans point at
+  Settings → Plan status instead of "Plan changes aren't available in the app."
+- **Deleting an account does not cancel an App Store subscription, and now says
+  so,** on the Delete my account screen in the iPhone app and on the public
+  account deletion page. The iOS privacy manifest declares Purchase History.
+- **The privacy policy names Apple In-App Purchase** and what the server keeps
+  about an App Store subscription. Privacy and account deletion take a new
+  effective date at the next release.
+
 ### Changed
 
 - **Internal links and one campaign tag.** Home, /care and /help/households link

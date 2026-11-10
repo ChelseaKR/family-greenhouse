@@ -19,6 +19,17 @@ Everything below was checked against `origin/main` @ `06706f55`
 same-day analytics and universal-links work. Where a fact could go stale
 quickly (deep links, push), the section says how to re-check it.
 
+## 2026-11-09: In-App Purchase supersedes "the app sells nothing"
+
+Since ADR 0041 and ADR 0042 the iPhone app sells three auto-renewing
+subscriptions through In-App Purchase (Garden yearly, Garden monthly,
+Greenhouse monthly) in a store build made with `VITE_APP_STORE_PURCHASES=true`.
+The Google Play app still sells nothing. Wherever an older section below says
+the app "sells nothing" or quotes a description or review note saying so, it is
+history, not copy to paste: the current description is
+`store-assets/metadata/en-US.json` (`appStore.description`), and the current
+review notes are kept outside the repository with the submission packet.
+
 ## 0. Readiness re-check, 2026-10-04
 
 Re-verified against `origin/main` @ `c4a4f908` (after #911 to #919, the native
@@ -89,7 +100,7 @@ now available," May 1, 2025
 >
 > What is native in the app: Apple's tab bar and navigation bar (Home, Plants, Tasks, Household, More), large titles, the back swipe, search and menus in the navigation bar on Plants, alerts and action sheets for confirmations, a native Settings list, Add care task as a native form sheet, the camera and photo picker (on a plant's page, "…" → Take photo / Choose photo; on Add plant; on the leaf health check; and on the sitter and caretaker pages), the share sheet, printing a plant's passport, haptics, and push notifications for care reminders.
 >
-> The app sells nothing and collects no payment. Paid plans exist on our website; the app shows the household's plan as read-only and has no purchase path, price or link to one.
+> (Superseded 2026-11-09: the app now sells plans through In-App Purchase. This draft is history.) The app sells nothing and collects no payment. Paid plans exist on our website; the app shows the household's plan as read-only and has no purchase path, price or link to one.
 >
 > Reminders: by email, and on iPhone as push notifications once turned on. Nothing is asked at launch. Settings → Notifications → This device → Turn on shows the iOS permission prompt once; the Tasks tab offers the same while care is due. A reminder is sent once a day, on the hourly run after the account's quiet hours end (08:00 in the account's time zone with none set), for the tasks due that day, with the number of tasks on the app icon. Tapping it opens Tasks. Push needs a physical iPhone; the Simulator has no push token.
 
@@ -109,7 +120,7 @@ push paragraph is true of build 4001 onward only (made with
 | Primary category     | Lifestyle                                                                                                                                                                                                                                                                             |
 | Age rating           | 4+ — no objectionable-content categories apply: no user-generated content visible outside an invited household, no open chat between strangers (the AI feature is a one-way assistant, not messaging), no gambling, no mature themes. Answer Apple's questionnaire "None" throughout. |
 | Price (app download) | Free                                                                                                                                                                                                                                                                                  |
-| In-app purchase      | None. The app sells nothing and collects no payment — see "Price and payment model" below.                                                                                                                                                                                            |
+| In-app purchase      | Garden yearly, Garden monthly and Greenhouse monthly auto-renewing subscriptions (ADR 0041, ADR 0042) — see the 2026-11-09 note above.                                                                                                                                                |
 
 ### Description
 
@@ -132,7 +143,7 @@ push paragraph is true of build 4001 onward only (made with
 > • Plant profiles with room, photos, and your own notes.
 > • Watering, feeding, repotting, and custom tasks on the schedules you set.
 > • A photo timeline so you can look back at how a plant has changed.
-> • Identify a plant from a photo, and run a leaf health check when something looks off.
+> • Run a leaf health check when something looks off.
 > • Subscribe to upcoming care from your own calendar app.
 >
 > REMINDERS
@@ -146,7 +157,9 @@ push paragraph is true of build 4001 onward only (made with
 > • Report an answer that looks wrong and we review it.
 >
 > ACCOUNTS AND PRICING
-> Family Greenhouse is free to download. This app does not sell subscriptions and collects no payment. It shows your current plan and usage as read-only information.
+> Family Greenhouse is free to download, and the free Seedling plan covers one home with up to 2 people and 8 plants. Garden and Greenhouse are optional auto-renewing subscriptions, available in the app through In-App Purchase, and one plan covers the whole household. Garden is billed yearly or monthly, and adds up to 200 plants, any number of people, the plant care assistant, and sitter links of up to 90 days. Greenhouse is billed monthly, and adds any number of homes. Payment is charged to your Apple ID when you confirm. A subscription renews automatically unless it is cancelled at least 24 hours before the end of the current period. Manage or cancel it in your Apple ID's subscription settings.
+>
+> Terms of Use: https://familygreenhouse.net/legal/terms
 >
 > Privacy policy: https://familygreenhouse.net/legal/privacy
 > Support: https://familygreenhouse.net/support
@@ -190,10 +203,11 @@ ceiling exceeds what those cadences earn per month). Garden annual came back
 at $24.99 on 2026-11-07 once identification left the plan (ADR 0042); the
 Garden lifetime purchase and Greenhouse annual stay withdrawn, and existing
 subscribers on them keep renewing.
-None of this is sold in the app: `BillingSettings.tsx` gates on
-`isNativeApp()` and shows a neutral "Plan changes aren't available in the
-app," with no link, and in the app `/pricing` and `/gift` open Settings →
-Plan status rather than any plans page.
+None of these Stripe prices is sold in the app. In the iPhone app with
+In-App Purchase on, Settings → Plan status shows the App Store's own prices
+(`AppStorePlans.tsx`); everywhere else in the apps `BillingSettings.tsx` shows
+a neutral "Plan changes aren't available in the app," with no link. In the app
+`/pricing` and `/gift` open Settings → Plan status rather than any plans page.
 This is Apple's Guideline 3.1.1 rule for a "digital goods" subscription, not
 a choice made for this listing — see `docs/mobile.md`, "Store payment
 rules," for the two-store policy this follows.
