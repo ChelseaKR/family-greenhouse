@@ -895,7 +895,11 @@ export function checkPlantSafetyPageHtml({
       fail(`the lead answer differs from the ${lead.id} FAQ answer the table composes`);
     }
     const url = page.claims[lead.id].source.url;
-    if (![...block.querySelectorAll('a[data-claim="citation"]')].some((a) => a.getAttribute('href') === url)) {
+    if (
+      ![...block.querySelectorAll('a[data-claim="citation"]')].some(
+        (a) => a.getAttribute('href') === url
+      )
+    ) {
       fail(`the lead has no citation beside it linking ${url}`);
     }
   }
