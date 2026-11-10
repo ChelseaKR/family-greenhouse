@@ -513,6 +513,7 @@
   },
   "plantSafetyPage": {
     "metaTitle": "Is {{name}} toxic to cats and dogs? What to know",
+    "leadTitle": "Is {{name}} toxic to {{animal}}? Listed as {{verdict}}",
     "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? The source, and who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
     "heading": "Is {{questionName}} toxic to cats and dogs?",
@@ -597,11 +598,14 @@
       "animal": {
         "cats": "cats",
         "dogs": "dogs",
-        "horses": "horses"
+        "horses": "horses",
+        "rats": "rats"
       },
       "question": "Is {{name}} toxic to {{animal}}?",
+      "and": "and",
       "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
       "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerUnlisted": "We can’t say. The ASPCA listing for {{title}} ({{scientificName}}) covers {{animals}} and has no entry for {{animal}}. Ask an exotic-animal vet.",
       "answerDetails": "Its listing names the toxic principles: {{principles}}. The signs it lists are on this page, under “Clinical signs”.",
       "answerAnyPlant": "Its plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats.",
       "partsQuestion": "Which parts of {{name}} are poisonous?",

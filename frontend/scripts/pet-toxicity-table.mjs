@@ -116,6 +116,7 @@ function evaluateTable(source) {
     ASPCA_ANIMAL_POISON_CONTROL_URL,
     ASPCA_PLANT_LIST_URL,
     EXTENSION_SOURCE_ORIGINS,
+    ASKED_ABOUT_ANIMALS,
   } = module.exports;
 
   if (!Array.isArray(PET_TOXICITY) || PET_TOXICITY.length === 0) {
@@ -135,6 +136,7 @@ function evaluateTable(source) {
     aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL,
     plantListUrl: ASPCA_PLANT_LIST_URL,
     extensionOrigins: [...EXTENSION_SOURCE_ORIGINS],
+    askedAboutAnimals: Array.isArray(ASKED_ABOUT_ANIMALS) ? [...ASKED_ABOUT_ANIMALS] : [],
   };
 }
 
@@ -252,7 +254,9 @@ const squashText = (value) => String(value).replace(/\s+/g, ' ').trim();
  *   - `alternatives`: listed slugs whose own pages cite "non-toxic" for both
  *     cats and dogs; anything else is dropped;
  *   - `related`: listed slugs that are published, not this page, and not
- *     already an alternative.
+ *     already an alternative;
+ *   - `askedAbout`: the entry's `askedAbout` animals that the table's
+ *     ASKED_ABOUT_ANIMALS names and the listing's `listed` does not.
  * Returns null for a page that is not detailed.
  */
 export function plantDetails(entry, table) {
@@ -326,6 +330,11 @@ export function plantDetails(entry, table) {
     related.push(target);
   }
 
+  const asked = Array.isArray(entry.askedAbout) ? entry.askedAbout : [];
+  const askedAbout = (table.askedAboutAnimals ?? []).filter(
+    (animal) => asked.includes(animal) && !Object.hasOwn(listing.listed, animal)
+  );
+
   return {
     horses,
     listing: listingFields,
@@ -333,6 +342,7 @@ export function plantDetails(entry, table) {
     alternatives,
     related,
     anyToxic: ANIMALS.some((a) => page.claims[a].state === 'toxic'),
+    askedAbout,
   };
 }
 
@@ -370,10 +380,19 @@ function fill(template, values) {
   });
 }
 
+/** "cats and dogs", "cats, dogs and horses". Must match joinWords() in plantSafetyPages.ts. */
+function joinWords(words, and) {
+  return words.length < 2
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} ${and} ${words[words.length - 1]}`;
+}
+
 /**
  * The FAQ a detailed page prints and publishes as FAQPage, composed from the
  * table and a flattened catalog (`a.b.c` keys). One question per cited animal
- * (cats, dogs, then horses when cited), then which parts are poisonous (only
+ * (cats, dogs, then horses when cited), then one per `askedAbout` animal the
+ * listing has no entry for, answered "we can't say" (never a verdict), then
+ * which parts are poisonous (only
  * with a quoted "Poison Part" and a cited "toxic" for cats or dogs), then what
  * to do. Must match
  * plantSafetyFaq() in src/features/petsafe/plantSafetyPages.ts.
@@ -413,6 +432,28 @@ export function plantFaq(entry, details, catalog, aspcaOrigin) {
       answer: parts.join(' '),
     });
   }
+  const cited = ALL_ANIMALS.map((animal) => ({
+    animal,
+    claim: animal === 'horses' ? details.horses : claimFor(entry, animal, aspcaOrigin),
+  })).filter(({ claim }) => claim.state !== NOT_ASSESSED);
+  for (const animal of details.askedAbout ?? []) {
+    const source = cited[0]?.claim.source;
+    if (!source) break;
+    const animalWord = catalog[`plantSafetyPage.faq.animal.${animal}`];
+    items.push({
+      id: animal,
+      question: fill(catalog['plantSafetyPage.faq.question'], { name, animal: animalWord }),
+      answer: fill(catalog['plantSafetyPage.faq.answerUnlisted'], {
+        title: source.title,
+        scientificName: source.scientificName,
+        animals: joinWords(
+          cited.map((c) => catalog[`plantSafetyPage.faq.animal.${c.animal}`]),
+          catalog['plantSafetyPage.faq.and']
+        ),
+        animal: animalWord,
+      }),
+    });
+  }
   const parts = details.extension?.fields.find((f) => f.field === 'poisonPart')?.value;
   if (details.anyToxic && parts) {
     items.push({
@@ -431,6 +472,16 @@ export function plantFaq(entry, details, catalog, aspcaOrigin) {
     answer: catalog['plantSafetyPage.faq.whatToDoAnswer'],
   });
   return items;
+}
+
+/**
+ * The page's lead: the FAQ item for the entry's `leadAnimal` (cats or dogs),
+ * verbatim, or null where the entry names none or the FAQ has no such item.
+ * Must match plantSafetyLead() in src/features/petsafe/plantSafetyPages.ts.
+ */
+export function plantLead(entry, faq) {
+  if (!ANIMALS.includes(entry?.leadAnimal)) return null;
+  return faq.find((item) => item.id === entry.leadAnimal) ?? null;
 }
 
 /** JSON with object keys sorted at every depth, so a digest cannot depend on key order. */
@@ -464,8 +515,10 @@ export function pageContentDigest(entry) {
     extensionSource,
     alternatives,
     related,
+    leadAnimal,
+    askedAbout,
   } = entry;
-  // The last four are left out of the digest when absent (canonicalJson drops
+  // The last six are left out of the digest when absent (canonicalJson drops
   // undefined keys), so adding them to some entries moves only those pages' dates.
   const shown = {
     slug,
@@ -479,6 +532,8 @@ export function pageContentDigest(entry) {
     extensionSource,
     alternatives,
     related,
+    leadAnimal,
+    askedAbout,
   };
   return `sha256-${createHash('sha256').update(canonicalJson(shown)).digest('hex')}`;
 }
