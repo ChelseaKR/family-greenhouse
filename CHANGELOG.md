@@ -16,6 +16,39 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **Internal links and one campaign tag.** Home, /care and /help/households link
+  the two household blog posts, home and /pet-safe link the Christmas cactus and
+  poinsettia pet pages by name, and the sitter page's footer link carries a fixed
+  `utm_source` and `utm_medium`, never the sitter token.
+
+### Fixed
+
+- **A caretaker seat now ends when the member who created it leaves or is
+  removed.** Sitter links, plant tags and wall displays already did. A removed
+  admin who kept a seat URL could read tasks and spaces and complete tasks for
+  up to 180 days. The caretaker's visits stay on record, and the confirmations,
+  help pages and audit log now name seats. The product cannot tell the caretaker,
+  so the seat stays on the Household page with why it stopped and what an admin
+  can do next, including when the plan cannot create a new one, and the email to
+  the remaining admins when someone leaves gives the count. Seats left live by
+  earlier departures are not changed, because their creator was already scrubbed.
+
+## [0.50.0] - 2026-11-08
+
+**Garden is now $2.99 a month or $24.99 a year, and a production release needs
+one approval.** Plant identification is sold only by the 20-identification pack.
+Signing out now clears what the app has read, a renamed plant reaches its tasks,
+emptied fields stay empty, and the status page posts the plant tag outage. The
+Terms text changed with the new plan; Privacy did not.
+
+- **What the deploy changes.** Terraform sets the two new Garden price ids, the
+  100-check Garden leaf-health cap and `app_store_billing_enabled = "1"`, which
+  opens the `/billing/app-store/*` routes. No running subscription moves and no
+  stored data is migrated. The apps get these changes only with a store build,
+  and none is planned for this release.
+
 ### Added
 
 - **Garden goes on sale at $2.99 a month and $24.99 a year at the next
@@ -103,15 +136,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   including during the plant-tag outage fixed in #931. It now says the log is
   written by hand and has no entries yet.
 
-- **A caretaker seat now ends when the member who created it leaves or is
-  removed.** Sitter links, plant tags and wall displays already did. A removed
-  admin who kept a seat URL could read tasks and spaces and complete tasks for
-  up to 180 days. The caretaker's visits stay on record, and the confirmations,
-  help pages and audit log now name seats. The product cannot tell the caretaker,
-  so the seat stays on the Household page with why it stopped and what an admin
-  can do next, including when the plan cannot create a new one, and the email to
-  the remaining admins when someone leaves gives the count. Seats left live by
-  earlier departures are not changed, because their creator was already scrubbed.
+- **The plant tag outage is posted on the status page.** All six plant tag
+  routes returned a server error from September 4 to October 5, 2026, until
+  #931 reached production in 0.39.0. The entry is in English and Spanish. Incident
+  dates no longer print a day early in United States time zones.
 
 ## [0.49.0] - 2026-11-08
 

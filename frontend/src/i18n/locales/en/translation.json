@@ -507,6 +507,7 @@
     "readingHeading": "More on plants and pets",
     "readingSafeIntro": "Shopping for something new?",
     "readingToxicIntro": "Already living with one from the second list?",
+    "holidayHeading": "Holiday plants",
     "citedPagesHeading": "Plants with a cited verdict page",
     "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
   },
@@ -2019,7 +2020,19 @@
     "notActivelyChecked": "Not actively checked",
     "coreApiOperational": "Core API operational",
     "checkingTitle": "Checking live system status…",
-    "checkingBody": "Waiting for a fresh response from the production health endpoint."
+    "checkingBody": "Waiting for a fresh response from the production health endpoint.",
+    "recentIncidents": "Recent incidents",
+    "resolved": "Resolved",
+    "investigating": "Investigating",
+    "historyUnavailable": "Incident history unavailable right now.",
+    "detailsToFollow": "Details for the current issue will be posted here as we learn more.",
+    "emptyLog": "Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.",
+    "incidents": {
+      "plantTags2026": {
+        "title": "Plant tags weren’t working",
+        "body": "From September 4 to October 5, 2026, plant tags weren’t working. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. It was fixed in version 0.39.0 on October 5."
+      }
+    }
   },
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",
@@ -2823,6 +2836,16 @@
         "forgiving": "Seven houseplants that survive being forgotten",
         "petSafe": "Pet-safe houseplants that are hard to kill",
         "toxicSwaps": "Common toxic houseplants and safer swaps"
+      },
+      "householdHeading": "Sharing the plants at home",
+      "household": {
+        "remember": "How to actually remember to water your plants",
+        "sharing": "Sharing plant care without becoming the household nag"
+      },
+      "holidayHeading": "Holiday plants and pets",
+      "holidayPets": {
+        "christmasCactus": "Christmas cactus and pets",
+        "poinsettia": "Poinsettia and pets"
       }
     },
     "plans": {

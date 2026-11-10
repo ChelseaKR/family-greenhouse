@@ -669,6 +669,24 @@ export const HELP_SECTIONS: HelpSection[] = [
         text: 'On the Household page, an admin can Generate invite link and send it to whoever should join. They create their own login and land in your household as a member. The link expires after 7 days and can be used by more than one person in that window, so treat it as semi-private and do not post it publicly. There is no way to revoke an invite early; if one gets out, wait it out and remove anyone unexpected.',
       },
       {
+        id: 'share-the-chores',
+        q: 'How do we share plant care without one person nagging?',
+        a: (
+          <p>
+            Two blog posts cover this:{' '}
+            <Link to="/blog/sharing-plant-care-without-becoming-the-nag">
+              Sharing plant care without becoming the household nag
+            </Link>{' '}
+            and{' '}
+            <Link to="/blog/how-to-remember-to-water-plants">
+              How to actually remember to water your plants
+            </Link>
+            .
+          </p>
+        ),
+        text: 'Two blog posts cover this: Sharing plant care without becoming the household nag, and How to actually remember to water your plants.',
+      },
+      {
         id: 'admin-vs-member',
         q: 'What can an admin do that a member can’t?',
         a: (

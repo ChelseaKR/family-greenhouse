@@ -26,6 +26,9 @@ import {
 } from './petSafeSpecies';
 import { PLANT_SAFETY_PAGES } from './plantSafetyPages';
 
+/** In season each December. Names only, from the table; see `HolidayPlants`. */
+const HOLIDAY_PLANT_SLUGS = ['christmas-cactus', 'poinsettia'];
+
 const PAGE_TITLE = 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker';
 const PAGE_DESCRIPTION =
   'Free, no-signup checker: type a houseplant name and see whether it’s toxic to cats and dogs, in plain language. Based on the ASPCA’s plant safety data.';
@@ -257,6 +260,8 @@ export function PetSafePage() {
         </p>
       </aside>
 
+      <HolidayPlants />
+
       <SpeciesDirectory />
 
       {PUBLIC_REGISTRATION_AVAILABLE && (
@@ -281,6 +286,42 @@ export function PetSafePage() {
         </section>
       )}
     </PublicShell>
+  );
+}
+
+/**
+ * The two gift plants people ask about in December, ahead of the long list.
+ * The names come from the table and the verdicts stay on each plant's page, so
+ * this says nothing about either one. A plant the table stops publishing drops
+ * out rather than linking to a page that is gone.
+ */
+function HolidayPlants() {
+  const { t } = useTranslation();
+  const pages = HOLIDAY_PLANT_SLUGS.flatMap((slug) =>
+    PLANT_SAFETY_PAGES.filter((page) => page.slug === slug)
+  );
+  if (pages.length === 0) return null;
+  return (
+    <section className="mt-12" aria-labelledby="pet-safe-holiday-heading">
+      <h2
+        id="pet-safe-holiday-heading"
+        className="font-serif text-xl tracking-tight text-ink sm:text-2xl"
+      >
+        {t('petSafeSpecies.holidayHeading')}
+      </h2>
+      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        {pages.map((page) => (
+          <li key={page.slug}>
+            <Link
+              to={`/pet-safe/${page.slug}`}
+              className="text-primary-700 underline hover:text-primary-800"
+            >
+              {page.commonName}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

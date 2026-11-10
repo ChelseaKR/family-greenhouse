@@ -520,6 +520,7 @@
     "readingHeading": "Más sobre plantas y mascotas",
     "readingSafeIntro": "¿Estás buscando una planta nueva?",
     "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?",
+    "holidayHeading": "Plantas navideñas",
     "citedPagesHeading": "Plantas con una página de veredicto citado",
     "citedPagesLede": "Una página por planta, con cada veredicto junto a la ficha de la ASPCA de la que sale."
   },
@@ -2069,7 +2070,19 @@
     "notActivelyChecked": "No se comprueba activamente",
     "coreApiOperational": "API principal operativa",
     "checkingTitle": "Comprobando el estado del sistema…",
-    "checkingBody": "Esperando una respuesta reciente del punto de estado de producción."
+    "checkingBody": "Esperando una respuesta reciente del punto de estado de producción.",
+    "recentIncidents": "Incidentes recientes",
+    "resolved": "Resuelto",
+    "investigating": "En investigación",
+    "historyUnavailable": "El historial de incidentes no está disponible en este momento.",
+    "detailsToFollow": "Publicaremos aquí los detalles del problema actual a medida que sepamos más.",
+    "emptyLog": "Los incidentes se redactan a mano y todavía no se ha publicado ninguno aquí. Un registro vacío no mide el tiempo de actividad.",
+    "incidents": {
+      "plantTags2026": {
+        "title": "Las etiquetas de plantas no funcionaban",
+        "body": "Del 4 de septiembre al 5 de octubre de 2026, las etiquetas de plantas no funcionaron. No se pudieron crear, quitar, listar, escanear ni proteger con PIN las etiquetas, ni completar tareas desde una etiqueta. Se veía «No pudimos cargar tus etiquetas de plantas» en la página de etiquetas, «Eso no funcionó» al cambiar una etiqueta y «Algo salió mal» en la página de escaneo. Se corrigió en la versión 0.39.0 el 5 de octubre."
+      }
+    }
   },
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
@@ -2888,6 +2901,16 @@
         "forgiving": "Siete plantas de interior que sobreviven al olvido",
         "petSafe": "Plantas seguras para mascotas y difíciles de matar",
         "toxicSwaps": "Plantas de interior tóxicas comunes y alternativas más seguras"
+      },
+      "householdHeading": "Compartir las plantas en casa (en inglés)",
+      "household": {
+        "remember": "Cómo acordarte de verdad de regar tus plantas",
+        "sharing": "Compartir el cuidado de las plantas sin ser quien regaña en casa"
+      },
+      "holidayHeading": "Plantas navideñas y mascotas (en inglés)",
+      "holidayPets": {
+        "christmasCactus": "El cactus de Navidad y las mascotas",
+        "poinsettia": "La flor de Pascua y las mascotas"
       }
     },
     "plans": {

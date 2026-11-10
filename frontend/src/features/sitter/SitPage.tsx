@@ -60,6 +60,14 @@ function dueLabel(days: number | null): string | null {
   return `Due in ${days} days`;
 }
 
+/**
+ * The one way off this page to the product, tagged so docs/analytics.md can
+ * read whether sitters ever follow it. Fixed text: nothing here may be built
+ * from the token. `gaPageLocation` keeps `utm_*`, and scrubs the token from
+ * this page's own address and from the referrer the click reports.
+ */
+const SITTER_FOOTER_HREF = '/?utm_source=sitter_link&utm_medium=referral';
+
 export function SitPage() {
   const { token = '' } = useParams<{ token: string }>();
   const { t } = useTranslation();
@@ -318,7 +326,10 @@ export function SitPage() {
 
           <p className="mt-10 text-sm text-gray-600">
             Looking after plants regularly?{' '}
-            <Link to="/" className="text-primary-700 underline hover:text-primary-800">
+            <Link
+              to={SITTER_FOOTER_HREF}
+              className="text-primary-700 underline hover:text-primary-800"
+            >
               Family Greenhouse
             </Link>{' '}
             keeps a whole household’s plant care in one shared place.
