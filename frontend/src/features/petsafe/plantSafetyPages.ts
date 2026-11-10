@@ -1,8 +1,10 @@
 import {
+  ASKED_ABOUT_ANIMALS,
   ASPCA_ANIMAL_POISON_CONTROL_URL,
   ASPCA_PLANT_LIST_URL,
   EXTENSION_SOURCE_ORIGINS,
   PET_TOXICITY,
+  type AskedAboutAnimal,
   type PetToxicityEntry,
 } from '../../../../backend/src/models/petToxicity';
 import { SITE_URL, siteUrl } from '@/config/site';
@@ -79,6 +81,12 @@ export interface PlantSafetyPage {
   /** The table's note — only when every animal's verdict is cited, else null. */
   note: string | null;
   claims: Record<Animal, AnimalClaim>;
+  /**
+   * The table's `leadAnimal` opt-in, when it names cats or dogs; else null.
+   * Whether the page actually leads is plantSafetyLead()'s call: only with a
+   * cited FAQ answer for that animal.
+   */
+  lead: Animal | null;
 }
 
 /**
@@ -131,12 +139,17 @@ export function toPlantSafetyPage(entry: LooseEntry): PlantSafetyPage | null {
   const cited = ANIMALS.filter((animal) => claims[animal].state !== 'not-assessed');
   if (cited.length === 0) return null;
 
+  const lead = (ANIMALS as readonly unknown[]).includes(entry.leadAnimal)
+    ? (entry.leadAnimal as Animal)
+    : null;
+
   return {
     slug,
     commonName,
     scientificName,
     note: cited.length === ANIMALS.length && isText(note) ? note : null,
     claims,
+    lead,
   };
 }
 
@@ -213,6 +226,11 @@ export interface PlantSafetyDetails {
   related: PlantSafetyPage[];
   /** True when cats or dogs is a cited "toxic": picks the alternatives heading. */
   anyToxic: boolean;
+  /**
+   * The table's `askedAbout` animals the FAQ answers with "we can't say": each
+   * named in ASKED_ABOUT_ANIMALS and absent from the listing's `listed`.
+   */
+  askedAbout: AskedAboutAnimal[];
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -302,6 +320,14 @@ export function plantSafetyDetailsFrom(
     related.push(target);
   }
 
+  const listed = isRecord(listing.listed) ? listing.listed : {};
+  const askedAbout = ASKED_ABOUT_ANIMALS.filter(
+    (animal) =>
+      Array.isArray(entry.askedAbout) &&
+      entry.askedAbout.includes(animal) &&
+      !Object.hasOwn(listed, animal)
+  );
+
   return {
     horses: claimFor(entry, 'horses'),
     listing: listingFields,
@@ -309,6 +335,7 @@ export function plantSafetyDetailsFrom(
     alternatives,
     related,
     anyToxic: ANIMALS.some((a) => page.claims[a].state === 'toxic'),
+    askedAbout,
   };
 }
 
@@ -319,14 +346,23 @@ export function plantSafetyDetails(page: PlantSafetyPage): PlantSafetyDetails | 
 }
 
 export interface FaqItem {
-  id: AnyAnimal | 'parts' | 'whatToDo';
+  id: AnyAnimal | AskedAboutAnimal | 'parts' | 'whatToDo';
   question: string;
   answer: string;
 }
 
+/** "cats and dogs", "cats, dogs and horses": the catalog's own conjunction. */
+function joinWords(words: string[], and: string): string {
+  return words.length < 2
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} ${and} ${words[words.length - 1]}`;
+}
+
 /**
  * The FAQ a detailed page prints and publishes as FAQPage: one question per
- * cited animal (cats, dogs, then horses when cited), then which parts are
+ * cited animal (cats, dogs, then horses when cited), then one per `askedAbout`
+ * animal the listing has no entry for, answered "we can't say" with the
+ * animals it does cover (never a verdict), then which parts are
  * poisonous (only where the extension source quotes its "Poison Part" values
  * and the ASPCA cites "toxic" for cats or dogs), then what to do. Every
  * word is a catalog template filled from the table, and an animal whose
@@ -377,6 +413,28 @@ export function plantSafetyFaq(
       answer: parts.join(' '),
     });
   }
+  const cited = ALL_ANIMALS.flatMap((animal) => {
+    const claim = animal === 'horses' ? details.horses : page.claims[animal];
+    return claim.state === 'not-assessed' ? [] : [{ animal, source: claim.source }];
+  });
+  for (const animal of details.askedAbout) {
+    const source = cited[0]?.source;
+    if (!source) break;
+    const animalWord = t(`plantSafetyPage.faq.animal.${animal}`);
+    items.push({
+      id: animal,
+      question: t('plantSafetyPage.faq.question', { name, animal: animalWord }),
+      answer: t('plantSafetyPage.faq.answerUnlisted', {
+        title: source.title,
+        scientificName: source.scientificName,
+        animals: joinWords(
+          cited.map((c) => t(`plantSafetyPage.faq.animal.${c.animal}`)),
+          t('plantSafetyPage.faq.and')
+        ),
+        animal: animalWord,
+      }),
+    });
+  }
   const parts = details.extension?.fields.find((f) => f.field === 'poisonPart')?.value;
   if (details.anyToxic && parts && details.extension) {
     items.push({
@@ -395,6 +453,17 @@ export function plantSafetyFaq(
     answer: t('plantSafetyPage.faq.whatToDoAnswer'),
   });
   return items;
+}
+
+/**
+ * The page's lead: the FAQ answer for the table's `leadAnimal`, verbatim, or
+ * null. It exists only where that FAQ item does (a detailed page whose listing
+ * cites the animal), so the lead can never say more than the FAQ. Must match
+ * plantLead() in scripts/pet-toxicity-table.mjs.
+ */
+export function plantSafetyLead(page: PlantSafetyPage, faq: FaqItem[]): FaqItem | null {
+  if (page.lead === null) return null;
+  return faq.find((item) => item.id === page.lead) ?? null;
 }
 
 /** The catalog key for each state's label. The build gate reads the same keys. */
@@ -457,7 +526,16 @@ export function plantSafetyMeta(page: PlantSafetyPage, t: Translate): MetaTags {
   const url = siteUrl(`${PLANT_PAGE_PREFIX}${page.slug}`);
   const details = plantSafetyDetails(page);
   const faq = plantSafetyFaq(page, details, t);
-  const title = t('plantSafetyPage.metaTitle', { name: headName(page.commonName) });
+  const lead = plantSafetyLead(page, faq);
+  const leadClaim = lead && page.lead ? page.claims[page.lead] : null;
+  const title =
+    lead && leadClaim && leadClaim.state !== 'not-assessed'
+      ? t('plantSafetyPage.leadTitle', {
+          name: headName(page.commonName),
+          animal: t(`plantSafetyPage.faq.animal.${page.lead}`),
+          verdict: t(VERDICT_LABEL_KEY[leadClaim.state]).toLowerCase(),
+        })
+      : t('plantSafetyPage.metaTitle', { name: headName(page.commonName) });
   const description = t('plantSafetyPage.metaDescription', {
     name: headName(page.commonName),
     scientificName: page.scientificName,

@@ -380,7 +380,7 @@ describe('the emergency aside', () => {
   });
 
   it.each(PLANT_SAFETY_PAGES.map((page) => [page.slug, page] as const))(
-    '%s opens with the aside, before the verdicts',
+    '%s opens with the aside (after a lead page’s lead), before the verdicts',
     (_slug, page) => {
       const { container } = render(
         <MemoryRouter>
@@ -389,7 +389,9 @@ describe('the emergency aside', () => {
       );
       const article = container.querySelector('article')!;
       const aside = article.querySelector('aside[data-plant-emergency]');
-      expect(article.firstElementChild).toBe(aside);
+      const lead = article.querySelector('[data-plant-lead]');
+      expect(lead === null, page.slug).toBe(page.slug !== 'christmas-cactus');
+      expect(lead ? lead.nextElementSibling : article.firstElementChild).toBe(aside);
       for (const verdict of article.querySelectorAll('[data-claim="verdict"]')) {
         expect(
           aside!.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -714,6 +716,108 @@ describe('detailed pages (quoted sources, similar plants, FAQ)', () => {
 
     it('the unsabotaged detailed pages pass, so each failure above is the sabotage', () => {
       for (const slug of ['aloe-vera', 'pothos', 'spider-plant', 'peace-lily', 'snake-plant']) {
+        expect(gate(html(slug), entryFor(slug)), slug).toEqual([]);
+      }
+    });
+  });
+});
+
+/**
+ * The Christmas cactus page leads with its cited cat answer, ahead of the
+ * hotline aside, and the spider plant page answers "rats" with "we can't say".
+ * Both come from the table (`leadAnimal`, `askedAbout`); the gate recomposes
+ * them, so each control below must fail it.
+ */
+describe('a cited lead and an unlisted-animal question', () => {
+  const html = (slug: string) => documentFor(findPlantSafetyPage(slug)!);
+  const failuresFor = (slug: string, sabotaged: string) =>
+    gate(sabotaged, entryFor(slug)).join('\n');
+  const mainText = (doc: string) => {
+    const host = document.createElement('div');
+    host.innerHTML = doc.slice(doc.indexOf('<body>') + 6, doc.lastIndexOf('</body>'));
+    const main = host.querySelector('main')!;
+    const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.textContent ?? '');
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  };
+
+  it('the Christmas cactus answer is the first text on the page, then the hotlines', () => {
+    const page = html('christmas-cactus');
+    expect(mainText(page)).toMatch(
+      /^Is Christmas cactus toxic to cats\? No\. The ASPCA lists Christmas Cactus \(Schlumbergera bridgesii\) as non-toxic to cats\. Its plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats\. Source: /
+    );
+    expect(page.indexOf('data-plant-lead')).toBeLessThan(page.indexOf('data-plant-emergency'));
+    expect(page.indexOf('data-plant-emergency')).toBeLessThan(page.indexOf('data-claim="verdict"'));
+    expect(page).toContain('<title>Is Christmas cactus toxic to cats? Listed as non-toxic</title>');
+  });
+
+  it('no other page carries a lead, and the spider plant FAQ asks about rats', () => {
+    for (const slug of ['spider-plant', 'poinsettia', 'peace-lily']) {
+      expect(html(slug), slug).not.toContain('data-plant-lead');
+    }
+    const spider = html('spider-plant');
+    expect(spider).toContain('Is spider plant toxic to rats?');
+    expect(spider).toContain(
+      'We can’t say. The ASPCA listing for Spider Plant (Chlorophytum comosum) covers cats and ' +
+        'dogs and has no entry for rats. Ask an exotic-animal vet.'
+    );
+  });
+
+  describe('negative controls', () => {
+    it('a lead reworded to call the plant safe fails', () => {
+      const page = html('christmas-cactus');
+      const sabotaged = page.replace(
+        /(<p[^>]*data-claim="lead-answer"[^>]*>)[^<]*</,
+        '$1Yes, Christmas cactus is safe for cats.<'
+      );
+      expect(sabotaged).not.toBe(page);
+      expect(failuresFor('christmas-cactus', sabotaged)).toContain('the lead answer');
+    });
+
+    it('"safe" in the lead title fails the head check', () => {
+      const page = html('christmas-cactus');
+      const catalog = readCatalog();
+      const sabotaged = catalog['plantSafetyPage.leadTitle']!.replace(
+        'Listed as {{verdict}}',
+        'Safe, listed as {{verdict}}'
+      );
+      expect(sabotaged).not.toBe(catalog['plantSafetyPage.leadTitle']);
+      const failures = checkPlantSafetyPageHtml({
+        html: page,
+        entry: entryFor('christmas-cactus'),
+        aspcaOrigin: ASPCA_ANIMAL_POISON_CONTROL_URL,
+        catalog: { ...catalog, 'plantSafetyPage.leadTitle': sabotaged },
+      }).join('\n');
+      expect(failures).toContain('plantSafetyPage.leadTitle asserts safety ("Safe")');
+    });
+
+    it('a lead on a page whose table entry has none fails', () => {
+      const cactus = html('christmas-cactus');
+      const block = cactus.match(/<section[^>]*data-plant-lead[\s\S]*?<\/section>/)![0];
+      const page = html('spider-plant');
+      const sabotaged = page.replace('<aside', `${block}<aside`);
+      expect(sabotaged).not.toBe(page);
+      const failures = failuresFor('spider-plant', sabotaged);
+      expect(failures).toContain('carries a lead');
+      expect(failures).toContain('the emergency aside is not first');
+    });
+
+    it('a rat verdict in place of "we can’t say" fails, visible and in JSON-LD', () => {
+      const page = html('spider-plant');
+      const sabotaged = page.replaceAll(
+        'We can’t say. The ASPCA listing for Spider Plant (Chlorophytum comosum) covers cats and ' +
+          'dogs and has no entry for rats. Ask an exotic-animal vet.',
+        'No. Spider plant is non-toxic to rats.'
+      );
+      expect(sabotaged).not.toBe(page);
+      const failures = failuresFor('spider-plant', sabotaged);
+      expect(failures).toContain('FAQ answers differ');
+      expect(failures).toContain('JSON-LD FAQPage differs');
+    });
+
+    it('the unsabotaged pages pass, so each failure above is the sabotage', () => {
+      for (const slug of ['christmas-cactus', 'spider-plant']) {
         expect(gate(html(slug), entryFor(slug)), slug).toEqual([]);
       }
     });

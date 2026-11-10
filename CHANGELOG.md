@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Changed
+
+- **The Christmas cactus pet page answers the cat question first, and the
+  spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
+  "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
+  the hotline box, and its title is "Is Christmas cactus toxic to cats? Listed
+  as non-toxic". /pet-safe/spider-plant's FAQ adds "Is spider plant toxic to
+  rats?": the ASPCA listing has no rat entry, so the page says it can't say
+  and points to an exotic-animal vet. Both are per-page fields in the pet
+  table; no other page and no verdict changed.
+
 ## [0.51.0] - 2026-11-09
 
 **A caretaker seat now ends when the member who made it leaves, and the site

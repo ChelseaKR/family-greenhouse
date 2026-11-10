@@ -526,6 +526,7 @@
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "leadTitle": "¿La planta {{name}} es tóxica para {{animal}}? Figura como {{verdict}}",
     "metaDescription": "El veredicto sobre {{name}} ({{scientificName}}) y las mascotas, con su fuente, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
     "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
@@ -610,11 +611,14 @@
       "animal": {
         "cats": "gatos",
         "dogs": "perros",
-        "horses": "caballos"
+        "horses": "caballos",
+        "rats": "ratas"
       },
       "question": "¿La planta {{name}} es tóxica para {{animal}}?",
+      "and": "y",
       "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
       "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
+      "answerUnlisted": "No podemos decirlo. La ficha de la ASPCA de {{title}} ({{scientificName}}) cubre {{animals}} y no tiene entrada para {{animal}}. Consulta a un veterinario de animales exóticos.",
       "answerDetails": "Su ficha indica los principios tóxicos: {{principles}}. Los signos que enumera aparecen en esta página, en «Signos clínicos».",
       "answerAnyPlant": "Su lista de plantas también señala que comer cualquier planta puede causar vómitos o malestar estomacal en perros y gatos.",
       "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
