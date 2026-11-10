@@ -1153,6 +1153,7 @@ export const leaveHousehold = createHandler(
         leftUserId: user.userId,
         memberName: member.name?.trim() || null,
         releasedTasks,
+        caretakerSeats: departure.revokedCredentials.caretakerSeats,
       });
     } catch (err) {
       logger.warn(

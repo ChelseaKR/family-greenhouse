@@ -27,6 +27,7 @@ import {
   plantSafetyDetails,
   plantSafetyDetailsFrom,
   plantSafetyFaq,
+  plantSafetyLead,
   toPlantSafetyPage,
   type Animal,
   type LooseEntry,
@@ -37,11 +38,12 @@ import {
   loadPetToxicityTable,
   plantDetails,
   plantFaq,
+  plantLead,
   plantPage,
   // @ts-expect-error - vanilla ESM build script, deliberately untyped
 } from '../../../scripts/pet-toxicity-table.mjs';
 // @ts-expect-error - vanilla ESM build script, deliberately untyped
-import { readCatalog } from '../../../scripts/check-plant-safety-pages.mjs';
+import { SAFETY_WORDING, readCatalog } from '../../../scripts/check-plant-safety-pages.mjs';
 
 const LISTING = {
   title: 'Fixture Listing',
@@ -246,6 +248,7 @@ function comparable(details: PlantSafetyDetails | null) {
     alternatives: details.alternatives.map((p) => p.slug),
     related: details.related.map((p) => p.slug),
     anyToxic: details.anyToxic,
+    askedAbout: details.askedAbout,
   };
 }
 
@@ -435,5 +438,102 @@ describe('the page details and FAQ agree with the gate', () => {
     const safe = DETAILED_FIXTURE('spider-plant');
     (safe.extensionSource as Record<string, unknown>).poisonPart = 'Leaves';
     expect(asked(safe)).toBe(false);
+  });
+});
+
+/**
+ * Two per-page opt-ins, both read from the table (Search Console, 2026-11-09):
+ * `leadAnimal` puts one cited verdict first on the page and in its title, and
+ * `askedAbout` answers a searched animal the ASPCA listing has no entry for
+ * with "we can't say". Neither is template-wide, and both fail closed.
+ */
+describe('a cited lead and an unlisted-animal question, per page', () => {
+  const catalog = readCatalog();
+  const t = i18next.getFixedT('en') as unknown as (k: string, o?: Record<string, string>) => string;
+  const leadOf = (entry: LooseEntry) => {
+    const page = toPlantSafetyPage(entry)!;
+    const mine = plantSafetyLead(page, plantSafetyFaq(page, pageDetails(entry), t));
+    const gate = plantLead(
+      entry,
+      plantFaq(entry, gateDetails(entry), catalog, ASPCA_ANIMAL_POISON_CONTROL_URL)
+    );
+    expect(mine).toEqual(gate);
+    return mine;
+  };
+  const faqOf = (entry: LooseEntry) => {
+    const page = toPlantSafetyPage(entry)!;
+    const mine = plantSafetyFaq(page, pageDetails(entry), t);
+    expect(mine).toEqual(
+      plantFaq(entry, gateDetails(entry), catalog, ASPCA_ANIMAL_POISON_CONTROL_URL)
+    );
+    return mine;
+  };
+
+  it('only the Christmas cactus page leads with a verdict', () => {
+    const leads = PET_TOXICITY.filter(
+      (e) => toPlantSafetyPage(e as LooseEntry) !== null && leadOf(e as LooseEntry) !== null
+    ).map((e) => e.slug);
+    expect(leads).toEqual(['christmas-cactus']);
+  });
+
+  it('the Christmas cactus lead is the cited cat answer, with the any-plant caveat', () => {
+    // The listing covers cats and dogs (and horses), all non-toxic.
+    const listing = DETAILED_FIXTURE('christmas-cactus').aspcaListing as Record<string, unknown>;
+    expect(listing.listed).toEqual({ cats: 'non-toxic', dogs: 'non-toxic', horses: 'non-toxic' });
+    const lead = leadOf(DETAILED_FIXTURE('christmas-cactus'));
+    expect(lead).toEqual({
+      id: 'cats',
+      question: 'Is Christmas cactus toxic to cats?',
+      answer:
+        'No. The ASPCA lists Christmas Cactus (Schlumbergera bridgesii) as non-toxic to cats. ' +
+        'Its plant list also notes that eating any plant can cause vomiting or stomach upset in ' +
+        'dogs and cats.',
+    });
+    expect(lead!.answer).not.toMatch(/\bsafe/i);
+  });
+
+  it('a lead on an animal the listing does not cite is dropped, in both implementations', () => {
+    const entry = DETAILED_FIXTURE('christmas-cactus');
+    (entry.aspcaListing as Record<string, unknown>).listed = { dogs: 'non-toxic' };
+    expect(leadOf(entry)).toBeNull();
+    const odd = DETAILED_FIXTURE('christmas-cactus');
+    (odd as Record<string, unknown>).leadAnimal = 'horses';
+    expect(leadOf(odd)).toBeNull();
+    const short = DETAILED_FIXTURE('christmas-cactus');
+    delete (short.aspcaListing as Record<string, unknown>).detailsRead;
+    expect(leadOf(short)).toBeNull();
+  });
+
+  it('only the spider plant page asks about rats', () => {
+    const asking = PET_TOXICITY.filter((e) => {
+      const page = toPlantSafetyPage(e as LooseEntry);
+      return page && faqOf(e as LooseEntry).some((i) => i.id === 'rats');
+    }).map((e) => e.slug);
+    expect(asking).toEqual(['spider-plant']);
+  });
+
+  it('answers rats with "we can’t say" and the exotic-vet route, never a verdict', () => {
+    const faq = faqOf(DETAILED_FIXTURE('spider-plant'));
+    expect(faq.map((i) => i.id)).toEqual(['cats', 'dogs', 'rats', 'whatToDo']);
+    const rats = faq.find((i) => i.id === 'rats')!;
+    expect(rats.question).toBe('Is spider plant toxic to rats?');
+    expect(rats.answer).toBe(
+      'We can’t say. The ASPCA listing for Spider Plant (Chlorophytum comosum) covers cats and ' +
+        'dogs and has no entry for rats. Ask an exotic-animal vet.'
+    );
+    expect(rats.answer).not.toMatch(SAFETY_WORDING);
+    expect(rats.answer).not.toMatch(/\btoxic\b/i);
+  });
+
+  it('an asked-about animal the listing does cover, or does not know, gets no question', () => {
+    const covered = DETAILED_FIXTURE('spider-plant');
+    (covered.aspcaListing as { listed: Record<string, string> }).listed.rats = 'non-toxic';
+    expect(faqOf(covered).map((i) => i.id)).not.toContain('rats');
+    const unknown = DETAILED_FIXTURE('spider-plant');
+    (unknown as Record<string, unknown>).askedAbout = ['hamsters', 'cats'];
+    expect(faqOf(unknown).map((i) => i.id)).toEqual(['cats', 'dogs', 'whatToDo']);
+    const short = DETAILED_FIXTURE('spider-plant');
+    delete (short.aspcaListing as Record<string, unknown>).detailsRead;
+    expect(faqOf(short)).toEqual([]);
   });
 });

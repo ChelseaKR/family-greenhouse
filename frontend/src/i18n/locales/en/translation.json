@@ -513,6 +513,7 @@
   },
   "plantSafetyPage": {
     "metaTitle": "Is {{name}} toxic to cats and dogs? What to know",
+    "leadTitle": "Is {{name}} toxic to {{animal}}? Listed as {{verdict}}",
     "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? The source, and who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
     "heading": "Is {{questionName}} toxic to cats and dogs?",
@@ -597,11 +598,14 @@
       "animal": {
         "cats": "cats",
         "dogs": "dogs",
-        "horses": "horses"
+        "horses": "horses",
+        "rats": "rats"
       },
       "question": "Is {{name}} toxic to {{animal}}?",
+      "and": "and",
       "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
       "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerUnlisted": "We can’t say. The ASPCA listing for {{title}} ({{scientificName}}) covers {{animals}} and has no entry for {{animal}}. Ask an exotic-animal vet.",
       "answerDetails": "Its listing names the toxic principles: {{principles}}. The signs it lists are on this page, under “Clinical signs”.",
       "answerAnyPlant": "Its plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats.",
       "partsQuestion": "Which parts of {{name}} are poisonous?",
@@ -1394,7 +1398,7 @@
       "blockedLastMember": "You’re the only member, so there’s nobody to leave this household to. Invite someone and make them an admin first. If you’re done with Family Greenhouse altogether, you can delete your account in Settings instead — that removes you from every household.",
       "blockedLastAdmin": "You’re the only admin. Make another member an admin above, and then you can leave.",
       "confirmTitle": "Leave {{household}}?",
-      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags and wall-display links you created stop working. To come back, an admin would have to invite you again.",
+      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags, wall-display links and caretaker seats you created stop working. To come back, an admin would have to invite you again.",
       "confirmTasks_one": "You have {{count}} task with your name on it; it goes back up for grabs.",
       "confirmTasks_other": "You have {{count}} tasks with your name on them; they go back up for grabs.",
       "confirmTasksUnknown": "Any tasks with your name on them go back up for grabs.",
@@ -1456,7 +1460,7 @@
       "unknown": "A change to the household this version of the app can’t describe"
     },
     "detail": {
-      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}}",
+      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}} · caretaker seats {{caretakerSeats}}",
       "scopes": "Access: {{scopes}}",
       "expires": "Expires {{date}}",
       "giftEnds": "Runs until {{date}}",
@@ -2575,6 +2579,11 @@
       "revoke": "Revoke",
       "revokeHint": "Revoking stops the link straight away. Visits already recorded are kept.",
       "loadFailed": "We couldn’t load your caretaker seats just now. That isn’t the same as having none — any seats you created are still active.",
+      "turnedOffHeading": "Turned off when someone left",
+      "turnedOffRow": "{{name}}: turned off on {{date}}, when the person who created this seat left the household. The old link no longer works, and we can’t tell {{name}} for you.",
+      "turnedOffNextEntitled": "If they’re still helping, create a new seat above and send them the new link.",
+      "turnedOffNextLocked": "A new caretaker seat needs Greenhouse, and your plan doesn’t include it. If they’re still helping, you can share a sitter link from this page instead, but what they do won’t be logged under their name.",
+      "turnedOffNextUnknown": "We couldn’t check whether your plan can create a new seat just now. If they’re still helping, they’ll need a new link.",
       "reportLink": "Open the visit report"
     },
     "page": {

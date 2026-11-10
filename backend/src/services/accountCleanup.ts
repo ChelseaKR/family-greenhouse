@@ -4,6 +4,7 @@ import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
 import * as billing from './billing.js';
 import * as kioskService from './kioskService.js';
+import * as caretakerService from './caretakerService.js';
 import * as plantService from './plantService.js';
 import * as plantTagService from './plantTagService.js';
 import * as sitterService from './sitterService.js';
@@ -358,6 +359,8 @@ export interface RevokedCredentialCounts {
   kioskLinks: number;
   /** Public cutting-share links (`/shared/{code}`), which live up to 14 days. */
   cuttingShares: number;
+  /** Caretaker seats (ADR 0020), which last up to 180 days. */
+  caretakerSeats: number;
 }
 
 /**
@@ -380,6 +383,14 @@ export interface RevokedCredentialCounts {
  * ACCOUNT. Once it has run, nothing can tell which credentials the departing
  * member created, so revocation is no longer possible.
  *
+ * Caretaker seats joined the sweep last. They were left out when seats shipped,
+ * on the grounds that a household may rely on them, but a seat URL is shown to
+ * the admin who created it and opens the household for up to 180 days. A
+ * remaining admin issues a new seat; the caretaker cannot be told by the product
+ * (ADR 0020), so the removal and leave confirmations say it will happen, the
+ * seat stays on the household's card with why it stopped, and the email to the
+ * remaining admins when someone leaves names the count.
+ *
  * API keys are deliberately absent: `middleware/apiKey.ts` re-checks the
  * creator's membership on every use, so the key stops working without the row
  * disappearing — which leaves a remaining admin able to see in Settings why
@@ -392,19 +403,20 @@ export async function revokeCredentialsCreatedBy(
   householdId: string,
   userId: string
 ): Promise<RevokedCredentialCounts> {
-  const [plantTags, sitterLinks, kioskLinks, cuttingShares] = await Promise.all([
+  const [plantTags, sitterLinks, kioskLinks, cuttingShares, caretakerSeats] = await Promise.all([
     plantTagService.revokeTagsCreatedBy(householdId, userId),
     sitterService.revokeSitterLinksCreatedBy(householdId, userId),
     kioskService.revokeKioskLinksCreatedBy(householdId, userId),
     plantService.revokePlantSharesCreatedBy(householdId, userId),
+    caretakerService.revokeCaretakersCreatedBy(householdId, userId),
   ]);
-  if (plantTags + sitterLinks + kioskLinks + cuttingShares > 0) {
+  if (plantTags + sitterLinks + kioskLinks + cuttingShares + caretakerSeats > 0) {
     logger.info(
-      { householdId, plantTags, sitterLinks, kioskLinks, cuttingShares },
+      { householdId, plantTags, sitterLinks, kioskLinks, cuttingShares, caretakerSeats },
       'member_removal.credentials_revoked'
     );
   }
-  return { plantTags, sitterLinks, kioskLinks, cuttingShares };
+  return { plantTags, sitterLinks, kioskLinks, cuttingShares, caretakerSeats };
 }
 
 /**
@@ -639,10 +651,12 @@ export async function anonymizeUserInHousehold(
       )
   );
 
-  // Caretaker seats, like sitter links, outlive a departing member: the
-  // household may still be relying on them. Scrub only the departed creator's
-  // stable id. Visit records name the CARETAKER, never a member, so they need
-  // no scrub — and rewriting them would falsify the household's own record.
+  // Caretaker seats. A departure has already revoked the ones this member
+  // created (`revokeCredentialsCreatedBy`, which must run first); deleting an
+  // account has not, so a shared household keeps them, as it keeps its plant
+  // tags. Either way, scrub only the departed creator's stable id. Visit records
+  // name the CARETAKER, never a member, so they need no scrub — and rewriting
+  // them would falsify the household's own record.
   await forEachQueryPage(
     {
       TableName: TABLE_NAME,

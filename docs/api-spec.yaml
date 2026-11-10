@@ -2032,6 +2032,7 @@ paths:
                       sitterLinks: { type: integer }
                       kioskLinks: { type: integer }
                       cuttingShares: { type: integer }
+                      caretakerSeats: { type: integer }
                   defaultHouseholdId:
                     type: string
                     nullable: true

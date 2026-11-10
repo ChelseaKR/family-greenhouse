@@ -154,7 +154,27 @@ export interface PetToxicityEntry {
    * shown with that entry's own cited verdicts, whatever they are.
    */
   related?: string[];
+  /**
+   * Opt-in, one page at a time: lead the `/pet-safe/<slug>` page and its
+   * `<title>` with this animal's cited verdict, ahead of the hotline aside.
+   * Set where Search Console shows a searched question for one animal that
+   * the page already answers lower down. The lead is that animal's FAQ answer
+   * verbatim, so it appears only on a detailed page whose listing cites the
+   * animal; otherwise the page keeps its usual opening and title.
+   */
+  leadAnimal?: 'cats' | 'dogs';
+  /**
+   * Animals people search this plant for that its ASPCA listing has no entry
+   * for. A detailed page answers each in its FAQ with "we can't say" and the
+   * exotic-vet route, never a verdict. Dropped for any animal the listing
+   * does state, or one ASKED_ABOUT_ANIMALS does not name.
+   */
+  askedAbout?: AskedAboutAnimal[];
 }
+
+/** Animals a page may be asked about beyond cats, dogs and horses. */
+export const ASKED_ABOUT_ANIMALS = ['rats'] as const;
+export type AskedAboutAnimal = (typeof ASKED_ABOUT_ANIMALS)[number];
 
 /**
  * The ASPCA plant list's index page, cited for the one sentence it prints
@@ -300,6 +320,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     },
     alternatives: ['boston-fern', 'parlor-palm', 'hoya'],
     related: ['pothos', 'english-ivy'],
+    // "is spider plant safe for rats" (US, 2026-08 to 11). The listing has no rat entry.
+    askedAbout: ['rats'],
     aliases: ['airplane plant', 'ribbon plant', 'chlorophytum'],
     cats: 'non-toxic',
     dogs: 'non-toxic',
@@ -938,6 +960,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     horses: 'non-toxic',
     alternatives: ['orchid', 'african-violet', 'hoya'],
     related: ['poinsettia'],
+    // "are christmas cactus toxic to cats" ranks on page one (US, 2026-08 to 11).
+    leadAnimal: 'cats',
     // No bare 'christmas' alias: poinsettia (toxic) is the other Christmas
     // plant in this table and must not be out-ranked by a non-toxic row on a
     // generic seasonal query.

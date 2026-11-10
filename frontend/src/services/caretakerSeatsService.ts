@@ -19,6 +19,9 @@ export interface CaretakerSummary {
   startsAt: string;
   expiresAt: string;
   status: 'active' | 'revoked';
+  /** Set only when a departure ended the seat, never when an admin revoked it. */
+  revokedReason?: 'creator_left';
+  revokedAt?: string;
 }
 
 /** The create response — the ONLY time the token + URL are exposed. */

@@ -526,6 +526,7 @@
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "leadTitle": "¿La planta {{name}} es tóxica para {{animal}}? Figura como {{verdict}}",
     "metaDescription": "El veredicto sobre {{name}} ({{scientificName}}) y las mascotas, con su fuente, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
     "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
@@ -610,11 +611,14 @@
       "animal": {
         "cats": "gatos",
         "dogs": "perros",
-        "horses": "caballos"
+        "horses": "caballos",
+        "rats": "ratas"
       },
       "question": "¿La planta {{name}} es tóxica para {{animal}}?",
+      "and": "y",
       "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
       "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
+      "answerUnlisted": "No podemos decirlo. La ficha de la ASPCA de {{title}} ({{scientificName}}) cubre {{animals}} y no tiene entrada para {{animal}}. Consulta a un veterinario de animales exóticos.",
       "answerDetails": "Su ficha indica los principios tóxicos: {{principles}}. Los signos que enumera aparecen en esta página, en «Signos clínicos».",
       "answerAnyPlant": "Su lista de plantas también señala que comer cualquier planta puede causar vómitos o malestar estomacal en perros y gatos.",
       "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
@@ -1441,7 +1445,7 @@
       "blockedLastMember": "Eres el único miembro, así que no hay nadie a quien dejarle este hogar. Invita a alguien y hazlo administrador primero. Si ya no quieres usar Family Greenhouse, puedes eliminar tu cuenta en Ajustes; eso te saca de todos tus hogares.",
       "blockedLastAdmin": "Eres la única persona administradora. Haz administrador a otro miembro más arriba y después podrás salir.",
       "confirmTitle": "¿Salir de {{household}}?",
-      "confirmMessage": "Dejarás de ver las plantas, las tareas y la actividad de este hogar de inmediato. El hogar conserva su historial de cuidados, con tu nombre mostrado como «Former member» (antiguo miembro). Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creaste dejarán de funcionar. Para volver, una persona administradora tendría que invitarte de nuevo.",
+      "confirmMessage": "Dejarás de ver las plantas, las tareas y la actividad de este hogar de inmediato. El hogar conserva su historial de cuidados, con tu nombre mostrado como «Former member» (antiguo miembro). Los enlaces para cuidadores, las etiquetas de plantas, los enlaces de pantalla y las plazas de cuidador que creaste dejarán de funcionar. Para volver, una persona administradora tendría que invitarte de nuevo.",
       "confirmTasks_one": "Tienes {{count}} tarea a tu nombre; quedará libre para quien pueda hacerla.",
       "confirmTasks_many": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
       "confirmTasks_other": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
@@ -1504,7 +1508,7 @@
       "unknown": "Un cambio en el hogar que esta versión de la aplicación no sabe describir"
     },
     "detail": {
-      "revokedWith": "Desactivados con ello: enlaces de cuidador {{sitterLinks}} · etiquetas de planta {{plantTags}} · pantallas de pared {{kioskLinks}} · enlaces de esqueje {{cuttingShares}}",
+      "revokedWith": "Desactivados con ello: enlaces de cuidador {{sitterLinks}} · etiquetas de planta {{plantTags}} · pantallas de pared {{kioskLinks}} · enlaces de esqueje {{cuttingShares}} · plazas de cuidador {{caretakerSeats}}",
       "scopes": "Acceso: {{scopes}}",
       "expires": "Caduca el {{date}}",
       "giftEnds": "Dura hasta el {{date}}",
@@ -2640,6 +2644,11 @@
       "revoke": "Revocar",
       "revokeHint": "Revocar detiene el enlace de inmediato. Las visitas ya registradas se conservan.",
       "loadFailed": "No pudimos cargar tus plazas de cuidador ahora mismo. Eso no significa que no tengas ninguna: las que creaste siguen activas.",
+      "turnedOffHeading": "Desactivadas cuando alguien salió",
+      "turnedOffRow": "{{name}}: desactivada el {{date}}, cuando salió del hogar la persona que creó esta plaza. El enlace anterior ya no funciona, y no podemos avisar a {{name}} por ti.",
+      "turnedOffNextEntitled": "Si sigue ayudando, crea una plaza nueva arriba y envíale el enlace nuevo.",
+      "turnedOffNextLocked": "Una plaza de cuidador nueva requiere Greenhouse, y tu plan no lo incluye. Si sigue ayudando, puedes compartir un enlace de cuidador desde esta página, pero lo que haga no quedará registrado a su nombre.",
+      "turnedOffNextUnknown": "No pudimos comprobar ahora mismo si tu plan permite crear una plaza nueva. Si sigue ayudando, necesitará un enlace nuevo.",
       "reportLink": "Abrir el informe de visitas"
     },
     "page": {

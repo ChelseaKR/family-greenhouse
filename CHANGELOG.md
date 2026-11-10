@@ -43,10 +43,45 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The Christmas cactus pet page answers the cat question first, and the
+  spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
+  "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
+  the hotline box, and its title is "Is Christmas cactus toxic to cats? Listed
+  as non-toxic". /pet-safe/spider-plant's FAQ adds "Is spider plant toxic to
+  rats?": the ASPCA listing has no rat entry, so the page says it can't say
+  and points to an exotic-animal vet. Both are per-page fields in the pet
+  table; no other page and no verdict changed.
+
+## [0.51.0] - 2026-11-09
+
+**A caretaker seat now ends when the member who made it leaves, and the site
+links its household posts and holiday pet pages.** Terms and Privacy text did
+not change.
+
+- **What the deploy changes.** No Terraform change since 0.50.0: `infrastructure/`
+  is untouched, so expect only the usual Lambda and frontend updates. No stored
+  data is migrated, and seats left live by earlier departures are not changed.
+  The apps get these changes only with a store build, and none is planned for
+  this release.
+
+### Changed
+
 - **Internal links and one campaign tag.** Home, /care and /help/households link
   the two household blog posts, home and /pet-safe link the Christmas cactus and
   poinsettia pet pages by name, and the sitter page's footer link carries a fixed
   `utm_source` and `utm_medium`, never the sitter token.
+
+### Fixed
+
+- **A caretaker seat now ends when the member who created it leaves or is
+  removed.** Sitter links, plant tags and wall displays already did. A removed
+  admin who kept a seat URL could read tasks and spaces and complete tasks for
+  up to 180 days. The caretaker's visits stay on record, and the confirmations,
+  help pages and audit log now name seats. The product cannot tell the caretaker,
+  so the seat stays on the Household page with why it stopped and what an admin
+  can do next, including when the plan cannot create a new one, and the email to
+  the remaining admins when someone leaves gives the count. Seats left live by
+  earlier departures are not changed, because their creator was already scrubbed.
 
 ## [0.50.0] - 2026-11-08
 
