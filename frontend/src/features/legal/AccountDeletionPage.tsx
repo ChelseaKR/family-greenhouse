@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
-import { LegalShell } from './LegalShell';
+import { LegalShell, UNRELEASED_EFFECTIVE_DATE } from './LegalShell';
 import { ACCOUNT_DELETION_MAILTO, SUPPORT_EMAIL } from './contacts';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { useAuthStore } from '@/store/authStore';
@@ -15,7 +15,7 @@ export function AccountDeletionPage() {
   });
 
   return (
-    <LegalShell title={t('legal.accountDeletion.title')} effectiveDate="2026-11-05">
+    <LegalShell title={t('legal.accountDeletion.title')} effectiveDate={UNRELEASED_EFFECTIVE_DATE}>
       <p className="lead">{t('legal.accountDeletion.lead')}</p>
       <h2>{t('legal.accountDeletion.self.heading')}</h2>
       <ol>

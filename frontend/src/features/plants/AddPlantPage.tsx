@@ -43,6 +43,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 import { taskTypeLabels } from '@/utils/taskTypeConfig';
 import { isNativeApp } from '@/lib/platform';
+import { useThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -205,6 +206,10 @@ export function AddPlantPage() {
     setConfidence(null);
     await acceptPhoto(file);
   };
+
+  // In the apps, the photo goes to Plant.id only after a yes on this device
+  // (Guideline 5.1.2(i)); "Not now" sends nothing.
+  const plantIdConsent = useThirdPartyConsent('identify');
 
   const runIdentify = async () => {
     if (!pickedFile) return;
@@ -561,13 +566,14 @@ export function AddPlantPage() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={runIdentify}
+                    onClick={() => plantIdConsent.run(() => void runIdentify())}
                     isLoading={isIdentifying}
                     leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
                   >
                     Identify from photo
                   </Button>
                 )}
+                {plantIdConsent.dialog}
                 {mutation.isPending && pickedFile && (
                   <div
                     className="h-2 w-full overflow-hidden rounded-full bg-gray-200"

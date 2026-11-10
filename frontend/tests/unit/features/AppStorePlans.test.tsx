@@ -12,7 +12,7 @@ import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../msw/server';
 import { useAuthStore } from '@/store/authStore';
-import type { SubscriptionState } from '@/services/billingService';
+import type { Plan, SubscriptionState } from '@/services/billingService';
 
 const plugin = vi.hoisted(() => ({
   getProducts: vi.fn(),
@@ -190,6 +190,64 @@ describe('AppStorePlans', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Manage subscription' }));
     expect(plugin.manageSubscriptions).toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Subscribe/ })).not.toBeInTheDocument();
+  });
+
+  // Guideline 3.1.2(c): say what the customer gets for the price, beside the
+  // price. The numbers are the catalog's, never typed into the copy.
+  it('says what each plan includes, from the plan catalog, beside its price', async () => {
+    const limits = (homes: number | null, plants: number, sitterLinkMaxDays: number) => ({
+      homes,
+      members: null,
+      plants,
+      tags: 50,
+      analyticsHistoryDays: null,
+      sitterLinkMaxDays,
+      sitterLinksActive: 10,
+    });
+    const plans = [
+      {
+        id: 'garden',
+        name: 'Garden',
+        description: '',
+        maxPlants: 200,
+        maxMembers: null,
+        limits: limits(1, 200, 90),
+      },
+      {
+        id: 'greenhouse',
+        name: 'Greenhouse',
+        description: '',
+        maxPlants: 5000,
+        maxMembers: null,
+        limits: limits(null, 5000, 90),
+      },
+    ] as Plan[];
+    plugin.getProducts.mockResolvedValue([
+      { ...STORE_PRODUCTS[0], description: 'Shared care for one household, with chat.' },
+      STORE_PRODUCTS[1],
+    ]);
+    renderUi(<AppStorePlans subscription={seedling} isAdmin planNames={NAMES} plans={plans} />);
+
+    const garden = await screen.findByTestId('app-store-plan-garden');
+    expect(garden).toHaveTextContent(
+      'Up to 200 plants in one home, any number of people, the plant care assistant, and plant sitter links of up to 90 days.'
+    );
+    // The App Store's own subscription description is shown too.
+    expect(garden).toHaveTextContent('Shared care for one household, with chat.');
+    expect(screen.getByTestId('app-store-plan-greenhouse')).toHaveTextContent(
+      'Everything in Garden, plus any number of homes with up to 5,000 plants in each, caretaker seats, a wall display link and API keys.'
+    );
+  });
+
+  it('claims no numbers when the catalog did not send them', async () => {
+    const plans = [
+      { id: 'garden', name: 'Garden', description: '', maxPlants: 200, maxMembers: null },
+    ] as Plan[];
+    renderUi(<AppStorePlans subscription={seedling} isAdmin planNames={NAMES} plans={plans} />);
+
+    const garden = await screen.findByTestId('app-store-plan-garden');
+    expect(garden).not.toHaveTextContent(/Up to/);
+    expect(garden).not.toHaveTextContent(/undefined|null|NaN/);
   });
 
   it('says so when the App Store has no products to show', async () => {

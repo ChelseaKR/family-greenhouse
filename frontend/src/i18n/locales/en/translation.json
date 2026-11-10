@@ -3065,6 +3065,25 @@
     "privacy": "Privacy Policy",
     "lockedSeePlans": "See plans",
     "lockedMember": "A household admin can change the plan in Settings.",
-    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions)."
+    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions).",
+    "plansInSettings": "Plans are in Settings → Plan status, where a household admin can subscribe.",
+    "includesGarden": "Up to {{plants}} plants in one home, any number of people, the plant care assistant, and plant sitter links of up to {{sitterDays}} days.",
+    "includesGreenhouse": "Everything in Garden, plus any number of homes with up to {{plants}} plants in each, caretaker seats, a wall display link and API keys."
+  },
+  "thirdPartyConsent": {
+    "allow": "Allow",
+    "notNow": "Not now",
+    "chat": {
+      "title": "Send your question to Amazon Bedrock?",
+      "body": "To answer, Family Greenhouse sends your question and details of your household’s plants and tasks to Amazon Bedrock, an AI service from Amazon Web Services that runs Anthropic’s Claude model for us. We ask once on this device; our privacy policy has the details."
+    },
+    "leafHealth": {
+      "title": "Send this leaf photo to Amazon Bedrock?",
+      "body": "To check the leaf, Family Greenhouse sends the photo and the plant’s name to Amazon Bedrock, an AI service from Amazon Web Services that runs Anthropic’s Claude model for us. We ask once on this device; our privacy policy has the details."
+    },
+    "identify": {
+      "title": "Send this photo to Plant.id?",
+      "body": "To identify the plant, Family Greenhouse sends the photo to Plant.id, a service run by Kindwise in the Czech Republic. Its terms let it keep and reuse the photos it receives, including to train its models and to show them to its other customers. We ask once on this device; our privacy policy has the details."
+    }
   }
 }

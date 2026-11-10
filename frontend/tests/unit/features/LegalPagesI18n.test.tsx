@@ -81,8 +81,9 @@ const PAGES = [
     Page: PrivacyPage,
     en: 'Privacy',
     es: 'Privacidad',
-    // The Google Analytics wording (#1085) and the time-zone line changed in 0.48.0.
-    ...termsEffectiveText('2026-11-05'),
+    // Apple In-App Purchase and the in-app permission step for Bedrock and
+    // Plant.id were added after 0.50.0; the release PR sets the date.
+    ...termsEffectiveText('UNRELEASED'),
   },
   {
     name: 'terms',
@@ -108,8 +109,9 @@ const PAGES = [
     Page: AccountDeletionPage,
     en: 'Delete your account',
     es: 'Eliminar tu cuenta',
-    // The paid-plan cancellation line (#1096) changed in 0.48.0.
-    ...termsEffectiveText('2026-11-05'),
+    // The App Store subscription line was added after 0.50.0; the release PR
+    // sets the date.
+    ...termsEffectiveText('UNRELEASED'),
   },
 ] as const;
 
@@ -287,6 +289,45 @@ describe('legal pages: link targets survive localization', () => {
     ]) {
       expect(spanish, phrase).toContain(phrase);
     }
+  });
+
+  // The server keeps App Store transaction state (ADR 0041), and the apps ask
+  // before the first send to Bedrock or Plant.id (Guideline 5.1.2(i)).
+  it('privacy names Apple In-App Purchase and the in-app permission step, in both locales', () => {
+    const english = renderEnglish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Apple (only if your household subscribes in the iPhone app through In-App Purchase)',
+      'the original transaction id',
+      'we ask on that device before the first question or photo is sent',
+      'we ask on that device before the first photo is sent',
+    ]) {
+      expect(english, phrase).toContain(phrase);
+    }
+    cleanup();
+
+    const spanish = renderSpanish(PrivacyPage).container.textContent ?? '';
+    for (const phrase of [
+      'Apple (solo si tu hogar se suscribe en la app de iPhone mediante la compra dentro de la app)',
+      'el identificador de la transacción original',
+      'te lo preguntamos en ese dispositivo antes de enviar la primera pregunta o foto',
+      'te lo preguntamos en ese dispositivo antes de enviar la primera foto',
+    ]) {
+      expect(spanish, phrase).toContain(phrase);
+    }
+  });
+
+  // Deleting an account cannot cancel a subscription Apple bills; the public
+  // deletion page the listing links to must not say it cancels every plan.
+  it('account deletion says an App Store subscription is cancelled with Apple, in both locales', () => {
+    const english = renderEnglish(AccountDeletionPage).container.textContent ?? '';
+    expect(english).toContain(
+      'Deleting your account does not cancel a subscription bought in the iPhone app through Apple’s In-App Purchase'
+    );
+    cleanup();
+    const spanish = renderSpanish(AccountDeletionPage).container.textContent ?? '';
+    expect(spanish).toContain(
+      'Eliminar tu cuenta no cancela una suscripción contratada en la app de iPhone mediante la compra dentro de la app de Apple'
+    );
   });
 
   it('terms and privacy cross-link each other in Spanish', () => {

@@ -77,6 +77,34 @@ describe('help content', () => {
     expect(visibleSections(true).some((s) => s.id === 'billing')).toBe(false);
   });
 
+  // The iPhone app can send push notifications and sell plans through In-App
+  // Purchase; the answer must not tell a reviewer the opposite, on either
+  // platform. Neither switch is on in every build, so it names the condition.
+  describe('the "different in the apps" answer', () => {
+    const article = (native: boolean) =>
+      visibleSections(native)
+        .flatMap((s) => s.articles)
+        .find((a) => a.id === 'mobile-apps')!;
+
+    it.each([true, false])(
+      'makes no blanket "no notifications" or "no purchases" claim (native %s)',
+      (native) => {
+        const { text } = article(native);
+        expect(text).not.toMatch(
+          /No notifications at all|No purchases|not shipped in the mobile apps/
+        );
+        expect(text).toContain('In-App Purchase');
+        expect(text).toContain('Settings → Notifications');
+      }
+    );
+
+    it('renders the same answer on the page as in its plain-text twin', () => {
+      render(<>{article(true).a}</>);
+      expect(screen.queryByText(/No notifications at all/)).toBeNull();
+      expect(screen.getByText(/In-App Purchase/)).toBeInTheDocument();
+    });
+  });
+
   describe('the identify-photo answer (ADR 0042)', () => {
     const article = (native: boolean) =>
       visibleSections(native)

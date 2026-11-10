@@ -39,3 +39,17 @@ export function appStorePurchasesAvailable(): boolean {
     hasNativePlugin(NATIVE_PURCHASES_PLUGIN, NATIVE_PURCHASES_METHODS)
   );
 }
+
+/**
+ * The line a locked feature shows inside the apps in place of a "see plans"
+ * link (Guideline 3.1.1). In the iPhone app with In-App Purchase on, plans
+ * ARE changed in the app, so it points at Settings → Plan status; everywhere
+ * else in the apps (Android, or an iOS build without purchases) it says plan
+ * changes aren't available there. A catalog key, so callers translate it.
+ */
+export function nativePlanNoteKey():
+  'appStore.plansInSettings' | 'settings.billing.nativeUnavailable' {
+  return appStorePurchasesAvailable()
+    ? 'appStore.plansInSettings'
+    : 'settings.billing.nativeUnavailable';
+}

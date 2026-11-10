@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Link } from 'react-router';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { formatDate } from '@/i18n/format';
-import type { PlanId, SubscriptionState } from '@/services/billingService';
+import type { Plan, PlanId, SubscriptionState } from '@/services/billingService';
 import {
   buyPlan,
   loadStoreProducts,
@@ -25,6 +26,9 @@ import {
  * (ADR 0041): the paid tiers at the App Store's own prices — Garden monthly
  * and yearly (ADR 0042), Greenhouse monthly — Apple's purchase sheet,
  * Restore purchases, and Apple's Manage Subscriptions sheet.
+ *
+ * Guideline 3.1.2(c): each row also says what the tier includes, from the
+ * App Store's own subscription description and the plan catalog's caps.
  *
  * Guideline 3.1.1 and 3.1.2: the prices shown are StoreKit's `displayPrice`
  * and nothing else (never the catalog's, never the website's); nothing here
@@ -87,10 +91,39 @@ interface AppStorePlansProps {
   subscription: SubscriptionState | undefined;
   isAdmin: boolean;
   planNames: Partial<Record<PlanId, string>>;
+  /** The plan catalog, for what each tier includes. Absent, or a tier
+   *  without its caps (an older backend), and no includes line is shown. */
+  plans?: Plan[];
 }
 
-export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlansProps) {
-  const { t } = useTranslation();
+const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/**
+ * What a paid tier gives for its price (Guideline 3.1.2(c)), with the numbers
+ * read from the catalog the server publishes, never typed into the copy. A
+ * line is shown only when every fact it states was read: a cap that is
+ * missing, or not the shape the sentence claims ("any number of people" needs
+ * an unlimited member cap), drops the line rather than printing a guess.
+ */
+function includesLine(
+  plan: PaidPlanId,
+  catalog: Plan[] | undefined,
+  t: TFunction,
+  locale: string | undefined
+): string | null {
+  const limits = catalog?.find((p) => p.id === plan)?.limits;
+  if (!limits || !isCount(limits.plants)) return null;
+  const plants = limits.plants.toLocaleString(locale);
+  if (plan === 'garden') {
+    if (limits.members !== null || !isCount(limits.sitterLinkMaxDays)) return null;
+    return t('appStore.includesGarden', { plants, sitterDays: limits.sitterLinkMaxDays });
+  }
+  if (limits.homes !== null) return null;
+  return t('appStore.includesGreenhouse', { plants });
+}
+
+export function AppStorePlans({ subscription, isAdmin, planNames, plans }: AppStorePlansProps) {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<Message | null>(null);
   const name = (plan: PlanId) => planNames[plan] ?? plan;
@@ -208,6 +241,10 @@ export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlan
     // yearly product (ADR 0042), so a store that has not been given one
     // simply shows the monthly.
     const loaded = products.data;
+    const includes: Record<PaidPlanId, string | null> = {
+      garden: includesLine('garden', plans, t, i18n.resolvedLanguage),
+      greenhouse: includesLine('greenhouse', plans, t, i18n.resolvedLanguage),
+    };
     const offered = PAID.filter((p) => RANK[p] > RANK[includedUpTo]).flatMap((plan) =>
       CADENCES.flatMap((interval) => {
         const product = loaded[interval][plan];
@@ -232,6 +269,17 @@ export function AppStorePlans({ subscription, isAdmin, planNames }: AppStorePlan
                   price: product.displayPrice,
                 })}
               </p>
+              {product.description && (
+                <p className="mt-1 text-sm text-gray-700">{product.description}</p>
+              )}
+              {includes[plan] && (
+                <p
+                  className="mt-1 text-sm text-gray-600"
+                  data-testid={`app-store-includes-${plan}`}
+                >
+                  {includes[plan]}
+                </p>
+              )}
             </div>
             <Button
               onClick={() => buy.mutate({ plan, interval })}

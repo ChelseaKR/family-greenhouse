@@ -15,6 +15,7 @@ import {
 import { getErrorMessage } from '@/services/api';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
+import { useThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 import { ProposalCard } from './ProposalCard';
 import { historyToDisplayMessages, type DisplayMessage } from './chatHistory';
 import { ReportResponseControl } from './ReportResponseControl';
@@ -40,6 +41,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const bedrockConsent = useThirdPartyConsent('chat');
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -187,11 +189,15 @@ export function ChatPage() {
   function handleSend(): void {
     const trimmed = input.trim();
     if (!trimmed || isSending) return;
-    setError(null);
-    setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: 'user', text: trimmed }]);
-    setInput('');
-    void deliver(trimmed);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    // In the apps, nothing goes to Bedrock before a yes on this device
+    // (Guideline 5.1.2(i)). "Not now" leaves the question in the box.
+    bedrockConsent.run(() => {
+      setError(null);
+      setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: 'user', text: trimmed }]);
+      setInput('');
+      void deliver(trimmed);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -408,6 +414,7 @@ export function ChatPage() {
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         </div>
+        {bedrockConsent.dialog}
         <p className="text-xs text-gray-600 mt-1">
           AI-generated — verify before acting. Refuses pesticide / dosage advice. Reminder
           suggestions wait for your confirm before being created.

@@ -3130,6 +3130,25 @@
     "privacy": "Política de privacidad",
     "lockedSeePlans": "Ver planes",
     "lockedMember": "Un administrador del hogar puede cambiar el plan en Ajustes.",
-    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones)."
+    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones).",
+    "plansInSettings": "Los planes están en Ajustes → Estado del plan, donde una persona administradora del hogar puede suscribirse.",
+    "includesGarden": "Hasta {{plants}} plantas en un hogar, cualquier número de personas, el asistente de cuidados y enlaces de cuidador de hasta {{sitterDays}} días.",
+    "includesGreenhouse": "Todo lo de Garden, más cualquier número de hogares con hasta {{plants}} plantas en cada uno, plazas de cuidador, un enlace de pantalla de pared y claves de API."
+  },
+  "thirdPartyConsent": {
+    "allow": "Permitir",
+    "notNow": "Ahora no",
+    "chat": {
+      "title": "¿Enviar tu pregunta a Amazon Bedrock?",
+      "body": "Para responder, Family Greenhouse envía tu pregunta y datos de las plantas y tareas de tu hogar a Amazon Bedrock, un servicio de IA de Amazon Web Services que ejecuta para nosotros el modelo Claude de Anthropic. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    },
+    "leafHealth": {
+      "title": "¿Enviar esta foto de la hoja a Amazon Bedrock?",
+      "body": "Para revisar la hoja, Family Greenhouse envía la foto y el nombre de la planta a Amazon Bedrock, un servicio de IA de Amazon Web Services que ejecuta para nosotros el modelo Claude de Anthropic. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    },
+    "identify": {
+      "title": "¿Enviar esta foto a Plant.id?",
+      "body": "Para identificar la planta, Family Greenhouse envía la foto a Plant.id, un servicio de Kindwise, una empresa de la República Checa. Sus condiciones le permiten conservar y reutilizar las fotos que recibe, entre otras cosas para entrenar sus modelos y mostrarlas a sus otros clientes. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    }
   }
 }
