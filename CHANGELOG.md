@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-09
+
+**A caretaker seat now ends when the member who made it leaves, and the site
+links its household posts and holiday pet pages.** Terms and Privacy text did
+not change.
+
+- **What the deploy changes.** No Terraform change since 0.50.0: `infrastructure/`
+  is untouched, so expect only the usual Lambda and frontend updates. No stored
+  data is migrated, and seats left live by earlier departures are not changed.
+  The apps get these changes only with a store build, and none is planned for
+  this release.
+
 ### Changed
 
 - **Internal links and one campaign tag.** Home, /care and /help/households link
