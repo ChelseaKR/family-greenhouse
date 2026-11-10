@@ -25,7 +25,7 @@ import {
 } from '../models/identifyTopUp.js';
 import { getHouseholdSubscription, getStripe } from './billing.js';
 import { isPlantIdentificationConfigured } from './plantIdentification.js';
-import { assertIdentifyTopUpPriceMatchesCatalog } from './stripePrices.js';
+import { assertIdentifyTopUpPriceMatchesCatalog, automaticTaxEnabled } from './stripePrices.js';
 
 export interface IdentifyTopUpCheckoutArgs {
   householdId: string;
@@ -109,7 +109,7 @@ export async function createIdentifyTopUpCheckoutSession(
     cancel_url: args.cancelUrl,
     client_reference_id: args.householdId,
     metadata,
-    automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX_ENABLED === '1' },
+    automatic_tax: { enabled: automaticTaxEnabled() },
     customer_update: sub.stripeCustomerId
       ? ({ address: 'auto', name: 'auto' } as const)
       : undefined,

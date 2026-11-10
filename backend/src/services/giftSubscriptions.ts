@@ -42,7 +42,7 @@ import {
   hasLiveStripeSubscription,
 } from './billing.js';
 import { findGiftByCode, redeemGift } from './giftCodes.js';
-import { assertGiftPriceMatchesCatalog } from './stripePrices.js';
+import { assertGiftPriceMatchesCatalog, automaticTaxEnabled } from './stripePrices.js';
 import { audit } from '../utils/auditLog.js';
 
 export interface GiftCheckoutArgs {
@@ -98,7 +98,7 @@ export async function createGiftCheckoutSession(args: GiftCheckoutArgs): Promise
     success_url: args.successUrl,
     cancel_url: args.cancelUrl,
     metadata,
-    automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX_ENABLED === '1' },
+    automatic_tax: { enabled: automaticTaxEnabled() },
   };
   const session = args.idempotencyKey
     ? await stripe.checkout.sessions.create(params, { idempotencyKey: args.idempotencyKey })
