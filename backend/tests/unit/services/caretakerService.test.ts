@@ -598,3 +598,76 @@ describe('caretakerService — the token is not in the table (#568)', () => {
     expect(expectedHash(TOKEN)).not.toBe(sitterHash);
   });
 });
+
+// A seat is a task view plus completion, photos and notes for up to 180 days,
+// and its URL was shown to the admin who created it. Same rule as sitter links.
+describe('caretakerService.revokeCaretakersCreatedBy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const row = (overrides: Record<string, unknown> = {}) =>
+    activeRow({ createdBy: 'departing', ...overrides }).Item;
+
+  it('revokes only the departing member’s active seats, by each row’s own key', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({
+        Items: [
+          row({ token: undefined, tokenHash: 'hash-of-a-post-568-row' }),
+          row({ id: 'seat-pre-568', token: 'b'.repeat(64) }),
+          row({ id: 'seat-staying', token: 'c'.repeat(64), createdBy: 'staying' }),
+          row({ id: 'seat-revoked', token: 'd'.repeat(64), status: 'revoked' }),
+        ],
+      } as never)
+      .mockResolvedValue({} as never);
+
+    expect(await svc.revokeCaretakersCreatedBy(HH, 'departing')).toBe(2);
+    const writes = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map((c) => c[0] as unknown as { kind: string; input: { Key?: { PK: string } } })
+      .filter((c) => c.kind === 'Update');
+    expect(writes.map((w) => w.input.Key?.PK)).toEqual([
+      'CARETAKER#hash-of-a-post-568-row',
+      `CARETAKER#${'b'.repeat(64)}`,
+    ]);
+  });
+
+  it('records why and when, so the household can be shown what happened', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Items: [row()] } as never)
+      .mockResolvedValue({} as never);
+
+    await svc.revokeCaretakersCreatedBy(HH, 'departing');
+    const write = vi
+      .mocked(dynamodb.send)
+      .mock.calls.map(
+        (c) =>
+          c[0] as unknown as {
+            kind: string;
+            input: { ExpressionAttributeValues?: Record<string, unknown> };
+          }
+      )
+      .find((c) => c.kind === 'Update');
+    expect(write?.input.ExpressionAttributeValues).toMatchObject({
+      ':revoked': 'revoked',
+      ':reason': 'creator_left',
+      ':at': expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  });
+
+  it('follows pagination, so an older seat cannot survive past the first page', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send)
+      .mockResolvedValueOnce({ Items: [], LastEvaluatedKey: { PK: 'next' } } as never)
+      .mockResolvedValueOnce({ Items: [row()] } as never)
+      .mockResolvedValue({} as never);
+
+    expect(await svc.revokeCaretakersCreatedBy(HH, 'departing')).toBe(1);
+  });
+
+  it('THROWS on a failed read rather than reporting 0 revoked', async () => {
+    const { dynamodb, svc } = await load();
+    vi.mocked(dynamodb.send).mockRejectedValueOnce(new Error('dynamo down') as never);
+    await expect(svc.revokeCaretakersCreatedBy(HH, 'departing')).rejects.toThrow('dynamo down');
+  });
+});

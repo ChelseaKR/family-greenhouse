@@ -423,7 +423,13 @@ describe('Leave household in the iOS app (data)', () => {
         HttpResponse.json({
           householdId: 'hh-2',
           releasedTasks: 2,
-          revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+          revokedCredentials: {
+            plantTags: 0,
+            sitterLinks: 0,
+            kioskLinks: 0,
+            cuttingShares: 0,
+            caretakerSeats: 0,
+          },
           defaultHouseholdId: 'hh-1',
           defaultHouseholdRole: 'admin',
           remainingHouseholds: 1,

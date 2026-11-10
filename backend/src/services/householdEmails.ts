@@ -386,6 +386,8 @@ interface MemberLeftItem {
   memberName: string | null;
   householdName: string | null;
   releasedTasks: number;
+  /** Absent on a row queued before this field existed: say nothing, not 0. */
+  caretakerSeats?: number;
   householdUrl: string;
 }
 
@@ -472,6 +474,7 @@ export function renderQueued(
           memberName: item.memberName,
           householdName: item.householdName,
           releasedTasks: item.releasedTasks,
+          caretakerSeats: item.caretakerSeats,
           householdUrl: item.householdUrl,
           tasksUrl: appLink('/tasks'),
           settingsUrl: settings,
@@ -778,10 +781,12 @@ export async function notifyMemberLeft(
     leftUserId: string;
     memberName: string | null;
     releasedTasks: number;
+    /** Caretaker seats the departure revoked; the caretaker cannot be told. */
+    caretakerSeats: number;
   },
   now: Date = new Date()
 ): Promise<number> {
-  const { householdId, leftUserId, memberName, releasedTasks } = params;
+  const { householdId, leftUserId, memberName, releasedTasks, caretakerSeats } = params;
   const householdName = valueOrNull(await readHouseholdName(householdId));
   const members = await householdService.getHouseholdMembers(householdId);
   const householdUrl = appLink('/household');
@@ -799,7 +804,13 @@ export async function notifyMemberLeft(
       householdId,
       kind: 'member_left',
       dedupeKey: `member_left#${householdId}#${leftUserId}#${now.toISOString()}`,
-      item: { memberName, householdName, releasedTasks, householdUrl } satisfies MemberLeftItem,
+      item: {
+        memberName,
+        householdName,
+        releasedTasks,
+        caretakerSeats,
+        householdUrl,
+      } satisfies MemberLeftItem,
       maxItems: 1,
       accumulate: false,
       now,

@@ -456,6 +456,8 @@ interface Caretaker {
   startsAt: string;
   expiresAt: string;
   status: 'active' | 'revoked';
+  revokedReason?: 'creator_left';
+  revokedAt?: string;
 }
 
 /** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
@@ -3636,13 +3638,20 @@ function departLocalHousehold(
     sitterLinks: number;
     kioskLinks: number;
     cuttingShares: number;
+    caretakerSeats: number;
   };
 } {
   const summary = {
     releasedTasks: 0,
     rotationsUpdated: 0,
     helpAsksAnonymized: 0,
-    revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+    revokedCredentials: {
+      plantTags: 0,
+      sitterLinks: 0,
+      kioskLinks: 0,
+      cuttingShares: 0,
+      caretakerSeats: 0,
+    },
   };
   const revoked = summary.revokedCredentials;
   const userId = target.id;
@@ -3670,6 +3679,15 @@ function departLocalHousehold(
     if (share.householdId === householdId && share.createdBy === userId) {
       db.shares.delete(code);
       revoked.cuttingShares += 1;
+    }
+  }
+  // Revoked, not deleted: as in production, visits outlive the seat.
+  for (const seat of db.caretakers.values()) {
+    if (seat.householdId === householdId && seat.createdBy === userId && seat.status === 'active') {
+      seat.status = 'revoked';
+      seat.revokedReason = 'creator_left';
+      seat.revokedAt = new Date().toISOString();
+      revoked.caretakerSeats += 1;
     }
   }
   for (const [token, calendar] of db.calendarTokens.entries()) {
