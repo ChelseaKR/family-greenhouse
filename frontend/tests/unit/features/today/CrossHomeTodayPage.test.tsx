@@ -1,10 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CrossHomeTodayPage } from '@/features/today/CrossHomeTodayPage';
+import { Toaster } from '@/components/Toaster';
 import { useAuthStore, type User } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import { server } from '../../../msw/server';
 
 const API = 'http://localhost:4000';
@@ -74,12 +77,14 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/today']}>
         <CrossHomeTodayPage />
+        <Toaster />
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
 beforeEach(() => {
+  useToastStore.setState({ toasts: [] });
   // The caller's ACTIVE household is their own home; rows from other homes
   // must still act on their own household, not this one.
   useAuthStore.setState({
@@ -235,5 +240,155 @@ describe('CrossHomeTodayPage', () => {
     expect(screen.getByRole('button', { name: 'Unclaim the Fern task' })).toBeInTheDocument();
     // Still labelled with its home after the patch.
     expect(screen.getByText('In Beach Cottage')).toBeInTheDocument();
+  });
+
+  // Double care (the same care logged by someone else a little earlier). The
+  // server holds the completion back with a 409 whose message is written for
+  // an API client: "... Send confirmDuplicate: true to log it anyway." This
+  // page used to show that sentence as an error and offered no way to confirm.
+  describe('when someone else already logged the same care', () => {
+    const duplicateBody = {
+      message: 'Sam already logged water for Fern. Send confirmDuplicate: true to log it anyway.',
+      details: {
+        code: 'DUPLICATE_CARE',
+        plantName: 'Fern',
+        duplicate: {
+          completionId: 'c-sam',
+          completedAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
+          completedBy: 'user-sam',
+          completedByName: 'Sam',
+          taskId: 't-beach',
+          taskType: 'water',
+          sameTask: true,
+          windowHours: 24,
+        },
+      },
+    };
+
+    /** Holds the first completion back; accepts one that confirms. */
+    function holdBackUntilConfirmed() {
+      const calls: Array<{ household: string | null; body: Record<string, unknown> }> = [];
+      server.use(
+        http.get(`${API}/me/today`, () => HttpResponse.json(FIXTURE)),
+        http.post(`${API}/tasks/t-beach/complete`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>;
+          calls.push({ household: request.headers.get('x-household-id'), body });
+          if (body.confirmDuplicate !== true) {
+            return HttpResponse.json(duplicateBody, { status: 409 });
+          }
+          return HttpResponse.json({
+            ...FIXTURE.households[1].tasks[0],
+            lastCompleted: new Date().toISOString(),
+            nextDue: atLocalNoon(7),
+          });
+        })
+      );
+      return calls;
+    }
+
+    it('says so in plain words and offers to log it anyway, never the API text', async () => {
+      const calls = holdBackUntilConfirmed();
+      renderPage();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Mark Fern done at Beach Cottage' })
+      );
+
+      const notices = await screen.findByRole('region', { name: 'Notifications' });
+      expect(
+        await within(notices).findByText('Sam logged Water for Fern 4 hours ago. Log it anyway?')
+      ).toBeInTheDocument();
+      // A real button with a name, not a sentence to act on.
+      expect(within(notices).getByRole('button', { name: 'Log it anyway' })).toBeInTheDocument();
+      // No field name and no instruction to "send" anything, anywhere.
+      expect(document.body).not.toHaveTextContent(/confirmDuplicate/);
+      expect(document.body).not.toHaveTextContent(/Send /);
+      // Nothing was logged, so the row is still in the queue.
+      expect(screen.getByText('Fern')).toBeInTheDocument();
+      expect(calls).toHaveLength(1);
+    });
+
+    it("logs it anyway in the row's own home when confirmed", async () => {
+      const calls = holdBackUntilConfirmed();
+      renderPage();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Mark Fern done at Beach Cottage' })
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Log it anyway' }));
+
+      await waitFor(() => expect(calls).toHaveLength(2));
+      expect(calls[1]).toEqual({
+        household: 'hh-beach',
+        body: { expectedNextDue: atLocalNoon(-2), confirmDuplicate: true },
+      });
+      await waitFor(() => expect(screen.queryByText('Fern')).not.toBeInTheDocument());
+      expect(await screen.findByText('Logged anyway')).toBeInTheDocument();
+      // The offer went away with the choice; it cannot be taken twice.
+      expect(screen.queryByRole('button', { name: 'Log it anyway' })).not.toBeInTheDocument();
+    });
+
+    it('asks once per row: tapping Done again replaces the offer', async () => {
+      const calls = holdBackUntilConfirmed();
+      renderPage();
+
+      const done = await screen.findByRole('button', { name: 'Mark Fern done at Beach Cottage' });
+      fireEvent.click(done);
+      await screen.findByRole('button', { name: 'Log it anyway' });
+      await waitFor(() => expect(done).toBeEnabled());
+      fireEvent.click(done);
+
+      await waitFor(() => expect(calls).toHaveLength(2));
+      await waitFor(() => expect(done).toBeEnabled());
+      expect(screen.getAllByRole('button', { name: 'Log it anyway' })).toHaveLength(1);
+      // Neither tap confirmed anything.
+      expect(calls.map((call) => call.body.confirmDuplicate)).toEqual([undefined, undefined]);
+    });
+
+    describe('in Spanish', () => {
+      afterEach(async () => {
+        await i18n.changeLanguage('en');
+      });
+
+      it('asks in Spanish, with no English and no API text', async () => {
+        await ensureLanguageCatalog('es');
+        await i18n.changeLanguage('es');
+        holdBackUntilConfirmed();
+        renderPage();
+
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Marcar Fern como hecho en Beach Cottage' })
+        );
+
+        expect(
+          await screen.findByText(
+            'Sam registró Regar para Fern hace 4 horas. ¿Registrarlo de todos modos?'
+          )
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Registrar de todos modos' })
+        ).toBeInTheDocument();
+        expect(document.body).not.toHaveTextContent(
+          /confirmDuplicate|already logged|Log it anyway/
+        );
+      });
+    });
+
+    it('still shows an ordinary refusal as an error, with nothing to confirm', async () => {
+      server.use(
+        http.get(`${API}/me/today`, () => HttpResponse.json(FIXTURE)),
+        http.post(`${API}/tasks/t-beach/complete`, () =>
+          HttpResponse.json({ message: 'Task not found' }, { status: 404 })
+        )
+      );
+      renderPage();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Mark Fern done at Beach Cottage' })
+      );
+
+      expect(await screen.findByText('Task not found')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Log it anyway' })).not.toBeInTheDocument();
+    });
   });
 });

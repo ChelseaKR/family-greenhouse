@@ -8,7 +8,7 @@
  * invalidate the same prefix on settle, per the household-scoped query-key
  * convention.
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   taskService,
@@ -16,7 +16,7 @@ import {
   type SnoozeReason,
   type TaskWithCoverage,
 } from '@/services/taskService';
-import { PlantWithTasks, Task } from '@/services/plantService';
+import { plantService, PlantWithTasks, Task, TaskCompletion } from '@/services/plantService';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { toast } from '@/store/toastStore';
@@ -133,6 +133,139 @@ function findTaskInSnapshots(snapshots: CachedQuerySnapshot, taskId: string): Ta
   return undefined;
 }
 
+/**
+ * How long to wait before each read of the history after a completion: at
+ * once, then twice more if the read has not caught up. The completion is
+ * written before the server answers, so the first read almost always has it;
+ * the later ones cover a read that briefly lags the write.
+ */
+export const CARE_HISTORY_WAITS_MS: readonly number[] = [0, 1_000, 3_000];
+
+const wait = (ms: number) =>
+  ms > 0 ? new Promise<void>((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+
+const instant = (iso: string | null | undefined) => (iso ? Date.parse(iso) : Number.NaN);
+
+/** The newest completion instant in a list, or -Infinity for an empty one. */
+function newestCompletion(completions: TaskCompletion[] | undefined): number {
+  return Math.max(
+    Number.NEGATIVE_INFINITY,
+    ...(completions ?? []).map((row) => instant(row.completedAt)).filter(Number.isFinite)
+  );
+}
+
+/** Does this history hold the completion the task's `lastCompleted` names? */
+function historyHasCompletion(completions: TaskCompletion[] | undefined, completed: Task) {
+  const at = instant(completed.lastCompleted);
+  return (completions ?? []).some(
+    (row) => row.taskId === completed.id && instant(row.completedAt) >= at
+  );
+}
+
+/** The same question of an activity feed. Anything that is not a feed passes. */
+function feedHasCompletion(feed: unknown, completed: Task): boolean {
+  if (!Array.isArray(feed)) return true;
+  const at = instant(completed.lastCompleted);
+  return feed.some((event: unknown) => {
+    const row = event as { type?: unknown; occurredAt?: string; payload?: { taskId?: unknown } };
+    return (
+      row?.type === 'task.completed' &&
+      row.payload?.taskId === completed.id &&
+      instant(row.occurredAt) >= at
+    );
+  });
+}
+
+async function refreshPlantHistory(
+  queryClient: QueryClient,
+  householdId: string | null,
+  completed: Task,
+  waitsMs: readonly number[]
+): Promise<void> {
+  const queryKey = ['plants', householdId, completed.plantId];
+  for (const ms of waitsMs) {
+    await wait(ms);
+    // Only a plant page that is open. One that is not is already marked
+    // stale and reads fresh when it is next opened.
+    if (!queryClient.getQueryCache().find({ queryKey, exact: true })?.isActive()) return;
+    let fresh: PlantWithTasks;
+    try {
+      fresh = await plantService.getPlant(completed.plantId);
+    } catch {
+      continue;
+    }
+    if (!historyHasCompletion(fresh.recentCompletions, completed)) continue;
+    queryClient.setQueryData<PlantWithTasks>(queryKey, (current) =>
+      // Never backwards: a slower, older read must not replace a newer list.
+      current &&
+      Array.isArray(current.recentCompletions) &&
+      newestCompletion(fresh.recentCompletions) >= newestCompletion(current.recentCompletions)
+        ? { ...current, recentCompletions: fresh.recentCompletions }
+        : current
+    );
+    // Writing to the cache clears the "stale for the next mount" mark that
+    // `onSettled` set. Put it back, so the next mount still reads the plant.
+    queryClient.invalidateQueries({ queryKey, exact: true, refetchType: 'none' });
+    return;
+  }
+}
+
+async function refreshActivityFeeds(
+  queryClient: QueryClient,
+  householdId: string | null,
+  completed: Task,
+  waitsMs: readonly number[]
+): Promise<void> {
+  const open = { queryKey: ['household', householdId, 'activity'], type: 'active' as const };
+  for (const ms of waitsMs) {
+    await wait(ms);
+    if (queryClient.getQueryCache().findAll(open).length === 0) return;
+    await queryClient.refetchQueries(open);
+    // As above: a read clears the stale mark, and the next mount keeps its
+    // fresh read.
+    queryClient.invalidateQueries({ ...open, refetchType: 'none' });
+    const caughtUp = queryClient
+      .getQueryCache()
+      .findAll(open)
+      .every((query) => feedHasCompletion(query.state.data, completed));
+    if (caughtUp) return;
+  }
+}
+
+/**
+ * After a completion, bring the care history that is ON SCREEN up to date:
+ * the open plant page's `recentCompletions` (its "Last watered" line, Care
+ * History and streaks) and any open activity feed (the dashboard's).
+ *
+ * The task itself is patched from the completion response, which is the
+ * authority on the task. It is not the authority on the history: it does not
+ * say who the completion was attributed to, and when someone else completed
+ * the same occurrence first it is not this member's completion at all (the
+ * server answers 200 with the task as it stands). A row built on the client
+ * from that response would be a guess shown as a record. So the history is
+ * read from the server again, and used only once it holds the completion the
+ * response names.
+ *
+ * Only the history is taken from that read. The rest of the plant payload is
+ * left alone, because the same read can still carry the task's OLD due date
+ * for a moment (the reason `onSettled` marks these queries stale instead of
+ * refetching them). Never rejects: a failed read leaves the screen as it was,
+ * and the stale mark still brings the truth on the next mount.
+ */
+export async function refreshCareHistory(
+  queryClient: QueryClient,
+  householdId: string | null,
+  completed: Task,
+  waitsMs: readonly number[] = CARE_HISTORY_WAITS_MS
+): Promise<void> {
+  // No completion instant to look for (not a real completion response).
+  if (!completed?.id || !Number.isFinite(instant(completed.lastCompleted))) return;
+  await Promise.allSettled([
+    refreshPlantHistory(queryClient, householdId, completed, waitsMs),
+    refreshActivityFeeds(queryClient, householdId, completed, waitsMs),
+  ]);
+}
+
 export function useCompleteTaskMutation(householdId: string | null) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -181,6 +314,9 @@ export function useCompleteTaskMutation(householdId: string | null) {
       queryClient.setQueriesData({ queryKey: ['plants', householdId] }, (value: unknown) =>
         replaceCompletedTaskInCache(value, updatedTask)
       );
+      // The history on screen ("Last watered", Care History, the activity
+      // feed) comes from the server too, a moment later.
+      void refreshCareHistory(queryClient, householdId, updatedTask);
       playHaptic('completed');
       noteCareDoneInBackground();
       toast.success(variables.confirmDuplicate ? t('doubleCare.loggedAnyway') : 'Task completed');

@@ -77,6 +77,13 @@ export function CaretakerPage() {
   const [done, setDone] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
   const [recordGap, setRecordGap] = useState(false);
+  // What the live region says when a row disappears, and where focus goes.
+  // The same pattern as the sitter page (features/sitter/SitPage.tsx).
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [justCompleted, setJustCompleted] = useState<{ taskId: string; seq: number } | null>(null);
+  const completionSeq = useRef(0);
+  const doneButtons = useRef(new Map<string, HTMLButtonElement>());
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
@@ -113,6 +120,12 @@ export function CaretakerPage() {
         const result = await caretakerVisitService.completeTask(token, task.taskId, task.dueDate);
         setDone((d) => new Set(d).add(task.taskId));
         if (!result.visitRecorded) setRecordGap(true);
+        // The row is about to be removed, and it takes two things with it:
+        // the words (a live region announces insertions, never removals) and
+        // the focus (the removed <li> held it, so it falls to <body>). Both
+        // are replaced here, exactly as the sitter page does.
+        setStatusMessage(t('sitter.markedDone', { plant: task.plantName }));
+        setJustCompleted({ taskId: task.taskId, seq: completionSeq.current++ });
       } catch (err) {
         if (err instanceof CaretakerLinkInactiveError) {
           setStatus('inactive');
@@ -130,6 +143,22 @@ export function CaretakerPage() {
     },
     [t, token]
   );
+
+  // Move focus to the next task's Done button once the completed row is gone,
+  // or to the closing summary when that was the last one. Runs after the
+  // render that removed the row, and is keyed on a counter rather than on the
+  // task id so that every completion moves focus.
+  useEffect(() => {
+    if (!justCompleted) return;
+    const order = tasks.map((task) => task.taskId);
+    const from = order.indexOf(justCompleted.taskId);
+    const nextId =
+      order.slice(from + 1).find((id) => !done.has(id)) ??
+      order.find((id) => !done.has(id)) ??
+      null;
+    const target = nextId ? doneButtons.current.get(nextId) : summaryRef.current;
+    target?.focus();
+  }, [done, justCompleted, tasks]);
 
   const handlePhotoPicked = useCallback(
     async (file: File | undefined, forTaskId: string | null = photoTaskId) => {
@@ -275,16 +304,28 @@ export function CaretakerPage() {
               passes live="off" so its own role="status" does not nest a polite
               region inside this polite region and announce twice. */}
           <div className="mt-10 space-y-3" aria-live="polite">
+            {/* Inserted, not toggled: this region reports additions, so the
+                sentence about the row that just left has to arrive as new
+                content. The key makes a repeat of the same sentence (a second
+                task on one plant) a new node too. Plain <p>, no role: a
+                second live region nested in this one would announce twice. */}
+            {statusMessage && justCompleted && (
+              <p key={justCompleted.seq} className="sr-only">
+                {statusMessage}
+              </p>
+            )}
             {remaining.length === 0 ? (
-              finishedSomething ? (
-                <Alert variant="success" title={t('caretaker.page.allDoneTitle')} live="off">
-                  {t('caretaker.page.allDoneBody')}
-                </Alert>
-              ) : (
-                <Alert variant="info" title={t('caretaker.page.nothingDueTitle')} live="off">
-                  {t('caretaker.page.nothingDueBody')}
-                </Alert>
-              )
+              <div ref={summaryRef} tabIndex={-1} className="focus:outline-hidden">
+                {finishedSomething ? (
+                  <Alert variant="success" title={t('caretaker.page.allDoneTitle')} live="off">
+                    {t('caretaker.page.allDoneBody')}
+                  </Alert>
+                ) : (
+                  <Alert variant="info" title={t('caretaker.page.nothingDueTitle')} live="off">
+                    {t('caretaker.page.nothingDueBody')}
+                  </Alert>
+                )}
+              </div>
             ) : (
               <ul className="space-y-3">
                 {remaining.map((task) => {
@@ -318,6 +359,10 @@ export function CaretakerPage() {
                           )}
                         </div>
                         <Button
+                          ref={(node) => {
+                            if (node) doneButtons.current.set(task.taskId, node);
+                            else doneButtons.current.delete(task.taskId);
+                          }}
                           variant="primary"
                           size="sm"
                           isLoading={pending.has(task.taskId)}
