@@ -98,6 +98,12 @@ variable "monthly_budget_usd" {
   default     = "50"
 }
 
+variable "cognito_mau_alert_threshold" {
+  description = "Monthly active users on the Cognito pool above which alert_email is notified, via a Budgets usage budget on the billed MAU usage type (see aws_budgets_budget.cognito_mau in main.tf). Counts the calendar month's distinct active users as Cognito bills them, pool-wide."
+  type        = number
+  default     = 15
+}
+
 variable "lambda_dlq_name" {
   description = "Name of the Lambda/EventBridge dead-letter queue to alarm on. Empty disables the DLQ alarm."
   type        = string

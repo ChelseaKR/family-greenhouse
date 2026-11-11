@@ -437,6 +437,7 @@ module "monitoring" {
   alert_sms_number                = var.alert_sms_number
   dynamodb_table_name             = module.database.table_name
   monthly_budget_usd              = var.monthly_budget_usd
+  cognito_mau_alert_threshold     = var.cognito_mau_alert_threshold
   lambda_dlq_name                 = module.api.lambda_dlq_name
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
