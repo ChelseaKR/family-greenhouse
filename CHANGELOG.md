@@ -52,6 +52,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and points to an exotic-animal vet. Both are per-page fields in the pet
   table; no other page and no verdict changed.
 
+### Fixed
+
+- **The production price attestation now says which attested Stripe prices
+  still exist.** Three of the eight ids in `stripe_price_ids_attested` (the
+  withdrawn Garden annual, Garden lifetime and Greenhouse annual) were deleted
+  from Stripe and never sold; the tfvars comments said subscribers still renew
+  on them. Comments only: no id, variable, or runtime value changed.
+
 ## [0.51.0] - 2026-11-09
 
 **A caretaker seat now ends when the member who made it leaves, and the site
