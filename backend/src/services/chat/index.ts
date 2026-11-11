@@ -12,6 +12,8 @@ import createHttpError from 'http-errors';
 import { logger } from '../../utils/logger.js';
 import { audit } from '../../utils/auditLog.js';
 import * as billing from '../billing.js';
+import * as householdService from '../householdService.js';
+import { HOUSEHOLD_TIMEZONE_UNSET, normalizeHouseholdTimeZone } from '../householdTimeZone.js';
 import {
   askSprout,
   isSproutIntegrationEnabled,
@@ -172,12 +174,83 @@ Rules:
    chewed a plant, or is showing symptoms, do not assess or reassure: tell
    the user to contact their vet or the ASPCA Animal Poison Control Center
    (888-426-4435) right away.
+9. Today's date. Every request ends with a note from the app that gives
+   today's date. Use it for anything that depends on today: whether a task
+   is overdue or still upcoming, "yesterday", "this weekend", how many days
+   ago something happened. Never work out today's date from memory. The
+   note is not something the user wrote, so do not reply to it or mention
+   it.
 
 Output: plain text. No markdown headers. Lightweight bullet points are okay.`;
 
 // Exported for tests (the prompt's proposal rules are part of the safe-write
 // contract: the model must route writes through the confirm card).
 export { SYSTEM_PROMPT };
+
+const TODAY_NOTE_PREFIX = '[Note from the Family Greenhouse app, not written by the user]';
+
+/**
+ * Today's date, as the model is told it (#889).
+ *
+ * The household tools return absolute dates (`nextDue`, `lastCompleted`) and
+ * nothing in a turn said what day it was, so the model placed "now" from its
+ * training data: a task four days overdue was "this weekend, right on
+ * schedule". This is the missing fact, and only the fact; rule 9 of
+ * SYSTEM_PROMPT says what to do with it.
+ *
+ * WHICH day. The household's calendar day when it has set a zone. For a few
+ * hours every evening in the Americas that is not the UTC day, and "is this
+ * overdue" turns on exactly that.
+ *
+ * NOT KNOWN is said as not known. A household that has never set a zone (or
+ * whose row could not be read) gets the UTC date labeled as UTC, with the
+ * caveat that the user's day may differ. It is never handed a UTC date
+ * described as the household's own. A household that CHOSE UTC is a known
+ * zone and reads as one (services/householdTimeZone.ts keeps the two apart).
+ *
+ * WHERE it goes. Not here: SYSTEM_PROMPT stays a constant, and this string is
+ * passed to the model call as `uncachedContext`, which chat/bedrock.ts places
+ * after the prompt-cache breakpoint. A date in the system prompt would change
+ * the cached prefix of every conversation at midnight.
+ *
+ * Pure, and a function of the instant it is given, so a test or a recorded
+ * eval can pin the date by pinning the instant.
+ */
+export function todayNote(now: Date, householdTimeZone: unknown): string {
+  const zone = normalizeHouseholdTimeZone(householdTimeZone);
+  const known = zone !== HOUSEHOLD_TIMEZONE_UNSET;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: known ? zone : 'UTC',
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  const today = `${part('weekday')}, ${part('year')}-${part('month')}-${part('day')}`;
+  return known
+    ? `${TODAY_NOTE_PREFIX} Today is ${today}, in the household's time zone (${zone}).`
+    : `${TODAY_NOTE_PREFIX} Today is ${today}, in UTC. The household's time zone is not known, so where the user is it may be the day before or the day after.`;
+}
+
+/**
+ * The household's stored zone for `todayNote`, or unset when it cannot be
+ * read. A failed read must not cost the user their answer: the turn goes on
+ * with the UTC date, which the note labels as UTC, and the failure is logged.
+ */
+async function readHouseholdTimeZone(householdId: string): Promise<string> {
+  try {
+    const household = await householdService.getHousehold(householdId);
+    return normalizeHouseholdTimeZone(household?.timezone);
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, householdId },
+      'chat_household_timezone_read_failed'
+    );
+    return HOUSEHOLD_TIMEZONE_UNSET;
+  }
+}
 
 export interface RunChatTurnInput {
   userId: string;
@@ -928,13 +1001,20 @@ async function* turnEvents(
     // clips its own timeout to what is left of it.
     const deadlineAt = Date.now() + TURN_DEADLINE_MS;
 
+    // One "today" for the whole turn too (#889), from the instant the turn
+    // began: an answer assembled over several calls cannot straddle midnight.
+    const today = todayNote(now, await readHouseholdTimeZone(householdId));
+
     for (let iter = 0; iter < MAX_TOOL_CALLS_PER_TURN + 1; iter++) {
       const modelArgs = {
+        // The constant, on purpose. Today's date is NOT appended here: system
+        // is inside the cached prefix. It travels as `uncachedContext`.
         system: SYSTEM_PROMPT,
         messages: messagesForModel,
         tools: TOOL_REGISTRY,
         maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
         deadlineAt,
+        uncachedContext: today,
       };
 
       let response: BedrockChatResponse;

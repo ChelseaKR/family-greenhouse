@@ -709,6 +709,98 @@ describe('GET /tag/{token} (public)', () => {
     expect(res.body).not.toContain('Smith');
   });
 
+  // Audit 2026-11-08, finding 12. The public page prints "Last watered <when>
+  // by <name>." A completion that came from a SURFACE, not a person, carries a
+  // server-written label for a name, and cutting a label to its first word
+  // printed "by a.", "by the." and "by Former.".
+  describe('attribution for a completion no member made', () => {
+    async function scanWith(completedBy: string, completedByName: string) {
+      const { taskService } = await arrange();
+      vi.mocked(taskService.getTaskCompletions).mockResolvedValue([
+        {
+          taskType: 'water',
+          completedAt: '2026-09-03T10:00:00.000Z',
+          completedBy,
+          completedByName,
+        },
+      ] as never);
+      const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');
+      const res = (await getTagView(
+        anonEvent({ path: `/tag/${TOKEN}`, pathParameters: { token: TOKEN } }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      return { res, body: JSON.parse(res.body) };
+    }
+
+    it.each([
+      { surface: 'a sitter link', completedBy: 'sitter:link-1', label: 'a plant sitter' },
+      { surface: 'the kiosk display', completedBy: 'kiosk:link-9', label: 'the kiosk display' },
+      {
+        surface: 'a member who has since left',
+        completedBy: 'deleted-user',
+        label: 'Former member',
+      },
+    ])('prints the whole label for $surface, not its first word', async (c) => {
+      const { body } = await scanWith(c.completedBy, c.label);
+      expect(body.history.status).toBe('ok');
+      expect(body.history.lastWatered).toEqual({
+        taskType: 'water',
+        completedAt: '2026-09-03T10:00:00.000Z',
+        completedByName: c.label,
+        viaTag: false,
+      });
+      expect(body.history.lastCare.completedByName).toBe(c.label);
+    });
+
+    it('decides by WHO completed it, never by what the name says: a member is still cut to a first name', async () => {
+      // The privacy rule this page exists under: a photographed label never
+      // carries a member's full name. A member whose stored name merely reads
+      // like a label gets no exemption from it.
+      for (const name of ['Jane Smith', 'Former member Smith', 'a plant sitter Smith']) {
+        const { res, body } = await scanWith('user-2', name);
+        expect(body.history.lastWatered.completedByName).toBe(name.split(' ')[0]);
+        expect(res.body).not.toContain('Smith');
+      }
+    });
+
+    it('still cuts a caretaker seat and an API key label to one word (unchanged; not in the audit finding)', async () => {
+      // Both are household-typed text, so neither may be printed whole on a
+      // public page without a decision. Pinned so this fix cannot widen them.
+      const seat = await scanWith('caretaker:seat-1', 'Maria Lopez');
+      expect(seat.body.history.lastWatered.completedByName).toBe('Maria');
+      expect(seat.res.body).not.toContain('Lopez');
+      const key = await scanWith('apikey:key-1', 'Garage sensor');
+      expect(key.body.history.lastWatered.completedByName).toBe('Garage');
+      expect(key.res.body).not.toContain('sensor');
+    });
+
+    it('the ids this rule keys on are the ones the writers actually stamp', async () => {
+      // The handler cannot import the writers' constants (two are private to
+      // other Lambda groups), so it carries its own copies. This is what
+      // fails if a writer changes its actor id and the copy here goes stale —
+      // which would silently bring "by a." back.
+      const { readFileSync } = await import('node:fs');
+      const src = (rel: string) =>
+        readFileSync(new URL(`../../../src/${rel}`, import.meta.url), 'utf8');
+      const { sitterActorId } = await import('../../../src/services/sitterPhotoPolicy.js');
+      expect(sitterActorId('link-1')).toBe('sitter:link-1');
+      expect(src('handlers/tasks/handler.ts')).toMatch(
+        /`sitter:\$\{link\.id\}`,\s*'a plant sitter'/
+      );
+      expect(src('handlers/tasks/kiosk.ts')).toContain(
+        'const kioskActorId = (linkId: string) => `kiosk:${linkId}`;'
+      );
+      expect(src('services/accountCleanup.ts')).toContain(
+        "export const DELETED_USER_ID = 'deleted-user';"
+      );
+      expect(src('services/trashService.ts')).toContain(
+        "export const DELETED_USER_ID = 'deleted-user';"
+      );
+    });
+  });
+
   it('a plant with notes but no house rule scans with no care note, never the notes', async () => {
     await arrange({ plant: { careRule: null } });
     const { getTagView } = await import('../../../src/handlers/plantTags/handler.js');
