@@ -147,7 +147,9 @@ stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
 # plant identification out of the plan. The two ids above named `garden` and
 # `garden_annual` are now LEGACY ($4.99 / $39.99): keep them, never archive
 # those prices, so a household that bought at the old price keeps renewing on
-# it and the webhook still maps it to Garden. The two below are the CURRENT
+# it and the webhook still maps it to Garden. (Only the $4.99 monthly ever had
+# a subscriber; the $39.99 annual never sold and no longer exists in Stripe —
+# see the 2026-11-10 note below.) The two below are the CURRENT
 # prices and are BLANK until the owner creates them. While both are blank
 # GET /billing/plans publishes Garden as not available and nothing sells it;
 # the commercial_gate_guard precondition refuses a plan with exactly one of
@@ -194,6 +196,28 @@ stripe_price_id_identify_top_up = "price_1UExJSAhnUt8CMG0fGgIyAzZ"
 # so the pack has been on sale since this morning. Five ids were attested and
 # six were live, which is precisely the drift the list below exists to make
 # impossible, and precisely why a bare boolean could not catch it.
+#
+# Read back from the LIVE account (acct_1E4J3YAhnUt8CMG0) on 2026-11-10 with
+# the Stripe CLI, read only. Five of the eight ids in stripe_price_ids_attested
+# exist and are active: the $4.99 Garden monthly, the $9.99 Greenhouse
+# monthly, the identification pack, and the $2.99 / $24.99 Garden pair. The
+# other three — Garden annual $39.99, Garden lifetime $149 and Greenhouse
+# annual $79.99 — answer resource_missing to `stripe prices retrieve <id>
+# --live` and are in neither the active nor the archived price list, so they
+# were deleted from Stripe on or before 2026-11-10 (no price.deleted event is
+# inside the 30-day event window, so the day is not known). Nothing was ever
+# sold on them: the live account holds one subscription (canceled) and one
+# invoice ($0), both on the $4.99 monthly, no charges and no payment intents,
+# and Stripe only deletes a price that has never been used. So the
+# "existing subscribers still renew" the two annual entries used to claim was
+# never true of a live customer, and no renewal can land on these ids. They
+# stay configured and listed: the list is one-directional (a stale entry
+# cannot charge anyone), both withdrawn cadences are refused by
+# isIntervalOffered before Stripe is reached, the webhook's reverse lookup
+# only compares ids, and nothing in production retrieves them
+# (reconcileConfiguredPrices has no runtime caller). To sell one of these
+# cadences again, create a NEW live price, paste it into the slot, and attest
+# it here; never reuse these three ids.
 stripe_price_ids_are_live = true
 
 # The SCOPE of that attestation, and the thing that makes it enforceable.
@@ -217,10 +241,10 @@ stripe_price_ids_are_live = true
 # id over a live one is exactly what this attestation exists to prevent.
 stripe_price_ids_attested = [
   "price_1Tkur4AhnUt8CMG0b07WYF1t", # Garden monthly
-  "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual (withdrawn from sale; existing subscribers still renew)
-  "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime (withdrawn from sale)
+  "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual $39.99, legacy; never sold, deleted from Stripe (read 2026-11-10, note above)
+  "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime $149, withdrawn; never sold, deleted from Stripe (read 2026-11-10, note above)
   "price_1UB7JuAhnUt8CMG05o9ktQLa", # Greenhouse monthly
-  "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual (withdrawn from sale; existing subscribers still renew)
+  "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual $79.99, withdrawn; never sold, deleted from Stripe (read 2026-11-10, note above)
   "price_1UExJSAhnUt8CMG0fGgIyAzZ", # Identification top-up pack, 20 credits, $1.99 one-time (ADR 0019)
   "price_1UZebQAhnUt8CMG0fKwhJAwy", # Garden $2.99 monthly (ADR 0042), created by the owner in LIVE mode 2026-11-08
   "price_1UZebdAhnUt8CMG0vpZCVGdE", # Garden $24.99 yearly (ADR 0042), created by the owner in LIVE mode 2026-11-08
