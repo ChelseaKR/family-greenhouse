@@ -86,6 +86,12 @@ variable "monthly_budget_usd" {
   default     = "50"
 }
 
+variable "cognito_mau_alert_threshold" {
+  description = "Monthly active users on the Cognito pool above which alert_email is notified (a Budgets usage budget on the billed MAU usage type; modules/monitoring/main.tf). The 2026-11-10 unit-economics review put the early warning at 15. Cost Explorer showed the pool at 57 in September and 25 in October 2026, so expect the default to fire and raise it here once the number has been read."
+  type        = number
+  default     = 15
+}
+
 variable "enable_monitoring_alarms" {
   description = "Create the CloudWatch metric alarms (~$0.10/alarm/month). Defaults true so production is unaffected; staging sets it false because its alerts topic has no subscribers, so the alarms notified nobody."
   type        = bool

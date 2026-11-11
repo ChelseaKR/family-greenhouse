@@ -65,6 +65,60 @@ resource "aws_budgets_budget" "monthly_cost" {
   }
 }
 
+# Monthly active users on the Cognito pool: the one variable cost with no cap.
+#
+# Every other per-household cost in the plan has a ceiling (leaf-health checks,
+# the chat token budget, identifications). Members do not: Garden is "unlimited
+# members", and the pool is on Cognito's Plus tier (modules/auth/main.tf), which
+# bills $0.02 per monthly active user with no free tier. The 2026-11-10
+# unit-economics review put the zero crossing for an iOS-yearly household at
+# every other ceiling at about 28 active members, and asked for a warning at 15
+# so the number is looked at before that is possible rather than after.
+#
+# A Budgets USAGE budget rather than a CloudWatch alarm, on purpose. The number
+# that matters is Cognito's own monthly distinct-user count, and that exists
+# only on the billing side. The AWS/Cognito CloudWatch metrics count sign-in
+# and token-refresh EVENTS per period — a person on three devices is three, a
+# phone on a 365-day refresh token is zero — and an alarm's whole evaluation
+# window may not exceed one day, so no alarm in this module can say "more than
+# N people this month". The usage type below is the billed MAU meter itself,
+# read through Cost Explorer on 2026-11-10: 3 in August, 57 in September, 25 in
+# October, 11 by 10 November 2026. The threshold therefore starts where the
+# review put it and is a root variable; expect it to fire, then raise it once
+# the number has been read. Budgets data lags usage by up to a day, which is
+# fine for a monthly count.
+#
+# Pool-wide, not per household: Cognito bills the pool, and the pool's count is
+# an upper bound on any one household's active members. The usage type is
+# TIER-SPECIFIC (Essentials bills as USE1-CognitoEssentialsMAU), so
+# scripts/check-observability.mjs ties it to user_pool_tier in modules/auth:
+# moving the pool to another tier and leaving this alone would make it watch a
+# meter that no longer accrues, a permanent zero reading as "under budget".
+# Account-global like the budget above; created only where someone is
+# subscribed to hear from it, since console visibility is not its purpose.
+resource "aws_budgets_budget" "cognito_mau" {
+  count = var.alert_email != "" ? 1 : 0
+
+  name         = "${var.project_name}-cognito-mau-${var.environment}"
+  budget_type  = "USAGE"
+  limit_amount = tostring(var.cognito_mau_alert_threshold)
+  limit_unit   = "CognitoUserPoolsMAU"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "UsageType"
+    values = ["USE1-CognitoPlusMAU"]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = var.cognito_mau_alert_threshold
+    threshold_type             = "ABSOLUTE_VALUE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+  }
+}
+
 # Cost anomaly detection. Catches an unusual spend spike per-service (e.g. a
 # Bedrock day that 10x's the baseline) even when it's still under the monthly
 # budget — the budget alarm only fires at a fixed dollar ceiling, this fires on
