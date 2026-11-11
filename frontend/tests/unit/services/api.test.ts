@@ -3,6 +3,7 @@ import { http, HttpResponse, delay } from 'msw';
 import { AxiosError } from 'axios';
 import { api, getErrorMessage, withoutPurchaseCalls } from '@/services/api';
 import { track } from '@/services/analytics';
+import { NATIVE_PURCHASES_METHODS, nativePlanNoteKey } from '@/services/appStoreAvailability';
 import { useAuthStore } from '@/store/authStore';
 import { server, handlers } from '../../msw/server';
 
@@ -525,5 +526,37 @@ describe('plan refusals (402) inside the native shells', () => {
     expect(withoutPurchaseCalls('Upgrade to start chatting.')).toBe(
       "Plan changes aren't available in the app."
     );
+  });
+
+  // In the iPhone app with In-App Purchase on, plans ARE changed in the app,
+  // so the neutral line points at the screen that sells them instead.
+  it('withoutPurchaseCalls: in the iPhone app that sells plans, points at Plan status', () => {
+    vi.stubEnv('VITE_APP_STORE_PURCHASES', 'true');
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      PluginHeaders: [
+        {
+          name: 'NativePurchases',
+          methods: NATIVE_PURCHASES_METHODS.map((name) => ({ name })),
+        },
+      ],
+    };
+    try {
+      expect(withoutPurchaseCalls('Upgrade to start chatting.')).toBe(
+        'Plans are in Settings → Plan status, where a household admin can subscribe.'
+      );
+      expect(nativePlanNoteKey()).toBe('appStore.plansInSettings');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('nativePlanNoteKey: the neutral line wherever the app sells nothing', () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+    };
+    expect(nativePlanNoteKey()).toBe('settings.billing.nativeUnavailable');
   });
 });

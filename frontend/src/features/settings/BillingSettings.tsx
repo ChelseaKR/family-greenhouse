@@ -607,6 +607,7 @@ export function BillingSettings() {
             subscription={subQuery.data}
             isAdmin={isAdmin}
             planNames={Object.fromEntries(plans.map((p) => [p.id, p.name]))}
+            plans={plans}
           />
         </Suspense>
       )}

@@ -10,6 +10,7 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { formatCurrency } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
 import { billingService, effectivePlanId } from '@/services/billingService';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 /**
  * Why the prompt is showing:
@@ -158,7 +159,7 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             {native ? (
-              <p className="text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+              <p className="text-gray-600">{t(nativePlanNoteKey())}</p>
             ) : isAdmin ? (
               buyLabel &&
               paymentsOn && (

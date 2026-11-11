@@ -4,6 +4,11 @@
 
 **Date:** 2026-10-24
 
+**Superseded in part:** [ADR 0042](0042-garden-repriced-to-2-99-with-identification-sold-only-by-the-pack.md)
+replaces this record's Garden price ($4.99) and its "Not built: annual App
+Store products" (`garden.yearly` exists at $24.99). The status line is the
+owner's to change.
+
 **Deciders:** Chelsea Kelly-Reif
 
 **Related:** [ADR 0027](0027-no-card-garden-trial.md) (the no-card trial),

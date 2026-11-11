@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatPage } from '@/features/chat/ChatPage';
@@ -169,6 +169,49 @@ describe('ChatPage plan availability', () => {
       await screen.findByRole('heading', { name: 'Plant care chat isn’t available on Seedling' })
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Chat message')).not.toBeInTheDocument();
+  });
+
+  // Guideline 5.1.2(i): in the apps, the question goes to Amazon Bedrock only
+  // after a yes on this device. "Not now" keeps the question in the box.
+  it('in the app, asks before the first question goes to Amazon Bedrock', async () => {
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    try {
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({ planId: 'garden' });
+      vi.mocked(chatService.sendMessage).mockResolvedValue({
+        response: 'Water when the top inch is dry.',
+        conversationId: 'conv-1',
+      } as never);
+      renderPage();
+      const box = await screen.findByLabelText('Chat message');
+      fireEvent.change(box, { target: { value: 'How often should I water a pothos?' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent(
+        'Send your question to Amazon Bedrock?'
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(chatService.sendMessage).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Chat message')).toHaveValue(
+        'How often should I water a pothos?'
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Allow' }));
+      await waitFor(() =>
+        expect(chatService.sendMessage).toHaveBeenCalledWith(
+          'How often should I water a pothos?',
+          undefined,
+          expect.any(String)
+        )
+      );
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+      localStorage.clear();
+    }
   });
 
   /**

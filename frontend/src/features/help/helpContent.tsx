@@ -1313,23 +1313,27 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: 'What’s different in the iOS and Android apps?',
         a: (
           <>
-            <p>Two things, and both are worth knowing before you rely on the app:</p>
+            <p>
+              Plants, tasks, households, sitters and chat work the same. Two things depend on the
+              app and its version:
+            </p>
             <ul>
               <li>
-                <strong>No notifications at all.</strong> Push notifications are not shipped in the
-                mobile apps, and web push doesn&rsquo;t work inside them either. Reminders reach you
-                by email; the notification settings screen deliberately hides the controls it cannot
-                honour.
+                <strong>Notifications.</strong> Reminders always reach you by email. Where the app
+                can send push notifications to your phone, <em>Settings → Notifications</em> has a
+                switch to turn them on; where it can&rsquo;t, the switch isn&rsquo;t shown and
+                reminders stay email-only. Web push doesn&rsquo;t work inside the apps.
               </li>
               <li>
-                <strong>No purchases.</strong> The app shows your household&rsquo;s plan and what it
-                includes, but plans aren&rsquo;t bought or changed in the app.
+                <strong>Plans.</strong> In an iPhone app version that offers Apple&rsquo;s In-App
+                Purchase, a household admin can subscribe, restore or manage a plan in{' '}
+                <em>Settings → Plan status</em>. Otherwise the app shows your household&rsquo;s plan
+                and what it includes, and plans aren&rsquo;t bought or changed in the app.
               </li>
             </ul>
-            <p>Everything else — plants, tasks, households, sitters, chat — works the same.</p>
           </>
         ),
-        text: 'Two things, and both are worth knowing before you rely on the app. No notifications at all: push notifications are not shipped in the mobile apps, and web push does not work inside them either. Reminders reach you by email, and the notification settings screen deliberately hides the controls it cannot honour. No purchases: the app shows your household’s plan and what it includes, but plans aren’t bought or changed in the app. Everything else — plants, tasks, households, sitters, chat — works the same.',
+        text: 'Plants, tasks, households, sitters and chat work the same. Two things depend on the app and its version. Notifications: reminders always reach you by email. Where the app can send push notifications to your phone, Settings → Notifications has a switch to turn them on; where it can’t, the switch isn’t shown and reminders stay email-only. Web push doesn’t work inside the apps. Plans: in an iPhone app version that offers Apple’s In-App Purchase, a household admin can subscribe, restore or manage a plan in Settings → Plan status. Otherwise the app shows your household’s plan and what it includes, and plans aren’t bought or changed in the app.',
       },
       {
         id: 'dark-mode',

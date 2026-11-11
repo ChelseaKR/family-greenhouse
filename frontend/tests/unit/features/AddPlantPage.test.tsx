@@ -8,6 +8,7 @@ import { plantService } from '@/services/plantService';
 import { speciesService, type SpeciesSearchResponse } from '@/services/speciesService';
 import { taskService } from '@/services/taskService';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
+import { grantThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 
 vi.mock('@/services/plantService', async () => {
   const actual =
@@ -630,10 +631,14 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
         isNativePlatform: () => true,
         getPlatform: () => 'ios',
       };
+      // The Plant.id permission (Guideline 5.1.2(i)) is its own test below;
+      // the rest of this suite starts from a device that already said yes.
+      grantThirdPartyConsent('identify');
     });
 
     afterEach(() => {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+      localStorage.clear();
     });
 
     async function pickNativePhotoAndTryIdentify(source: 'camera' | 'library' = 'library') {
@@ -646,6 +651,25 @@ describe('AddPlantPage identification top-up (ADR 0019)', () => {
       );
       fireEvent.click(await screen.findByRole('button', { name: /identify from photo/i }));
     }
+
+    it('asks before sending the photo to Plant.id, and "Not now" sends nothing (Guideline 5.1.2(i))', async () => {
+      localStorage.clear();
+      vi.mocked(plantService.identifyPlant).mockResolvedValue({
+        configured: true,
+        suggestions: [],
+      } as never);
+      renderPage();
+      await pickNativePhotoAndTryIdentify();
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent('Send this photo to Plant.id?');
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(plantService.identifyPlant).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: /identify from photo/i }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Allow' }));
+      await waitFor(() => expect(plantService.identifyPlant).toHaveBeenCalledTimes(1));
+    });
 
     it('offers the camera and the photo picker in place of the file input', async () => {
       vi.mocked(plantService.identifyPlant).mockResolvedValueOnce({

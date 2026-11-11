@@ -72,8 +72,9 @@ describe('deferred legal catalog', () => {
     // ships its text names a day (#593), +2 for the Apple purchases section
     // of the Terms (ADR 0041), +5 for the Terms' operator section, its
     // paid-links section (ADR 0038), and the not-veterinary-advice line, +1
-    // for the time-zone collection bullet (0.48.0).
-    expect(en).toHaveLength(136);
+    // for the time-zone collection bullet (0.48.0), +1 for Apple In-App
+    // Purchase as a named third party in the privacy policy (ADR 0041).
+    expect(en).toHaveLength(137);
     expect(en.every((k) => k.startsWith('legal.'))).toBe(true);
   });
 
