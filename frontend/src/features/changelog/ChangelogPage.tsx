@@ -43,6 +43,34 @@ const CATEGORY_STYLES: Record<Category, string> = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-11-08',
+    category: 'Improvement',
+    title: 'Garden is $2.99 a month, or $24.99 a year',
+    webOnly: true,
+    body: (
+      <>
+        Garden now costs $2.99 a month or $24.99 a year for the whole household. It was $4.99 a
+        month. Greenhouse is still $9.99 a month. Plant identification is no longer part of Garden:
+        it is sold as a pack of 20 identifications for $1.99.{' '}
+        <Link to="/pricing">See the plans</Link>.
+      </>
+    ),
+  },
+  {
+    date: '2026-10-24',
+    category: 'Improvement',
+    title: 'The free plan is 2 people and 8 plants',
+    webOnly: true,
+    body: (
+      <>
+        The free Seedling plan is now one home, up to 2 people and 8 plants. A household created
+        before October 24, 2026 keeps 3 people and 20 plants for as long as it stays on Seedling. A
+        new household starts with 14 days of Garden and no card; when they end it moves to Seedling
+        on its own and keeps everything it added.
+      </>
+    ),
+  },
+  {
     date: '2026-09-02',
     category: 'Feature',
     title: 'Paid plans are open',

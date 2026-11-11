@@ -35,7 +35,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   does. /pricing marks up its seven "Common questions" as an FAQPage, from the
   list the page renders. Each pet-safety page's structured data carries
   `dateModified`, equal to its sitemap `<lastmod>`; the build fails if they
-  differ. No page copy, title or meta description changed.
+  differ. No title or meta description changed.
+- **The public prices say what Garden costs now.** The price sentence a reader
+  without JavaScript gets on /pricing adds Garden's yearly price ("$2.99 a month
+  or $24.99 a year"), from the same table as the structured data, and falls back
+  to monthly prices if yearly is withdrawn. /changelog gains two website-only
+  entries, for the 2026-11-08 Garden price and the 2026-10-24 free plan; its
+  newest entry had still said Garden was $4.99.
 
 ### Fixed
 

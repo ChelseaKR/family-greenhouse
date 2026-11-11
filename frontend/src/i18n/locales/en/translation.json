@@ -2180,6 +2180,7 @@
   },
   "pricing": {
     "monthlyPriceLine": "Garden is ${{garden}} a month and Greenhouse is ${{greenhouse}} a month, each covering the whole household.",
+    "priceLineWithGardenYear": "Garden is ${{garden}} a month or ${{gardenYear}} a year, and Greenhouse is ${{greenhouse}} a month, each covering the whole household.",
     "intervalLabel": "Billing interval",
     "intervalMonthly": "Monthly",
     "intervalYearly": "Yearly",

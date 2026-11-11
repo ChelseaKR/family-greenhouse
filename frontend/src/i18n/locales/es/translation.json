@@ -2238,6 +2238,7 @@
   },
   "pricing": {
     "monthlyPriceLine": "Garden cuesta ${{garden}} al mes y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
+    "priceLineWithGardenYear": "Garden cuesta ${{garden}} al mes o ${{gardenYear}} al año, y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",
     "intervalYearly": "Anual",

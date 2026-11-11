@@ -82,20 +82,25 @@ interface PricingGridProps {
  */
 function LoadingPriceLine() {
   const { t } = useTranslation();
-  const monthly = (id: 'garden' | 'greenhouse') => {
+  const offered = (id: 'garden' | 'greenhouse', interval: 'month' | 'year') => {
     const plan = PLAN_PRICES.find((candidate) => candidate.id === id);
-    const offer = plan && offeredPrices(plan).find((o) => o.interval === 'month');
+    const offer = plan && offeredPrices(plan).find((o) => o.interval === interval);
     return offer ? offer.amount.toFixed(2) : null;
   };
-  const garden = monthly('garden');
-  const greenhouse = monthly('greenhouse');
+  const garden = offered('garden', 'month');
+  const greenhouse = offered('greenhouse', 'month');
   if (garden === null || greenhouse === null) return null;
+  // Garden's yearly price is named only while Garden sells yearly (ADR 0042);
+  // a withdrawn cadence falls back to the monthly-only sentence.
+  const gardenYear = offered('garden', 'year');
   return (
     <p
       data-testid="plan-price-line"
       className="mx-auto mt-10 max-w-2xl text-center text-base leading-7 text-gray-800"
     >
-      {t('pricing.monthlyPriceLine', { garden, greenhouse })}
+      {gardenYear === null
+        ? t('pricing.monthlyPriceLine', { garden, greenhouse })
+        : t('pricing.priceLineWithGardenYear', { garden, gardenYear, greenhouse })}
     </p>
   );
 }
