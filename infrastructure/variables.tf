@@ -624,7 +624,7 @@ variable "stripe_price_id_gift_greenhouse_month" {
 }
 
 variable "stripe_automatic_tax_enabled" {
-  description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured."
+  description = "Set to exactly '1' to pass automatic_tax to every Stripe Checkout Session (plan, identification pack, gift). Prerequisites, all in the Stripe Dashboard: Stripe Tax active with the head-office address confirmed; tax code txcd_10103000 (Software as a service, personal use) on EVERY product sold (Garden, Greenhouse, Identification pack), because with the flag on the backend refuses to sell a price whose product carries any other code or none (backend/src/services/stripePrices.ts); a tax registration for each state collected in (California from 2027-01-01). The flag only shapes NEW Checkout Sessions: a subscription that already exists keeps automatic_tax off until it is updated in Stripe (Tax > Migrations)."
   type        = string
   default     = ""
 }

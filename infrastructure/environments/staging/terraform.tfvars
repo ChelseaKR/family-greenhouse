@@ -89,6 +89,11 @@ stripe_price_id_identify_top_up = ""
 # block in main.tf only requires the attestation for an sk_live_ key.
 stripe_price_ids_are_live = false
 
+# Stripe Tax is per mode: the test-mode products need tax code txcd_10103000
+# and a test-mode California registration before this can be "1" here, or
+# every checkout is refused by the price reconciliation. Rehearse the
+# production flip here first: a California billing address must add tax to a
+# Garden checkout and a Texas address must not.
 stripe_automatic_tax_enabled = ""
 
 # Runtime commercial gate, exactly as in production. Open here FIRST, so the

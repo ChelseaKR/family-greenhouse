@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
+import { isPriceReconciliationError } from '../../../src/services/stripePrices.js';
 
 // Mock the Stripe SDK that billing.getStripe() dynamically imports, so
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
@@ -2306,13 +2307,31 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     });
   });
 
-  it('enables automatic tax only when configured', async () => {
+  it('enables automatic tax only when configured, on a product carrying the SaaS tax code', async () => {
     process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
     try {
+      pricesRetrieve.mockResolvedValueOnce({
+        id: 'price_garden_monthly',
+        ...CATALOG_PRICES.price_garden_monthly,
+        product: { id: 'prod_garden', tax_code: 'txcd_10103000' },
+      });
       await runCheckout('month');
       expect(sessionsCreate).toHaveBeenCalledWith(
         expect.objectContaining({ automatic_tax: { enabled: true } })
       );
+    } finally {
+      delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+    }
+  });
+
+  it('with automatic tax on, refuses to sell a product whose tax code is missing — before Stripe', async () => {
+    // Today's live products carry the account preset or nothing. Once the
+    // flag is "1" that is a refusal, not a sale taxed as the wrong thing.
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    try {
+      // The seeded catalog price has no product expansion at all.
+      await expect(runCheckout('month')).rejects.toSatisfy(isPriceReconciliationError);
+      expect(sessionsCreate).not.toHaveBeenCalled();
     } finally {
       delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
     }
@@ -3471,7 +3490,7 @@ describe('createCheckoutSession — refuses to charge an unreconciled price', ()
 
   it('reconciles the price it is about to charge before creating the Session', async () => {
     await run();
-    expect(pricesRetrieve).toHaveBeenCalledWith('price_garden_monthly');
+    expect(pricesRetrieve).toHaveBeenCalledWith('price_garden_monthly', { expand: ['product'] });
     expect(pricesRetrieve.mock.invocationCallOrder[0]).toBeLessThan(
       sessionsCreate.mock.invocationCallOrder[0]
     );

@@ -63,6 +63,43 @@ export type GiftCatalogItemId = `gift-${GiftablePlanId}-month`;
  */
 export const CATALOG_CURRENCY = 'usd';
 
+/**
+ * The Stripe Tax product tax code every catalog item must carry once
+ * automatic tax is on: "Software as a service (SaaS) - personal use".
+ *
+ * Why one code for everything: Garden and Greenhouse are prewritten software
+ * reached through a browser, which is the definition; an identification pack
+ * is the right to twenty more uses of that same software, not a gift card
+ * (Stripe's gift-card code is for a card "assumed to be multi-purpose") and
+ * not a service of human effort; a gift month is prepaid months of the same
+ * tier. Stripe has no code for prepaid usage credits, and the general code
+ * the account presets (`txcd_10000000`, "General - Electronically Supplied
+ * Services") is one Stripe itself says to replace with "more specific
+ * categories like software ... especially if you sell in the US". From
+ * 2027-01-01 California taxes remotely accessed software (SB 122), so the
+ * code on the Product decides whether a Californian is charged the right tax.
+ *
+ * Products are created by hand in the Stripe Dashboard, not by Terraform, so
+ * this file cannot SET the code; what it can do is refuse to sell under the
+ * wrong one. `comparePriceToCatalog` ignores it while
+ * `STRIPE_AUTOMATIC_TAX_ENABLED` is off — today's products carry the preset
+ * and nothing is taxed — and demands it the moment the flag is "1", so a
+ * product the owner forgot refuses checkout instead of being taxed as the
+ * wrong kind of thing, silently, on every sale.
+ */
+export const CATALOG_TAX_CODE = 'txcd_10103000';
+
+/**
+ * The one definition of "Stripe Tax is on" for this process. The three
+ * Checkout paths pass it to Stripe as `automatic_tax.enabled`, and the price
+ * reconciliation reads the same answer to decide whether the product's tax
+ * code is part of what must match. Exactly the string "1", like the other
+ * runtime gates (`payments_enabled`), so a stray "true" keeps tax off.
+ */
+export function automaticTaxEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.STRIPE_AUTOMATIC_TAX_ENABLED === '1';
+}
+
 /** One catalog amount, expanded into what Stripe should report for it. */
 export interface ExpectedPrice {
   itemId: CatalogItemId;
@@ -264,17 +301,73 @@ export function comparePriceToCatalog(expected: ExpectedPrice, price: Stripe.Pri
 }
 
 /**
+ * Compare the tax code on a price's PRODUCT against `CATALOG_TAX_CODE`. Pure,
+ * like `comparePriceToCatalog`, and only ever consulted when automatic tax is
+ * on — see `reconcilePrice`.
+ *
+ * The product must arrive expanded (`reconcilePrice` asks Stripe for it); a
+ * bare product id means the code could not be read, and a code that cannot
+ * be read is a refusal, not an assumption. A product with NO tax code is
+ * named as such rather than passed: Stripe would quietly tax it under the
+ * account's preset code, which is exactly the absence this check exists to
+ * surface.
+ */
+export function compareTaxCodeToCatalog(expected: ExpectedPrice, price: Stripe.Price): string[] {
+  const product = price.product;
+  if (typeof product !== 'object' || product === null) {
+    return [
+      `${expected.env}: the product behind this price was not returned, so its tax code ` +
+        `cannot be checked and it cannot be sold with automatic tax on`,
+    ];
+  }
+  if ('deleted' in product && product.deleted) {
+    return [`${expected.env}: the product behind this price has been deleted in Stripe`];
+  }
+  const raw = product.tax_code;
+  const taxCode = typeof raw === 'string' ? raw : raw?.id;
+  if (!taxCode) {
+    return [
+      `${expected.env}: product ${product.id} carries no tax code, so Stripe would tax it under ` +
+        `the account preset; set ${CATALOG_TAX_CODE} (Software as a service, personal use) on it`,
+    ];
+  }
+  if (taxCode !== CATALOG_TAX_CODE) {
+    return [
+      `${expected.env}: product ${product.id} carries tax code ${taxCode} but the catalog is ` +
+        `sold as ${CATALOG_TAX_CODE} (Software as a service, personal use)`,
+    ];
+  }
+  return [];
+}
+
+/** What `reconcilePrice` must hold a price to, beyond amount and cadence. */
+export interface ReconcileOptions {
+  /**
+   * When true, the product's tax code is part of the comparison. Callers
+   * pass `automaticTaxEnabled()`; the sweep passes it from the env it was
+   * handed, so a test can ask either question without touching process.env.
+   */
+  automaticTax?: boolean;
+}
+
+/**
  * Retrieve one price and reconcile it. Fails closed: any retrieval error is
  * `unretrievable`, which callers must treat as "do not charge".
+ *
+ * The product is expanded on every retrieve, not only when automatic tax is
+ * on: it is the same single request either way, and it keeps the shape of
+ * what Stripe returns constant across the flag, so flipping the flag changes
+ * what is DEMANDED of the response, never what is asked for.
  */
 export async function reconcilePrice(
   stripe: Pick<Stripe, 'prices'>,
   expected: ExpectedPrice,
-  priceId: string
+  priceId: string,
+  options: ReconcileOptions = {}
 ): Promise<PriceReconciliation> {
   let price: Stripe.Price;
   try {
-    price = await stripe.prices.retrieve(priceId);
+    price = await stripe.prices.retrieve(priceId, { expand: ['product'] });
   } catch (err) {
     return {
       itemId: expected.itemId,
@@ -290,6 +383,7 @@ export async function reconcilePrice(
   }
 
   const problems = comparePriceToCatalog(expected, price);
+  if (options.automaticTax) problems.push(...compareTaxCodeToCatalog(expected, price));
   return {
     itemId: expected.itemId,
     cadence: expected.cadence,
@@ -326,7 +420,9 @@ export async function reconcileConfiguredPrices(
       });
       continue;
     }
-    results.push(await reconcilePrice(stripe, expected, priceId));
+    results.push(
+      await reconcilePrice(stripe, expected, priceId, { automaticTax: automaticTaxEnabled(env) })
+    );
   }
   return results;
 }
@@ -378,7 +474,9 @@ export async function assertPriceMatchesCatalog(
       problems: [`plan ${planId} publishes no ${cadence} amount, so nothing can be charged for it`],
     });
   }
-  const result = await reconcilePrice(stripe, expected, priceId);
+  const result = await reconcilePrice(stripe, expected, priceId, {
+    automaticTax: automaticTaxEnabled(),
+  });
   if (result.status !== 'ok') throw new PriceReconciliationError(result);
 }
 
@@ -397,7 +495,9 @@ export async function assertIdentifyTopUpPriceMatchesCatalog(
   stripe: Pick<Stripe, 'prices'>,
   priceId: string
 ): Promise<void> {
-  const result = await reconcilePrice(stripe, identifyTopUpExpectedPrice(), priceId);
+  const result = await reconcilePrice(stripe, identifyTopUpExpectedPrice(), priceId, {
+    automaticTax: automaticTaxEnabled(),
+  });
   if (result.status !== 'ok') throw new PriceReconciliationError(result);
 }
 
@@ -411,6 +511,8 @@ export async function assertGiftPriceMatchesCatalog(
   planId: GiftablePlanId,
   priceId: string
 ): Promise<void> {
-  const result = await reconcilePrice(stripe, giftExpectedPrice(planId), priceId);
+  const result = await reconcilePrice(stripe, giftExpectedPrice(planId), priceId, {
+    automaticTax: automaticTaxEnabled(),
+  });
   if (result.status !== 'ok') throw new PriceReconciliationError(result);
 }

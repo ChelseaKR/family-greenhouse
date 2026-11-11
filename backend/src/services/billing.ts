@@ -33,7 +33,7 @@ import {
 import { grantCreditPack } from './identifyCredits.js';
 import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSubscriptions.js';
 import { grantGiftPurchase } from './giftCodes.js';
-import { assertPriceMatchesCatalog } from './stripePrices.js';
+import { assertPriceMatchesCatalog, automaticTaxEnabled } from './stripePrices.js';
 import { recordBillingTransition } from './householdAudit.js';
 import {
   TRIAL_PERIOD_DAYS,
@@ -901,7 +901,7 @@ export async function createCheckoutSession(args: {
     // Stripe Tax is opt-in because the Stripe account must first have its
     // registrations and product tax code configured. Once enabled, Checkout
     // collects the minimum address fields needed for the calculation.
-    automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX_ENABLED === '1' },
+    automatic_tax: { enabled: automaticTaxEnabled() },
     // Existing customers need this explicit opt-in for Checkout to save the
     // fresh billing address it uses for future automatic-tax calculations.
     customer_update: sub.stripeCustomerId

@@ -226,7 +226,16 @@ stripe_price_ids_attested = [
   "price_1UZebdAhnUt8CMG0vpZCVGdE", # Garden $24.99 yearly (ADR 0042), created by the owner in LIVE mode 2026-11-08
 ]
 
-# Enable only after Stripe Tax registrations and product tax codes are live.
+# Stripe Tax. Flip to "1" for 2027-01-01, when California taxes remotely
+# accessed software (SB 122), and only once all three are true in the LIVE
+# Stripe Dashboard: (1) tax code txcd_10103000 (Software as a service,
+# personal use) is on all three products (Garden, Greenhouse, Identification
+# pack) — with the flag on, checkout REFUSES a price whose product carries any
+# other code or none (stripe_automatic_tax_enabled in variables.tf); (2) the
+# head-office address under Tax settings is the address on the CDTFA seller's
+# permit; (3) a California registration exists, active from 2027-01-01.
+# Prices stay tax-exclusive: the account's default tax behavior is Automatic
+# (exclusive for USD), so $2.99 is still $2.99 plus tax at checkout.
 stripe_automatic_tax_enabled = ""
 
 # Runtime commercial gate. The backend compares this to the literal string

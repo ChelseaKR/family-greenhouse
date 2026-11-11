@@ -498,6 +498,19 @@ ids in tfvars: price ids encode neither amount nor cadence, and
 `stripe_price_ids_attested`, which names the ids that attestation covers so an
 unattested id fails the Terraform plan instead of warning past a `check` block.
 
+The same retrieve expands the price's product, and once
+`STRIPE_AUTOMATIC_TAX_ENABLED` is `"1"` the product's tax code is part of what
+must match: every catalog item is sold as `CATALOG_TAX_CODE`
+(`txcd_10103000`, "Software as a service - personal use"; the identification
+pack is more uses of the same software and a gift month is prepaid months of
+it, so neither takes the gift-card code), and a product carrying any other
+code, or none, is a refused checkout. Products are made by hand in the Stripe
+Dashboard, so this is the only place the code can be held to anything; with
+the flag off the code is ignored, which is why today's products can carry the
+account preset without refusing a sale. From 2027-01-01 California taxes
+remotely accessed software (SB 122), and the code on the product is what
+decides whether a Californian is charged the right tax.
+
 Two gaps worth knowing about. The attested list proves an id was _reviewed_,
 not that it charges the right amount, and reconciliation is what proves the
 amount — so they are complements, not substitutes. And

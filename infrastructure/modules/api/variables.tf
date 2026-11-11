@@ -169,7 +169,7 @@ variable "stripe_price_id_gift_greenhouse_month" {
 }
 
 variable "stripe_automatic_tax_enabled" {
-  description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured. Enables automatic tax in Checkout."
+  description = "Set to exactly '1' to enable automatic tax on every Checkout Session. Only after Stripe Tax is active, tax code txcd_10103000 is on every product sold (the backend refuses other codes once this is on), and the state registrations exist. Shapes new Sessions only; existing subscriptions are updated in Stripe."
   type        = string
   default     = ""
 }
