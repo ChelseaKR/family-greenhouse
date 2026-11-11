@@ -1,11 +1,13 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HouseholdPage } from '@/features/household/HouseholdPage';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
+import { Toaster } from '@/components/Toaster';
 import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
@@ -361,6 +363,116 @@ describe('HouseholdPage', () => {
 
     expect(await screen.findByLabelText('City')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled();
+  });
+
+  // Audit 2026-11-08, finding 11: neither mutation had an `onError`, so a
+  // refused or failed remove/role change did nothing at all on screen. The
+  // admin was left looking at an unchanged roster with no reason given.
+  describe('a member change that fails says so', () => {
+    function renderWithToasts() {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <HouseholdPage />
+            <Toaster />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    }
+    const notifications = () => screen.getByRole('region', { name: 'Notifications' });
+
+    beforeEach(() => {
+      useToastStore.setState({ toasts: [] });
+    });
+
+    it('shows the server’s reason when removing a member is refused', async () => {
+      becomeAdmin();
+      server.use(
+        http.delete(`${API}/households/hh-1/members/user-2`, () =>
+          HttpResponse.json(
+            { message: 'Promote another member to admin before removing the last admin' },
+            { status: 400 }
+          )
+        )
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Remove Bob' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+      expect(
+        await within(notifications()).findByText(
+          'Promote another member to admin before removing the last admin'
+        )
+      ).toBeInTheDocument();
+      // The confirmation is closed, so the message is not left behind it.
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
+      );
+      // Nothing was removed, and the page does not pretend otherwise: Bob is
+      // still on the roster, with his remove button.
+      expect(await screen.findByRole('button', { name: 'Remove Bob' })).toBeInTheDocument();
+    });
+
+    it('says the app could not be reached when removing a member gets no answer', async () => {
+      becomeAdmin();
+      server.use(http.delete(`${API}/households/hh-1/members/user-2`, () => HttpResponse.error()));
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Remove Bob' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+      expect(
+        await within(notifications()).findByText(
+          "Can't reach Family Greenhouse. Check your connection and try again."
+        )
+      ).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Remove Bob' })).toBeInTheDocument();
+    });
+
+    it('shows the server’s reason when a role change is refused', async () => {
+      becomeAdmin();
+      server.use(
+        http.put(`${API}/households/hh-1/members/user-2/role`, () =>
+          HttpResponse.json(
+            { message: 'Promote another member to admin before demoting the last admin' },
+            { status: 400 }
+          )
+        )
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Demote Bob to member' }));
+
+      expect(
+        await within(notifications()).findByText(
+          'Promote another member to admin before demoting the last admin'
+        )
+      ).toBeInTheDocument();
+      // Still an admin: the button still offers the demotion.
+      expect(screen.getByRole('button', { name: 'Demote Bob to member' })).toBeInTheDocument();
+    });
+
+    it('says the app could not be reached when a role change gets no answer', async () => {
+      becomeAdmin();
+      server.use(
+        http.put(`${API}/households/hh-1/members/user-2/role`, () => HttpResponse.error())
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Demote Bob to member' }));
+
+      expect(
+        await within(notifications()).findByText(
+          "Can't reach Family Greenhouse. Check your connection and try again."
+        )
+      ).toBeInTheDocument();
+    });
   });
 
   it('shows the household audit log to an admin', async () => {

@@ -24,6 +24,7 @@ import { HouseholdSkeleton } from '@/components/Skeleton';
 import { Alert } from '@/components/Alert';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { getErrorMessage } from '@/services/api';
+import { toast } from '@/store/toastStore';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
@@ -112,6 +113,13 @@ export function HouseholdPage() {
       queryClient.invalidateQueries({ queryKey: ['household', householdId] });
       setMemberToRemove(null);
     },
+    // A refused or failed removal used to do nothing on screen. Close the
+    // confirmation first: while the dialog is open the toast sits under its
+    // backdrop, in the part of the page the dialog makes inert.
+    onError: (err) => {
+      setMemberToRemove(null);
+      toast.error(getErrorMessage(err));
+    },
   });
 
   const updateRoleMutation = useMutation({
@@ -120,6 +128,8 @@ export function HouseholdPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['household', householdId] });
     },
+    // Same silence as removal: the role stayed as it was and nothing said why.
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const setLocationMutation = useMutation({

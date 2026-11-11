@@ -17,6 +17,7 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "yesterday": "Yesterday",
+    "never": "Never",
     "daysAgo_one": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago"
   },
@@ -461,7 +462,8 @@
   },
   "joinInvite": {
     "signInOrCreate": "Please sign in or create an account to accept this invitation.",
-    "signInExisting": "Please sign in with an existing account to accept this invitation."
+    "signInExisting": "Please sign in with an existing account to accept this invitation.",
+    "loadFailed": "We couldn’t load this invite just now. Try again in a moment."
   },
   "pricingStatus": {
     "freeAccountQuestion": "Can I create an account?",
@@ -790,6 +792,7 @@
       "provenance": "Grown by {{name}}, passed on to you.",
       "invalid": "This share link is invalid or has expired.",
       "askForNew": "Ask the sender for a fresh link — they expire after 14 days.",
+      "loadFailed": "We couldn’t load this cutting just now. Try again in a moment.",
       "houseRuleLabel": "House rule",
       "addToGreenhouse": "Add to my greenhouse",
       "added": "{{name}} added to your greenhouse",
@@ -954,7 +957,8 @@
       "remove": "Remove…",
       "restore": "Restore to active care",
       "doAria": "{{label}}: {{task}} {{plant}}",
-      "claim": "I’ll do it"
+      "claim": "I’ll do it",
+      "taskDue": "Due: {{date}}"
     }
   },
   "importPlants": {

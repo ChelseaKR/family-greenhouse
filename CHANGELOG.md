@@ -59,6 +59,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   withdrawn Garden annual, Garden lifetime and Greenhouse annual) were deleted
   from Stripe and never sold; the tfvars comments said subscribers still renew
   on them. Comments only: no id, variable, or runtime value changed.
+- **A failed load no longer reads as a dead link or a display that was turned
+  off.** The shared cutting page and the join page say they could not load,
+  with Try again, unless the server says the link is invalid or expired. A wall
+  display that taps Done on a task someone just deleted reads its list again
+  and keeps refreshing; it says it was turned off only when its own link is.
+  Removing a member or changing a role shows the reason when it fails. On a
+  Spanish screen the plant page says "Vence:" and "Nunca" where it said "Due:"
+  and "Never".
 
 ## [0.51.0] - 2026-11-09
 
