@@ -16,6 +16,14 @@ import { track } from '@/services/analytics';
 import { useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 
+/**
+ * True only when the server answered 404. A 5xx, a rate limit, a timeout or no
+ * answer at all is a read that failed, and says nothing about the invite.
+ */
+function isNotFound(error: unknown): boolean {
+  return (error as { response?: { status?: unknown } } | null)?.response?.status === 404;
+}
+
 export function JoinHouseholdPage() {
   const { t } = useTranslation();
   useDocumentTitle('Join household');
@@ -27,7 +35,9 @@ export function JoinHouseholdPage() {
   const {
     data: inviteData,
     isLoading,
+    isFetching: isFetchingInvite,
     error: validateError,
+    refetch: refetchInvite,
   } = useQuery({
     queryKey: ['invite', inviteCode],
     queryFn: () => householdService.validateInvite(inviteCode!),
@@ -87,7 +97,15 @@ export function JoinHouseholdPage() {
     );
   }
 
-  const isInvalid = validateError || !inviteData?.valid;
+  // "Invalid or expired" only when the server said so: `valid: false`, or a
+  // 404 (or an address with no code to ask about). `validateError ||
+  // !inviteData?.valid` used to put every failed read here too, so a 503 or a
+  // dropped connection sent someone holding a good invite back to the admin
+  // for a new one. Anything short of a verdict is a read we did not get.
+  const verdict = inviteData?.valid;
+  const isInvalid =
+    verdict === false || (verdict === undefined && (!inviteCode || isNotFound(validateError)));
+  const loadFailed = !isInvalid && verdict !== true;
 
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
@@ -115,6 +133,13 @@ export function JoinHouseholdPage() {
                   Sign in
                 </Link>
               )}
+            </div>
+          ) : loadFailed ? (
+            <div className="text-center space-y-4">
+              <Alert variant="error">{t('joinInvite.loadFailed')}</Alert>
+              <Button onClick={() => void refetchInvite()} isLoading={isFetchingInvite}>
+                {t('common.retry')}
+              </Button>
             </div>
           ) : isAlreadyMember ? (
             <div className="text-center space-y-4">

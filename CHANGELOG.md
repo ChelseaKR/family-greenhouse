@@ -40,6 +40,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **The privacy policy names Apple In-App Purchase** and what the server keeps
   about an App Store subscription. Privacy and account deletion take a new
   effective date at the next release.
+- **After Done, the page keeps your place and shows what changed.** On the
+  caretaker page and the plant label page, keyboard and screen-reader focus
+  moves to the next task, or to the thanks when none is left, instead of being
+  lost when the finished row leaves the list. The caretaker page says "Marked
+  as done" for each one, and each "I just did this" button on the label page
+  is named after its own task. On Today across your homes, a care someone
+  else already logged is offered back in plain words with a "Log it anyway"
+  button, in place of the API's own error text. On the plant page and the
+  dashboard, "Last watered", Care History and the activity feed show the
+  completion without leaving the page; what they show is read from the server
+  after the completion, never filled in by the browser.
 
 ### Changed
 
@@ -59,6 +70,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   withdrawn Garden annual, Garden lifetime and Greenhouse annual) were deleted
   from Stripe and never sold; the tfvars comments said subscribers still renew
   on them. Comments only: no id, variable, or runtime value changed.
+- **A failed load no longer reads as a dead link or a display that was turned
+  off.** The shared cutting page and the join page say they could not load,
+  with Try again, unless the server says the link is invalid or expired. A wall
+  display that taps Done on a task someone just deleted reads its list again
+  and keeps refreshing; it says it was turned off only when its own link is.
+  Removing a member or changing a role shows the reason when it fails. On a
+  Spanish screen the plant page says "Vence:" and "Nunca" where it said "Due:"
+  and "Never".
 - **Three backend fixes from the 2026-11-08 audit.** A scanned plant tag names
   a completion by a plant sitter, the kiosk display or a former member in
   full: it printed "Last watered today by a." A sitter link revoked before its

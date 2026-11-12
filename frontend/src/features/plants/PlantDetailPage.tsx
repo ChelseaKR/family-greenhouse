@@ -58,6 +58,7 @@ import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import i18n from '@/i18n';
 import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
 import { trashService, TRASH_RETENTION_DAYS } from '@/services/trashService';
@@ -73,7 +74,10 @@ import { PlacementFitCard } from './PlacementFitCard';
 import { hasNativeBarTools, hasNativeFrame, hasNativePresent } from '@/lib/platform';
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return 'Never';
+  // Through the catalog: a string returned from a function is not JSX text,
+  // so the hardcoded-string scanner never saw this one and it stayed English
+  // on a Spanish screen.
+  if (!dateString) return i18n.t('common.never');
   return new Date(dateString).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -949,7 +953,7 @@ function TaskRow({
                   isOverdue(task.nextDue) ? 'text-accent-700 font-medium' : 'text-gray-600'
                 )}
               >
-                Due: {formatDate(task.nextDue)}
+                {t('plants.detail.taskDue', { date: formatDate(task.nextDue) })}
                 {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
               </p>
             )}

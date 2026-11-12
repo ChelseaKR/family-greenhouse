@@ -44,12 +44,29 @@ export interface KioskView {
  */
 export const KIOSK_FALLBACK_POLL_SECONDS = 300;
 
-/** Thrown when the link is missing/revoked (404) so the page can show a
- *  friendly "this display has been turned off" message, not a raw error. */
+/** Thrown when the link's own read says it is missing/revoked (404) so the
+ *  page can show a friendly "this display has been turned off" message, not a
+ *  raw error. Only `getView` raises it: that route has exactly one 404, the
+ *  link itself. */
 export class KioskLinkInactiveError extends Error {
   constructor() {
     super('This kiosk link is invalid or has been turned off.');
     this.name = 'KioskLinkInactiveError';
+  }
+}
+
+/**
+ * Thrown when a completion is answered 404 (or 410). That answer has two
+ * causes the status cannot tell apart: the link was revoked, or the task was
+ * deleted a moment ago ("Task not found"). It used to be reported as the link
+ * being inactive, so one tap on a just-deleted task turned a live wall display
+ * off until somebody reloaded it. The page reads the link again instead, and
+ * `getView` is what says whether the display is still on.
+ */
+export class KioskCompletionNotFoundError extends Error {
+  constructor() {
+    super('Kiosk completion was not found: the task or the link is gone.');
+    this.name = 'KioskCompletionNotFoundError';
   }
 }
 
@@ -100,7 +117,8 @@ export const kioskService = {
       }
     );
     if (response.status === 404 || response.status === 410) {
-      throw new KioskLinkInactiveError();
+      // Not KioskLinkInactiveError: a deleted task answers 404 here too.
+      throw new KioskCompletionNotFoundError();
     }
     if (!response.ok) {
       throw new Error(`Kiosk completion failed (${response.status})`);

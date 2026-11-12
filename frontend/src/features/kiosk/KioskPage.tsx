@@ -5,6 +5,7 @@ import { CheckIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import {
   kioskService,
+  KioskCompletionNotFoundError,
   KioskLinkInactiveError,
   KIOSK_FALLBACK_POLL_SECONDS,
   type KioskTask,
@@ -166,7 +167,8 @@ export function KioskPage() {
 
   // The poll. Interval comes from the server (the household chose it), and
   // the cost of this feature scales with it — see KIOSK_FALLBACK_POLL_SECONDS
-  // and backend/src/services/kioskService.ts. A revoked link stops the timer.
+  // and backend/src/services/kioskService.ts. A revoked link stops the timer,
+  // and only the link's own read (`load`) can say it is revoked.
   useEffect(() => {
     if (status === 'inactive') return;
     const id = window.setInterval(() => void load(), pollSeconds * MS);
@@ -182,9 +184,13 @@ export function KioskPage() {
           current ? current.filter((candidate) => candidate.taskId !== task.taskId) : current
         );
       } catch (err) {
-        if (err instanceof KioskLinkInactiveError) {
-          setStatus('inactive');
-          setTasks(null);
+        if (err instanceof KioskCompletionNotFoundError) {
+          // The task was deleted a moment ago, or the link was revoked; the
+          // completion's 404 cannot say which. Read the link again: a list
+          // comes back without the deleted task, a revoked link turns the
+          // display off, and a failed read marks the list stale. Calling this
+          // "turned off" here stopped the poll for good over one deleted task.
+          await load();
           return;
         }
         // Leave the row tappable so somebody standing there can try again.
@@ -197,7 +203,7 @@ export function KioskPage() {
         });
       }
     },
-    [token]
+    [token, load]
   );
 
   const now = new Date();
