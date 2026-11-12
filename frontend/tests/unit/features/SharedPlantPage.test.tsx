@@ -158,5 +158,82 @@ describe('SharedPlantPage', () => {
       await screen.findByText('This share link is invalid or has expired.')
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add to my greenhouse' })).not.toBeInTheDocument();
+    // The server said the link is gone, so there is nothing to retry.
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  // Audit 2026-11-08, finding 6: every failed read used to render as "This
+  // share link is invalid or has expired", so a 503 or a dropped connection
+  // told someone holding a good link to go and ask for a new one.
+  describe('a read that failed is not an invalid link', () => {
+    const INVALID = 'This share link is invalid or has expired.';
+    const LOAD_FAILED = 'We couldn’t load this cutting just now. Try again in a moment.';
+
+    it.each([
+      [
+        'a 503',
+        Object.assign(new Error('Request failed with status code 503'), {
+          response: { status: 503, data: { message: 'Service Unavailable' } },
+        }),
+      ],
+      [
+        'a 500',
+        Object.assign(new Error('Request failed with status code 500'), {
+          response: { status: 500, data: { message: 'Internal Server Error' } },
+        }),
+      ],
+      // No `response` at all: offline, the API unreachable, or a timeout.
+      ['a dropped connection', Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' })],
+      [
+        'a timeout',
+        Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' }),
+      ],
+    ])(
+      'says the cutting could not be loaded on %s, not that the link is bad',
+      async (_, failure) => {
+        vi.mocked(plantService.getSharedPlant).mockRejectedValueOnce(failure);
+        renderPage('good-link');
+
+        expect(await screen.findByText(LOAD_FAILED)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+        expect(screen.queryByText(INVALID)).not.toBeInTheDocument();
+        // "Ask the sender for a fresh link" is advice for a dead link only.
+        expect(screen.queryByText(/Ask the sender for a fresh link/)).not.toBeInTheDocument();
+      }
+    );
+
+    it('reads the link again on Try again and shows the cutting once the read succeeds', async () => {
+      vi.mocked(plantService.getSharedPlant)
+        .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+        .mockResolvedValueOnce(PREVIEW);
+      renderPage('good-link');
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+      expect(
+        await screen.findByRole('heading', { name: 'Mother Monstera', level: 1 })
+      ).toBeInTheDocument();
+      expect(plantService.getSharedPlant).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(LOAD_FAILED)).not.toBeInTheDocument();
+    });
+
+    it('says invalid or expired when the retry is answered 404', async () => {
+      vi.mocked(plantService.getSharedPlant)
+        .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+        .mockRejectedValueOnce(
+          Object.assign(new Error('Request failed'), {
+            response: {
+              status: 404,
+              data: { message: 'This share link is invalid or has expired' },
+            },
+          })
+        );
+      renderPage('expired2');
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+      expect(await screen.findByText(INVALID)).toBeInTheDocument();
+      expect(screen.queryByText(LOAD_FAILED)).not.toBeInTheDocument();
+    });
   });
 });

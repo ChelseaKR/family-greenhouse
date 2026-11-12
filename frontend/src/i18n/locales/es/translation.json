@@ -17,6 +17,7 @@
     "today": "Hoy",
     "tomorrow": "Mañana",
     "yesterday": "Ayer",
+    "never": "Nunca",
     "daysAgo_one": "hace {{count}} día",
     "daysAgo_other": "hace {{count}} días",
     "daysAgo_many": "{{count}} days ago"
@@ -474,7 +475,8 @@
   },
   "joinInvite": {
     "signInOrCreate": "Inicia sesión o crea una cuenta para aceptar esta invitación.",
-    "signInExisting": "Inicia sesión con una cuenta existente para aceptar esta invitación."
+    "signInExisting": "Inicia sesión con una cuenta existente para aceptar esta invitación.",
+    "loadFailed": "No pudimos cargar esta invitación ahora mismo. Inténtalo de nuevo en un momento."
   },
   "pricingStatus": {
     "freeAccountQuestion": "¿Puedo crear una cuenta?",
@@ -804,6 +806,7 @@
       "provenance": "Cultivada por {{name}}, ahora pasa a tus manos.",
       "invalid": "Este enlace no es válido o ha caducado.",
       "askForNew": "Pide un enlace nuevo a quien lo envió — caducan a los 14 días.",
+      "loadFailed": "No pudimos cargar este esqueje ahora mismo. Inténtalo de nuevo en un momento.",
       "houseRuleLabel": "Regla de la casa",
       "addToGreenhouse": "Añadir a mi invernadero",
       "added": "{{name}} añadida a tu invernadero",
@@ -973,7 +976,8 @@
       "remove": "Quitar…",
       "restore": "Volver al cuidado activo",
       "doAria": "{{label}}: {{task}} {{plant}}",
-      "claim": "Me encargo yo"
+      "claim": "Me encargo yo",
+      "taskDue": "Vence: {{date}}"
     }
   },
   "importPlants": {

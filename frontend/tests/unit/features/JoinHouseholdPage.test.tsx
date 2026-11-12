@@ -113,6 +113,71 @@ describe('JoinHouseholdPage', () => {
     await waitFor(() => expect(useAuthStore.getState().user?.householdId).toBe('hh-7'));
   });
 
+  // Audit 2026-11-08, finding 6: `validateError || !inviteData?.valid` put
+  // every failed read under "This invite link is invalid or has expired", so
+  // a 503 or a dropped connection sent someone with a good invite back to the
+  // admin for a new one.
+  describe('a read that failed is not an invalid invite', () => {
+    const INVALID = 'This invite link is invalid or has expired.';
+    const LOAD_FAILED = 'We couldn’t load this invite just now. Try again in a moment.';
+
+    it.each([
+      ['a 503', () => HttpResponse.json({ message: 'Service Unavailable' }, { status: 503 })],
+      ['a 500', () => HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })],
+      ['a 429', () => HttpResponse.json({ message: 'Too many requests' }, { status: 429 })],
+      ['a dropped connection', () => HttpResponse.error()],
+      // A 200 that does not say whether the invite is valid is a read we did
+      // not get, not a verdict.
+      ['a body with no verdict', () => HttpResponse.json({})],
+    ])('says the invite could not be loaded on %s, not that it is bad', async (_, respond) => {
+      server.use(http.get(`${API}/households/invites/code-good`, respond));
+
+      renderJoin('code-good');
+
+      expect(await screen.findByText(LOAD_FAILED)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(screen.queryByText(INVALID)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ask for a new invite link/i)).not.toBeInTheDocument();
+    });
+
+    it('reads the invite again on Try again and shows it once the read succeeds', async () => {
+      let reads = 0;
+      server.use(
+        http.get(`${API}/households/invites/code-flaky`, () => {
+          reads += 1;
+          return reads === 1
+            ? HttpResponse.json({ message: 'Service Unavailable' }, { status: 503 })
+            : HttpResponse.json({ valid: true, household: { id: 'hh-9', name: 'The Brikis' } });
+        })
+      );
+
+      renderJoin('code-flaky');
+      await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+      expect(await screen.findByText('The Brikis')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /join household/i })).toBeInTheDocument();
+      expect(screen.queryByText(LOAD_FAILED)).not.toBeInTheDocument();
+      expect(reads).toBe(2);
+    });
+
+    it.each([
+      ['the server answers valid: false', () => HttpResponse.json({ valid: false })],
+      [
+        'the server answers 404',
+        () => HttpResponse.json({ message: 'Not found' }, { status: 404 }),
+      ],
+    ])('still says invalid or expired when %s', async (_, respond) => {
+      server.use(http.get(`${API}/households/invites/code-dead`, respond));
+
+      renderJoin('code-dead');
+
+      expect(await screen.findByText(INVALID)).toBeInTheDocument();
+      expect(screen.queryByText(LOAD_FAILED)).not.toBeInTheDocument();
+      // The server said the invite is gone, so there is nothing to retry.
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('a user who already belongs to a household opens an invite to a DIFFERENT one', () => {
     beforeEach(() => {
       // The common case this page used to get wrong: almost every onboarded
