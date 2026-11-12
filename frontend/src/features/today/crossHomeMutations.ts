@@ -8,6 +8,7 @@
  *
  * Hooks and pure cache patches only; the row components live in the page.
  */
+import { useRef } from 'react';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@/services/plantService';
@@ -20,11 +21,14 @@ import {
 import { getErrorMessage } from '@/services/api';
 import { playHaptic } from '@/services/nativeHaptics';
 import { noteCareDoneInBackground } from '@/services/nativeReview';
-import { toast } from '@/store/toastStore';
+import { toast, useToastStore } from '@/store/toastStore';
+import { describeDuplicate, readDuplicateCare } from '@/features/tasks/doubleCare';
 
 export interface RowTarget {
   householdId: string;
   task: CrossHomeTodayRow;
+  /** Double-care: the member saw the notice and chose to log it anyway. */
+  confirmDuplicate?: boolean;
 }
 
 /** A completed row leaves the queue: this is today's work, not the schedule. */
@@ -79,23 +83,76 @@ function markHomeStale(queryClient: QueryClient, householdId: string): void {
   }
 }
 
+/**
+ * Completing a row, including the double-care round trip.
+ *
+ * When someone else logged the same care a little earlier, the server holds
+ * the completion back (409 DUPLICATE_CARE; nothing is logged) and its message
+ * is written for an API client ("Send confirmDuplicate: true ..."). That text
+ * is never shown. The notice is worded here from the structured details, in
+ * the same words the rest of the app uses, and carries a "Log it anyway"
+ * button that sends the completion again, confirmed, to the row's own home.
+ *
+ * The notice is a toast, so it times out. The row is still in the queue and
+ * tapping Done again brings the same offer back, which is the durable route
+ * the toast store asks every action to have.
+ */
 export function useCrossHomeCompleteMutation() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ householdId, task }: RowTarget) =>
-      crossHomeTodayService.completeTask(householdId, task.id, task.nextDue),
-    onSuccess: (_updated, { householdId, task }) => {
+  // The open offer for each row, so a second tap replaces it instead of
+  // stacking another, and a completion clears it.
+  const offers = useRef(new Map<string, number>());
+  const clearOffer = (taskId: string) => {
+    const id = offers.current.get(taskId);
+    if (id !== undefined) useToastStore.getState().dismiss(id);
+    offers.current.delete(taskId);
+  };
+
+  const mutation = useMutation({
+    mutationFn: ({ householdId, task, confirmDuplicate }: RowTarget) =>
+      crossHomeTodayService.completeTask(
+        householdId,
+        task.id,
+        task.nextDue,
+        confirmDuplicate ? { confirmDuplicate: true } : undefined
+      ),
+    onSuccess: (_updated, { householdId, task, confirmDuplicate }) => {
+      clearOffer(task.id);
       queryClient.setQueryData<CrossHomeToday>(CROSS_HOME_TODAY_QUERY_KEY, (old) =>
         old ? removeRow(old, householdId, task.id) : old
       );
       markHomeStale(queryClient, householdId);
       playHaptic('completed');
       noteCareDoneInBackground();
-      toast.success(t('today.completedToast', { plant: task.plantName, name: task.householdName }));
+      toast.success(
+        confirmDuplicate
+          ? t('doubleCare.loggedAnyway')
+          : t('today.completedToast', { plant: task.plantName, name: task.householdName })
+      );
     },
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError: (err, { householdId, task }) => {
+      const duplicate = readDuplicateCare(err);
+      if (!duplicate) {
+        toast.error(getErrorMessage(err));
+        return;
+      }
+      clearOffer(task.id);
+      offers.current.set(
+        task.id,
+        toast.info(describeDuplicate(duplicate, t), {
+          action: {
+            label: t('doubleCare.logAnyway'),
+            onAction: () => {
+              offers.current.delete(task.id);
+              mutation.mutate({ householdId, task, confirmDuplicate: true });
+            },
+          },
+        })
+      );
+    },
   });
+  return mutation;
 }
 
 function useRowPatchMutation(

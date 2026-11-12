@@ -6,11 +6,12 @@
  * the revoked-label state are covered too — they are what a household sees
  * after rotating a leaked label.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ScanTagPage } from '@/features/tags/ScanTagPage';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import {
   publicTagService,
   TagInactiveError,
@@ -131,7 +132,9 @@ describe('ScanTagPage', () => {
     renderPage();
 
     await userEvent.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
-    await userEvent.click(screen.getByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    );
 
     expect(await screen.findByText('Thank you, Grandma!')).toBeInTheDocument();
     expect(completeTask).toHaveBeenCalledWith({
@@ -149,7 +152,9 @@ describe('ScanTagPage', () => {
     getView.mockResolvedValue(view());
     renderPage();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'I just did this Water the Monstera' })
+    );
     expect(
       await screen.findByText(/Pop a name in first so the household knows who to thank/)
     ).toBeInTheDocument();
@@ -161,7 +166,7 @@ describe('ScanTagPage', () => {
     renderPage();
 
     expect(await screen.findByText('This label isn’t active any more')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'I just did this' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /I just did this/ })).not.toBeInTheDocument();
   });
 
   it('asks for the household PIN, retries with it, and flags a wrong one', async () => {
@@ -193,7 +198,9 @@ describe('ScanTagPage', () => {
       alreadyDone: false,
     });
     await userEvent.type(screen.getByLabelText(/Who shall we say did it\?/), 'Grandma');
-    await userEvent.click(screen.getByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    );
     await waitFor(() =>
       expect(completeTask).toHaveBeenCalledWith(expect.objectContaining({ pin: '4321' }))
     );
@@ -215,13 +222,17 @@ describe('ScanTagPage', () => {
     renderPage();
 
     await userEvent.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
-    await userEvent.click(screen.getByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    );
 
     expect(await screen.findByText('We couldn’t record that')).toBeInTheDocument();
     expect(
       screen.getByText('Nothing was logged. Please tap again in a moment.')
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'I just did this' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    ).toBeEnabled();
   });
 
   it('says so plainly when nothing is due', async () => {
@@ -231,6 +242,112 @@ describe('ScanTagPage', () => {
     expect(
       await screen.findByText('Nothing needs doing right now — thanks for checking on it!')
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'I just did this' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /I just did this/ })).not.toBeInTheDocument();
+  });
+
+  // A plant with more than one task due used to offer several buttons all
+  // named "I just did this", and completing one dropped focus to <body> as
+  // its row left the list. Each button now carries its row's task in its
+  // name, and focus goes where the sitter page sends it: the next task, or
+  // the thanks when nothing is left.
+  describe('after Done', () => {
+    const dueFeed = {
+      taskId: 't2',
+      taskType: 'fertilize',
+      dueDate: new Date(Date.now() + 3_600_000).toISOString(),
+      overdue: false,
+    };
+    const saved = (taskId: string, taskType: string) => ({
+      taskId,
+      taskType,
+      dueDate: new Date().toISOString(),
+      completedByName: 'Grandma',
+      alreadyDone: false,
+    });
+
+    it('names each Done button after its own task', async () => {
+      getView.mockResolvedValue(view({ tasks: [dueWater, dueFeed] }));
+      renderPage();
+
+      // The visible words stay first in the name, so "click I just did this"
+      // still works by voice.
+      expect(
+        await screen.findByRole('button', { name: 'I just did this Water the Monstera' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'I just did this Fertilize the Monstera' })
+      ).toBeInTheDocument();
+      const names = screen
+        .getAllByRole('button', { name: /I just did this/ })
+        .map((button) => button.textContent);
+      // Same visible label on both: only the accessible name tells them apart.
+      expect(names).toEqual(['I just did this', 'I just did this']);
+    });
+
+    describe('in Spanish', () => {
+      afterEach(async () => {
+        await i18n.changeLanguage('en');
+      });
+
+      it('names each button in Spanish, from the Spanish already on the page', async () => {
+        await ensureLanguageCatalog('es');
+        await i18n.changeLanguage('es');
+        getView.mockResolvedValue(view({ tasks: [dueWater, dueFeed] }));
+        renderPage();
+
+        expect(
+          await screen.findByRole('button', { name: 'Acabo de hacerlo Regar: Monstera' })
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Acabo de hacerlo Fertilizar: Monstera' })
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('moves focus to the next task', async () => {
+      getView.mockResolvedValue(view({ tasks: [dueWater, dueFeed] }));
+      completeTask.mockResolvedValue(saved('t1', 'water'));
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
+      await user.click(screen.getByRole('button', { name: /Water the Monstera/ }));
+
+      expect(await screen.findByText('Thank you, Grandma!')).toBeInTheDocument();
+      const next = screen.getByRole('button', { name: 'I just did this Fertilize the Monstera' });
+      await waitFor(() => expect(document.activeElement).toBe(next));
+    });
+
+    it('moves focus to the thanks when that was the last task', async () => {
+      getView.mockResolvedValue(view());
+      completeTask.mockResolvedValue(saved('t1', 'water'));
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
+      await user.click(screen.getByRole('button', { name: /Water the Monstera/ }));
+
+      const thanks = await screen.findByText('Thank you, Grandma!');
+      await waitFor(() => {
+        // `<body>` contains everything, so "contains the thanks" alone would
+        // pass on exactly the bug this asserts against.
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toHaveAttribute('tabindex', '-1');
+        expect(document.activeElement?.contains(thanks)).toBe(true);
+      });
+    });
+
+    it('does not move focus when a name is still needed', async () => {
+      getView.mockResolvedValue(view({ tasks: [dueWater, dueFeed] }));
+      const user = userEvent.setup();
+      renderPage();
+
+      const done = await screen.findByRole('button', { name: /Water the Monstera/ });
+      await user.click(done);
+
+      expect(await screen.findByText(/Pop a name in first/)).toBeInTheDocument();
+      expect(completeTask).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(done);
+    });
   });
 });

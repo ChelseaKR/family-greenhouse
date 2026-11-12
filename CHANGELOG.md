@@ -40,6 +40,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **The privacy policy names Apple In-App Purchase** and what the server keeps
   about an App Store subscription. Privacy and account deletion take a new
   effective date at the next release.
+- **After Done, the page keeps your place and shows what changed.** On the
+  caretaker page and the plant label page, keyboard and screen-reader focus
+  moves to the next task, or to the thanks when none is left, instead of being
+  lost when the finished row leaves the list. The caretaker page says "Marked
+  as done" for each one, and each "I just did this" button on the label page
+  is named after its own task. On Today across your homes, a care someone
+  else already logged is offered back in plain words with a "Log it anyway"
+  button, in place of the API's own error text. On the plant page and the
+  dashboard, "Last watered", Care History and the activity feed show the
+  completion without leaving the page; what they show is read from the server
+  after the completion, never filled in by the browser.
 
 ### Changed
 
