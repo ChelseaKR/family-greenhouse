@@ -94,14 +94,46 @@ describe('the /pricing price is in the static text', () => {
     expect(garden.monthly).toBe(2.99); // ADR 0042
   });
 
-  it('names no annual or lifetime price while those cadences are withdrawn', () => {
+  it("names Garden's yearly price, and no price for a withdrawn cadence", () => {
     const html = renderToString(tree(newClient()));
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     expect(garden.withdrawn).toEqual(['lifetime']);
-    // The static line states monthly prices only, so the yearly amount is
-    // absent from the prerendered text even though Garden now sells yearly.
-    expect(html).not.toContain(String(garden.annual));
+    expect(greenhouse.withdrawn).toEqual(['year']);
+    // Garden sells yearly again (ADR 0042), so a no-JavaScript reader is told.
+    expect(text).toContain(
+      `Garden is $${garden.monthly.toFixed(2)} a month or $${garden.annual!.toFixed(2)} a year`
+    );
+    // Garden lifetime and Greenhouse yearly are withdrawn, so never named.
     expect(html).not.toContain(String(garden.lifetime));
-    expect(html).not.toMatch(/year|annual|lifetime/i);
+    expect(html).not.toContain(String(greenhouse.annual));
+    expect(html).not.toMatch(/lifetime/i);
+  });
+
+  it('negative control: with Garden yearly withdrawn the line falls back to monthly prices only', () => {
+    const withdrawn = garden.withdrawn;
+    (garden as { withdrawn: readonly string[] }).withdrawn = ['lifetime', 'year'];
+    try {
+      const html = renderToString(tree(newClient()));
+      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      expect(text).toContain(GARDEN_LINE);
+      expect(html).not.toContain(String(garden.annual));
+      expect(html).not.toMatch(/a year/i);
+    } finally {
+      (garden as { withdrawn: readonly string[] }).withdrawn = withdrawn;
+    }
+  });
+
+  it('states the yearly price in the Spanish catalog too', async () => {
+    await ensureLanguageCatalog('es');
+    await i18n.changeLanguage('es');
+    try {
+      const text = renderToString(tree(newClient()))
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ');
+      expect(text).toContain(`o $${garden.annual!.toFixed(2)} al año`);
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('states no price under the commercial hold (the static build is held the same way)', () => {

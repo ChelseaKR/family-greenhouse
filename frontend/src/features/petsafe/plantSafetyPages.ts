@@ -11,6 +11,7 @@ import { SITE_URL, siteUrl } from '@/config/site';
 import type { MetaTags } from '@/config/seo';
 import { sentenceName } from '@/features/care/plantNames';
 import { ASPCA_POISON_CONTROL_TEL, PET_POISON_HELPLINE_TEL } from './petVerdict';
+import lastmodLedger from '../../../scripts/plant-pages-lastmod.json';
 
 /**
  * The data behind `/pet-safe/<slug>`: one page per plant in the curated
@@ -514,13 +515,39 @@ export function headName(commonName: string): string {
 type Translate = (key: string, options?: Record<string, string>) => string;
 
 /**
+ * The date this page's content last changed, or undefined when none is
+ * recorded.
+ *
+ * It is the page's sitemap `<lastmod>`: both read
+ * `scripts/plant-pages-lastmod.json`, which pins a date to a digest of every
+ * table field the page shows and moves it only when that digest does (see
+ * `build-plant-pages-lastmod.mjs`). The build date never reaches it. The
+ * sitemap had told crawlers this date for every plant page while the page's
+ * own structured data said nothing.
+ *
+ * It dates the page, not the ASPCA's listing: it says when this page last
+ * changed, and makes no claim about when the listing was last read.
+ *
+ * A slug with no dated entry gets no date, never today's. The ledger's digest
+ * is not re-checked here (that needs the table and a hash); the build gate
+ * does it, and fails a page whose `dateModified` is not the date the sitemap
+ * gives it.
+ */
+export function plantPageLastmod(slug: string): string | undefined {
+  const pages: Record<string, { lastmod?: string } | undefined> = lastmodLedger.pages;
+  const lastmod = Object.hasOwn(pages, slug) ? pages[slug]?.lastmod : undefined;
+  return typeof lastmod === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(lastmod) ? lastmod : undefined;
+}
+
+/**
  * The page's `<head>`, composed from the same catalog strings and table fields
  * as its body. The build gate recomposes this independently and compares it
  * byte for byte, so the title, description and structured data cannot carry
  * a claim the body does not.
  *
  * Structured data describes the page and nothing else: a `WebPage` about the
- * plant, citing the listing(s) its verdicts come from, and a breadcrumb.
+ * plant, citing the listing(s) its verdicts come from and carrying the date the
+ * page last changed (`plantPageLastmod`), and a breadcrumb.
  */
 export function plantSafetyMeta(page: PlantSafetyPage, t: Translate): MetaTags {
   const url = siteUrl(`${PLANT_PAGE_PREFIX}${page.slug}`);
@@ -542,6 +569,7 @@ export function plantSafetyMeta(page: PlantSafetyPage, t: Translate): MetaTags {
     cats: t(VERDICT_LABEL_KEY[page.claims.cats.state]),
     dogs: t(VERDICT_LABEL_KEY[page.claims.dogs.state]),
   });
+  const dateModified = plantPageLastmod(page.slug);
 
   return {
     title,
@@ -557,6 +585,8 @@ export function plantSafetyMeta(page: PlantSafetyPage, t: Translate): MetaTags {
           name: title,
           description,
           inLanguage: 'en',
+          // The key is absent, not empty, for a page with no recorded date.
+          ...(dateModified ? { dateModified } : {}),
           isPartOf: {
             '@type': 'WebSite',
             '@id': `${SITE_URL}/#website`,

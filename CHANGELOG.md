@@ -26,6 +26,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 - **The App Store plans card says what each plan includes,** from the plan
   catalog's caps and the App Store's own subscription description (Guideline
   3.1.2(c)).
+- **llms.txt lists every care guide and pet-safety page, and says when it last
+  changed.** /llms.txt is now generated (`npm run llms --workspace frontend`).
+  After the hand-kept summary it has one line per care guide (its water and
+  light lines) and one per pet-safety page (the verdict word the page shows for
+  cats and for dogs, with the ASPCA named as the source), from the data the
+  pages render, and a "Last updated" date that moves only when the file's text
+  does. /pricing marks up its seven "Common questions" as an FAQPage, from the
+  list the page renders. Each pet-safety page's structured data carries
+  `dateModified`, equal to its sitemap `<lastmod>`; the build fails if they
+  differ. No title or meta description changed.
+- **The public prices say what Garden costs now.** The price sentence a reader
+  without JavaScript gets on /pricing adds Garden's yearly price ("$2.99 a month
+  or $24.99 a year"), from the same table as the structured data, and falls back
+  to monthly prices if yearly is withdrawn. /changelog gains two website-only
+  entries, for the 2026-11-08 Garden price and the 2026-10-24 free plan; its
+  newest entry had still said Garden was $4.99.
 
 ### Fixed
 

@@ -94,7 +94,7 @@ import {
   publishedPagesBySlug,
   publishedPlantPages,
 } from './pet-toxicity-table.mjs';
-import { FRONTEND_ROOT, SITE, publicRoutePaths } from './public-routes.mjs';
+import { FRONTEND_ROOT, SITE, plantPageRoutes, publicRoutePaths } from './public-routes.mjs';
 
 const DIST = join(FRONTEND_ROOT, 'dist');
 const EN_CATALOG = join(FRONTEND_ROOT, 'src', 'i18n', 'locales', 'en', 'translation.json');
@@ -633,6 +633,19 @@ export function checkDetails({ main, entry, page, details, faq, catalog, table }
 }
 
 /**
+ * Each plant page's sitemap `<lastmod>`, by path: the ledger's date, and only
+ * for a page whose table entry still has the digest that date was given to
+ * (`plantPageRoutes`). A page whose entry changed since has no date here.
+ */
+export function plantPageLastmods(table = loadPetToxicityTable()) {
+  return new Map(
+    plantPageRoutes(table)
+      .filter((route) => typeof route.lastmod === 'string')
+      .map((route) => [route.path, route.lastmod])
+  );
+}
+
+/**
  * Check one prerendered plant page. Returns a list of failures (empty = pass).
  *
  * `entry` is the table entry the page is for; `aspcaOrigin` the table's URL
@@ -649,6 +662,7 @@ export function checkPlantSafetyPageHtml({
   routes = declaredRoutes().paths,
   publishedPaths = publicRoutePaths(),
   shop = loadPlantShop(),
+  lastmods = plantPageLastmods(),
 }) {
   const page = plantPage(entry, aspcaOrigin);
   const details = plantDetails(entry, { ...table, aspcaOrigin });
@@ -984,6 +998,16 @@ export function checkPlantSafetyPageHtml({
     if (webPage.description !== head.description) fail('JSON-LD WebPage.description differs');
     if (webPage.url !== `${SITE}${where}`) fail('JSON-LD WebPage.url is not the canonical URL');
     if (webPage.about?.name !== entry.commonName) fail('JSON-LD WebPage.about is not this plant');
+    // The page's date is the sitemap's date for it, or neither has one. The
+    // build date, a hand-typed date and a date left behind by an edited entry
+    // all fail here, as does a page that drops the date the sitemap states.
+    const lastmod = lastmods.get(where);
+    if (webPage.dateModified !== lastmod) {
+      fail(
+        `JSON-LD WebPage.dateModified is ${JSON.stringify(webPage.dateModified)}, ` +
+          `but the sitemap's <lastmod> for this page is ${JSON.stringify(lastmod)}`
+      );
+    }
     const cited = [webPage.citation ?? []]
       .flat()
       .map((c) => c?.url)
@@ -1026,6 +1050,7 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
   const routes = declaredRoutes().paths;
   const publishedPaths = publicRoutePaths();
   const published = publishedPlantPages(table);
+  const lastmods = plantPageLastmods(table);
   const failures = [];
 
   const dir = join(dist, ...PLANT_PAGE_PREFIX.split('/').filter(Boolean));
@@ -1042,6 +1067,14 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
       failures.push(`${page.path}: the table publishes it, but no page was prerendered`);
       continue;
     }
+    // Without this, a page with no date and no dateModified would agree with
+    // itself and pass: nothing to compare is not the same as equal.
+    if (!lastmods.has(page.path)) {
+      failures.push(
+        `${page.path}: no verified <lastmod> in the ledger, so its dateModified cannot be checked; ` +
+          'run `npm run plant-pages:lastmod --workspace frontend`'
+      );
+    }
     failures.push(
       ...checkPlantSafetyPageHtml({
         html: readFileSync(file, 'utf8'),
@@ -1051,6 +1084,7 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
         catalog,
         routes,
         publishedPaths,
+        lastmods,
       })
     );
   }

@@ -44,6 +44,54 @@ async function jsonLdWith(flags: { hold: boolean; registration: boolean }) {
   return pricingJsonLd();
 }
 
+/** The same, with a translator that returns the key, so a test can read which strings were used. */
+async function questionKeysWith(flags: { hold: boolean; registration: boolean }) {
+  vi.resetModules();
+  vi.doMock('@/config/commercialStatus', () => ({
+    COMMERCIAL_HOLD_ACTIVE: flags.hold,
+    COMMERCIAL_HOLD_EFFECTIVE_DATE: '2026-09-01',
+    COMMERCIAL_HOLD_MESSAGE: 'Paid plans are paused.',
+    PUBLIC_REGISTRATION_AVAILABLE: flags.registration,
+  }));
+  const { pricingJsonLd } = await import('@/features/pricing/pricingJsonLd');
+  return faqPairs(pricingJsonLd((key) => key)).map((pair) => pair.question);
+}
+
+interface FaqPair {
+  question: string;
+  answer: string;
+}
+
+/** The FAQPage node's questions and answers, in order; empty when there is no node. */
+function faqPairs(payload: Record<string, unknown>): FaqPair[] {
+  const graph = payload['@graph'] as {
+    '@type': string;
+    mainEntity?: { name: string; acceptedAnswer: { text: string } }[];
+  }[];
+  const nodes = graph.filter((node) => node['@type'] === 'FAQPage');
+  expect(nodes.length).toBeLessThanOrEqual(1);
+  return (nodes[0]?.mainEntity ?? []).map((q) => ({
+    question: q.name,
+    answer: q.acceptedAnswer.text,
+  }));
+}
+
+/** Every way the marked-up questions differ from the ones on the page; empty means none. */
+function faqFaults(onPage: FaqPair[], markedUp: FaqPair[]): string[] {
+  const out: string[] = [];
+  if (onPage.length === 0) out.push('the page shows no questions');
+  if (onPage.length !== markedUp.length) {
+    out.push(`the page shows ${onPage.length} questions, the markup has ${markedUp.length}`);
+  }
+  onPage.forEach((pair, i) => {
+    const other = markedUp[i];
+    if (!other) return;
+    if (other.question !== pair.question) out.push(`question ${i + 1} is worded differently`);
+    if (other.answer !== pair.answer) out.push(`answer ${i + 1} is worded differently`);
+  });
+  return out;
+}
+
 function appNode(payload: Record<string, unknown>): AppNode {
   const graph = payload['@graph'] as AppNode[];
   return graph.find((node) => node['@type'] === 'SoftwareApplication')!;
@@ -141,7 +189,97 @@ describe('/pricing structured data', () => {
   });
 });
 
+describe('/pricing questions in the structured data', () => {
+  afterEach(() => {
+    vi.doUnmock('@/config/commercialStatus');
+    vi.resetModules();
+  });
+
+  it('marks up the buying questions while plans are on sale', async () => {
+    expect(await questionKeysWith({ hold: false, registration: true })).toEqual([
+      'pricingStatus.freeAccountQuestion',
+      'pricingStatus.householdQuestion',
+      'pricingStatus.trialQuestion',
+      'pricingStatus.cardQuestion',
+      'pricingStatus.changeQuestion',
+      'pricingStatus.whereQuestion',
+      'pricingStatus.dataQuestion',
+    ]);
+  });
+
+  it('swaps them for the paused-plans questions while the hold is on', async () => {
+    const held = await questionKeysWith({ hold: true, registration: true });
+    expect(held).toEqual([
+      'pricingStatus.freeAccountQuestion',
+      'pricingStatus.paidOfferQuestion',
+      'pricingStatus.reactivationQuestion',
+      'pricingStatus.dataQuestion',
+    ]);
+    // No trial or card answer is published for plans nobody can buy.
+    expect(held).not.toContain('pricingStatus.trialQuestion');
+  });
+
+  it('drops the account question when nobody may sign up', async () => {
+    const closed = await questionKeysWith({ hold: false, registration: false });
+    expect(closed).not.toContain('pricingStatus.freeAccountQuestion');
+    expect(closed).toContain('pricingStatus.householdQuestion');
+  });
+
+  it('publishes no FAQPage without the page\u2019s own text to put in it', async () => {
+    expect(faqPairs(await jsonLdWith({ hold: false, registration: true }))).toEqual([]);
+  });
+});
+
 describe('PricingPage', () => {
+  it('marks up exactly the questions and answers it shows, word for word', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.listPlans).mockResolvedValue({
+      paymentsAvailable: false,
+      commercialHold: { active: false, effectiveDate: '2026-09-01' },
+      plans: [],
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <PricingPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    // What a person reads: every <dt>/<dd> pair on the page, in order.
+    const onPage: FaqPair[] = [...container.querySelectorAll('dl > div')].map((row) => ({
+      question: row.querySelector('dt')!.textContent!,
+      answer: row.querySelector('dd')!.textContent!,
+    }));
+    const script = document.head.querySelector('script[type="application/ld+json"]');
+    const markedUp = faqPairs(JSON.parse(script!.textContent!));
+
+    expect(onPage.length).toBeGreaterThanOrEqual(4);
+    // Real sentences, not catalog keys: a missing translation renders its key.
+    for (const pair of onPage) {
+      expect(pair.question).not.toMatch(/^pricingStatus\./);
+      expect(pair.answer).not.toMatch(/^pricingStatus\./);
+      expect(pair.answer.length).toBeGreaterThan(20);
+    }
+    expect(faqFaults(onPage, markedUp)).toEqual([]);
+
+    // Negative controls: each sabotage changes the markup, and each is named.
+    const reworded = markedUp.map((pair, i) =>
+      i === 1 ? { ...pair, answer: `${pair.answer} Guaranteed.` } : pair
+    );
+    expect(reworded).not.toEqual(markedUp);
+    expect(faqFaults(onPage, reworded)).toEqual(['answer 2 is worded differently']);
+
+    const extra = [...markedUp, { question: 'Is it the best plant app?', answer: 'Yes.' }];
+    expect(extra).not.toEqual(markedUp);
+    expect(faqFaults(onPage, extra)).toEqual([
+      `the page shows ${onPage.length} questions, the markup has ${onPage.length + 1}`,
+    ]);
+
+    expect(faqFaults([], [])).toEqual(['the page shows no questions']);
+  });
+
   it('emits the structured data into the head, where a crawler reads it', async () => {
     // The grid's own query is not what is under test here; give it a catalog
     // to settle on so the assertion is about the head and nothing else.
