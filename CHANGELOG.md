@@ -78,6 +78,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   Removing a member or changing a role shows the reason when it fails. On a
   Spanish screen the plant page says "Vence:" and "Nunca" where it said "Due:"
   and "Never".
+- **Three backend fixes from the 2026-11-08 audit.** A scanned plant tag names
+  a completion by a plant sitter, the kiosk display or a former member in
+  full: it printed "Last watered today by a." A sitter link revoked before its
+  start date no longer makes the away recap fail to load; the recap of the
+  last window that did open shows. The care assistant is told today's date on
+  every question, in the household's time zone or in UTC when none is set
+  (#889), and the date stays out of the prompt cache.
 
 ## [0.51.0] - 2026-11-09
 

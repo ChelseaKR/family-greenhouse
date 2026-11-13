@@ -165,6 +165,54 @@ describe('public scan + complete', () => {
     expect(event).toMatchObject({ actorName: 'Grandma', payload: { viaTag: true } });
   });
 
+  // Audit 2026-11-08, finding 12, end to end through the REAL writers: a
+  // completion made on the sitter link or the kiosk carries the label that
+  // route stamps, and the public page printed only its first word ("by a.").
+  it('names a sitter and the kiosk display in full on the scan page, and a member only by first name', async () => {
+    const auth = await loginAsSeed();
+    db.households.get(seedHouseholdId)!.planId = 'greenhouse'; // kiosk is Greenhouse-only
+    const { token } = await issueSeedTag(auth);
+    const lastWateredBy = async () =>
+      (await request(app).get(`/tag/${token}`)).body.history.lastWatered.completedByName as string;
+
+    // A member, through the signed-in route: first name only.
+    const seedName = db.users.get(seedUserId)!.name;
+    expect(seedName.trim().split(/\s+/).length).toBeGreaterThan(1); // a surname exists to withhold
+    const byMember = await request(app)
+      .post(`/tasks/${seedTaskId}/complete`)
+      .set('Authorization', `Bearer ${auth}`)
+      .send({});
+    expect(byMember.status).toBe(200);
+    expect(await lastWateredBy()).toBe(seedName.trim().split(/\s+/)[0]);
+
+    // A plant sitter, through the public sitter link.
+    const link = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${auth}`)
+      .send({ expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() });
+    expect(link.status).toBe(201);
+    const bySitter = await request(app)
+      .post(`/sitter/${link.body.token}/tasks/${seedTaskId}/complete`)
+      .send({ confirmDuplicate: true });
+    expect(bySitter.status).toBe(200);
+    expect(await lastWateredBy()).toBe('a plant sitter');
+
+    // The wall display.
+    const kiosk = await request(app)
+      .post(`/households/${seedHouseholdId}/kiosk-link`)
+      .set('Authorization', `Bearer ${auth}`)
+      .send({});
+    expect(kiosk.status).toBe(201);
+    const byKiosk = await request(app)
+      .post(`/kiosk/${kiosk.body.token}/tasks/${seedTaskId}/complete`)
+      .send({ confirmDuplicate: true });
+    expect(byKiosk.status).toBe(200);
+    expect(await lastWateredBy()).toBe('the kiosk display');
+
+    // Three completions, so each read above saw a different newest row.
+    expect([...db.completions.values()].filter((c) => c.plantId === seedPlantId)).toHaveLength(3);
+  });
+
   it('a retried tap for the same occurrence is acknowledged, not completed twice', async () => {
     const auth = await loginAsSeed();
     onGarden();
