@@ -956,6 +956,69 @@ describe('BillingSettings — a household on the no-card Garden trial (ADR 0027)
   });
 });
 
+describe('BillingSettings — every upgrade prompt lands on the plan choice', () => {
+  const OFFER: IdentifyTopUpOffer = {
+    available: true,
+    credits: 20,
+    validityDays: 365,
+    priceUsd: 1.99,
+  };
+  const endsAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const trialHousehold: SubscriptionState = {
+    planId: 'seedling',
+    trialAvailable: true,
+    usageDetail: usage({ plantCount: 3, maxPlants: 200, maxMembers: 6 }),
+    noCardTrial: { state: 'active', endsAt },
+    gift: null,
+  };
+  const scrolled: Element[] = [];
+  const original = Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdmin.mockReturnValue(true);
+    scrolled.length = 0;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+  });
+
+  afterEach(() => {
+    Element.prototype.scrollIntoView = original;
+    cleanup();
+  });
+
+  it('renders Change plan right under Plan status, above the identification pack', async () => {
+    await renderBilling(trialHousehold, { paid: true, identifyTopUp: OFFER });
+
+    const changePlan = screen.getByRole('heading', { name: 'Change plan' }).closest('[id]')!;
+    expect(changePlan).toHaveAttribute('id', 'change-plan');
+    const topUp = screen.getByTestId('identify-top-up-card');
+    // DOCUMENT_POSITION_FOLLOWING: the pack comes after the plan choice.
+    expect(
+      changePlan.compareDocumentPosition(topUp) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Plan status' })).toBeInTheDocument();
+  });
+
+  it('scrolls to the plan choice when opened from a prompt (#change-plan)', async () => {
+    await renderBilling(trialHousehold, {
+      paid: true,
+      identifyTopUp: OFFER,
+      route: '/settings/billing#change-plan',
+    });
+
+    await waitFor(() => expect(scrolled.map((el) => el.id)).toContain('change-plan'));
+    expect(screen.getByRole('button', { name: 'Keep Garden' })).toBeInTheDocument();
+  });
+
+  it('stays at the top when opened without the fragment', async () => {
+    await renderBilling(trialHousehold, { paid: true, identifyTopUp: OFFER });
+
+    expect(scrolled.map((el) => el.id)).not.toContain('change-plan');
+  });
+});
+
 describe('resolveTrialOffer (three states, never two)', () => {
   it('keeps an absent field apart from a real false', () => {
     expect(resolveTrialOffer({ planId: 'seedling', trialAvailable: true })).toBe('available');

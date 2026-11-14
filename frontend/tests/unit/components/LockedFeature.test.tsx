@@ -63,6 +63,7 @@ function signIn(role: 'admin' | 'member') {
 function stubReads({
   paymentsAvailable = true,
   planId = 'seedling',
+  plans = PLANS as Array<Record<string, unknown>>,
   members = [
     { userId: 'u-admin', name: 'Maria', role: 'admin' as const },
     { userId: 'u-me', name: 'Sam', role: 'member' as const },
@@ -73,7 +74,7 @@ function stubReads({
       HttpResponse.json({
         paymentsAvailable,
         commercialHold: { active: false, effectiveDate: '2026-09-01' },
-        plans: PLANS,
+        plans,
       })
     ),
     http.get(`${API}/billing/me`, () => HttpResponse.json({ planId })),
@@ -243,7 +244,7 @@ describe('LockedFeature', () => {
 
     expect(await screen.findByRole('link', { name: 'Change plan' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
     expect(screen.queryByRole('button', { name: /upgrade/ })).not.toBeInTheDocument();
   });

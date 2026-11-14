@@ -11,6 +11,7 @@ import { formatCurrency } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
 import { billingService, effectivePlanId } from '@/services/billingService';
 import { nativePlanNoteKey } from '@/services/appStoreAvailability';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
  * Why the prompt is showing:
@@ -164,7 +165,7 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
               buyLabel &&
               paymentsOn && (
                 <Link
-                  to="/settings/billing"
+                  to={CHANGE_PLAN_ROUTE}
                   // The price makes this label long; on a phone it wraps
                   // rather than clipping (the shared style never wraps).
                   className={buttonStyles({ className: 'text-center whitespace-normal!' })}

@@ -70,6 +70,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **Every upgrade prompt opens Plan status at the plan choice.** "Change plan",
+  "Keep Garden", "Choose a Garden plan" and "See plans" now link to
+  `/settings/billing#change-plan`, and the page scrolls there. The Change plan
+  card moved up to sit right under Plan status, above the identification pack
+  and gifts, so a household that opens the page from either trial email also
+  finds it near the top. The Plan status heading and its one-line description
+  are translated. No price, plan or checkout rule changed.
 - **The Christmas cactus pet page answers the cat question first, and the
   spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
   "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of

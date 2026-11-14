@@ -24,6 +24,7 @@ import {
 } from '@/services/upgradeRequestService';
 import { formatCurrency, formatDate } from '@/i18n/format';
 import { formatNameList } from '@/utils/nameList';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
  * Everything the ask needs, shared by the card and the inline button. Reads
@@ -249,7 +250,7 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
               <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
             ) : ask.role === 'admin' ? (
               <div className="space-y-2">
-                <Link to="/settings/billing" className={buttonStyles({})}>
+                <Link to={CHANGE_PLAN_ROUTE} className={buttonStyles({})}>
                   {t('locked.adminChangePlan')}
                 </Link>
                 <p className="text-xs text-gray-600">{t('locked.adminHint')}</p>

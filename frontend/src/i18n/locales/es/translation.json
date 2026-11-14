@@ -1797,6 +1797,7 @@
     "billing": {
       "usageTitle": "Uso",
       "currentPlan": "Tu hogar tiene el plan {{plan}}.",
+      "planStatusDescription": "Consulta los límites del plan actual de tu hogar.",
       "currentPlanTrial": "Tu hogar tiene el plan {{plan}} (prueba gratuita).",
       "currentPlanUnpaid": "Tu hogar tiene el plan {{plan}}, pero su último pago no se ha completado.",
       "paymentRetryingTitle": "Tu último pago no se ha completado",

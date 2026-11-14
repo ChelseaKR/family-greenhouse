@@ -81,6 +81,7 @@ interface Setup {
   links?: unknown[];
   plansStatus?: number;
   noCardTrial?: { state: 'active' | 'ended'; endsAt: string };
+  plans?: unknown[];
 }
 
 /** Every read the card makes, and a record of the links it creates. */
@@ -90,6 +91,7 @@ function stub({
   links = [],
   plansStatus = 200,
   noCardTrial,
+  plans = PLANS,
 }: Setup = {}) {
   useAuthStore.setState({
     user: {
@@ -128,7 +130,7 @@ function stub({
         ? HttpResponse.json({
             paymentsAvailable: true,
             commercialHold: { active: false, effectiveDate: '2026-09-01' },
-            plans: PLANS,
+            plans,
           })
         : HttpResponse.json({ message: 'nope' }, { status: plansStatus });
     }),
@@ -201,7 +203,7 @@ describe('Going away? on the sitter-link form', () => {
     expect(scoped.getByText(/printable care brief/i)).toBeVisible();
     expect(
       scoped.getByRole('link', { name: 'Upgrade to Garden for $4.99 a month' })
-    ).toHaveAttribute('href', '/settings/billing');
+    ).toHaveAttribute('href', '/settings/billing#change-plan');
     expect(scoped.getByText(/your free 7-day link is still yours/i)).toBeVisible();
   });
 

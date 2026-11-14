@@ -1747,6 +1747,7 @@
     "billing": {
       "usageTitle": "Usage",
       "currentPlan": "Your household is on the {{plan}} plan.",
+      "planStatusDescription": "View your household’s current plan limits.",
       "currentPlanTrial": "Your household is on the {{plan}} plan (free trial).",
       "currentPlanUnpaid": "Your household is on the {{plan}} plan, but its last payment has not gone through.",
       "paymentRetryingTitle": "Your last payment didn’t go through",
