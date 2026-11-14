@@ -207,8 +207,15 @@ describe('a lead page title', () => {
     expect(enCatalog.plantSafetyPage.leadTitle).toContain('{{verdict}}');
   });
 
-  it('every other page keeps the cats-and-dogs title', () => {
+  it('every page the table does not opt in keeps the cats-and-dogs title', () => {
     const leads = PLANT_SAFETY_PAGES.filter((p) => p.lead !== null).map((p) => p.slug);
-    expect(leads).toEqual(['christmas-cactus']);
+    expect(leads).toEqual([
+      'pothos',
+      'peace-lily',
+      'bird-of-paradise',
+      'anthurium',
+      'money-tree',
+      'christmas-cactus',
+    ]);
   });
 });
