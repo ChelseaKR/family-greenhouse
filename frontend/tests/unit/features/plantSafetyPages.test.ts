@@ -469,11 +469,18 @@ describe('a cited lead and an unlisted-animal question, per page', () => {
     return mine;
   };
 
-  it('only the Christmas cactus page leads with a verdict', () => {
+  it('only the pages the table opts in lead with a verdict', () => {
     const leads = PET_TOXICITY.filter(
       (e) => toPlantSafetyPage(e as LooseEntry) !== null && leadOf(e as LooseEntry) !== null
     ).map((e) => e.slug);
-    expect(leads).toEqual(['christmas-cactus']);
+    expect(leads).toEqual([
+      'pothos',
+      'peace-lily',
+      'bird-of-paradise',
+      'anthurium',
+      'money-tree',
+      'christmas-cactus',
+    ]);
   });
 
   it('the Christmas cactus lead is the cited cat answer, with the any-plant caveat', () => {

@@ -2841,7 +2841,7 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Maranta leuconeura',
     alsoKnownAs: ['Maranta', 'Red-Veined Prayer Plant', 'Herringbone Plant', 'Rabbit Tracks'],
     related: ['calathea', 'nerve-plant', 'boston-fern'],
-    metaTitle: 'How Often to Water a Prayer Plant: Keep It Evenly Moist',
+    metaTitle: 'How Often to Water a Prayer Plant (Maranta): Evenly Moist',
     metaDescription:
       'Keep a prayer plant’s soil evenly moist through the growing season and let it dry a little in winter. It wants bright, indirect light and high humidity.',
     reviewed: '2026-11-03',

@@ -219,6 +219,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     alternatives: ['hoya', 'spider-plant', 'boston-fern'],
     related: ['philodendron', 'monstera'],
     aliases: ['devil’s ivy', 'devils ivy', 'golden pothos', 'money plant', 'epipremnum'],
+    // US Search Console 2026-08-14 to 11-11: dog questions sit at position 46 against 69 for cats; "are pothos toxic to dogs" is the top one at 41.
+    leadAnimal: 'dogs',
     cats: 'toxic',
     dogs: 'toxic',
     note: 'The sap carries insoluble calcium oxalate crystals, so a chewed leaf causes mouth pain, drooling and vomiting. Rarely life-threatening, but unpleasant — keep it up high or out of a determined pet’s reach.',
@@ -360,6 +362,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     alternatives: ['calathea', 'cast-iron-plant', 'orchid'],
     related: ['lily', 'anthurium'],
     aliases: ['spathiphyllum', 'closet plant'],
+    // US Search Console 2026-08-14 to 11-11: 114 of 180 impressions ask about dogs; "are peace lilies poisonous to dogs" sits at position 28.6.
+    leadAnimal: 'dogs',
     cats: 'toxic',
     dogs: 'toxic',
     note: 'Calcium oxalate crystals cause intense mouth and throat irritation, drooling and trouble swallowing. Despite the name it is NOT a true lily, so it won’t cause the kidney failure true lilies do — but it’s still one to keep away from pets.',
@@ -782,6 +786,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     // about the harsher species using the milder one's note. Both are toxic,
     // so an ambiguous query is never told "safe" — but keep them separate.
     aliases: ['strelitzia', 'strelitzia reginae', 'bird of paradise flower', 'crane flower'],
+    // US Search Console 2026-08-14 to 11-11: 19 of 39 impressions ask about dogs; dog questions sit at positions 10 to 45.
+    leadAnimal: 'dogs',
     cats: 'toxic',
     dogs: 'toxic',
     note: 'Toxic to cats and dogs per the ASPCA, which names GI irritants and lists mild nausea, vomiting and drowsiness, caused mainly by the fruit and seeds. Indoor plants rarely fruit, but the listing still applies to the plant, so keep it out of reach. A very different shrub (Caesalpinia gilliesii) is also sold as “bird of paradise” and is harsher, so check which one you have. If your pet has eaten some, call your vet or a poison hotline.',
@@ -818,6 +824,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
       'anthurium andraeanum',
       'anthurium scherzeranum',
     ],
+    // US Search Console 2026-08-14 to 11-11: 15 of 21 impressions ask about cats; "anthurium toxic to cats" sits at position 16.
+    leadAnimal: 'cats',
     cats: 'toxic',
     dogs: 'toxic',
     note: 'Toxic to cats and dogs per the ASPCA, which names insoluble calcium oxalates and lists oral irritation, pain and swelling of the mouth, tongue and lips, excessive drooling, vomiting and difficulty swallowing. Peace lily and dieffenbachia carry the same crystals. Despite the “flamingo lily” nickname it is not a true lily, so it will not cause the kidney failure true lilies do. If your pet has chewed it, call your vet or a poison hotline.',
@@ -929,6 +937,8 @@ export const PET_TOXICITY: PetToxicityEntry[] = [
     // card for a plant that is not. 'money plant' stays pointed at pothos
     // (toxic) — the conservative of the three readings. Guarded by tests.
     aliases: ['pachira', 'pachira aquatica', 'guiana chestnut', 'malabar chestnut', 'saba nut'],
+    // US Search Console 2026-08-14 to 11-11: 34 of 55 impressions ask about cats; cat questions sit at positions 10 to 26.
+    leadAnimal: 'cats',
     cats: 'non-toxic',
     dogs: 'non-toxic',
     note: 'Non-toxic to cats and dogs per the ASPCA — the braided-trunk Pachira is genuinely safe. Careful with the name though: “money plant” usually means pothos or jade instead, and both of those ARE toxic, so make sure yours is the braided Pachira.',
