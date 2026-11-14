@@ -15,6 +15,7 @@ import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
 import { CoverageCard } from './CoverageCard';
 import { isNativeApp } from '@/lib/platform';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
  * Care analytics — KPI tiles + four views over the same data feed:
@@ -174,7 +175,7 @@ export function AnalyticsPage() {
             {!isNativeApp() && (
               <>
                 {' '}
-                <Link to="/settings/billing" className="font-medium underline">
+                <Link to={CHANGE_PLAN_ROUTE} className="font-medium underline">
                   {t('analytics.historyWindow.upgrade')}
                 </Link>
               </>

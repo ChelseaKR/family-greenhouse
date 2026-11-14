@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import {
   billingService,
@@ -32,6 +32,7 @@ import { grandfatheredFreeCaps } from '@/features/billing/planCaps';
 import { NoCardTrialNoticeView } from '@/features/billing/NoCardTrialNotice';
 import { isPaymentLapsed, paymentFailedCopy } from '@/features/billing/paymentFailing';
 import { useReportPlanPurchase } from '@/features/billing/reportPlanPurchase';
+import { CHANGE_PLAN_ID } from '@/features/billing/changePlanLink';
 import { changePlanDescription } from './changePlanDescription';
 // Lazy: the checkout/redemption flow is real weight (~430 lines) that most
 // visits to this page never touch -- it only renders once plansQuery has
@@ -218,6 +219,17 @@ export function BillingSettings() {
     onError: (error) => setPurchaseErrorKey(purchaseErrorKey(error)),
   });
 
+  // Every upgrade prompt links to `#change-plan` (`CHANGE_PLAN_ROUTE`). React
+  // Router does not scroll to a fragment on its own, and the card only exists
+  // once both reads have settled, so scroll once it can be there. Same shape
+  // as PlantDetailPage's `#care` and HouseholdPage's `#sitter-links`.
+  const { hash } = useLocation();
+  const billingReadsSettled = !plansQuery.isLoading && !subQuery.isLoading;
+  useEffect(() => {
+    if (hash !== `#${CHANGE_PLAN_ID}` || !billingReadsSettled) return;
+    document.getElementById(CHANGE_PLAN_ID)?.scrollIntoView?.({ block: 'start' });
+  }, [hash, billingReadsSettled]);
+
   if (plansQuery.isLoading || subQuery.isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -283,7 +295,7 @@ export function BillingSettings() {
   // second concurrent subscription keys off `stripeSubscriptionId`, which is
   // exactly the field the webhook has not written yet — so a second checkout
   // started in this window is accepted, and the household is billed twice for
-  // two subscriptions that both keep renewing. The top-up path two cards below
+  // two subscriptions that both keep renewing. The top-up path further down
   // has said "this can take a moment" since it shipped; the subscription path,
   // which is the one that costs $4.99–$9.99 a month, said nothing.
   //
@@ -454,7 +466,10 @@ export function BillingSettings() {
         plans={plansQuery.data?.plans}
       />
       <Card>
-        <CardHeader title="Plan status" description="View your household's current plan limits." />
+        <CardHeader
+          title={t('settings.tabs.billing')}
+          description={t('settings.billing.planStatusDescription')}
+        />
         {/* Named before anything else on the card, because every other line
             here is a consequence of it. */}
         {paymentFailure && (
@@ -612,45 +627,11 @@ export function BillingSettings() {
         </Suspense>
       )}
 
-      {showTopUp && topUpOffer && (
-        <div>
-          {returnedFromTopUp && (
-            <Alert variant="info" className="mb-4">
-              <p>{t('identifyTopUp.purchaseReturned')}</p>
-            </Alert>
-          )}
-          <IdentifyTopUpCard
-            variant="billing"
-            available={paymentsAvailable && topUpOffer.available}
-            credits={topUpOffer.credits}
-            priceUsd={topUpOffer.priceUsd ?? null}
-            validityDays={topUpOffer.validityDays}
-            balance={identifyCredits === undefined ? null : identifyCredits}
-            notIncludedIn={
-              subQuery.data?.identifyAllowance?.monthly === 0
-                ? subQuery.data.identifyAllowance.planName
-                : null
-            }
-          />
-        </div>
-      )}
-
-      {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
-          then nothing renders. Not on native: no purchase surface is. */}
-      {!native && plansQuery.data?.giftSubscriptions && (
-        <Suspense fallback={<LoadingSpinner size="sm" />}>
-          <GiftSubscriptionCard
-            offer={plansQuery.data.giftSubscriptions}
-            plans={plansQuery.data.plans}
-            paymentsAvailable={paymentsAvailable}
-            gift={subQuery.data?.gift}
-            returnedFromPurchase={returnedFromGift}
-          />
-        </Suspense>
-      )}
-
+      {/* The plan choice comes straight after Plan status, above the
+          identification pack and gifts: it is what every upgrade prompt
+          and both trial emails send an admin here to do. */}
       {paymentsAvailable && !native && (
-        <Card>
+        <Card id={CHANGE_PLAN_ID} className="scroll-mt-24 lg:scroll-mt-4">
           <CardHeader
             title={t('settings.billing.changePlanTitle')}
             description={changePlanDescription(t, subQuery.data, changePlanDescriptionKey)}
@@ -711,6 +692,43 @@ export function BillingSettings() {
             />
           )}
         </Card>
+      )}
+
+      {showTopUp && topUpOffer && (
+        <div>
+          {returnedFromTopUp && (
+            <Alert variant="info" className="mb-4">
+              <p>{t('identifyTopUp.purchaseReturned')}</p>
+            </Alert>
+          )}
+          <IdentifyTopUpCard
+            variant="billing"
+            available={paymentsAvailable && topUpOffer.available}
+            credits={topUpOffer.credits}
+            priceUsd={topUpOffer.priceUsd ?? null}
+            validityDays={topUpOffer.validityDays}
+            balance={identifyCredits === undefined ? null : identifyCredits}
+            notIncludedIn={
+              subQuery.data?.identifyAllowance?.monthly === 0
+                ? subQuery.data.identifyAllowance.planName
+                : null
+            }
+          />
+        </div>
+      )}
+
+      {/* Gift subscriptions (ADR 0028). Older backends publish no offer, and
+          then nothing renders. Not on native: no purchase surface is. */}
+      {!native && plansQuery.data?.giftSubscriptions && (
+        <Suspense fallback={<LoadingSpinner size="sm" />}>
+          <GiftSubscriptionCard
+            offer={plansQuery.data.giftSubscriptions}
+            plans={plansQuery.data.plans}
+            paymentsAvailable={paymentsAvailable}
+            gift={subQuery.data?.gift}
+            returnedFromPurchase={returnedFromGift}
+          />
+        </Suspense>
       )}
     </div>
   );

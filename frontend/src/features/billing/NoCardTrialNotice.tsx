@@ -14,6 +14,7 @@ import {
   type SubscriptionState,
 } from '@/services/billingService';
 import { noCardTrialNoticeKind, type NoCardTrialPlacement } from './noCardTrialNoticeKind';
+import { CHANGE_PLAN_ROUTE } from './changePlanLink';
 
 /**
  * The in-app notices for the no-card Garden trial (ADR 0027).
@@ -181,7 +182,7 @@ export function NoCardTrialNoticeView({
         )}
         {keepGardenLabel && (
           <p>
-            <Link to="/settings/billing" className={buttonStyles({ size: 'sm' })}>
+            <Link to={CHANGE_PLAN_ROUTE} className={buttonStyles({ size: 'sm' })}>
               {keepGardenLabel}
             </Link>
           </p>

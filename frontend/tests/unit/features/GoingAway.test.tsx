@@ -81,6 +81,7 @@ interface Setup {
   links?: unknown[];
   plansStatus?: number;
   noCardTrial?: { state: 'active' | 'ended'; endsAt: string };
+  plans?: unknown[];
 }
 
 /** Every read the card makes, and a record of the links it creates. */
@@ -90,6 +91,7 @@ function stub({
   links = [],
   plansStatus = 200,
   noCardTrial,
+  plans = PLANS,
 }: Setup = {}) {
   useAuthStore.setState({
     user: {
@@ -128,7 +130,7 @@ function stub({
         ? HttpResponse.json({
             paymentsAvailable: true,
             commercialHold: { active: false, effectiveDate: '2026-09-01' },
-            plans: PLANS,
+            plans,
           })
         : HttpResponse.json({ message: 'nope' }, { status: plansStatus });
     }),
@@ -201,8 +203,32 @@ describe('Going away? on the sitter-link form', () => {
     expect(scoped.getByText(/printable care brief/i)).toBeVisible();
     expect(
       scoped.getByRole('link', { name: 'Upgrade to Garden for $4.99 a month' })
-    ).toHaveAttribute('href', '/settings/billing');
+    ).toHaveAttribute('href', '/settings/billing#change-plan');
     expect(scoped.getByText(/your free 7-day link is still yours/i)).toBeVisible();
+  });
+
+  it('names the yearly price first when Garden sells yearly, and the button opens the plan choice', async () => {
+    // ADR 0042: the plan grid opens on Yearly, so "$2.99 a month" on the
+    // button opened onto "$24.99 a year". Both prices are in the sentence;
+    // the button names the choice rather than one of them.
+    const user = userEvent.setup();
+    const yearly = PLANS.map((p) =>
+      p.id === 'garden' ? { ...p, monthlyPrice: 2.99, annualPrice: 24.99 } : p
+    );
+    stub({ plans: yearly });
+    renderCard();
+
+    await typeLength(user, '14');
+
+    const scoped = within(await screen.findByTestId('going-away-offer'));
+    expect(
+      scoped.getByText('Garden is $24.99 a year or $2.99 a month for the whole household. It adds:')
+    ).toBeVisible();
+    expect(scoped.getByRole('link', { name: 'Choose a Garden plan' })).toHaveAttribute(
+      'href',
+      '/settings/billing#change-plan'
+    );
+    expect(scoped.queryByRole('link', { name: /Upgrade to Garden for/ })).not.toBeInTheDocument();
   });
 
   it('never blocks the free link: one tap goes back to 7 days and the link is created', async () => {

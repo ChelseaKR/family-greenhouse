@@ -311,7 +311,7 @@ describe('SitterLinksCard plan caps', () => {
     expect(screen.getByText(/Garden allows sitter links up to 90 days/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

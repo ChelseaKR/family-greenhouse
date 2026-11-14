@@ -25,6 +25,7 @@ import { SitterGapPrompt } from './SitterGapPrompt';
 import { GoingAwayOffer, type GoingAwayReason } from './GoingAwayOffer';
 import { SITTER_LINK_MAX_DAYS_CEILING, sitterLinkLimitsFor } from './sitterPlanLimits';
 import { toStartOfDayIso, todayLocalDateValue } from './localDates';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -333,7 +334,7 @@ export function SitterLinksCard({
                 <>
                   {' '}
                   <Link
-                    to="/settings/billing"
+                    to={CHANGE_PLAN_ROUTE}
                     className="text-primary-700 underline hover:text-primary-800"
                   >
                     {t('household.sitterLinks.seePlans')}
