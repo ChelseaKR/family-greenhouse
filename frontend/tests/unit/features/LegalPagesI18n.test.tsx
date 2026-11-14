@@ -82,8 +82,8 @@ const PAGES = [
     en: 'Privacy',
     es: 'Privacidad',
     // Apple In-App Purchase and the in-app permission step for Bedrock and
-    // Plant.id were added after 0.50.0; the release PR sets the date.
-    ...termsEffectiveText('UNRELEASED'),
+    // Plant.id shipped in 0.52.0.
+    ...termsEffectiveText('2026-11-13'),
   },
   {
     name: 'terms',
@@ -109,9 +109,8 @@ const PAGES = [
     Page: AccountDeletionPage,
     en: 'Delete your account',
     es: 'Eliminar tu cuenta',
-    // The App Store subscription line was added after 0.50.0; the release PR
-    // sets the date.
-    ...termsEffectiveText('UNRELEASED'),
+    // The App Store subscription line shipped in 0.52.0.
+    ...termsEffectiveText('2026-11-13'),
   },
 ] as const;
 

@@ -16,6 +16,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-13
+
+**The release the next iPhone store build is cut from: the apps ask before
+sending anything to Amazon Bedrock or Plant.id, the App Store plans card says
+what each plan includes, and the help, plan notes and legal pages say what the
+iPhone app sells.** The Privacy Policy and the account-deletion page take
+effect November 13, 2026. The Terms did not change.
+
+- **What the deploy changes.** Terraform adds one AWS Budgets usage budget,
+  `family-greenhouse-cognito-mau-production`, which emails
+  support@familygreenhouse.net above 15 Cognito monthly active users. The pool
+  read 25 in October, so expect it to fire, and raise
+  `cognito_mau_alert_threshold` once the number has been read. The production
+  tfvars change only comments. `stripe_automatic_tax_enabled` stays blank, so
+  the new tax-code refusal does nothing yet. No stored data is migrated. The
+  apps get these changes only with a store build. iPhone 0.52.0 (build 5200) is
+  that build, uploaded on the day it is submitted.
+
 ### Added
 
 - **The apps ask before sending data to Amazon Bedrock or Plant.id.** In the
