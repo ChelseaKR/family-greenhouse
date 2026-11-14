@@ -71,15 +71,13 @@ const WATERING_BATCH_2 = [
   'birds-nest-fern',
   'purple-shamrock',
 ];
-/** The seven guides of batch 6, added 2026-11-08, written to fit the smallest case too. */
+/** The five guides of batch 6, added 2026-11-08, written to fit the smallest case too. */
 const BATCH_6 = [
   'thai-constellation-monstera',
-  'cebu-blue-pothos',
   'rattlesnake-plant',
   'peacock-plant',
   'zebra-calathea',
   'calathea-orbifolia',
-  'coleus',
 ];
 /** Plus the guides with the longest headings, which push the link lowest. */
 const GUIDES = [

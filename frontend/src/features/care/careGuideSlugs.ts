@@ -72,12 +72,10 @@ export const CARE_GUIDE_SLUGS: ReadonlySet<string> = new Set([
   'birds-nest-fern',
   'purple-shamrock',
   'thai-constellation-monstera',
-  'cebu-blue-pothos',
   'rattlesnake-plant',
   'peacock-plant',
   'zebra-calathea',
   'calathea-orbifolia',
-  'coleus',
 ]);
 
 /** True when `/care/<slug>` is a published guide. */

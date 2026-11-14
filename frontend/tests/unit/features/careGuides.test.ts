@@ -101,8 +101,8 @@ describe('CARE_GUIDES registry', () => {
     // so "[free pet-safe checker](/pet-safe)" is not read as a verdict. Four
     // of the 2026-11-03 watering guides have no listing of their own either,
     // and neither do the 2026-11-05 air plant (Tillandsia), the batch-5
-    // tradescantia (T. zebrina), the 2026-11-07 bird’s nest fern (Asplenium
-    // nidus), and the 2026-11-08 Cebu Blue and coleus.
+    // tradescantia (T. zebrina) and the 2026-11-07 bird’s nest fern (Asplenium
+    // nidus).
     const unknown = CARE_GUIDES.filter((g) => !careToxicity(g).sourced);
     expect(unknown.map((g) => g.slug)).toEqual([
       'zz-plant',
@@ -113,8 +113,6 @@ describe('CARE_GUIDES registry', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
-      'cebu-blue-pothos',
-      'coleus',
     ]);
     for (const g of unknown) {
       const prose = [
@@ -506,8 +504,6 @@ describe('pet-safety test guides', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
-      'cebu-blue-pothos',
-      'coleus',
     ]);
   });
 });
@@ -709,8 +705,6 @@ describe('third-batch pet-safety guides', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
-      'cebu-blue-pothos',
-      'coleus',
     ]);
   });
 });
@@ -1634,23 +1628,21 @@ describe('watering guides batch 2 (2026-11-07)', () => {
 });
 
 /**
- * Care guides batch 6, added 2026-11-08: the plant names Search Console showed
- * with impressions and no guide in the 28 days to 2026-11-07. Each cites the
- * extension pages it was written from, read that day. Only Clemson's coleus
- * page gives an interval, so only the coleus guide states one.
+ * Care guides batch 6, added 2026-11-08: five of the plant names Search Console
+ * showed with impressions and no guide in the 28 days to 2026-11-07. Each cites
+ * the extension pages it was written from, read that day. None of those pages
+ * gives a watering interval, so none of these guides states one.
  *
- * Existing guides stay untouched until the 12-01 title read, so these link to
- * each other for their inbound related cards.
+ * The four calatheas link to each other for their inbound related cards, and
+ * the monstera guide links to its Thai Constellation cultivar.
  */
 describe('care guides batch 6 (2026-11-08)', () => {
   const BATCH = [
     'thai-constellation-monstera',
-    'cebu-blue-pothos',
     'rattlesnake-plant',
     'peacock-plant',
     'zebra-calathea',
     'calathea-orbifolia',
-    'coleus',
   ] as const;
   const CALATHEAS = [
     'rattlesnake-plant',
@@ -1673,7 +1665,7 @@ describe('care guides batch 6 (2026-11-08)', () => {
     ...g.faqs.map((f) => f.a),
   ];
 
-  it('publishes all seven, reviewed and updated on the day the sources were read', () => {
+  it('publishes all five, reviewed and updated on the day the sources were read', () => {
     for (const [i, slug] of BATCH.entries()) {
       const g = guides[i];
       expect(g, slug).toBeDefined();
@@ -1709,18 +1701,10 @@ describe('care guides batch 6 (2026-11-08)', () => {
     }
   });
 
-  it('states no watering interval, except the ones Clemson gives for coleus', () => {
+  it('states no watering interval, since none of its sources gives one', () => {
     for (const g of guides) {
-      if (g.slug === 'coleus') continue;
       for (const text of wateringText(g)) expect(text, g.slug).not.toMatch(INTERVAL);
     }
-    const coleus = findCareGuide('coleus')!;
-    for (const text of wateringText(coleus)) {
-      if (INTERVAL.test(text)) expect(text).toMatch(/three to five days|7 to 10 days/);
-    }
-    expect(coleus.careSources.map((s) => s.url)).toContain(
-      'https://hgic.clemson.edu/factsheet/coleus/'
-    );
   });
 
   it('negative control: an unsourced interval fails the interval check', () => {
@@ -1762,33 +1746,11 @@ describe('care guides batch 6 (2026-11-08)', () => {
     expect(view.faq.q).toBe('Is a Thai constellation toxic to cats and dogs?');
   });
 
-  it('reads "Unknown" for Cebu Blue and coleus, with no borrowed verdict', () => {
-    for (const slug of ['cebu-blue-pothos', 'coleus']) {
-      const g = findCareGuide(slug)!;
-      expect(PET_TOXICITY.some((e) => e.slug === slug)).toBe(false);
-      expect(careToxicity(g).sourced, slug).toBe(false);
-      expect(careToxicity(g).petSafePath, slug).toBeNull();
-      expect(g.quickFacts.toxicity, slug).toMatch(/^Unknown\b/);
-    }
-    // ASPCA's "Coleus" listing is C. ampoinicus and its golden pothos is E.
-    // aureum, so neither of these plants' names may reach a row.
-    for (const e of PET_TOXICITY) {
-      const names = [e.commonName, e.scientificName, ...e.aliases].map((n) => n.toLowerCase());
-      for (const n of ['coleus', 'coleus scutellarioides', 'cebu blue', 'epipremnum pinnatum']) {
-        expect(names, `${e.slug}: ${n}`).not.toContain(n);
-      }
-    }
-    expect(lookupToxicity('coleus', 10)).toEqual([]);
-  });
-
-  it('says its humidity source is silent rather than inventing a coleus number', () => {
-    expect(findCareGuide('coleus')!.quickFacts.humidity).toBe('Not stated by our sources');
-  });
-
-  it('is linked from another new guide’s related cards', () => {
+  it('is linked from another guide’s related cards', () => {
     for (const slug of BATCH) {
-      const from = guides.filter((g) => g.slug !== slug && g.related.includes(slug));
+      const from = CARE_GUIDES.filter((g) => g.slug !== slug && g.related.includes(slug));
       expect(from.length, slug).toBeGreaterThan(0);
     }
+    expect(findCareGuide('monstera')!.related).toContain('thai-constellation-monstera');
   });
 });

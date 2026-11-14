@@ -115,12 +115,10 @@ const WATERING_BATCH_2_ROUTES = [
 /** Routes seo/care-guides-batch-5 adds to the sitemap, listed for the same reason. */
 const CARE_GUIDES_BATCH_6_ROUTES = [
   '/care/thai-constellation-monstera',
-  '/care/cebu-blue-pothos',
   '/care/rattlesnake-plant',
   '/care/peacock-plant',
   '/care/zebra-calathea',
   '/care/calathea-orbifolia',
-  '/care/coleus',
 ];
 
 const PENDING_ROUTES = [

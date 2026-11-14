@@ -300,8 +300,6 @@ describe('CareGuidePage pet toxicity', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
-      'cebu-blue-pothos',
-      'coleus',
     ]);
     for (const guide of CARE_GUIDES) {
       const { container, unmount } = renderGuide(guide.slug);

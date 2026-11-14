@@ -108,9 +108,8 @@ describe('careToxicity over the real table', () => {
     // string of pearls, prayer plant (Maranta leuconeura), croton and
     // Chinese money plant (Pilea peperomioides), the 2026-11-05 air plant
     // (Tillandsia), the 2026-11-05 tradescantia (T. zebrina; ASPCA lists
-    // only T. fluminensis), the 2026-11-07 bird’s nest fern (Asplenium nidus),
-    // and the 2026-11-08 Cebu Blue (Epipremnum pinnatum) and coleus (C.
-    // scutellarioides; ASPCA lists only C. ampoinicus).
+    // only T. fluminensis), and the 2026-11-07 bird’s nest fern (Asplenium
+    // nidus).
     const unsourced = CARE_GUIDES.filter((g) => !careToxicity(g).sourced).map((g) => g.slug);
     expect(unsourced).toEqual([
       'zz-plant',
@@ -121,8 +120,6 @@ describe('careToxicity over the real table', () => {
       'air-plant',
       'tradescantia',
       'birds-nest-fern',
-      'cebu-blue-pothos',
-      'coleus',
     ]);
   });
 

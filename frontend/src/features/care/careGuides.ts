@@ -19,15 +19,15 @@
  * schefflera) and the six added 2026-11-05 in batch 5 (satin pothos through
  * tradescantia) cite extension pages read that day; the eight watering guides of
  * batch 2, added 2026-11-07 (jasmine through purple shamrock), cite extension
- * and RHS pages read that day; the seven of care guides batch 6, added
- * 2026-11-08 (Thai Constellation through coleus), cite extension pages read
- * that day; and since #1079 every guide
+ * and RHS pages read that day; the five of care guides batch 6, added
+ * 2026-11-08 (Thai Constellation through calathea orbifolia), cite extension
+ * pages read that day; and since #1079 every guide
  * records its sources in `careSources`, so no water, light or humidity line
  * rests on an unrecorded source. The
  * generator prompt that produces this shape is
  * `docs/growth/prompts/02-species-care-page.md`.
  * The first three were a hand-reviewed sample so the content quality and the
- * architecture could be judged before scaling; there are 71 now, still short
+ * architecture could be judged before scaling; there are 69 now, still short
  * of the ~150 species the surface is sized for.
  *
  * ⚠️ Two fields a wrong answer does real harm on — verify against source data
@@ -320,7 +320,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Monstera',
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Swiss Cheese Plant', 'Split-Leaf Philodendron'],
-    related: ['heartleaf-philodendron', 'fiddle-leaf-fig', 'bird-of-paradise'],
+    related: ['heartleaf-philodendron', 'thai-constellation-monstera', 'bird-of-paradise'],
     metaTitle: 'How Often to Water a Monstera: Once the Top 1–2 Inches Dry',
     heading: 'Monstera care: how often to water it',
     metaDescription:
@@ -5194,7 +5194,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Thai Constellation',
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Monstera Thai Constellation'],
-    related: ['monstera', 'cebu-blue-pothos', 'satin-pothos'],
+    related: ['monstera', 'heartleaf-philodendron', 'satin-pothos'],
     metaTitle: 'How Often to Water a Thai Constellation: Top Third Dry',
     metaDescription:
       'Water a Thai Constellation monstera thoroughly, then let the top quarter to third of the pot dry. Give it more light than a green monstera and high humidity.',
@@ -5254,75 +5254,6 @@ export const CARE_GUIDES: CareGuide[] = [
         publisher: 'North Carolina State Extension',
         title: 'Monstera deliciosa (Swiss Cheese Plant)',
         url: 'https://plants.ces.ncsu.edu/plants/monstera-deliciosa/',
-        accessed: '2026-11-08',
-      },
-    ],
-  },
-  {
-    slug: 'cebu-blue-pothos',
-    commonName: 'Cebu Blue Pothos',
-    scientificName: 'Epipremnum pinnatum',
-    alsoKnownAs: ['Dragon-Tail Plant'],
-    related: ['thai-constellation-monstera', 'pothos', 'satin-pothos'],
-    metaTitle: 'How Often to Water a Cebu Blue Pothos: Moist, Well Drained',
-    metaDescription:
-      'Keep a Cebu Blue pothos in moist, well-drained soil rich in organic matter, in bright, indirect light. Overwatering leads to root rot. Give the vine support.',
-    reviewed: '2026-11-08',
-    updated: '2026-11-08',
-    summary:
-      'Cebu Blue is a cultivar of Epipremnum pinnatum, a climbing vine with narrow, blue-green leaves that typically stay in their juvenile form. It is a close relative of the golden pothos but a separate species. Keep the soil moist and well drained, give it bright, indirect light and moderate humidity, and give the vine something to climb or trail from. North Carolina State Extension calls the cultivars easy to grow and low maintenance.',
-    quickFacts: {
-      water: 'Keep the soil moist and well drained',
-      light: 'Bright, indirect light; away from drafts',
-      difficulty: 'Easy; NC State calls it low maintenance',
-      toxicity: 'Unknown: the ASPCA lists a different species, not this one',
-      humidity: 'Moderate humidity',
-    },
-    sections: {
-      watering: [
-        'Keep a Cebu Blue’s soil moist and well drained. North Carolina State Extension says the soil should be moist, well drained and rich in organic matter, and it gives no number of days. Check the soil with a finger before you water.',
-        'Moist is not wet. NC State says overwatering causes fungal and bacterial diseases that can lead to root rot, so use a pot with drainage and empty the saucer.',
-      ],
-      light: [
-        'Give it bright, indirect sunlight and warm temperatures, NC State says, and keep it away from drafts and cold air.',
-        'Moderate humidity is enough. NC State says the soil does best slightly acidic.',
-      ],
-      problems: [
-        'NC State says this plant resists most serious diseases, and lists mealybugs, scale, thrips and spider mites as the pests to watch for. Overwatering is the problem most within your control.',
-        'If the leaves stay small and narrow, that is normal for Cebu Blue. NC State says its leaves typically remain in the juvenile form, and that they mature and become fenestrated if the plant grows up a stake or moss pole.',
-      ],
-      propagation: [
-        'Propagate it with stem cuttings, NC State says. Prune in spring or early summer to keep its size and shape in check.',
-        'NC State says repotting may be needed about every 2 to 3 years, and suggests a wooden stake, bamboo stake or sphagnum moss pole for support.',
-      ],
-      sharedCare: [
-        'In a shared household, a Cebu Blue needs one person checking the soil, because a well-meant extra watering is the main way to lose it.',
-        'Hang it or stake it somewhere everyone can reach the pot, and agree that nobody waters until a finger says the soil needs it.',
-      ],
-      honestBit: [
-        'My take: Cebu Blue is the quiet way to get a more interesting pothos without taking on a harder plant. Give it a pole if you want to see what the leaves can do.',
-        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, lists the golden pothos, Epipremnum aureum, and has no listing we could find that names Epipremnum pinnatum, so we won’t borrow a verdict from a relative. If your pet has chewed it, call your vet or a poison hotline. The [free pet-safe checker](/pet-safe) covers the rest of your plants.',
-      ],
-    },
-    faqs: [
-      {
-        q: 'How often should I water a Cebu Blue pothos?',
-        a: 'Often enough to keep the soil moist and well drained. North Carolina State Extension gives that rule and no number of days, and warns that overwatering can lead to root rot.',
-      },
-      {
-        q: 'Is a Cebu Blue a real pothos?',
-        a: 'It is a close relative. North Carolina State Extension lists Cebu Blue as a cultivar of Epipremnum pinnatum, while golden pothos is Epipremnum aureum, and says botanists treat the two as separate species.',
-      },
-      {
-        q: 'Why doesn’t my Cebu Blue have split leaves?',
-        a: 'North Carolina State Extension says its leaves typically stay in the juvenile form. If it grows on a stake or moss pole, the leaves mature and become fenestrated like the species.',
-      },
-    ],
-    careSources: [
-      {
-        publisher: 'North Carolina State Extension',
-        title: 'Epipremnum pinnatum (Cebu Blue, Dragon-Tail Plant)',
-        url: 'https://plants.ces.ncsu.edu/plants/epipremnum-pinnatum/',
         accessed: '2026-11-08',
       },
     ],
@@ -5401,7 +5332,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Peacock Plant',
     scientificName: 'Goeppertia makoyana',
     alsoKnownAs: ['Calathea makoyana'],
-    related: ['rattlesnake-plant', 'calathea-orbifolia', 'coleus'],
+    related: ['rattlesnake-plant', 'calathea-orbifolia', 'prayer-plant'],
     metaTitle: 'How Often to Water a Peacock Plant: Moist, Not Soggy',
     metaDescription:
       'Keep a peacock plant’s potting mix moist but never soggy, using distilled or rainwater, and water less in winter. It needs about 60% humidity and no direct sun.',
@@ -5599,87 +5530,6 @@ export const CARE_GUIDES: CareGuide[] = [
         publisher: 'North Carolina State Extension',
         title: 'Goeppertia orbifolia',
         url: 'https://plants.ces.ncsu.edu/plants/goeppertia-orbifolia/',
-        accessed: '2026-11-08',
-      },
-    ],
-  },
-  {
-    slug: 'coleus',
-    commonName: 'Coleus',
-    scientificName: 'Coleus scutellarioides',
-    alsoKnownAs: ['Painted Nettle'],
-    related: ['polka-dot-plant', 'peacock-plant', 'tradescantia'],
-    metaTitle: 'How Often to Water Coleus: When the Top Inch Is Dry',
-    metaDescription:
-      'Water established coleus when the entire top inch of soil is dry, and more often in containers. Soggy soil stunts it, browns its leaves and scorches the edges.',
-    reviewed: '2026-11-08',
-    updated: '2026-11-08',
-    summary:
-      'Coleus, Coleus scutellarioides, is grown for colorful leaves, usually as a tender annual outdoors and sometimes as a houseplant in bright light. Once it is established, water when the entire top inch of soil is dry, and expect containers to need it more often. Good drainage matters most: an overwatered coleus is stunted, with muddy brown leaves and scorched edges.',
-    quickFacts: {
-      water: 'When the top inch is dry; pots dry out faster',
-      light: 'Part shade outdoors; bright light as a houseplant',
-      difficulty: 'Easy; UF/IFAS calls it hard to kill',
-      toxicity: 'Unknown: the ASPCA lists a different species, not this one',
-      humidity: 'Not stated by our sources',
-    },
-    sections: {
-      watering: [
-        'Once coleus is established, water when the entire top inch of soil is dry. That is Clemson Extension’s rule for garden plants, and it says to check below the surface every three to five days. For the first 7 to 10 days after planting, it says to keep the root balls moist but not overly wet.',
-        'Containers run drier, and Clemson says potted coleus are more susceptible to drought and need frequent watering. UF/IFAS puts it a little differently: keep the soil lightly moist at all times. In practice, check a pot more often than a bed, and water before the top inch stays dry for long.',
-      ],
-      light: [
-        'Most coleus grow best in part shade or dappled light, Clemson says, though sun-tolerant cultivars thrive in full, hot sun, and varieties that are not sun tolerant bleach and discolor. UF/IFAS says to check the specifics of your variety.',
-        'As a houseplant it requires bright light, North Carolina State Extension says. Full shade may lead to leggy growth.',
-      ],
-      problems: [
-        'An overwatered coleus is easy to spot. Clemson says plants with “wet feet” are stunted, with muddy brown leaves and scorched leaf margins. Excessive soil moisture and wet foliage can also bring downy mildew, stem rot or root rot, so water at the base and use a very well-drained mix in pots.',
-        'Clemson lists mealybugs, aphids and whiteflies, and NC State adds spider mites, especially on indoor plants. Wilting in full sun is another sign, NC State says, that a plant wants more shade.',
-      ],
-      propagation: [
-        'Stem cuttings are the easy way. UF/IFAS says to cut a two- to six-inch section of stem, trim it a half-inch below the lowest leaves, remove those leaves, and set it in moist potting soil or vermiculite in a shady spot for a couple of weeks. NC State says cuttings also root in water.',
-        'Clemson notes that patented cultivars should not be propagated by cuttings, and that plant labels say so with ‘PP’ or ‘PPAF’. Coleus is killed by the first fall frost, so take cuttings before then to keep a favorite.',
-      ],
-      sharedCare: [
-        'In a shared household, coleus needs one rule: nobody waters until the top inch is dry, because soggy soil does more damage than a brief wilt.',
-        'Pots dry faster than beds, so if it lives on a shared patio, agree on who checks it during a hot spell.',
-      ],
-      honestBit: [
-        'My take: coleus gives you as much color as most flowers, and pinching it back is the only chore that really pays off.',
-        'On pets we don’t give a verdict for this one. The ASPCA plant list, the source this site uses for pet safety, has a listing titled “Coleus”, but it names a different species, Coleus ampoinicus, also called Indian borage, and we won’t borrow a verdict from a relative. If your pet has chewed it, call your vet or a poison hotline. The [free pet-safe checker](/pet-safe) covers the rest of your plants.',
-      ],
-    },
-    faqs: [
-      {
-        q: 'How often should I water coleus?',
-        a: 'Once established, when the entire top inch of soil is dry, Clemson Extension says, checking below the surface every three to five days. Containers dry out faster and need frequent watering.',
-      },
-      {
-        q: 'What does an overwatered coleus look like?',
-        a: 'Stunted, with muddy brown leaves and scorched leaf margins, Clemson Extension says. Coleus must have good soil drainage, and poorly drained soil and excessive watering both damage it.',
-      },
-      {
-        q: 'Can coleus grow indoors?',
-        a: 'Yes, with bright light, which North Carolina State Extension says it requires as a houseplant. It also says aphids, whiteflies and spider mites are especially a problem on indoor plants.',
-      },
-    ],
-    careSources: [
-      {
-        publisher: 'Clemson Cooperative Extension',
-        title: 'Coleus',
-        url: 'https://hgic.clemson.edu/factsheet/coleus/',
-        accessed: '2026-11-08',
-      },
-      {
-        publisher: 'UF/IFAS Gardening Solutions',
-        title: 'Coleus',
-        url: 'https://gardeningsolutions.ifas.ufl.edu/plants/ornamentals/coleus/',
-        accessed: '2026-11-08',
-      },
-      {
-        publisher: 'North Carolina State Extension',
-        title: 'Coleus scutellarioides (Coleus)',
-        url: 'https://plants.ces.ncsu.edu/plants/coleus-scutellarioides/',
         accessed: '2026-11-08',
       },
     ],
