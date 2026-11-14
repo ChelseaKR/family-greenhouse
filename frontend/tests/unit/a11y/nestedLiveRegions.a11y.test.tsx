@@ -185,7 +185,9 @@ describe('no live region is nested inside another live region', () => {
 
     const { container } = renderAt(`/tag/${'a3f9'.repeat(16)}`, '/tag/:token', <ScanTagPage />);
     await userEvent.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
-    await userEvent.click(screen.getByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    );
 
     await screen.findByText('Thank you, Grandma!');
     expectNoNestedLiveRegions(container);
@@ -213,7 +215,9 @@ describe('no live region is nested inside another live region', () => {
 
     const { container } = renderAt(`/tag/${'a3f9'.repeat(16)}`, '/tag/:token', <ScanTagPage />);
     await userEvent.type(await screen.findByLabelText(/Who shall we say did it\?/), 'Grandma');
-    await userEvent.click(screen.getByRole('button', { name: 'I just did this' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'I just did this Water the Monstera' })
+    );
 
     await screen.findByText('We couldn’t record that');
     expectNoNestedLiveRegions(container);

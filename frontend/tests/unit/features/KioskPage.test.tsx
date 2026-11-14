@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { KioskPage } from '@/features/kiosk/KioskPage';
 import {
   kioskService,
+  KioskCompletionNotFoundError,
   KioskLinkInactiveError,
   type KioskTask,
   type KioskView,
@@ -131,13 +132,16 @@ describe('KioskPage', () => {
   });
 
   it('falls back to the revoked screen if the link dies mid-tap', async () => {
-    getView.mockResolvedValue(view);
-    completeTask.mockRejectedValue(new KioskLinkInactiveError());
+    // The completion's 404 does not say whether the task or the link is gone,
+    // so the page reads the link again, and that read is what says revoked.
+    getView.mockResolvedValueOnce(view).mockRejectedValue(new KioskLinkInactiveError());
+    completeTask.mockRejectedValue(new KioskCompletionNotFoundError());
     const user = userEvent.setup();
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Done' }));
     expect(await screen.findByText(/This display has been turned off/i)).toBeInTheDocument();
+    expect(getView).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the last good list and marks it stale when a refresh fails', async () => {

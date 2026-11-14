@@ -194,6 +194,10 @@ export interface SubscriptionState {
   /** Identification top-up credits. `null` means the balance could not be
    *  read — unknown, never zero. Absent from older backends. */
   identifyCredits?: IdentifyCreditBalance | null;
+  /** The monthly identification allowance the household spends against. A
+   *  `monthly` of 0 is a plan that bundles none (ADR 0042). Absent from older
+   *  backends. */
+  identifyAllowance?: { monthly: number; planName: string };
   /** The household's no-card Garden trial (ADR 0027). `null` means there is
    *  none to describe: the household never had one, or Stripe owns its
    *  entitlement. Absent from older backends. */

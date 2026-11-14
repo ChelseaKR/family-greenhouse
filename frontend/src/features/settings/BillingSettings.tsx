@@ -607,6 +607,7 @@ export function BillingSettings() {
             subscription={subQuery.data}
             isAdmin={isAdmin}
             planNames={Object.fromEntries(plans.map((p) => [p.id, p.name]))}
+            plans={plans}
           />
         </Suspense>
       )}
@@ -625,6 +626,11 @@ export function BillingSettings() {
             priceUsd={topUpOffer.priceUsd ?? null}
             validityDays={topUpOffer.validityDays}
             balance={identifyCredits === undefined ? null : identifyCredits}
+            notIncludedIn={
+              subQuery.data?.identifyAllowance?.monthly === 0
+                ? subQuery.data.identifyAllowance.planName
+                : null
+            }
           />
         </div>
       )}

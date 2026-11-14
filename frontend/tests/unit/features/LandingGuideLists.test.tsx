@@ -17,6 +17,9 @@ const EXPECTED_SLUGS = [
   'low-maintenance-houseplants-for-forgetful-people',
   'pet-safe-houseplants-that-are-hard-to-kill',
   'most-common-toxic-houseplants-and-safer-swaps',
+  // The two household posts Google has not indexed; see smallTrafficLinks.test.tsx.
+  'how-to-remember-to-water-plants',
+  'sharing-plant-care-without-becoming-the-nag',
 ];
 
 function renderLanding(): HTMLElement {

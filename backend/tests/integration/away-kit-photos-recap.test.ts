@@ -470,4 +470,68 @@ describe('return recap (members-only)', () => {
     expect(missing.status).toBe(404);
     expect(missing.body.message).toBe('Sitter link not found');
   });
+
+  // Audit 2026-11-08, finding 10. In production the read for this household
+  // threw (DynamoDB refuses the backwards range). The mock has no DynamoDB,
+  // so the same pick showed up here as the other half of the defect: a 200
+  // for the called-off link, an empty recap of a window that never happened,
+  // in place of the trip that did.
+  it('skips a link revoked before its start date and still shows the trip that happened', async () => {
+    const admin = await loginAsSeed();
+    seedPlan('garden');
+    const trip = await createLink(admin, { label: 'The trip we took' });
+    await sitterCompletes(trip.token);
+    endWindowNow(trip.token);
+
+    const planned = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ startsAt: inFuture(7), expiresAt: inFuture(14), label: 'The trip we called off' });
+    expect(planned.status).toBe(201);
+    const revoke = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${planned.body.id}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(revoke.status).toBe(204);
+    // The case in question: revoked, with its start still ahead of now.
+    const stored = db.sitterLinks.get(planned.body.token)!;
+    expect(stored.status).toBe('revoked');
+    expect(stored.startsAt > new Date().toISOString()).toBe(true);
+
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/away-recap`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body.link).toMatchObject({ id: trip.id, label: 'The trip we took' });
+    expect(res.body.counts.tasks).toBe(1);
+    expect(res.body.window.from <= res.body.window.to).toBe(true);
+
+    // Asked for by id, the called-off link is a 404 and carries no recap.
+    const byId = await request(app)
+      .get(`/households/${seedHouseholdId}/away-recap?linkId=${planned.body.id}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(byId.status).toBe(404);
+    expect(byId.body).not.toHaveProperty('window');
+    expect(byId.body).not.toHaveProperty('counts');
+  });
+
+  it('answers 404, not an empty recap, when the only link was revoked before it started', async () => {
+    const admin = await loginAsSeed();
+    seedPlan('garden');
+    const planned = await request(app)
+      .post(`/households/${seedHouseholdId}/sitter-links`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ startsAt: inFuture(7), expiresAt: inFuture(14) });
+    expect(planned.status).toBe(201);
+    const revoke = await request(app)
+      .delete(`/households/${seedHouseholdId}/sitter-links/${planned.body.id}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(revoke.status).toBe(204);
+
+    const res = await request(app)
+      .get(`/households/${seedHouseholdId}/away-recap`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(404);
+    expect(res.body.message).toBe('No sitter window has ended yet');
+    expect(res.body).not.toHaveProperty('counts');
+  });
 });

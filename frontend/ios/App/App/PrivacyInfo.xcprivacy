@@ -127,6 +127,22 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
 		</dict>
+		<!--
+		  Purchase History: with App Store purchases on (ADR 0041), the server
+		  stores the household's App Store subscription (product, original
+		  transaction id, expiry, renewal state) next to the household that
+		  bought it, from the app's signed transactions and Apple's
+		  notifications. Linked to the account, used only to give the household
+		  its plan: App Functionality, not tracking.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+		</dict>
 	</array>
 	<!--
 	  Required-reason APIs (ITMS-91053). Our own Swift calls none of them, and

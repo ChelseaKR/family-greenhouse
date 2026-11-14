@@ -670,6 +670,10 @@ export const updatePlant = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
+    if (validatedBody.name !== undefined) {
+      await taskService.syncPlantNameOnTasks(user.householdId!, plantId, plant.name);
+    }
+
     // Record real lifecycle transitions on the household story. Archive and
     // restore are operational events; died/gave-away additionally feed the
     // survival metric. Best-effort, same as plant.created.

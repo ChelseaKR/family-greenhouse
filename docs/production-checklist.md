@@ -114,10 +114,10 @@ backend "production live" rather than "production-ready in code".
 - [ ] **Per-PR preview environments** — spin up a per-branch frontend on a
       CloudFront preview stage that points at a shared dev backend. Out of
       scope for the current code; needs a Terraform workspace per PR.
-- [ ] **Promote staging → production** — all production deploy jobs reference
-      the `production` GitHub Environment. Confirm that Environment has a
-      required reviewer; the workflow reference alone cannot enforce who may
-      approve.
+- [ ] **Promote staging → production** — the `terraform` job, which every
+      production deploy job needs, references the `production` GitHub
+      Environment. Confirm that Environment has a required reviewer; the
+      workflow reference alone cannot enforce who may approve.
 
 ## Reminders / notifications
 

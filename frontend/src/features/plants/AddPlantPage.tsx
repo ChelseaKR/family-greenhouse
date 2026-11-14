@@ -13,6 +13,7 @@ import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/out
 import {
   plantService,
   identifyBudgetExhaustedFromError,
+  identifyNotIncludedIn,
   type IdentificationSuggestion,
   type IdentifyBudgetExhausted,
 } from '@/services/plantService';
@@ -42,6 +43,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 import { taskTypeLabels } from '@/utils/taskTypeConfig';
 import { isNativeApp } from '@/lib/platform';
+import { useThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -205,6 +207,10 @@ export function AddPlantPage() {
     await acceptPhoto(file);
   };
 
+  // In the apps, the photo goes to Plant.id only after a yes on this device
+  // (Guideline 5.1.2(i)); "Not now" sends nothing.
+  const plantIdConsent = useThirdPartyConsent('identify');
+
   const runIdentify = async () => {
     if (!pickedFile) return;
     setIsIdentifying(true);
@@ -253,9 +259,19 @@ export function AddPlantPage() {
         // configured, OR this is the iOS/Android app, which must never offer
         // an in-app purchase outside Apple's/Google's own billing — see
         // `native` above): say what happened and where the allowance comes
-        // from, in the reader's language.
-        if (!exhausted.topUpAvailable || native)
-          setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
+        // from, in the reader's language. A plan that bundles none (ADR 0042)
+        // has nothing used up and no reset to promise; the apps name no pack
+        // and no price (docs/mobile.md, "Store payment rules").
+        if (!exhausted.topUpAvailable || native) {
+          const notIncludedIn = identifyNotIncludedIn(exhausted);
+          setIdentifyNotice(
+            notIncludedIn
+              ? t(native ? 'identifyTopUp.notIncludedInApp' : 'identifyTopUp.notIncludedNoPack', {
+                  plan: notIncludedIn,
+                })
+              : t('identifyTopUp.exhaustedNoPack')
+          );
+        }
         return;
       }
       setError(
@@ -498,6 +514,7 @@ export function AddPlantPage() {
               credits={identifyExhausted.topUp.credits}
               priceUsd={identifyExhausted.topUp.priceUsd}
               balance={identifyExhausted.credits}
+              notIncludedIn={identifyNotIncludedIn(identifyExhausted)}
             />
           </div>
         )}
@@ -549,13 +566,14 @@ export function AddPlantPage() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={runIdentify}
+                    onClick={() => plantIdConsent.run(() => void runIdentify())}
                     isLoading={isIdentifying}
                     leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
                   >
                     Identify from photo
                   </Button>
                 )}
+                {plantIdConsent.dialog}
                 {mutation.isPending && pickedFile && (
                   <div
                     className="h-2 w-full overflow-hidden rounded-full bg-gray-200"

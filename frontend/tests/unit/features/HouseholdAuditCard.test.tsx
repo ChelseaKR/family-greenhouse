@@ -60,7 +60,7 @@ describe('HouseholdAuditCard', () => {
             entry({
               kind: 'member.removed',
               target: { type: 'former_member' },
-              details: { role: 'member', sitterLinks: 2, plantTags: 1 },
+              details: { role: 'member', sitterLinks: 2, plantTags: 1, caretakerSeats: 3 },
             }),
             entry({
               kind: 'member.left',
@@ -96,7 +96,9 @@ describe('HouseholdAuditCard', () => {
 
     expect(await screen.findByText('Ada removed a former member from the household')).toBeVisible();
     expect(
-      screen.getByText(/sitter links 2 · plant tags 1 · wall displays 0 · cutting links 0/)
+      screen.getByText(
+        /sitter links 2 · plant tags 1 · wall displays 0 · cutting links 0 · caretaker seats 3/
+      )
     ).toBeInTheDocument();
     expect(screen.getByText('A former member left by deleting their account')).toBeInTheDocument();
     expect(screen.getByText('Ada made Mel an admin')).toBeInTheDocument();

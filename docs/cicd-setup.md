@@ -91,7 +91,7 @@ In **Settings → Environments → New environment** → name it `production`:
 - **Wait timer**: 0 (optional — set to 5–60 min if you want a cooling-off period).
 - **Deployment branches and tags**: restrict to `v*` tags and `main`.
 
-`cd-production.yml` references `environment: production` on its deploy jobs, so deploys are blocked until you click "Approve and deploy" in the Actions UI.
+`cd-production.yml` references `environment: production` on one job, `terraform`, the first that touches production, so a release is blocked until you click "Approve and deploy" in the Actions UI. That single approval covers Terraform and both deploy jobs.
 
 ## Step 5 — First triggered deploy
 
@@ -104,9 +104,9 @@ This kicks off `cd-production.yml`. Walk through:
 
 1. **validate** job — checks tag format.
 2. **build** job — runs `npm test`, builds backend + frontend bundles, uploads artifacts.
-3. **terraform** job — `terraform apply` against prod tfvars.
-4. **deploy-backend** + **deploy-frontend** jobs — gated on `production` environment approval.
-   - Click **Review deployments** → Approve.
+3. **terraform** job — gated on `production` environment approval, then `terraform apply` against prod tfvars.
+   - Click **Review deployments** → Approve. This is the only approval in the release.
+4. **deploy-backend**, then **deploy-frontend** — run on that approval, only if the job before them succeeded.
 5. **smoke-tests** job — runs the post-deploy Playwright smoke against `https://familygreenhouse.net`, including a real public signup through the unconfirmed/confirmation-ready state and a separate admin-created authenticated fixture. Both disposable Cognito users are deleted.
 6. On a deploy or smoke failure, **rollback** restores Cognito's pre-deploy signup policy, restores the pre-deploy frontend snapshot + CloudFront cache, and re-publishes the archived previous Lambda code. After either a successful smoke or a verified rollback, the run-scoped frontend snapshot prefix is permanently purged, including every S3 object version and delete marker.
 

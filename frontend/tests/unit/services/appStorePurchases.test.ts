@@ -23,6 +23,7 @@ vi.mock('@/services/appStorePurchasesPlugin', () => plugin);
 
 import {
   APP_STORE_PRODUCT_IDS,
+  APP_STORE_YEARLY_PRODUCT_IDS,
   NATIVE_PURCHASES_METHODS,
   appStorePurchasesAvailable,
   buyPlan,
@@ -99,21 +100,38 @@ describe('the product ids', () => {
     const configured = storekit.subscriptionGroups[0].subscriptions.map(
       (s: { productID: string }) => s.productID
     );
-    for (const id of Object.values(APP_STORE_PRODUCT_IDS)) {
+    for (const id of [
+      ...Object.values(APP_STORE_PRODUCT_IDS),
+      ...Object.values(APP_STORE_YEARLY_PRODUCT_IDS),
+    ]) {
       expect(backend).toContain(`'${id}'`);
       expect(configured).toContain(id);
     }
+    // And nothing is in the StoreKit file that the app does not know about.
+    expect([...configured].sort()).toEqual(
+      [
+        ...Object.values(APP_STORE_PRODUCT_IDS),
+        ...Object.values(APP_STORE_YEARLY_PRODUCT_IDS),
+      ].sort()
+    );
   });
 });
 
 describe('loadStoreProducts', () => {
   it('keys the App Store products by tier', async () => {
     plugin.getProducts.mockResolvedValue([
-      { id: APP_STORE_PRODUCT_IDS.garden, displayName: 'Garden', displayPrice: '$4.99' },
+      { id: APP_STORE_PRODUCT_IDS.garden, displayName: 'Garden', displayPrice: '$2.99' },
+      {
+        id: APP_STORE_YEARLY_PRODUCT_IDS.garden!,
+        displayName: 'Garden (yearly)',
+        displayPrice: '$24.99',
+      },
     ]);
     const products = await loadStoreProducts();
-    expect(products.garden?.displayPrice).toBe('$4.99');
-    expect(products.greenhouse).toBeUndefined();
+    expect(products.month.garden?.displayPrice).toBe('$2.99');
+    expect(products.year.garden?.displayPrice).toBe('$24.99');
+    expect(products.month.greenhouse).toBeUndefined();
+    expect(products.year.greenhouse).toBeUndefined();
   });
 });
 

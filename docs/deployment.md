@@ -116,15 +116,15 @@ All three guards reserve through a conditional DynamoDB `ADD` before the paid ca
 
 ### Billing
 
-| Variable                                | Effect                                                                                                                                                                                                                                                         |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`                     | Stripe API key (`sk_live_...` or `sk_test_...`)                                                                                                                                                                                                                |
-| `STRIPE_WEBHOOK_SECRET`                 | Set on the webhook handler Lambda only                                                                                                                                                                                                                         |
-| `STRIPE_PRICE_ID_GARDEN`                | Price ID for the $4.99 plan                                                                                                                                                                                                                                    |
-| `STRIPE_PRICE_ID_GREENHOUSE`            | Price ID for the $9.99 plan                                                                                                                                                                                                                                    |
-| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`       | One-time price ID for the 20-identification top-up pack ($1.99, ADR 0019). Blank = not for sale; checkout answers 400 `TOP_UP_NOT_CONFIGURED`. Terraform `stripe_price_id_identify_top_up`.                                                                    |
-| `STRIPE_PRICE_ID_GIFT_GARDEN_MONTH`     | One-time price ID for ONE gift month of Garden ($4.99 — the monthly price; ADR 0028), charged with `quantity` = months. Blank = Garden cannot be given; checkout answers 400 `GIFT_NOT_CONFIGURED`. Terraform `stripe_price_id_gift_garden_month`.             |
-| `STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH` | One-time price ID for ONE gift month of Greenhouse ($9.99 — the monthly price; ADR 0028), charged with `quantity` = months. Blank = Greenhouse cannot be given; checkout answers 400 `GIFT_NOT_CONFIGURED`. Terraform `stripe_price_id_gift_greenhouse_month`. |
+| Variable                                             | Effect                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`                                  | Stripe API key (`sk_live_...` or `sk_test_...`)                                                                                                                                                                                                                |
+| `STRIPE_WEBHOOK_SECRET`                              | Set on the webhook handler Lambda only                                                                                                                                                                                                                         |
+| `STRIPE_PRICE_ID_GARDEN_299` / `_GARDEN_ANNUAL_2499` | Price IDs for Garden at $2.99 a month / $24.99 a year (ADR 0042). `STRIPE_PRICE_ID_GARDEN` and `_GARDEN_ANNUAL` are the LEGACY $4.99 / $39.99 prices, kept for renewals only.                                                                                  |
+| `STRIPE_PRICE_ID_GREENHOUSE`                         | Price ID for the $9.99 plan                                                                                                                                                                                                                                    |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`                    | One-time price ID for the 20-identification top-up pack ($1.99, ADR 0019). Blank = not for sale; checkout answers 400 `TOP_UP_NOT_CONFIGURED`. Terraform `stripe_price_id_identify_top_up`.                                                                    |
+| `STRIPE_PRICE_ID_GIFT_GARDEN_MONTH`                  | One-time price ID for ONE gift month of Garden ($2.99 — the monthly price; ADR 0028), charged with `quantity` = months. Blank = Garden cannot be given; checkout answers 400 `GIFT_NOT_CONFIGURED`. Terraform `stripe_price_id_gift_garden_month`.             |
+| `STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH`              | One-time price ID for ONE gift month of Greenhouse ($9.99 — the monthly price; ADR 0028), charged with `quantity` = months. Blank = Greenhouse cannot be given; checkout answers 400 `GIFT_NOT_CONFIGURED`. Terraform `stripe_price_id_gift_greenhouse_month`. |
 
 Use AWS Secrets Manager or SSM Parameter Store for any of these that look like secrets — Terraform pulls them in via `data` blocks rather than hardcoding.
 
@@ -260,7 +260,23 @@ git tag -s v1.2.3 -m 'v1.2.3'
 git push origin v1.2.3
 ```
 
-The workflow opens a deploy request that an admin approves before applying.
+The workflow pauses once, at the `terraform` job, for a reviewer on the
+`production` environment. That one approval authorizes the whole release:
+Terraform apply, then the backend deploy, then the frontend deploy, in that order
+with no further pause. Rejecting it fails `terraform`, and every job that changes
+production is skipped.
+
+`terraform` is the only job that declares `environment: production`, and
+`scripts/production-approval-gate.test.mjs` pins that. Two things follow:
+
+- **Re-running a failed deploy job does not ask again.** "Re-run failed jobs" after
+  a failed `deploy-backend` or `deploy-frontend` runs on the original approval,
+  because `terraform` already succeeded and is not re-run. "Re-run all jobs" or a
+  new tag does ask again.
+- **The `production` deployment row turns green when Terraform finishes**, before
+  the backend or frontend ships, so that row does not mean the release is live.
+  Check the run itself. `scripts/check-deploy-staleness.mjs` reads the commit in the
+  live service worker for this reason, and reports a mismatch as half-applied.
 
 **A `v*` tag is a deployment, not a bookmark.** `cd-production.yml` triggers on
 `push: tags: ['v*']`, so pushing the tag is the act that ships to production and
@@ -298,9 +314,11 @@ rollback; a later manual rollback therefore needs a retained build artifact or
 careful S3-version restoration.
 
 The automatic rollback also restores the pre-deploy Cognito registration
-policy. It does not generically reverse other Terraform changes, so inspect the
-plan before approval and use a targeted follow-up plan if infrastructure—not
-application code—must be reverted.
+policy. It does not generically reverse other Terraform changes. The plan runs
+after the approval, inside the `terraform` job, and applies straight away, so
+run the plan locally before approving a release that changes infrastructure, and
+use a targeted follow-up plan if infrastructure—not application code—must be
+reverted.
 
 ## Superseded frontend assets
 

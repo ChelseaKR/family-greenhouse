@@ -20,6 +20,11 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/i18n/format';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
+import { resetRememberedIntervalForTests } from '@/features/pricing/planPricing';
+
+// The tapped cadence is module memory for the page load (ADR 0042, "Yearly
+// first"); tests in this file share the module, so each starts forgetful.
+beforeEach(() => resetRememberedIntervalForTests());
 
 vi.mock('@/services/googleAnalytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/googleAnalytics')>();
@@ -103,13 +108,14 @@ async function renderBilling(
     paid = false,
     route = '/settings/billing',
     identifyTopUp,
-  }: { paid?: boolean; route?: string; identifyTopUp?: IdentifyTopUpOffer } = {}
+    plans,
+  }: { paid?: boolean; route?: string; identifyTopUp?: IdentifyTopUpOffer; plans?: Plan[] } = {}
 ) {
   const { billingService } = await import('@/services/billingService');
   vi.mocked(billingService.listPlans).mockResolvedValue({
     paymentsAvailable: paid,
     commercialHold: { active: !paid, effectiveDate: '2026-07-14' },
-    plans: paid ? PRICED_PLANS : PLANS,
+    plans: plans ?? (paid ? PRICED_PLANS : PLANS),
     ...(identifyTopUp ? { identifyTopUp } : {}),
   });
   vi.mocked(billingService.getCurrentSubscription).mockResolvedValue(sub);
@@ -401,32 +407,77 @@ describe('purchase controls once payment activity is available', () => {
     expect(screen.getByRole('button', { name: 'Switch to Garden' })).toBeInTheDocument();
   });
 
-  it('starts checkout with a fresh idempotency key per click', async () => {
+  it('opens Plan status on Yearly, with the yearly amount and saving, and Monthly one tap away (ADR 0042, "Yearly first")', async () => {
+    await renderBilling({ planId: 'seedling' }, { paid: true });
+
+    const yearly = screen.getByRole('button', { name: /Yearly/ });
+    expect(yearly).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(screen.getByText('$39.99')).toBeInTheDocument();
+    expect(screen.getAllByText('per year').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$4.99')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
+    expect(screen.getByRole('button', { name: /Monthly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('$4.99')).toBeInTheDocument();
+  });
+
+  it('starts checkout with a fresh idempotency key per click, at the yearly cadence by default', async () => {
     const { billingService } = await import('@/services/billingService');
     vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
     await renderBilling({ planId: 'seedling' }, { paid: true });
 
     await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
 
+    // `interval: 'year'` is what the server resolves to the yearly Stripe
+    // price id (`priceEnvFor` in backend/src/models/plans.ts; pinned by
+    // backend/tests/unit/services/billing.test.ts).
     expect(billingService.createCheckout).toHaveBeenCalledWith({
       planId: 'garden',
-      interval: 'month',
+      interval: 'year',
       checkoutAttemptId: expect.stringMatching(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       ),
     });
   });
 
-  it('carries the selected interval into checkout', async () => {
+  it('buys Greenhouse monthly from the Yearly tab, the cadence its card shows (ADR 0042)', async () => {
+    const { billingService } = await import('@/services/billingService');
+    vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
+    await renderBilling(
+      { planId: 'seedling' },
+      {
+        paid: true,
+        plans: [
+          PRICED_PLANS[0],
+          PRICED_PLANS[1],
+          { ...PRICED_PLANS[2], annualPrice: null, lifetimePrice: null },
+        ],
+      }
+    );
+
+    expect(screen.getByRole('button', { name: /Yearly/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Billed monthly')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Greenhouse' }));
+
+    expect(billingService.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ planId: 'greenhouse', interval: 'month' })
+    );
+  });
+
+  it('carries the selected interval into checkout when Monthly is tapped', async () => {
     const { billingService } = await import('@/services/billingService');
     vi.mocked(billingService.createCheckout).mockResolvedValue({ url: 'https://pay.example/s1' });
     await renderBilling({ planId: 'seedling' }, { paid: true });
 
-    await userEvent.click(screen.getByRole('button', { name: /Yearly/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Monthly/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Switch to Garden' }));
 
     expect(billingService.createCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ planId: 'garden', interval: 'year' })
+      expect.objectContaining({ planId: 'garden', interval: 'month' })
     );
   });
 
@@ -945,6 +996,41 @@ describe('BillingSettings — identification top-up pack (ADR 0019)', () => {
     expect(screen.getByTestId('identify-credit-balance')).toHaveTextContent(
       /12 identification credits left/
     );
+  });
+
+  it('tells a Garden household identification is not included, not that it needs more', async () => {
+    await renderBilling(
+      {
+        planId: 'garden',
+        identifyAllowance: { monthly: 0, planName: 'Garden' },
+        identifyCredits: { remaining: 12, expiresAt: null },
+      },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    const card = screen.getByTestId('identify-top-up-card');
+    expect(card).toHaveTextContent(
+      'Identification is sold as a 20-identification pack for $1.99; it is not included in Garden.'
+    );
+    expect(card).toHaveTextContent('12 identification credits left');
+    expect(card).not.toHaveTextContent(/Need more|monthly allowance|resets|0 of 0/);
+    expect(screen.getByRole('button', { name: 'Buy 20 for $1.99' })).toBeInTheDocument();
+    // No identification meter, so nothing can read "0 of 0" or "0 left".
+    expect(screen.queryByText(/\b0 of 0\b|\b0 left\b/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the allowance wording for a plan that has an allowance', async () => {
+    await renderBilling(
+      {
+        planId: 'seedling',
+        identifyAllowance: { monthly: 1, planName: 'Seedling' },
+        identifyCredits: { remaining: 0, expiresAt: null },
+      },
+      { paid: true, identifyTopUp: OFFER }
+    );
+    const card = screen.getByTestId('identify-top-up-card');
+    expect(card).toHaveTextContent('Need more identifications?');
+    expect(card).toHaveTextContent(/monthly allowance/);
+    expect(card).not.toHaveTextContent(/not included/);
   });
 
   it('renders nothing for the pack when the catalog does not offer it and the household holds no credits', async () => {

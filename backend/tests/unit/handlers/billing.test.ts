@@ -116,9 +116,17 @@ describe('billing handler', () => {
     // The identification vendor key: the top-up pack is for sale only where
     // the identifications it buys can be made. Individual tests remove it.
     process.env.PLANT_ID_API_KEY = 'plant-key';
+    // The current Stripe price ids (ADR 0042): a cadence with a blank id is
+    // published as unavailable, so the priced-catalog tests need them set.
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_g_m';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499 = 'price_g_y';
+    process.env.STRIPE_PRICE_ID_GREENHOUSE = 'price_gh_m';
   });
 
   afterEach(() => {
+    delete process.env.STRIPE_PRICE_ID_GARDEN_299;
+    delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499;
+    delete process.env.STRIPE_PRICE_ID_GREENHOUSE;
     delete process.env.PAYMENTS_ENABLED;
     delete process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP;
     delete process.env.PLANT_ID_API_KEY;
@@ -165,8 +173,8 @@ describe('billing handler', () => {
         lifetimePrice: null,
       });
       expect(byId.garden).toMatchObject({
-        monthlyPrice: 4.99,
-        annualPrice: null,
+        monthlyPrice: 2.99,
+        annualPrice: 24.99,
         lifetimePrice: null,
       });
       expect(byId.greenhouse).toMatchObject({
@@ -274,6 +282,36 @@ describe('billing handler', () => {
       expect(billing.getHouseholdSubscription).toHaveBeenCalledWith('hh-1');
       expect(getCreditBalance).toHaveBeenCalledWith('hh-1');
     });
+
+    it.each([
+      [
+        { planId: 'garden', status: 'active' },
+        { monthly: 0, planName: 'Garden' },
+      ],
+      [{ planId: 'seedling' }, { monthly: 1, planName: 'Seedling' }],
+      [
+        { planId: 'greenhouse', status: 'active' },
+        { monthly: 100, planName: 'Greenhouse' },
+      ],
+      // The no-card trial has Garden's features and Seedling's allowance.
+      [
+        { planId: 'seedling', noCardTrialEndsAt: '2999-01-01T00:00:00.000Z' },
+        { monthly: 1, planName: 'Garden' },
+      ],
+    ])(
+      'publishes the identification allowance the household spends against: %o',
+      async (sub, want) => {
+        const billing = await import('../../../src/services/billing.js');
+        const { getCurrentSubscription } = await import('../../../src/handlers/billing/handler.js');
+        vi.mocked(billing.getHouseholdSubscription).mockResolvedValueOnce(sub as never);
+        const res = (await getCurrentSubscription(
+          buildEvent({ httpMethod: 'GET' }),
+          ctx,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(JSON.parse(res.body).identifyAllowance).toEqual(want);
+      }
+    );
 
     it('publishes trialAvailable on the wire, so the UI can qualify its trial copy (#602)', async () => {
       const billing = await import('../../../src/services/billing.js');
@@ -575,7 +613,6 @@ describe('billing handler', () => {
     // before the service is even called. The message has to be clear about
     // what happened, and clear that existing subscribers are not affected.
     it.each([
-      ['garden', 'year'],
       ['garden', 'lifetime'],
       ['greenhouse', 'year'],
     ] as const)(
@@ -599,6 +636,21 @@ describe('billing handler', () => {
         expect(billing.createCheckoutSession).not.toHaveBeenCalled();
       }
     );
+
+    it('publishes Garden as unavailable, never at an old or invented price, while the new price ids are blank (ADR 0042)', async () => {
+      delete process.env.STRIPE_PRICE_ID_GARDEN_299;
+      delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499;
+      process.env.STRIPE_PRICE_ID_GARDEN = 'price_legacy_499';
+      const { listPlans } = await import('../../../src/handlers/billing/handler.js');
+      const res = (await listPlans(
+        buildEvent({ httpMethod: 'GET' }),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      const garden = JSON.parse(res.body).plans.find((p: { id: string }) => p.id === 'garden');
+      delete process.env.STRIPE_PRICE_ID_GARDEN;
+      expect(garden).toMatchObject({ monthlyPrice: null, annualPrice: null });
+    });
 
     it('maps the service-level INTERVAL_WITHDRAWN guard to the same 400, for any path around the schema', async () => {
       // Defence in depth: if a caller ever reaches createCheckoutSession with

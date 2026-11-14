@@ -26,6 +26,7 @@ import i18n from '@/i18n';
 import { isNativeApp } from '@/lib/platform';
 import { sessionVaultAvailable } from '@/services/sessionVault';
 import { isAuthRejectionStatus } from '@/lib/authRejection';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -269,7 +270,8 @@ export function getErrorMessage(error: unknown): string {
  * `message` without the calls to action the backend's plan refusals carry:
  * a sentence that starts with "Upgrade", "Buy" or "Choose a paid plan", and a
  * trailing ", or upgrade …" clause. When nothing else is left, the app's
- * neutral "Plan changes aren't available in the app."
+ * neutral line (`nativePlanNoteKey`): "Plan changes aren't available in the
+ * app.", or in the iPhone app that sells plans, where to find them.
  */
 export function withoutPurchaseCalls(message: string): string {
   const kept = message
@@ -277,7 +279,7 @@ export function withoutPurchaseCalls(message: string): string {
     .filter((sentence) => !/^(upgrade|buy|choose a paid plan)\b/i.test(sentence.trim()))
     .map((sentence) => sentence.replace(/,\s*or (upgrade|choose a paid plan)\b[^.!?]*/i, ''));
   const text = kept.join(' ').trim();
-  return text || i18n.t('settings.billing.nativeUnavailable');
+  return text || i18n.t(nativePlanNoteKey());
 }
 
 function serverErrorMessage(error: unknown): string {

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { RECENT_COMPLETIONS_LIMIT } from '@/services/plantService';
 import type { PlantWithTasks, Task } from '@/services/plantService';
@@ -25,6 +26,7 @@ interface CareReportCardProps {
  * have to be aggregated server-side, not inferred from this list.
  */
 export function CareReportCard({ plant }: CareReportCardProps) {
+  const { t } = useTranslation();
   const completions = plant.recentCompletions;
   const totalTasks = plant.upcomingTasks.length;
   const totalCompletions = completions.length;
@@ -35,11 +37,11 @@ export function CareReportCard({ plant }: CareReportCardProps) {
   // task has ever been done.
   const lastCompletion = newest([
     ...completions.map((c) => c.completedAt),
-    ...plant.upcomingTasks.map((t) => t.lastCompleted),
+    ...plant.upcomingTasks.map((task) => task.lastCompleted),
   ]);
 
   const overallBestStreak = plant.upcomingTasks.reduce(
-    (max, t) => Math.max(max, longestStreak(t, completions)),
+    (max, task) => Math.max(max, longestStreak(task, completions)),
     0
   );
 
@@ -60,7 +62,10 @@ export function CareReportCard({ plant }: CareReportCardProps) {
           label={`Best streak (last ${RECENT_COMPLETIONS_LIMIT})`}
           value={overallBestStreak >= 2 ? `${overallBestStreak} cycles` : '—'}
         />
-        <Stat label="Last care" value={lastCompletion ? formatRelative(lastCompletion) : 'Never'} />
+        <Stat
+          label="Last care"
+          value={lastCompletion ? formatRelative(lastCompletion) : t('common.never')}
+        />
       </dl>
 
       {plant.upcomingTasks.length > 0 && (
@@ -69,8 +74,8 @@ export function CareReportCard({ plant }: CareReportCardProps) {
             By task, within those {RECENT_COMPLETIONS_LIMIT}
           </h4>
           <ul className="divide-y divide-primary-100/60 text-sm">
-            {plant.upcomingTasks.map((t) => (
-              <TaskRow key={t.id} task={t} completions={completions} />
+            {plant.upcomingTasks.map((task) => (
+              <TaskRow key={task.id} task={task} completions={completions} />
             ))}
           </ul>
         </div>

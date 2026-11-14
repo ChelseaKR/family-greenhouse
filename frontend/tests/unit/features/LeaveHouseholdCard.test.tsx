@@ -37,7 +37,13 @@ const other = (userId: string, role: 'admin' | 'member'): HouseholdMember => ({
 const leftResult = {
   householdId: 'hh-2',
   releasedTasks: 1,
-  revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+  revokedCredentials: {
+    plantTags: 0,
+    sitterLinks: 0,
+    kioskLinks: 0,
+    cuttingShares: 0,
+    caretakerSeats: 0,
+  },
   defaultHouseholdId: 'hh-1',
   defaultHouseholdRole: 'admin',
   remainingHouseholds: 1,

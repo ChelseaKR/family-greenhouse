@@ -21,11 +21,11 @@ purchase.
 
 Source of truth: `backend/src/models/plans.ts`.
 
-| Plan       | Monthly | Plants cap | Members cap | Notes                                      |
-| ---------- | ------- | ---------- | ----------- | ------------------------------------------ |
-| Seedling   | Free    | 8          | 2           | Default for every new household            |
-| Garden     | $4.99   | 200        | Unlimited   | Free trial once per household, no stacking |
-| Greenhouse | $9.99   | 5000       | Unlimited   | Free trial once per household, no stacking |
+| Plan       | Monthly           | Plants cap | Members cap | Notes                                                                             |
+| ---------- | ----------------- | ---------- | ----------- | --------------------------------------------------------------------------------- |
+| Seedling   | Free              | 8          | 2           | Default for every new household                                                   |
+| Garden     | $2.99 ($24.99/yr) | 200        | Unlimited   | Free trial once per household, no stacking; was $4.99 until 2026-11-07 (ADR 0042) |
+| Greenhouse | $9.99             | 5000       | Unlimited   | Free trial once per household, no stacking                                        |
 
 `scripts/check-doc-figures.mjs` re-derives all six cap figures above from
 `plans.ts` on every `npm run verify`, and fails both when a number is wrong and
@@ -498,6 +498,19 @@ ids in tfvars: price ids encode neither amount nor cadence, and
 `stripe_price_ids_attested`, which names the ids that attestation covers so an
 unattested id fails the Terraform plan instead of warning past a `check` block.
 
+The same retrieve expands the price's product, and once
+`STRIPE_AUTOMATIC_TAX_ENABLED` is `"1"` the product's tax code is part of what
+must match: every catalog item is sold as `CATALOG_TAX_CODE`
+(`txcd_10103000`, "Software as a service - personal use"; the identification
+pack is more uses of the same software and a gift month is prepaid months of
+it, so neither takes the gift-card code), and a product carrying any other
+code, or none, is a refused checkout. Products are made by hand in the Stripe
+Dashboard, so this is the only place the code can be held to anything; with
+the flag off the code is ignored, which is why today's products can carry the
+account preset without refusing a sale. From 2027-01-01 California taxes
+remotely accessed software (SB 122), and the code on the product is what
+decides whether a Californian is charged the right tax.
+
 Two gaps worth knowing about. The attested list proves an id was _reviewed_,
 not that it charges the right amount, and reconciliation is what proves the
 amount — so they are complements, not substitutes. And
@@ -675,15 +688,16 @@ The frontend needs no Stripe key. The Stripe integration uses the variables
 below, but two independent controls sit ahead of them on every request: the
 repository hold must be inactive and `PAYMENTS_ENABLED` must be exactly `1`.
 
-| Var(s)                                                           | How it's set                                                                                    |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | `environments/<env>/terraform.tfvars` — NOT secret, committed                                   |
-| `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                                                     |
-| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`                                | same tfvars — one-time price; blank = pack not for sale, checkout refuses                       |
-| `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml)                                  |
-| `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`                                          |
-| `commercial-status.json`                                         | committed shared status; `commercialHoldActive: false` since 2026-09-01                         |
-| `PAYMENTS_ENABLED`                                               | Terraform `payments_enabled`; defaults `"0"`, set to `"1"` in the production and staging tfvars |
+| Var(s)                                                           | How it's set                                                                                                                                 |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_PRICE_ID_GARDEN_299` / `_GARDEN_ANNUAL_2499`             | `environments/<env>/terraform.tfvars` — NOT secret, committed; Garden's CURRENT $2.99 / $24.99 prices (ADR 0042), set together or not at all |
+| `STRIPE_PRICE_ID_GARDEN` / `_GARDEN_ANNUAL` / `_GARDEN_LIFETIME` | same tfvars — the LEGACY $4.99 / $39.99 prices and the withdrawn $149 lifetime; renewals and the webhook's reverse map only, never sold      |
+| `STRIPE_PRICE_ID_GREENHOUSE` / `_GREENHOUSE_ANNUAL`              | same tfvars                                                                                                                                  |
+| `STRIPE_PRICE_ID_IDENTIFY_TOP_UP`                                | same tfvars — one-time price; blank = pack not for sale, checkout refuses                                                                    |
+| `STRIPE_SECRET_KEY`                                              | GitHub Actions secret → `TF_VAR_stripe_secret_key` (cd-\*.yml)                                                                               |
+| `STRIPE_WEBHOOK_SECRET`                                          | GitHub Actions secret → `TF_VAR_stripe_webhook_secret`                                                                                       |
+| `commercial-status.json`                                         | committed shared status; `commercialHoldActive: false` since 2026-09-01                                                                      |
+| `PAYMENTS_ENABLED`                                               | Terraform `payments_enabled`; defaults `"0"`, set to `"1"` in the production and staging tfvars                                              |
 
 Empty values keep Stripe inert (the pre-billing behavior), so a half-finished
 setup never breaks the app. An empty MONTHLY id makes a plan unbuyable; an empty
@@ -695,9 +709,20 @@ live: `withdrawnIntervals` on a plan (`backend/src/models/plans.ts`) makes
 that as "not available" — and makes `POST /billing/checkout` refuse it. The
 price and its env var stay on the plan so that renewals on an existing
 subscription still resolve to the right tier and the portal keeps managing
-them. As of 2026-09-02 both annual cadences and Garden lifetime are withdrawn
-(their AI-cost ceiling per household exceeds their monthly revenue); do not
-archive those Stripe prices — existing subscriptions renew against them.
+them. As of 2026-09-02 both annual cadences and Garden lifetime were withdrawn
+(their AI-cost ceiling per household exceeded their monthly revenue); on
+2026-11-07 Garden annual came back at $24.99 once identification left the plan
+(ADR 0042), and Greenhouse annual and Garden lifetime stay withdrawn. Do not
+archive any of those Stripe prices — existing subscriptions renew against them.
+
+A tier can also be REPRICED (ADR 0042): the catalog names a new Stripe price
+for a cadence and lists the old one under `legacyPrices`. A legacy price is
+never offered, but `planIdFromPriceId` still maps it to its tier so renewals on
+it keep resolving, and `reconcileConfiguredPrices` still checks it at its own
+amount. Garden's `STRIPE_PRICE_ID_GARDEN` ($4.99) and `_GARDEN_ANNUAL` ($39.99)
+are legacy; `_GARDEN_299` and `_GARDEN_ANNUAL_2499` are current, and
+`GET /billing/plans` publishes a cadence as unavailable while its current id
+is blank in the environment.
 
 `payments_enabled` is per-environment, but `commercial-status.json` is shared
 across both. Staging can therefore be opened for verification while production
@@ -713,11 +738,15 @@ mode) when the hold was lifted; it is the procedure for any new environment.
 
 1. Create a Stripe account; do the whole flow in **test mode** first, then repeat in live mode.
 2. Create two **products** — Garden and Greenhouse (Seedling is free → no Stripe object). Add prices:
-   - **Garden**: monthly $4.99, annual $39.99, one-time **lifetime** $149
+   - **Garden**: monthly $2.99 and annual $24.99 (ADR 0042, the current
+     prices, `stripe_price_id_garden_299` / `_garden_annual_2499`); the
+     earlier monthly $4.99, annual $39.99 and one-time **lifetime** $149 prices
+     stay live for the households on them (`stripe_price_id_garden` /
+     `_garden_annual` / `_garden_lifetime`) and are never sold again.
    - **Greenhouse**: monthly $9.99, annual $79.99 (no lifetime)
-   - Annual and lifetime prices are kept for existing subscribers but are
-     withdrawn from sale (`withdrawnIntervals`); only monthly can be started.
-3. Paste the five `price_…` ids into `infrastructure/environments/production/terraform.tfvars`.
+   - Greenhouse annual and Garden lifetime are kept for existing subscribers
+     but are withdrawn from sale (`withdrawnIntervals`).
+3. Paste the `price_…` ids into `infrastructure/environments/production/terraform.tfvars`. Garden's two current ids go in together: a plan with exactly one set fails.
 4. Add `STRIPE_SECRET_KEY` (the `sk_…` key) as a GitHub Actions **repo secret**.
 5. Create a Stripe **webhook endpoint** at `<API_URL>/billing/webhook` and subscribe it to the four events above. Production URL:
    ```
@@ -740,8 +769,10 @@ mode) when the hold was lifted; it is the procedure for any new environment.
    the webhook's `planIdFromPriceId` — which exists only to resolve a
    portal-initiated switch — is unreachable.
 
-   Leave the **withdrawn** cadences out of the switchable list (Garden annual
-   and lifetime, Greenhouse annual): they are not sold to anyone new, and
+   List the Garden $2.99 monthly, the Garden $24.99 yearly and the Greenhouse
+   monthly. Leave the **withdrawn** cadences and the **legacy** prices out of
+   the switchable list (Garden $4.99 monthly and $39.99 annual, Garden
+   lifetime, Greenhouse annual): they are not sold to anyone new, and
    offering them in the portal would start one from the surface that checkout
    refuses. Their prices stay live so existing subscriptions keep renewing —
    see § _Withdrawn cadences_ above.
@@ -822,10 +853,15 @@ $1.99**, one-time, valid 12 months from purchase, never auto-renewed.
   a conditional decrement. The success `usage` object gains `source`
   (`allowance` | `credit`) and, after a credit spend, `credits`
   (`{ remaining, expiresAt }`). The 402 gains `details`:
-  `{ code: IDENTIFY_BUDGET_EXHAUSTED, topUpAvailable, credits, topUp }`.
+  `{ code: IDENTIFY_BUDGET_EXHAUSTED, allowance, planName, topUpAvailable, credits, topUp }`.
+  An `allowance` of 0 is a plan that bundles none (Garden, ADR 0042): the
+  clients say identification is not included, never that it is used up or
+  resets, and the apps name no pack or price (`identifyTopUp.notIncludedInApp`).
 - **Balance:** `GET /billing/me` carries `identifyCredits`
   (`{ remaining, expiresAt }`), or `null` when the read failed — unknown is
-  never published as zero.
+  never published as zero. It also carries `identifyAllowance`
+  (`{ monthly, planName }`), the metered allowance Settings reads to pick the
+  same wording.
 
 ## The no-card Garden trial
 
@@ -911,6 +947,10 @@ production** (owner decision 2026-10-23, `infrastructure/environments/production
   checkout cutoff (the end minus 48 h 30 min, printed as a date) adds a card then
   and is first charged on the trial's end date; started later, or after the
   trial (day 14), the first charge is the day it starts. Same rule as checkout.
+- **Prices:** both emails name the catalog's Garden prices, the yearly first and then
+  the monthly, each once (ADR 0042 "Yearly first"; ADR 0039 §7 as amended): "If you
+  would like to keep Garden, it is $24.99 a year, or $2.99 a month." When the catalog
+  has no yearly Garden price on sale, the monthly alone is named.
 - **Contents:** the end date, plants added and care tasks done during the trial (read
   from existing rows), what Seedling holds (read from the plan catalog), and that
   everything already made is kept. A household with no plants is told "You have not
@@ -1046,9 +1086,12 @@ and never the original transaction id. A running App Store subscription also
 ends the no-card trial's metering, like Stripe state.
 
 **Products.** One subscription group, "Family Greenhouse plans":
-`net.familygreenhouse.app.garden.monthly` ($4.99) and
-`net.familygreenhouse.app.greenhouse.monthly` ($9.99), monthly, no
-introductory offer. `models/appStore.ts` maps them to tiers.
+`net.familygreenhouse.app.garden.monthly` ($2.99 a month),
+`net.familygreenhouse.app.garden.yearly` ($24.99 a year; ADR 0042) and
+`net.familygreenhouse.app.greenhouse.monthly` ($9.99 a month), no
+introductory offer. `models/appStore.ts` maps them to tiers and cadences; the
+purchase intent takes an optional `interval` (`month` default, `year`) to pick
+the Garden product.
 
 **Routes.**
 

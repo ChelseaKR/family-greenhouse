@@ -6,7 +6,8 @@ import { COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { buttonStyles } from '@/components/buttonStyles';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { isNativeApp } from '@/lib/platform';
-import { billingService } from '@/services/billingService';
+import { formatCurrency } from '@/i18n/format';
+import { billingService, type IdentifyTopUpOffer } from '@/services/billingService';
 import { PaidPlanGrid } from './PaidPlanGrid';
 import { PLAN_PRICES, offeredPrices } from './planPrices';
 
@@ -81,20 +82,25 @@ interface PricingGridProps {
  */
 function LoadingPriceLine() {
   const { t } = useTranslation();
-  const monthly = (id: 'garden' | 'greenhouse') => {
+  const offered = (id: 'garden' | 'greenhouse', interval: 'month' | 'year') => {
     const plan = PLAN_PRICES.find((candidate) => candidate.id === id);
-    const offer = plan && offeredPrices(plan).find((o) => o.interval === 'month');
+    const offer = plan && offeredPrices(plan).find((o) => o.interval === interval);
     return offer ? offer.amount.toFixed(2) : null;
   };
-  const garden = monthly('garden');
-  const greenhouse = monthly('greenhouse');
+  const garden = offered('garden', 'month');
+  const greenhouse = offered('greenhouse', 'month');
   if (garden === null || greenhouse === null) return null;
+  // Garden's yearly price is named only while Garden sells yearly (ADR 0042);
+  // a withdrawn cadence falls back to the monthly-only sentence.
+  const gardenYear = offered('garden', 'year');
   return (
     <p
       data-testid="plan-price-line"
       className="mx-auto mt-10 max-w-2xl text-center text-base leading-7 text-gray-800"
     >
-      {t('pricing.monthlyPriceLine', { garden, greenhouse })}
+      {gardenYear === null
+        ? t('pricing.monthlyPriceLine', { garden, greenhouse })
+        : t('pricing.priceLineWithGardenYear', { garden, gardenYear, greenhouse })}
     </p>
   );
 }
@@ -141,7 +147,35 @@ function PublishedPlanCatalog({ publishedFooter }: PricingGridProps) {
           </Link>
         )}
       />
+      <IdentificationNote offer={plansQuery.data.identifyTopUp} />
       {publishedFooter}
     </>
+  );
+}
+
+/**
+ * Identification is not part of the Garden plan (ADR 0042) and is sold by
+ * the pack (ADR 0019). The grid lists no identification bullet on any tier,
+ * so this one line says where it went. The pack's size and price come from
+ * the same catalog response as the plan prices, never from a constant here;
+ * when the pack is not for sale in this environment (no price configured,
+ * or the identification vendor unset) the line still says what Garden does
+ * not include, and names no amount.
+ */
+function IdentificationNote({ offer }: { offer: IdentifyTopUpOffer | undefined }) {
+  const { t } = useTranslation();
+  const forSale = offer?.available === true && typeof offer.priceUsd === 'number';
+  return (
+    <p
+      data-testid="identification-note"
+      className="mx-auto mt-6 max-w-2xl text-center text-sm leading-6 text-gray-700"
+    >
+      {forSale
+        ? t('pricing.identificationNote', {
+            credits: offer.credits,
+            price: formatCurrency(offer.priceUsd!),
+          })
+        : t('pricing.identificationNoteNoPack')}
+    </p>
   );
 }

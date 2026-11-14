@@ -58,9 +58,14 @@ identify_metering_enabled = "1"
 # Setting any per-tier leaf-health value adds one household read per check
 # (the same read identify already makes). A household already past a newly
 # lowered cap is blocked until the month rolls over, so lower caps on the 1st.
-leaf_health_monthly_cap            = ""
-leaf_health_monthly_cap_seedling   = "20"
-leaf_health_monthly_cap_garden     = ""
+leaf_health_monthly_cap          = ""
+leaf_health_monthly_cap_seedling = "20"
+# Garden: 100, not the flat 200 (ADR 0042). At $2.99 a month / $24.99 a year
+# with identification out of the plan, the tier's AI ceiling is leaf-health
+# plus chat; at 200 checks that ceiling ($1.73) was 98% of what a yearly
+# subscription earns per month through Apple ($1.77 after the 15% cut). At
+# 100 it is $1.14, 64% of that row and under 45% of the monthly ones.
+leaf_health_monthly_cap_garden     = "100"
 leaf_health_monthly_cap_greenhouse = ""
 chat_budget_input_tokens           = ""
 chat_budget_output_tokens          = ""
@@ -138,6 +143,27 @@ stripe_price_id_garden_annual     = "price_1TkurVAhnUt8CMG0ebSAipxL"
 stripe_price_id_garden_lifetime   = "price_1Tkus1AhnUt8CMG0JkC7YgYO"
 stripe_price_id_greenhouse        = "price_1UB7JuAhnUt8CMG05o9ktQLa"
 stripe_price_id_greenhouse_annual = "price_1UB7JuAhnUt8CMG0yFUs1tl8"
+# Garden repriced 2026-11-07 (ADR 0042): $2.99 a month or $24.99 a year, with
+# plant identification out of the plan. The two ids above named `garden` and
+# `garden_annual` are now LEGACY ($4.99 / $39.99): keep them, never archive
+# those prices, so a household that bought at the old price keeps renewing on
+# it and the webhook still maps it to Garden. (Only the $4.99 monthly ever had
+# a subscriber; the $39.99 annual never sold and no longer exists in Stripe —
+# see the 2026-11-10 note below.) The two below are the CURRENT
+# prices and are BLANK until the owner creates them. While both are blank
+# GET /billing/plans publishes Garden as not available and nothing sells it;
+# the commercial_gate_guard precondition refuses a plan with exactly one of
+# them set, so the repricing goes live whole or not at all.
+# Owner step (Stripe Dashboard, LIVE mode, the existing "Garden" product):
+#   1. Add a recurring price: $2.99 USD, monthly, metadata plan_id=garden
+#      interval=month adr=0042. Paste its id into stripe_price_id_garden_299.
+#   2. Add a recurring price: $24.99 USD, yearly, metadata plan_id=garden
+#      interval=year adr=0042. Paste its id into stripe_price_id_garden_annual_2499.
+#   3. Add both ids to stripe_price_ids_attested below, with comments.
+#   4. Customer Portal: replace the $4.99 Garden monthly price with the $2.99
+#      monthly and the $24.99 yearly in the list a customer may switch to.
+stripe_price_id_garden_299         = "price_1UZebQAhnUt8CMG0fKwhJAwy"
+stripe_price_id_garden_annual_2499 = "price_1UZebdAhnUt8CMG0vpZCVGdE"
 # Identification top-up pack (ADR 0019): a ONE-TIME price for "20
 # identifications, $1.99", created in Stripe LIVE mode. Blank = not for sale;
 # POST /billing/top-up/checkout answers 400 TOP_UP_NOT_CONFIGURED and no credit
@@ -170,6 +196,28 @@ stripe_price_id_identify_top_up = "price_1UExJSAhnUt8CMG0fGgIyAzZ"
 # so the pack has been on sale since this morning. Five ids were attested and
 # six were live, which is precisely the drift the list below exists to make
 # impossible, and precisely why a bare boolean could not catch it.
+#
+# Read back from the LIVE account (acct_1E4J3YAhnUt8CMG0) on 2026-11-10 with
+# the Stripe CLI, read only. Five of the eight ids in stripe_price_ids_attested
+# exist and are active: the $4.99 Garden monthly, the $9.99 Greenhouse
+# monthly, the identification pack, and the $2.99 / $24.99 Garden pair. The
+# other three — Garden annual $39.99, Garden lifetime $149 and Greenhouse
+# annual $79.99 — answer resource_missing to `stripe prices retrieve <id>
+# --live` and are in neither the active nor the archived price list, so they
+# were deleted from Stripe on or before 2026-11-10 (no price.deleted event is
+# inside the 30-day event window, so the day is not known). Nothing was ever
+# sold on them: the live account holds one subscription (canceled) and one
+# invoice ($0), both on the $4.99 monthly, no charges and no payment intents,
+# and Stripe only deletes a price that has never been used. So the
+# "existing subscribers still renew" the two annual entries used to claim was
+# never true of a live customer, and no renewal can land on these ids. They
+# stay configured and listed: the list is one-directional (a stale entry
+# cannot charge anyone), both withdrawn cadences are refused by
+# isIntervalOffered before Stripe is reached, the webhook's reverse lookup
+# only compares ids, and nothing in production retrieves them
+# (reconcileConfiguredPrices has no runtime caller). To sell one of these
+# cadences again, create a NEW live price, paste it into the slot, and attest
+# it here; never reuse these three ids.
 stripe_price_ids_are_live = true
 
 # The SCOPE of that attestation, and the thing that makes it enforceable.
@@ -193,14 +241,25 @@ stripe_price_ids_are_live = true
 # id over a live one is exactly what this attestation exists to prevent.
 stripe_price_ids_attested = [
   "price_1Tkur4AhnUt8CMG0b07WYF1t", # Garden monthly
-  "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual (withdrawn from sale; existing subscribers still renew)
-  "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime (withdrawn from sale)
+  "price_1TkurVAhnUt8CMG0ebSAipxL", # Garden annual $39.99, legacy; never sold, deleted from Stripe (read 2026-11-10, note above)
+  "price_1Tkus1AhnUt8CMG0JkC7YgYO", # Garden lifetime $149, withdrawn; never sold, deleted from Stripe (read 2026-11-10, note above)
   "price_1UB7JuAhnUt8CMG05o9ktQLa", # Greenhouse monthly
-  "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual (withdrawn from sale; existing subscribers still renew)
+  "price_1UB7JuAhnUt8CMG0yFUs1tl8", # Greenhouse annual $79.99, withdrawn; never sold, deleted from Stripe (read 2026-11-10, note above)
   "price_1UExJSAhnUt8CMG0fGgIyAzZ", # Identification top-up pack, 20 credits, $1.99 one-time (ADR 0019)
+  "price_1UZebQAhnUt8CMG0fKwhJAwy", # Garden $2.99 monthly (ADR 0042), created by the owner in LIVE mode 2026-11-08
+  "price_1UZebdAhnUt8CMG0vpZCVGdE", # Garden $24.99 yearly (ADR 0042), created by the owner in LIVE mode 2026-11-08
 ]
 
-# Enable only after Stripe Tax registrations and product tax codes are live.
+# Stripe Tax. Flip to "1" for 2027-01-01, when California taxes remotely
+# accessed software (SB 122), and only once all three are true in the LIVE
+# Stripe Dashboard: (1) tax code txcd_10103000 (Software as a service,
+# personal use) is on all three products (Garden, Greenhouse, Identification
+# pack) — with the flag on, checkout REFUSES a price whose product carries any
+# other code or none (stripe_automatic_tax_enabled in variables.tf); (2) the
+# head-office address under Tax settings is the address on the CDTFA seller's
+# permit; (3) a California registration exists, active from 2027-01-01.
+# Prices stay tax-exclusive: the account's default tax behavior is Automatic
+# (exclusive for USD), so $2.99 is still $2.99 plus tax at checkout.
 stripe_automatic_tax_enabled = ""
 
 # Runtime commercial gate. The backend compares this to the literal string

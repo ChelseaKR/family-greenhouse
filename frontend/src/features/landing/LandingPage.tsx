@@ -222,6 +222,20 @@ const featuredLists = [
   { slug: 'most-common-toxic-houseplants-and-safer-swaps', key: 'toxicSwaps' },
 ] as const;
 
+// The two posts closest to what the product does. Google had not indexed either
+// and nothing but /blog and two other posts linked them (2026-11-08 read).
+const householdPosts = [
+  { slug: 'how-to-remember-to-water-plants', key: 'remember' },
+  { slug: 'sharing-plant-care-without-becoming-the-nag', key: 'sharing' },
+] as const;
+
+// Names only, like the list on /pet-safe. The verdict stays on each plant's own
+// page beside its citation, so a label here can't state or imply one.
+const holidayPetPages = [
+  { slug: 'christmas-cactus', key: 'christmasCactus' },
+  { slug: 'poinsettia', key: 'poinsettia' },
+] as const;
+
 /** Shown in the mock browser's address bar. */
 const MOCK_HOST = 'familygreenhouse.net';
 
@@ -925,6 +939,36 @@ export function LandingPage() {
                         className="text-sm font-medium text-primary-700 hover:underline"
                       >
                         {t(`landing.care.lists.${list.key}`)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.householdHeading')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {householdPosts.map((post) => (
+                    <li key={post.slug}>
+                      <Link
+                        to={`/blog/${post.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.household.${post.key}`)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.holidayHeading')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {holidayPetPages.map((plant) => (
+                    <li key={plant.slug}>
+                      <Link
+                        to={`/pet-safe/${plant.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.holidayPets.${plant.key}`)}
                       </Link>
                     </li>
                   ))}

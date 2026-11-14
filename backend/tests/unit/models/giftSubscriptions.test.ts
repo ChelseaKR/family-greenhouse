@@ -39,10 +39,9 @@ describe('gift subscriptions: the constants are the decision', () => {
   });
 
   it('prices a gift at the monthly price times the months, in integer cents, with no discount', () => {
-    // 4.99 * 3 is 14.970000000000002 in floating point; the catalog must
-    // publish 1497. And twelve months is twelve monthlies, NOT the withdrawn
+    // 2.99 * 3 is 8.97 only by luck of rounding; the catalog must publish 897. And twelve months is twelve monthlies, NOT the withdrawn
     // annual price (ADR 0012).
-    expect(giftAmountCents('garden', 3)).toBe(1497);
+    expect(giftAmountCents('garden', 3)).toBe(897);
     expect(giftAmountCents('garden', 12)).toBe(Math.round(PLANS.garden.monthlyPrice * 100) * 12);
     expect(giftAmountCents('garden', 12)).not.toBe(
       Math.round((PLANS.garden.annualPrice ?? 0) * 100)

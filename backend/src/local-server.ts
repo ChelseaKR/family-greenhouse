@@ -60,6 +60,7 @@ import {
   getEntitledPlan,
   getEntitledPlanForIssuedGrant,
   getMeteredPlanId,
+  type PlanId,
   hasHouseholdToolkit,
   noCardTrialState,
   giftState,
@@ -114,7 +115,11 @@ import {
   planMoves,
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
-import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import {
+  identifyRefusalMessage,
+  identifyTopUpSummary,
+  identifyUpgradeTargetName,
+} from './models/identifyTopUp.js';
 import {
   IDENTIFICATION_CONFIDENCE_FLOOR,
   isPlantIdentificationConfigured,
@@ -451,6 +456,8 @@ interface Caretaker {
   startsAt: string;
   expiresAt: string;
   status: 'active' | 'revoked';
+  revokedReason?: 'creator_left';
+  revokedAt?: string;
 }
 
 /** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
@@ -3631,13 +3638,20 @@ function departLocalHousehold(
     sitterLinks: number;
     kioskLinks: number;
     cuttingShares: number;
+    caretakerSeats: number;
   };
 } {
   const summary = {
     releasedTasks: 0,
     rotationsUpdated: 0,
     helpAsksAnonymized: 0,
-    revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+    revokedCredentials: {
+      plantTags: 0,
+      sitterLinks: 0,
+      kioskLinks: 0,
+      cuttingShares: 0,
+      caretakerSeats: 0,
+    },
   };
   const revoked = summary.revokedCredentials;
   const userId = target.id;
@@ -3665,6 +3679,15 @@ function departLocalHousehold(
     if (share.householdId === householdId && share.createdBy === userId) {
       db.shares.delete(code);
       revoked.cuttingShares += 1;
+    }
+  }
+  // Revoked, not deleted: as in production, visits outlive the seat.
+  for (const seat of db.caretakers.values()) {
+    if (seat.householdId === householdId && seat.createdBy === userId && seat.status === 'active') {
+      seat.status = 'revoked';
+      seat.revokedReason = 'creator_left';
+      seat.revokedAt = new Date().toISOString();
+      revoked.caretakerSeats += 1;
     }
   }
   for (const [token, calendar] of db.calendarTokens.entries()) {
@@ -4544,7 +4567,7 @@ const identifySchema = z.object({
 // Mirrors services/identifyBudget.ts: in-memory monthly identification usage
 // keyed `${yyyy-mm}#${householdId | user:userId}`. Enforcement only when
 // IDENTIFY_METERING_ENABLED=1, matching production (default off for beta).
-const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 1, garden: 30, greenhouse: 100 };
+const IDENTIFY_ALLOWANCES: Record<PlanId, number> = { seedling: 1, garden: 0, greenhouse: 100 };
 
 function identifyMeterFor(user: { userId: string; householdId: string | null }) {
   const ym = new Date().toISOString().slice(0, 7);
@@ -4563,7 +4586,11 @@ function identifyMeterFor(user: { userId: string; householdId: string | null }) 
   return {
     key,
     planName: plan.name,
+    meteredPlanId,
     allowance: IDENTIFY_ALLOWANCES[meteredPlanId] ?? IDENTIFY_ALLOWANCES.seedling,
+    onNoCardTrial: user.householdId
+      ? noCardTrialState(subscriptionOf(user.householdId)) === 'active'
+      : false,
     used: identifyUsage.get(key) ?? 0,
     meteringEnabled: process.env.IDENTIFY_METERING_ENABLED === '1',
   };
@@ -4577,9 +4604,17 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
     // the top-up `details`. The mock sells no packs (checkout is 503 below),
     // so the offer is never available and the balance is a real zero.
     return res.status(402).json({
-      message: `Your ${meter.planName} plan is limited to ${meter.allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+      message: identifyRefusalMessage({
+        planName: meter.planName,
+        allowance: meter.allowance,
+        onNoCardTrial: meter.onNoCardTrial,
+        upgradeTo: identifyUpgradeTargetName(meter.meteredPlanId, IDENTIFY_ALLOWANCES),
+        topUp: null,
+      }),
       details: {
         code: 'IDENTIFY_BUDGET_EXHAUSTED',
+        allowance: meter.allowance,
+        planName: meter.planName,
         topUpAvailable: false,
         credits: (req as any).user.householdId ? { remaining: 0, expiresAt: null } : null,
         topUp: null,
@@ -6848,6 +6883,12 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     usageDetail: usage,
     // The mock sells no top-up packs, so the balance is a real zero.
     identifyCredits: { remaining: 0, expiresAt: null },
+    identifyAllowance: {
+      monthly:
+        IDENTIFY_ALLOWANCES[getMeteredPlanId(subscriptionOf(user.householdId))] ??
+        IDENTIFY_ALLOWANCES.seedling,
+      planName: plan.name,
+    },
     // Mirrors handlers/billing/handler.ts (ADR 0027).
     noCardTrial: (() => {
       const trialState = noCardTrialState(subscriptionOf(user.householdId));

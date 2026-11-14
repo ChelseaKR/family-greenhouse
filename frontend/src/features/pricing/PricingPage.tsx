@@ -4,7 +4,7 @@ import { buttonStyles } from '@/components/buttonStyles';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { siteUrl } from '@/config/site';
 import { PricingGrid } from './PricingGrid';
-import { pricingJsonLd } from './pricingJsonLd';
+import { pricingJsonLd, pricingQuestions } from './pricingJsonLd';
 import { isNativeApp } from '@/lib/platform';
 import { useTranslation } from 'react-i18next';
 import { useGiftAvailability } from '@/features/gift/useGiftAvailability';
@@ -58,8 +58,10 @@ export function PricingPage() {
     // from the runtime catalog: the prerendered HTML is written at build time,
     // long before any fetch, and it is the only version of this page a crawler
     // that runs no JavaScript ever sees. Which offers may be published — and
-    // why there is no aggregateRating — is decided in `pricingJsonLd`.
-    jsonLd: pricingJsonLd(),
+    // why there is no aggregateRating — is decided in `pricingJsonLd`. It is
+    // given `t` so its FAQPage carries the questions and answers rendered in
+    // the list at the foot of this page, from the same `pricingQuestions()`.
+    jsonLd: pricingJsonLd(t),
   });
 
   // Inside the iOS and Android apps there is no plans page: /pricing opens
@@ -143,34 +145,12 @@ export function PricingPage() {
           {COMMERCIAL_HOLD_ACTIVE ? t('pricingStatus.headingHeld') : t('pricingStatus.headingOpen')}
         </h2>
         <dl className="mt-6 space-y-6">
-          {PUBLIC_REGISTRATION_AVAILABLE && (
-            <div>
-              <dt className="font-medium text-gray-900">
-                {t('pricingStatus.freeAccountQuestion')}
-              </dt>
-              <dd className="mt-1 text-sm text-gray-600">{t('pricingStatus.freeAccountAnswer')}</dd>
-            </div>
-          )}
-          {(COMMERCIAL_HOLD_ACTIVE
-            ? (['paidOffer', 'reactivation'] as const)
-            : // `household` and `card` lead: "does everyone need to pay?" and
-              // "will you take my card?" are the two questions a hesitant
-              // buyer has before the ones about changing plans later.
-              (['household', 'trial', 'card', 'change', 'where'] as const)
-          ).map((topic) => (
-            <div key={topic}>
-              <dt className="font-medium text-gray-900">{t(`pricingStatus.${topic}Question`)}</dt>
-              <dd className="mt-1 text-sm text-gray-600">{t(`pricingStatus.${topic}Answer`)}</dd>
+          {pricingQuestions().map(({ id, question, answer }) => (
+            <div key={id}>
+              <dt className="font-medium text-gray-900">{t(question)}</dt>
+              <dd className="mt-1 text-sm text-gray-600">{t(answer)}</dd>
             </div>
           ))}
-          <div>
-            <dt className="font-medium text-gray-900">{t('pricingStatus.dataQuestion')}</dt>
-            <dd className="mt-1 text-sm text-gray-600">
-              {COMMERCIAL_HOLD_ACTIVE
-                ? t('pricingStatus.dataAnswerHeld')
-                : t('pricingStatus.dataAnswerOpen')}
-            </dd>
-          </div>
         </dl>
       </section>
     </PublicShell>

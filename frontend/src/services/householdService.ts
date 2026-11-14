@@ -136,6 +136,7 @@ export interface LeaveHouseholdResult {
     sitterLinks: number;
     kioskLinks: number;
     cuttingShares: number;
+    caretakerSeats: number;
   };
   /** The default household after leaving; null when the caller has none left. */
   defaultHouseholdId: string | null;

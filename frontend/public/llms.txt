@@ -2,7 +2,7 @@
 
 > Family Greenhouse is a web app for shared houseplant care in one household: everyone at home sees which plants are due, who watered what, and the care history, and reminders arrive by email or in the browser. It also publishes free plant care guides and a pet-safety lookup for houseplants. It is an independent product.
 
-What it costs, as published on the pricing page: plans are priced per household, not per person. The free plan (Seedling) is one home, up to 2 household members and 8 plants, with no credit card. Garden is $4.99 a month and Greenhouse is $9.99 a month, each covering the whole household; a paid plan can be canceled any time. A new household starts with 14 days of Garden free with no card; when the 14 days end it moves to the free plan on its own, keeping everything it added. Canceling a paid plan returns the household to the free plan at the end of the paid period, and records above the free limit stay readable. The pricing page is the authority if this file and it ever disagree.
+What it costs, as published on the pricing page: plans are priced per household, not per person. The free plan (Seedling) is one home, up to 2 household members and 8 plants, with no credit card. Garden is $2.99 a month or $24.99 a year and Greenhouse is $9.99 a month, each covering the whole household; a paid plan can be canceled any time. Plant identification is not included in Garden; it is sold as a 20-identification pack for $1.99. A new household starts with 14 days of Garden free with no card; when the 14 days end it moves to the free plan on its own, keeping everything it added. Canceling a paid plan returns the household to the free plan at the end of the paid period, and records above the free limit stay readable. The pricing page is the authority if this file and it ever disagree.
 
 Pet safety: the pet-safety pages say whether a houseplant is toxic to cats and dogs, based on the ASPCA's plant safety data. "Non-toxic" means not poisonous, not that it is food. They are not veterinary advice: if a pet may have eaten something harmful, call a vet or the ASPCA Animal Poison Control line.
 
@@ -11,6 +11,8 @@ Care guides: one page per plant with how often to water it and how much light it
 How to cite: name the site and link the page you used, for example "Family Greenhouse care guide for pothos (https://familygreenhouse.net/care/pothos)".
 
 This file follows the llms.txt format described at https://llmstxt.org/.
+
+Last updated: 2026-11-14.
 
 ## Pages
 
@@ -27,3 +29,134 @@ This file follows the llms.txt format described at https://llmstxt.org/.
 - [Terms of service](https://familygreenhouse.net/legal/terms)
 - [Support](https://familygreenhouse.net/support)
 - [Sitemap](https://familygreenhouse.net/sitemap.xml)
+
+## Care guides
+
+- [Pothos care: how often to water it](https://familygreenhouse.net/care/pothos): Epipremnum aureum. Water: When the soil has dried out; it is better kept too dry than too wet. Light: Bright, indirect light; survives low light, but the variegation fades.
+- [How to care for a snake plant](https://familygreenhouse.net/care/snake-plant): Dracaena trifasciata. Water: Once the soil has dried out; very little in winter. Light: Anything from low light to a few hours of direct sun.
+- [Monstera care: how often to water it](https://familygreenhouse.net/care/monstera): Monstera deliciosa. Water: Thoroughly, once the top 1–2 inches of soil are dry. Light: Bright light near a window; the sources differ on direct sun.
+- [Spider plant care: how often to water it](https://familygreenhouse.net/care/spider-plant): Chlorophytum comosum. Water: Water thoroughly once the soil has dried slightly; less in winter. Light: Medium to bright, indirect light; avoid midday sun.
+- [Peace lily care: how often to water it](https://familygreenhouse.net/care/peace-lily): Spathiphyllum. Water: Keep it moist, not soggy, and let it dry slightly between waterings. Light: Bright, indirect light for flowers; tolerates low light; no direct sun.
+- [Heartleaf philodendron care: how often to water it](https://familygreenhouse.net/care/heartleaf-philodendron): Philodendron hederaceum. Water: Keep the soil lightly and evenly moist, never soggy; less in winter. Light: Bright, indirect light; tolerates very low light.
+- [ZZ plant care: how often to water it](https://familygreenhouse.net/care/zz-plant): Zamioculcas zamiifolia. Water: About every 2 weeks in summer, once dry; monthly in winter. Light: Low to bright, indirect light; no direct sun.
+- [Aloe vera care: how often to water it](https://familygreenhouse.net/care/aloe-vera): Aloe vera. Water: Water well when the top inch of soil is dry; much less in winter. Light: Full sun to bright, indirect light, such as a sunny window.
+- [Dieffenbachia care](https://familygreenhouse.net/care/dieffenbachia): Dieffenbachia. Water: Water thoroughly, then wait until the top inch of soil is dry. Light: Bright, filtered light; tolerates lower light; shield it from hot direct sun.
+- [Calathea care](https://familygreenhouse.net/care/calathea): Goeppertia (formerly Calathea). Water: Keep the soil moist but not soggy. Light: Bright, indirect light; no direct sun.
+- [Fiddle leaf fig care and pet safety](https://familygreenhouse.net/care/fiddle-leaf-fig): Ficus lyrata. Water: Keep it moist but well-drained; it is sensitive to overwatering. Light: Bright light; the sources differ on direct sun, so shield it from afternoon sun.
+- [Rubber plant care: how often to water it](https://familygreenhouse.net/care/rubber-plant): Ficus elastica. Water: Water thoroughly, then let the soil dry slightly; less from fall to late winter. Light: Bright, indirect light; adapts to lower light.
+- [Bird of paradise plant care](https://familygreenhouse.net/care/bird-of-paradise): Strelitzia reginae. Water: Generously in spring and summer; drier in winter. Light: As much bright light as you can give it, including some direct sun.
+- [Anthurium care: why it stops flowering](https://familygreenhouse.net/care/anthurium): Anthurium andraeanum. Water: When the top inch of soil is dry. Light: Bright, indirect light; too little light stops flowering.
+- [Chinese evergreen care: watering and light](https://familygreenhouse.net/care/chinese-evergreen): Aglaonema. Water: When the top inch or two of soil is dry. Light: Low to medium indirect light; no direct sun.
+- [Jade plant care: how to water it](https://familygreenhouse.net/care/jade-plant): Crassula ovata. Water: Water deeply, then let the soil dry; keep it on the dry side in winter. Light: Four or more hours of direct sun a day.
+- [English ivy care indoors](https://familygreenhouse.net/care/english-ivy): Hedera helix. Water: Water thoroughly when the top half-inch of soil is dry; never soggy. Light: Bright light, but not direct sun.
+- [Boston fern care: watering and pet safety](https://familygreenhouse.net/care/boston-fern): Nephrolepis exaltata. Water: Keep the soil evenly moist but not saturated; less in winter. Light: Bright to medium indirect light; no direct sun.
+- [Money tree care: watering and pet safety](https://familygreenhouse.net/care/money-tree): Pachira aquatica. Water: Keep the mix moist but well-drained; never leave it standing in water. Light: Bright, indirect light or partial shade; no hot direct sun.
+- [How to care for a Christmas cactus](https://familygreenhouse.net/care/christmas-cactus): Schlumbergera. Water: When the top inch of soil is dry; water thoroughly. Light: Bright, filtered light; avoid strong sun.
+- [Parlor Palm care](https://familygreenhouse.net/care/parlor-palm): Chamaedorea elegans. Water: When the surface of the soil has dried; less in winter. Light: Bright, indirect light is best; tolerates low light; no direct sun.
+- [Moth orchid care: how to water it](https://familygreenhouse.net/care/orchid): Phalaenopsis. Water: About once a week; soak the bark, then drain completely. Light: Bright, indirect light, such as an east window.
+- [Hoya care: the wax plant and porcelain flower](https://familygreenhouse.net/care/hoya): Hoya carnosa. Water: Water thoroughly, then let the mix dry almost completely; very little in winter. Light: Bright, indirect light; too much sun can scorch or redden the leaves.
+- [Nerve plant care: how often to water it](https://familygreenhouse.net/care/nerve-plant): Fittonia albivenis. Water: About twice a week; keep the soil moist but never waterlogged. Light: Bright to medium light; no direct sun.
+- [African Violet care](https://familygreenhouse.net/care/african-violet): Saintpaulia ionantha. Water: Keep the mix moist but not soggy; water the soil, not the leaves. Light: Moderate to bright, indirect light; a north or northeast window works well.
+- [Poinsettia care](https://familygreenhouse.net/care/poinsettia): Euphorbia pulcherrima. Water: When the soil surface is dry to the touch; then drain fully. Light: Bright, indirect light near a sunny window.
+- [Sago Palm care](https://familygreenhouse.net/care/sago-palm): Cycas revoluta. Water: Keep it evenly moist, letting the surface nearly dry between waterings. Light: Bright, filtered sun for 4 to 6 hours a day; no harsh direct sun.
+- [Asparagus Fern care](https://familygreenhouse.net/care/asparagus-fern): Asparagus densiflorus. Water: Keep the soil consistently moist but well-drained; less in winter. Light: Bright, indirect light or filtered sun; no hot afternoon sun.
+- [Haworthia care](https://familygreenhouse.net/care/haworthia): Haworthia. Water: Weekly in summer if the mix drains well, less in winter; let it dry between waterings. Light: An east or west window with a few hours of direct light a day, or plant lights.
+- [Burro’s Tail care](https://familygreenhouse.net/care/burros-tail): Sedum morganianum. Water: Let the soil dry out between waterings; water less in winter. Light: A sunny windowsill with at least partial sun.
+- [Blue Echeveria care](https://familygreenhouse.net/care/blue-echeveria): Echeveria glauca. Water: Water thoroughly, then let the soil dry completely; about weekly or less. Light: Full sun, six or more hours, or a south or west window with a plant light.
+- [Begonia care](https://familygreenhouse.net/care/begonia): Begonia. Water: Keep evenly moist, drying a little between waterings; less in winter. Light: A bright spot away from hot direct sun; early morning sun is fine.
+- [True Lily care](https://familygreenhouse.net/care/lily): Lilium. Water: When the soil surface feels dry; water until it drains, then empty the cover. Light: Bright light, out of direct sun.
+- [String of Pearls care](https://familygreenhouse.net/care/string-of-pearls): Curio rowleyanus (formerly Senecio rowleyanus). Water: Sparingly, once the mix is dry; overwatering kills it. Light: Bright, indirect light; direct sun can scorch it.
+- [Prayer Plant care](https://familygreenhouse.net/care/prayer-plant): Maranta leuconeura. Water: Keep it evenly moist; let it dry a little in winter. Light: Bright, indirect light; direct sun bleaches the leaves.
+- [Croton care](https://familygreenhouse.net/care/croton): Codiaeum variegatum. Water: When the top half-inch to inch of soil is dry. Light: Bright light for color; the sources differ on direct sun.
+- [Chinese Money Plant care](https://familygreenhouse.net/care/chinese-money-plant): Pilea peperomioides. Water: When the top of the mix starts to dry; less in winter. Light: Bright, indirect light; strong summer sun can scorch it.
+- [Peperomia care](https://familygreenhouse.net/care/peperomia): Peperomia obtusifolia. Water: Let it dry out between waterings; never soggy. Light: Bright, indirect light; tolerates low light for months.
+- [Alocasia care](https://familygreenhouse.net/care/alocasia): Alocasia. Water: When the top 2 inches are dry; very little in winter. Light: Bright, indirect light; strong sun scorches the leaves.
+- [Cast Iron Plant care](https://familygreenhouse.net/care/cast-iron-plant): Aspidistra elatior. Water: When the soil is dry 2 to 3 inches down; less in winter. Light: Low light to shade; no direct sun.
+- [Corn Plant care](https://familygreenhouse.net/care/corn-plant): Dracaena fragrans. Water: When the surface is dry, then water thoroughly. Light: Bright to moderate filtered light; no direct sun.
+- [Amaryllis care](https://familygreenhouse.net/care/amaryllis): Hippeastrum. Water: When the soil surface feels dry; empty the saucer. Light: At least 4 hours of direct sun; a south window is best.
+- [Norfolk Island Pine care](https://familygreenhouse.net/care/norfolk-island-pine): Araucaria heterophylla. Water: When the surface is dry; water thoroughly. Light: Bright light near an east, west or south window.
+- [Cyclamen care](https://familygreenhouse.net/care/cyclamen): Cyclamen persicum. Water: When the surface is dry; water at the pot’s edge. Light: Bright, indirect light in a cool room.
+- [Kalanchoe care](https://familygreenhouse.net/care/kalanchoe): Kalanchoe blossfeldiana. Water: When the soil has dried, but before it wilts. Light: Bright light; shade it from hot afternoon sun.
+- [Air Plant care](https://familygreenhouse.net/care/air-plant): Tillandsia. Water: About once a week; every 2 weeks in cool, dim months. Light: Bright light; the sources differ on direct sun.
+- [Rosemary care](https://familygreenhouse.net/care/rosemary): Salvia rosmarinus. Water: When the soil is dry to the touch, about once a week. Light: Full sun; your sunniest window, turned each week.
+- [Ponytail Palm care](https://familygreenhouse.net/care/ponytail-palm): Beaucarnea recurvata. Water: Deeply, then let it dry; much less in winter. Light: As much light as possible; a sunny window.
+- [Areca Palm care](https://familygreenhouse.net/care/areca-palm): Dypsis lutescens. Water: Keep it moist but not soggy while it is growing. Light: Bright, indirect light in a warm room.
+- [Schefflera care](https://familygreenhouse.net/care/schefflera): Schefflera arboricola. Water: Thoroughly, once the top ½ inch of soil is dry. Light: Medium to bright, filtered light; no harsh direct sun.
+- [Satin Pothos care](https://familygreenhouse.net/care/satin-pothos): Scindapsus pictus. Water: Keep the potting mix moist and well drained. Light: Bright, indirect light; no direct sun.
+- [Dragon Tree care](https://familygreenhouse.net/care/dragon-tree): Dracaena marginata. Water: Thoroughly, once the soil surface is dry to the touch. Light: Bright, indirect light; tolerates lower light.
+- [Arrowhead Plant care](https://familygreenhouse.net/care/arrowhead-plant): Syngonium podophyllum. Water: Let the mix dry out slightly between waterings. Light: Medium to bright indirect light; no direct sun.
+- [Weeping Fig care](https://familygreenhouse.net/care/weeping-fig): Ficus benjamina. Water: Often enough that the soil never dries out fully. Light: Bright, indirect or curtain-filtered light.
+- [Polka Dot Plant care](https://familygreenhouse.net/care/polka-dot-plant): Hypoestes phyllostachya. Water: Water well; let it dry slightly between waterings. Light: Bright, filtered light; too dim makes it leggy.
+- [Tradescantia care](https://familygreenhouse.net/care/tradescantia): Tradescantia zebrina. Water: Let the soil dry between waterings; less in winter. Light: Bright light indoors keeps the stripes.
+- [Jasmine care](https://familygreenhouse.net/care/jasmine): Jasminum polyanthum. Water: Keep moist while growing; water very lightly in winter. Light: Bright, indirect light; some morning sun is fine.
+- [Lucky Bamboo care](https://familygreenhouse.net/care/lucky-bamboo): Dracaena sanderiana. Water: In water: cover the roots, change it weekly. Light: Bright, indirect light; direct sun browns the leaves.
+- [Venus Flytrap care](https://familygreenhouse.net/care/venus-flytrap): Dionaea muscipula. Water: Never let it dry out; use rain or distilled water. Light: Several hours of direct sun; a south or west window.
+- [Majesty Palm care](https://familygreenhouse.net/care/majesty-palm): Ravenea rivularis. Water: Keep the soil consistently moist, never soggy. Light: Bright, indirect light; direct sun scorches it.
+- [Kentia Palm care](https://familygreenhouse.net/care/kentia-palm): Howea forsteriana. Water: Generously in summer; in winter, only once it is dry. Light: Tolerates low light; grows best in bright light.
+- [Paperwhite care](https://familygreenhouse.net/care/paperwhite): Narcissus papyraceus. Water: Keep water touching the bulb bottoms; soil stays moist. Light: A cool, sunny spot; too warm or dim and stems flop.
+- [Bird’s Nest Fern care](https://familygreenhouse.net/care/birds-nest-fern): Asplenium nidus. Water: Keep the mix moist; never let it dry out. Light: Bright light or light shade; sun yellows it.
+- [Purple Shamrock care](https://familygreenhouse.net/care/purple-shamrock): Oxalis triangularis. Water: When the surface is dry; stop while it is dormant. Light: Bright light; the sources differ on direct sun.
+- [Thai Constellation care](https://familygreenhouse.net/care/thai-constellation-monstera): Monstera deliciosa. Water: Water thoroughly; let the top quarter to third dry. Light: More light than a green monstera; no direct sun.
+- [Rattlesnake Plant care](https://familygreenhouse.net/care/rattlesnake-plant): Goeppertia insignis. Water: Moist, not wet, in growth; less in winter. Light: Limited sun to bright shade; no full sun.
+- [Peacock Plant care](https://familygreenhouse.net/care/peacock-plant): Goeppertia makoyana. Water: Moist, never soggy; less in winter; no tap water. Light: Bright, indirect light or part shade; no direct sun.
+- [Zebra Calathea care](https://familygreenhouse.net/care/zebra-calathea): Goeppertia zebrina. Water: Moist, never soggy; use distilled or rainwater. Light: Bright, indirect light or part shade.
+- [Calathea Orbifolia care](https://familygreenhouse.net/care/calathea-orbifolia): Goeppertia orbifolia. Water: Consistently moist, never soggy; no tap water. Light: Bright, indirect light or part shade.
+
+## Pet safety pages
+
+- [Is pothos toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/pothos): Epipremnum aureum. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is monstera toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/monstera): Monstera deliciosa. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is snake plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/snake-plant): Dracaena trifasciata. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is spider plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/spider-plant): Chlorophytum comosum. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is peace lily toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/peace-lily): Spathiphyllum. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is aloe vera toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/aloe-vera): Aloe vera. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is jade plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/jade-plant): Crassula ovata. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is philodendron toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/philodendron): Philodendron. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is fiddle-leaf fig toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/fiddle-leaf-fig): Ficus lyrata. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is rubber plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/rubber-plant): Ficus elastica. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is dieffenbachia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/dieffenbachia): Dieffenbachia. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is calathea toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/calathea): Calathea. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is Boston fern toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/boston-fern): Nephrolepis exaltata. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is asparagus fern toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/asparagus-fern): Asparagus densiflorus. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is African violet toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/african-violet): Saintpaulia. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is orchid toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/orchid): Phalaenopsis. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is true lily toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/lily): Lilium. Cats: Toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is sago palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/sago-palm): Cycas revoluta. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is poinsettia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/poinsettia): Euphorbia pulcherrima. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is bird of paradise toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/bird-of-paradise): Strelitzia reginae. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is anthurium toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/anthurium): Anthurium. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is Chinese evergreen toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/chinese-evergreen): Aglaonema. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is English ivy toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/english-ivy): Hedera helix. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is money tree toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/money-tree): Pachira aquatica. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is Christmas cactus toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/christmas-cactus): Schlumbergera. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is parlor palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/parlor-palm): Chamaedorea elegans. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is hoya toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/hoya): Hoya carnosa. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is nerve plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/nerve-plant): Fittonia albivenis. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is alocasia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/alocasia): Alocasia. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is areca palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/areca-palm): Dypsis lutescens. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is corn plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/corn-plant): Dracaena fragrans. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is ponytail palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/ponytail-palm): Beaucarnea recurvata. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is begonia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/begonia): Begonia. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is cast iron plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/cast-iron-plant): Aspidistra elatior. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is peperomia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/peperomia): Peperomia obtusifolia. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is jasmine toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/jasmine): Jasminum. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is blue echeveria toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/blue-echeveria): Echeveria glauca. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is haworthia toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/haworthia): Haworthia. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is burro’s tail toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/burros-tail): Sedum morganianum. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is schefflera toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/schefflera): Schefflera. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is amaryllis toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/amaryllis): Hippeastrum. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is norfolk pine toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/norfolk-island-pine): Araucaria heterophylla. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is cyclamen toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/cyclamen): Cyclamen persicum. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is kalanchoe toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/kalanchoe): Kalanchoe blossfeldiana. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is rosemary toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/rosemary): Salvia rosmarinus. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is satin pothos toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/satin-pothos): Scindapsus pictus. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is dragon tree toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/dragon-tree): Dracaena marginata. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is arrowhead plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/arrowhead-plant): Syngonium podophyllum. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is weeping fig toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/weeping-fig): Ficus benjamina. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is polka dot plant toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/polka-dot-plant): Hypoestes phyllostachya. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is lucky bamboo toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/lucky-bamboo): Dracaena sanderiana. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is venus flytrap toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/venus-flytrap): Dionaea muscipula. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is majesty palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/majesty-palm): Ravenea rivularis. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is kentia palm toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/kentia-palm): Howea forsteriana. Cats: Non-toxic. Dogs: Non-toxic. Source: ASPCA plant list.
+- [Is paperwhite toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/paperwhite): Narcissus papyraceus. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.
+- [Is purple shamrock toxic to cats and dogs?](https://familygreenhouse.net/pet-safe/purple-shamrock): Oxalis triangularis. Cats: Toxic. Dogs: Toxic. Source: ASPCA plant list.

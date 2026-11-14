@@ -216,6 +216,144 @@ describe('invokeChatModel (Bedrock wrapper)', () => {
     expect(res.costUsd).toBeCloseTo(1 + 2.5, 10);
   });
 
+  // #889. The assistant is told today's date. The date changes every day and
+  // the cached prefix is tools + system + the conversation up to the
+  // breakpoint, so the date may sit in none of those: it rides AFTER the
+  // breakpoint, where nothing is cached.
+  describe("uncachedContext (today's date): sent on every call, part of no cached prefix", () => {
+    interface Body {
+      system: unknown;
+      tools: unknown[];
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    }
+
+    /**
+     * What Bedrock hashes for the cache entry a request writes, in render
+     * order: tools, system, then every block up to and including the one
+     * carrying `cache_control`. The marker itself is not content.
+     */
+    function cachedPrefix(body: Body) {
+      const blocks: Array<Record<string, unknown>> = [];
+      let closed = false;
+      for (const message of body.messages) {
+        for (const block of message.content) {
+          if (closed) break;
+          const { cache_control: marker, ...content } = block;
+          blocks.push({ role: message.role, ...content });
+          if (marker) closed = true;
+        }
+      }
+      // A request with no breakpoint has no cached prefix to reason about.
+      expect(closed).toBe(true);
+      return { tools: body.tools, system: body.system, blocks };
+    }
+
+    const question = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'What is due?' }],
+    };
+    const toolTurn = [
+      {
+        role: 'assistant' as const,
+        content: [{ type: 'tool_use' as const, id: 'tu1', name: 'list_plants', input: {} }],
+      },
+      {
+        role: 'user' as const,
+        content: [{ type: 'tool_result' as const, tool_use_id: 'tu1', content: '[]' }],
+      },
+    ];
+    const MONDAY = 'Today is Monday, 2026-03-09, in UTC.';
+    const TUESDAY = 'Today is Tuesday, 2026-03-10, in UTC.';
+
+    async function send(messages: unknown[], uncachedContext?: string): Promise<Body> {
+      bedrockSend.mockResolvedValueOnce(modelResponse());
+      const invokeChatModel = await subject();
+      await invokeChatModel({
+        system: 'static system prompt',
+        messages: messages as never,
+        tools,
+        ...(uncachedContext === undefined ? {} : { uncachedContext }),
+      });
+      return JSON.parse(lastCommandInput().body) as Body;
+    }
+
+    it('rides as the final text block, after the breakpoint, and leaves system alone', async () => {
+      const body = await send([question], MONDAY);
+      expect(body.system).toBe('static system prompt');
+      expect(body.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'What is due?', cache_control: { type: 'ephemeral' } },
+            { type: 'text', text: MONDAY },
+          ],
+        },
+      ]);
+    });
+
+    it('follows the tool results on a later call of the loop, still after the breakpoint', async () => {
+      const body = await send([question, ...toolTurn], MONDAY);
+      expect(body.messages[0].content).toEqual([{ type: 'text', text: 'What is due?' }]);
+      expect(body.messages[2].content).toEqual([
+        {
+          type: 'tool_result',
+          tool_use_id: 'tu1',
+          content: '[]',
+          cache_control: { type: 'ephemeral' },
+        },
+        { type: 'text', text: MONDAY },
+      ]);
+    });
+
+    it('is in no cached prefix: the prefix is the same with Monday, with Tuesday and with no date', async () => {
+      const none = await send([question]);
+      const monday = await send([question], MONDAY);
+      const tuesday = await send([question], TUESDAY);
+      // The two dated requests really do differ, so equality below is not
+      // two copies of one request.
+      expect(JSON.stringify(monday)).not.toBe(JSON.stringify(tuesday));
+      expect(JSON.stringify(monday)).toContain('2026-03-09');
+
+      expect(cachedPrefix(monday)).toEqual(cachedPrefix(none));
+      expect(cachedPrefix(tuesday)).toEqual(cachedPrefix(none));
+      expect(JSON.stringify(cachedPrefix(monday))).not.toContain('2026-03-09');
+      expect(JSON.stringify(cachedPrefix(tuesday))).not.toContain('2026-03-10');
+    });
+
+    it('keeps the loop cacheable across midnight: what call N cached is still a prefix of call N+1', async () => {
+      // Call N goes out on Monday; the tool runs; call N+1 goes out on Tuesday.
+      const callN = cachedPrefix(await send([question], MONDAY));
+      const callN1 = cachedPrefix(await send([question, ...toolTurn], TUESDAY));
+      expect(callN1.tools).toEqual(callN.tools);
+      expect(callN1.system).toEqual(callN.system);
+      expect(callN1.blocks.length).toBeGreaterThan(callN.blocks.length);
+      expect(callN1.blocks.slice(0, callN.blocks.length)).toEqual(callN.blocks);
+    });
+
+    it('exactly one breakpoint, and never on the date', async () => {
+      const body = await send([question, ...toolTurn], MONDAY);
+      const marked = body.messages.flatMap((m) => m.content).filter((b) => b.cache_control);
+      expect(marked).toHaveLength(1);
+      expect(marked[0].type).toBe('tool_result');
+    });
+
+    it('is not sent, and says so in the log, when there is no user message to carry it', async () => {
+      const { logger } = await import('../../../src/utils/logger.js');
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined as never);
+      // An assistant-last request cannot take trailing user text.
+      const assistantLast = await send(
+        [question, { role: 'assistant', content: [{ type: 'text', text: 'Let me look.' }] }],
+        MONDAY
+      );
+      expect(JSON.stringify(assistantLast)).not.toContain('2026-03-09');
+      const empty = await send([], MONDAY);
+      expect(empty.messages).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls[0][1]).toBe('chat_uncached_context_not_sent');
+      warn.mockRestore();
+    });
+  });
+
   // #460. A hung Bedrock connection used to hold the 90-second chat Lambda for
   // its whole timeout: the user saw a request that never returned and the
   // account paid for 90 seconds of a 512 MB function.

@@ -19,6 +19,7 @@
  * webhook both import it.
  */
 import type Stripe from 'stripe';
+import { getPlan, PLAN_ORDER, planRank, type PlanId } from './plans.js';
 
 export const IDENTIFY_TOP_UP_PACK = {
   /** Stable identifier stamped on Stripe metadata; never shown to users. */
@@ -101,6 +102,71 @@ export function identifyTopUpSummary(
   };
   if (paymentsAvailable) summary.priceUsd = IDENTIFY_TOP_UP_PACK.priceUsd;
   return summary;
+}
+
+/**
+ * The name of the lowest tier above `meteredPlanId` whose monthly allowance is
+ * actually larger, or null when none is. Tier rank alone is not the answer:
+ * Garden ranks above Seedling and has an allowance of 0 (ADR 0042), so "upgrade"
+ * can mean Greenhouse only. The allowances are an argument because they belong
+ * to `services/identifyBudget.ts`, which this pure module must not import.
+ */
+export function identifyUpgradeTargetName(
+  meteredPlanId: PlanId,
+  allowances: Record<PlanId, number>
+): string | null {
+  const target = PLAN_ORDER.find(
+    (id) => planRank(id) > planRank(meteredPlanId) && allowances[id] > allowances[meteredPlanId]
+  );
+  return target ? getPlan(target).name : null;
+}
+
+/**
+ * The sentence `POST /plants/identify` refuses with once the allowance and any
+ * credits are spent. The website and the apps show their own translated copy
+ * off `details`; this is what an API client reads, and what `getErrorMessage`
+ * would show. Each purchase call opens its own sentence ("Buy", "Upgrade") or
+ * trails as ", or upgrade", the shapes `withoutPurchaseCalls` (frontend
+ * `services/api.ts`) drops inside the apps, so no price or pack can reach them.
+ *
+ * An allowance of 0 is not an allowance that ran out: it was never there, and
+ * it does not come back next month.
+ */
+export function identifyRefusalMessage(input: {
+  /** The tier the household is entitled to. */
+  planName: string;
+  /** Its metered monthly allowance. */
+  allowance: number;
+  onNoCardTrial: boolean;
+  upgradeTo: string | null;
+  /** The pack, only when it can be bought here. */
+  topUp: { credits: number; priceUsd?: number } | null;
+}): string {
+  const { planName, allowance, onNoCardTrial, upgradeTo, topUp } = input;
+  const opening = (clause: string) => clause.charAt(0).toUpperCase() + clause.slice(1);
+  if (allowance === 0) {
+    const notIncluded = `Identification is not included in ${planName}.`;
+    const upgrade = upgradeTo ? `upgrade to ${upgradeTo} for a monthly allowance` : null;
+    if (topUp?.priceUsd !== undefined) {
+      const pack = `Buy the ${topUp.credits}-identification pack for $${topUp.priceUsd.toFixed(2)}`;
+      return `${notIncluded} ${pack}${upgrade ? `, or ${upgrade}` : ''}.`;
+    }
+    return upgrade ? `${notIncluded} ${opening(upgrade)}.` : notIncluded;
+  }
+  const count = `${allowance} plant identification${allowance === 1 ? '' : 's'}`;
+  const resets = 'Your allowance resets at the start of next month.';
+  const upgrade = upgradeTo ? `upgrade to ${upgradeTo} for a higher monthly allowance` : null;
+  const offer = topUp
+    ? ` Buy a top-up pack of ${topUp.credits} identifications${upgrade ? `, or ${upgrade}` : ''}.`
+    : upgrade
+      ? ` ${opening(upgrade)}.`
+      : '';
+  if (onNoCardTrial) {
+    return `During the no-card Garden trial, identifications use the free plan's allowance of ${allowance} a month, and this month's ${allowance === 1 ? 'is' : 'are'} used up. ${resets}${offer}`;
+  }
+  return topUp
+    ? `Your ${planName} plan's ${count} for this month ${allowance === 1 ? 'is' : 'are'} used up. ${resets}${offer}`
+    : `Your ${planName} plan is limited to ${count} per month. ${resets}${offer}`;
 }
 
 /** True when a Checkout Session was minted by `createIdentifyTopUpCheckoutSession`. */

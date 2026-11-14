@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
+import { isPriceReconciliationError } from '../../../src/services/stripePrices.js';
 
 // Mock the Stripe SDK that billing.getStripe() dynamically imports, so
 // createCheckoutSession can be exercised without a network/key. `sessionsCreate`
@@ -34,13 +35,13 @@ vi.mock('stripe', () => ({
  */
 const CATALOG_PRICES: Record<string, Record<string, unknown>> = {
   price_garden_monthly: {
-    unit_amount: 499,
+    unit_amount: 299,
     currency: 'usd',
     active: true,
     recurring: { interval: 'month', interval_count: 1 },
   },
   price_garden_annual: {
-    unit_amount: 3999,
+    unit_amount: 2499,
     currency: 'usd',
     active: true,
     recurring: { interval: 'year', interval_count: 1 },
@@ -2155,11 +2156,11 @@ describe('planSummary', () => {
     // as "not available", so the interval toggle disappears on its own.
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
+    // Garden annual came back at $24.99 (ADR 0042); the others stay null.
     expect(planSummary(PLANS.seedling, true).annualPrice).toBeNull();
-    expect(planSummary(PLANS.garden, true).annualPrice).toBeNull();
+    expect(planSummary(PLANS.garden, true).annualPrice).toBe(24.99);
     expect(planSummary(PLANS.greenhouse, true).annualPrice).toBeNull();
-    // ...while the catalog itself still knows the amount.
-    expect(PLANS.garden.annualPrice).toBe(39.99);
+    // ...while the catalog itself still knows the withdrawn amount.
     expect(PLANS.greenhouse.annualPrice).toBe(79.99);
   });
 
@@ -2175,7 +2176,7 @@ describe('planSummary', () => {
   it('still publishes the monthly amount on both paid tiers', async () => {
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
-    expect(planSummary(PLANS.garden, true).monthlyPrice).toBe(4.99);
+    expect(planSummary(PLANS.garden, true).monthlyPrice).toBe(2.99);
     expect(planSummary(PLANS.greenhouse, true).monthlyPrice).toBe(9.99);
   });
 
@@ -2186,7 +2187,7 @@ describe('planSummary', () => {
     const { planSummary } = await import('../../../src/services/billing.js');
     const { PLANS } = await import('../../../src/models/plans.js');
     const offered = { ...PLANS.garden, withdrawnIntervals: undefined };
-    expect(planSummary(offered, true)).toMatchObject({ annualPrice: 39.99, lifetimePrice: 149 });
+    expect(planSummary(offered, true)).toMatchObject({ annualPrice: 24.99, lifetimePrice: 149 });
     const withdrawn = { ...PLANS.garden, withdrawnIntervals: ['year'] as const };
     expect(planSummary(withdrawn, true)).toMatchObject({ annualPrice: null, lifetimePrice: 149 });
   });
@@ -2214,8 +2215,8 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     vi.clearAllMocks();
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
-    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499 = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
@@ -2306,13 +2307,31 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     });
   });
 
-  it('enables automatic tax only when configured', async () => {
+  it('enables automatic tax only when configured, on a product carrying the SaaS tax code', async () => {
     process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
     try {
+      pricesRetrieve.mockResolvedValueOnce({
+        id: 'price_garden_monthly',
+        ...CATALOG_PRICES.price_garden_monthly,
+        product: { id: 'prod_garden', tax_code: 'txcd_10103000' },
+      });
       await runCheckout('month');
       expect(sessionsCreate).toHaveBeenCalledWith(
         expect.objectContaining({ automatic_tax: { enabled: true } })
       );
+    } finally {
+      delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+    }
+  });
+
+  it('with automatic tax on, refuses to sell a product whose tax code is missing — before Stripe', async () => {
+    // Today's live products carry the account preset or nothing. Once the
+    // flag is "1" that is a refusal, not a sale taxed as the wrong thing.
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    try {
+      // The seeded catalog price has no product expansion at all.
+      await expect(runCheckout('month')).rejects.toSatisfy(isPriceReconciliationError);
+      expect(sessionsCreate).not.toHaveBeenCalled();
     } finally {
       delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
     }
@@ -2341,7 +2360,6 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
   }
 
   it.each([
-    ['garden', 'year'],
     ['garden', 'lifetime'],
     ['greenhouse', 'year'],
   ] as const)(
@@ -2360,8 +2378,8 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
     // With the annual env deleted, the old "Missing STRIPE_PRICE_ID_..."
     // error would fire if configuration were read first. The withdrawal
     // guard must win: the answer is "not sold", not "misconfigured".
-    delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
-    const err = await attemptWithdrawnCheckout('garden', 'year').catch((e: Error) => e);
+    delete process.env.STRIPE_PRICE_ID_GREENHOUSE_ANNUAL;
+    const err = await attemptWithdrawnCheckout('greenhouse', 'year').catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toMatch(/^INTERVAL_WITHDRAWN:/);
     expect((err as Error).message).not.toMatch(/Missing STRIPE_PRICE_ID/);
@@ -2369,8 +2387,8 @@ describe('createCheckoutSession — interval resolves the Stripe price', () => {
   });
 
   it('throws a clear error when the requested (offered) cadence has no configured price env', async () => {
-    delete process.env.STRIPE_PRICE_ID_GARDEN;
-    await expect(runCheckout('month')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN');
+    delete process.env.STRIPE_PRICE_ID_GARDEN_299;
+    await expect(runCheckout('month')).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN_299');
     expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
@@ -2467,7 +2485,7 @@ describe('createCheckoutSession — refuses a second checkout for a household wi
     vi.clearAllMocks();
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
@@ -2587,7 +2605,7 @@ describe('createCheckoutSession — one plan checkout at a time (the pending-che
     vi.clearAllMocks();
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     sessionsCreate.mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
@@ -2993,7 +3011,7 @@ describe('the free trial is once per household, not once per checkout', () => {
     vi.clearAllMocks();
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
@@ -3149,7 +3167,7 @@ describe('no stacked trials: checkout after the no-card trial (2026-10-23)', () 
     vi.setSystemTime(NOW);
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_garden_annual';
     process.env.STRIPE_PRICE_ID_GARDEN_LIFETIME = 'price_garden_lifetime';
     sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
@@ -3451,7 +3469,7 @@ describe('createCheckoutSession — refuses to charge an unreconciled price', ()
     vi.clearAllMocks();
     process.env.PAYMENTS_ENABLED = '1';
     process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
-    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_garden_monthly';
     sessionsCreate.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.test/cs' });
     seedCatalogPrices();
   });
@@ -3472,7 +3490,7 @@ describe('createCheckoutSession — refuses to charge an unreconciled price', ()
 
   it('reconciles the price it is about to charge before creating the Session', async () => {
     await run();
-    expect(pricesRetrieve).toHaveBeenCalledWith('price_garden_monthly');
+    expect(pricesRetrieve).toHaveBeenCalledWith('price_garden_monthly', { expand: ['product'] });
     expect(pricesRetrieve.mock.invocationCallOrder[0]).toBeLessThan(
       sessionsCreate.mock.invocationCallOrder[0]
     );
@@ -3766,5 +3784,65 @@ describe('the retry window end to end through the webhook (#593)', () => {
     expect(
       getEntitledPlan({ ...row, planId: values[':planId'] as string, status: 'canceled' })
     ).toBe(PLANS.garden);
+  });
+});
+
+describe('Garden repricing (ADR 0042): legacy prices keep resolving, the new ones sell', () => {
+  afterEach(() => {
+    delete process.env.STRIPE_PRICE_ID_GARDEN;
+    delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL;
+    delete process.env.STRIPE_PRICE_ID_GARDEN_299;
+    delete process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499;
+  });
+
+  function renewal(priceId: string, planId = 'garden') {
+    return {
+      id: 'evt_renewal',
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_x',
+          status: 'active',
+          // No usable metadata: only the price can say which tier this is.
+          metadata: { householdId: 'hh-1' },
+          items: { data: [{ price: { id: priceId }, current_period_end: 1_800_000_000 }] },
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  it('a household still renewing on the old $4.99 price resolves to Garden', async () => {
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_legacy_499';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_new_299';
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    expect(deltaForStripeEvent(renewal('price_legacy_499'))?.fields.planId).toBe('garden');
+  });
+
+  it('the old $39.99 annual price and the new $2.99 and $24.99 prices all resolve to Garden', async () => {
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL = 'price_legacy_3999';
+    process.env.STRIPE_PRICE_ID_GARDEN_299 = 'price_new_299';
+    process.env.STRIPE_PRICE_ID_GARDEN_ANNUAL_2499 = 'price_new_2499';
+    const { deltaForStripeEvent } = await import('../../../src/services/billing.js');
+    for (const id of ['price_legacy_3999', 'price_new_299', 'price_new_2499']) {
+      expect(deltaForStripeEvent(renewal(id))?.fields.planId).toBe('garden');
+    }
+  });
+
+  it('checkout never sells at the legacy price, even when it is the only one configured', async () => {
+    process.env.PAYMENTS_ENABLED = '1';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    process.env.STRIPE_PRICE_ID_GARDEN = 'price_garden_monthly';
+    const { createCheckoutSession } = await import('../../../src/services/billing.js');
+    await expect(
+      createCheckoutSession({
+        householdId: 'hh-1',
+        customerEmail: 'a@b.test',
+        planId: 'garden',
+        interval: 'month',
+        successUrl: 's',
+        cancelUrl: 'c',
+      })
+    ).rejects.toThrow('Missing STRIPE_PRICE_ID_GARDEN_299');
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 });

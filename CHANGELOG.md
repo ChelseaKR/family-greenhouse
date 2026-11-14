@@ -27,6 +27,166 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the Monstera deliciosa row, and the four calatheas read the genus-level
   Calathea row, not ASPCA's "Peacock Plant", which is Kaempferia. The monstera
   guide's related cards now include Thai Constellation.
+- **The apps ask before sending data to Amazon Bedrock or Plant.id.** In the
+  iPhone and Android apps, the first chat question, leaf health check and photo
+  identification each open a dialog that names the service and what goes to it.
+  Not now sends nothing; Allow is remembered on that device. The website asks
+  nothing new (App Review Guideline 5.1.2(i)).
+- **The App Store plans card says what each plan includes,** from the plan
+  catalog's caps and the App Store's own subscription description (Guideline
+  3.1.2(c)).
+- **llms.txt lists every care guide and pet-safety page, and says when it last
+  changed.** /llms.txt is now generated (`npm run llms --workspace frontend`).
+  After the hand-kept summary it has one line per care guide (its water and
+  light lines) and one per pet-safety page (the verdict word the page shows for
+  cats and for dogs, with the ASPCA named as the source), from the data the
+  pages render, and a "Last updated" date that moves only when the file's text
+  does. /pricing marks up its seven "Common questions" as an FAQPage, from the
+  list the page renders. Each pet-safety page's structured data carries
+  `dateModified`, equal to its sitemap `<lastmod>`; the build fails if they
+  differ. No title or meta description changed.
+- **The public prices say what Garden costs now.** The price sentence a reader
+  without JavaScript gets on /pricing adds Garden's yearly price ("$2.99 a month
+  or $24.99 a year"), from the same table as the structured data, and falls back
+  to monthly prices if yearly is withdrawn. /changelog gains two website-only
+  entries, for the 2026-11-08 Garden price and the 2026-10-24 free plan; its
+  newest entry had still said Garden was $4.99.
+
+### Fixed
+
+- **Nothing in the iPhone app or its listing says the app sells nothing.** The
+  App Store description names the three In-App Purchase subscriptions and their
+  renewal terms. Help no longer says the apps have no notifications and no
+  purchases. Locked features in an iPhone build that sells plans point at
+  Settings → Plan status instead of "Plan changes aren't available in the app."
+- **Deleting an account does not cancel an App Store subscription, and now says
+  so,** on the Delete my account screen in the iPhone app and on the public
+  account deletion page. The iOS privacy manifest declares Purchase History.
+- **The privacy policy names Apple In-App Purchase** and what the server keeps
+  about an App Store subscription. Privacy and account deletion take a new
+  effective date at the next release.
+- **After Done, the page keeps your place and shows what changed.** On the
+  caretaker page and the plant label page, keyboard and screen-reader focus
+  moves to the next task, or to the thanks when none is left, instead of being
+  lost when the finished row leaves the list. The caretaker page says "Marked
+  as done" for each one, and each "I just did this" button on the label page
+  is named after its own task. On Today across your homes, a care someone
+  else already logged is offered back in plain words with a "Log it anyway"
+  button, in place of the API's own error text. On the plant page and the
+  dashboard, "Last watered", Care History and the activity feed show the
+  completion without leaving the page; what they show is read from the server
+  after the completion, never filled in by the browser.
+
+### Changed
+
+- **The Christmas cactus pet page answers the cat question first, and the
+  spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
+  "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
+  the hotline box, and its title is "Is Christmas cactus toxic to cats? Listed
+  as non-toxic". /pet-safe/spider-plant's FAQ adds "Is spider plant toxic to
+  rats?": the ASPCA listing has no rat entry, so the page says it can't say
+  and points to an exotic-animal vet. Both are per-page fields in the pet
+  table; no other page and no verdict changed.
+
+### Fixed
+
+- **The production price attestation now says which attested Stripe prices
+  still exist.** Three of the eight ids in `stripe_price_ids_attested` (the
+  withdrawn Garden annual, Garden lifetime and Greenhouse annual) were deleted
+  from Stripe and never sold; the tfvars comments said subscribers still renew
+  on them. Comments only: no id, variable, or runtime value changed.
+- **A failed load no longer reads as a dead link or a display that was turned
+  off.** The shared cutting page and the join page say they could not load,
+  with Try again, unless the server says the link is invalid or expired. A wall
+  display that taps Done on a task someone just deleted reads its list again
+  and keeps refreshing; it says it was turned off only when its own link is.
+  Removing a member or changing a role shows the reason when it fails. On a
+  Spanish screen the plant page says "Vence:" and "Nunca" where it said "Due:"
+  and "Never".
+- **Three backend fixes from the 2026-11-08 audit.** A scanned plant tag names
+  a completion by a plant sitter, the kiosk display or a former member in
+  full: it printed "Last watered today by a." A sitter link revoked before its
+  start date no longer makes the away recap fail to load; the recap of the
+  last window that did open shows. The care assistant is told today's date on
+  every question, in the household's time zone or in UTC when none is set
+  (#889), and the date stays out of the prompt cache.
+
+## [0.51.0] - 2026-11-09
+
+**A caretaker seat now ends when the member who made it leaves, and the site
+links its household posts and holiday pet pages.** Terms and Privacy text did
+not change.
+
+- **What the deploy changes.** No Terraform change since 0.50.0: `infrastructure/`
+  is untouched, so expect only the usual Lambda and frontend updates. No stored
+  data is migrated, and seats left live by earlier departures are not changed.
+  The apps get these changes only with a store build, and none is planned for
+  this release.
+
+### Changed
+
+- **Internal links and one campaign tag.** Home, /care and /help/households link
+  the two household blog posts, home and /pet-safe link the Christmas cactus and
+  poinsettia pet pages by name, and the sitter page's footer link carries a fixed
+  `utm_source` and `utm_medium`, never the sitter token.
+
+### Fixed
+
+- **A caretaker seat now ends when the member who created it leaves or is
+  removed.** Sitter links, plant tags and wall displays already did. A removed
+  admin who kept a seat URL could read tasks and spaces and complete tasks for
+  up to 180 days. The caretaker's visits stay on record, and the confirmations,
+  help pages and audit log now name seats. The product cannot tell the caretaker,
+  so the seat stays on the Household page with why it stopped and what an admin
+  can do next, including when the plan cannot create a new one, and the email to
+  the remaining admins when someone leaves gives the count. Seats left live by
+  earlier departures are not changed, because their creator was already scrubbed.
+
+## [0.50.0] - 2026-11-08
+
+**Garden is now $2.99 a month or $24.99 a year, and a production release needs
+one approval.** Plant identification is sold only by the 20-identification pack.
+Signing out now clears what the app has read, a renamed plant reaches its tasks,
+emptied fields stay empty, and the status page posts the plant tag outage. The
+Terms text changed with the new plan; Privacy did not.
+
+- **What the deploy changes.** Terraform sets the two new Garden price ids, the
+  100-check Garden leaf-health cap and `app_store_billing_enabled = "1"`, which
+  opens the `/billing/app-store/*` routes. No running subscription moves and no
+  stored data is migrated. The apps get these changes only with a store build,
+  and none is planned for this release.
+
+### Added
+
+- **Garden goes on sale at $2.99 a month and $24.99 a year at the next
+  production tag (ADR 0042).** Production now names both live Stripe prices and
+  attests them; existing Garden prices are untouched.
+- **Garden is $2.99 a month or $24.99 a year, and plant identification is
+  sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
+  with 30 identifications. Garden annual returns at $24.99. Garden bundles no
+  identifications; Seedling keeps 1 and Greenhouse 100. Garden leaf-health
+  checks drop from 200 to 100 a month, because 200 left $0.04 a month on the
+  yearly price through Apple. Households that bought at $4.99 or $39.99 keep
+  renewing on those Stripe prices (new `legacyPrices` in the catalog; the
+  webhook still maps them to Garden). The new prices are the Terraform
+  variables `stripe_price_id_garden_299` and `stripe_price_id_garden_annual_2499`,
+  blank by default: the pricing page publishes Garden as unavailable while
+  they are blank, and the plan fails if only one of the pair is set. The
+  iPhone app gets a `garden.yearly` product beside `garden.monthly`. The
+  pricing page, FAQ, Terms and llms.txt, in English and Spanish, now say
+  "Identification is sold as a 20-identification pack for $1.99; it is not
+  included in Garden." Nothing changes in production until the owner creates
+  the two Stripe prices and pastes their ids.
+- **Yearly first (ADR 0042).** The pricing page and Settings → Plan status
+  open on the yearly Garden price, $24.99 with the derived "Save ~30%" hint;
+  Monthly is one tap away, and the tap is kept for the page load only, in
+  memory. On the Yearly tab Greenhouse, which has no yearly price, shows its
+  monthly price marked "Billed monthly" and checks out monthly. The iPhone app
+  lists the yearly product first. The day-10 and
+  day-14 trial emails name the yearly price first and then the monthly, each
+  once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
+  a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real
+  checkouts choosing yearly reverts the default.
 
 ### Changed
 
@@ -43,6 +203,50 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   routes again, and a recorded subscription keeps its entitlement. A new
   wiring test pins the switch, its path to the billing Lambda and the Sandbox
   default.
+
+- **A production release needs one deploy approval, not three.** The reviewer on
+  the `production` environment now approves once, at the `terraform` job, and that
+  approval covers Terraform, the backend deploy and the frontend deploy. Rejecting
+  it stops all three. Re-running a failed deploy job no longer asks again. The
+  `production` deployment record now has one row per release, which turns green
+  when Terraform finishes; the staleness check still takes the live commit from
+  the service worker, so a failed backend or frontend deploy is reported as
+  half-applied, and it now dates a build from when its row succeeded rather than
+  from when approval was requested. This takes effect from the first tag cut after
+  it merges, because a run uses the workflow at its tagged commit.
+
+### Fixed
+
+- **A Garden household that tries plant identification is told it isn't
+  included, not that an allowance of 0 resets next month (ADR 0042).** The
+  website names the 20-identification pack, its catalog price and the buy
+  button; the apps name no price or pack. Upgrade wording now points at
+  Greenhouse, since Garden has no allowance, and Spanish matches.
+
+- **Signing out clears what the app has read.** The next person to sign in on
+  the same browser tab could see the previous account's homes in the switcher
+  and, by choosing one, its cached plants and private notes. The in-memory
+  query cache now empties whenever the signed-in account changes, however the
+  session ended.
+
+- **Renaming a plant now reaches its tasks.** Task lists, the sitter, caretaker
+  and kiosk pages and the calendar feed kept using the old name for good, because each task stored its own copy from the day it was created.
+  Saving a plant now updates those copies, which also repairs any left behind by
+  an earlier rename.
+
+- **Emptying a field on Edit Plant or Edit Task now clears it.** A plant's notes
+  and species and a task's notes came back after being deleted and saved, and a
+  custom task changed to another type kept showing its custom name.
+
+- **The status page no longer claims a clean record it never measured.** It
+  said "No incidents in the last 90 days" because a hand-kept list was empty,
+  including during the plant-tag outage fixed in #931. It now says the log is
+  written by hand and has no entries yet.
+
+- **The plant tag outage is posted on the status page.** All six plant tag
+  routes returned a server error from September 4 to October 5, 2026, until
+  #931 reached production in 0.39.0. The entry is in English and Spanish. Incident
+  dates no longer print a day early in United States time zones.
 
 ## [0.49.0] - 2026-11-08
 

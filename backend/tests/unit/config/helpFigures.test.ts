@@ -97,12 +97,15 @@ describe('help pages: the plan caps they state', () => {
 describe('help pages: the metered allowances they state', () => {
   it('states the monthly identification allowance for every tier', () => {
     const { seedling, garden, greenhouse } = IDENTIFY_ALLOWANCES;
+    // The website's answer and its plain-text twin, then the apps' pair.
     expect(
-      occurrences(
-        `${seedling} identification on Seedling, ${garden} on Garden, ${greenhouse} on Greenhouse`
-      ),
-      'the identify-photo answer must state all three allowances'
-    ).toBe(2);
+      occurrences(`${seedling} identification on Seedling, ${greenhouse} on Greenhouse`),
+      'the identify-photo answers must state the two allowances that exist'
+    ).toBe(4);
+    // Garden's 0 is no allowance, not a number that resets on the 1st.
+    expect(garden).toBe(0);
+    expect(occurrences('Garden has no monthly allowance')).toBe(2);
+    expect(occurrences('Seedling, 0 on Garden')).toBe(0);
   });
 
   it('states the leaf-health caps that production actually enforces', () => {
@@ -115,12 +118,15 @@ describe('help pages: the metered allowances they state', () => {
     const flat = tfvar('leaf_health_monthly_cap') ?? codeDefault;
     const paid = tfvar('leaf_health_monthly_cap_garden') ?? flat;
     const free = tfvar('leaf_health_monthly_cap_seedling') ?? flat;
+    const top = tfvar('leaf_health_monthly_cap_greenhouse') ?? flat;
 
     // The sentence only makes sense while the two differ. If production ever
     // levels them, this fails and the sentence should become one number.
     expect(free, 'production no longer gives Seedling its own leaf-health cap').not.toBe(paid);
     expect(
-      occurrences(`${paid} checks on Garden and Greenhouse, ${free} on the free Seedling plan`),
+      occurrences(
+        `${paid} checks on Garden, ${top} on Greenhouse, ${free} on the free Seedling plan`
+      ),
       'the leaf-health answer must state both caps, re-derived from the production tfvars'
     ).toBe(2); // once in the rendered answer, once in its `text` twin
   });

@@ -133,6 +133,17 @@ export interface InvokeChatModelArgs {
   system: string;
   messages: BedrockMessage[];
   tools: ToolDefinition[];
+  /**
+   * Text the model should read on THIS call that must not become part of any
+   * cached prefix: today's date (#889), which is different tomorrow.
+   *
+   * It is sent as a final text block on the last message, AFTER the cache
+   * breakpoint (see `withCacheBreakpoint`). It is not part of `messages`, so
+   * it is never persisted and never replayed: each call carries exactly one,
+   * the current one. Do not put it in `system` or in `messages` instead; both
+   * sit inside the cached prefix.
+   */
+  uncachedContext?: string;
   /** Hard token cap on the model's response (defense against runaway output). */
   maxOutputTokens?: number;
   /**
@@ -178,10 +189,11 @@ export class ChatTurnDeadlineError extends Error {
  * static prefix — **does not work on this model**, and fails silently. The
  * minimum cacheable prefix for Claude Haiku 4.5 is 4,096 tokens; a shorter
  * prefix is not an error, it simply never creates an entry. Measured on this
- * repo's actual prompt: the system prompt is 2,540 bytes and the six tool
+ * repo's actual prompt: the system prompt was 2,540 bytes and the six tool
  * schemas serialize to 5,061, together roughly 2,050 tokens — barely half the
- * minimum. A breakpoint there would have looked like a fix, changed nothing,
- * and reported nothing.
+ * minimum. (The date rule added for #889 takes the system prompt to 2,916
+ * bytes, about 100 tokens more; the conclusion is unchanged.) A breakpoint
+ * there would have looked like a fix, changed nothing, and reported nothing.
  *
  * So the breakpoint goes on the LAST content block of the LAST message. The
  * cached prefix is then tools + system + the whole conversation so far, which
@@ -191,19 +203,43 @@ export class ChatTurnDeadlineError extends Error {
  *
  * If it ever stops working, `usage.cache_read_input_tokens` — surfaced as
  * `cacheReadTokens` and logged on every call — is what says so.
+ *
+ * ## Where text that changes between calls goes (`uncachedContext`)
+ *
+ * The cached prefix is everything up to and including the breakpoint block,
+ * in render order: tools, then system, then the messages. So anything that
+ * changes from one day to the next cannot go in `system` (it would change the
+ * prefix of every entry) or in a block at or before the breakpoint. Today's
+ * date is appended as one more text block AFTER the breakpoint block: it is
+ * read by the model and hashed into nothing. The next call of the loop no
+ * longer has it on that message, and what this call cached is still an exact
+ * prefix of what the next one sends.
+ *
+ * A text block is allowed after tool results in a user message (the results
+ * must come first, which they do). It cannot follow an assistant message, so
+ * with no trailing user message there is nowhere to put it: it is left out
+ * and logged, which costs that one call its date and nothing else.
  */
-function withCacheBreakpoint(messages: BedrockMessage[]): unknown[] {
+function withCacheBreakpoint(messages: BedrockMessage[], uncachedContext?: string): unknown[] {
+  const last = messages[messages.length - 1];
+  const carriesContext =
+    uncachedContext !== undefined && last !== undefined && last.role === 'user';
+  if (uncachedContext !== undefined && !carriesContext) {
+    logger.warn(
+      { messageCount: messages.length, lastRole: last?.role ?? null },
+      'chat_uncached_context_not_sent'
+    );
+  }
   if (messages.length === 0) return messages;
   return messages.map((message, messageIndex) => {
     if (messageIndex !== messages.length - 1) return message;
-    return {
-      ...message,
-      content: message.content.map((block, blockIndex) =>
-        blockIndex === message.content.length - 1
-          ? { ...block, cache_control: { type: 'ephemeral' } }
-          : block
-      ),
-    };
+    const content: unknown[] = message.content.map((block, blockIndex) =>
+      blockIndex === message.content.length - 1
+        ? { ...block, cache_control: { type: 'ephemeral' } }
+        : block
+    );
+    if (carriesContext) content.push({ type: 'text', text: uncachedContext });
+    return { ...message, content };
   });
 }
 
@@ -212,7 +248,7 @@ function buildPayload(args: InvokeChatModelArgs): Record<string, unknown> {
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: args.maxOutputTokens ?? 1024,
     system: args.system,
-    messages: withCacheBreakpoint(args.messages),
+    messages: withCacheBreakpoint(args.messages, args.uncachedContext),
     tools: args.tools.map((t) => ({
       name: t.name,
       description: t.description,
