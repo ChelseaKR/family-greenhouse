@@ -289,6 +289,44 @@ describe('LockedFeature', () => {
     expect(screen.queryByText(/Included with/)).not.toBeInTheDocument();
   });
 
+  it('names the yearly price first when the plan sells yearly, the price its Change plan opens on', async () => {
+    // ADR 0042: the plan grid opens on Yearly. A card that named only the
+    // monthly price sent an admin to a different number.
+    const yearly = PLANS.map((plan) =>
+      plan.id === 'garden' ? { ...plan, monthlyPrice: 2.99, annualPrice: 24.99 } : plan
+    );
+    signIn('admin');
+    stubReads({
+      plans: yearly,
+      members: [{ userId: 'u-me', name: 'Sam', role: 'admin' }],
+    });
+    renderLocked(<LockedFeature feature="plant_cap" />);
+
+    expect(await screen.findByTestId('locked-included')).toHaveTextContent(
+      'Included with Garden — $24.99 a year or $2.99 a month for the whole household'
+    );
+    expect(await screen.findByRole('link', { name: 'Change plan' })).toHaveAttribute(
+      'href',
+      '/settings/billing#change-plan'
+    );
+  });
+
+  it('keeps the monthly sentence for a tier with no yearly price, and for a yearly price of null', async () => {
+    // Greenhouse sells monthly only; the API publishes `annualPrice: null`
+    // for a cadence whose Stripe price is not configured.
+    const noYearly = PLANS.map((plan) =>
+      plan.id === 'garden' ? { ...plan, monthlyPrice: 2.99, annualPrice: null } : plan
+    );
+    signIn('member');
+    stubReads({ plans: noYearly });
+    renderLocked(<LockedFeature feature="plant_cap" />);
+
+    expect(await screen.findByTestId('locked-included')).toHaveTextContent(
+      'Included with Garden — $2.99 a month for the whole household'
+    );
+    expect(screen.getByTestId('locked-included')).not.toHaveTextContent(/a year/);
+  });
+
   it('names the tier once the subscription read settles', async () => {
     // The control for the test above: same feature, same catalog, a settled
     // read — the line must still appear, so the fix is "wait", not "delete".

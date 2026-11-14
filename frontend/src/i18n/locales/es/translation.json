@@ -1396,6 +1396,7 @@
       "freeNow_other": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y puede haber {{count}} activos a la vez.",
       "gardenAdds": "Garden añade, para todo el hogar:",
       "gardenAddsPrice": "Garden cuesta {{price}} al mes para todo el hogar. Añade:",
+      "gardenAddsPrices": "Garden cuesta {{annualPrice}} al año o {{price}} al mes para todo el hogar. Añade:",
       "lineLinks_one": "Enlaces de cuidador de hasta {{days}} días, con {{count}} activo a la vez",
       "lineLinks_many": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
       "lineLinks_other": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
@@ -1403,6 +1404,7 @@
       "linePhotos": "Fotos de tu cuidador mientras estás fuera, que se suman a la cronología de cada planta",
       "lineRecap": "Un resumen de lo que pasó, listo para cuando vuelvas",
       "upgrade": "Pasa a Garden por {{price}} al mes",
+      "choosePlan": "Elige un plan de Garden",
       "useFree_one": "Usar {{count}} día",
       "useFree_many": "Usar {{count}} días",
       "useFree_other": "Usar {{count}} días",
@@ -2339,6 +2341,7 @@
   "locked": {
     "includedWith": "Incluido en {{plan}}",
     "includedWithPrice": "Incluido en {{plan}} — {{price}} al mes para todo el hogar",
+    "includedWithPrices": "Incluido en {{plan}} — {{annualPrice}} al año o {{price}} al mes para todo el hogar",
     "adminChangePlan": "Cambiar de plan",
     "adminHint": "Eres administrador/a, así que puedes cambiar el plan del hogar en Ajustes → Estado del plan.",
     "ask": "Pedir a {{names}} que mejore el plan",

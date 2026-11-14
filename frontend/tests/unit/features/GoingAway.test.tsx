@@ -207,6 +207,30 @@ describe('Going away? on the sitter-link form', () => {
     expect(scoped.getByText(/your free 7-day link is still yours/i)).toBeVisible();
   });
 
+  it('names the yearly price first when Garden sells yearly, and the button opens the plan choice', async () => {
+    // ADR 0042: the plan grid opens on Yearly, so "$2.99 a month" on the
+    // button opened onto "$24.99 a year". Both prices are in the sentence;
+    // the button names the choice rather than one of them.
+    const user = userEvent.setup();
+    const yearly = PLANS.map((p) =>
+      p.id === 'garden' ? { ...p, monthlyPrice: 2.99, annualPrice: 24.99 } : p
+    );
+    stub({ plans: yearly });
+    renderCard();
+
+    await typeLength(user, '14');
+
+    const scoped = within(await screen.findByTestId('going-away-offer'));
+    expect(
+      scoped.getByText('Garden is $24.99 a year or $2.99 a month for the whole household. It adds:')
+    ).toBeVisible();
+    expect(scoped.getByRole('link', { name: 'Choose a Garden plan' })).toHaveAttribute(
+      'href',
+      '/settings/billing#change-plan'
+    );
+    expect(scoped.queryByRole('link', { name: /Upgrade to Garden for/ })).not.toBeInTheDocument();
+  });
+
   it('never blocks the free link: one tap goes back to 7 days and the link is created', async () => {
     const user = userEvent.setup();
     const { created } = stub();

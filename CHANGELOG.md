@@ -77,6 +77,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   and gifts, so a household that opens the page from either trial email also
   finds it near the top. The Plan status heading and its one-line description
   are translated. No price, plan or checkout rule changed.
+- **The cap and Going-away prompts name Garden's yearly price beside the
+  monthly one.** "Included with Garden — $24.99 a year or $2.99 a month for the
+  whole household", and "Garden is $24.99 a year or $2.99 a month for the whole
+  household. It adds:", with the button "Choose a Garden plan". The plan grid
+  those prompts open has led with the Yearly tab since ADR 0042, so a prompt
+  that named only "$2.99 a month" opened onto "$24.99 a year". A tier with no
+  yearly price (Greenhouse) keeps its monthly sentence. The no-card trial
+  notices are unchanged.
 - **The Christmas cactus pet page answers the cat question first, and the
   spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
   "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
