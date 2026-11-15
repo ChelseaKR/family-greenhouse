@@ -104,6 +104,30 @@ describe('the yellow-leaves posts are merged into the overwatering post', () => 
     expect(findPost(CANONICAL.slice('/blog/'.length))).toBeDefined();
   });
 
+  it('takes in what only the merged posts said, with its citation', () => {
+    const Body = findPost(CANONICAL.slice('/blog/'.length))!.Component;
+    const html = renderToStaticMarkup(<Body />);
+    const text = html.replace(/<[^>]+>/g, '');
+    expect(text).toContain(
+      'University of Illinois Extension says healthy roots are generally white.'
+    );
+    expect(html).toContain('<h2>If it is not the water</h2>');
+    for (const h3 of [
+      'Yellow going to brown and crispy, especially at edges and tips, soil dry',
+      'Whole plant pale, new leaves small or yellowish-green, growth leggy',
+      'Yellow patches or bleached, washed-out areas on leaves facing the window',
+      'Older leaves uniformly yellow, plant has been in the same soil for years',
+      'Yellow stippling or speckling, fine webbing, tiny moving dots',
+      'Sudden yellowing after something changed',
+    ]) {
+      expect(html, h3).toContain(`<h3>${h3}</h3>`);
+    }
+    expect(html).toContain('Where the cited advice comes from');
+    expect(html).toContain(
+      'href="https://extension.illinois.edu/news-releases/keep-houseplants-happy-simple-solutions"'
+    );
+  });
+
   it('redirects both old URLs to it', () => {
     const map = REDIRECTS as Record<string, string>;
     for (const slug of MERGED) expect(map[`/blog/${slug}`], slug).toBe(CANONICAL);

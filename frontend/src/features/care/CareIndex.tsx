@@ -82,7 +82,7 @@ export function CareIndex() {
         lede="How often to water it, how much light it wants, and why yours is doing that. Honest, specific, no “lush green companion” filler."
       />
 
-      {/* Off until its heading is approved; see holidayGuideList.ts. */}
+      {/* Holiday care guides; see holidayGuideList.ts. */}
       <HolidayCareGuides id="care-index-holiday" />
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">

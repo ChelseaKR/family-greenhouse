@@ -76,8 +76,11 @@ describe('/care structured data', () => {
       CARE_GUIDE_INDEX.map((g) => g.commonName)
     );
 
-    // The first <ul> on the page is the guide grid.
-    const grid = screen.getAllByRole('list')[0]!;
+    // The guide grid is the first <ul> outside the short "Holiday plants" list
+    // that sits above it (HolidayCareGuides, which repeats six of the guides).
+    const grid = screen
+      .getAllByRole('list')
+      .find((ul) => !ul.closest('[aria-labelledby="care-index-holiday"]'))!;
     expect(list.itemListElement.map((i) => i.url)).toEqual(listedUrls(grid));
   });
 

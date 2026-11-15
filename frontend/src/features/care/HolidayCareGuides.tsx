@@ -4,8 +4,7 @@ import { HOLIDAY_CARE_GUIDES, HOLIDAY_CARE_GUIDES_ON } from './holidayGuideList'
 
 /**
  * The "Holiday plants" care-guide list. Renders nothing while
- * `HOLIDAY_CARE_GUIDES_ON` is false; see holidayGuideList.ts for why it is
- * off and what turning it on adds.
+ * `HOLIDAY_CARE_GUIDES_ON` is false; see holidayGuideList.ts.
  */
 export function HolidayCareGuides({
   id,

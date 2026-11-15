@@ -981,7 +981,7 @@ export function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                {/* Off until its heading is approved; see holidayGuideList.ts. */}
+                {/* Holiday care guides; see holidayGuideList.ts. */}
                 <HolidayCareGuides id="landing-holiday-care" as="h3" className="mt-6" />
                 <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
                   <Link to="/care" className="text-primary-700 hover:underline">

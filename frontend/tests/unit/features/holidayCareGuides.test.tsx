@@ -17,9 +17,9 @@ import enCatalog from '@/i18n/locales/en/translation.json';
 import esCatalog from '@/i18n/locales/es/translation.json';
 
 /**
- * The "Holiday plants" care-guide list is built and switched off until its
- * heading is approved (holidayGuideList.ts). These pin both halves: off, it
- * renders nothing on the pages it is placed on; on, it is the list it says.
+ * The "Holiday plants" care-guide list (holidayGuideList.ts), switched on
+ * 2026-11-15 once its heading and Spanish names were approved. These pin that
+ * it renders on the pages it is placed on, and that it is the list it says.
  */
 afterEach(async () => {
   cleanup();
@@ -44,17 +44,27 @@ describe('the holiday care-guide list', () => {
     await ensureLanguageCatalog('es');
   });
 
-  it('is switched off until its heading is approved', () => {
-    expect(HOLIDAY_CARE_GUIDES_ON).toBe(false);
+  it('is switched on', () => {
+    expect(HOLIDAY_CARE_GUIDES_ON).toBe(true);
   });
 
   it.each([
     ['home', () => inApp(<LandingPage />), 'landing-holiday-care'],
     ['/care', () => inApp(<CareIndex />), 'care-index-holiday'],
-  ])('renders nothing on %s while off', (_name, renderIt, id) => {
+  ])('renders the list on %s', (_name, renderIt, id) => {
     const root = renderIt();
-    expect(root.querySelector(`#${id}`)).toBeNull();
-    expect(root.querySelector(`[aria-labelledby="${id}"]`)).toBeNull();
+    const section = root.querySelector(`[aria-labelledby="${id}"]`);
+    expect(section).not.toBeNull();
+    expect(root.querySelector(`#${id}`)?.textContent).toBe(enCatalog.petSafeSpecies.holidayHeading);
+    expect(
+      Array.from(section?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'))
+    ).toEqual(HOLIDAY_CARE_GUIDES.map((g) => `/care/${g.slug}`));
+  });
+
+  it('renders nothing when switched off (negative control)', () => {
+    const root = inApp(<HolidayCareGuides id="holiday-off" on={false} />);
+    expect(root.querySelector('#holiday-off')).toBeNull();
+    expect(root.querySelector('a')).toBeNull();
   });
 
   it('when on, links each guide under its own name', () => {

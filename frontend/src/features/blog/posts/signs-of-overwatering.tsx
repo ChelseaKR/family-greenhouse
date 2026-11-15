@@ -5,6 +5,22 @@
  * household angle honest rather than forced: two carers, double doses.
  * Length ~1150 words.
  */
+/**
+ * Merged in 2026-11-15, when the two yellow-leaves posts became 301s to this
+ * one (src/config/redirects.json): the root-colour line, cited below, and the
+ * "If it is not the water" patterns, moved verbatim from
+ * why-are-my-plant-leaves-turning-yellow. Approved wording.
+ */
+const SOURCES = [
+  {
+    publisher: 'University of Illinois Extension',
+    title: 'Keep houseplants happy with simple solutions',
+    url: 'https://extension.illinois.edu/news-releases/keep-houseplants-happy-simple-solutions',
+  },
+];
+
+const READ_ON = '2026-11-05';
+
 export default function SignsOfOverwatering() {
   return (
     <article className="prose-fg">
@@ -84,6 +100,11 @@ export default function SignsOfOverwatering() {
         Healthy roots are firm and pale, white or tan, and they hold their shape. Rotted roots are
         brown or black, slimy, and come apart between your fingers. The smell confirms it.
       </p>
+      <p>
+        University of Illinois Extension says healthy roots are generally white. Rusty orange to
+        light brown roots point to underwatering, and dark brown to black roots point to
+        overwatering.
+      </p>
 
       <h2>How to fix an overwatered plant</h2>
       <ol>
@@ -120,6 +141,65 @@ export default function SignsOfOverwatering() {
         to propagate is a reasonable insurance policy while you wait.
       </p>
 
+      <h2>If it is not the water</h2>
+      <p>
+        Yellow leaves are a symptom, not a diagnosis. If the soil is dry, or the leaves are crisp
+        rather than soft, look for one of these patterns instead.
+      </p>
+
+      <h3>Yellow going to brown and crispy, especially at edges and tips, soil dry</h3>
+      <p>
+        Underwatering, or air that&rsquo;s very dry, or both. A pot that&rsquo;s bone-light and soil
+        that has shrunk away from the sides of the pot confirms it. When soil gets that dry, water
+        runs straight down the gap and out the bottom without wetting anything, so the fix is to
+        stand the pot in a few inches of water for half an hour and let it drink from below.
+      </p>
+
+      <h3>Whole plant pale, new leaves small or yellowish-green, growth leggy</h3>
+      <p>
+        Not enough light. The giveaway is the stretch: long bare stems, big gaps between leaves, and
+        everything leaning toward the window. Moving it closer to a window generally fixes this, but
+        move it in stages over a couple of weeks rather than all at once, and{' '}
+        <a href="/blog/how-much-light-does-my-room-get">work out what light you actually have</a>{' '}
+        first.
+      </p>
+
+      <h3>Yellow patches or bleached, washed-out areas on leaves facing the window</h3>
+      <p>
+        Too much direct sun, which is a real thing even indoors. Common after a plant gets moved, or
+        in early summer when the sun&rsquo;s angle changes and a spot that was fine in March becomes
+        a hotspot in June. Pull it back from the glass or diffuse the light with a sheer curtain.
+      </p>
+
+      <h3>Older leaves uniformly yellow, plant has been in the same soil for years</h3>
+      <p>
+        Possibly nutrient depletion &mdash; a plant that hasn&rsquo;t been fed or repotted in a long
+        time eventually runs the pot down, and it withdraws what it can from old leaves to supply
+        new growth. Repotting into fresh mix is the more reliable fix than fertilizer, and it lets
+        you look at the roots while you&rsquo;re there.
+      </p>
+      <p>
+        A caution, because this is where people do damage: don&rsquo;t reach for fertilizer as a
+        general response to a sad plant. If the problem is roots, feeding makes it worse. Only feed
+        a plant that is otherwise healthy and actively growing.
+      </p>
+
+      <h3>Yellow stippling or speckling, fine webbing, tiny moving dots</h3>
+      <p>
+        Pests. Turn the leaf over and look at the underside and where the leaf meets the stem
+        &mdash; that&rsquo;s where they live. Spider mites give a fine pale stippling and sometimes
+        webbing in leaf joints; sticky residue points at scale or aphids. Isolate the plant from its
+        neighbors the same day.
+      </p>
+
+      <h3>Sudden yellowing after something changed</h3>
+      <p>
+        A move, a repot, a cold night by a drafty window, a radiator turned on for the season, a
+        trip to a new home. Plants respond to change with a bit of leaf loss and then stabilize. If
+        you can name a change in the last two weeks, the most useful thing you can do is nothing:
+        hold the conditions steady and wait.
+      </p>
+
       <h2>Plant by plant</h2>
       <p>
         How much water is too much depends on the plant. Each of our care guides gives that
@@ -148,6 +228,24 @@ export default function SignsOfOverwatering() {
         the same reason a task can be assigned to one person, so the reminder goes to them rather
         than to the whole household.
       </p>
+
+      <section aria-labelledby="post-sources">
+        <h2 id="post-sources">Where the cited advice comes from</h2>
+        <p>
+          The lines above that name University of Illinois Extension were checked against this page.
+          The wording is ours.
+        </p>
+        <ul>
+          {SOURCES.map((s) => (
+            <li key={s.url}>
+              <a href={s.url} rel="noopener">
+                {s.publisher}, {s.title}
+              </a>{' '}
+              (read <time dateTime={READ_ON}>November 5, 2026</time>)
+            </li>
+          ))}
+        </ul>
+      </section>
     </article>
   );
 }

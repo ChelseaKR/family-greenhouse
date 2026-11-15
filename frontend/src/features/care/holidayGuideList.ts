@@ -2,13 +2,11 @@
  * A short "Holiday plants" list of care guides, for the home page and the /care
  * index.
  *
- * Built 2026-11-15 and switched OFF. The links' words are the guides' own
- * names, but the heading above them is a new visible label on those two
- * pages, and new copy ships only once it is approved. Until then this renders
- * nothing, anywhere. To switch it on, set `HOLIDAY_CARE_GUIDES_ON` to true and
- * change the "is switched off" and "renders nothing" tests in
- * holidayCareGuides.test.tsx to expect the list; the rendered list itself is
- * already tested, in English and Spanish.
+ * Built 2026-11-15 and switched on the same day, once Chelsea approved the
+ * heading on these two pages and the Spanish names. The links' words are the
+ * guides' own names. Setting `HOLIDAY_CARE_GUIDES_ON` to false removes the
+ * list from both pages (and fails the "is switched on" test in
+ * holidayCareGuides.test.tsx, which then needs updating with it).
  *
  * Why these pages and these plants (fg-seo-data-2026-11-15, actions 1 and 4):
  * the only care pages in the US top 10 are less-common and holiday plants, and
@@ -19,12 +17,12 @@
  * (`petSafeSpecies.holidayHeading`, Spanish "Plantas navideñas"). The names are
  * catalog strings (`careHolidayGuides.*`): in English each is its guide's own
  * `commonName` (holidayCareGuides.test.tsx fails if one drifts), and in
- * Spanish each is a proposed name that ships with the heading's approval, since
- * the Spanish home page may show no English (spanishFirstScreens.test.tsx).
+ * Spanish each is the approved name, since the Spanish home page may show no
+ * English (spanishFirstScreens.test.tsx).
  * They are not read from careGuides.ts, which would pull the guide data into
  * the home page's bundle.
  */
-export const HOLIDAY_CARE_GUIDES_ON = false;
+export const HOLIDAY_CARE_GUIDES_ON = true;
 
 export const HOLIDAY_CARE_GUIDES = [
   { slug: 'amaryllis', nameKey: 'careHolidayGuides.amaryllis' },

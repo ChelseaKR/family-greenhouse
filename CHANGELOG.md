@@ -80,8 +80,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   The home page links the haworthia and rosemary guides, the monstera and aloe
   vera guides list sago palm and blue echeveria among their related plants,
   and the overwatering post's plant list adds haworthia, blue echeveria, sago
-  palm and rosemary. No sentence or heading was added; a "Holiday plants" list
-  is built but switched off until its wording is approved.
+  palm and rosemary. The home page and /care gain a "Holiday plants" list
+  (amaryllis, paperwhite, poinsettia, Christmas cactus, cyclamen, rosemary),
+  with Spanish names on the Spanish page. The overwatering post takes in what
+  only the merged posts said: Illinois Extension's root colours, with its
+  citation, and the six "If it is not the water" yellowing patterns.
 
 - **Every upgrade prompt opens Plan status at the plan choice.** "Change plan",
   "Keep Garden", "Choose a Garden plan" and "See plans" now link to
