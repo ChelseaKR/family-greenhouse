@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Combobox, Dialog, Transition } from '@headlessui/react';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { MagnifyingGlassIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 import { plantService, type Plant, type Task } from '@/services/plantService';
@@ -18,6 +19,7 @@ function matches(haystack: string | null | undefined, q: string) {
 }
 
 export function CommandPalette() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => !!s.user);
   const [open, setOpen] = useState(false);
@@ -41,17 +43,25 @@ export function CommandPalette() {
 
   const householdId = useActiveHouseholdId();
 
-  const { data: plants } = useQuery({
+  const plantsQuery = useQuery({
     queryKey: ['plants', householdId],
     queryFn: () => plantService.getPlants(),
     enabled: isAuthenticated && open,
   });
 
-  const { data: tasks } = useQuery({
+  const tasksQuery = useQuery({
     queryKey: ['tasks', householdId],
     queryFn: () => taskService.getTasks(),
     enabled: isAuthenticated && open,
   });
+  const plants = plantsQuery.data;
+  const tasks = tasksQuery.data;
+  // "No matches" is a claim about the household's plants and tasks, so it is
+  // only made once both lists have actually been read. Typing straight after
+  // ⌘K used to say "No matches" for a plant that was there, because the lists
+  // were still loading — and a failed read said it for good (ADR 0010).
+  const searching = plantsQuery.isLoading || tasksQuery.isLoading;
+  const readFailed = plantsQuery.isError || tasksQuery.isError;
 
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
@@ -202,7 +212,19 @@ export function CommandPalette() {
                   </Combobox.Options>
                 )}
 
-                {query !== '' && results.length === 0 && (
+                {query !== '' && results.length === 0 && searching && (
+                  <p className="px-6 py-8 text-center text-sm text-gray-500" role="status">
+                    {t('common.loading')}
+                  </p>
+                )}
+
+                {query !== '' && results.length === 0 && !searching && readFailed && (
+                  <p className="px-6 py-8 text-center text-sm text-red-700" role="alert">
+                    {t('common.error')}
+                  </p>
+                )}
+
+                {query !== '' && results.length === 0 && !searching && !readFailed && (
                   <div className="p-6 text-center">
                     <EmptySearch className="mx-auto h-24 w-auto" />
                     <p className="mt-2 text-sm text-gray-500">
