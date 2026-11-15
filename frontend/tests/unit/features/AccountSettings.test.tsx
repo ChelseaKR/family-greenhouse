@@ -108,6 +108,27 @@ describe('AccountSettings — CSV export', () => {
     expect(plantsCsvCall?.[1]).toContain('Fiddle Leaf Fig');
   });
 
+  it('stamps the export with the local calendar day, not the UTC one', async () => {
+    const { plantService } = await import('@/services/plantService');
+    const { downloadCsv } = await import('@/utils/csv');
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([]);
+    // 21:30 on Sep 3 in New York (this suite's zone) is already Sep 4 in UTC.
+    vi.useFakeTimers({ now: new Date('2026-09-04T01:30:00.000Z'), toFake: ['Date'] });
+    try {
+      renderSettings();
+      await userEvent.click(screen.getByRole('button', { name: /download csv/i }));
+      await waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const filenames = vi.mocked(downloadCsv).mock.calls.map(([filename]) => filename);
+    expect(filenames).toEqual([
+      'family-greenhouse-plants-2026-09-03.csv',
+      'family-greenhouse-tasks-2026-09-03.csv',
+    ]);
+  });
+
   it('keeps deletion available before household setup and hides household-only exports', () => {
     useAuthStore.setState({
       user: {
