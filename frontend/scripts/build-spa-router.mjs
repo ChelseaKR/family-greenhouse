@@ -53,12 +53,44 @@
  * ## Why /.well-known passes through untouched (rule 1b in spa-router.js)
  *
  * Moved here from the function, which sits against CloudFront's 10 KB limit.
+ * `/.well-known/...` is a registry of well-known URIs (RFC 8615), not a route.
+ * `assetlinks.json` would survive the app-shell rule by accident — its last
+ * segment has a dot — but `apple-app-site-association` is extensionless by
+ * Apple's spec, so without rule 1b it is rewritten to `/app-shell.html` and
+ * Apple's CDN fetches `200 text/html` no matter what the deploy uploaded. The
+ * file would be in the bucket, correctly typed, and unreachable.
+ *
  * Passing it through also means a MISSING association file answers 404
  * rather than 200-with-the-shell, which is the difference between Android's
  * verifier reporting "no such file" and reporting a JSON parse error on a
  * page of HTML. Same reasoning as `/assets/`, and it works for the same
  * reason: the frontend bucket grants `s3:ListBucket`, so a missing object is
  * a 404 that no `custom_error_response` turns into a 200.
+ *
+ * ## Why a moved page is a 301 here (rule 0 in spa-router.js)
+ *
+ * When two pages are merged, the URL that goes away keeps whatever links and
+ * search history it had only if it answers with a permanent redirect to the
+ * page that absorbed it. A canonical tag cannot do that job: the old page no
+ * longer exists to carry one. The first case was the three overlapping
+ * yellow-leaves posts (2026-11-15), merged into the overwatering post, which
+ * had the most search impressions of the three.
+ *
+ * `src/config/redirects.json` maps each old path to its new one; this script
+ * copies it into `MOVED`, and `BlogPost.tsx` reads the same file so an in-app
+ * link to an old slug lands on the new post too. The 301 is the one response
+ * the function writes itself, and it is checked before every other rule, so a
+ * moved path never reaches S3 (where the deploy's `--delete` sync has already
+ * removed its object). The Location is a path, not an absolute URL: this
+ * distribution answers only for the apex, so the browser resolves it there,
+ * and the function needs no host substitution the way www-redirect.js does.
+ * The query string is dropped; nothing on a moved post reads one.
+ *
+ * `movedPages()` THROWS for a map that would misroute: an old path that is
+ * still a published route (the 301 would hide a live page), a new path that is
+ * not a published route (a redirect to a 404), a chain (old -> old -> new
+ * costs a hop each time), or a path that is not lower-case and slash-free at
+ * the end (the function lower-cases and trims before it looks).
  *
  * Usage:
  *   node scripts/build-spa-router.mjs           # rewrite the generated block
@@ -85,6 +117,14 @@ export const ROUTER = join(
 
 const BEGIN = '// --- generated from public-routes.mjs: do not edit by hand -------------------';
 const END = '// --- end generated -----------------------------------------------------------';
+
+const MOVED_BEGIN =
+  '// --- generated from src/config/redirects.json: do not edit by hand -----------';
+const MOVED_END =
+  '// --- end generated redirects -------------------------------------------------';
+
+/** Old path -> new path, for pages that were merged into another. */
+export const REDIRECTS_FILE = join(FRONTEND_ROOT, 'src', 'config', 'redirects.json');
 
 const APP_BEGIN =
   '// --- generated from App.tsx: do not edit by hand -----------------------------';
@@ -196,6 +236,53 @@ export function expectedAppRoutes(paths = publicRoutePaths()) {
   return appRoutes(paths);
 }
 
+/**
+ * The moved pages as `[from, to]` pairs, sorted by `from`, after checking the
+ * map cannot misroute (see "Why a moved page is a 301 here" above).
+ */
+export function movedPages(
+  redirects = JSON.parse(readFileSync(REDIRECTS_FILE, 'utf8')),
+  paths = publicRoutePaths()
+) {
+  const published = new Set(paths);
+  const pairs = Object.entries(redirects).sort(([a], [b]) => a.localeCompare(b));
+  const problems = [];
+  for (const [from, to] of pairs) {
+    for (const path of [from, to]) {
+      if (typeof path !== 'string' || !/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(path)) {
+        problems.push(`${path} is not a lower-case path with no trailing slash`);
+      }
+    }
+    if (published.has(from)) problems.push(`${from} is still published; a 301 would hide it`);
+    if (!published.has(to)) problems.push(`${from} -> ${to}, which is not a published route`);
+    if (Object.hasOwn(redirects, to)) problems.push(`${from} -> ${to} is a chain`);
+  }
+  if (problems.length > 0) {
+    throw new Error(`src/config/redirects.json would misroute:\n  ${problems.join('\n  ')}`);
+  }
+  return pairs;
+}
+
+/** The moved pages the committed function defines, read by evaluating it. */
+export function committedMoved(source = readFileSync(ROUTER, 'utf8')) {
+  const sandbox = {};
+  runInNewContext(source, sandbox, { filename: 'spa-router.js' });
+  if (sandbox.MOVED === null || typeof sandbox.MOVED !== 'object') {
+    throw new Error('spa-router.js does not define a MOVED object');
+  }
+  return Object.entries(sandbox.MOVED);
+}
+
+/** The MOVED block. An entry Prettier would wrap is emitted wrapped. */
+function generatedMovedBlock(pairs) {
+  if (pairs.length === 0) return `${MOVED_BEGIN}\nvar MOVED = {};\n${MOVED_END}`;
+  const entries = pairs.map(([from, to]) => {
+    const oneLine = `  '${from}': '${to}',`;
+    return oneLine.length <= PRINT_WIDTH ? oneLine : `  '${from}':\n    '${to}',`;
+  });
+  return `${MOVED_BEGIN}\nvar MOVED = {\n${entries.join('\n')}\n};\n${MOVED_END}`;
+}
+
 /** The generated block, formatted the way Prettier formats it. */
 function generatedBlock(routes, prefixes) {
   const entries = routes.map((route) => `  '${route}': 1,`).join('\n');
@@ -236,9 +323,10 @@ function spliceBlock(source, begin, end, block) {
   return source.slice(0, start) + block + source.slice(stop + end.length);
 }
 
-function replaceBlock(source, routes, app, prefixes = PREFIX_SERVED_NAMESPACES) {
+function replaceBlock(source, routes, app, prefixes = PREFIX_SERVED_NAMESPACES, moved = []) {
   const withRoutes = spliceBlock(source, BEGIN, END, generatedBlock(routes, prefixes));
-  return spliceBlock(withRoutes, APP_BEGIN, APP_END, generatedAppBlock(app));
+  const withMoved = spliceBlock(withRoutes, MOVED_BEGIN, MOVED_END, generatedMovedBlock(moved));
+  return spliceBlock(withMoved, APP_BEGIN, APP_END, generatedAppBlock(app));
 }
 
 /**
@@ -249,7 +337,13 @@ export function renderedRouterSource(
   source = readFileSync(ROUTER, 'utf8'),
   paths = publicRoutePaths()
 ) {
-  return replaceBlock(source, mappedRoutes(paths), expectedAppRoutes(paths));
+  return replaceBlock(
+    source,
+    mappedRoutes(paths),
+    expectedAppRoutes(paths),
+    PREFIX_SERVED_NAMESPACES,
+    movedPages(undefined, paths)
+  );
 }
 
 function reportDrift(label, expected, actual, consequence) {
@@ -283,6 +377,13 @@ function check() {
         'page under it answers 404 in production.'
     ),
     reportDrift(
+      'the CloudFront function disagrees with src/config/redirects.json.',
+      movedPages().map(([from, to]) => `${from} -> ${to}`),
+      committedMoved().map(([from, to]) => `${from} -> ${to}`),
+      'A redirect missing here leaves a merged page answering 404 in production, and\n' +
+        'one here that the file no longer has sends readers to the wrong page.'
+    ),
+    reportDrift(
       'the CloudFront function disagrees with App.tsx (exact routes).',
       expectedApp.exact,
       actualApp.exact,
@@ -306,7 +407,8 @@ function check() {
   console.log(
     `spa-router:check OK — ${committedRoutes().length} prerendered routes and ` +
       `${committedPrefixes().length} prefix (${prefixServedRoutes().length} pages) match ` +
-      `public-routes, and ${actualApp.exact.length} exact + ${actualApp.patterns.length} ` +
+      `public-routes, ${committedMoved().length} moved pages match redirects.json, and ` +
+      `${actualApp.exact.length} exact + ${actualApp.patterns.length} ` +
       'parameterised app routes match App.tsx.'
   );
 }
@@ -315,7 +417,7 @@ function write() {
   const routes = mappedRoutes();
   const app = expectedAppRoutes();
   const source = readFileSync(ROUTER, 'utf8');
-  const next = replaceBlock(source, routes, app, PREFIX_SERVED_NAMESPACES);
+  const next = replaceBlock(source, routes, app, PREFIX_SERVED_NAMESPACES, movedPages());
   const counts = `${routes.length} prerendered + ${app.exact.length}/${app.patterns.length} app`;
   if (next === source) {
     console.log(`spa-router: already up to date (${counts} routes).`);

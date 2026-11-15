@@ -508,6 +508,14 @@
     "browsePrompt": "¿Solo estás mirando? Lee nuestras",
     "careGuides": "guías de cuidado de plantas"
   },
+  "careHolidayGuides": {
+    "amaryllis": "Amarilis",
+    "paperwhite": "Narciso de papel",
+    "poinsettia": "Flor de Pascua",
+    "christmasCactus": "Cactus de Navidad",
+    "cyclamen": "Ciclamen",
+    "rosemary": "Romero"
+  },
   "petSafeSpecies": {
     "title": "Todas las plantas con guía, y su veredicto para mascotas",
     "lede": "La frase que aparece bajo cada planta es la nota de toxicidad de su propia guía de cuidado, palabra por palabra. Abre la guía para lo demás: riego, luz y qué suele salir mal.",
@@ -2782,7 +2790,8 @@
       "snakePlant": "Lengua de suegra",
       "spiderPlant": "Mala madre",
       "bostonFern": "Helecho de Boston",
-      "fiddleLeafFig": "Ficus lira"
+      "fiddleLeafFig": "Ficus lira",
+      "rosemary": "Romero"
     },
     "facts": {
       "free": {

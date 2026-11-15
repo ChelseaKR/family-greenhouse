@@ -70,6 +70,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **The three yellow-leaves posts are one page, and the guides Google had not
+  crawled get links from the pages it does.**
+  /blog/why-are-my-plant-leaves-turning-yellow and
+  /blog/do-yellow-leaves-mean-overwatering now answer a 301 to
+  /blog/signs-of-overwatering-and-how-to-fix-it, which had the most search
+  impressions of the three. The redirects live in `src/config/redirects.json`
+  and are served by the CloudFront router; the two posts left the sitemap.
+  The home page links the haworthia and rosemary guides, the monstera and aloe
+  vera guides list sago palm and blue echeveria among their related plants,
+  and the overwatering post's plant list adds haworthia, blue echeveria, sago
+  palm and rosemary. The home page and /care gain a "Holiday plants" list
+  (amaryllis, paperwhite, poinsettia, Christmas cactus, cyclamen, rosemary),
+  with Spanish names on the Spanish page. The overwatering post takes in what
+  only the merged posts said: Illinois Extension's root colours, with its
+  citation, and the six "If it is not the water" yellowing patterns.
+
 - **Every upgrade prompt opens Plan status at the plan choice.** "Change plan",
   "Keep Garden", "Choose a Garden plan" and "See plans" now link to
   `/settings/billing#change-plan`, and the page scrolls there. The Change plan

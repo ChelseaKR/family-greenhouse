@@ -11,9 +11,7 @@ import PlantSitterHandoff from './plant-sitter-handoff';
 import NonPlantPeople from './non-plant-people';
 import MergingCollections from './merging-collections';
 import SignsOfOverwatering from './signs-of-overwatering';
-import YellowLeaves from './yellow-leaves';
 import RoomLight from './room-light';
-import YellowLeavesOverwatering from './yellow-leaves-overwatering';
 import CanYouOverwaterAPlant from './can-you-overwater-a-plant';
 
 /**
@@ -180,17 +178,6 @@ export const POSTS: BlogPost[] = [
     Component: SignsOfOverwatering,
   },
   {
-    slug: 'why-are-my-plant-leaves-turning-yellow',
-    title: 'Why are my plant’s leaves turning yellow?',
-    description:
-      'Yellow leaves are a symptom, not a diagnosis — almost everything that can go wrong produces them. Triage by pattern instead: which leaves, in what order, and what else is true.',
-    metaDescription:
-      'Yellow leaves are a symptom, not a diagnosis. Triage by pattern instead: which leaves yellowed, in what order, and what else is true about the plant.',
-    date: '2026-08-05',
-    readingMinutes: 6,
-    Component: YellowLeaves,
-  },
-  {
     slug: 'how-much-light-does-my-room-get',
     title: 'How much light does your room actually get?',
     description:
@@ -200,17 +187,6 @@ export const POSTS: BlogPost[] = [
     date: '2026-08-12',
     readingMinutes: 6,
     Component: RoomLight,
-  },
-  {
-    slug: 'do-yellow-leaves-mean-overwatering',
-    title: 'Do yellow leaves mean overwatering? Often, not always',
-    description:
-      'Overwatering is the most common cause of yellow houseplant leaves, but thirst, low light, hunger and pests can look the same. Two checks settle it: the soil, then the roots.',
-    metaDescription:
-      'Often, yes: overwatering is the most common cause of yellow houseplant leaves. Check the soil, then the roots, because thirst and low light can look the same.',
-    date: '2026-11-05',
-    readingMinutes: 5,
-    Component: YellowLeavesOverwatering,
   },
   {
     slug: 'can-you-overwater-a-plant',

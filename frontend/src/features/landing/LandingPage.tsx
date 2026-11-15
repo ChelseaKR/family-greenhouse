@@ -44,6 +44,7 @@ import { SITE_URL, siteUrl } from '@/config/site';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { planBandFor } from './planBand';
 import clsx from 'clsx';
+import { HolidayCareGuides } from '@/features/care/HolidayCareGuides';
 
 // Hero copy for the two framings under test. Variant A (control) is the
 // existing household / shared-care-journal hero. Variant B leads with
@@ -201,14 +202,21 @@ const differentiators = [
 ];
 
 // A few care guides to surface by name in the "before you buy" band.
-// Slugs match features/care/careGuides.ts. Monstera and Pothos are genus
-// names, the same in every locale; the other two have common names that
+// Slugs match features/care/careGuides.ts. Monstera, Pothos and Haworthia are
+// genus names, the same in every locale; the others have common names that
 // differ, so they come from the catalog.
+//
+// Haworthia and rosemary were added 2026-11-15: Google had not indexed either
+// guide (URL Inspection, fg-seo-data-2026-11-15), and the home page is the
+// page it crawls most. Their labels are the guides' own names; rosemary's
+// Spanish one is the catalog's existing "Romero".
 const featuredGuides = [
   { slug: 'pothos', name: 'Pothos' },
   { slug: 'snake-plant', nameKey: 'landing.plants.snakePlant' },
   { slug: 'spider-plant', nameKey: 'landing.plants.spiderPlant' },
   { slug: 'monstera', name: 'Monstera' },
+  { slug: 'haworthia', name: 'Haworthia' },
+  { slug: 'rosemary', nameKey: 'landing.plants.rosemary' },
 ];
 
 // The ranked and list-style blog posts, linked by name from the same band so
@@ -973,6 +981,8 @@ export function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                {/* Holiday care guides; see holidayGuideList.ts. */}
+                <HolidayCareGuides id="landing-holiday-care" as="h3" className="mt-6" />
                 <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
                   <Link to="/care" className="text-primary-700 hover:underline">
                     {t('landing.care.allGuides')} <span aria-hidden="true">→</span>

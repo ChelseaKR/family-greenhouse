@@ -40,10 +40,13 @@ import { runInNewContext } from 'node:vm';
 import { appRoutes, declaredRoutePaths, sampleUrlFor } from './app-routes.mjs';
 import {
   committedAppRoutes,
+  committedMoved,
   committedPrefixes,
   committedRoutes,
   expectedAppRoutes,
   mappedRoutes,
+  movedPages,
+  REDIRECTS_FILE,
   renderedRouterSource,
 } from './build-spa-router.mjs';
 import { FRONTEND_ROOT, PREFIX_SERVED_NAMESPACES } from './public-routes.mjs';
@@ -75,8 +78,9 @@ const respond = (host, uri, querystring = {}) =>
 // its own distribution and function (www-redirect.js, tested by
 // www-redirect.test.mjs): on this distribution `redirect-to-https` answered
 // http://www before the function ran, so it took two hops. `www.` is no longer
-// an alias of this distribution, so this function only ever ROUTES. A response
-// generated here would short-circuit S3 for every path it matched.
+// an alias of this distribution, so this function ROUTES. A response
+// generated here would short-circuit S3 for every path it matched; the one
+// exception is a page listed in src/config/redirects.json, tested below.
 test('the router only rewrites; it never answers a request itself', () => {
   for (const host of ['familygreenhouse.net', 'www.familygreenhouse.net']) {
     for (const uri of ['/', '/care/zz-plant', '/dashboard', '/assets/app.js', '/nope']) {
@@ -431,4 +435,57 @@ test('the function does not grow with the number of prefix-served pages', () => 
       'page must cost the function nothing.'
   );
   assert.equal(with500More, asPublished);
+});
+
+// ---------------------------------------------------------------------------
+// Moved pages: src/config/redirects.json. The only paths the function answers
+// itself, with one 301 to the page that absorbed them.
+// ---------------------------------------------------------------------------
+
+const REDIRECTS = JSON.parse(readFileSync(REDIRECTS_FILE, 'utf8'));
+
+test('a moved page answers one 301 to the page that absorbed it', () => {
+  assert.ok(Object.keys(REDIRECTS).length > 0, 'redirects.json is empty; this test proves nothing');
+  for (const [from, to] of Object.entries(REDIRECTS)) {
+    for (const uri of [from, `${from}/`, from.toUpperCase()]) {
+      const result = respond('familygreenhouse.net', uri, { utm_source: { value: 'x' } });
+      assert.equal(result.statusCode, 301, uri);
+      assert.equal(result.headers.location.value, to, uri);
+    }
+    // The page it points at is served, so the redirect is one hop to a 200.
+    assert.equal(rewrite(to), `${to}/index.html`, to);
+  }
+});
+
+test('the yellow-leaves posts point at the overwatering post', () => {
+  const canonical = '/blog/signs-of-overwatering-and-how-to-fix-it';
+  assert.equal(REDIRECTS['/blog/why-are-my-plant-leaves-turning-yellow'], canonical);
+  assert.equal(REDIRECTS['/blog/do-yellow-leaves-mean-overwatering'], canonical);
+});
+
+test('a path that only resembles a moved one is routed, not redirected', () => {
+  const [from] = Object.keys(REDIRECTS);
+  for (const uri of [`${from}-2`, `${from}/extra`, `${from}.html`]) {
+    assert.equal(handler({ request: { uri } }).statusCode, undefined, uri);
+  }
+});
+
+test('the committed MOVED map matches redirects.json', () => {
+  assert.deepEqual(committedMoved(), movedPages());
+});
+
+test('a redirect map that would misroute fails the build instead of shipping', () => {
+  const paths = ['/', '/blog/kept', '/blog/also-kept'];
+  assert.throws(() => movedPages({ '/blog/kept': '/blog/also-kept' }, paths), /still published/);
+  assert.throws(() => movedPages({ '/blog/gone': '/blog/nowhere' }, paths), /not a published/);
+  assert.throws(
+    () => movedPages({ '/blog/a': '/blog/b', '/blog/b': '/blog/kept' }, paths),
+    /is a chain/
+  );
+  assert.throws(() => movedPages({ '/blog/Gone': '/blog/kept' }, paths), /lower-case/);
+  assert.throws(() => movedPages({ '/blog/gone/': '/blog/kept' }, paths), /lower-case/);
+  // Negative control: a well-formed map passes.
+  assert.deepEqual(movedPages({ '/blog/gone': '/blog/kept' }, paths), [
+    ['/blog/gone', '/blog/kept'],
+  ]);
 });

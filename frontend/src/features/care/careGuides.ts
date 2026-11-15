@@ -318,7 +318,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Monstera',
     scientificName: 'Monstera deliciosa',
     alsoKnownAs: ['Swiss Cheese Plant', 'Split-Leaf Philodendron'],
-    related: ['heartleaf-philodendron', 'fiddle-leaf-fig', 'bird-of-paradise'],
+    related: ['heartleaf-philodendron', 'bird-of-paradise', 'sago-palm'],
     metaTitle: 'How Often to Water a Monstera: Once the Top 1–2 Inches Dry',
     heading: 'Monstera care: how often to water it',
     metaDescription:
@@ -705,7 +705,7 @@ export const CARE_GUIDES: CareGuide[] = [
     commonName: 'Aloe Vera',
     scientificName: 'Aloe vera',
     alsoKnownAs: ['Medicine Plant', 'Burn Plant', 'Aloe'],
-    related: ['jade-plant', 'snake-plant', 'haworthia'],
+    related: ['jade-plant', 'haworthia', 'blue-echeveria'],
     metaTitle: 'How Often to Water Aloe Vera: When the Top Inch Is Dry',
     heading: 'Aloe vera care: how often to water it',
     metaDescription:

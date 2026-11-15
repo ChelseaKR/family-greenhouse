@@ -11,6 +11,8 @@
 //
 // This function now decides the WHOLE routing question, in four kinds:
 //
+//   0. A page that moved (MOVED below). Answered here with one 301 to its new
+//      path, the only response this function writes itself.
 //   1. `/assets/...`  content-addressed build output. Left alone, always. The
 //      name contains the hash of the bytes, so the object either exists or it
 //      genuinely does not, and "does not" must reach the viewer as a 404.
@@ -62,6 +64,13 @@ var PRERENDERED = {
 var PREFIXED = '/pet-safe/ /blog/ /care/ /help/';
 // --- end generated -----------------------------------------------------------
 
+// --- generated from src/config/redirects.json: do not edit by hand -----------
+var MOVED = {
+  '/blog/do-yellow-leaves-mean-overwatering': '/blog/signs-of-overwatering-and-how-to-fix-it',
+  '/blog/why-are-my-plant-leaves-turning-yellow': '/blog/signs-of-overwatering-and-how-to-fix-it',
+};
+// --- end generated redirects -------------------------------------------------
+
 // --- generated from App.tsx: do not edit by hand -----------------------------
 var APP_EXACT =
   '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /gift /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
@@ -104,19 +113,8 @@ function handler(event) {
     return request;
   }
 
-  // (1b) `/.well-known/...` is a registry of well-known URIs (RFC 8615), not a
-  // route. `assetlinks.json` would survive rule (3) by accident — its last
-  // segment has a dot — but `apple-app-site-association` is extensionless by
-  // Apple's spec, so without this it is rewritten to `/app-shell.html` and
-  // Apple's CDN fetches `200 text/html` no matter what the deploy uploaded.
-  // The file would be in the bucket, correctly typed, and unreachable.
-  //
-  // Passing it through also means a MISSING association file answers 404
-  // rather than 200-with-the-shell, which is the difference between Android's
-  // verifier reporting "no such file" and reporting a JSON parse error on a
-  // page of HTML. Same reasoning as `/assets/` above, and it works for the
-  // same reason: the frontend bucket grants `s3:ListBucket`, so a missing
-  // object is a 404 that no `custom_error_response` turns into a 200.
+  // (1b) Well-known URIs (RFC 8615) are files, never routes, so a missing one
+  // is a 404. Why: build-spa-router.mjs, "Why /.well-known passes through".
   if (uri === '/.well-known' || uri.indexOf('/.well-known/') === 0) {
     return request;
   }
@@ -124,6 +122,16 @@ function handler(event) {
   // Normalise one trailing slash away so `/care/monstera/` and
   // `/care/monstera` resolve to the same object.
   var path = uri.length > 1 && uri.charAt(uri.length - 1) === '/' ? uri.slice(0, -1) : uri;
+
+  // (0) Why a 301 and not a rewrite: build-spa-router.mjs movedPages().
+  var moved = MOVED[path.toLowerCase()];
+  if (typeof moved === 'string') {
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: { location: { value: moved } },
+    };
+  }
 
   if (path === '/') {
     // The prerendered homepage.

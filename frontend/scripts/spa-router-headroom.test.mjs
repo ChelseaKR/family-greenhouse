@@ -83,11 +83,13 @@ const PR_1103_ROUTES = [
   '/pet-safe/polka-dot-plant',
 ];
 
-/** Routes feat/blog-answer-first (head fdb42fbe, no PR yet) adds to the sitemap. */
-const BLOG_ANSWER_FIRST_ROUTES = [
-  '/blog/do-yellow-leaves-mean-overwatering',
-  '/blog/can-you-overwater-a-plant',
-];
+/**
+ * Routes feat/blog-answer-first (head fdb42fbe, no PR yet) adds to the sitemap.
+ * Its other post, /blog/do-yellow-leaves-mean-overwatering, was merged into
+ * the overwatering post on 2026-11-15 and now answers a 301
+ * (src/config/redirects.json, tested in spa-router.test.mjs).
+ */
+const BLOG_ANSWER_FIRST_ROUTES = ['/blog/can-you-overwater-a-plant'];
 
 /**
  * Routes content/watering-guides-batch2 adds to the sitemap. The fixture is

@@ -138,8 +138,6 @@ export default function CanYouOverwaterAPlant() {
         Yellow lower leaves, wilting in wet soil and fungus gnats are the usual first signs. For the
         two-minute check and the fix, see{' '}
         <a href="/blog/signs-of-overwatering-and-how-to-fix-it">how to fix an overwatered plant</a>.
-        If the question is whether yellow leaves really mean too much water, see{' '}
-        <a href="/blog/do-yellow-leaves-mean-overwatering">do yellow leaves mean overwatering</a>.
       </p>
 
       <h2>Plant by plant</h2>
