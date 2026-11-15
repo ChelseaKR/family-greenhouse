@@ -51,6 +51,11 @@ function landing(): HTMLElement {
 const anchorsTo = (root: ParentNode, href: string) =>
   Array.from(root.querySelectorAll('a')).filter((a) => a.getAttribute('href') === href);
 
+/** The rendered text of server markup, read through the DOM parser (not a tag-stripping regex). */
+function textOf(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+}
+
 describe('links to guides Google had not crawled', () => {
   beforeAll(async () => {
     await ensureLanguageCatalog('es');
@@ -90,7 +95,7 @@ describe('links to guides Google had not crawled', () => {
       expect(html, slug).toContain(`href="/care/${slug}"`);
     }
     // The list reads as a list: a space after every comma between links.
-    const text = html.replace(/<[^>]+>/g, '');
+    const text = textOf(html);
     expect(text).toContain(
       'snake plant, ZZ plant, aloe vera, jade plant, haworthia, blue echeveria'
     );
@@ -107,7 +112,7 @@ describe('the yellow-leaves posts are merged into the overwatering post', () => 
   it('takes in what only the merged posts said, with its citation', () => {
     const Body = findPost(CANONICAL.slice('/blog/'.length))!.Component;
     const html = renderToStaticMarkup(<Body />);
-    const text = html.replace(/<[^>]+>/g, '');
+    const text = textOf(html);
     expect(text).toContain(
       'University of Illinois Extension says healthy roots are generally white.'
     );
