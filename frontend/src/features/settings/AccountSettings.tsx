@@ -20,6 +20,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/services/api';
 import { downloadCsv, toCsv } from '@/utils/csv';
+import { todayLocalDateValue } from '@/features/household/localDates';
 import { track } from '@/services/analytics';
 import { appStorePurchasesAvailable } from '@/services/appStoreAvailability';
 import { ArchiveImportCard } from './ArchiveImportCard';
@@ -86,7 +87,9 @@ export function AccountSettings() {
         plantService.getPlants('all'),
         taskService.getTasks(),
       ]);
-      const stamp = new Date().toISOString().slice(0, 10);
+      // The person's own calendar day. `toISOString()` is UTC, so an export
+      // taken on a US evening was stamped with tomorrow's date.
+      const stamp = todayLocalDateValue();
       downloadCsv(
         `family-greenhouse-plants-${stamp}.csv`,
         toCsv(
@@ -135,7 +138,7 @@ export function AccountSettings() {
     mutationFn: async () => {
       track('data_exported', { context: 'json' });
       const blob = await authService.exportMyData();
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = todayLocalDateValue();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
