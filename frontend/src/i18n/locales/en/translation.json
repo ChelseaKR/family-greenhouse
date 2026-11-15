@@ -495,6 +495,14 @@
     "browsePrompt": "Just browsing? Read our",
     "careGuides": "plant care guides"
   },
+  "careHolidayGuides": {
+    "amaryllis": "Amaryllis",
+    "paperwhite": "Paperwhite",
+    "poinsettia": "Poinsettia",
+    "christmasCactus": "Christmas Cactus",
+    "cyclamen": "Cyclamen",
+    "rosemary": "Rosemary"
+  },
   "petSafeSpecies": {
     "title": "Every plant we have a guide for, and its pet verdict",
     "lede": "The line under each plant is the toxicity note from that plant’s own care guide, word for word. Open a guide for the rest — watering, light, and what usually goes wrong.",
@@ -2717,7 +2725,8 @@
       "snakePlant": "Snake plant",
       "spiderPlant": "Spider plant",
       "bostonFern": "Boston fern",
-      "fiddleLeafFig": "Fiddle leaf fig"
+      "fiddleLeafFig": "Fiddle leaf fig",
+      "rosemary": "Rosemary"
     },
     "facts": {
       "free": {

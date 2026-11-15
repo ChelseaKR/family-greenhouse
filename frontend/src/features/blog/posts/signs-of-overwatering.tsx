@@ -124,9 +124,11 @@ export default function SignsOfOverwatering() {
       <p>
         How much water is too much depends on the plant. Each of our care guides gives that
         plant&rsquo;s watering rhythm and the problems it most often shows, and these ones cover
-        overwatering on that plant specifically: <a href="/care/snake-plant">snake plant</a>,
-        <a href="/care/zz-plant">ZZ plant</a>, <a href="/care/aloe-vera">aloe vera</a>,
-        <a href="/care/jade-plant">jade plant</a>, <a href="/care/peace-lily">peace lily</a> and
+        overwatering on that plant specifically: <a href="/care/snake-plant">snake plant</a>,{' '}
+        <a href="/care/zz-plant">ZZ plant</a>, <a href="/care/aloe-vera">aloe vera</a>,{' '}
+        <a href="/care/jade-plant">jade plant</a>, <a href="/care/haworthia">haworthia</a>,{' '}
+        <a href="/care/blue-echeveria">blue echeveria</a>, <a href="/care/sago-palm">sago palm</a>,{' '}
+        <a href="/care/rosemary">rosemary</a>, <a href="/care/peace-lily">peace lily</a> and{' '}
         <a href="/care/fiddle-leaf-fig">fiddle-leaf fig</a>. The{' '}
         <a href="/care">care guide index</a> lists every plant we cover.
       </p>

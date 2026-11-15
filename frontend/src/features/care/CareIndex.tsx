@@ -5,6 +5,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 import { SITE_URL, siteUrl } from '@/config/site';
 import { CARE_GUIDE_INDEX } from './careGuideContent';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+import { HolidayCareGuides } from './HolidayCareGuides';
 
 const PAGE_TITLE = 'Plant Care Guides — How Often to Water Common Houseplants';
 const PAGE_DESCRIPTION =
@@ -80,6 +81,9 @@ export function CareIndex() {
         title="Plant care guides"
         lede="How often to water it, how much light it wants, and why yours is doing that. Honest, specific, no “lush green companion” filler."
       />
+
+      {/* Off until its heading is approved; see holidayGuideList.ts. */}
+      <HolidayCareGuides id="care-index-holiday" />
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CARE_GUIDE_INDEX.map((g) => (

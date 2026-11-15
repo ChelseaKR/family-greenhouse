@@ -37,6 +37,7 @@ const SAME_IN_EVERY_LOCALE = new Set([
   // Genus names, used as the common name in Spanish too.
   'Monstera',
   'Pothos',
+  'Haworthia',
   // `publicShell.blog`, listed as intentionallyEqual in translation.todo.json.
   'Blog',
   // The legacy beta badge: the same word in Spanish, and production builds
