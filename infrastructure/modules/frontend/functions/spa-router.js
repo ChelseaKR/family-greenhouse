@@ -48,7 +48,6 @@
 // --- generated from public-routes.mjs: do not edit by hand -------------------
 var PRERENDERED = {
   '/pricing': 1,
-  '/gift': 1,
   '/blog': 1,
   '/care': 1,
   '/help': 1,
@@ -65,7 +64,7 @@ var PREFIXED = '/pet-safe/ /blog/ /care/ /help/';
 
 // --- generated from App.tsx: do not edit by hand -----------------------------
 var APP_EXACT =
-  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
+  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /gift /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
 var APP_PATTERNS =
   '/caretaker/* /join/* /kiosk/* /plants/* /plants/*/passport /shared/* /sit/* /sit/*/brief /tag/*';
 // --- end generated App.tsx ---------------------------------------------------

@@ -63,11 +63,13 @@ export const SITE = process.env.SITE_URL || 'https://familygreenhouse.net';
 export const STATIC_ROUTES = [
   { path: '/', priority: 1.0, changefreq: 'weekly' },
   { path: '/pricing', priority: 0.9, changefreq: 'monthly' },
-  // Public gift-subscription landing page: the actual purchase flow
-  // (POST /billing/gift/checkout) needs a signed-in buyer, but browsing it —
-  // and understanding what it is — needs no account and no household, so it
-  // belongs in the crawlable set like /pricing rather than behind auth.
-  { path: '/gift', priority: 0.7, changefreq: 'monthly' },
+  // /gift is left out while gifts are not offered (2026-11-15). The footer
+  // hides its link then, and its prerender was only a heading over a loading
+  // spinner, so it was an indexed page with nothing on it. The page still
+  // works: /gift is an App.tsx route, so it is served by the noindex app
+  // shell. To restore it when gifts return, add this line back and run
+  // `npm run sitemap`, `npm run spa-router` and `npm run llms` (frontend):
+  //   { path: '/gift', priority: 0.7, changefreq: 'monthly' },
   { path: '/blog', priority: 0.8, changefreq: 'weekly' },
   { path: '/care', priority: 0.8, changefreq: 'weekly' },
   { path: '/help', priority: 0.8, changefreq: 'monthly' },
