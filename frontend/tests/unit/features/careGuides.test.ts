@@ -342,7 +342,7 @@ describe('CARE_GUIDES content dates', () => {
     // their links to the other holiday guides on 2026-11-04, a copy edit.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
     // Seven guides got new search titles or descriptions on 2026-11-06, a copy
-    // edit with no new facts, so they drift too. So do three holiday guides
+    // edit with no new facts, so they drift too. So do two holiday guides
     // that got a "how often to water" heading on 2026-11-15 (and amaryllis a
     // new description from its own cited text).
     expect(drifted.map((g) => g.slug).sort()).toEqual([
@@ -360,7 +360,6 @@ describe('CARE_GUIDES content dates', () => {
       'money-tree',
       'monstera',
       'nerve-plant',
-      'norfolk-island-pine',
       'poinsettia',
       'rubber-plant',
     ]);
@@ -882,14 +881,15 @@ describe('holiday guides', () => {
 
   /**
    * Search Console, 28 days to 2026-11-14: real US "how often to water"
-   * queries for these three already land at positions 4 to 10, so on
-   * 2026-11-15 each got that question as its H1, and amaryllis a description
+   * queries for amaryllis and cyclamen already land at positions 4 to 10, so
+   * on 2026-11-15 each got that question as its H1, and amaryllis a description
    * with Clemson's interval. A copy edit, so `updated` moved and `reviewed`
-   * did not. Kalanchoe is unchanged.
+   * did not. Norfolk Island pine kept its heading: the longer one pushed the
+   * sign-up link below the iPhone SE Safari fold (care-cta-above-fold.spec.ts).
+   * Kalanchoe is unchanged.
    */
   const HEADED: Partial<Record<(typeof HOLIDAY)[number], string>> = {
     amaryllis: 'Amaryllis care: how often to water it',
-    'norfolk-island-pine': 'Norfolk Island pine care: how often to water it',
     cyclamen: 'Cyclamen care: how often to water it',
   };
 

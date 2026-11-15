@@ -3458,11 +3458,10 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Norfolk Pine', 'House Pine'],
     related: ['poinsettia', 'amaryllis', 'parlor-palm'],
     metaTitle: 'How Often to Water a Norfolk Island Pine: When Dry',
-    heading: 'Norfolk Island pine care: how often to water it',
     metaDescription:
       'Water a Norfolk Island pine thoroughly when the soil surface is dry, then drain it. It needs bright light and help with dry winter air.',
     reviewed: '2026-11-04',
-    updated: '2026-11-15',
+    updated: '2026-11-04',
     summary:
       'A Norfolk Island pine is not a true pine but a slow-growing tropical conifer, often sold at the holidays as a small living Christmas tree. It needs a bright window, a thorough drink once the surface dries, and help with dry winter air. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {

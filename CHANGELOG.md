@@ -93,8 +93,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   rats?": the ASPCA listing has no rat entry, so the page says it can't say
   and points to an exotic-animal vet. Both are per-page fields in the pet
   table; no other page and no verdict changed.
-- **Three holiday care guides ask "how often to water it" in their heading.**
-  The amaryllis, cyclamen and Norfolk Island pine pages now have that H1 and
+- **Two holiday care guides ask "how often to water it" in their heading.**
+  The amaryllis and cyclamen pages now have that H1 and
   Article headline, where real US searches for the question already reach
   positions 4 to 10. The amaryllis search description now gives the watering
   rhythm its cited extension pages give: little until a new bulb sprouts, and
