@@ -2938,7 +2938,7 @@
         "heldClosed": "Plan status — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A new household starts with 14 days of Garden free, with no card.",
+        "open": "Priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. New households get 14 days of Garden free, no card.",
         "heldOpen": "Create a free Family Greenhouse account for one home, up to 2 people and 8 plants. Paid plans, purchases, and plan changes remain paused.",
         "heldClosed": "Paid plans, purchases, plan changes, and new account registration are paused."
       }

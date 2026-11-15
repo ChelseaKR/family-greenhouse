@@ -62,7 +62,14 @@ export function BlogPost() {
                 },
                 datePublished: post.date,
                 dateModified: post.date,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
+                // One Organization with `publisher` (same @id), plus the
+                // `url` Google's Article guidance asks an author to carry.
+                author: {
+                  '@type': 'Organization',
+                  '@id': `${SITE_URL}/#organization`,
+                  name: 'Family Greenhouse',
+                  url: SITE_URL,
+                },
                 publisher: {
                   '@type': 'Organization',
                   // Same @id the homepage graph defines for this entity, so

@@ -72,7 +72,8 @@
     <link rel="icon" type="image/x-icon" href="/brand/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- No <link rel="manifest"> here: VitePWA (vite.config.ts) injects one into
+         the build, so a literal copy shipped the tag twice on every page. -->
 
     <!-- Performance: preconnect to the API origin so the first XHR is faster.
          __API_ORIGIN__ is substituted at build time from VITE_API_URL by the

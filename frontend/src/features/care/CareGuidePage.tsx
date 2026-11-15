@@ -245,7 +245,16 @@ export function CareGuidePage() {
                 // older than their own content (see careGuides.ts).
                 datePublished: guide.reviewed,
                 dateModified: guide.updated,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
+                // The same Organization node as `publisher` and the
+                // homepage graph, with the `url` Google's Article guidance
+                // asks an author to carry. A bare name left the author an
+                // unidentified entity on every guide.
+                author: {
+                  '@type': 'Organization',
+                  '@id': `${SITE}/#organization`,
+                  name: 'Family Greenhouse',
+                  url: SITE,
+                },
                 publisher: {
                   '@type': 'Organization',
                   '@id': `${SITE}/#organization`,

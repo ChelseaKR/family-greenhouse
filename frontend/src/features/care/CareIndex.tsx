@@ -2,9 +2,62 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PublicShell, PageIntro } from '@/components/PublicShell';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { siteUrl } from '@/config/site';
+import { SITE_URL, siteUrl } from '@/config/site';
 import { CARE_GUIDE_INDEX } from './careGuideContent';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+
+const PAGE_TITLE = 'Plant Care Guides — How Often to Water Common Houseplants';
+const PAGE_DESCRIPTION =
+  'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.';
+
+/**
+ * The same CollectionPage / ItemList / BreadcrumbList shape /pet-safe
+ * publishes (see PetSafePage.tsx for why CollectionPage). This hub was the one
+ * page linking every guide that told a crawler nothing about that list: no
+ * structured data at all, while each guide's own breadcrumb names it as
+ * "Plant care". Names and URLs come from CARE_GUIDE_INDEX, in the order the
+ * visible list renders, so the two cannot disagree. Nothing here is visible.
+ */
+const CARE_INDEX_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': siteUrl('/care'),
+      url: siteUrl('/care'),
+      name: PAGE_TITLE,
+      description: PAGE_DESCRIPTION,
+      inLanguage: 'en',
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'Family Greenhouse',
+        url: SITE_URL,
+      },
+      mainEntity: { '@id': siteUrl('/care#guides') },
+    },
+    {
+      '@type': 'ItemList',
+      '@id': siteUrl('/care#guides'),
+      name: 'Houseplant care guides',
+      numberOfItems: CARE_GUIDE_INDEX.length,
+      itemListElement: CARE_GUIDE_INDEX.map((guide, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: guide.commonName,
+        url: siteUrl(`/care/${guide.slug}`),
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl('/') },
+        // The name every guide's own breadcrumb already gives this page.
+        { '@type': 'ListItem', position: 2, name: 'Plant care' },
+      ],
+    },
+  ],
+};
 
 /**
  * Index of the species care guides. Doubles as the internal-linking hub that
@@ -14,10 +67,10 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 export function CareIndex() {
   const { t } = useTranslation();
   useMetaTags({
-    title: 'Plant Care Guides — How Often to Water Common Houseplants',
-    description:
-      'Straight, no-nonsense care guides for common houseplants: how often to water, how much light, and why yours might be dying.',
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
     canonical: siteUrl('/care'),
+    jsonLd: CARE_INDEX_JSON_LD,
   });
 
   return (
