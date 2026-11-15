@@ -3374,10 +3374,11 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Hippeastrum', 'Dutch Amaryllis', 'Barbados Lily'],
     related: ['poinsettia', 'cyclamen', 'christmas-cactus'],
     metaTitle: 'How Often to Water an Amaryllis: When the Soil Is Dry',
+    heading: 'Amaryllis care: how often to water it',
     metaDescription:
-      'Water an amaryllis when the soil surface feels dry, and never leave it in a full saucer. Give it direct sun, then rest the bulb so it blooms again.',
+      'Water an amaryllis when the soil surface is dry. A new bulb needs little until it sprouts; in bloom, about once or twice a week. Don’t leave it in water.',
     reviewed: '2026-11-04',
-    updated: '2026-11-04',
+    updated: '2026-11-15',
     summary:
       'An amaryllis is a large tropical bulb, Hippeastrum, sold in the fall to bloom indoors for the holidays. It wants a sunny window, a pot that drains, and water only once the surface dries, and after it blooms it can be kept and flowered again. The ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
@@ -3457,10 +3458,11 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Norfolk Pine', 'House Pine'],
     related: ['poinsettia', 'amaryllis', 'parlor-palm'],
     metaTitle: 'How Often to Water a Norfolk Island Pine: When Dry',
+    heading: 'Norfolk Island pine care: how often to water it',
     metaDescription:
       'Water a Norfolk Island pine thoroughly when the soil surface is dry, then drain it. It needs bright light and help with dry winter air.',
     reviewed: '2026-11-04',
-    updated: '2026-11-04',
+    updated: '2026-11-15',
     summary:
       'A Norfolk Island pine is not a true pine but a slow-growing tropical conifer, often sold at the holidays as a small living Christmas tree. It needs a bright window, a thorough drink once the surface dries, and help with dry winter air. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -3539,10 +3541,11 @@ export const CARE_GUIDES: CareGuide[] = [
     alsoKnownAs: ['Florist’s Cyclamen', 'Persian Cyclamen'],
     related: ['african-violet', 'kalanchoe', 'amaryllis'],
     metaTitle: 'How Often to Water a Cyclamen: When the Surface Is Dry',
+    heading: 'Cyclamen care: how often to water it',
     metaDescription:
       'Water a cyclamen when the soil surface is dry, at the edge of the pot or from below, never on the tuber. Keep it cool and bright to keep it blooming.',
     reviewed: '2026-11-04',
-    updated: '2026-11-04',
+    updated: '2026-11-15',
     summary:
       'Florist’s cyclamen, Cyclamen persicum, flowers through the winter with swept-back petals over silver-marked, heart-shaped leaves. It wants a cool, bright room and soil that stays moist but never wet, and it goes dormant after flowering. The ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {

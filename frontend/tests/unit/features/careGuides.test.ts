@@ -342,13 +342,17 @@ describe('CARE_GUIDES content dates', () => {
     // their links to the other holiday guides on 2026-11-04, a copy edit.
     const drifted = CARE_GUIDES.filter((g) => g.updated !== g.reviewed);
     // Seven guides got new search titles or descriptions on 2026-11-06, a copy
-    // edit with no new facts, so they drift too.
+    // edit with no new facts, so they drift too. So do three holiday guides
+    // that got a "how often to water" heading on 2026-11-15 (and amaryllis a
+    // new description from its own cited text).
     expect(drifted.map((g) => g.slug).sort()).toEqual([
+      'amaryllis',
       'begonia',
       'bird-of-paradise',
       'blue-echeveria',
       'burros-tail',
       'christmas-cactus',
+      'cyclamen',
       'english-ivy',
       'haworthia',
       'heartleaf-philodendron',
@@ -356,6 +360,7 @@ describe('CARE_GUIDES content dates', () => {
       'money-tree',
       'monstera',
       'nerve-plant',
+      'norfolk-island-pine',
       'poinsettia',
       'rubber-plant',
     ]);
@@ -875,16 +880,36 @@ describe('holiday guides', () => {
       (t) => (SOURCED_INTERVALS[g.slug] ?? []).reduce((s, ok) => s.split(ok).join(''), t)
     );
 
-  it('publishes all four, reviewed and updated on the day the sources were read', () => {
+  /**
+   * Search Console, 28 days to 2026-11-14: real US "how often to water"
+   * queries for these three already land at positions 4 to 10, so on
+   * 2026-11-15 each got that question as its H1, and amaryllis a description
+   * with Clemson's interval. A copy edit, so `updated` moved and `reviewed`
+   * did not. Kalanchoe is unchanged.
+   */
+  const HEADED: Partial<Record<(typeof HOLIDAY)[number], string>> = {
+    amaryllis: 'Amaryllis care: how often to water it',
+    'norfolk-island-pine': 'Norfolk Island pine care: how often to water it',
+    cyclamen: 'Cyclamen care: how often to water it',
+  };
+
+  it('publishes all four, reviewed on the day the sources were read', () => {
     for (const [i, slug] of HOLIDAY.entries()) {
       const g = guides[i];
       expect(g, slug).toBeDefined();
       expect(g!.reviewed, slug).toBe('2026-11-04');
-      expect(g!.updated, slug).toBe('2026-11-04');
+      expect(g!.updated, slug).toBe(HEADED[slug] ? '2026-11-15' : '2026-11-04');
       expect(g!.careSources.length, slug).toBeGreaterThanOrEqual(2);
       for (const s of g!.careSources) expect(s.accessed, `${slug}: ${s.url}`).toBe('2026-11-04');
-      expect(g!.heading, slug).toBeUndefined();
+      expect(g!.heading, slug).toBe(HEADED[slug]);
     }
+  });
+
+  it('gives the amaryllis description Clemson’s interval for a blooming bulb', () => {
+    const d = findCareGuide('amaryllis')!.metaDescription;
+    expect(d).toMatch(/^Water an amaryllis when the soil surface is dry\./);
+    expect(d).toContain('about once or twice a week');
+    expect(d.length).toBeLessThanOrEqual(155);
   });
 
   it('answers "how often to water" first, in the title and the first FAQ', () => {
