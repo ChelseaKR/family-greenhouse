@@ -3003,7 +3003,7 @@
         "heldClosed": "Estado de los planes — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
+        "open": "Precio por hogar, no por persona. Empieza gratis: un hogar, hasta 2 miembros del hogar y 8 plantas. Un hogar nuevo tiene 14 días de Garden gratis, sin tarjeta.",
         "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 2 personas y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
         "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
       }
