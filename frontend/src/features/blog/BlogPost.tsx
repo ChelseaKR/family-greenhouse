@@ -9,6 +9,7 @@ import { DEFAULT_OG_IMAGE } from '@/config/seo';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { formatContentDate } from '@/utils/contentDate';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
+import REDIRECTS from '@/config/redirects.json';
 
 /**
  * Single-post page. The post itself is a self-contained TSX component;
@@ -105,7 +106,10 @@ export function BlogPost() {
   );
 
   if (!post) {
-    return <Navigate to="/blog" replace />;
+    // A post merged into another (src/config/redirects.json) goes to the post
+    // that absorbed it, the same place the edge's 301 sends a fresh request.
+    const moved = (REDIRECTS as Record<string, string>)[`/blog/${slug?.toLowerCase()}`];
+    return <Navigate to={moved ?? '/blog'} replace />;
   }
 
   const Body = post.Component;

@@ -148,10 +148,6 @@ export default function SignsOfOverwatering() {
         the same reason a task can be assigned to one person, so the reminder goes to them rather
         than to the whole household.
       </p>
-      <p>
-        If you want the fuller diagnosis on discolored foliage, we went through the causes in{' '}
-        <a href="/blog/why-are-my-plant-leaves-turning-yellow">why plant leaves turn yellow</a>.
-      </p>
     </article>
   );
 }
