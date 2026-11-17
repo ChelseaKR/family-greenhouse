@@ -71,16 +71,22 @@ export function PlantImageUpload({
       if (blob.size > MAX_BYTES) {
         throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
       }
-      // The presign request carries the blob's content type, and the PUT
-      // must use the exact same Content-Type header (backend contract). The
-      // type is read from the bytes, not from the file name.
+      // The presign request carries the blob's content type and size, and
+      // the PUT must send exactly that Content-Type and that many bytes
+      // (backend contract). The type is read from the bytes, not from the
+      // file name.
       const contentType = blob.type;
-      const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(plantId, contentType);
+      const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
+        plantId,
+        contentType,
+        blob.size
+      );
       await plantService.uploadImage(uploadUrl, blob, contentType, setProgress, signal);
       // Don't confirm an upload the user already navigated away from.
       if (signal.aborted) throw new DOMException('Upload aborted', 'AbortError');
+      // `imageUrl` only names the upload. The photo the plant shows is the
+      // server's own copy, which the queries invalidated below fetch.
       await plantService.confirmImageUpload(plantId, imageUrl);
-      return imageUrl;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });

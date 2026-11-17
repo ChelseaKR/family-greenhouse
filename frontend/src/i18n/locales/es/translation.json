@@ -1296,6 +1296,13 @@
     "inviteByEmailSent": "Invitación enviada. El enlace de abajo es el mismo, por si prefieres mandarlo tú también.",
     "inviteByEmailCooldown": "Esa dirección recibió una invitación a este hogar en las últimas 24 horas. El enlace de abajo sigue funcionando.",
     "inviteByEmailUnavailable": "No hemos podido enviar el correo, así que no decimos que salió. Copia el enlace de abajo y mándalo tú.",
+    "inviteLinkLimits": "Este enlace funciona durante 7 días y para un máximo de 5 personas.",
+    "inviteEmailLinkLimits": "Este enlace funciona durante 7 días y para una sola persona.",
+    "revokeInvites": {
+      "hint": "Al desactivar los enlaces de invitación dejan de funcionar todos los enlaces y las invitaciones por correo creados hasta ahora. También dejan de funcionar cuando alguien sale de este hogar o se le quita de él.",
+      "button": "Desactivar enlaces de invitación",
+      "done": "Los enlaces de invitación están desactivados. Los creados antes de ahora ya no funcionan. Puedes crear uno nuevo."
+    },
     "climateCheckFailed": "No se pudo comprobar la disponibilidad del clima. Los cambios de ubicación están pausados; inténtalo más tarde.",
     "climateUnavailable": "Los consejos según el clima no están disponibles ahora. La configuración de ubicación volverá cuando se active la integración meteorológica.",
     "climateSavedLocation": "Tu ubicación guardada es {{city}}.",

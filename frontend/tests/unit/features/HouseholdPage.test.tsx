@@ -254,6 +254,112 @@ describe('HouseholdPage', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Invite link')).toHaveValue('http://localhost:3000/join/ABC')
     );
+    // An emailed invitation admits one person, and the line under it says so.
+    expect(screen.getByText('This link works for 7 days and for one person.')).toBeVisible();
+  });
+
+  it('says a generated link works for 7 days and for up to 5 people', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toHaveValue(
+      'http://localhost:3000/join/LINK'
+    );
+    expect(screen.getByText('This link works for 7 days and for up to 5 people.')).toBeVisible();
+  });
+
+  it('turns off invite links: asks the server, clears the link on screen and says so', async () => {
+    becomeAdmin();
+    let revokeRequests = 0;
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      ),
+      http.delete(`${API}/households/hh-1/invites`, () => {
+        revokeRequests += 1;
+        return HttpResponse.json({ revokedAt: '2026-11-17T12:00:00.000Z' });
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toBeVisible();
+    // What it does is said before the button is pressed.
+    expect(screen.getByText(/stops every link and emailed invitation made so far/i)).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Turn off invite links' }));
+
+    expect(
+      await screen.findByText(
+        'Invite links are off. Links made before now no longer work. You can make a new one.'
+      )
+    ).toBeVisible();
+    expect(revokeRequests).toBe(1);
+    // The link that just stopped working is not left on screen as if usable.
+    expect(screen.queryByLabelText('Invite link')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Generate invite link/i })).toBeVisible();
+
+    // Making a new one clears the notice.
+    await user.click(screen.getByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toBeVisible();
+    expect(screen.queryByText(/Invite links are off/)).not.toBeInTheDocument();
+  });
+
+  it('says so when invite links could not be turned off, and leaves the link on screen', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      ),
+      http.delete(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json({ message: 'Admin access required' }, { status: 403 })
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    await screen.findByLabelText('Invite link');
+    await user.click(screen.getByRole('button', { name: 'Turn off invite links' }));
+
+    expect(await screen.findByText('Admin access required')).toBeVisible();
+    expect(screen.queryByText(/Invite links are off/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Invite link')).toBeVisible();
+  });
+
+  it('does not offer the control to a member who is not an admin', async () => {
+    renderPage();
+    await screen.findByText('The Kelly-Reifs');
+    expect(screen.queryByRole('button', { name: 'Turn off invite links' })).not.toBeInTheDocument();
   });
 
   it('never claims a send that did not happen, and still hands over the link', async () => {

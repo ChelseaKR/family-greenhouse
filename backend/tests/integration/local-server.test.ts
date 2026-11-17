@@ -1327,20 +1327,21 @@ describe('invite + join flow', () => {
 });
 
 describe('POST /plants/:id/image', () => {
-  it('defaults to jpeg and matches the key extension to the contentType', async () => {
+  it('defaults to jpeg, matches the key extension to the contentType, and grants a holding key', async () => {
     const token = await loginAsSeed();
     const dflt = await request(app)
       .post(`/plants/${seedPlantId}/image`)
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentLength: 1234 });
     expect(dflt.status).toBe(200);
     expect(dflt.body.imageUrl).toMatch(/\.jpg$/);
-    expect(dflt.body.imageUrl).toContain(`/plants/${seedHouseholdId}/${seedPlantId}/`);
+    expect(dflt.body.imageUrl).toContain(`/uploads/${seedHouseholdId}/${seedPlantId}/`);
     expect(dflt.body.uploadUrl).toMatch(/^http:\/\/localhost:4000\/mock-upload\/[^/]+$/);
 
     const webp = await request(app)
       .post(`/plants/${seedPlantId}/image`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ contentType: 'image/webp' });
+      .send({ contentType: 'image/webp', contentLength: 1234 });
     expect(webp.status).toBe(200);
     expect(webp.body.imageUrl).toMatch(/\.webp$/);
   });
@@ -1350,62 +1351,125 @@ describe('POST /plants/:id/image', () => {
     const res = await request(app)
       .post(`/plants/${seedPlantId}/image`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ contentType: 'image/gif' });
+      .send({ contentType: 'image/gif', contentLength: 1234 });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Validation failed');
+  });
+
+  it('400s a request that does not declare a size, and one over 5 MiB', async () => {
+    const token = await loginAsSeed();
+    for (const body of [undefined, { contentType: 'image/png' }]) {
+      const req = request(app)
+        .post(`/plants/${seedPlantId}/image`)
+        .set('Authorization', `Bearer ${token}`);
+      const res = body ? await req.send(body) : await req;
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/reload the page or update the app/i);
+    }
+    const tooBig = await request(app)
+      .post(`/plants/${seedPlantId}/image`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ contentType: 'image/png', contentLength: 5 * 1024 * 1024 + 1 });
+    expect(tooBig.status).toBe(400);
+    expect(tooBig.body.message).toBe('Image exceeds the 5 MiB limit');
+    expect(db.mockUploadGrants.size).toBe(0);
   });
 });
 
 describe('POST /plants/:id/image/confirm', () => {
-  it('rejects a signed PUT that exceeds the 5 MiB image limit', async () => {
-    const token = await loginAsSeed();
-    const sign = await request(app)
+  const bytes = Buffer.from('real-local-image-bytes');
+  async function signFor(token: string, contentType: string, contentLength: number) {
+    return request(app)
       .post(`/plants/${seedPlantId}/image`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ contentType: 'image/png' });
+      .send({ contentType, contentLength });
+  }
 
-    const upload = await request(app)
-      .put(new URL(sign.body.uploadUrl).pathname)
-      .set('Content-Type', 'image/png')
-      .send(Buffer.alloc(5 * 1024 * 1024 + 1));
+  it('the upload URL refuses a body that is not the declared size', async () => {
+    const token = await loginAsSeed();
+    const sign = await signFor(token, 'image/png', bytes.length);
+    expect(sign.status).toBe(200);
 
-    expect(upload.status).toBe(400);
-    expect(upload.body.message).toBe('Image exceeds the 5 MiB limit');
+    for (const body of [Buffer.concat([bytes, bytes]), bytes.subarray(1)]) {
+      const upload = await request(app)
+        .put(new URL(sign.body.uploadUrl).pathname)
+        .set('Content-Type', 'image/png')
+        .send(body);
+      expect(upload.status).toBe(403);
+      expect(upload.body.message).toBe('Upload Content-Length does not match the signed request');
+    }
+    expect(db.mockImages.size).toBe(0);
   });
 
-  it('accepts and serves the imageUrl only after the signed PUT lands', async () => {
+  it('the upload URL refuses a Content-Type other than the declared one', async () => {
     const token = await loginAsSeed();
-    const sign = await request(app)
-      .post(`/plants/${seedPlantId}/image`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ contentType: 'image/png' });
+    const sign = await signFor(token, 'image/png', bytes.length);
+    const upload = await request(app)
+      .put(new URL(sign.body.uploadUrl).pathname)
+      .set('Content-Type', 'image/jpeg')
+      .send(bytes);
+    expect(upload.status).toBe(400);
+    expect(db.mockImages.size).toBe(0);
+  });
+
+  it('stores the photo under a new key after the signed PUT lands, and serves only that', async () => {
+    const token = await loginAsSeed();
+    const sign = await signFor(token, 'image/png', bytes.length);
     expect(sign.status).toBe(200);
-    const bytes = Buffer.from('real-local-image-bytes');
     const upload = await request(app)
       .put(new URL(sign.body.uploadUrl).pathname)
       .set('Content-Type', 'image/png')
       .send(bytes);
     expect(upload.status).toBe(200);
 
+    // An upload that has not been confirmed is not served.
+    const pending = await request(app).get(new URL(sign.body.imageUrl).pathname);
+    expect(pending.status).toBe(404);
+
     const confirm = await request(app)
       .post(`/plants/${seedPlantId}/image/confirm`)
       .set('Authorization', `Bearer ${token}`)
       .send({ imageUrl: sign.body.imageUrl });
     expect(confirm.status).toBe(200);
-    expect(db.plants.get(seedPlantId)?.imageUrl).toBe(sign.body.imageUrl);
+    // The plant's photo is the server's own copy, not the upload reference.
+    expect(confirm.body.imageUrl).not.toBe(sign.body.imageUrl);
+    expect(confirm.body.imageUrl).toContain(`/plants/${seedHouseholdId}/${seedPlantId}/`);
+    expect(confirm.body.imageUrl).toMatch(/\.png$/);
+    expect(db.plants.get(seedPlantId)?.imageUrl).toBe(confirm.body.imageUrl);
+    expect(confirm.body.photo.imageUrl).toBe(confirm.body.imageUrl);
 
-    const served = await request(app).get(new URL(sign.body.imageUrl).pathname);
+    const served = await request(app).get(new URL(confirm.body.imageUrl).pathname);
     expect(served.status).toBe(200);
     expect(served.headers['content-type']).toMatch(/^image\/png/);
     expect(Buffer.from(served.body)).toEqual(bytes);
+    // The upload itself is gone.
+    expect([...db.mockImages.keys()].filter((k) => k.startsWith('uploads/'))).toEqual([]);
+  });
+
+  it('a second PUT to the same upload URL does not change the stored photo', async () => {
+    const token = await loginAsSeed();
+    const sign = await signFor(token, 'image/png', bytes.length);
+    const put = () =>
+      request(app).put(new URL(sign.body.uploadUrl).pathname).set('Content-Type', 'image/png');
+    expect((await put().send(bytes)).status).toBe(200);
+    const confirm = await request(app)
+      .post(`/plants/${seedPlantId}/image/confirm`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ imageUrl: sign.body.imageUrl });
+    expect(confirm.status).toBe(200);
+
+    const other = Buffer.from('some-other-image-bytes');
+    expect(other.length).toBe(bytes.length);
+    expect((await put().send(other)).status).toBe(200);
+
+    const served = await request(app).get(new URL(confirm.body.imageUrl).pathname);
+    expect(Buffer.from(served.body)).toEqual(bytes);
+    expect(db.plants.get(seedPlantId)?.imageUrl).toBe(confirm.body.imageUrl);
   });
 
   it('rejects confirmation when the signed PUT never happened', async () => {
     const token = await loginAsSeed();
-    const sign = await request(app)
-      .post(`/plants/${seedPlantId}/image`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ contentType: 'image/jpeg' });
+    const sign = await signFor(token, 'image/jpeg', bytes.length);
 
     const confirm = await request(app)
       .post(`/plants/${seedPlantId}/image/confirm`)
@@ -1424,6 +1488,18 @@ describe('POST /plants/:id/image/confirm', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ imageUrl: 'http://elsewhere.example/' });
     expect(res.status).toBe(400);
+  });
+
+  it('rejects a reference to a stored photo: only an upload can be confirmed', async () => {
+    const token = await loginAsSeed();
+    const res = await request(app)
+      .post(`/plants/${seedPlantId}/image/confirm`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        imageUrl: `http://localhost:4000/mock-images/plants/${seedHouseholdId}/${seedPlantId}/a.png`,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('imageUrl does not match a key issued for this plant');
   });
 });
 

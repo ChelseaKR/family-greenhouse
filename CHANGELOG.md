@@ -32,6 +32,39 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   or the TestFlight purchase check and App Review's purchase will not finish;
   it is set back in the first release after approval
   (`docs/mobile-release-checklist.md`).
+- **A plant photo upload is bound to one file, and the photo is stored apart
+  from the upload** (ADR 0046). `POST /plants/{id}/image` and the caretaker
+  photo route now take `contentLength`, the file's exact size in bytes, and
+  refuse a request without it or above 5 MiB. The upload URL is signed for
+  that size and that content type, to a holding key under `uploads/`. The
+  confirm step checks the uploaded bytes, removes their metadata and stores
+  the result under a new `plants/` key of its own; the confirm response
+  returns that photo. The images bucket deletes anything left under
+  `uploads/` after one day. **Clients:** a browser tab or installed web app
+  still running the previous code gets a 400 that says to reload or update
+  when it adds a photo; a reload fixes it. The iPhone and Android apps get
+  the new code with their next store build, and no store build exists yet.
+- **A household invite admits a limited number of people and can be turned
+  off** (ADR 0047). An invite link admits up to 5 people and an emailed
+  invitation one, each for 7 days. Every invite a household has made stops
+  working when a member leaves or is removed. An admin can also turn them
+  off with "Turn off invite links" on the Household page
+  (`DELETE /households/{id}/invites`). An invite that was pending before
+  this release keeps working, as a link with 5 uses.
+- **A changed email address takes effect only after it is verified**
+  (ADR 0048). The user pool now holds an email change until the code sent to
+  the new address is entered, the ID token says whether the address is
+  verified, and turning email back on after a bounce or complaint is refused
+  for an address that is not. `docs/security.md` described the first of
+  these before it was configured; it now says what is configured, and a
+  test reads both.
+- **What the deploy changes.** Terraform updates the user pool and its app
+  client in place (read the plan: neither may be replaced), adds two
+  lifecycle rules to the images bucket and adds one API route. No stored
+  data is migrated: existing photos keep their keys, and existing invites
+  gain their counters on first use. The post-deploy smoke test now uploads
+  to the holding prefix and expects storage to refuse an upload of a
+  different size.
 
 ## [0.52.0] - 2026-11-17
 

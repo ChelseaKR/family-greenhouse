@@ -368,7 +368,7 @@ export function AddPlantPage() {
           // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
           // fallback) and remove the metadata, GPS included; the original is
           // uploaded, still stripped, if the canvas pipeline fails. The
-          // presign contentType must match the PUT's Content-Type header.
+          // presign carries the blob's type and size; the PUT must match both.
           const blob = await prepareImageForUpload(pickedFile);
           if (blob.size > MAX_BYTES) {
             throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
@@ -376,7 +376,8 @@ export function AddPlantPage() {
           const contentType = blob.type;
           const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
             plant.id,
-            contentType
+            contentType,
+            blob.size
           );
           await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
           await plantService.confirmImageUpload(plant.id, imageUrl);

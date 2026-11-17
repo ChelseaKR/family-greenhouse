@@ -1,6 +1,4 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { createHandler, firstAllowedOrigin } from '../../middleware/handler.js';
@@ -23,15 +21,13 @@ import {
   UpdateSpaceInput,
 } from '../../models/schemas.js';
 import type { SpeciesSource } from '../../models/types.js';
-import {
-  IMAGE_CONTENT_TYPES,
-  MAX_IMAGE_BYTES,
-  mintImageKey,
-  publicImageUrl,
-  resolveIssuedImageKey,
-} from '../../services/plantImageRules.js';
 import { scopePhotoUrls } from '../../services/photoAccess.js';
-import { sanitizeUploadedPhoto } from '../../services/photoIntake.js';
+import {
+  acceptUploadedPhoto,
+  discardAcceptedPhoto,
+  presignPhotoUpload,
+  readUploadRequest,
+} from '../../services/photoIntake.js';
 import * as plantService from '../../services/plantService.js';
 import * as caretakerPhotos from '../caretakers/photos.js';
 import * as spaceService from '../../services/spaceService.js';
@@ -45,7 +41,6 @@ import * as householdAudit from '../../services/householdAudit.js';
 import * as accountMilestones from '../../services/accountMilestones.js';
 import { getEntitledPlan, limitOf } from '../../models/plans.js';
 import { successResponse, createdResponse, noContentResponse } from '../../utils/response.js';
-import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
 import { audit } from '../../utils/auditLog.js';
 import { logger } from '../../utils/logger.js';
 
@@ -768,10 +763,13 @@ export const deletePlant = createHandler(
   .use(authMiddleware())
   .use(requireHousehold());
 
-// Body is optional: legacy clients POST with no body and get the jpeg default.
+// `contentType` defaults to JPEG, as it always did. `contentLength` is the
+// exact size of the file about to be uploaded, in bytes; a request without it
+// is refused in the handler with a message a person can act on (ADR 0046).
 const imageUploadRequestSchema = z
   .object({
     contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
+    contentLength: z.number().int().positive().optional(),
   })
   .nullable();
 type ImageUploadRequest = z.infer<typeof imageUploadRequestSchema>;
@@ -781,9 +779,11 @@ type ImageUploadRequest = z.infer<typeof imageUploadRequestSchema>;
 // The client uploads to S3, then calls /image/confirm with the imageUrl. This
 // avoids the race where a closed-tab upload leaves the plant with a broken URL.
 //
-// Contract: optional JSON body { contentType?: 'image/jpeg'|'image/png'|'image/webp' }
-// (default image/jpeg; anything else is a 400). The presigned PUT is signed
-// for exactly that Content-Type, and the key carries the matching extension.
+// Contract: JSON body { contentType?: 'image/jpeg'|'image/png'|'image/webp',
+// contentLength: number } (contentType defaults to image/jpeg; contentLength
+// is required and at most 5 MiB; anything else is a 400). The presigned PUT
+// is signed for exactly that Content-Type and Content-Length, to a holding
+// key that carries the matching extension (ADR 0046).
 export const getImageUploadUrl = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -799,19 +799,17 @@ export const getImageUploadUrl = createHandler(
       throw createHttpError(404, 'Plant not found');
     }
 
-    const contentType = validatedBody?.contentType ?? 'image/jpeg';
-    const key = mintImageKey(user.householdId!, plantId, contentType);
+    const requested = readUploadRequest(validatedBody);
+    if (!requested.ok) throw createHttpError(400, requested.message);
 
-    const command = new PutObjectCommand({
-      Bucket: IMAGES_BUCKET,
-      Key: key,
-      ContentType: contentType,
-    });
-
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
-    const imageUrl = publicImageUrl(key);
-
-    return successResponse({ uploadUrl, imageUrl });
+    return successResponse(
+      await presignPhotoUpload({
+        householdId: user.householdId!,
+        plantId,
+        contentType: requested.contentType,
+        contentLength: requested.contentLength,
+      })
+    );
   },
   // `imageUrl` here is the reference the confirm call sends back, not a photo
   // to show, so it leaves unsigned (ADR 0033).
@@ -824,10 +822,10 @@ export const getImageUploadUrl = createHandler(
   .use(validateBody(imageUploadRequestSchema));
 
 // POST /plants/:id/image/confirm
-// Called by the client after a successful S3 PUT. Verifies the imageUrl
-// matches a prefix we mint (assets-domain form when ASSETS_BASE_URL is set,
-// raw S3 form otherwise), HeadObjects the key to enforce the size cap, and
-// only then writes it onto the plant.
+// Called by the client after a successful S3 PUT. Verifies the imageUrl names
+// an upload we issued for this plant, checks the uploaded object's size, type
+// and bytes, stores the cleaned photo under a key of the server's own, and
+// only then writes that photo onto the plant (services/photoIntake.ts).
 export const confirmImageUpload = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { user } = event as AuthenticatedEvent;
@@ -836,62 +834,33 @@ export const confirmImageUpload = createHandler(
     if (!plantId) {
       throw createHttpError(400, 'Plant ID is required');
     }
-    const imageUrl = validatedBody.imageUrl;
-    const key = resolveIssuedImageKey(user.householdId!, plantId, imageUrl);
-    if (!key) {
-      throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
-    }
     const plant = await plantService.getPlant(user.householdId!, plantId);
     if (!plant) {
       throw createHttpError(404, 'Plant not found');
     }
-    // Verify the object actually landed and respects the size cap before we
-    // attach it. The presigned PUT can't bound size, so this is where an
-    // oversized upload gets rejected (and best-effort removed).
-    let contentLength: number | undefined;
-    let contentType: string | undefined;
-    try {
-      const head = await s3.send(new HeadObjectCommand({ Bucket: IMAGES_BUCKET, Key: key }));
-      contentLength = head.ContentLength;
-      contentType = head.ContentType;
-    } catch {
-      throw createHttpError(400, 'Uploaded image not found; upload it before confirming');
-    }
-    if (contentLength === undefined || contentLength === 0 || contentLength > MAX_IMAGE_BYTES) {
-      s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
-        logger.warn({ err, key }, 'oversized_image_delete_failed');
-      });
-      throw createHttpError(
-        400,
-        contentLength === 0 ? 'Uploaded image is empty' : 'Image exceeds the 5 MiB limit'
-      );
-    }
-    // The presigned PUT's Content-Type is client-claimed and NOT covered by
-    // the S3 signature (Content-Type isn't a signable header), so the actual
-    // upload can arrive with a different Content-Type than what was presigned
-    // for. Re-check the object's real Content-Type against the same allowlist
-    // used at presign time — otherwise a non-image object (e.g. text/html)
-    // could be confirmed and later served same-origin as the plant's image.
-    if (!contentType || !(contentType in IMAGE_CONTENT_TYPES)) {
-      s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
-        logger.warn({ err, key }, 'invalid_content_type_delete_failed');
-      });
-      throw createHttpError(400, 'Uploaded file is not a valid image');
-    }
-    // The server's own strip, after the device's (#849): the bytes must be
-    // the declared image type, and lose every EXIF/XMP/IPTC block, GPS
-    // included, before anything can show them (services/photoIntake.ts).
-    const sanitized = await sanitizeUploadedPhoto(key, contentType);
-    if (!sanitized.ok) throw createHttpError(sanitized.status, sanitized.message);
+    // The server's own check and strip, after the device's (#849): the bytes
+    // must be the declared image type, within the size cap, and lose every
+    // EXIF/XMP/IPTC block, GPS included, before anything can show them. What
+    // is attached is the server's copy, never the object the client can
+    // still write to.
+    const accepted = await acceptUploadedPhoto(user.householdId!, plantId, validatedBody.imageUrl);
+    if (!accepted.ok) throw createHttpError(accepted.status, accepted.message);
+    const imageUrl = accepted.imageUrl;
     // Append to the photo timeline (which atomically also updates plant.imageUrl
     // to the latest). The previous behavior of bare updatePlantImage is now
     // a degenerate case of this — there's no need for both.
-    const photo = await plantService.appendPlantPhoto(
-      user.householdId!,
-      plantId,
-      imageUrl,
-      user.userId
-    );
+    let photo;
+    try {
+      photo = await plantService.appendPlantPhoto(
+        user.householdId!,
+        plantId,
+        imageUrl,
+        user.userId
+      );
+    } catch (err) {
+      await discardAcceptedPhoto(accepted.key);
+      throw err;
+    }
     activity
       .recordActivity({
         type: 'photo.uploaded',

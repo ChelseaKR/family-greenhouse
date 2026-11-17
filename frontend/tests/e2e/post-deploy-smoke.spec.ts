@@ -66,7 +66,10 @@ import {
   purgeSmokeOwnedPartitions,
   runAllCleanupSteps,
   isSignedS3GetFor,
+  isSignedS3GetUnder,
   s3ObjectTargetFromPresignedUrl,
+  signedHeadersOf,
+  storedPhotoKeyFromReference,
   safeResponseDiagnostic,
   testFixtureClaimPartition,
   type SafeResponseDiagnostic,
@@ -683,6 +686,7 @@ test.describe('post-deploy smoke', () => {
   let fixture: ConfirmedFixture | undefined;
   let authenticatedSessionEstablished = false;
   let uploadedS3Target: SmokeS3ObjectTarget | undefined;
+  let storedS3Target: SmokeS3ObjectTarget | undefined;
   const apiErrors: SafeResponseDiagnostic[] = [];
 
   test.beforeEach(async ({ page }) => {
@@ -692,6 +696,7 @@ test.describe('post-deploy smoke', () => {
     await claimTestFixture(fixture, randomUUID());
     authenticatedSessionEstablished = false;
     uploadedS3Target = undefined;
+    storedS3Target = undefined;
     apiErrors.length = 0;
     page.on('response', (resp) => {
       const url = resp.url();
@@ -730,6 +735,12 @@ test.describe('post-deploy smoke', () => {
         // semantics. Undefined means the test never reached presign.
         label: 'Exact S3 upload fallback',
         run: () => purgeUploadedS3Object(uploadedS3Target),
+      },
+      {
+        // The photo the confirm step stored under its own key (ADR 0046).
+        // Undefined means the test never reached a successful confirm.
+        label: 'Exact S3 stored photo fallback',
+        run: () => purgeUploadedS3Object(storedS3Target),
       },
     ]);
   });
@@ -869,23 +880,57 @@ test.describe('post-deploy smoke', () => {
       (await presignResponse.json()) as unknown
     );
     const s3Target = s3ObjectTargetFromPresignedUrl(uploadUrl.href);
-    const expectedKeyPrefix = `plants/${activeFixture.householdId}/${plantId}/`;
+    // The upload lands under a holding prefix, never under the plant's own
+    // (ADR 0046).
+    const uploadKeyPrefix = `uploads/${activeFixture.householdId}/${plantId}/`;
+    const storedKeyPrefix = `plants/${activeFixture.householdId}/${plantId}/`;
     if (
-      !s3Target.key.startsWith(expectedKeyPrefix) ||
-      !/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(s3Target.key.slice(expectedKeyPrefix.length))
+      !s3Target.key.startsWith(uploadKeyPrefix) ||
+      !/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(s3Target.key.slice(uploadKeyPrefix.length))
     ) {
-      throw new Error('Image presign did not issue the expected plant-scoped S3 key');
+      throw new Error('Image presign did not issue the expected plant-scoped upload key');
     }
     uploadedS3Target = s3Target;
 
+    // The upload URL must bind the file's type and exact size.
+    const signedHeaders = signedHeadersOf(uploadUrl.href);
+    if (!signedHeaders.includes('content-length') || !signedHeaders.includes('content-type')) {
+      throw new Error('Image presign did not sign the upload Content-Type and Content-Length');
+    }
+    let presignPayload: unknown;
+    try {
+      presignPayload = presignResponse.request().postDataJSON() as unknown;
+    } catch {
+      throw new Error('Image presign request did not contain JSON');
+    }
+    const declaredLength =
+      typeof presignPayload === 'object' &&
+      presignPayload !== null &&
+      'contentLength' in presignPayload &&
+      typeof presignPayload.contentLength === 'number'
+        ? presignPayload.contentLength
+        : 0;
+    const declaredType =
+      typeof presignPayload === 'object' &&
+      presignPayload !== null &&
+      'contentType' in presignPayload &&
+      typeof presignPayload.contentType === 'string'
+        ? presignPayload.contentType
+        : '';
+    if (!Number.isInteger(declaredLength) || declaredLength <= 0 || !declaredType) {
+      throw new Error('Image presign request did not declare the upload type and size');
+    }
+
     // Register the delivery assertion as soon as the presign response reveals
-    // the uploaded key, before the client can finish PUT + confirm + route.
-    // The presign's `imageUrl` is the stored reference, which loads nothing
-    // since #855 (ADR 0033): the page renders a short-lived signed S3 URL for
-    // the same bucket and key, so that is the response to wait for.
+    // the plant, before the client can finish PUT + confirm + route. The
+    // presign's `imageUrl` names the upload and loads nothing. The page
+    // renders a short-lived signed S3 URL (ADR 0033) for the photo the confirm
+    // step stores under the plant's prefix, at a key only the confirm response
+    // names, so wait for that prefix and compare the exact key afterwards.
     const renderedImageResponsePromise = page.waitForResponse(
       (response) =>
-        response.request().resourceType() === 'image' && isSignedS3GetFor(response.url(), s3Target)
+        response.request().resourceType() === 'image' &&
+        isSignedS3GetUnder(response.url(), s3Target.bucket, storedKeyPrefix)
     );
 
     const s3PutResponse = await s3PutPromise;
@@ -917,11 +962,45 @@ test.describe('post-deploy smoke', () => {
     }
     // Playwright does not expose an XMLHttpRequest Blob through
     // request.postDataBuffer(), even when S3 accepted real bytes. A successful
-    // confirm is the authoritative non-empty assertion: the API HeadObjects
-    // the uploaded key and rejects ContentLength === 0 before returning 200.
+    // confirm is the authoritative non-empty assertion: the API reads the
+    // uploaded object and rejects an empty one before returning 200.
+
+    // The confirm response names the photo the server stored: a new key under
+    // the plant's prefix, not the key that was uploaded to.
+    const confirmBody = (await confirmResponse.json()) as unknown;
+    const storedReference =
+      typeof confirmBody === 'object' &&
+      confirmBody !== null &&
+      'imageUrl' in confirmBody &&
+      typeof confirmBody.imageUrl === 'string'
+        ? confirmBody.imageUrl
+        : '';
+    const storedKey = storedPhotoKeyFromReference(storedReference, storedKeyPrefix);
+    if (!storedKey) {
+      throw new Error('Image confirmation did not return a stored photo under the plant prefix');
+    }
+    const storedTarget: SmokeS3ObjectTarget = { bucket: s3Target.bucket, key: storedKey };
+    storedS3Target = storedTarget;
+
+    // The upload URL is still within its lifetime. A PUT with the declared
+    // type but a different size must be refused by storage itself, because
+    // the size is in the signature. Nothing about the URL is printed.
+    const wrongSize = await page.request.put(uploadUrl.href, {
+      headers: { 'Content-Type': declaredType },
+      data: Buffer.alloc(declaredLength + 1),
+      failOnStatusCode: false,
+    });
+    if (wrongSize.status() !== 403) {
+      throw new Error(
+        `S3 did not refuse an upload of a different size (status ${wrongSize.status()}; expected 403)`
+      );
+    }
 
     const renderedImageResponse = await renderedImageResponsePromise;
     assertResponseStatus(renderedImageResponse, 200, 'Rendered plant image');
+    if (!isSignedS3GetFor(renderedImageResponse.url(), storedTarget)) {
+      throw new Error('Rendered plant image was not the photo the confirm step stored');
+    }
     expect(renderedImageResponse.headers()['content-type']).toMatch(/^image\//i);
     expect(
       (await renderedImageResponse.body()).byteLength,

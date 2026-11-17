@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('plantService.getImageUploadUrl', () => {
-  it('presigns against the content type the PUT will send', async () => {
+  it('presigns against the content type and the exact size the PUT will send', async () => {
     let body: unknown;
     server.use(
       http.post(`${API}/plants/p1/image`, async ({ request }) => {
@@ -90,10 +90,10 @@ describe('plantService.getImageUploadUrl', () => {
       })
     );
 
-    await expect(plantService.getImageUploadUrl('p1', 'image/webp')).resolves.toMatchObject({
+    await expect(plantService.getImageUploadUrl('p1', 'image/webp', 4321)).resolves.toMatchObject({
       uploadUrl: 'https://s3.test/put',
     });
-    expect(body).toEqual({ contentType: 'image/webp' });
+    expect(body).toEqual({ contentType: 'image/webp', contentLength: 4321 });
   });
 });
 

@@ -5,7 +5,9 @@ import {
   authMiddleware,
   requireAdmin,
   requireHousehold,
+  requireVerifiedEmail,
   rejectApiKeyPrincipal,
+  EMAIL_NOT_VERIFIED_MESSAGE,
   __resetMembershipCacheForTests,
 } from '../../../src/middleware/auth.js';
 import * as householdService from '../../../src/services/householdService.js';
@@ -369,5 +371,59 @@ describe('rejectApiKeyPrincipal (M2)', () => {
     const res = await invoke(buildEvent({ sub: 'u', email: 'e' }));
     expect(res.statusCode).toBe(200);
     expect(inner).toHaveBeenCalledOnce();
+  });
+});
+
+describe('email_verified on the caller (ADR 0048)', () => {
+  const userOf = async (claims: Record<string, unknown>) => {
+    const { invoke, inner } = makeHandler([authMiddleware()]);
+    const res = await invoke(buildEvent(claims));
+    expect(res.statusCode).toBe(200);
+    return (inner.mock.calls[0][0] as { user: Record<string, unknown> }).user;
+  };
+
+  it('reads the claim as the token states it, boolean or string', async () => {
+    // A boolean in the token; a string once API Gateway has passed it on.
+    expect((await userOf({ sub: 'u', email: 'a@b.com', email_verified: true })).emailVerified).toBe(
+      true
+    );
+    expect(
+      (await userOf({ sub: 'u', email: 'a@b.com', email_verified: 'true' })).emailVerified
+    ).toBe(true);
+    expect(
+      (await userOf({ sub: 'u', email: 'a@b.com', email_verified: false })).emailVerified
+    ).toBe(false);
+    expect(
+      (await userOf({ sub: 'u', email: 'a@b.com', email_verified: 'false' })).emailVerified
+    ).toBe(false);
+  });
+
+  it('leaves it absent when the token does not say, or says something else', async () => {
+    expect(await userOf({ sub: 'u', email: 'a@b.com' })).not.toHaveProperty('emailVerified');
+    expect(await userOf({ sub: 'u', email: 'a@b.com', email_verified: 'yes' })).not.toHaveProperty(
+      'emailVerified'
+    );
+  });
+
+  it('requireVerifiedEmail turns away only a token that states the address is not verified', async () => {
+    const refused = makeHandler([authMiddleware(), requireVerifiedEmail()]);
+    await expect(
+      refused.invoke(buildEvent({ sub: 'u', email: 'a@b.com', email_verified: 'false' }))
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: EMAIL_NOT_VERIFIED_MESSAGE,
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+    expect(refused.inner).not.toHaveBeenCalled();
+
+    for (const claims of [
+      { sub: 'u', email: 'a@b.com', email_verified: 'true' },
+      // No claim: a token issued before the claim was readable must still work.
+      { sub: 'u', email: 'a@b.com' },
+    ]) {
+      const allowed = makeHandler([authMiddleware(), requireVerifiedEmail()]);
+      expect((await allowed.invoke(buildEvent(claims))).statusCode).toBe(200);
+      expect(allowed.inner).toHaveBeenCalledOnce();
+    }
   });
 });

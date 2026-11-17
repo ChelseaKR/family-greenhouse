@@ -14,7 +14,7 @@
     "features/dashboard/ClimateCard.tsx": 4,
     "features/dashboard/DashboardPage.tsx": 14,
     "features/dashboard/YearInReviewCard.tsx": 1,
-    "features/household/HouseholdPage.tsx": 8,
+    "features/household/HouseholdPage.tsx": 7,
     "features/household/JoinHouseholdPage.tsx": 12,
     "features/household/SitterLinksCard.tsx": 4,
     "features/petsafe/PetSafePage.tsx": 8,

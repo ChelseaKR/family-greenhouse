@@ -65,6 +65,12 @@ describe('PlantImageUpload', () => {
     await waitFor(() => expect(plantService.uploadImage).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(plantService.confirmImageUpload).toHaveBeenCalledTimes(1));
     expect(vi.mocked(plantService.uploadImage).mock.calls[1][1]).toBe(file);
+    // Each presign declares the type and the exact size of the file it is for.
+    expect(plantService.getImageUploadUrl).toHaveBeenLastCalledWith(
+      'plant-1',
+      'image/jpeg',
+      file.size
+    );
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
     expect(onUploadSuccess).toHaveBeenCalledTimes(1);
   });

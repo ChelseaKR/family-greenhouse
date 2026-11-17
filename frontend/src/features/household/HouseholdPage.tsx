@@ -53,6 +53,12 @@ export function HouseholdPage() {
   const [searchParams] = useSearchParams();
   const awayEntry = searchParams.get('away') === '1';
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // A link admits up to five people, an emailed invitation one; the line
+  // under the link says which this is.
+  const [inviteLinkKind, setInviteLinkKind] = useState<'link' | 'email'>('link');
+  // Set once the admin has turned the household's invites off on this visit,
+  // and cleared when they make a new one.
+  const [invitesTurnedOff, setInvitesTurnedOff] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   // In the native shells the invite goes out through the share sheet.
@@ -88,6 +94,8 @@ export function HouseholdPage() {
     mutationFn: () => householdService.createInvite(householdId!),
     onSuccess: (data) => {
       setInviteLink(data.url);
+      setInviteLinkKind('link');
+      setInvitesTurnedOff(false);
       setCopyError(false);
     },
   });
@@ -101,9 +109,27 @@ export function HouseholdPage() {
       ),
     onSuccess: (data) => {
       setInviteLink(data.url);
+      setInviteLinkKind('email');
+      setInvitesTurnedOff(false);
       setInviteEmailStatus(data.status);
       setCopyError(false);
       if (data.status === 'accepted') setInviteEmailDraft('');
+    },
+  });
+
+  // Every invite made so far stops working, so the one on screen is cleared
+  // rather than left looking usable.
+  const forgetShownInvite = () => {
+    setInviteLink(null);
+    setInviteEmailStatus(null);
+    setCopyError(false);
+  };
+
+  const revokeInvitesMutation = useMutation({
+    mutationFn: () => householdService.revokeInvites(householdId!),
+    onSuccess: () => {
+      forgetShownInvite();
+      setInvitesTurnedOff(true);
     },
   });
 
@@ -112,6 +138,9 @@ export function HouseholdPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['household', householdId] });
       setMemberToRemove(null);
+      // Removing someone turns off the household's invites so far, the one
+      // on screen included.
+      forgetShownInvite();
     },
     // A refused or failed removal used to do nothing on screen. Close the
     // confirmation first: while the dialog is open the toast sits under its
@@ -310,7 +339,11 @@ export function HouseholdPage() {
                   {t('household.share.copyFailed')}
                 </p>
               )}
-              <p className="text-xs text-gray-600">This link will expire in 7 days.</p>
+              <p className="text-xs text-gray-600">
+                {inviteLinkKind === 'email'
+                  ? t('household.inviteEmailLinkLimits')
+                  : t('household.inviteLinkLimits')}
+              </p>
             </div>
           ) : (
             <Button
@@ -327,6 +360,29 @@ export function HouseholdPage() {
               {getErrorMessage(createInviteMutation.error)}
             </Alert>
           )}
+
+          {/* Taking invites back. There is no list to choose from: a link is
+              shown once, when it is made, so the control turns off every
+              invite made so far (ADR 0047). */}
+          <div className="mt-6 space-y-2 border-t border-gray-200 pt-4">
+            <p className="text-xs text-gray-600">{t('household.revokeInvites.hint')}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => revokeInvitesMutation.mutate()}
+              isLoading={revokeInvitesMutation.isPending}
+            >
+              {t('household.revokeInvites.button')}
+            </Button>
+            {/* Rendered unconditionally so the live region exists before it
+                has anything to say. */}
+            <p className="text-sm text-primary-800" role="status">
+              {invitesTurnedOff ? t('household.revokeInvites.done') : ''}
+            </p>
+            {revokeInvitesMutation.isError && (
+              <Alert variant="error">{getErrorMessage(revokeInvitesMutation.error)}</Alert>
+            )}
+          </div>
         </Card>
       )}
 

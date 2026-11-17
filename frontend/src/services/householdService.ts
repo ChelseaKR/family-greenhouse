@@ -187,6 +187,15 @@ export const householdService = {
     return response.data;
   },
 
+  /**
+   * Turn off every invite this household has made so far, links and emailed
+   * invitations alike. Invites made afterwards work as usual. Admin only.
+   */
+  async revokeInvites(householdId: string): Promise<{ revokedAt: string }> {
+    const response = await api.delete<{ revokedAt: string }>(`/households/${householdId}/invites`);
+    return response.data;
+  },
+
   async validateInvite(inviteCode: string): Promise<{ household: Household; valid: boolean }> {
     const response = await api.get<{ household: Household; valid: boolean }>(
       `/households/invites/${inviteCode}`

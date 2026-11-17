@@ -43,6 +43,13 @@ export interface Household {
    * already in production is the owner decision ADR 0025 sets out.
    */
   timezone?: string;
+  /**
+   * Invites created at or before this instant no longer work (ADR 0047). Set
+   * when a member leaves or is removed, and when an admin turns off the
+   * household's invite links. Absent = no invite has been turned off this way.
+   * A timestamp, not a credential; no client reads it.
+   */
+  invitesRevokedAt?: string;
   createdAt: string;
   createdBy: string;
   /**
@@ -101,6 +108,10 @@ export interface HouseholdInvite {
   createdBy: string;
   createdAt: string;
   expiresAt: string;
+  /** How many people may join with this invite (ADR 0047). */
+  maxUses: number;
+  /** How many have. */
+  uses: number;
 }
 
 /**

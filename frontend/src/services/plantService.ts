@@ -291,6 +291,7 @@ export interface ImportPlantsResponse {
 
 export interface ImageUploadResponse {
   uploadUrl: string;
+  /** Names the upload, for the confirm call. It is not the stored photo. */
   imageUrl: string;
 }
 
@@ -360,13 +361,19 @@ export const plantService = {
   },
 
   /**
-   * Presign an image upload. `contentType` must be one of image/jpeg,
-   * image/png, image/webp and MUST match the Content-Type header of the
-   * subsequent PUT — the backend signs the URL against it.
+   * Presign an image upload for one file. `contentType` must be one of
+   * image/jpeg, image/png, image/webp and `contentLength` is the file's exact
+   * size in bytes. The backend signs the URL for both, so the subsequent PUT
+   * MUST send that Content-Type header and a body of exactly that size.
    */
-  async getImageUploadUrl(plantId: string, contentType: string): Promise<ImageUploadResponse> {
+  async getImageUploadUrl(
+    plantId: string,
+    contentType: string,
+    contentLength: number
+  ): Promise<ImageUploadResponse> {
     const response = await api.post<ImageUploadResponse>(`/plants/${plantId}/image`, {
       contentType,
+      contentLength,
     });
     return response.data;
   },

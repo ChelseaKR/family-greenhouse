@@ -1261,6 +1261,13 @@
     "inviteByEmailSent": "Invitation sent. The link below is the same one, if you'd rather also send it yourself.",
     "inviteByEmailCooldown": "That address was invited to this household in the last 24 hours. The link below still works.",
     "inviteByEmailUnavailable": "We couldn't send that email, so we haven't said it went out. Copy the link below and send it yourself.",
+    "inviteLinkLimits": "This link works for 7 days and for up to 5 people.",
+    "inviteEmailLinkLimits": "This link works for 7 days and for one person.",
+    "revokeInvites": {
+      "hint": "Turning invite links off stops every link and emailed invitation made so far. They also stop working when anyone leaves or is removed from this household.",
+      "button": "Turn off invite links",
+      "done": "Invite links are off. Links made before now no longer work. You can make a new one."
+    },
     "climateCheckFailed": "Climate availability could not be checked. Location changes are paused; try again later.",
     "climateUnavailable": "Climate-aware tips are unavailable right now. Location setup will return when the weather integration is enabled.",
     "climateSavedLocation": "Your saved location is {{city}}.",

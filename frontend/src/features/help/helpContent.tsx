@@ -660,13 +660,14 @@ export const HELP_SECTIONS: HelpSection[] = [
             On the <strong>Household</strong> page, an admin can{' '}
             <strong>Generate invite link</strong> and send it to whoever should join. They create
             their own login and land in your household as a member. The link{' '}
-            <strong>expires after 7 days</strong> and can be used by more than one person in that
-            window, so treat it as semi-private and don&rsquo;t post it publicly. There is no way to
-            revoke an invite early — if one gets out, the safest response is to wait it out and
-            remove anyone unexpected.
+            <strong>works for 7 days and for up to 5 people</strong>; an invitation sent by email
+            works for one person. Treat a link as semi-private and don&rsquo;t post it publicly. If
+            one gets out, an admin can choose <strong>Turn off invite links</strong> on the
+            Household page, which stops every invite made so far. Invites also stop working when
+            anyone leaves or is removed from the household.
           </p>
         ),
-        text: 'On the Household page, an admin can Generate invite link and send it to whoever should join. They create their own login and land in your household as a member. The link expires after 7 days and can be used by more than one person in that window, so treat it as semi-private and do not post it publicly. There is no way to revoke an invite early; if one gets out, wait it out and remove anyone unexpected.',
+        text: 'On the Household page, an admin can Generate invite link and send it to whoever should join. They create their own login and land in your household as a member. The link works for 7 days and for up to 5 people; an invitation sent by email works for one person. Treat a link as semi-private and do not post it publicly. If one gets out, an admin can choose Turn off invite links on the Household page, which stops every invite made so far. Invites also stop working when anyone leaves or is removed from the household.',
       },
       {
         id: 'share-the-chores',
