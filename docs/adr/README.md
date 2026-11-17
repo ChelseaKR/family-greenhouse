@@ -72,6 +72,7 @@ be invisible.
 | [0040](0040-seedling-cut-to-8-plants-and-2-people-with-grandfathering.md)         | The free plan is cut to 8 plants and 2 people, and households created before the cut keep 20 and 3                         | Accepted |
 | [0041](0041-apple-in-app-purchase-in-the-iphone-app.md)                           | Apple In-App Purchase in the iPhone app, beside Stripe, off by default                                                     | Proposed |
 | [0042](0042-garden-repriced-to-2-99-with-identification-sold-only-by-the-pack.md) | Garden is repriced to $2.99 a month or $24.99 a year, and plant identification leaves the plan                             | Accepted |
+| [0043](0043-the-ios-app-is-iphone-only-for-its-first-review.md)                   | The iOS app is iPhone-only for its first App Store review                                                                  | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 
