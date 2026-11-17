@@ -390,6 +390,97 @@ describe('plants identify handler', () => {
     });
   });
 
+  describe('the iPhone app never spends a top-up credit (ADR 0044)', () => {
+    function iphoneHouseholdEvent(useTopUpCredits: unknown) {
+      const event = householdEvent();
+      event.body = JSON.stringify({ image: 'A'.repeat(100), useTopUpCredits });
+      return event;
+    }
+
+    it('reserves against the plan allowance only: no household is handed over to hold credits', async () => {
+      const plantIdentification = await import('../../../src/services/plantIdentification.js');
+      await warmHousehold();
+      vi.mocked(billing.getHouseholdSubscription).mockResolvedValue({ planId: 'greenhouse' });
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      vi.mocked(plantIdentification.identifyPlant).mockResolvedValueOnce({
+        configured: true,
+        suggestions: [],
+      });
+
+      const res = (await identify(
+        iphoneHouseholdEvent(false),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // Same bucket and allowance as the website; only the credit holder is gone.
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 100, null);
+    });
+
+    it('refuses without consulting or offering a pack, even where the website would offer one', async () => {
+      const plantIdentification = await import('../../../src/services/plantIdentification.js');
+      await warmHousehold();
+      process.env.PAYMENTS_ENABLED = '1';
+      process.env.STRIPE_PRICE_ID_IDENTIFY_TOP_UP = 'price_topup';
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      // With no household to draw on, reserveIdentification refuses with
+      // credits null: not consulted, not zero.
+      const exceeded = new identifyBudget.IdentifyBudgetExceededError();
+      Object.assign(exceeded, { credits: null });
+      vi.mocked(identifyBudget.reserveIdentification).mockRejectedValueOnce(exceeded);
+
+      const res = (await identify(
+        iphoneHouseholdEvent(false),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(402);
+      const body = JSON.parse(res.body);
+      expect(identifyBudget.reserveIdentification).toHaveBeenCalledWith('hh-1', 0, null);
+      expect(body.message).toBe(
+        'Identification is not included in Garden. Upgrade to Greenhouse for a monthly allowance.'
+      );
+      expect(body.details).toEqual({
+        code: 'IDENTIFY_BUDGET_EXHAUSTED',
+        allowance: 0,
+        planName: 'Garden',
+        topUpAvailable: false,
+        credits: null,
+        topUp: null,
+      });
+      expect(plantIdentification.identifyPlant).not.toHaveBeenCalled();
+    });
+
+    it('keeps spending credits when the field is absent or true (the website and older builds)', async () => {
+      await warmHousehold();
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      const plantIdentification = await import('../../../src/services/plantIdentification.js');
+      vi.mocked(plantIdentification.identifyPlant).mockResolvedValue({
+        configured: true,
+        suggestions: [],
+      });
+
+      await identify(householdEvent(), ctx, () => {});
+      await identify(iphoneHouseholdEvent(true), ctx, () => {});
+      expect(vi.mocked(identifyBudget.reserveIdentification).mock.calls).toEqual([
+        ['hh-1', 0, 'hh-1'],
+        ['hh-1', 0, 'hh-1'],
+      ]);
+    });
+
+    it('rejects a field that is not a boolean, rather than guessing', async () => {
+      await warmHousehold();
+      const { identify } = await import('../../../src/handlers/plants/identify.js');
+      const res = (await identify(
+        iphoneHouseholdEvent('false'),
+        ctx,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(400);
+      expect(identifyBudget.reserveIdentification).not.toHaveBeenCalled();
+    });
+  });
+
   describe('the refusal says what is true of the plan (ADR 0042)', () => {
     it('sends an upgrade ask for identifications to Greenhouse, never to Garden', async () => {
       const { resolveTargetPlan } = await import('../../../src/models/upgradeFeatures.js');

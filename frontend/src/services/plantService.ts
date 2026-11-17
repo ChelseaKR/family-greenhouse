@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { api } from './api';
 import { track } from './analytics';
+import { getNativePlatform } from '@/lib/platform';
 import type { IdentifyCreditBalance } from './billingService';
 import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
 
@@ -425,9 +426,16 @@ export const plantService = {
     return response.data;
   },
 
+  /**
+   * Inside the iPhone app the request says `useTopUpCredits: false`, so the
+   * server spends only the plan's monthly allowance and never an
+   * identification pack bought on the website (ADR 0044, App Review
+   * Guideline 3.1.3(b)). The website and the Android app send nothing extra.
+   */
   async identifyPlant(imageBase64: string): Promise<IdentifyResponse> {
     const response = await api.post<IdentifyResponse>('/plants/identify', {
       image: imageBase64,
+      ...(getNativePlatform() === 'ios' ? { useTopUpCredits: false } : {}),
     });
     return response.data;
   },

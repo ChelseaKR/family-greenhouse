@@ -29,6 +29,12 @@ change.
   `1,2`), for its first App Store review (ADR 0043). On an iPad it runs as an
   iPhone app. `npm run mobile:validate` now fails if the iPad target comes
   back without a new decision. The website and the Android app are unchanged.
+- **The iPhone app no longer spends identification packs bought on the
+  website** (ADR 0044). Photo identification in the iPhone app uses only the
+  plan's monthly allowance; when that is spent it says identification isn't
+  included, as before, and offers no pack. Packs keep working on the website.
+  The request carries `useTopUpCredits: false`; the website and the Android
+  app send nothing new.
 - **What the deploy changes.** Terraform adds one AWS Budgets usage budget,
   `family-greenhouse-cognito-mau-production`, which emails
   support@familygreenhouse.net above 15 Cognito monthly active users. The pool

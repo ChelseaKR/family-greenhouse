@@ -3345,6 +3345,12 @@ paths:
                 image:
                   type: string
                   description: Base64-encoded JPEG/PNG or a data URL. Cap at 256 KB after encoding.
+                useTopUpCredits:
+                  type: boolean
+                  description: >-
+                    Optional, default true. The iPhone app sends false (ADR 0044): the call then spends
+                    only the plan's monthly allowance, never an identification pack credit, and a refusal
+                    carries `credits: null` (not consulted) and no pack offer.
       responses:
         '200':
           description: >-
