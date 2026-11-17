@@ -309,8 +309,12 @@ resource "aws_iam_role" "github_alert_relay" {
 resource "aws_iam_policy" "deploy" {
   provider = aws.iam
 
-  name        = local.deploy_role_name
-  description = "Scoped deploy permissions for the GitHub Actions Terraform role: full access within the services this stack manages, IAM limited to project-prefixed roles/policies and bounded."
+  name = local.deploy_role_name
+  # Unchanged on purpose. IAM cannot edit a policy's description, so a new
+  # one makes Terraform delete this policy and create another, and for that
+  # moment the deploy role would hold nothing. The statements below are what
+  # changed; they become a new version of the same policy.
+  description = "Scoped deploy permissions for the GitHub Actions CD role: full access within the services this stack manages, IAM limited to project-prefixed roles/policies."
 
   policy = jsonencode({
     Version = "2012-10-17"

@@ -606,6 +606,26 @@ for (const [description, sabotage, expected] of [
   });
 }
 
+test('the existing role and policy keep their identity, so applying this updates them in place', () => {
+  // The deploy role and its policy already exist in the account. A changed name
+  // or policy description is a replacement, not an update: Terraform would delete
+  // the policy the live role depends on before creating the new one.
+  const module = cicdModule();
+  assert.match(module, /deploy_role_name\s*=\s*"\$\{var\.project_name\}-github-deploy"/u);
+  const policy = resource(module, 'aws_iam_policy', 'deploy');
+  assert.match(policy, /\n {2}name = local\.deploy_role_name\n/u);
+  assert.ok(
+    policy.includes(
+      'description = "Scoped deploy permissions for the GitHub Actions CD role: full access within the services this stack manages, IAM limited to project-prefixed roles/policies."'
+    ),
+    'the deploy policy description changed, which replaces the policy'
+  );
+  assert.match(
+    resource(module, 'aws_iam_role', 'github_deploy'),
+    /\n {2}name = local\.deploy_role_name\n/u
+  );
+});
+
 // --- the permissions boundary ---------------------------------------------------
 
 function terraformFiles(dir) {
