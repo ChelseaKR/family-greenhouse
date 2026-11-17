@@ -51,8 +51,9 @@ systems each believing they decide its plan.
    extensions present, the chain valid at the payload's `signedDate`, and the ES256 signature valid
    under the leaf. `services/appStoreJws.ts` does this with `node:crypto` alone, so the billing
    Lambda gains no dependency. OCSP is not checked (Apple's own library leaves it off by default).
-   The bundle id must be `net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox are both accepted, because App Review buys in Sandbox against
-   the production server; `APP_STORE_ENVIRONMENTS` narrows it later. Xcode-signed transactions are
+   The bundle id must be `net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox were both accepted at first, because App Review buys in Sandbox against
+   the production server. [ADR 0045](0045-production-grants-plans-for-production-app-store-transactions-only.md)
+   changed that: Production only, with Sandbox an opt-in per deployment. Xcode-signed transactions are
    never accepted by the server.
 
 4. **Which household.** Before the purchase sheet opens, `POST /billing/app-store/purchase-intent`

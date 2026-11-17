@@ -540,6 +540,7 @@ locals {
     STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                      = var.payments_enabled
     APP_STORE_BILLING_ENABLED             = var.app_store_billing_enabled
+    APP_STORE_ENVIRONMENTS                = var.app_store_environments
     POSTHOG_KEY                           = var.posthog_key
     POSTHOG_HOST                          = var.posthog_host
   }

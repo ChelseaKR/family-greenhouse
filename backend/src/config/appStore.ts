@@ -28,20 +28,23 @@ export const APP_STORE_BUNDLE_ID = 'net.familygreenhouse.app';
 export const APP_STORE_APP_APPLE_ID = 6812185914;
 
 /**
- * Which App Store environments' transactions grant entitlement. Production by
- * itself is not enough: App Review buys with Sandbox accounts against the
- * production server, and Apple's guidance is to accept Sandbox there too.
- * The cost is that a TestFlight tester's free Sandbox subscription unlocks
- * the plan on the tester's own household while it lasts (Sandbox
- * subscriptions renew on an accelerated clock and stop on their own).
- * `APP_STORE_ENVIRONMENTS` (comma separated) narrows it, for example to
- * "Production" once the app is approved. `Xcode` and `LocalTesting` are never
- * accepted: those are signed by a certificate on the developer's Mac, not by
- * Apple, and cannot pass `verifyAppleJws`.
+ * Which App Store environments' transactions grant entitlement (ADR 0045).
+ *
+ * Production only, unless the deployment opts in. A Sandbox purchase is a
+ * test purchase nobody paid for, so it grants a plan only where that is
+ * intended. `APP_STORE_ENVIRONMENTS` (comma separated) is the opt-in: staging
+ * sets "Production,Sandbox", and production sets it only for the days App
+ * Review needs it, because App Review buys with Sandbox accounts against the
+ * production server.
+ *
+ * Unset means Production. A value that names neither environment accepts
+ * nothing, so a typo closes the door instead of opening it. `Xcode` and
+ * `LocalTesting` are never accepted: those are signed by a certificate on
+ * the developer's Mac, not by Apple, and cannot pass `verifyAppleJws`.
  */
 export function appStoreEnvironments(): ReadonlySet<string> {
   const raw = process.env.APP_STORE_ENVIRONMENTS;
-  const listed = (raw ?? 'Production,Sandbox')
+  const listed = (raw ?? 'Production')
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s === 'Production' || s === 'Sandbox');

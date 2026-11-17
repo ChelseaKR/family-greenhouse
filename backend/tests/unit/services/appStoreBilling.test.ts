@@ -7,7 +7,7 @@
  * DynamoDB is a small in-memory fake that evaluates the exact condition
  * expressions this module sends, so a changed expression fails here.
  */
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: vi.fn(function (input) {
@@ -127,6 +127,10 @@ beforeEach(() => {
   household('hh-2');
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('getOrCreateAccountToken', () => {
   it('creates one UUID per household, with a lookup back to it, and reuses it', async () => {
     const first = await getOrCreateAccountToken('hh-1');
@@ -222,24 +226,28 @@ describe('applyVerifiedTransaction', () => {
     expect(row('hh-1').appStore).toBeUndefined();
   });
 
-  it('grants a Sandbox purchase by default, and ignores it once production is narrowed', async () => {
+  it('ignores a Sandbox purchase by default, and grants it only where Sandbox is opted in', async () => {
     const saved = process.env.APP_STORE_ENVIRONMENTS;
     try {
       delete process.env.APP_STORE_ENVIRONMENTS;
       const sandbox = tx({ environment: 'Sandbox' });
-      expect(await applyVerifiedTransaction(sandbox, null, 'hh-1', NOW)).toMatchObject({
-        outcome: 'applied',
-        planId: 'garden',
-      });
+      expect((await applyVerifiedTransaction(sandbox, null, 'hh-1', NOW)).outcome).toBe('ignored');
+      expect(row('hh-1').appStore).toBeUndefined();
 
       process.env.APP_STORE_ENVIRONMENTS = 'Production';
+      expect((await applyVerifiedTransaction(sandbox, null, 'hh-1', NOW)).outcome).toBe('ignored');
+      expect(row('hh-1').appStore).toBeUndefined();
+
+      process.env.APP_STORE_ENVIRONMENTS = 'Production,Sandbox';
       const other = tx({
         environment: 'Sandbox',
         originalTransactionId: '4000000000',
         transactionId: '4000000001',
       });
-      expect((await applyVerifiedTransaction(other, null, 'hh-2', NOW)).outcome).toBe('ignored');
-      expect(row('hh-2').appStore).toBeUndefined();
+      expect(await applyVerifiedTransaction(other, null, 'hh-2', NOW)).toMatchObject({
+        outcome: 'applied',
+        planId: 'garden',
+      });
     } finally {
       if (saved === undefined) delete process.env.APP_STORE_ENVIRONMENTS;
       else process.env.APP_STORE_ENVIRONMENTS = saved;
@@ -288,7 +296,8 @@ describe('notifications and signed transactions', () => {
     });
   });
 
-  it('applies a Sandbox notification, which carries no appAppleId (App Review buys in Sandbox against production)', async () => {
+  it('applies a Sandbox notification, which carries no appAppleId, where Sandbox is opted in', async () => {
+    vi.stubEnv('APP_STORE_ENVIRONMENTS', 'Production,Sandbox');
     const token = await getOrCreateAccountToken('hh-1');
     const signedDate = Date.now();
     const signedTransactionInfo = signJws(chain, {
@@ -316,6 +325,38 @@ describe('notifications and signed transactions', () => {
     );
     expect(result).toMatchObject({ outcome: 'applied', householdId: 'hh-1', planId: 'garden' });
     expect(row('hh-1').appStore).toMatchObject({ environment: 'Sandbox' });
+  });
+
+  it('ignores a Sandbox notification by default: nothing is bound and no plan is written', async () => {
+    vi.stubEnv('APP_STORE_ENVIRONMENTS', undefined);
+    const token = await getOrCreateAccountToken('hh-1');
+    const signedDate = Date.now();
+    const signedTransactionInfo = signJws(chain, {
+      ...tx({
+        appAccountToken: token,
+        environment: 'Sandbox',
+        signedDate,
+        expiresDate: signedDate + 30 * DAY,
+      }),
+    });
+    const signedPayload = signJws(chain, {
+      notificationType: 'SUBSCRIBED',
+      subtype: 'INITIAL_BUY',
+      signedDate,
+      data: {
+        bundleId: 'net.familygreenhouse.app',
+        environment: 'Sandbox',
+        signedTransactionInfo,
+      },
+    });
+    const result = await applyNotification(
+      signedPayload,
+      { trustedRootsPem: [chain.rootPem] },
+      new Date(signedDate)
+    );
+    expect(result.outcome).toBe('ignored');
+    expect(row('hh-1').appStore).toBeUndefined();
+    expect([...table.keys()].some((k) => k.startsWith('APPSTORE_TXN#'))).toBe(false);
   });
 
   it('refuses a notification for another app id', async () => {

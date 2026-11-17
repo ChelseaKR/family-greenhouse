@@ -16,6 +16,23 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Security
+
+- **Production grants a plan only for Production App Store transactions**
+  (ADR 0045). The backend default for `APP_STORE_ENVIRONMENTS` is now
+  `Production`; it was `Production,Sandbox`. Terraform gains
+  `app_store_environments` (default `"Production"`, or `"Production,Sandbox"`),
+  which the billing Lambda reads. Production sets `"Production"` and staging
+  sets `"Production,Sandbox"`, each in its own tfvars. A Sandbox transaction
+  sent to production is verified, logged and ignored. **What the deploy
+  changes:** one environment variable on the billing Lambda in each
+  environment; no stored data is migrated, and a subscription already
+  recorded keeps its plan until its recorded expiry. **Before an App Store
+  submission,** production must be set to `"Production,Sandbox"` and deployed,
+  or the TestFlight purchase check and App Review's purchase will not finish;
+  it is set back in the first release after approval
+  (`docs/mobile-release-checklist.md`).
+
 ## [0.52.0] - 2026-11-17
 
 **The release the next iPhone store build is cut from, and that build is for

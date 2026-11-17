@@ -16,7 +16,11 @@
       "Store payment rules" and "In-App Purchase".
 - [ ] In-App Purchase, if this build sells through the App Store: the App
       Store Connect subscription group and both products exist and are
-      attached to the version, the server switch is on in production, the
+      attached to the version, the server switch is on in production,
+      production accepts Sandbox for the review
+      (`app_store_environments = "Production,Sandbox"` deployed before the
+      TestFlight check, and set back to `"Production"` in the first release
+      after approval; ADR 0045), the
       App Store Server Notifications v2 URL is set for Production and
       Sandbox, the build was made with `VITE_APP_STORE_PURCHASES=true`, a
       Sandbox purchase and a restore were checked on a device, and the Terms
