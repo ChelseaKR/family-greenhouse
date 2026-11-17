@@ -662,6 +662,21 @@ variable "app_store_billing_enabled" {
   }
 }
 
+# Which App Store environments' signed transactions grant a plan (ADR 0045).
+# Production only by default. "Production,Sandbox" is an opt-in an environment
+# makes in its own tfvars: staging always, production only for the days App
+# Review needs it.
+variable "app_store_environments" {
+  description = "App Store environments whose transactions grant entitlement: \"Production\" (default) or \"Production,Sandbox\". Sandbox purchases are free, so accept them only where that is intended."
+  type        = string
+  default     = "Production"
+
+  validation {
+    condition     = contains(["Production", "Production,Sandbox"], var.app_store_environments)
+    error_message = "app_store_environments must be exactly \"Production\" or \"Production,Sandbox\"."
+  }
+}
+
 # Manual confirmation gate: Stripe price ids look identical in test and live
 # mode, so Terraform can't verify stripe_price_id_* actually match the mode of
 # stripe_secret_key. This must be deliberately flipped to true (see the check

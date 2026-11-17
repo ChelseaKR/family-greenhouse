@@ -262,6 +262,7 @@ module "api" {
   stripe_automatic_tax_enabled          = var.stripe_automatic_tax_enabled
   payments_enabled                      = var.payments_enabled
   app_store_billing_enabled             = var.app_store_billing_enabled
+  app_store_environments                = var.app_store_environments
 }
 
 # Price ids are visually identical in test and live Stripe mode, so this is

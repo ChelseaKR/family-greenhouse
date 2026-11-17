@@ -74,6 +74,7 @@ be invisible.
 | [0042](0042-garden-repriced-to-2-99-with-identification-sold-only-by-the-pack.md)    | Garden is repriced to $2.99 a month or $24.99 a year, and plant identification leaves the plan                             | Accepted |
 | [0043](0043-the-ios-app-is-iphone-only-for-its-first-review.md)                      | The iOS app is iPhone-only for its first App Store review                                                                  | Accepted |
 | [0044](0044-the-iphone-app-does-not-spend-identification-packs-bought-on-the-web.md) | The iPhone app does not spend identification packs bought on the website                                                   | Accepted |
+| [0045](0045-production-grants-plans-for-production-app-store-transactions-only.md)   | Production grants plans for Production App Store transactions only                                                         | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

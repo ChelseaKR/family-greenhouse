@@ -112,3 +112,8 @@ payments_enabled = "1"
 # are verified against the pinned Apple Root CA - G3. Set back to "0" and apply
 # to close the routes again; a recorded subscription keeps its entitlement.
 app_store_billing_enabled = "1"
+
+# Staging accepts Sandbox purchases on purpose (ADR 0045): this is where a
+# Sandbox Apple Account buys from a build pointed at this API. Staging has no
+# real customers, so a free Sandbox plan here costs nothing.
+app_store_environments = "Production,Sandbox"

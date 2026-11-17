@@ -1106,8 +1106,13 @@ All three answer 404 while the switch is off.
 **Verification.** `services/appStoreJws.ts` checks the `x5c` chain against the
 pinned Apple Root CA - G3, Apple's two marker extensions, validity at
 `signedDate`, and the ES256 signature, with `node:crypto` only. Bundle id
-`net.familygreenhouse.app`; production notifications must name app 6812185914. Production and Sandbox are accepted (App Review buys in Sandbox);
-`APP_STORE_ENVIRONMENTS` narrows it.
+`net.familygreenhouse.app`; production notifications must name app 6812185914. Only Production transactions grant a plan unless the
+deployment opts in to Sandbox (ADR 0045): `app_store_environments` in the
+environment's tfvars sets `APP_STORE_ENVIRONMENTS` on the billing Lambda.
+Staging is `"Production,Sandbox"`. Production is `"Production"`, and is set to
+`"Production,Sandbox"` only from the owner's TestFlight purchase check until
+Apple approves a build, then set back. A refused transaction is logged as
+`app_store_environment_refused` and changes nothing.
 
 **Not paying twice.** The purchase intent refuses a household with a live
 Stripe subscription, an active App Store subscription, or a lifetime or gift

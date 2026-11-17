@@ -194,6 +194,13 @@ variable "app_store_billing_enabled" {
   default     = "0"
 }
 
+# Production only unless an environment opts in to Sandbox (ADR 0045).
+variable "app_store_environments" {
+  description = "Value of APP_STORE_ENVIRONMENTS on the billing Lambda: \"Production\" or \"Production,Sandbox\"."
+  type        = string
+  default     = "Production"
+}
+
 # --- Notification delivery ---
 variable "ses_identity_arn" {
   description = "ARN of the verified SES identity (domain) reminder emails are sent from. Used to scope the Lambda role's ses:SendEmail/SendRawEmail grant. Empty (no domain provisioned) falls back to Resource \"*\"."

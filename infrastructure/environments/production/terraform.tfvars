@@ -300,14 +300,28 @@ trial_lifecycle_emails_enabled = true
 
 # Apple In-App Purchase for the iPhone app (ADR 0041), exactly as staging sets
 # it (#1064). It sets APP_STORE_BILLING_ENABLED = "1" on the billing Lambda, so
-# the three /billing/app-store/* routes stop answering 404. App Review buys
-# with a Sandbox Apple Account against this production API; without this line
-# that purchase is refused. It needs payments_enabled = "1" above and
-# commercialHoldActive = false in commercial-status.json, both already true.
-# Sandbox transactions are accepted here on purpose (APP_STORE_ENVIRONMENTS is
-# deliberately not set, so the backend default "Production,Sandbox" applies);
-# narrowing that to "Production" after approval is a separate change. No
-# secret is involved: Apple's signed transactions and notifications are
-# verified against the pinned Apple Root CA - G3. Kill switch: set "0" and
-# ship a tag; a recorded subscription keeps its entitlement.
+# the three /billing/app-store/* routes stop answering 404. It needs
+# payments_enabled = "1" above and commercialHoldActive = false in
+# commercial-status.json, both already true. No secret is involved: Apple's
+# signed transactions and notifications are verified against the pinned Apple
+# Root CA - G3. Kill switch: set "0" and ship a tag; a recorded subscription
+# keeps its entitlement.
 app_store_billing_enabled = "1"
+
+# Which App Store environments grant a plan (ADR 0045). "Production" means a
+# Sandbox purchase, which is free, grants nothing here. It sets
+# APP_STORE_ENVIRONMENTS on the billing Lambda.
+#
+# The only other value is "Production,Sandbox". Use it for the days around an
+# App Store submission, from the owner's TestFlight purchase check until Apple
+# approves the build: both buy in Sandbox against this API. To open it, change
+# the value and put a dated note on the line directly above it, in this form
+# (a wiring test refuses the open value without the note):
+#
+#   sandbox-window: opened 2027-01-05 for App Review
+#
+# Set it back to "Production" and delete the note in the first release after
+# approval. Each change takes effect at the next production tag. A Sandbox
+# subscription recorded while it was open keeps its plan until the expiry
+# already recorded; later renewals are not applied.
+app_store_environments = "Production"
