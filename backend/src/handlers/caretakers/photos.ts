@@ -3,21 +3,20 @@
  * do. Dispatched by the `plants` Lambda group because that group owns the S3
  * image pipeline; the token-scoped auth model is identical to `./public.ts`.
  *
- * The two-step contract is the same one members use, for the same reason: a
- * presigned PUT cannot bound size or verify content type, so nothing is
- * attached to a plant until a confirm call has HeadObject'd the key. The
- * caretaker path adds no new leniency — the key is minted for the token's
- * household and the named plant, and `resolveIssuedImageKey` refuses anything
- * else, so a caretaker cannot attach an object to another household's plant
- * even with a crafted URL.
+ * The two-step contract is the same one members use, and the same code
+ * (services/photoIntake.ts, ADR 0046): the upload URL is signed for one
+ * holding key, one content type and one exact size, and nothing is attached
+ * to a plant until the confirm call has checked the uploaded bytes and stored
+ * the server's own copy. The caretaker path adds no new leniency — the
+ * holding key is minted for the token's household and the named plant, and
+ * anything else is refused, so a caretaker cannot attach an object to another
+ * household's plant even with a crafted URL.
  *
  * The photo lands in the plant's normal timeline (so the household sees it
  * where photos already live), attributed to the caretaker by name, and is
  * also folded into the visit record as proof of the visit.
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import createHttpError from 'http-errors';
 import { createHandler } from '../../middleware/handler.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
@@ -31,17 +30,13 @@ import {
 import * as plantService from '../../services/plantService.js';
 import { recordActivity } from '../../services/activity.js';
 import { scopePhotoUrls } from '../../services/photoAccess.js';
-import { sanitizeUploadedPhoto } from '../../services/photoIntake.js';
 import {
-  IMAGE_CONTENT_TYPES,
-  MAX_IMAGE_BYTES,
-  mintImageKey,
-  publicImageUrl,
-  resolveIssuedImageKey,
-} from '../../services/plantImageRules.js';
-import { s3, IMAGES_BUCKET } from '../../utils/s3.js';
+  acceptUploadedPhoto,
+  discardAcceptedPhoto,
+  presignPhotoUpload,
+  readUploadRequest,
+} from '../../services/photoIntake.js';
 import { successResponse } from '../../utils/response.js';
-import { logger } from '../../utils/logger.js';
 import { requireActiveCaretaker, recordVisitAction } from './shared.js';
 
 /** The plant must exist in the token's household and still be alive. */
@@ -66,15 +61,17 @@ export const getCaretakerPhotoUploadUrl = createHandler(
     const plantId = event.pathParameters?.plantId;
     await requireCaretakerPlant(caretaker.householdId, plantId);
 
-    const contentType = validatedBody?.contentType ?? 'image/jpeg';
-    const key = mintImageKey(caretaker.householdId, plantId!, contentType);
-    const uploadUrl = await getSignedUrl(
-      s3,
-      new PutObjectCommand({ Bucket: IMAGES_BUCKET, Key: key, ContentType: contentType }),
-      { expiresIn: 300 }
-    );
+    const requested = readUploadRequest(validatedBody);
+    if (!requested.ok) throw createHttpError(400, requested.message);
 
-    return successResponse({ uploadUrl, imageUrl: publicImageUrl(key) });
+    return successResponse(
+      await presignPhotoUpload({
+        householdId: caretaker.householdId,
+        plantId: plantId!,
+        contentType: requested.contentType,
+        contentLength: requested.contentLength,
+      })
+    );
   },
   // `imageUrl` is the reference the confirm call sends back (ADR 0033).
   { signPhotoUrls: false }
@@ -86,9 +83,9 @@ export const getCaretakerPhotoUploadUrl = createHandler(
 
 // POST /caretaker/{token}/plants/{plantId}/photo/confirm
 //
-// Verify the object landed within the size and content-type limits, then
-// append it to the plant's timeline attributed to the caretaker, and record
-// it on the visit.
+// Check the uploaded object, store the server's own cleaned copy, then append
+// that to the plant's timeline attributed to the caretaker, and record it on
+// the visit.
 export const confirmCaretakerPhoto = createHandler(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const { validatedBody } = event as ValidatedEvent<CaretakerPhotoConfirmInput>;
@@ -96,49 +93,28 @@ export const confirmCaretakerPhoto = createHandler(
     const plantId = event.pathParameters?.plantId;
     const plant = await requireCaretakerPlant(caretaker.householdId, plantId);
 
-    const key = resolveIssuedImageKey(caretaker.householdId, plantId!, validatedBody.imageUrl);
-    if (!key) {
-      throw createHttpError(400, 'imageUrl does not match a key issued for this plant');
-    }
-
-    let contentLength: number | undefined;
-    let contentType: string | undefined;
-    try {
-      const head = await s3.send(new HeadObjectCommand({ Bucket: IMAGES_BUCKET, Key: key }));
-      contentLength = head.ContentLength;
-      contentType = head.ContentType;
-    } catch {
-      throw createHttpError(400, 'Uploaded image not found; upload it before confirming');
-    }
-    if (contentLength === undefined || contentLength === 0 || contentLength > MAX_IMAGE_BYTES) {
-      s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
-        logger.warn({ err, key }, 'oversized_image_delete_failed');
-      });
-      throw createHttpError(
-        400,
-        contentLength === 0 ? 'Uploaded image is empty' : 'Image exceeds the 5 MiB limit'
-      );
-    }
-    // The presigned PUT's Content-Type is client-claimed and not covered by
-    // the S3 signature, so re-check the object's real type against the same
-    // allowlist used at presign time.
-    if (!contentType || !(contentType in IMAGE_CONTENT_TYPES)) {
-      s3.send(new DeleteObjectCommand({ Bucket: IMAGES_BUCKET, Key: key })).catch((err) => {
-        logger.warn({ err, key }, 'invalid_content_type_delete_failed');
-      });
-      throw createHttpError(400, 'Uploaded file is not a valid image');
-    }
-    // The same server-side strip as the member route (services/photoIntake.ts).
-    const sanitized = await sanitizeUploadedPhoto(key, contentType);
-    if (!sanitized.ok) throw createHttpError(sanitized.status, sanitized.message);
-
-    const actorId = `caretaker:${caretaker.id}`;
-    const photo = await plantService.appendPlantPhoto(
+    // The same check, strip and server-side copy as the member route.
+    const accepted = await acceptUploadedPhoto(
       caretaker.householdId,
       plantId!,
-      validatedBody.imageUrl,
-      actorId
+      validatedBody.imageUrl
     );
+    if (!accepted.ok) throw createHttpError(accepted.status, accepted.message);
+    const imageUrl = accepted.imageUrl;
+
+    const actorId = `caretaker:${caretaker.id}`;
+    let photo;
+    try {
+      photo = await plantService.appendPlantPhoto(
+        caretaker.householdId,
+        plantId!,
+        imageUrl,
+        actorId
+      );
+    } catch (err) {
+      await discardAcceptedPhoto(accepted.key);
+      throw err;
+    }
 
     const visitRecorded = await recordVisitAction(caretaker, {
       kind: 'photo',
@@ -146,7 +122,7 @@ export const confirmCaretakerPhoto = createHandler(
         photoId: photo.id,
         plantId: plantId!,
         plantName: plant.name,
-        imageUrl: validatedBody.imageUrl,
+        imageUrl,
         at: photo.uploadedAt,
       },
     });
@@ -165,7 +141,7 @@ export const confirmCaretakerPhoto = createHandler(
       householdIds: [caretaker.householdId],
       notAfter: caretaker.expiresAt,
     });
-    return successResponse({ imageUrl: validatedBody.imageUrl, photo, visitRecorded });
+    return successResponse({ imageUrl, photo, visitRecorded });
   }
 )
   .use(rateLimit({ perWindowMs: 60_000, max: 10 }))

@@ -768,6 +768,34 @@ describe('notifications email deliverability', () => {
     expect(JSON.parse(res.body).emailStatus).toBe('ok');
   });
 
+  it("does not clear a suppression for an address the pool has not verified is the caller's", async () => {
+    const prefs = await import('../../../src/services/notificationPrefs.js');
+    const suppression = await import('../../../src/services/emailSuppression.js');
+    const { clearEmailSuppression } =
+      await import('../../../src/handlers/notifications/handler.js');
+    vi.mocked(prefs.getPreferences).mockResolvedValue({ userId: 'user-1', email: true } as never);
+    const withClaim = (emailVerified: string | undefined) => {
+      const event = buildEvent({
+        httpMethod: 'DELETE',
+        path: '/notifications/email-suppression',
+      });
+      const claims = (event.requestContext.authorizer as { claims: Record<string, unknown> })
+        .claims;
+      if (emailVerified !== undefined) claims.email_verified = emailVerified;
+      return clearEmailSuppression(event, ctx, () => {}) as Promise<APIGatewayProxyResult>;
+    };
+
+    const refused = await withClaim('false');
+    expect(refused.statusCode).toBe(403);
+    expect(JSON.parse(refused.body).message).toMatch(/has not been verified/);
+    expect(suppression.clearSuppression).not.toHaveBeenCalled();
+
+    // A verified address, and a token that does not say, are both served.
+    expect((await withClaim('true')).statusCode).toBe(200);
+    expect((await withClaim(undefined)).statusCode).toBe(200);
+    expect(suppression.clearSuppression).toHaveBeenCalledTimes(2);
+  });
+
   it('rate limits un-suppression at 5/hour so a bounce loop cannot be driven', async () => {
     const prefs = await import('../../../src/services/notificationPrefs.js');
     const { clearEmailSuppression } =

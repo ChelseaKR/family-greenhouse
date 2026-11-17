@@ -320,6 +320,8 @@ describe('AddPlantPage acceptSuggestion race guard', () => {
     expect(await screen.findByRole('heading', { name: 'Plant detail destination' })).toBeVisible();
     expect(screen.getByText('Photo upload recovery requested')).toBeVisible();
     expect(plantService.createPlant).toHaveBeenCalledTimes(1);
+    // The presign declared the size of the file that was about to be sent.
+    expect(vi.mocked(plantService.getImageUploadUrl).mock.calls[0][2]).toBe('plant-photo'.length);
     expect(plantService.confirmImageUpload).not.toHaveBeenCalled();
 
     // The failed upload navigation replaces the submitted form. Going Back

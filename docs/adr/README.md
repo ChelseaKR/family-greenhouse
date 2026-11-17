@@ -75,6 +75,9 @@ be invisible.
 | [0043](0043-the-ios-app-is-iphone-only-for-its-first-review.md)                      | The iOS app is iPhone-only for its first App Store review                                                                  | Accepted |
 | [0044](0044-the-iphone-app-does-not-spend-identification-packs-bought-on-the-web.md) | The iPhone app does not spend identification packs bought on the website                                                   | Accepted |
 | [0045](0045-production-grants-plans-for-production-app-store-transactions-only.md)   | Production grants plans for Production App Store transactions only                                                         | Accepted |
+| [0046](0046-an-uploaded-photo-is-checked-and-stored-apart-from-the-upload.md)        | An uploaded photo is checked and stored apart from the upload                                                              | Accepted |
+| [0047](0047-an-invite-admits-a-limited-number-of-people-and-can-be-turned-off.md)    | An invite admits a limited number of people and can be turned off                                                          | Accepted |
+| [0048](0048-a-changed-email-address-takes-effect-only-after-it-is-verified.md)       | A changed email address takes effect only after it is verified                                                             | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

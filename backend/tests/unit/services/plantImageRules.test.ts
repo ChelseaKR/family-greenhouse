@@ -1,9 +1,11 @@
 /**
  * The photo-key rules are now shared by two writers — the authenticated member
- * path and the token-scoped caretaker path — so the "is this a URL we issued
- * for THIS plant" check is tested once, here, rather than trusted twice.
+ * path and the token-scoped caretaker path — so the "is this an upload we
+ * issued for THIS plant" check is tested once, here, rather than trusted twice.
  *
  * Every case below is an attempt to attach an object the caller was not given.
+ * That includes a stored photo: a key under `plants/` is never an upload
+ * (ADR 0046).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
@@ -11,8 +13,10 @@ import {
   MAX_IMAGE_BYTES,
   imageKeyPrefix,
   mintImageKey,
+  mintUploadKey,
   publicImageUrl,
-  resolveIssuedImageKey,
+  resolveIssuedUploadKey,
+  uploadKeyPrefix,
 } from '../../../src/services/plantImageRules.js';
 
 const HH = 'hh-1';
@@ -37,52 +41,68 @@ describe('image rules', () => {
     expect(MAX_IMAGE_BYTES).toBe(5 * 1024 * 1024);
   });
 
-  it('mints a unique key under the household + plant prefix', () => {
+  it('mints a unique photo key under the household + plant prefix', () => {
     const a = mintImageKey(HH, PLANT, 'image/png');
     const b = mintImageKey(HH, PLANT, 'image/png');
     expect(a).toMatch(new RegExp(`^${imageKeyPrefix(HH, PLANT)}[0-9a-f-]+\\.png$`));
     expect(a).not.toBe(b);
   });
+
+  it('mints a unique upload key under the holding prefix, apart from stored photos', () => {
+    const a = mintUploadKey(HH, PLANT, 'image/png');
+    const b = mintUploadKey(HH, PLANT, 'image/png');
+    expect(uploadKeyPrefix(HH, PLANT)).toBe('uploads/hh-1/plant-1/');
+    expect(imageKeyPrefix(HH, PLANT)).toBe('plants/hh-1/plant-1/');
+    expect(a).toMatch(new RegExp(`^${uploadKeyPrefix(HH, PLANT)}[0-9a-f-]+\\.png$`));
+    expect(a).not.toBe(b);
+  });
 });
 
-describe('resolveIssuedImageKey', () => {
+describe('resolveIssuedUploadKey', () => {
   beforeEach(() => {
     delete process.env.ASSETS_BASE_URL;
   });
 
-  it('accepts a URL it would have minted', () => {
-    const key = mintImageKey(HH, PLANT, 'image/jpeg');
-    expect(resolveIssuedImageKey(HH, PLANT, publicImageUrl(key))).toBe(key);
+  it('accepts an upload URL it would have minted', () => {
+    const key = mintUploadKey(HH, PLANT, 'image/jpeg');
+    expect(resolveIssuedUploadKey(HH, PLANT, publicImageUrl(key))).toBe(key);
   });
 
   it('accepts the assets-domain form when ASSETS_BASE_URL is set', () => {
     process.env.ASSETS_BASE_URL = 'https://example.test/';
-    const key = mintImageKey(HH, PLANT, 'image/webp');
-    expect(resolveIssuedImageKey(HH, PLANT, `https://example.test/${key}`)).toBe(key);
+    const key = mintUploadKey(HH, PLANT, 'image/webp');
+    expect(resolveIssuedUploadKey(HH, PLANT, `https://example.test/${key}`)).toBe(key);
+  });
+
+  it('refuses a stored photo of the same plant: only an upload can be confirmed', () => {
+    const stored = mintImageKey(HH, PLANT, 'image/jpeg');
+    expect(resolveIssuedUploadKey(HH, PLANT, publicImageUrl(stored))).toBeNull();
+    process.env.ASSETS_BASE_URL = 'https://example.test';
+    expect(resolveIssuedUploadKey(HH, PLANT, `https://example.test/${stored}`)).toBeNull();
   });
 
   it('refuses another plant’s prefix', () => {
-    const key = mintImageKey(HH, 'plant-2', 'image/jpeg');
-    expect(resolveIssuedImageKey(HH, PLANT, publicImageUrl(key))).toBeNull();
+    const key = mintUploadKey(HH, 'plant-2', 'image/jpeg');
+    expect(resolveIssuedUploadKey(HH, PLANT, publicImageUrl(key))).toBeNull();
   });
 
   it('refuses another household’s prefix', () => {
-    const key = mintImageKey('hh-2', PLANT, 'image/jpeg');
-    expect(resolveIssuedImageKey(HH, PLANT, publicImageUrl(key))).toBeNull();
+    const key = mintUploadKey('hh-2', PLANT, 'image/jpeg');
+    expect(resolveIssuedUploadKey(HH, PLANT, publicImageUrl(key))).toBeNull();
   });
 
   it('refuses a traversal, a nested path, or a query string in the filename', () => {
-    const prefix = publicImageUrl(imageKeyPrefix(HH, PLANT));
-    expect(resolveIssuedImageKey(HH, PLANT, `${prefix}../secret.jpg`)).toBeNull();
-    expect(resolveIssuedImageKey(HH, PLANT, `${prefix}nested/file.jpg`)).toBeNull();
-    expect(resolveIssuedImageKey(HH, PLANT, `${prefix}file.jpg?x=1`)).toBeNull();
-    expect(resolveIssuedImageKey(HH, PLANT, `${prefix}file.svg`)).toBeNull();
-    expect(resolveIssuedImageKey(HH, PLANT, `${prefix}file.jpg.html`)).toBeNull();
+    const prefix = publicImageUrl(uploadKeyPrefix(HH, PLANT));
+    expect(resolveIssuedUploadKey(HH, PLANT, `${prefix}../secret.jpg`)).toBeNull();
+    expect(resolveIssuedUploadKey(HH, PLANT, `${prefix}nested/file.jpg`)).toBeNull();
+    expect(resolveIssuedUploadKey(HH, PLANT, `${prefix}file.jpg?x=1`)).toBeNull();
+    expect(resolveIssuedUploadKey(HH, PLANT, `${prefix}file.svg`)).toBeNull();
+    expect(resolveIssuedUploadKey(HH, PLANT, `${prefix}file.jpg.html`)).toBeNull();
   });
 
   it('refuses a foreign origin that merely contains our prefix', () => {
     expect(
-      resolveIssuedImageKey(HH, PLANT, `https://evil.test/${imageKeyPrefix(HH, PLANT)}a.jpg`)
+      resolveIssuedUploadKey(HH, PLANT, `https://evil.test/${uploadKeyPrefix(HH, PLANT)}a.jpg`)
     ).toBeNull();
   });
 });

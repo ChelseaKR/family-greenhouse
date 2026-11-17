@@ -134,10 +134,11 @@ resource "aws_s3_bucket_versioning" "images" {
 }
 
 # Lifecycle for the images bucket (previously absent — deleted-plant photos and
-# abandoned presigned-PUT uploads would otherwise live forever: cost creep plus
-# a data-retention gap where user images persist after account deletion).
-#   - abort_incomplete_multipart_upload: reclaim never-finished presigned PUTs.
+# abandoned uploads would otherwise live forever: cost creep plus a
+# data-retention gap where user images persist after account deletion).
+#   - abort_incomplete_multipart_upload: reclaim never-finished multipart uploads.
 #   - noncurrent_version_expiration: bound the versioning history added above.
+#   - expire-unconfirmed-uploads: remove uploads that were never confirmed.
 resource "aws_s3_bucket_lifecycle_configuration" "images" {
   bucket = aws_s3_bucket.images.id
 
@@ -184,6 +185,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
 
     expiration {
       days = 37
+    }
+  }
+
+  # Uploads waiting for their confirm call (ADR 0046). A client's photo lands
+  # under `uploads/`; the confirm step stores the server's own checked copy
+  # under `plants/` and deletes the upload. Whatever is still here a day later
+  # was never confirmed, and this removes it: the current object after one
+  # day, and in the versioned production bucket the version behind it one day
+  # after that. S3 then removes the delete marker that expiry left, on its
+  # own, because the rule has an age. No response ever signs a URL under this
+  # prefix.
+  rule {
+    id     = "expire-unconfirmed-uploads"
+    status = "Enabled"
+
+    filter {
+      prefix = "uploads/"
+    }
+
+    expiration {
+      days = 1
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
     }
   }
 }

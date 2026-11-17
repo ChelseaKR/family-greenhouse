@@ -9,13 +9,16 @@ import {
   isAmazonS3Hostname,
   isProductTelemetryRequest,
   isSignedS3GetFor,
+  isSignedS3GetUnder,
   isVendorAnalyticsHostname,
   purgeExactSmokeS3Object,
   purgeSmokeOwnedPartitions,
   runAllCleanupSteps,
   s3ObjectTargetFromPresignedUrl,
   safeResponseDiagnostic,
+  signedHeadersOf,
   SIGNUP_ADDRESS_MARKER_TTL_SECONDS,
+  storedPhotoKeyFromReference,
   TEST_FIXTURE,
 } from '../../e2e/post-deploy-smoke-support';
 
@@ -305,6 +308,66 @@ describe('post-deploy smoke support', () => {
           )
         ).toBe(false);
         expect(isSignedS3GetFor('not-a-url', target)).toBe(false);
+      });
+    });
+
+    describe('the stored photo and the upload URL (ADR 0046)', () => {
+      const BUCKET = 'family-greenhouse-images-production-12345678';
+      const HOST = `https://${BUCKET}.s3.us-east-1.amazonaws.com`;
+      const PREFIX = 'plants/household/plant/';
+      const signed = (path: string, signedHeaders = 'host') =>
+        `${HOST}/${path}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=secret&X-Amz-Expires=3600&X-Amz-Signature=abc123&X-Amz-SignedHeaders=${encodeURIComponent(signedHeaders)}`;
+
+      it('isSignedS3GetUnder accepts a signed GET for any key under the plant prefix', () => {
+        expect(isSignedS3GetUnder(signed(`${PREFIX}a.webp`), BUCKET, PREFIX)).toBe(true);
+        expect(isSignedS3GetUnder(signed(`${PREFIX}b.jpg`), BUCKET, PREFIX)).toBe(true);
+      });
+
+      it('isSignedS3GetUnder rejects the holding prefix, another plant, another bucket, an unsigned URL and garbage', () => {
+        expect(isSignedS3GetUnder(signed('uploads/household/plant/a.webp'), BUCKET, PREFIX)).toBe(
+          false
+        );
+        expect(isSignedS3GetUnder(signed('plants/household/other/a.webp'), BUCKET, PREFIX)).toBe(
+          false
+        );
+        expect(isSignedS3GetUnder(signed(`${PREFIX}a.webp`), 'someone-else-images', PREFIX)).toBe(
+          false
+        );
+        expect(isSignedS3GetUnder(`${HOST}/${PREFIX}a.webp`, BUCKET, PREFIX)).toBe(false);
+        // A prefix that does not end at a path boundary would match a sibling.
+        expect(isSignedS3GetUnder(signed(`${PREFIX}a.webp`), BUCKET, 'plants/household/pl')).toBe(
+          false
+        );
+        expect(isSignedS3GetUnder('not-a-url', BUCKET, PREFIX)).toBe(false);
+      });
+
+      it('signedHeadersOf lists what an upload URL binds, and nothing for a URL that binds nothing', () => {
+        expect(
+          signedHeadersOf(
+            signed('uploads/household/plant/a.webp', 'content-length;content-type;host')
+          )
+        ).toEqual(['content-length', 'content-type', 'host']);
+        expect(signedHeadersOf(signed('uploads/household/plant/a.webp'))).toEqual(['host']);
+        expect(signedHeadersOf('https://familygreenhouse.net/x')).toEqual([]);
+        expect(signedHeadersOf('not-a-url')).toEqual([]);
+      });
+
+      it('storedPhotoKeyFromReference reads only a plain photo reference under the plant prefix', () => {
+        expect(
+          storedPhotoKeyFromReference(`https://familygreenhouse.net/${PREFIX}abc-123.webp`, PREFIX)
+        ).toBe(`${PREFIX}abc-123.webp`);
+        for (const bad of [
+          'https://familygreenhouse.net/uploads/household/plant/abc.webp',
+          'https://familygreenhouse.net/plants/household/other/abc.webp',
+          `https://familygreenhouse.net/${PREFIX}nested/abc.webp`,
+          `https://familygreenhouse.net/${PREFIX}abc.svg`,
+          `https://familygreenhouse.net/${PREFIX}abc.webp?x=1`,
+          `https://familygreenhouse.net/${PREFIX}abc.webp#frag`,
+          'not-a-url',
+          '',
+        ]) {
+          expect(storedPhotoKeyFromReference(bad, PREFIX), bad).toBeNull();
+        }
       });
     });
 

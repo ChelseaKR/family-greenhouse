@@ -114,8 +114,9 @@ export const caretakerVisitService = {
 
   /**
    * Two-step photo add, the same contract members use: ask for a presigned
-   * PUT, upload straight to storage, then confirm so the server can verify the
-   * object before attaching it to the plant.
+   * PUT for this file's type and exact size, upload straight to storage, then
+   * confirm so the server can check the object and attach its own copy to
+   * the plant.
    */
   async addPhoto(token: string, plantId: string, file: File): Promise<CaretakerPhotoConfirmation> {
     // Downscaled and stripped of its metadata before it leaves the phone.
@@ -128,7 +129,7 @@ export const caretakerVisitService = {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentType }),
+        body: JSON.stringify({ contentType, contentLength: photo.size }),
       }
     );
 
