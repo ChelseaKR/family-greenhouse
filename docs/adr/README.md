@@ -78,6 +78,7 @@ be invisible.
 | [0046](0046-an-uploaded-photo-is-checked-and-stored-apart-from-the-upload.md)        | An uploaded photo is checked and stored apart from the upload                                                              | Accepted |
 | [0047](0047-an-invite-admits-a-limited-number-of-people-and-can-be-turned-off.md)    | An invite admits a limited number of people and can be turned off                                                          | Accepted |
 | [0048](0048-a-changed-email-address-takes-effect-only-after-it-is-verified.md)       | A changed email address takes effect only after it is verified                                                             | Accepted |
+| [0049](0049-aws-trusts-github-environments-and-the-pipeline-cannot-widen-itself.md)  | AWS trusts GitHub environments, and the deploy pipeline cannot widen itself                                                | Accepted |
 
 > Numbers not in use: 0001. Gaps are expected — a number can be claimed on a branch that never lands — and this line is generated, so a file that goes missing shows up here instead of silently.
 

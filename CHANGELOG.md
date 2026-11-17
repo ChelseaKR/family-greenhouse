@@ -65,6 +65,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   gain their counters on first use. The post-deploy smoke test now uploads
   to the holding prefix and expects storage to refuse an upload of a
   different size.
+- **AWS trusts GitHub environments, and the deploy pipeline cannot widen
+  itself** (ADR 0049). Three changes to the pipeline, none to the app:
+  - **Roles and trust.** The one CI/CD role becomes three: a deploy role for
+    `terraform apply`, a release role with no IAM writes for everything after
+    it, and a read-only role for the alert relay. Each can be assumed only
+    from named GitHub environments; no role trusts a branch or a tag. A
+    release still pauses for one approval.
+  - **IAM.** The deploy role is denied every change to the CI/CD roles, their
+    policies and the OIDC provider, must put a permissions boundary on any
+    role it creates, and cannot remove one. The boundary goes on the staging
+    Lambda roles now and on the production ones when
+    `iam_permissions_boundary_enabled` is set to `true`.
+  - **Installs.** Jobs that hold an OIDC token or a secret install with
+    `npm ci --ignore-scripts`.
+- **The pipeline change is applied by an admin, not by a release.** An admin
+  applies `infrastructure/modules/cicd` from a
+  terminal, adds two repository secrets (`AWS_RELEASE_ROLE_ARN`,
+  `AWS_ALERT_RELAY_ROLE_ARN`) and creates the `staging-infrastructure`
+  environment with a required reviewer, in the order
+  `docs/cicd-setup.md` gives ("Moving an existing account to environment-only
+  trust"). A release cut before that stops at its first job or at the plan
+  check, with nothing applied. A staging deploy now asks for one approval.
 
 ### Fixed
 

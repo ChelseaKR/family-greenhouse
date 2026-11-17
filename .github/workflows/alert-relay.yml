@@ -75,8 +75,15 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write # OIDC, to assume the read-only half of the deploy role
+      id-token: write # OIDC, to assume the read-only alert-relay role
       issues: write # file and update the alert issue
+    # The only environment AWS lets the alert-relay role be assumed from
+    # (infrastructure/modules/cicd, ADR 0049). No reviewer: see the step below.
+    # `deployment: false` because this runs every half hour, and each run would
+    # otherwise add a deployment record to the repository.
+    environment:
+      name: alert-relay
+      deployment: false
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -89,17 +96,16 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
-      # AWS_DEPLOY_ROLE_ARN rather than AWS_PRODUCTION_ROLE_ARN: the
-      # `production` GitHub environment carries a required-reviewers rule, and
-      # an unattended scheduled run would sit waiting for an approval that
-      # nobody is there to give — an alerting path that needs a human before it
-      # can tell a human. The role's OIDC trust allows `ref:refs/heads/main`
-      # (modules/cicd/variables.tf, allowed_refs), which is where a scheduled
-      # run executes.
+      # AWS_ALERT_RELAY_ROLE_ARN: a role that can make the two read-only calls
+      # below and nothing else (infrastructure/modules/cicd, ADR 0049). AWS
+      # lets it be assumed only from this job's `alert-relay` environment,
+      # which carries no reviewer on purpose: an unattended scheduled run would
+      # sit waiting for an approval that nobody is there to give — an alerting
+      # path that needs a human before it can tell a human.
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ALERT_RELAY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Two read-only calls. The account id is resolved here rather than being

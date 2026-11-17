@@ -20,12 +20,31 @@ dmarc_rua_email                = "dmarc@familygreenhouse.net"
 # The SSM parameter /family-greenhouse/perenual-api-key is not managed here;
 # deleting it is a separate owner step.
 
-# CI/CD: provisions the GitHub OIDC provider + deploy role (modules/cicd).
-# The role ARN goes into the AWS_DEPLOY_ROLE_ARN + AWS_PRODUCTION_ROLE_ARN
-# repo secrets. Trust is bound to this repo's main branch + v* tags +
-# the 'production' GitHub environment.
+# CI/CD: provisions the GitHub OIDC provider, the three CI/CD roles and the
+# permissions boundary (modules/cicd, ADR 0049). The role ARNs go into the
+# AWS_PRODUCTION_ROLE_ARN, AWS_RELEASE_ROLE_ARN and AWS_ALERT_RELAY_ROLE_ARN
+# repo secrets. Each role is assumable only from named GitHub environments of
+# this repo; none trusts a branch or a tag. An admin applies changes to that
+# module; CD refuses to (docs/cicd-setup.md).
 github_org  = "ChelseaKR"
 github_repo = "family-greenhouse"
+
+# GitHub environments whose jobs may assume the deploy role (ADR 0049):
+# `production` for the production Terraform job, `staging-infrastructure` for
+# the staging one. BOTH must have a required reviewer under Settings ->
+# Environments. An environment listed here with no reviewer is a way to the
+# deploy role that nobody approves, and GitHub creates a missing environment,
+# with no reviewer, the first time a job names it. Create and protect
+# `staging-infrastructure` before an admin applies this.
+cicd_deploy_environments = ["production", "staging-infrastructure"]
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). OFF until
+# staging has run under it: set to true once a staging deploy and its smoke
+# test have passed with the boundary on. Until then a production role's own
+# policy is the only limit on it. CD can turn this on and cannot turn it off
+# again: removing a boundary is an admin action
+# (aws iam delete-role-permissions-boundary), as docs/cicd-setup.md describes.
+iam_permissions_boundary_enabled = false
 
 # Cost guardrail. The running app is ~$2-3/mo; this catches a runaway. Cost
 # Anomaly Detection (monitoring module) handles spend *spikes* separately.

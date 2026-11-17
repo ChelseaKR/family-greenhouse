@@ -117,3 +117,11 @@ app_store_billing_enabled = "1"
 # Sandbox Apple Account buys from a build pointed at this API. Staging has no
 # real customers, so a free Sandbox plan here costs nothing.
 app_store_environments = "Production,Sandbox"
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). On here
+# FIRST, the way payments were: staging's roles carry the boundary and its
+# deployed smoke test runs under it before production's roles get it. The
+# boundary policy lives in the production state and must already exist (an
+# admin applies modules/cicd; docs/cicd-setup.md). CD can turn this on and
+# cannot turn it off again: removing a boundary is an admin action.
+iam_permissions_boundary_enabled = true

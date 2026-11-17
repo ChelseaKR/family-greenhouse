@@ -118,6 +118,13 @@ backend "production live" rather than "production-ready in code".
       production deploy job needs, references the `production` GitHub
       Environment. Confirm that Environment has a required reviewer; the
       workflow reference alone cannot enforce who may approve.
+- [ ] **The environments AWS trusts** (ADR 0049, `docs/cicd-setup.md` step 4).
+      AWS gives the deploy role, the one with IAM writes, to any job in the
+      `production` or `staging-infrastructure` Environment, so confirm BOTH
+      have a required reviewer. Confirm `production-release`, `staging` and
+      `alert-relay` have none (a reviewer on `production-release` would make
+      the automatic rollback wait for a click), and that each is restricted
+      to the branches and tags in that table. No file can check any of this.
 
 ## Reminders / notifications
 

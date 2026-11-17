@@ -61,3 +61,13 @@ output "github_deploy_role_arn" {
   description = "Deploy role ARN for GitHub Actions OIDC. Populates the AWS_PRODUCTION_ROLE_ARN repo secret."
   value       = length(module.cicd) > 0 ? module.cicd[0].deploy_role_arn : ""
 }
+
+output "github_release_role_arn" {
+  description = "Release role ARN for GitHub Actions OIDC (no IAM writes). Populates the AWS_RELEASE_ROLE_ARN repo secret."
+  value       = length(module.cicd) > 0 ? module.cicd[0].release_role_arn : ""
+}
+
+output "github_alert_relay_role_arn" {
+  description = "Read-only alert-relay role ARN for GitHub Actions OIDC. Populates the AWS_ALERT_RELAY_ROLE_ARN repo secret."
+  value       = length(module.cicd) > 0 ? module.cicd[0].alert_relay_role_arn : ""
+}
