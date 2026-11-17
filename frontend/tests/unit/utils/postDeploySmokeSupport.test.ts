@@ -19,6 +19,7 @@ import {
   signedHeadersOf,
   SIGNUP_ADDRESS_MARKER_TTL_SECONDS,
   storedPhotoKeyFromReference,
+  storedPhotoTargetFromConfirm,
   TEST_FIXTURE,
 } from '../../e2e/post-deploy-smoke-support';
 
@@ -350,6 +351,52 @@ describe('post-deploy smoke support', () => {
         expect(signedHeadersOf(signed('uploads/household/plant/a.webp'))).toEqual(['host']);
         expect(signedHeadersOf('https://familygreenhouse.net/x')).toEqual([]);
         expect(signedHeadersOf('not-a-url')).toEqual([]);
+      });
+
+      it('storedPhotoTargetFromConfirm reads the stored photo out of the signed URL a deployed API returns', () => {
+        // What `POST /plants/{id}/image/confirm` answers with in staging and
+        // production: every `imageUrl` in a response is a signed S3 GET.
+        expect(
+          storedPhotoTargetFromConfirm(signed(`${PREFIX}abc-123.webp`), BUCKET, PREFIX)
+        ).toEqual({ bucket: BUCKET, key: `${PREFIX}abc-123.webp` });
+        // Path-style S3 URLs name the same object.
+        expect(
+          storedPhotoTargetFromConfirm(
+            `https://s3.us-east-1.amazonaws.com/${BUCKET}/${PREFIX}abc-123.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc123`,
+            BUCKET,
+            PREFIX
+          )
+        ).toEqual({ bucket: BUCKET, key: `${PREFIX}abc-123.jpg` });
+      });
+
+      it('storedPhotoTargetFromConfirm also reads the plain reference form', () => {
+        expect(
+          storedPhotoTargetFromConfirm(
+            `https://familygreenhouse.net/${PREFIX}abc-123.webp`,
+            BUCKET,
+            PREFIX
+          )
+        ).toEqual({ bucket: BUCKET, key: `${PREFIX}abc-123.webp` });
+      });
+
+      it('storedPhotoTargetFromConfirm rejects the upload key, another plant, another bucket, an unsigned S3 URL and garbage', () => {
+        for (const bad of [
+          signed('uploads/household/plant/abc.webp'),
+          signed('plants/household/other/abc.webp'),
+          signed(`${PREFIX}nested/abc.webp`),
+          signed(`${PREFIX}abc.svg`),
+          `${HOST}/${PREFIX}abc.webp?x=1`,
+          `https://someone-else-images.s3.us-east-1.amazonaws.com/${PREFIX}abc.webp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc123`,
+          'https://familygreenhouse.net/uploads/household/plant/abc.webp',
+          'not-a-url',
+          '',
+        ]) {
+          expect(storedPhotoTargetFromConfirm(bad, BUCKET, PREFIX), bad).toBeNull();
+        }
+        // A prefix that does not end at a path boundary would match a sibling.
+        expect(
+          storedPhotoTargetFromConfirm(signed(`${PREFIX}abc.webp`), BUCKET, 'plants/household/pl')
+        ).toBeNull();
       });
 
       it('storedPhotoKeyFromReference reads only a plain photo reference under the plant prefix', () => {

@@ -213,6 +213,48 @@ describe('a member upload', () => {
     expectNoLocationAnywhere();
   });
 
+  it('the confirm response names the stored photo as a signed URL, which is what the deployed smoke test reads', async () => {
+    // A deployed API never answers with the stored reference: every `imageUrl`
+    // in a response is swapped for a short-lived signed S3 GET (ADR 0033), and
+    // the confirm response is no exception. The post-deploy smoke test finds
+    // the stored photo's key in that URL, so the shape is pinned here.
+    vi.stubEnv('AWS_REGION', 'us-east-1');
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'AKIAUPLOADSTRIPTEST');
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'upload-strip-test-secret');
+    vi.stubEnv('IMAGES_BUCKET', 'images-bucket');
+    const { __resetPhotoSigningClientForTests } = await import('../../src/services/photoAccess.js');
+    __resetPhotoSigningClientForTests();
+    try {
+      const plantsHandler = await import('../../src/handlers/plants/handler.js');
+      const plantService = await import('../../src/services/plantService.js');
+      const { householdId, plantId, identity } = await seed();
+      const upload = uploadAs(householdId, plantId, TINY_JPEG, 'image/jpeg');
+
+      const confirmed = await invokeHandler(plantsHandler.confirmImageUpload, {
+        method: 'POST',
+        routeKey: 'POST /plants/{id}/image/confirm',
+        pathParameters: { id: plantId },
+        identity,
+        body: { imageUrl: upload.imageUrl },
+      });
+      expect(confirmed.statusCode).toBe(200);
+
+      const storedKey = keyOf((await plantService.getPlant(householdId, plantId))!.imageUrl!);
+      expect(storedKey.startsWith(`plants/${householdId}/${plantId}/`)).toBe(true);
+      const body = confirmed.body as { imageUrl: string; photo: { imageUrl: string } };
+      for (const url of [body.imageUrl, body.photo.imageUrl]) {
+        const signed = new URL(url);
+        expect(signed.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+        expect(decodeURIComponent(signed.pathname).endsWith(`/${storedKey}`)).toBe(true);
+        // Never the upload's holding key.
+        expect(decodeURIComponent(signed.pathname)).not.toContain('/uploads/');
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      __resetPhotoSigningClientForTests();
+    }
+  });
+
   it('a later write to the upload key does not change the photo the plant shows', async () => {
     const plantsHandler = await import('../../src/handlers/plants/handler.js');
     const plantService = await import('../../src/services/plantService.js');

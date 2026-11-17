@@ -594,6 +594,41 @@ export function storedPhotoKeyFromReference(reference: string, keyPrefix: string
   return /^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(key.slice(keyPrefix.length)) ? key : null;
 }
 
+/**
+ * The stored photo a confirm response names, as a bucket and key, or null.
+ *
+ * A deployed API does not answer with the stored reference: every `imageUrl`
+ * in a response is swapped for a short-lived signed S3 GET (ADR 0033), the
+ * confirm response included. So this reads the object out of that signed URL
+ * and requires it to be in the bucket the upload went to, under the plant's
+ * own prefix, with a file name of the shape the server mints. The plain
+ * reference form is accepted too, for a server that does not sign.
+ *
+ * Returns null, never throws, and never echoes the URL, whose query string
+ * carries temporary credentials.
+ */
+export function storedPhotoTargetFromConfirm(
+  imageUrl: string,
+  bucket: string,
+  keyPrefix: string
+): SmokeS3ObjectTarget | null {
+  const plainKey = storedPhotoKeyFromReference(imageUrl, keyPrefix);
+  if (plainKey) return { bucket, key: plainKey };
+
+  let candidate: SmokeS3ObjectTarget;
+  try {
+    candidate = s3ObjectTargetFromPresignedUrl(imageUrl);
+  } catch {
+    return null;
+  }
+  if (!isSignedS3GetFor(imageUrl, candidate)) return null;
+  if (candidate.bucket !== bucket) return null;
+  if (!keyPrefix.endsWith('/') || !candidate.key.startsWith(keyPrefix)) return null;
+  return /^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(candidate.key.slice(keyPrefix.length))
+    ? candidate
+    : null;
+}
+
 export interface SmokeS3VersionIdentifier {
   key: string;
   versionId: string;
