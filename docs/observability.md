@@ -446,13 +446,12 @@ Three properties of it are deliberate and are pinned by
   "more than zero", not an expected count somebody would have to keep
   updating.)
 
-It assumes `AWS_DEPLOY_ROLE_ARN` rather than `AWS_PRODUCTION_ROLE_ARN`: the
-`production` GitHub environment carries a required-reviewers rule, and an
-unattended scheduled run would wait for an approval nobody is there to give —
-an alerting path that needs a human before it can tell a human. A scoped
-read-only role for it (`cloudwatch:DescribeAlarms`, `sns:GetTopicAttributes`,
-`sts:GetCallerIdentity`) would be better than reusing the deploy role and is
-not yet written.
+It assumes `AWS_ALERT_RELAY_ROLE_ARN`, a role of its own that allows
+`cloudwatch:DescribeAlarms` and `sns:GetTopicAttributes` on the alerts topics
+and nothing else (ADR 0049). AWS lets that role be assumed only from the
+job's `alert-relay` GitHub environment, which carries no reviewer on purpose:
+an unattended scheduled run would wait for an approval nobody is there to
+give — an alerting path that needs a human before it can tell a human.
 
 ## Triage
 

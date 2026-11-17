@@ -293,7 +293,9 @@ test('the prune runs only after a passing smoke, and nothing that can roll back 
 
 test('the prune job pins its actions and does not use an environment approval', () => {
   const job = cdProduction().jobs['prune-frontend-assets'];
-  assert.equal(job.environment, undefined);
+  // `production-release` has no reviewer; `production`, which has one, would
+  // make housekeeping wait for a click (ADR 0049).
+  assert.equal(job.environment, 'production-release');
   for (const step of job.steps.filter((s) => s.uses))
     assert.match(step.uses, /@[0-9a-f]{40}$/, step.uses);
 });

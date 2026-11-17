@@ -127,7 +127,8 @@ data "aws_region" "current" {}
 resource "aws_iam_role" "lambda" {
   provider = aws.iam
 
-  name = "${var.project_name}-lambda-${var.environment}"
+  name                 = "${var.project_name}-lambda-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -851,7 +852,8 @@ resource "aws_lambda_permission" "api_gateway" {
 resource "aws_iam_role" "chat_stream" {
   provider = aws.iam
 
-  name = "${var.project_name}-chat-stream-${var.environment}"
+  name                 = "${var.project_name}-chat-stream-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

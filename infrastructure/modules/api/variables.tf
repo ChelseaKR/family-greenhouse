@@ -8,6 +8,14 @@ variable "project_name" {
   type        = string
 }
 
+# ADR 0049. The most this module's roles can ever be allowed, however their
+# own policies are written. "" attaches none.
+variable "permissions_boundary_arn" {
+  description = "ARN of the permissions boundary to attach to every IAM role this module creates, or \"\" for none."
+  type        = string
+  default     = ""
+}
+
 variable "cognito_user_pool_id" {
   description = "Cognito User Pool ID"
   type        = string
