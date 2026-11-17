@@ -31,8 +31,16 @@ import { successResponse } from '../../utils/response.js';
 // We accept a data URL or a bare base64 string. The Plant.id SDK accepts both.
 // Cap the body size at the middleware level (256 KiB) — clients should resize
 // to <200 KiB before posting.
+//
+// `useTopUpCredits: false` is sent by the iPhone app (ADR 0044). Identification
+// packs are sold only on the website, and App Review Guideline 3.1.3(b) lets an
+// app unlock something bought elsewhere only if the app sells it too, so a
+// request from the iPhone app spends the plan's monthly allowance and never a
+// pack credit. Absent means true: the website and older builds are unchanged.
+// A client that sends false can only give up credits, never gain anything.
 const identifySchema = z.object({
   image: z.string().min(64).max(350_000, 'Image too large; resize to under 256 KB'),
+  useTopUpCredits: z.boolean().optional(),
 });
 
 type IdentifyInput = z.infer<typeof identifySchema>;
@@ -55,6 +63,11 @@ export const identify = createHandler(
     // and returned; blocking only happens when IDENTIFY_METERING_ENABLED=1
     // (default off — beta is unaffected).
     const bucketId = user.householdId ?? `user:${user.userId}`;
+    // The household that may hold (and spend) top-up credits on this request:
+    // none for a householdless caller, and none when the client asked not to
+    // spend them (the iPhone app, ADR 0044).
+    const creditHouseholdId =
+      validatedBody.useTopUpCredits === false ? null : (user.householdId ?? null);
     const sub = user.householdId ? await billing.getHouseholdSubscription(user.householdId) : null;
     const plan = sub
       ? // Entitlement, not the plan row — Plant.id calls cost real money, and
@@ -89,7 +102,7 @@ export const identify = createHandler(
         reservation = await identifyBudget.reserveIdentification(
           bucketId,
           allowance,
-          user.householdId ?? null
+          creditHouseholdId
         );
         used = reservation.used;
       } catch (err) {
@@ -97,9 +110,11 @@ export const identify = createHandler(
           // The pack is offered only where it can actually be bought: the
           // caller has a household to hold it, payments are on, and a Stripe
           // price is configured. `credits` is the balance the refusal saw —
-          // a real 0, or null when no household could hold a pack. A failed
-          // credit read never reaches here (it is the 503 below).
-          const topUp = user.householdId
+          // a real 0, or null when credits were not consulted (no household,
+          // or a request from the iPhone app, which sells no pack and is not
+          // pointed at one). A failed credit read never reaches here (it is
+          // the 503 below).
+          const topUp = creditHouseholdId
             ? identifyTopUpSummary(paymentsAreAvailable(), upstreamConfigured)
             : null;
           const topUpAvailable = topUp?.available === true;

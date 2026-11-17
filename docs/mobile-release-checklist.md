@@ -103,7 +103,9 @@ frontend`) and carries the real Team ID; `npm run aasa:check` and
       doesn't include the aps-environment entitlement", enable it by hand
       under Certificates, Identifiers & Profiles → Identifiers →
       `net.familygreenhouse.app`.
-- [ ] Physical iPhone, iPad, and Android smoke tests pass against production.
+- [ ] Physical iPhone and Android smoke tests pass against production. The
+      iOS app is iPhone-only (ADR 0043), so on an iPad check it once in iPhone
+      compatibility mode: App Review can open it there.
 
 ## Build and test
 
