@@ -66,6 +66,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   to the holding prefix and expects storage to refuse an upload of a
   different size.
 
+### Fixed
+
+- **The post-deploy smoke test reads the stored photo from the signed URL the
+  confirm response returns.** The check added with ADR 0046 expected the
+  stored reference there. A deployed API answers with a short-lived signed S3
+  URL for every photo (ADR 0033), so the first staging run failed at that
+  check with the upload itself working. The test now reads the bucket and key
+  out of the signed URL, and a real-handler test pins that shape. It also
+  treats any client-error status as storage refusing an upload of a different
+  size, where it had required exactly 403. No app code changed.
+
 ## [0.52.0] - 2026-11-17
 
 **The release the next iPhone store build is cut from, and that build is for

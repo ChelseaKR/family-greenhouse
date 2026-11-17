@@ -69,7 +69,7 @@ import {
   isSignedS3GetUnder,
   s3ObjectTargetFromPresignedUrl,
   signedHeadersOf,
-  storedPhotoKeyFromReference,
+  storedPhotoTargetFromConfirm,
   safeResponseDiagnostic,
   testFixtureClaimPartition,
   type SafeResponseDiagnostic,
@@ -966,20 +966,28 @@ test.describe('post-deploy smoke', () => {
     // uploaded object and rejects an empty one before returning 200.
 
     // The confirm response names the photo the server stored: a new key under
-    // the plant's prefix, not the key that was uploaded to.
+    // the plant's prefix, not the key that was uploaded to. Like every photo a
+    // deployed API returns, it arrives as a signed S3 URL (ADR 0033), so the
+    // key is read out of that.
     const confirmBody = (await confirmResponse.json()) as unknown;
-    const storedReference =
+    const confirmedImageUrl =
       typeof confirmBody === 'object' &&
       confirmBody !== null &&
       'imageUrl' in confirmBody &&
       typeof confirmBody.imageUrl === 'string'
         ? confirmBody.imageUrl
         : '';
-    const storedKey = storedPhotoKeyFromReference(storedReference, storedKeyPrefix);
-    if (!storedKey) {
+    const storedTarget = storedPhotoTargetFromConfirm(
+      confirmedImageUrl,
+      s3Target.bucket,
+      storedKeyPrefix
+    );
+    if (!storedTarget) {
       throw new Error('Image confirmation did not return a stored photo under the plant prefix');
     }
-    const storedTarget: SmokeS3ObjectTarget = { bucket: s3Target.bucket, key: storedKey };
+    if (storedTarget.key === s3Target.key) {
+      throw new Error('Image confirmation returned the upload key as the stored photo');
+    }
     storedS3Target = storedTarget;
 
     // The upload URL is still within its lifetime. A PUT with the declared
@@ -990,7 +998,9 @@ test.describe('post-deploy smoke', () => {
       data: Buffer.alloc(declaredLength + 1),
       failOnStatusCode: false,
     });
-    if (wrongSize.status() !== 403) {
+    // A signature mismatch is a 403. Any other client-error status is still a
+    // refusal; what must never happen is storage accepting the bytes.
+    if (wrongSize.status() < 400 || wrongSize.status() >= 500) {
       throw new Error(
         `S3 did not refuse an upload of a different size (status ${wrongSize.status()}; expected 403)`
       );
