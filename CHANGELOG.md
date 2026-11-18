@@ -90,6 +90,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **An App Store purchase is counted like a Stripe one.** The first time the
+  backend binds a Production App Store subscription to a household, it sends
+  the first-party product event `subscription_activated` with `plan`,
+  `interval` and `store: 'app_store'`, and the log line names `app_store` as
+  its source. Before this, a purchase in the iPhone app sent no product event
+  at all. Renewals, restores, Apple's notifications and Sandbox purchases send
+  nothing. Nothing a customer sees changes. `docs/analytics.md` says how to
+  count it.
 - **Every care guide ends with the "Holiday plants" list.** It is the list
   the home page and `/care` already show, with the same heading and the same
   link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen

@@ -38,6 +38,32 @@ describe('serverAnalytics.capture', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('marks an App Store purchase as such in the first-party log and in PostHog', async () => {
+    process.env.POSTHOG_KEY = 'phc_test';
+    delete process.env.POSTHOG_HOST;
+    const { capture } = await import('../../../src/utils/serverAnalytics.js');
+    const { logger } = await import('../../../src/utils/logger.js');
+    const logSpy = vi.spyOn(logger, 'info');
+    await capture('hh-1', 'subscription_activated', {
+      plan: 'garden',
+      interval: 'month',
+      store: 'app_store',
+    });
+    expect(logSpy).toHaveBeenCalledWith(
+      {
+        msg: 'product_event',
+        productEvent: 'subscription_activated',
+        properties: { plan: 'garden', interval: 'month', store: 'app_store' },
+        householdId: 'hh-1',
+        source: 'app_store',
+      },
+      'product_event'
+    );
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as { body: string }).body);
+    expect(body.properties.store).toBe('app_store');
+    expect(body.distinct_id).toBe('household:hh-1');
+  });
+
   it('no-ops when householdId is empty even with a key set', async () => {
     process.env.POSTHOG_KEY = 'phc_test';
     const { capture } = await import('../../../src/utils/serverAnalytics.js');

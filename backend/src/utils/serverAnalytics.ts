@@ -10,7 +10,10 @@
  * This emitter exists to fire CONFIRMED revenue events from the trusted
  * backend. The frontend `subscription_upgraded` event fires at checkout START
  * (intent, not confirmation); the Stripe webhook is the source of truth for
- * revenue, so it emits the confirmed counterparts.
+ * revenue, so it emits the confirmed counterparts. Apple In-App Purchase has
+ * one of its own: `services/appStoreBilling.ts` emits `subscription_activated`
+ * with `store: 'app_store'` the first time a Production App Store
+ * subscription is bound to a household.
  *
  * The three server events form the subscription lifecycle, and only the
  * middle one is money:
@@ -84,7 +87,17 @@ export interface ServerEventProps {
    * Absent when Stripe did not record a reason.
    */
   churnReason?: 'requested' | 'payment_failed' | 'payment_disputed' | 'other';
+  /**
+   * Where the subscription was bought, when it was not Stripe. Only
+   * `app_store`: Apple In-App Purchase in the iPhone app (ADR 0041), whose
+   * `subscription_activated` is emitted by `services/appStoreBilling.ts`.
+   * Absent on every Stripe event, so the Stripe payload is unchanged.
+   */
+  store?: 'app_store';
 }
+
+/** Which trusted path wrote the event, for the first-party log line. */
+type ServerEventSource = 'stripe_webhook' | 'app_store';
 
 /**
  * Best-effort capture. The first-party event is always logged for a valid
@@ -99,13 +112,15 @@ export async function capture(
 ): Promise<void> {
   if (!householdId) return;
 
+  const source: ServerEventSource =
+    properties.store === 'app_store' ? 'app_store' : 'stripe_webhook';
   logger.info(
     {
       msg: 'product_event',
       productEvent: event,
       properties,
       householdId,
-      source: 'stripe_webhook',
+      source,
     },
     'product_event'
   );
