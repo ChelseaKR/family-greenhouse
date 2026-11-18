@@ -181,6 +181,9 @@ interface LockedFeatureProps {
   /** One or two sentences on what the feature does — already translated. */
   children?: ReactNode;
   className?: string;
+  /** `h1` where the locked card is the whole page (chat on Seedling), which
+   *  otherwise has no level-one heading. Looks the same. */
+  headingAs?: 'h1' | 'h2';
 }
 
 /**
@@ -193,7 +196,13 @@ interface LockedFeatureProps {
  * backend/src/models/upgradeFeatures.ts and `locked.features` in both
  * catalogs, then wrap the gated UI in `<LockedFeature feature="…">`.
  */
-export function LockedFeature({ feature, title, children, className }: LockedFeatureProps) {
+export function LockedFeature({
+  feature,
+  title,
+  children,
+  className,
+  headingAs: Heading = 'h2',
+}: LockedFeatureProps) {
   const { t } = useTranslation();
   const ask = useUpgradeAsk(feature);
   const heading = title ?? t(`locked.features.${feature}`);
@@ -241,7 +250,7 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
           <LockClosedIcon className="h-5 w-5 text-primary-800" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-lg text-ink">{heading}</h2>
+          <Heading className="font-serif text-lg text-ink">{heading}</Heading>
           {includedWith && (
             <p className="mt-1 text-sm font-medium text-primary-900" data-testid="locked-included">
               {includedWith}

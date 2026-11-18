@@ -230,7 +230,11 @@ export function ChatPage() {
   if (subscriptionQuery.isError) {
     return (
       <Card>
-        <CardHeader title="Plant care chat" description="Ask questions about your household." />
+        <CardHeader
+          as="h1"
+          title="Plant care chat"
+          description="Ask questions about your household."
+        />
         <Alert variant="warning">{t('chat.availabilityCheckFailed')}</Alert>
       </Card>
     );
@@ -241,7 +245,7 @@ export function ChatPage() {
     // plan includes it, and can ask the admins for it in one tap. Admins get
     // the change-plan link instead.
     return (
-      <LockedFeature feature="chat" title={t('chat.seedlingUnavailableTitle')}>
+      <LockedFeature feature="chat" title={t('chat.seedlingUnavailableTitle')} headingAs="h1">
         {t('chat.seedlingUnavailableDescription')}
       </LockedFeature>
     );

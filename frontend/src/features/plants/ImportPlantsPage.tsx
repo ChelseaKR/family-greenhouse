@@ -234,7 +234,7 @@ function ImportFlow() {
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader t={t} />
         <Card>
-          <CardHeader title={t('importPlants.results.title')} />
+          <CardHeader as="h1" title={t('importPlants.results.title')} />
           <div className="space-y-4">
             <Alert variant={summary.created > 0 ? 'success' : 'warning'}>
               {t('importPlants.results.created', { count: summary.created })}
@@ -299,7 +299,11 @@ function ImportFlow() {
       <PageHeader t={t} />
 
       <Card>
-        <CardHeader title={t('importPlants.title')} description={t('importPlants.description')} />
+        <CardHeader
+          as="h1"
+          title={t('importPlants.title')}
+          description={t('importPlants.description')}
+        />
 
         {parseError && (
           <Alert variant="error" className="mb-4">

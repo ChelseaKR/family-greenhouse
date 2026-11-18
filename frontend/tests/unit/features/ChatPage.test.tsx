@@ -119,8 +119,11 @@ describe('ChatPage plan availability', () => {
     });
     renderPage();
 
+    // Level one: the locked card is the whole page, and as an h2 it left the
+    // page with no top-level heading.
     expect(
       await screen.findByRole('heading', {
+        level: 1,
         name: 'Plant care chat isn’t available on Seedling',
       })
     ).toBeInTheDocument();

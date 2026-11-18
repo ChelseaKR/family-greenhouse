@@ -3,6 +3,16 @@ import { render, screen } from '@testing-library/react';
 import { Card, CardHeader } from '@/components/Card';
 
 describe('Card', () => {
+  it('CardHeader is an h2 unless a page says its title is the h1', () => {
+    const { rerender } = render(<CardHeader title="Recent activity" />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Recent activity' })).toBeInTheDocument();
+    // Import plants and the chat error state are titled by a card header and
+    // nothing else, so as an h2 they had no level-one heading.
+    rerender(<CardHeader as="h1" title="Import plants" />);
+    const h1 = screen.getByRole('heading', { level: 1, name: 'Import plants' });
+    expect(h1).toHaveClass('font-serif', 'text-lg');
+  });
+
   it('renders children', () => {
     render(
       <Card>
