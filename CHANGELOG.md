@@ -157,6 +157,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   (`frontend/scripts/blog-posts-lastmod.json`, written by
   `npm run blog:lastmod --workspace frontend`). The publish date a reader
   sees on a post is unchanged.
+- **A task due every day reads "Every day" on the plant page.** It read
+  "Every 1 days", and in Spanish "Cada 1 día": the singular form held the
+  plural sentence. It now reads "Every day" and "Cada día". Every other
+  interval is unchanged ("Every 2 days", "Cada 2 días").
 
 ## [0.52.0] - 2026-11-17
 

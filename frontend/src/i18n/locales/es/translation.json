@@ -1113,7 +1113,7 @@
       "careHistoryDescription": "Tareas completadas recientemente",
       "noCareHistory": "Aún no hay historial de cuidados.",
       "snoozeTask": "Posponer tarea",
-      "everyDays_one": "Cada {{count}} día",
+      "everyDays_one": "Cada día",
       "everyDays_other": "Cada {{count}} días",
       "everyDays_many": "Cada {{count}} días"
     },

@@ -1091,7 +1091,7 @@
       "careHistoryDescription": "Recent task completions",
       "noCareHistory": "No care history yet.",
       "snoozeTask": "Snooze task",
-      "everyDays_one": "Every {{count}} days",
+      "everyDays_one": "Every day",
       "everyDays_other": "Every {{count}} days"
     },
     "photoUpload": {
