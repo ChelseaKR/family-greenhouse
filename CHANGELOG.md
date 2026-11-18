@@ -114,6 +114,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   (it was "How to Care for a Christmas Cactus: When to Water It"), from the
   guide's own cited water line. The description, which already opens with
   that answer, and the heading are unchanged.
+- **Six care guides answer "how often should I water it in winter?"** The
+  snake plant, jade plant, ponytail palm, hoya, haworthia and Boston fern
+  guides each gain that question, second in their FAQ and in the FAQ markup.
+  Each answer restates what the guide's watering section already says, with
+  the same named source; no fact is new. The short answer under "How often
+  to water" is still the year-round one. 23 guides give a winter instruction
+  in their water line, and only one asked the winter question.
 
 ### Fixed
 
