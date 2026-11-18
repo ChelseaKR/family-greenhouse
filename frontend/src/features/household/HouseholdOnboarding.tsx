@@ -194,10 +194,13 @@ export function HouseholdOnboarding() {
   }
 
   return (
-    <div className="greenhouse-grid min-h-screen flex flex-col justify-center bg-paper py-12 sm:px-6 lg:px-8">
+    // <main> and <h1>: this screen had neither a landmark nor a top-level
+    // heading (its title was an h2), so there was nothing to jump to and the
+    // heading outline started at level two (WCAG 1.3.1, 2.4.1).
+    <main className="greenhouse-grid min-h-screen flex flex-col justify-center bg-paper py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
         <BrandMark variant="wordmark" />
-        <h2
+        <h1
           ref={headingRef}
           tabIndex={-1}
           className="mt-8 text-center font-serif text-3xl tracking-tight text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
@@ -215,7 +218,7 @@ export function HouseholdOnboarding() {
                 : 'household.onboarding.createTitle'
             )}
           {step === 'join' && t('household.onboarding.joinTitle')}
-        </h2>
+        </h1>
         {step === 'choice' && !isAddingAnother && (
           <p className="mt-2 max-w-sm text-center text-sm text-gray-600">
             {t('household.onboarding.chooseLede')}
@@ -233,12 +236,14 @@ export function HouseholdOnboarding() {
                     <HomeIcon className="h-6 w-6 text-primary-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-ink">
+                    {/* Spans, not a heading and a paragraph: these sit inside
+                        a button, whose content is read as one name. */}
+                    <span className="block text-base font-semibold text-ink">
                       {t('household.onboarding.createCardTitle')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    </span>
+                    <span className="mt-1 block text-sm text-gray-500">
                       {t('household.onboarding.createCardBody')}
-                    </p>
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -251,12 +256,12 @@ export function HouseholdOnboarding() {
                     <UserGroupIcon className="h-6 w-6 text-accent-700" aria-hidden="true" />
                   </div>
                   <div className="text-left">
-                    <h3 className="text-base font-semibold text-ink">
+                    <span className="block text-base font-semibold text-ink">
                       {t('household.onboarding.joinCardTitle')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    </span>
+                    <span className="mt-1 block text-sm text-gray-500">
                       {t('household.onboarding.joinCardBody')}
-                    </p>
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -351,6 +356,6 @@ export function HouseholdOnboarding() {
           </p>
         )}
       </div>
-    </div>
+    </main>
   );
 }

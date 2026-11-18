@@ -108,12 +108,13 @@ export function JoinHouseholdPage() {
   const loadFailed = !isInvalid && verdict !== true;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
+    // <main> and <h1>: the page had no landmark and its title was an h2.
+    <main className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <BrandMark variant="wordmark" />
         </div>
-        <h2 className="mt-6 text-center font-serif text-2xl text-ink">Join Household</h2>
+        <h1 className="mt-6 text-center font-serif text-2xl text-ink">Join Household</h1>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -193,6 +194,6 @@ export function JoinHouseholdPage() {
           )}
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
