@@ -3465,7 +3465,7 @@
     "filterActivity": "Filter activity",
     "activityEmpty": "No activity yet — complete a task to see it here.",
     "welcomeBack": "Welcome back, {{name}}",
-    "welcomeFallbackName": "friend",
+    "welcomeBackNoName": "Welcome back, friend",
     "activityFilters": {
       "all": "All",
       "tasks": "Tasks",

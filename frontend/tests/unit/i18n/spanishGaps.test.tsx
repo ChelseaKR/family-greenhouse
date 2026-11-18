@@ -64,3 +64,32 @@ describe('shared components in Spanish', () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * Three wording decisions from the 2026-11-17 review of the Spanish, pinned so
+ * a later edit does not quietly undo them.
+ */
+describe('reviewed Spanish wording', () => {
+  afterAll(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('greets an account that has no name without a stand-in name', async () => {
+    await i18n.changeLanguage('en');
+    expect(i18n.t('dashboard.welcomeBackNoName')).toBe('Welcome back, friend');
+    await ensureLocaleCatalog(i18n, 'es');
+    await i18n.changeLanguage('es');
+    expect(i18n.t('dashboard.welcomeBackNoName')).toBe('Hola de nuevo');
+    expect(i18n.t('dashboard.welcomeBack', { name: 'Ana' })).toBe('Hola de nuevo, Ana');
+  });
+
+  it('says a key is generated, and puts the example plant in la sala', async () => {
+    const catalog = JSON.stringify((await import('@/i18n/locales/es/translation.json')).default);
+    expect(catalog).toContain('Generar clave');
+    expect(catalog).toContain('Generada el {{date}}');
+    expect(catalog).toContain('Monstera de la sala');
+    for (const retired of ['Emitir clave', 'Emitida el', 'Emite claves', 'amigo/a', 'del salón']) {
+      expect(catalog).not.toContain(retired);
+    }
+  });
+});

@@ -1043,7 +1043,7 @@
       "title": "Añadir una planta nueva",
       "intro": "Introduce los datos de tu planta para empezar a llevar el control de sus cuidados.",
       "photoPreviewAlt": "Vista previa de la foto elegida de la planta",
-      "namePlaceholder": "p. ej., Monstera del salón",
+      "namePlaceholder": "p. ej., Monstera de la sala",
       "speciesHelper": "Escribe para buscar nombres comunes; elige una sugerencia para rellenar el nombre científico.",
       "recommendedTasks": "Tareas de cuidado recomendadas",
       "autoTasksLabel": "Añadir automáticamente las tareas de cuidado recomendadas",
@@ -1966,7 +1966,7 @@
     "apiKeys": {
       "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza.",
       "loadFailed": "No pudimos cargar tus claves de API, así que esta lista no refleja lo que existe. No ha cambiado nada: una clave que funcionaba hace un momento sigue funcionando, hasta que la revoques, hasta que salga del hogar quien la emitió o hasta que el hogar deje de estar en Greenhouse.",
-      "lockedBody": "Las claves permiten que scripts y Home Assistant lean los datos de tu hogar; el acceso de escritura se concede de forma explícita. Emitir y usar claves forma parte del plan Greenhouse: una clave ya emitida deja de funcionar mientras el hogar no esté en ese plan, y vuelve a funcionar al subir de plan."
+      "lockedBody": "Las claves permiten que scripts y Home Assistant lean los datos de tu hogar; el acceso de escritura se concede de forma explícita. Generar y usar claves forma parte del plan Greenhouse: una clave ya emitida deja de funcionar mientras el hogar no esté en ese plan, y vuelve a funcionar al subir de plan."
     },
     "calendarFeed": {
       "title": "Calendario",
@@ -2146,13 +2146,13 @@
       "importHint": "¿Vas en sentido contrario? <importLink>Importa plantas desde un archivo CSV o JSON</importLink>, incluidas las exportaciones de esta aplicación."
     },
     "apiKeysPanel": {
-      "description": "Emite claves para acceder a los datos de tu hogar: Home Assistant, scripts, etc. Las claves son de solo lectura salvo que concedas explícitamente acceso de escritura. La disponibilidad depende del derecho a claves de API que ya tenga el hogar; los cambios a planes de pago están en pausa.",
+      "description": "Genera claves para acceder a los datos de tu hogar: Home Assistant, scripts, etc. Las claves son de solo lectura salvo que concedas explícitamente acceso de escritura. La disponibilidad depende del derecho a claves de API que ya tenga el hogar; los cambios a planes de pago están en pausa.",
       "created": "Clave nueva creada: cópiala ahora, no se volverá a mostrar.",
       "copyFailed": "No se pudo copiar automáticamente. Selecciona la clave y cópiala a mano.",
       "labelLabel": "Etiqueta de la clave",
       "labelPlaceholder": "Home Assistant, script personal…",
       "labelHelper": "Se muestra en la lista para identificar la clave; no se puede cambiar después.",
-      "issue": "Emitir clave",
+      "issue": "Generar clave",
       "scopes": "Permisos",
       "scopesHelp": "Concede solo lo que la clave necesite. Una solicitud a un endpoint que quede fuera de los permisos de la clave se rechaza con un 403.",
       "scopeRequired": "Selecciona al menos un permiso.",
@@ -2160,7 +2160,7 @@
       "none": "Aún no hay claves.",
       "revokeConfirmTitle": "¿Revocar la clave de API?",
       "revokeConfirmMessage": "La clave dejará de funcionar de inmediato. Todo lo que la esté usando recibirá un 401 en la siguiente solicitud.",
-      "keyLine": "fg_… <mono>{{last4}}</mono> · Emitida el {{date}}",
+      "keyLine": "fg_… <mono>{{last4}}</mono> · Generada el {{date}}",
       "lastUsed": "Último uso: {{date}}"
     }
   },
@@ -3536,7 +3536,7 @@
     "filterActivity": "Filtrar actividad",
     "activityEmpty": "Aún no hay actividad: completa una tarea para verla aquí.",
     "welcomeBack": "Hola de nuevo, {{name}}",
-    "welcomeFallbackName": "amigo/a",
+    "welcomeBackNoName": "Hola de nuevo",
     "activityFilters": {
       "all": "Todo",
       "tasks": "Tareas",

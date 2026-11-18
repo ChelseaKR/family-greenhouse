@@ -230,14 +230,19 @@ export function DashboardPage() {
   const plantCount = plants === undefined ? null : plants.length;
   const todayCount = upcomingTasks === undefined ? null : todayTasks.length;
   const overdueCount = upcomingTasks === undefined ? null : overdueTasks.length;
+  // An account with no name gets a greeting written without one, so each
+  // language can say it naturally instead of filling in a stand-in name.
+  const firstName = user?.name?.split(' ')[0] || undefined;
 
   return (
     <div className="space-y-10">
       <PageHeader
         eyebrow={t('dashboard.eyebrow')}
-        title={t('dashboard.welcomeBack', {
-          name: user?.name?.split(' ')[0] ?? t('dashboard.welcomeFallbackName'),
-        })}
+        title={
+          firstName
+            ? t('dashboard.welcomeBack', { name: firstName })
+            : t('dashboard.welcomeBackNoName')
+        }
         description={t('dashboard.description')}
         art={<DashboardHeaderArt className="w-full h-auto" />}
       />
