@@ -88,6 +88,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   trust"). A release cut before that stops at its first job or at the plan
   check, with nothing applied. A staging deploy now asks for one approval.
 
+### Changed
+
+- **Every care guide ends with the "Holiday plants" list.** It is the list
+  the home page and `/care` already show, with the same heading and the same
+  link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen
+  and Rosemary. It is the last thing on the page, below the related plants,
+  and a holiday guide leaves itself out. Search Console shows the guides that
+  reach the first page of US results are holiday and less-common ones. Three
+  of them are on this list (amaryllis, cyclamen, paperwhite), and November to
+  January is when they are searched, so each guide on the list now has a link
+  from every other guide and not only from the home page and `/care`.
+  `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
+  off everywhere.
+
 ### Fixed
 
 - **The post-deploy smoke test reads the stored photo from the signed URL the

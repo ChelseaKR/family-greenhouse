@@ -1,11 +1,12 @@
 /**
- * A short "Holiday plants" list of care guides, for the home page and the /care
- * index.
+ * A short "Holiday plants" list of care guides, for the home page, the /care
+ * index and, since 2026-11-17, the foot of every care guide (CareGuidePage.tsx
+ * has the reason).
  *
  * Built 2026-11-15 and switched on the same day, once Chelsea approved the
  * heading on these two pages and the Spanish names. The links' words are the
  * guides' own names. Setting `HOLIDAY_CARE_GUIDES_ON` to false removes the
- * list from both pages (and fails the "is switched on" test in
+ * list from all of them (and fails the "is switched on" test in
  * holidayCareGuides.test.tsx, which then needs updating with it).
  *
  * Why these pages and these plants (fg-seo-data-2026-11-15, actions 1 and 4):

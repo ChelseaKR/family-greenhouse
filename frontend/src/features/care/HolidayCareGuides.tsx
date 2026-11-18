@@ -11,6 +11,7 @@ export function HolidayCareGuides({
   as: Heading = 'h2',
   className = 'mt-10',
   on = HOLIDAY_CARE_GUIDES_ON,
+  exclude,
 }: {
   /** The heading's id, which also labels the section. Unique per page. */
   id: string;
@@ -18,9 +19,12 @@ export function HolidayCareGuides({
   className?: string;
   /** For tests; pages leave it to the switch. */
   on?: boolean;
+  /** A guide's own slug, so its page does not list a link to itself. */
+  exclude?: string;
 }) {
   const { t } = useTranslation();
   if (!on) return null;
+  const guides = HOLIDAY_CARE_GUIDES.filter((guide) => guide.slug !== exclude);
 
   return (
     <section aria-labelledby={id} className={className}>
@@ -28,7 +32,7 @@ export function HolidayCareGuides({
         {t('petSafeSpecies.holidayHeading')}
       </Heading>
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-        {HOLIDAY_CARE_GUIDES.map((guide) => (
+        {guides.map((guide) => (
           <li key={guide.slug}>
             <Link
               to={`/care/${guide.slug}`}
