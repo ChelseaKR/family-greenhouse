@@ -73,18 +73,58 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
   greenhouse: ['pricing.featureEverythingGarden', 'pricing.featureManyHomes'],
 };
 
+/** One bullet on a card: a catalog key, and the figures it names, if any. */
+interface Bullet {
+  key: string;
+  params?: Record<string, number>;
+}
+
+interface FeatureBullet {
+  flag: keyof PlanFeatures;
+  key: string;
+  /** The catalog figures the sentence names. Null when one did not arrive:
+   *  the bullet is then left out rather than guessed (ADR 0010). */
+  params?: (plan: Plan) => Record<string, number> | null;
+  /** The base bullet it follows on the card; without one it goes last. */
+  after?: string;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
  * Bullets driven by the catalog's `features` map (backend/src/models/plans.ts).
  * One renders on a tier when that tier has the flag AND the tier below does
  * not — "new here", so the cumulative lists never repeat a bullet.
  *
  * An entry is added by the change that SHIPS the capability, never before:
- * the flag says the tier includes it, this list says it exists. The Away Kit,
- * Plant Tags, the household toolkit, Move Day, kiosk and caretaker seats each
- * add their own line when they land (`awayKit`, `plantTags`,
+ * the flag says the tier includes it, this list says it exists. The Away Kit
+ * has its two lines (approved 2026-11-18): the sitter-link sentence the
+ * Going-away offer already uses, with Garden's own figures from the catalog,
+ * and the brief and photo-back in one line. They sit right after "Unlimited
+ * household members", because the free card's "1 sitter link at a time, up
+ * to 7 days" otherwise reads, through "Everything in Seedling", as Garden's
+ * limit too. Plant Tags, the household toolkit, Move Day, kiosk and caretaker
+ * seats each add their own line when one is approved (`plantTags`,
  * `householdToolkit`, `moveDay`, `kiosk`, `caretakerSeats`).
  */
-const FEATURE_BULLETS: ReadonlyArray<{ flag: keyof PlanFeatures; key: string }> = [
+const FEATURE_BULLETS: ReadonlyArray<FeatureBullet> = [
+  {
+    flag: 'awayKit',
+    key: 'household.goingAway.lineLinks',
+    params: (plan) => {
+      const days = plan.limits?.sitterLinkMaxDays;
+      const count = plan.limits?.sitterLinksActive;
+      return isCount(days) && isCount(count) ? { days, count } : null;
+    },
+    after: 'pricing.featureUnlimitedMembers',
+  },
+  {
+    flag: 'awayKit',
+    key: 'pricing.featureSitterBriefPhotos',
+    after: 'pricing.featureUnlimitedMembers',
+  },
   { flag: 'chat', key: 'pricing.featureChat' },
   { flag: 'apiKeys', key: 'pricing.featureApiAccess' },
 ];
@@ -100,13 +140,37 @@ const TIER_ORDER: readonly PlanId[] = ['seedling', 'garden', 'greenhouse'];
  * would otherwise hang the assistant bullet on Greenhouse and leave Garden
  * claiming nothing.
  */
-function newFeatureBullets(plan: Plan, catalog: Plan[]): string[] {
+function newFeatureBullets(plan: Plan, catalog: Plan[]): FeatureBullet[] {
   if (!plan.features) return [];
   const rank = TIER_ORDER.indexOf(plan.id);
   const lower = catalog.filter((p) => TIER_ORDER.indexOf(p.id) < rank);
   return FEATURE_BULLETS.filter(
     ({ flag }) => plan.features?.[flag] === true && !lower.some((p) => p.features?.[flag] === true)
-  ).map(({ key }) => key);
+  );
+}
+
+/**
+ * The card's bullets in order: the tier's own list, each followed by the
+ * flag bullets placed after it, then the flag bullets with no place of their
+ * own. A flag bullet whose figures did not arrive is left out.
+ */
+function cardBullets(plan: Plan, catalog: Plan[]): Bullet[] {
+  const extra: Bullet[] = [];
+  const placed = new Map<string, Bullet[]>();
+  for (const bullet of newFeatureBullets(plan, catalog)) {
+    const params = bullet.params ? bullet.params(plan) : undefined;
+    if (params === null) continue;
+    const entry: Bullet = params ? { key: bullet.key, params } : { key: bullet.key };
+    if (bullet.after && PLAN_FEATURES[plan.id].includes(bullet.after)) {
+      placed.set(bullet.after, [...(placed.get(bullet.after) ?? []), entry]);
+    } else {
+      extra.push(entry);
+    }
+  }
+  return [
+    ...PLAN_FEATURES[plan.id].flatMap((key) => [{ key }, ...(placed.get(key) ?? [])]),
+    ...extra,
+  ];
 }
 
 interface PaidPlanGridProps {
@@ -209,7 +273,7 @@ export function PaidPlanGrid({
           // price at this cadence simply isn't sold right now.
           const unavailable = !isFree && price === null;
           const isCurrent = currentPlanId === plan.id;
-          const bullets = [...PLAN_FEATURES[plan.id], ...newFeatureBullets(plan, plans)];
+          const bullets = cardBullets(plan, plans);
 
           return (
             <li
@@ -267,13 +331,13 @@ export function PaidPlanGrid({
               </p>
 
               <ul className="mt-4 space-y-2" role="list">
-                {bullets.map((featureKey) => (
-                  <li key={featureKey} className="flex items-start gap-2 text-sm text-gray-700">
+                {bullets.map((bullet) => (
+                  <li key={bullet.key} className="flex items-start gap-2 text-sm text-gray-700">
                     <CheckIcon
                       className="mt-0.5 h-4 w-4 shrink-0 text-primary-700"
                       aria-hidden="true"
                     />
-                    {t(featureKey)}
+                    {bullet.params ? t(bullet.key, bullet.params) : t(bullet.key)}
                   </li>
                 ))}
               </ul>
