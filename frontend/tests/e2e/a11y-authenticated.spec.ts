@@ -153,6 +153,9 @@ test.describe('A11y — authenticated routes', () => {
     await page.keyboard.press('ControlOrMeta+k');
     const search = page.getByRole('combobox');
     await expect(search).toBeFocused();
+    // Empty, it shows a hint with an Esc key cap, which was gray-500 on
+    // parchment: 4.2:1.
+    await expectNoA11yViolations(page, 'command-palette-empty');
     await search.fill('monstera');
     await expect(page.getByRole('option').first()).toBeVisible({ timeout: 15000 });
     await page.keyboard.press('ArrowDown');

@@ -239,8 +239,10 @@ export function CommandPalette() {
                   </div>
                 )}
 
+                {/* gray-600, not -500, on the hint: its Esc key cap sits on
+                    parchment, where gray-500 is 4.2:1. */}
                 {query === '' && (
-                  <p className="px-6 py-8 text-center text-sm text-gray-500">
+                  <p className="px-6 py-8 text-center text-sm text-gray-600">
                     Type to search plants and tasks. Press{' '}
                     <kbd className="rounded-sm border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
                       Esc
