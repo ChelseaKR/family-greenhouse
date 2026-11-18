@@ -271,7 +271,12 @@ describe('day 10 for a household with no plant (decision C1)', () => {
     tasksCompleted: ok(0),
     plantsNow: ok(0),
   };
-  const hrefs = (html: string) => [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  // Every link target in the email's HTML, in order, by plain string splitting.
+  const hrefs = (html: string) =>
+    html
+      .split('href="')
+      .slice(1)
+      .map((rest) => rest.slice(0, rest.indexOf('"')));
 
   it('leads with "Add your first plant" and its button, before the plans line', () => {
     const e = composeTrialLifecycleEmail(ctx({ facts: none }));
@@ -289,7 +294,8 @@ describe('day 10 for a household with no plant (decision C1)', () => {
     expect(e.text).toContain('See plans in Settings');
     // With nothing to count, the facts section is not repeated.
     expect(e.text).not.toContain('What your household did during the trial');
-    expect(e.text.split('$4.99').length - 1).toBe(1);
+    // The plans line is said once, with the catalog's price, not repeated.
+    expect(e.text.split(`$${PLANS.garden.monthlyPrice}`).length - 1).toBe(1);
   });
 
   it('says the same in Spanish', () => {
