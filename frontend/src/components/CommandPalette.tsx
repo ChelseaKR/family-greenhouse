@@ -107,7 +107,16 @@ export function CommandPalette() {
 
   return (
     <Transition.Root show={open} as={Fragment} afterLeave={() => setQuery('')}>
-      <Dialog as="div" className="relative z-50" onClose={close} initialFocus={inputRef}>
+      {/* PROPOSED WORDING. The dialog had no accessible name, and the search
+          field's only name was its placeholder. Both now carry
+          commandPalette.title. */}
+      <Dialog
+        as="div"
+        className="relative z-50"
+        onClose={close}
+        initialFocus={inputRef}
+        aria-label={t('commandPalette.title')}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-200"
@@ -140,6 +149,7 @@ export function CommandPalette() {
                   <Combobox.Input
                     ref={inputRef}
                     className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
+                    aria-label={t('commandPalette.title')}
                     placeholder="Search plants and tasks..."
                     onChange={(e) => setQuery(e.target.value)}
                   />

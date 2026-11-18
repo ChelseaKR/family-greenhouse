@@ -300,6 +300,16 @@ describe('ChatPage plan availability', () => {
       await waitFor(() => expect(log).toHaveTextContent('You have three plants.'));
     });
 
+    it('says who is speaking, which only the bubble side and colour showed', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+      const log = screen.getByRole('log');
+      expect(log).toHaveTextContent('You: What plants do I have?');
+
+      finish();
+      await waitFor(() => expect(log).toHaveTextContent('Plant care chat: You have three plants.'));
+    });
+
     it('says once that a reply is on its way, from a region that is always there', async () => {
       const finish = holdReply();
       await ask('What plants do I have?');

@@ -311,6 +311,14 @@ export function ChatPage() {
                       m.role === 'user' ? 'bg-primary-700 text-white' : 'bg-parchment text-gray-900'
                     }`}
                   >
+                    {/* PROPOSED WORDING. Who said what was carried only by
+                        which side the bubble sits on and its colour, so in
+                        the log a question and its answer ran together
+                        (WCAG 1.3.1). */}
+                    <span className="sr-only">
+                      {m.role === 'user' ? t('chat.speakerYou') : t('chat.speakerAssistant')}
+                      {': '}
+                    </span>
                     {m.text}
                   </div>
                   {m.role === 'assistant' && conversationId && (

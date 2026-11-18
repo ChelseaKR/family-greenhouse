@@ -44,6 +44,17 @@ beforeEach(() => {
  * loading, and not when the read failed (ADR 0010).
  */
 describe('CommandPalette', () => {
+  it('names the dialog and labels the search field', async () => {
+    // The dialog had no accessible name, and the field's only name was its
+    // placeholder, which goes away as soon as something is typed.
+    vi.mocked(plantService.getPlants).mockResolvedValue([fern] as never);
+    vi.mocked(taskService.getTasks).mockResolvedValue([]);
+    await openAndType('f');
+
+    expect(screen.getByRole('dialog', { name: 'Search plants and tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Search plants and tasks' })).toHaveValue('f');
+  });
+
   it('finds a plant once the lists have loaded', async () => {
     vi.mocked(plantService.getPlants).mockResolvedValue([fern] as never);
     vi.mocked(taskService.getTasks).mockResolvedValue([]);

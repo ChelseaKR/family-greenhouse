@@ -2137,7 +2137,12 @@
     "notesTooLong": "Las notas son demasiado largas",
     "tooManyTags": "Demasiadas etiquetas"
   },
+  "commandPalette": {
+    "title": "Buscar plantas y tareas"
+  },
   "chat": {
+    "speakerYou": "Tú",
+    "speakerAssistant": "Chat de cuidado de plantas",
     "availabilityChecking": "Comprobando la disponibilidad del chat…",
     "availabilityCheckFailed": "No se pudo comprobar la disponibilidad del chat. Inténtalo de nuevo en unos instantes.",
     "seedlingUnavailableTitle": "El chat de cuidado no está disponible en Seedling",

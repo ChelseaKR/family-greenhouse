@@ -615,13 +615,15 @@ export function HouseholdPage() {
                         })
                       }
                       disabled={updateRoleMutation.isPending}
-                      aria-label={
-                        member.role === 'admin'
-                          ? `Demote ${member.name} to member`
-                          : `Promote ${member.name} to admin`
-                      }
                     >
+                      {/* PROPOSED WORDING. The name was "Promote Sam to admin"
+                          over a button that reads "Make admin", so someone
+                          using voice control who says what they see ("click
+                          Make admin") matched nothing (WCAG 2.5.3). The name
+                          now starts with the visible words and adds whose
+                          role it is. */}
                       {member.role === 'admin' ? 'Make member' : 'Make admin'}
+                      <span className="sr-only">, {member.name}</span>
                     </Button>
                     <Button
                       variant="secondary"
