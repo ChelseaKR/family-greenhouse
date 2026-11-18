@@ -222,6 +222,66 @@ describe('the sitter page in Spanish', () => {
     expect(screen.queryByText('Water the Monstera')).not.toBeInTheDocument();
     expect(screen.queryByText('Overdue')).not.toBeInTheDocument();
   });
+
+  /**
+   * A task with no plant name (approved by Chelsea 2026-11-18, "Use 'tu
+   * planta'"): Spanish gets a whole no-name sentence, never the named
+   * template with a stand-in ("Riega la tu planta"). English is unchanged.
+   */
+  const unnamed = (taskId: string, taskType: string) => ({
+    taskId,
+    plantName: '',
+    taskType,
+    dueDate: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    spaceName: null,
+    placementNote: null,
+    overdue: true,
+  });
+
+  it.each([
+    [
+      'es',
+      ['Riega tu planta', 'Abona tu planta', 'Poda tu planta', 'Trasplanta tu planta'],
+      'Misting — tu planta',
+      ['Riega la tu planta', 'Riega la this plant', 'Water the this plant'],
+    ],
+    [
+      'en',
+      [
+        'Water the this plant',
+        'Feed the this plant',
+        'Prune the this plant',
+        'Repot the this plant',
+      ],
+      'Misting — this plant',
+      ['Riega tu planta'],
+    ],
+  ] as const)(
+    'in %s, a task with no plant name gets the no-name instruction',
+    async (lng, verbs, custom, absent) => {
+      await i18n.changeLanguage(lng);
+      vi.mocked(sitterService.getView).mockResolvedValue({
+        ...view,
+        tasks: [
+          unnamed('t1', 'water'),
+          unnamed('t2', 'fertilize'),
+          unnamed('t3', 'prune'),
+          unnamed('t4', 'repot'),
+          unnamed('t5', 'Misting'),
+        ],
+      } as unknown as SitterView);
+      render(
+        <MemoryRouter initialEntries={[`/sit/${'a'.repeat(64)}`]}>
+          <Routes>
+            <Route path="/sit/:token" element={<SitPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+      for (const text of verbs) expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.getByText(custom)).toBeInTheDocument();
+      for (const text of absent) expect(screen.queryByText(text)).not.toBeInTheDocument();
+    }
+  );
 });
 
 describe('approved wording', () => {

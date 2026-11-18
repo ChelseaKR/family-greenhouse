@@ -29,7 +29,21 @@ import { MapPinIcon } from '@heroicons/react/24/outline';
 
 /** Turn a task type + plant name into a warm, plain instruction. */
 function instructionFor(task: SitterTask, t: TFunction): string {
-  const plant = task.plantName || 'this plant';
+  const plant = task.plantName;
+  // A task with no plant name gets its own whole sentence ("Riega tu planta"),
+  // not the named template with a stand-in dropped in: Spanish would read
+  // "Riega la tu planta". The English is unchanged ("Water the this plant").
+  if (!plant) {
+    switch (task.taskType) {
+      case 'water':
+      case 'fertilize':
+      case 'prune':
+      case 'repot':
+        return t(`sitter.page.noPlantInstruction.${task.taskType}`);
+      default:
+        return t('sitter.page.noPlantInstruction.other', { task: task.taskType });
+    }
+  }
   switch (task.taskType) {
     case 'water':
       return t('caretaker.page.instructionWater', { plant });

@@ -1812,7 +1812,14 @@
       "heading": "{{label}}: lo que hay que hacer",
       "headingNoLabel": "¡Gracias por cuidar las plantas!",
       "metaTitle": "Cuidado de plantas — Family Greenhouse",
-      "metaDescription": "Mira qué plantas necesitan cuidados y márcalas como hechas. Sin registrarte."
+      "metaDescription": "Mira qué plantas necesitan cuidados y márcalas como hechas. Sin registrarte.",
+      "noPlantInstruction": {
+        "water": "Riega tu planta",
+        "fertilize": "Abona tu planta",
+        "prune": "Poda tu planta",
+        "repot": "Trasplanta tu planta",
+        "other": "{{task}} — tu planta"
+      }
     }
   },
   "sitterBrief": {
