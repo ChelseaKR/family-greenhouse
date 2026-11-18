@@ -62,6 +62,20 @@ describe('Button', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('keeps an edge in forced colors, where the fill that made it a button is gone', () => {
+    // Windows High Contrast removes backgrounds. Primary and danger buttons
+    // have no border of their own, so "Add task" and "Done" drew as loose
+    // words. Secondary already has one.
+    const { rerender } = render(<Button variant="primary">Add task</Button>);
+    expect(screen.getByRole('button')).toHaveClass('forced-colors:border');
+
+    rerender(<Button variant="danger">Remove</Button>);
+    expect(screen.getByRole('button')).toHaveClass('forced-colors:border');
+
+    rerender(<Button variant="secondary">Edit</Button>);
+    expect(screen.getByRole('button')).toHaveClass('border');
+  });
+
   it('is still natively disabled when the caller disables it', () => {
     render(<Button disabled>Save</Button>);
     expect(screen.getByRole('button')).toBeDisabled();

@@ -10,11 +10,15 @@ const baseClasses =
 
 const variantClasses: Record<ButtonVariant, string> = {
   // primary-700 + white clears WCAG AA contrast (5:1); primary-600 was 3.76.
+  // `forced-colors:border` on the two filled variants: their fill is what
+  // makes them look like buttons, and forced colors (Windows High Contrast)
+  // removes fills. Without a border "Add task" and "Done" drew as loose words
+  // on the page. Secondary already has a border.
   primary:
-    'bg-primary-700 text-white shadow-[0_8px_20px_-14px_rgba(23,52,4,0.9)] hover:bg-primary-800 hover:shadow-[0_12px_24px_-14px_rgba(23,52,4,0.95)] focus-visible:ring-primary-500',
+    'bg-primary-700 text-white shadow-[0_8px_20px_-14px_rgba(23,52,4,0.9)] hover:bg-primary-800 hover:shadow-[0_12px_24px_-14px_rgba(23,52,4,0.95)] focus-visible:ring-primary-500 forced-colors:border',
   secondary:
     'bg-paper/85 text-ink border border-dew hover:bg-glass/55 focus-visible:ring-primary-500',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
+  danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 forced-colors:border',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

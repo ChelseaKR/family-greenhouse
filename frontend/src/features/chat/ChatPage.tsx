@@ -430,7 +430,7 @@ export function ChatPage() {
             type="button"
             onClick={handleSend}
             disabled={!input.trim() || isSending}
-            className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg bg-primary-700 px-3 py-2 text-white hover:bg-primary-800 disabled:cursor-not-allowed disabled:bg-primary-200"
+            className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg bg-primary-700 px-3 py-2 text-white hover:bg-primary-800 forced-colors:border disabled:cursor-not-allowed disabled:bg-primary-200"
             aria-label="Send"
           >
             <PaperAirplaneIcon className="h-5 w-5" />

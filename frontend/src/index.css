@@ -331,6 +331,14 @@ html[data-text-size='large'] .whitespace-nowrap {
       background-color: transparent !important;
       color: HighlightText !important;
     }
+
+    /* A filled button is a button because of its fill, which this mode
+       removes. The shared Button adds its own border (buttonStyles.ts);
+       these two classes are the same thing written as CSS. */
+    .btn-primary,
+    .btn-danger {
+      border: 1px solid ButtonBorder !important;
+    }
   }
 
   /* Reduced motion preference */

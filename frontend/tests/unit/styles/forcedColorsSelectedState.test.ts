@@ -35,6 +35,12 @@ describe('selected state in forced colors', () => {
     }
   );
 
+  it('gives the filled .btn classes an edge, since their fill is gone', () => {
+    expect(block![1]).toMatch(
+      /\.btn-primary,\s*\.btn-danger\s*{[^}]*border:\s*1px solid ButtonBorder\s*!important/
+    );
+  });
+
   it('carries the text colour to what is inside, icons and count badges included', () => {
     expect(block![1]).toMatch(
       /\[aria-pressed='true'\] \*,[\s\S]*{[^}]*color:\s*HighlightText\s*!important/
