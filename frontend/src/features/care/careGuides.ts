@@ -1689,12 +1689,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
     related: ['poinsettia', 'kalanchoe', 'blue-echeveria'],
-    metaTitle: 'How to Care for a Christmas Cactus: When to Water It',
+    metaTitle: 'How Often to Water a Christmas Cactus: Top Inch Dry',
     heading: 'How to care for a Christmas cactus',
     metaDescription:
       'Water a Christmas cactus when the top inch of soil is dry, in bright, filtered light. Why it drops buds and how to make it bloom again.',
     reviewed: '2026-11-03',
-    updated: '2026-11-04',
+    updated: '2026-11-17',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {

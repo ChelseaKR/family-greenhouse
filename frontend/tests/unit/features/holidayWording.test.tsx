@@ -71,3 +71,35 @@ describe('poinsettia: the title and description lead with the watering answer', 
     expect(guide.updated).toBe('2026-11-17');
   });
 });
+
+describe('Christmas cactus: the title leads with the watering question', () => {
+  const TITLE = 'How Often to Water a Christmas Cactus: Top Inch Dry';
+
+  it('carries the approved title, within the display budget, and publishes it', () => {
+    const guide = findCareGuide('christmas-cactus')!;
+    expect(guide.metaTitle).toBe(TITLE);
+    expect(TITLE.length).toBeLessThanOrEqual(60);
+    expect(CARE_GUIDES.filter((g) => g.metaTitle === TITLE)).toHaveLength(1);
+    renderGuide('christmas-cactus');
+    expect(document.title).toBe(TITLE);
+  });
+
+  it('leaves the description and the heading as they were', () => {
+    const guide = findCareGuide('christmas-cactus')!;
+    expect(guide.metaDescription).toBe(
+      'Water a Christmas cactus when the top inch of soil is dry, in bright, filtered light. Why it drops buds and how to make it bloom again.'
+    );
+    expect(guide.heading).toBe('How to care for a Christmas cactus');
+    expect(renderGuide('christmas-cactus').querySelector('h1')?.textContent).toBe(
+      'How to care for a Christmas cactus'
+    );
+  });
+
+  it('says only what the guide’s own cited water line says', () => {
+    const guide = findCareGuide('christmas-cactus')!;
+    expect(guide.quickFacts.water).toBe('When the top inch of soil is dry; water thoroughly');
+    expect(guide.faqs[0]!.a).toContain('When the top inch of soil is dry');
+    expect(guide.reviewed).toBe('2026-11-03');
+    expect(guide.updated).toBe('2026-11-17');
+  });
+});

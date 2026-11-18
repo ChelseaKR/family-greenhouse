@@ -109,6 +109,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   heading and pet section are as they were. The other holiday guides that
   lead this way are the ones that reach the first page of US results, and the
   poinsettia guide had no US search impressions in the 28 days to 2026-11-16.
+- **The Christmas cactus guide's search title leads with the watering
+  question.** It is now "How Often to Water a Christmas Cactus: Top Inch Dry"
+  (it was "How to Care for a Christmas Cactus: When to Water It"), from the
+  guide's own cited water line. The description, which already opens with
+  that answer, and the heading are unchanged.
 
 ### Fixed
 
