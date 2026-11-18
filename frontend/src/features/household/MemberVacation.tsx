@@ -10,7 +10,7 @@
  * key → a single fetch), mutations invalidate it plus the task lists so
  * "Covering for X" badges refresh immediately.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { taskService, VacationWindow } from '@/services/taskService';
@@ -42,6 +42,22 @@ export function MemberVacation({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
+  // Opening the form replaces the button that was pressed, and closing it puts
+  // the button back. Neither moved focus, so a keyboard user who pressed "Set
+  // vacation" was left on nothing, at the top of the tab order, with the form
+  // somewhere below (WCAG 2.4.3). Focus now follows: into the first field on
+  // open, back to the button on cancel.
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusOnClose = useRef(false);
+  useEffect(() => {
+    if (formOpen) {
+      startDateRef.current?.focus();
+    } else if (returnFocusOnClose.current) {
+      returnFocusOnClose.current = false;
+      openButtonRef.current?.focus();
+    }
+  }, [formOpen]);
   const coverOptions = members.filter((m) => m.userId !== member.userId);
   const [coveredBy, setCoveredBy] = useState(coverOptions[0]?.userId ?? '');
   const [startDate, setStartDate] = useState('');
@@ -113,6 +129,7 @@ export function MemberVacation({
   if (!formOpen) {
     return (
       <button
+        ref={openButtonRef}
         type="button"
         onClick={() => setFormOpen(true)}
         className="mt-1 inline-flex min-h-touch items-center text-xs font-medium text-primary-700 hover:underline"
@@ -141,6 +158,7 @@ export function MemberVacation({
           <label className="block text-xs font-medium text-gray-700">
             {t('household.vacation.startDateLabel')}
             <input
+              ref={startDateRef}
               type="date"
               required
               value={startDate}
@@ -183,7 +201,15 @@ export function MemberVacation({
           >
             {t('household.vacation.save')}
           </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setFormOpen(false)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              returnFocusOnClose.current = true;
+              setFormOpen(false);
+            }}
+          >
             {t('common.cancel')}
           </Button>
         </div>

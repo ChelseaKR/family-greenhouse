@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -90,9 +90,24 @@ export function HouseholdPage() {
     document.getElementById('sitter-links')?.scrollIntoView?.({ block: 'start' });
   }, [awayEntry, householdLoaded]);
 
+  // "Generate invite link" is replaced by the link it made. The button that
+  // had focus is gone, so focus fell to the top of the document and nothing
+  // was announced: a keyboard or screen-reader user had made a link and had to
+  // go looking for it (WCAG 2.4.3, 4.1.3). Focus now lands on the link field,
+  // which reads its label and the link.
+  const inviteLinkRef = useRef<HTMLInputElement>(null);
+  const focusInviteLink = useRef(false);
+  useEffect(() => {
+    if (inviteLink && focusInviteLink.current) {
+      focusInviteLink.current = false;
+      inviteLinkRef.current?.focus();
+    }
+  }, [inviteLink]);
+
   const createInviteMutation = useMutation({
     mutationFn: () => householdService.createInvite(householdId!),
     onSuccess: (data) => {
+      focusInviteLink.current = true;
       setInviteLink(data.url);
       setInviteLinkKind('link');
       setInvitesTurnedOff(false);
@@ -302,6 +317,7 @@ export function HouseholdPage() {
             <div className="space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
+                  ref={inviteLinkRef}
                   type="text"
                   readOnly
                   value={inviteLink}

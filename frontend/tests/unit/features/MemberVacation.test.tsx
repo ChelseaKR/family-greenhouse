@@ -198,6 +198,19 @@ describe('MemberVacation sitter offer', () => {
     );
   });
 
+  it('moves focus into the form when it opens, and back to the button on cancel', async () => {
+    // The form replaces the button that was pressed. Focus used to be left on
+    // nothing, so the next Tab started again from the top of the page.
+    renderForm();
+    const open = screen.getByRole('button', { name: 'Set vacation' });
+    open.focus();
+    fireEvent.click(open);
+    expect(screen.getByLabelText('Start date')).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Set vacation' })).toHaveFocus();
+  });
+
   it('offers a sitter link the moment a trip longer than the free window is typed', async () => {
     renderForm();
     fireEvent.click(screen.getByText('Set vacation'));

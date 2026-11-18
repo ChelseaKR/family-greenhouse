@@ -280,6 +280,9 @@ describe('HouseholdPage', () => {
       'http://localhost:3000/join/LINK'
     );
     expect(screen.getByText('This link works for 7 days and for up to 5 people.')).toBeVisible();
+    // The button that was pressed is gone. Focus goes to the link it made
+    // rather than to the top of the page, so the link is also read out.
+    expect(screen.getByLabelText('Invite link')).toHaveFocus();
   });
 
   it('turns off invite links: asks the server, clears the link on screen and says so', async () => {
