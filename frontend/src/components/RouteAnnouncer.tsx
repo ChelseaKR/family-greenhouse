@@ -29,14 +29,14 @@ const GIVE_UP_MS = 8000;
 export function RouteAnnouncer() {
   const { pathname } = useLocation();
   const [message, setMessage] = useState('');
-  const isFirstPage = useRef(true);
+  // The path last announced. Starts at the first page, which the browser
+  // announces itself. A path, not a "first run" flag: React's StrictMode runs
+  // mount effects twice in development, and a flag announced the first page.
+  const announcedPath = useRef(pathname);
 
   useEffect(() => {
-    // The first page is announced by the browser itself.
-    if (isFirstPage.current) {
-      isFirstPage.current = false;
-      return;
-    }
+    if (announcedPath.current === pathname) return;
+    announcedPath.current = pathname;
     const started = Date.now();
     let timer = 0;
     const announce = () => {

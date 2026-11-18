@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -36,6 +37,23 @@ describe('RouteAnnouncer', () => {
   it('stays quiet on the first page, which the browser announces itself', async () => {
     renderApp();
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('stays quiet on the first page in StrictMode too, where mount effects run twice', async () => {
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <RouteAnnouncer />
+          <Routes>
+            <Route path="/dashboard" element={<Page title="Dashboard" />} />
+          </Routes>
+        </MemoryRouter>
+      </StrictMode>
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
