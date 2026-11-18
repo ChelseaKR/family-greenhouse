@@ -90,6 +90,29 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Changed
 
+- **In the iPhone app, an admin gets a "See plans" button where the trial
+  ends and in the Going-away offer.** With Apple In-App Purchase on, the
+  dashboard's trial notice shows "See plans" (Spanish "Ver planes"), to
+  Settings → Plan status, in its last days and for a week after it ends, in
+  place of the "View plan status" link; members keep the link. Not in the
+  first days of the trial: Apple charges when the person confirms and the free
+  days stop at once. The Going-away offer keeps its sentence ("Plans are in
+  Settings → Plan status, where a household admin can subscribe.") and adds
+  the same button for an admin. No price is shown, and the website, Android
+  and an iPhone build without In-App Purchase do not change.
+- **The Garden card names the Away Kit.** On `/pricing` and in Plan status the
+  Garden card now lists, right after "Unlimited household members", "Sitter
+  links of up to 90 days, with up to 10 live at once" (the Going-away offer's
+  sentence, with the catalog's figures) and "A printable care brief and photos
+  back from your sitter", in English and Spanish. The free card's "1 sitter
+  link at a time, up to 7 days" no longer reads, through "Everything in
+  Seedling", as Garden's limit too. A figure the catalog does not send leaves
+  its line out.
+- **The home page's "A growing collection" card says where the free plan
+  ends:** "The free plan holds 8 plants; Garden holds 200." (Spanish "El plan
+  gratuito admite 8 plantas; Garden, 200."). `scripts/check-plan-copy.mjs` now
+  derives both figures from `backend/src/models/plans.ts` for this sentence, in
+  both languages.
 - **The day-10 trial email asks a household with no plant to add one first.**
   When the household's plant count reads as 0, the email leads with "You have
   not added a plant yet. Add your first plant and say how often it needs

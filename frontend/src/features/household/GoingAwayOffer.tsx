@@ -10,7 +10,7 @@ import { useIsHouseholdAdmin } from '@/hooks/useActiveHouseholdRole';
 import { formatCurrency } from '@/i18n/format';
 import { isNativeApp } from '@/lib/platform';
 import { billingService, effectivePlanId } from '@/services/billingService';
-import { nativePlanNoteKey } from '@/services/appStoreAvailability';
+import { appStorePurchasesAvailable, nativePlanNoteKey } from '@/services/appStoreAvailability';
 import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
@@ -68,7 +68,10 @@ function isCount(value: unknown): value is number {
  * checkout runs with its double-charge guards and trial terms. This prompt
  * does not start a Stripe session itself. A member gets the existing one-tap
  * "ask an admin" (`AskToUpgrade`). Inside the apps there is no price and no
- * purchase button (Guideline 3.1.1), the same rule `LockedFeature` follows.
+ * purchase button toward the website (Guideline 3.1.1), the same rule
+ * `LockedFeature` follows. In the iPhone app with Apple In-App Purchase on
+ * (ADR 0041), an admin also gets "See plans", to Settings → Plan status,
+ * where Apple's purchase sheet is; still no price.
  */
 export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAwayOfferProps) {
   const { t } = useTranslation();
@@ -171,7 +174,14 @@ export function GoingAwayOffer({ householdId, reason, onUseFreeLength }: GoingAw
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             {native ? (
-              <p className="text-gray-600">{t(nativePlanNoteKey())}</p>
+              <>
+                <p className="text-gray-600">{t(nativePlanNoteKey())}</p>
+                {isAdmin && appStorePurchasesAvailable() && (
+                  <Link to="/settings/billing" className={buttonStyles({})}>
+                    {t('appStore.lockedSeePlans')}
+                  </Link>
+                )}
+              </>
             ) : isAdmin ? (
               buyLabel &&
               paymentsOn && (
