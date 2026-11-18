@@ -33,8 +33,8 @@ const NATIVE_TABS = NATIVE_SETTINGS_SECTIONS;
 const TAB_LABEL = SETTINGS_SECTION_LABEL;
 
 export function SettingsPage() {
-  useDocumentTitle('Settings');
   const { t } = useTranslation();
+  useDocumentTitle(t('nav.settings'));
   const location = useLocation();
   const navigate = useNavigate();
   const tabs = isNativeApp() ? NATIVE_TABS : TABS;
@@ -82,14 +82,14 @@ export function SettingsPage() {
         <PageHeader title={t(TAB_LABEL[tab])} />
       ) : (
         <PageHeader
-          eyebrow="Your account"
+          eyebrow={t('settings.page.eyebrow')}
           title={t('settings.title')}
           description={t('settings.description')}
         />
       )}
 
       <label className="block sm:hidden native-frame:hidden">
-        <span className="label">Settings section</span>
+        <span className="label">{t('settings.page.sectionLabel')}</span>
         <select
           className="input"
           value={tab}

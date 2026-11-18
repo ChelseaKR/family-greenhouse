@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -22,6 +23,8 @@ interface BulkApplyTemplateDialogProps {
  * silently truncate.
  */
 export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDialogProps) {
+  // `translate`, not `t`: a template in the list below is called `t`.
+  const { t: translate } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -100,7 +103,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                     onClick={handleClose}
                     className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-500 hover:text-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">{translate('common.close')}</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
@@ -109,7 +112,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                   as="h3"
                   className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
-                  Apply care template
+                  {translate('plants.bulkApply.title')}
                 </Dialog.Title>
 
                 {apply.isError && (
@@ -121,7 +124,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="bulk-tpl" className="label">
-                      Template
+                      {translate('plants.bulkApply.template')}
                     </label>
                     <select
                       id="bulk-tpl"
@@ -129,7 +132,7 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
                       value={selectedTemplate}
                       onChange={(e) => setSelectedTemplate(e.target.value)}
                     >
-                      <option value="">— pick one —</option>
+                      <option value="">{translate('plants.bulkApply.pickOne')}</option>
                       {templates?.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.name}
@@ -140,15 +143,22 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
 
                   <div>
                     <p className="label">
-                      Plants ({selectedPlants.size} selected
-                      {overLimit && ' — over the 50-plant cap, deselect some'})
+                      {overLimit
+                        ? translate('plants.bulkApply.plantsSelectedOver', {
+                            count: selectedPlants.size,
+                          })
+                        : translate('plants.bulkApply.plantsSelected', {
+                            count: selectedPlants.size,
+                          })}
                     </p>
                     {!plants ? (
                       <div className="flex justify-center py-6">
                         <LoadingSpinner />
                       </div>
                     ) : plants.length === 0 ? (
-                      <p className="text-sm text-gray-600">No plants yet.</p>
+                      <p className="text-sm text-gray-600">
+                        {translate('plants.bulkApply.noPlants')}
+                      </p>
                     ) : (
                       <ul className="max-h-64 overflow-y-auto rounded-md border border-primary-100/70 divide-y divide-primary-100/60">
                         {plants.map((p) => (
@@ -177,14 +187,14 @@ export function BulkApplyTemplateDialog({ isOpen, onClose }: BulkApplyTemplateDi
 
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="secondary" onClick={handleClose}>
-                      Cancel
+                      {translate('common.cancel')}
                     </Button>
                     <Button
                       onClick={() => apply.mutate()}
                       isLoading={apply.isPending}
                       disabled={!canApply}
                     >
-                      Apply to {selectedPlants.size} plant{selectedPlants.size === 1 ? '' : 's'}
+                      {translate('plants.bulkApply.applyTo', { count: selectedPlants.size })}
                     </Button>
                   </div>
                 </div>

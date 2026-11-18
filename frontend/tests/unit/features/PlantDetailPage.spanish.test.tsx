@@ -107,7 +107,9 @@ describe('the plant page in Spanish', () => {
     renderDetail();
 
     await screen.findByText(/^Vence: /);
-    expect(valueBeside('Added')).toHaveTextContent(/^Nunca$/);
+    // The label is Spanish now too; it used to be a hardcoded "Added".
+    expect(valueBeside('Añadida')).toHaveTextContent(/^Nunca$/);
+    expect(screen.queryByText('Added')).not.toBeInTheDocument();
     expect(screen.queryByText('Never')).not.toBeInTheDocument();
   });
 

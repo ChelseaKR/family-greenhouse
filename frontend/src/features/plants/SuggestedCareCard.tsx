@@ -35,12 +35,11 @@ export function SuggestedCareCard({
       className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm"
       aria-label={t('plants.suggestedCare.title')}
     >
-      <p className="font-semibold text-primary-900">Suggested care</p>
+      <p className="font-semibold text-primary-900">{t('plants.suggestedCare.title')}</p>
       <p className="mt-1 text-primary-900">{data.summary}</p>
       {showWateringTaskNotice && data.wateringDays !== null && (
         <p className="mt-2 text-xs text-primary-700">
-          We&rsquo;ll create a watering task on a {data.wateringDays}-day cadence after you save
-          this plant. You can edit it any time.
+          {t('plants.suggestedCare.wateringNotice', { days: data.wateringDays })}
         </p>
       )}
     </div>

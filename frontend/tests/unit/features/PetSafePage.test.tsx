@@ -67,6 +67,12 @@ describe('PetSafePage', () => {
     const results = within(container.querySelector('[aria-live="polite"]')!);
     expect(await results.findByText(/can be harmful to pets/i)).toBeInTheDocument();
     expect(results.getByText(/Dracaena trifasciata/)).toBeInTheDocument();
+    // The plant data stays English (and Latin) whatever language the page is
+    // in, so it says which it is: on a Spanish page a screen reader would
+    // otherwise read it by Spanish rules.
+    expect(results.getByText(/Dracaena trifasciata/)).toHaveAttribute('lang', 'la');
+    const englishData = container.querySelectorAll('main [lang="en"]');
+    expect(englishData.length).toBeGreaterThan(0);
     // Verdict lines for both species are present.
     expect(results.getByText(/Cats:/)).toBeInTheDocument();
     expect(results.getByText(/Dogs:/)).toBeInTheDocument();

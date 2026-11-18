@@ -55,8 +55,8 @@ function daysOverdue(nextDue: string, now = new Date()): number {
   return Math.max(0, calendarDaysBetween(new Date(nextDue), now));
 }
 export function AnalyticsPage() {
-  useDocumentTitle('Analytics');
   const { t } = useTranslation();
+  useDocumentTitle(t('nav.analytics'));
   const { householdId, householdQuery } = useActiveHousehold();
 
   const { data: daily, isLoading: dailyLoading } = useQuery(
@@ -142,9 +142,9 @@ export function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Care rhythm"
+        eyebrow={t('analytics.page.eyebrow')}
         title={t('nav.analytics')}
-        description="How your household is doing on plant care."
+        description={t('analytics.page.description')}
       />
 
       {/* KPI tiles */}
@@ -189,7 +189,7 @@ export function AnalyticsPage() {
         <div className="px-6 py-4 border-b border-primary-100/70">
           <CardHeader
             title={t('analytics.page.last30Days')}
-            description="Completed tasks per day."
+            description={t('analytics.page.last30DaysDescription')}
           />
         </div>
         <div className="p-6">
@@ -202,7 +202,7 @@ export function AnalyticsPage() {
             // draw a flat, empty chart labelled "total 0 tasks" — a fabricated
             // month of doing nothing. Say we don't know instead.
             <p className="py-6 text-center text-sm text-gray-600">
-              We couldn&rsquo;t load the last 30 days just now.
+              {t('analytics.page.dailyFailed')}
             </p>
           ) : (
             <DailyTrend series={daily.series} />
@@ -220,7 +220,7 @@ export function AnalyticsPage() {
                   ? t('analytics.historyWindow.byTaskTypeWindow', { days: windowDays })
                   : t('analytics.historyWindow.byTaskTypeYear', { year: yearNow })
               }
-              description="What kind of care your household has put in."
+              description={t('analytics.page.careMixDescription')}
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -263,7 +263,7 @@ export function AnalyticsPage() {
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
               title={t('analytics.page.atRiskTitle')}
-              description="Tasks overdue — the most-overdue plant first."
+              description={t('analytics.page.atRiskDescription')}
             />
           </div>
           {riskInputsUnavailable ? (
@@ -281,8 +281,12 @@ export function AnalyticsPage() {
                     className="flex items-center gap-3 hover:bg-parchment/60 -mx-6 px-6 py-1 -my-1"
                   >
                     <span className="flex-1 truncate font-medium text-gray-900">{plant.name}</span>
-                    <span className="text-amber-700 tabular-nums">{overdueCount} overdue</span>
-                    <span className="text-gray-500 tabular-nums">worst {worst}d</span>
+                    <span className="text-amber-700 tabular-nums">
+                      {t('analytics.page.overdueCount', { count: overdueCount })}
+                    </span>
+                    <span className="text-gray-500 tabular-nums">
+                      {t('analytics.page.worstDays', { days: worst })}
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -306,7 +310,7 @@ export function AnalyticsPage() {
                   ? t('analytics.historyWindow.topContributorsWindow', { days: windowDays })
                   : t('analytics.historyWindow.topContributorsYear', { year: yearNow })
               }
-              description="Tasks each member has completed."
+              description={t('analytics.page.byMemberDescription')}
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -337,7 +341,7 @@ export function AnalyticsPage() {
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
               title={t('analytics.page.perPlantTitle')}
-              description="Recent task activity by plant."
+              description={t('analytics.page.perPlantDescription')}
             />
           </div>
           <ul className="divide-y divide-primary-100/60">
@@ -362,7 +366,7 @@ export function AnalyticsPage() {
                 <li key={plant.id} className="flex items-center gap-3 px-6 py-3 text-sm">
                   <span className="w-40 truncate text-gray-900">{plant.name}</span>
                   <span className="text-gray-600">
-                    {taskCount} task{taskCount === 1 ? '' : 's'}
+                    {t('analytics.page.taskCount', { count: taskCount })}
                   </span>
                   <span className="ml-auto text-gray-600 tabular-nums">
                     {count === null ? '— completed' : `${count} completed`}
@@ -398,6 +402,7 @@ function movingAverage(values: number[], window = 7): number[] {
 }
 
 function DailyTrend({ series }: DailyTrendProps) {
+  const { t } = useTranslation();
   const max = Math.max(1, ...series.map((d) => d.count));
   const counts = series.map((d) => d.count);
   const avg = movingAverage(counts);
@@ -446,9 +451,7 @@ function DailyTrend({ series }: DailyTrendProps) {
           />
         </svg>
       </div>
-      <p className="text-xs text-gray-600">
-        Bars: tasks completed per day. Line: 7-day moving average.
-      </p>
+      <p className="text-xs text-gray-600">{t('analytics.page.trendLegend')}</p>
     </div>
   );
 }

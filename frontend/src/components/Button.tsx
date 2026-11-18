@@ -1,4 +1,5 @@
 import { forwardRef, ButtonHTMLAttributes } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LoadingSpinner } from './LoadingSpinner';
 import { buttonStyles, type ButtonSize, type ButtonVariant } from './buttonStyles';
 
@@ -26,6 +27,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const { t } = useTranslation();
     return (
       <button
         ref={ref}
@@ -46,7 +48,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {isLoading ? (
           <>
             <LoadingSpinner size="sm" className="mr-2" />
-            <span>Loading...</span>
+            <span>{t('common.loadingDots')}</span>
           </>
         ) : (
           <>

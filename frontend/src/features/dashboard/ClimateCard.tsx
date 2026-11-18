@@ -77,16 +77,13 @@ export function ClimateCard() {
         <div className="flex items-center gap-4">
           <EmptyClimate className="h-20 w-auto shrink-0" />
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Local climate</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Set a household location to get climate-aware care tips — humidity warnings, freeze
-              alerts, and skip-watering nudges.
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900">{t('climate.card.title')}</h3>
+            <p className="mt-1 text-sm text-gray-600">{t('climate.card.setLocationBody')}</p>
             <Link
               to="/household"
               className="mt-2 inline-block text-sm font-medium text-primary-700 hover:underline"
             >
-              Add household location →
+              {t('climate.card.setLocationLink')}
             </Link>
           </div>
         </div>
@@ -104,8 +101,8 @@ export function ClimateCard() {
           </h3>
           {data.weather ? (
             <p className="mt-1 text-sm text-gray-600">
-              {Math.round(data.weather.tempC)}°C · {Math.round(data.weather.humidity)}% outdoor
-              humidity
+              {Math.round(data.weather.tempC)}°C ·{' '}
+              {t('climate.card.outdoorHumidity', { percent: Math.round(data.weather.humidity) })}
               {data.weather.description && ` · ${data.weather.description}`}
             </p>
           ) : (

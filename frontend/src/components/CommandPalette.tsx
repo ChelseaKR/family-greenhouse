@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Combobox, Dialog, Transition } from '@headlessui/react';
 import { useNavigate } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { MagnifyingGlassIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 import { plantService, type Plant, type Task } from '@/services/plantService';
@@ -163,7 +163,7 @@ export function CommandPalette() {
                     {results.some((r) => r.kind === 'plant') && (
                       <li>
                         <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
-                          Plants
+                          {t('nav.plants')}
                         </h2>
                         <ul className="text-sm text-gray-700">
                           {results
@@ -196,7 +196,7 @@ export function CommandPalette() {
                     {results.some((r) => r.kind === 'task') && (
                       <li>
                         <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
-                          Tasks
+                          {t('nav.tasks')}
                         </h2>
                         <ul className="text-sm text-gray-700">
                           {results
@@ -244,7 +244,7 @@ export function CommandPalette() {
                         it: an empty result was the one outcome of typing here
                         that a screen reader never heard (WCAG 4.1.3). */}
                     <p className="mt-2 text-sm text-gray-500" role="status">
-                      No matches for &ldquo;{query}&rdquo;.
+                      {t('commandPalette.noMatches', { query })}
                     </p>
                   </div>
                 )}
@@ -253,11 +253,14 @@ export function CommandPalette() {
                     parchment, where gray-500 is 4.2:1. */}
                 {query === '' && (
                   <p className="px-6 py-8 text-center text-sm text-gray-600">
-                    Type to search plants and tasks. Press{' '}
-                    <kbd className="rounded-sm border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
-                      Esc
-                    </kbd>{' '}
-                    to close.
+                    <Trans
+                      i18nKey="commandPalette.hint"
+                      components={{
+                        kbd: (
+                          <kbd className="rounded-sm border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs" />
+                        ),
+                      }}
+                    />
                   </p>
                 )}
               </Combobox>

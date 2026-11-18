@@ -29,7 +29,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <LoadingSpinner size="sm" />
-        Loading photos…
+        {t('plants.photoTimeline.loading')}
       </div>
     );
   }
@@ -38,7 +38,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
   return (
     <section aria-label={t('plants.photoTimeline.title')}>
       <h2 id={headingId} className="text-sm font-semibold text-ink mb-2">
-        Photo timeline
+        {t('plants.photoTimeline.title')}
       </h2>
       {/* tabIndex 0: the strip scrolls sideways and holds nothing focusable,
           so without a tab stop a keyboard user could not reach the photos

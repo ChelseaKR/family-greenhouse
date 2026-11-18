@@ -72,7 +72,7 @@ export function PlantImageUpload({
       // (the backend confirm step enforces the same limit server-side).
       const blob = await prepareImageForUpload(file);
       if (blob.size > MAX_BYTES) {
-        throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+        throw new Error(t('plants.photoUpload.tooLarge', { max: MAX_BYTES / 1024 / 1024 }));
       }
       // The presign request carries the blob's content type and size, and
       // the PUT must send exactly that Content-Type and that many bytes
@@ -125,7 +125,7 @@ export function PlantImageUpload({
     const file = e.target.files?.[0];
     if (!file || upload.isPending) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError('Image must be a JPEG, PNG, or WebP file.');
+      setError(t('plants.photoUpload.wrongType'));
       e.target.value = '';
       return;
     }
@@ -209,11 +209,9 @@ export function PlantImageUpload({
             )}
           >
             <PhotoIcon className="h-4 w-4" aria-hidden="true" />
-            {upload.isPending ? 'Uploading photo…' : 'Upload photo'}
+            {upload.isPending ? t('plants.photoUpload.uploading') : t('plants.photoUpload.upload')}
           </label>
-          <p className="mt-1 text-xs text-gray-600">
-            JPEG, PNG, or WebP. Up to 5 MB after resizing.
-          </p>
+          <p className="mt-1 text-xs text-gray-600">{t('plants.photoUpload.formats')}</p>
         </div>
       )}
       {/* Always in the document, so it is a live region before it has anything
@@ -248,7 +246,7 @@ export function PlantImageUpload({
             upload.mutate(lastFile);
           }}
         >
-          Try again
+          {t('common.retry')}
         </Button>
       )}
     </div>

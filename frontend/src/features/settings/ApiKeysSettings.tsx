@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { TrashIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -130,12 +130,12 @@ export function ApiKeysSettings() {
       <Card>
         <CardHeader
           title={t('settings.tabs.apiKeys')}
-          description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing API-key entitlement; paid plan changes are paused."
+          description={t('settings.apiKeysPanel.description')}
         />
 
         {createdPlaintext && (
           <Alert variant="success" className="mb-4">
-            <p className="font-medium">New key created — copy it now, it won't be shown again.</p>
+            <p className="font-medium">{t('settings.apiKeysPanel.created')}</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
               <code className="min-w-0 flex-1 rounded-sm bg-white px-2 py-1 text-xs font-mono break-all">
                 {createdPlaintext}
@@ -156,12 +156,12 @@ export function ApiKeysSettings() {
                   setCopyError(false);
                 }}
               >
-                Dismiss
+                {t('chat.proposal.dismiss')}
               </Button>
             </div>
             {copyError && (
               <p className="mt-2 text-sm text-red-700" role="alert">
-                Could not copy automatically. Select the key and copy it manually.
+                {t('settings.apiKeysPanel.copyFailed')}
               </p>
             )}
           </Alert>
@@ -188,7 +188,7 @@ export function ApiKeysSettings() {
                   placeholder={t('settings.apiKeysPanel.labelPlaceholder')}
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  helperText="Shown in the list to identify the key — can't be changed later."
+                  helperText={t('settings.apiKeysPanel.labelHelper')}
                 />
               </div>
               <Button
@@ -196,15 +196,12 @@ export function ApiKeysSettings() {
                 isLoading={createMutation.isPending}
                 disabled={!label.trim() || scopes.length === 0}
               >
-                Issue key
+                {t('settings.apiKeysPanel.issue')}
               </Button>
             </div>
             <fieldset>
-              <legend className="label">Scopes</legend>
-              <p className="mb-2 text-xs text-gray-600">
-                Grant only what the key needs. A request to an endpoint outside the key&rsquo;s
-                scopes is refused with a 403.
-              </p>
+              <legend className="label">{t('settings.apiKeysPanel.scopes')}</legend>
+              <p className="mb-2 text-xs text-gray-600">{t('settings.apiKeysPanel.scopesHelp')}</p>
               <div className="flex flex-wrap gap-4">
                 {API_SCOPES.map((scope) => (
                   <label key={scope} className="flex items-center gap-2 text-sm text-gray-700">
@@ -224,7 +221,9 @@ export function ApiKeysSettings() {
                 </Alert>
               )}
               {scopes.length === 0 && (
-                <p className="mt-1 text-xs text-red-600">Select at least one scope.</p>
+                <p className="mt-1 text-xs text-red-600">
+                  {t('settings.apiKeysPanel.scopeRequired')}
+                </p>
               )}
             </fieldset>
           </div>
@@ -235,7 +234,7 @@ export function ApiKeysSettings() {
         <div className="px-6 py-4 border-b border-gray-200">
           <CardHeader
             title={keysUnavailable ? 'Active keys' : `Active keys (${keysQuery.data?.length ?? 0})`}
-            description="Revoking is immediate — clients using the key will start getting 401 on the next request."
+            description={t('settings.apiKeysPanel.revokeDescription')}
           />
         </div>
         {revokeMutation.isError && (
@@ -248,7 +247,7 @@ export function ApiKeysSettings() {
             {t('settings.apiKeys.loadFailed')} {getErrorMessage(keysQuery.error)}
           </Alert>
         ) : !keysQuery.data || keysQuery.data.length === 0 ? (
-          <p className="p-6 text-sm text-gray-600">No keys yet.</p>
+          <p className="p-6 text-sm text-gray-600">{t('settings.apiKeysPanel.none')}</p>
         ) : (
           <ul className="divide-y divide-gray-200">
             {keysQuery.data.map((key) => (
@@ -259,10 +258,18 @@ export function ApiKeysSettings() {
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 truncate">{key.label}</p>
                   <p className="text-xs text-gray-600">
-                    fg_… <span className="font-mono">{key.last4}</span> · Issued{' '}
-                    {new Date(key.createdAt).toLocaleDateString()}
+                    <Trans
+                      i18nKey="settings.apiKeysPanel.keyLine"
+                      values={{
+                        last4: key.last4,
+                        date: new Date(key.createdAt).toLocaleDateString(),
+                      }}
+                      components={{ mono: <span className="font-mono" /> }}
+                    />
                     {key.lastUsedAt &&
-                      ` · Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`}
+                      ` · ${t('settings.apiKeysPanel.lastUsed', {
+                        date: new Date(key.lastUsedAt).toLocaleDateString(),
+                      })}`}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(key.scopes ?? []).map((scope) => (
@@ -284,7 +291,7 @@ export function ApiKeysSettings() {
                     leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
                     aria-label={`Revoke key ${key.label}`}
                   >
-                    Revoke
+                    {t('caretaker.seats.revoke')}
                   </Button>
                 )}
               </li>
@@ -298,8 +305,8 @@ export function ApiKeysSettings() {
         onClose={() => setRevokeId(null)}
         onConfirm={() => revokeId && revokeMutation.mutate(revokeId)}
         title={t('settings.apiKeysPanel.revokeConfirmTitle')}
-        message="The key will stop working immediately. Anything currently using it will get 401 on the next request."
-        confirmLabel="Revoke"
+        message={t('settings.apiKeysPanel.revokeConfirmMessage')}
+        confirmLabel={t('caretaker.seats.revoke')}
         variant="danger"
         isLoading={revokeMutation.isPending}
       />

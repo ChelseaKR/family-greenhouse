@@ -162,7 +162,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                     className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">{t('common.close')}</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
@@ -171,7 +171,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
                   as="h3"
                   className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
-                  Edit plant
+                  {t('plants.editTitle')}
                 </Dialog.Title>
 
                 {mutation.isError && (
@@ -254,17 +254,17 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                   <div>
                     <label htmlFor="notes" className="label">
-                      Notes
+                      {t('plants.notesLabel')}
                     </label>
                     <textarea id="notes" rows={4} className="input" {...register('notes')} />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={handleClose}>
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button type="submit" isLoading={mutation.isPending}>
-                      Save changes
+                      {t('householdChannel.save')}
                     </Button>
                   </div>
                 </form>

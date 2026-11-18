@@ -36,8 +36,8 @@ import { LockedFeature } from '@/components/LockedFeature';
  * docs/chat-rag-design.md for the full design.
  */
 export function ChatPage() {
-  useDocumentTitle('Plant Care Chat');
   const { t } = useTranslation();
+  useDocumentTitle(t('chat.page.documentTitle'));
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
@@ -65,7 +65,7 @@ export function ChatPage() {
   // Names the conversation log after the page heading.
   const headingId = useId();
   // Spoken by the status region while a reply is on its way.
-  const replyingLabel = 'Plant care chat is replying';
+  const replyingLabel = t('chat.page.replying');
   const chatPlanId = effectivePlanId(subscriptionQuery.data);
   const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
 
@@ -233,7 +233,7 @@ export function ChatPage() {
         <CardHeader
           as="h1"
           title={t('chat.page.title')}
-          description="Ask questions about your household."
+          description={t('chat.page.errorDescription')}
         />
         <Alert variant="warning">{t('chat.availabilityCheckFailed')}</Alert>
       </Card>
@@ -258,19 +258,16 @@ export function ChatPage() {
           <div className="min-w-0">
             <h1 id={headingId} className="font-serif text-2xl text-ink flex items-center gap-2">
               <SparklesIcon className="h-6 w-6 text-primary-600" />
-              Plant care chat
+              {t('chat.page.title')}
             </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Ask about your plants, tasks, or local climate. Answers are based on your household's
-              actual data and a curated plant-care knowledge base.
-            </p>
+            <p className="text-sm text-gray-600 mt-1">{t('chat.page.intro')}</p>
           </div>
           {budget && (
             <div
               className="w-full text-left text-xs text-gray-600 sm:w-auto sm:text-right"
               title={`${budgetPct}% of monthly chat budget used`}
             >
-              {budgetPct}% used this month
+              {t('chat.page.budgetUsed', { percent: budgetPct })}
               <div className="mt-1 h-1.5 w-full overflow-hidden rounded-sm bg-gray-200 sm:w-32">
                 <div
                   className={`h-full ${lowBudget ? 'bg-amber-500' : 'bg-primary-600'}`}
@@ -293,11 +290,11 @@ export function ChatPage() {
       >
         {messages.length === 0 && !isSending && (
           <div className="max-w-md mx-auto text-center text-sm text-gray-500 mt-12">
-            <p>Try asking:</p>
+            <p>{t('chat.page.tryAsking')}</p>
             <ul className="mt-3 space-y-1">
-              <li>"What plants do I have?"</li>
-              <li>"Why does my monstera have brown leaf tips?"</li>
-              <li>"Set up a watering schedule for Bertha."</li>
+              <li>{t('chat.page.example1')}</li>
+              <li>{t('chat.page.example2')}</li>
+              <li>{t('chat.page.example3')}</li>
             </ul>
           </div>
         )}
@@ -448,10 +445,7 @@ export function ChatPage() {
           </button>
         </div>
         {bedrockConsent.dialog}
-        <p className="text-xs text-gray-600 mt-1">
-          AI-generated — verify before acting. Refuses pesticide / dosage advice. Reminder
-          suggestions wait for your confirm before being created.
-        </p>
+        <p className="text-xs text-gray-600 mt-1">{t('chat.page.disclaimer')}</p>
       </div>
     </div>
   );

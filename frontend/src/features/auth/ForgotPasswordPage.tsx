@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
@@ -12,15 +13,19 @@ import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-});
+// Built per call so the message is in the visitor's language, as
+// loginSchema.ts does.
+const makeForgotPasswordSchema = (t: TFunction) =>
+  z.object({
+    email: z.string().email(t('auth.invalidEmail')),
+  });
 
-type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+type ForgotPasswordFormData = z.infer<ReturnType<typeof makeForgotPasswordSchema>>;
 
 export function ForgotPasswordPage() {
   const { t } = useTranslation();
-  useDocumentTitle('Forgot password');
+  useDocumentTitle(t('auth.forgot.documentTitle'));
+  const schema = useMemo(() => makeForgotPasswordSchema(t), [t]);
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +35,7 @@ export function ForgotPasswordPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<ForgotPasswordFormData>({
-    resolver: zodResolver(forgotPasswordSchema),
+    resolver: zodResolver(schema),
   });
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
@@ -49,14 +54,13 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      contentLang="en"
       title={t('auth.forgot.title')}
-      subtitle="Enter your email and we'll send you a reset code."
+      subtitle={t('auth.forgot.subtitle')}
       footer={
         <>
-          Remember your password?{' '}
+          {t('auth.forgot.remember')}{' '}
           <Link to="/login" className="font-medium text-primary-700 hover:text-primary-600">
-            Sign in
+            {t('auth.signInButton')}
           </Link>
         </>
       }
@@ -78,7 +82,7 @@ export function ForgotPasswordPage() {
         />
 
         <Button type="submit" className="w-full" isLoading={isLoading}>
-          Send reset code
+          {t('auth.forgot.submit')}
         </Button>
       </form>
     </AuthShell>

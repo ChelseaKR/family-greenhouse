@@ -90,7 +90,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
       </dl>
 
       {data.sections.length === 0 ? (
-        <p className="text-sm text-gray-500">No care guide available for this species yet.</p>
+        <p className="text-sm text-gray-500">{t('plants.careGuideCard.none')}</p>
       ) : (
         <div className="space-y-4">
           {data.sections.map((s) => (

@@ -464,7 +464,10 @@ export function NotificationSettings() {
   if (!householdId) {
     return (
       <Card>
-        <CardHeader title={t('notifications.title')} description="How you want to be reminded" />
+        <CardHeader
+          title={t('notifications.title')}
+          description={t('notifications.panel.shortDescription')}
+        />
         <Alert variant="info">{t('notifications.householdRequired')}</Alert>
       </Card>
     );
@@ -481,7 +484,10 @@ export function NotificationSettings() {
   if (!prefsQuery.data) {
     return (
       <Card>
-        <CardHeader title={t('notifications.title')} description="How you want to be reminded" />
+        <CardHeader
+          title={t('notifications.title')}
+          description={t('notifications.panel.shortDescription')}
+        />
         <div className="space-y-3">
           <Alert variant="error">
             {getErrorMessage(prefsQuery.error) || t('notifications.loadFailed')}
@@ -518,7 +524,7 @@ export function NotificationSettings() {
     <Card>
       <CardHeader
         title={t('notifications.title')}
-        description="Choose how you want to be reminded about overdue plant care."
+        description={t('notifications.panel.description')}
       />
       <div className="space-y-6">
         {error && <Alert variant="error">{error}</Alert>}
@@ -550,7 +556,7 @@ export function NotificationSettings() {
                 isLoading={disableBrowser.isPending}
                 disabled={browserMutationPending}
               >
-                Turn off
+                {t('nativePush.turnOff')}
               </Button>
             ) : (
               <Button
@@ -558,7 +564,7 @@ export function NotificationSettings() {
                 isLoading={enableBrowser.isPending}
                 disabled={!canEnableBrowser || browserMutationPending}
               >
-                Enable
+                {t('notifications.panel.enable')}
               </Button>
             )}
           </div>
@@ -574,11 +580,11 @@ export function NotificationSettings() {
         {/* Email */}
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
-            <p className="text-sm font-medium text-gray-900">Email</p>
+            <p className="text-sm font-medium text-gray-900">{t('notifications.email')}</p>
             <p className="text-sm text-gray-600">{t('notifications.emailDescription')}</p>
           </div>
           <label className="inline-flex items-center cursor-pointer">
-            <span className="sr-only">Email notifications</span>
+            <span className="sr-only">{t('notifications.panel.emailToggle')}</span>
             <input
               {...nativeSwitchRole()}
               type="checkbox"
@@ -728,7 +734,7 @@ export function NotificationSettings() {
         <div className="space-y-3 pb-2">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Text message</p>
+              <p className="text-sm font-medium text-gray-900">{t('notifications.sms')}</p>
               <p className="text-sm text-gray-600">
                 {!smsAvailable
                   ? t('notifications.smsUnavailableShort')
@@ -738,7 +744,7 @@ export function NotificationSettings() {
               </p>
             </div>
             <label className="inline-flex items-center cursor-pointer">
-              <span className="sr-only">SMS notifications</span>
+              <span className="sr-only">{t('notifications.panel.smsToggle')}</span>
               <input
                 {...nativeSwitchRole()}
                 type="checkbox"
@@ -766,7 +772,7 @@ export function NotificationSettings() {
                     // manager fill it (WCAG 1.3.5).
                     autoComplete="tel"
                     placeholder="+15551234567"
-                    helperText="E.164 format. Leading + and country code required."
+                    helperText={t('notifications.panel.phoneHelper')}
                     value={phoneDraft}
                     disabled={sendCodeMutation.isPending || verifyCodeMutation.isPending}
                     onChange={(e) => {
@@ -831,15 +837,13 @@ export function NotificationSettings() {
         {/* Pest alerts */}
         <div className="flex items-center justify-between gap-4 pt-2">
           <div>
-            <p className="text-sm font-medium text-gray-900">Seasonal pest heads-ups</p>
-            <p className="text-sm text-gray-600">
-              When a plant in your household enters a typical pest season (spider mites, aphids,
-              etc.) we&rsquo;ll send one nudge per quarter to check it. Only fires for plants with a
-              recognized species.
+            <p className="text-sm font-medium text-gray-900">
+              {t('notifications.panel.pestTitle')}
             </p>
+            <p className="text-sm text-gray-600">{t('notifications.panel.pestDescription')}</p>
           </div>
           <label className="inline-flex items-center cursor-pointer">
-            <span className="sr-only">Pest alerts</span>
+            <span className="sr-only">{t('notifications.panel.pestToggle')}</span>
             <input
               {...nativeSwitchRole()}
               type="checkbox"
@@ -854,7 +858,9 @@ export function NotificationSettings() {
         {/* Quiet hours */}
         <div className="space-y-3 pt-2">
           <div>
-            <p className="text-sm font-medium text-gray-900">Quiet hours</p>
+            <p className="text-sm font-medium text-gray-900">
+              {t('notifications.panel.quietHours')}
+            </p>
             <p className="text-sm text-gray-600">{t('notifications.quietHoursDescription')}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-start">
@@ -864,7 +870,7 @@ export function NotificationSettings() {
               value={dndStartDraft}
               disabled={saveMutation.isPending}
               onChange={(e) => setDndStartDraft(e.target.value)}
-              helperText="24-hour, your local time"
+              helperText={t('notifications.panel.quietStartHelper')}
             />
             <Input
               label={t('notifications.panel.quietEnd')}
@@ -872,11 +878,11 @@ export function NotificationSettings() {
               value={dndEndDraft}
               disabled={saveMutation.isPending}
               onChange={(e) => setDndEndDraft(e.target.value)}
-              helperText="If end is earlier than start, the window wraps past midnight."
+              helperText={t('notifications.panel.quietEndHelper')}
             />
             <div>
               <label htmlFor="dnd-tz" className="label">
-                Timezone
+                {t('notifications.panel.timezone')}
               </label>
               <input
                 id="dnd-tz"
@@ -898,7 +904,7 @@ export function NotificationSettings() {
               }}
               disabled={saveMutation.isPending || (!dndStartDraft && !dndEndDraft)}
             >
-              Clear
+              {t('notifications.panel.clear')}
             </Button>
             <Button
               onClick={() =>

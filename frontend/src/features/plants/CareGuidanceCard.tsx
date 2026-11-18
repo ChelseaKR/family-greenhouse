@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { findCareGuide } from '@/utils/careGuidance';
 
@@ -14,6 +15,7 @@ interface CareGuidanceCardProps {
  * no match — we never fabricate guidance.
  */
 export function CareGuidanceCard({ species, plantName }: CareGuidanceCardProps) {
+  const { t } = useTranslation();
   const guide = findCareGuide(species);
   if (!guide) return null;
   return (
@@ -26,19 +28,19 @@ export function CareGuidanceCard({ species, plantName }: CareGuidanceCardProps) 
       </div>
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-6 text-sm">
         <div>
-          <dt className="font-semibold text-gray-900">Light</dt>
+          <dt className="font-semibold text-gray-900">{t('plants.careGuidance.light')}</dt>
           <dd className="mt-1 text-gray-700">{guide.light}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-gray-900">Water</dt>
+          <dt className="font-semibold text-gray-900">{t('plants.careGuidance.water')}</dt>
           <dd className="mt-1 text-gray-700">{guide.water}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-gray-900">Humidity</dt>
+          <dt className="font-semibold text-gray-900">{t('plants.careGuidance.humidity')}</dt>
           <dd className="mt-1 text-gray-700">{guide.humidity}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-gray-900">Notes</dt>
+          <dt className="font-semibold text-gray-900">{t('plants.notesLabel')}</dt>
           <dd className="mt-1 text-gray-700">{guide.notes}</dd>
         </div>
       </dl>

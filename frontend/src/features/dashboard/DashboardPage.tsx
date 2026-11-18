@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import {
   ArrowUturnLeftIcon,
@@ -64,16 +64,9 @@ import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { formatDate, formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
-const filterLabels: Record<ActivityFilter, string> = {
-  all: 'All',
-  tasks: 'Tasks',
-  plants: 'Plants',
-  people: 'People',
-};
-
 export function DashboardPage() {
-  useDocumentTitle('Dashboard');
   const { t } = useTranslation();
+  useDocumentTitle(t('nav.dashboard'));
   const user = useAuthStore((state) => state.user);
   const { householdId, householdQuery } = useActiveHousehold();
   // Who may add a plant: any member of the active household, admin or not
@@ -241,9 +234,11 @@ export function DashboardPage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Your household"
-        title={`Welcome back, ${user?.name?.split(' ')[0] ?? 'friend'}`}
-        description="Here's what's happening with your plants today."
+        eyebrow={t('dashboard.eyebrow')}
+        title={t('dashboard.welcomeBack', {
+          name: user?.name?.split(' ')[0] ?? t('dashboard.welcomeFallbackName'),
+        })}
+        description={t('dashboard.description')}
         art={<DashboardHeaderArt className="w-full h-auto" />}
       />
 
@@ -289,7 +284,7 @@ export function DashboardPage() {
             }
             action={
               <Link to="/tasks" className={buttonStyles({ variant: 'secondary', size: 'sm' })}>
-                View all
+                {t('dashboard.viewAll')}
               </Link>
             }
           />
@@ -390,7 +385,7 @@ export function DashboardPage() {
           title={t('dashboard.yourPlants')}
           action={
             <Link to="/plants/new" className={buttonStyles({ size: 'sm' })}>
-              Add plant
+              {t('plants.addPlant')}
             </Link>
           }
         />
@@ -424,13 +419,13 @@ export function DashboardPage() {
         ) : !plants || plants.length === 0 ? (
           <EmptyState
             title={t('plants.list.emptyTitle')}
-            description="Name it, or start from a species suggestion and we'll fill in the care details. We'll handle the watering reminders from there."
+            description={t('dashboard.firstPlantDescription')}
             action={
               <Link to="/plants/new" className={buttonStyles({ size: 'lg' })}>
-                Add your first plant
+                {t('plants.addFirst')}
               </Link>
             }
-            hint="Takes less than a minute."
+            hint={t('dashboard.firstPlantHint')}
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 large-text:grid-cols-1">
@@ -475,7 +470,7 @@ export function DashboardPage() {
         <div className="px-6 py-5 border-b border-primary-100/70 space-y-3">
           <CardHeader
             title={t('dashboard.recentActivity')}
-            description="What's been happening in your household"
+            description={t('dashboard.recentActivityDescription')}
           />
           {activity && activity.length > 0 && (
             <div
@@ -496,7 +491,7 @@ export function DashboardPage() {
                       : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
                   )}
                 >
-                  {filterLabels[f]}
+                  {t(`dashboard.activityFilters.${f}`)}
                 </button>
               ))}
             </div>
@@ -517,14 +512,12 @@ export function DashboardPage() {
         ) : !activity || activity.length === 0 ? (
           <div className="p-8 text-center">
             <EmptyActivity className="mx-auto h-32 w-auto" />
-            <p className="mt-3 text-sm text-gray-500">
-              No activity yet — complete a task to see it here.
-            </p>
+            <p className="mt-3 text-sm text-gray-500">{t('dashboard.activityEmpty')}</p>
           </div>
         ) : filteredActivity.length === 0 ? (
           <div className="p-6">
             <p className="text-sm text-gray-500">
-              No {filterLabels[activityFilter].toLowerCase()} activity in the last 50 events.
+              {t(`dashboard.activityEmptyFiltered.${activityFilter}`)}
             </p>
           </div>
         ) : (
@@ -571,14 +564,18 @@ function ActivityRow({ event }: ActivityRowProps) {
   let icon = <CheckIcon className="h-4 w-4 text-primary-700" aria-hidden="true" />;
   let iconTone = 'bg-primary-100 ring-primary-200/60';
   let body: React.ReactNode;
+  // The actor and what they acted on are set in medium weight inside a
+  // sentence whose word order belongs to the catalog.
+  const bold = { b: <span className="font-medium" /> };
 
   switch (event.type) {
     case 'task.completed':
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> completed{' '}
-          <span className="font-medium">{event.payload.taskType ?? 'a task'}</span>
-        </>
+        <Trans
+          i18nKey="activity.taskCompleted"
+          values={{ actor: actorName, task: event.payload.taskType ?? t('activity.aTask') }}
+          components={bold}
+        />
       );
       break;
     case 'task.snoozed': {
@@ -587,17 +584,20 @@ function ActivityRow({ event }: ActivityRowProps) {
       const p = event.payload;
       const reasonLabel =
         p.reason === 'rain'
-          ? 'rain expected'
+          ? t('activity.reasonRain')
           : p.reason === 'frost'
-            ? 'frost expected'
+            ? t('activity.reasonFrost')
             : p.reason === 'heat'
-              ? 'heat wave'
+              ? t('activity.reasonHeat')
               : null;
       body = (
         <>
-          <span className="font-medium">{actorName}</span> snoozed{' '}
-          <span className="font-medium">{p.taskType ?? 'a task'}</span>
-          {p.plantName && <> for {p.plantName}</>}
+          <Trans
+            i18nKey="activity.taskSnoozed"
+            values={{ actor: actorName, task: p.taskType ?? t('activity.aTask') }}
+            components={bold}
+          />
+          {p.plantName && <> {t('activity.forPlant', { plant: p.plantName })}</>}
           {reasonLabel && <> ({reasonLabel})</>}
         </>
       );
@@ -608,20 +608,25 @@ function ActivityRow({ event }: ActivityRowProps) {
       const p = event.payload;
       body = (
         <>
-          <span className="font-medium">{actorName}</span>{' '}
-          {event.type === 'task.claimed' ? 'claimed' : 'released'}{' '}
-          <span className="font-medium">{p.taskType ?? 'a task'}</span>
-          {p.plantName && <> for {p.plantName}</>}
+          <Trans
+            i18nKey={
+              event.type === 'task.claimed' ? 'activity.taskClaimed' : 'activity.taskReleased'
+            }
+            values={{ actor: actorName, task: p.taskType ?? t('activity.aTask') }}
+            components={bold}
+          />
+          {p.plantName && <> {t('activity.forPlant', { plant: p.plantName })}</>}
         </>
       );
       break;
     }
     case 'plant.created':
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> added{' '}
-          <span className="font-medium">{event.payload.plantName ?? 'a plant'}</span>
-        </>
+        <Trans
+          i18nKey="activity.plantAdded"
+          values={{ actor: actorName, plant: event.payload.plantName ?? t('activity.aPlant') }}
+          components={bold}
+        />
       );
       break;
     case 'plants.imported': {
@@ -724,32 +729,29 @@ function ActivityRow({ event }: ActivityRowProps) {
         });
         break;
       }
-      const verb = {
-        'plant.archived': 'archived',
-        'plant.restored': 'restored',
-        'plant.died': 'recorded the loss of',
-        'plant.gave_away': 'recorded giving away',
+      const sentence = {
+        'plant.archived': 'activity.plantArchived',
+        'plant.restored': 'activity.plantRestored',
+        'plant.died': 'activity.plantDied',
+        'plant.gave_away': 'activity.plantGaveAway',
       }[event.type];
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> {verb}{' '}
-          <span className="font-medium">{p.plantName ?? 'a plant'}</span>
-        </>
+        <Trans
+          i18nKey={sentence}
+          values={{ actor: actorName, plant: p.plantName ?? t('activity.aPlant') }}
+          components={bold}
+        />
       );
       break;
     }
     case 'photo.uploaded':
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> uploaded a new photo
-        </>
+        <Trans i18nKey="activity.photoUploaded" values={{ actor: actorName }} components={bold} />
       );
       break;
     case 'member.joined':
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> joined the household
-        </>
+        <Trans i18nKey="activity.memberJoined" values={{ actor: actorName }} components={bold} />
       );
       break;
     case 'member.left': {
@@ -793,9 +795,7 @@ function ActivityRow({ event }: ActivityRowProps) {
     }
     case 'plant.deleted':
       body = (
-        <>
-          <span className="font-medium">{actorName}</span> deleted a plant
-        </>
+        <Trans i18nKey="activity.plantDeleted" values={{ actor: actorName }} components={bold} />
       );
       break;
     case 'task.help_requested': {
