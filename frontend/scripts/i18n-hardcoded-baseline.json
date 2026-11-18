@@ -38,33 +38,5 @@
     "features/sitter/SitPage.tsx": 9,
     "features/status/StatusPage.tsx": 15
   },
-  "attributes": {
-    "components/CommandPalette.tsx": 1,
-    "components/Toaster.tsx": 2,
-    "features/analytics/AnalyticsPage.tsx": 8,
-    "features/auth/AuthShell.tsx": 1,
-    "features/auth/ForgotPasswordPage.tsx": 2,
-    "features/auth/ResetPasswordPage.tsx": 6,
-    "features/chat/ChatPage.tsx": 5,
-    "features/dashboard/DashboardPage.tsx": 8,
-    "features/dashboard/YearInReviewCard.tsx": 3,
-    "features/household/HouseholdPage.tsx": 5,
-    "features/household/SitterLinksCard.tsx": 3,
-    "features/petsafe/PetSafePage.tsx": 6,
-    "features/plants/AddPlantPage.tsx": 7,
-    "features/plants/AddTaskModal.tsx": 4,
-    "features/plants/CareGuideCard.tsx": 5,
-    "features/plants/CareReportCard.tsx": 3,
-    "features/plants/EditPlantModal.tsx": 1,
-    "features/plants/EditTaskModal.tsx": 2,
-    "features/plants/PhotoTimeline.tsx": 1,
-    "features/plants/PlantDetailPage.tsx": 5,
-    "features/plants/SuggestedCareCard.tsx": 1,
-    "features/settings/AccountSettings.tsx": 9,
-    "features/settings/ApiKeysSettings.tsx": 4,
-    "features/settings/NotificationSettings.tsx": 7,
-    "features/settings/SettingsPage.tsx": 1,
-    "features/sitter/SitPage.tsx": 2,
-    "features/status/StatusPage.tsx": 1
-  }
+  "attributes": {}
 }

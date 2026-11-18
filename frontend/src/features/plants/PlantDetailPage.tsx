@@ -699,7 +699,7 @@ export function PlantDetailPage() {
       {/* Tasks. `id="care"` is the fragment a single-task reminder links to. */}
       <Card id="care">
         <CardHeader
-          title="Care Tasks"
+          title={t('plants.detailPage.careTasksTitle')}
           description={
             (plant.status ?? 'active') === 'active'
               ? 'Scheduled care tasks for this plant'
@@ -720,7 +720,7 @@ export function PlantDetailPage() {
 
         {plant.upcomingTasks.length === 0 ? (
           <EmptyState
-            title="No tasks"
+            title={t('plants.detailPage.noTasksTitle')}
             description="Add care tasks to track watering, fertilizing, and more."
             action={
               (plant.status ?? 'active') === 'active' ? (
@@ -765,7 +765,10 @@ export function PlantDetailPage() {
 
       {/* Care history */}
       <Card>
-        <CardHeader title="Care History" description="Recent task completions" />
+        <CardHeader
+          title={t('plants.detailPage.careHistoryTitle')}
+          description="Recent task completions"
+        />
 
         {/* Who last watered this — the household question the app could
             already answer and never did (ADR 0016). Read off the plant
@@ -984,7 +987,7 @@ function TaskRow({
               className="w-full sm:w-auto"
               onClick={onEdit}
               leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
-              aria-label="Edit task"
+              aria-label={t('tasks.modal.editTitle')}
             >
               Edit
             </Button>
@@ -1051,7 +1054,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
           'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           isSnoozing && 'opacity-50 cursor-wait'
         )}
-        aria-label="Snooze task"
+        aria-label={t('plants.detailPage.snoozeTask')}
       >
         <ClockIcon className="h-4 w-4" aria-hidden="true" />
         Snooze

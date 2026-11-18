@@ -186,7 +186,7 @@ export function SitterLinksCard({
   return (
     <Card>
       <CardHeader
-        title="Plant-sitter links"
+        title={t('household.sitterLinks.cardTitle')}
         description="Going away? Share a temporary link so a neighbour or friend can see due care, plant names, current spaces, and placement notes — never your saved city, private notes, or member details. The link expires on its own, and you can revoke it any time."
       />
 
@@ -198,7 +198,7 @@ export function SitterLinksCard({
 
       {created ? (
         <div className="space-y-3">
-          <Alert variant="success" title="Your sitter link is ready">
+          <Alert variant="success" title={t('household.sitterLinks.readyTitle')}>
             Copy it now — for security, we won’t show the full link again. You can always create a
             new one.
           </Alert>
@@ -292,7 +292,7 @@ export function SitterLinksCard({
             <Input
               className="sm:col-span-2"
               label={t('household.sitterLinks.labelLabel')}
-              placeholder="e.g. The Smiths’ plants"
+              placeholder={t('household.sitterLinks.labelPlaceholder')}
               value={label}
               maxLength={60}
               onChange={(e) => setLabel(e.target.value)}

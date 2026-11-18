@@ -200,9 +200,9 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
 
                   {taskType === 'custom' && (
                     <Input
-                      label="Custom task name"
+                      label={t('tasks.modal.customTaskName')}
                       required
-                      placeholder="e.g., Rotate plant"
+                      placeholder={t('tasks.modal.customTaskPlaceholder')}
                       error={errors.customType?.message}
                       {...register('customType')}
                     />
@@ -219,7 +219,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                     increaseLabel={t('tasks.frequencyStepper.more')}
                   >
                     <Input
-                      label="Frequency (days)"
+                      label={t('tasks.modal.frequencyDays')}
                       type="number"
                       min={1}
                       max={365}
@@ -237,7 +237,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                       id="notes"
                       rows={3}
                       className="input"
-                      placeholder="Any notes about this task..."
+                      placeholder={t('tasks.modal.notesPlaceholder')}
                       {...register('notes')}
                     />
                   </div>

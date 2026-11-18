@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { plantService } from '@/services/plantService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
@@ -15,6 +16,7 @@ interface PhotoTimelineProps {
  * already shows the latest, so a one-item timeline would be visual noise).
  */
 export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
+  const { t } = useTranslation();
   const householdId = useActiveHouseholdId();
   const refreshSignedPhotos = useRefreshSignedPhotos();
   const headingId = useId();
@@ -34,7 +36,7 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
   if (!photos || photos.length <= 1) return null;
 
   return (
-    <section aria-label="Photo timeline">
+    <section aria-label={t('plants.photoTimeline.title')}>
       <h2 id={headingId} className="text-sm font-semibold text-ink mb-2">
         Photo timeline
       </h2>

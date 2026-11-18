@@ -7,6 +7,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
+import { useTranslation } from 'react-i18next';
 import { useToastStore, type ToastVariant } from '@/store/toastStore';
 
 const variantConfig: Record<
@@ -65,6 +66,8 @@ function useIsHydrated(): boolean {
  * auto-dismiss alone isn't accessible.
  */
 export function Toaster() {
+  // `translate`, not `t`: the toast being drawn is called `t` below.
+  const { t: translate } = useTranslation();
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
   const hydrated = useIsHydrated();
@@ -78,7 +81,7 @@ export function Toaster() {
     <div
       className="pointer-events-none fixed right-4 bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-4 z-50 native-frame:bottom-[calc(env(safe-area-inset-bottom)+0.75rem)]! ml-auto flex max-w-sm flex-col gap-2 sm:left-auto sm:w-full"
       role="region"
-      aria-label="Notifications"
+      aria-label={translate('notifications.title')}
       aria-live="polite"
     >
       {toasts.map((t) => {
@@ -114,7 +117,7 @@ export function Toaster() {
             <button
               type="button"
               onClick={() => dismiss(t.id)}
-              aria-label="Dismiss notification"
+              aria-label={translate('toasts.dismiss')}
               className={clsx(
                 'inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-sm opacity-70 transition-opacity hover:opacity-100',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',

@@ -471,6 +471,18 @@
         "body": "Crea una cuenta para preparar tu hogar o inicia sesión en el que ya compartes."
       },
       "haveAccount": "Ya tengo una cuenta"
+    },
+    "shellHomeLabel": "Family Greenhouse, Crecer juntos, inicio",
+    "forgot": {
+      "title": "Restablece tu contraseña"
+    },
+    "reset": {
+      "noEmailTitle": "Falta el correo electrónico",
+      "doneTitle": "Contraseña restablecida",
+      "title": "Elige una contraseña nueva",
+      "codeLabel": "Código de restablecimiento",
+      "newPassword": "Contraseña nueva",
+      "confirmNewPassword": "Confirmar la contraseña nueva"
     }
   },
   "joinInvite": {
@@ -986,6 +998,37 @@
       "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "Me encargo yo",
       "taskDue": "Vence: {{date}}"
+    },
+    "add": {
+      "photoPreviewAlt": "Vista previa de la foto elegida de la planta",
+      "namePlaceholder": "p. ej., Monstera del salón",
+      "recommendedTasks": "Tareas de cuidado recomendadas",
+      "tagsPlaceholder": "tropical, poca luz, regalo",
+      "notesPlaceholder": "Cualquier otra nota sobre esta planta…"
+    },
+    "careGuideCard": {
+      "title": "Guía de cuidado",
+      "family": "Familia",
+      "cycle": "Ciclo",
+      "hardinessZones": "Zonas de rusticidad",
+      "sunlight": "Luz solar"
+    },
+    "careReport": {
+      "title": "Informe de cuidados",
+      "activeTasks": "Tareas activas",
+      "lastCare": "Último cuidado"
+    },
+    "photoTimeline": {
+      "title": "Cronología de fotos"
+    },
+    "detailPage": {
+      "careTasksTitle": "Tareas de cuidado",
+      "noTasksTitle": "Sin tareas",
+      "careHistoryTitle": "Historial de cuidados",
+      "snoozeTask": "Posponer tarea"
+    },
+    "suggestedCare": {
+      "title": "Cuidados sugeridos"
     }
   },
   "importPlants": {
@@ -1221,6 +1264,14 @@
       "everyDay": "Cada día",
       "everyNDays": "Cada {n} días",
       "notes": "Notas"
+    },
+    "modal": {
+      "customTaskName": "Nombre de la tarea personalizada",
+      "customTaskPlaceholder": "p. ej., Girar la planta",
+      "frequencyDays": "Frecuencia (días)",
+      "notesPlaceholder": "Cualquier nota sobre esta tarea…",
+      "editTitle": "Editar tarea",
+      "customName": "Nombre personalizado"
     }
   },
   "today": {
@@ -1398,7 +1449,10 @@
       "endedOn": "{{label}}: terminó el {{date}}",
       "sharedBy": "Compartido por {{name}}",
       "anotherMember": "otro miembro",
-      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
+      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo",
+      "cardTitle": "Enlaces de cuidador",
+      "readyTitle": "Tu enlace de cuidador está listo",
+      "labelPlaceholder": "p. ej., Las plantas de los García"
     },
     "goingAway": {
       "titleEntry": "¿Te vas de viaje?",
@@ -1477,6 +1531,12 @@
       "billingMessage": "Salir no cancela ni cambia el plan: el resto del hogar lo conserva. Si se cobra en tu tarjeta, cambia el método de pago o cancela el plan en Ajustes → Estado del plan antes de salir: una vez fuera, no podrás acceder a la facturación de este hogar.",
       "billingConfirm": "Salir de todos modos",
       "left": "Has salido de {{household}}."
+    },
+    "page": {
+      "inviteTitle": "Invitar miembros",
+      "cityLabel": "Ciudad",
+      "cityPlaceholder": "p. ej., Austin, US",
+      "removeMemberTitle": "Quitar miembro"
     }
   },
   "householdAudit": {
@@ -1565,6 +1625,9 @@
       "tooLarge": "Esa foto es demasiado grande para enviarla, incluso después de reducirla. Prueba con otra.",
       "readFailed": "No hemos podido leer esa foto. Prueba con otra, por favor.",
       "sendFailed": "No hemos podido enviar esa foto ahora mismo. Vuelve a intentarlo en un momento."
+    },
+    "page": {
+      "inactiveTitle": "Este enlace de cuidador ya no está activo"
     }
   },
   "sitterBrief": {
@@ -1936,6 +1999,20 @@
       "rate": "Califica Family Greenhouse",
       "rateHint": "Abre la App Store, donde puedes dejar una calificación o una reseña.",
       "rateHintAndroid": "Abre Google Play, donde puedes dejar una calificación o una reseña."
+    },
+    "page": {
+      "sectionsNav": "Secciones de ajustes"
+    },
+    "accountPanel": {
+      "profileTitle": "Perfil",
+      "changePasswordTitle": "Cambiar contraseña",
+      "downloadTitle": "Descargar mis datos",
+      "deleteConfirmTitle": "¿Eliminar la cuenta?"
+    },
+    "apiKeysPanel": {
+      "labelLabel": "Etiqueta de la clave",
+      "labelPlaceholder": "Home Assistant, script personal…",
+      "revokeConfirmTitle": "¿Revocar la clave de API?"
     }
   },
   "security": {
@@ -2084,7 +2161,12 @@
     "emailStatusUnknown": "No pudimos comprobar si tu correo se está entregando en este momento. Esto no significa ni que sí ni que no: inténtalo de nuevo en un instante.",
     "emailResume": "Reanudar el correo a esta dirección",
     "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío.",
-    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana."
+    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana.",
+    "panel": {
+      "phoneLabel": "Número de teléfono",
+      "quietStart": "Inicio",
+      "quietEnd": "Fin"
+    }
   },
   "pushActions": {
     "done": "{{plant}}: marcada como hecha.",
@@ -2109,6 +2191,9 @@
         "title": "Las etiquetas de plantas no funcionaban",
         "body": "Del 4 de septiembre al 5 de octubre de 2026, las etiquetas de plantas no funcionaron. No se pudieron crear, quitar, listar, escanear ni proteger con PIN las etiquetas, ni completar tareas desde una etiqueta. Se veía «No pudimos cargar tus etiquetas de plantas» en la página de etiquetas, «Eso no funcionó» al cambiar una etiqueta y «Algo salió mal» en la página de escaneo. Se corrigió en la versión 0.39.0 el 5 de octubre."
       }
+    },
+    "page": {
+      "title": "Estado del sistema"
     }
   },
   "mobile": {
@@ -2138,7 +2223,8 @@
     "tooManyTags": "Demasiadas etiquetas"
   },
   "commandPalette": {
-    "title": "Buscar plantas y tareas"
+    "title": "Buscar plantas y tareas",
+    "placeholder": "Buscar plantas y tareas…"
   },
   "chat": {
     "speakerYou": "Tú",
@@ -2172,6 +2258,13 @@
       "assignee": "Asignado a {{name}}",
       "createTask": "Crear tarea",
       "dismiss": "Descartar"
+    },
+    "page": {
+      "title": "Chat de cuidado de plantas",
+      "sources": "Fuentes",
+      "placeholder": "Pregunta por tus plantas…",
+      "messageLabel": "Mensaje del chat",
+      "send": "Enviar"
     }
   },
   "analytics": {
@@ -2232,6 +2325,14 @@
       "backupAssigned": "La próxima tarea de {{task}} de {{plant}} ahora es de {{name}}.",
       "backupFailed": "No pudimos traspasar esa tarea.",
       "noTasks": "No hay tareas activas que traspasar; añade una en la página de la planta."
+    },
+    "page": {
+      "activeTasks": "Tareas activas",
+      "doneLast7Days": "Hechas en los últimos 7 días",
+      "overdueNow": "Atrasadas ahora",
+      "last30Days": "Últimos 30 días",
+      "atRiskTitle": "Plantas en riesgo",
+      "perPlantTitle": "Por planta"
     }
   },
   "climate": {
@@ -3137,6 +3238,13 @@
       "both": "{{name}} no figura en la lista de la ASPCA, así que no podemos dar un veredicto. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
+    },
+    "page": {
+      "title": "¿Es segura esta planta para las mascotas?",
+      "searchLabel": "Buscar la toxicidad de una planta para mascotas",
+      "nameLabel": "Nombre de la planta o de la especie",
+      "namePlaceholder": "p. ej., snake plant, pothos, lily…",
+      "noMatchTitle": "Aún sin resultados"
     }
   },
   "appStore": {
@@ -3189,5 +3297,19 @@
       "title": "¿Enviar esta foto a Plant.id?",
       "body": "Para identificar la planta, Family Greenhouse envía la foto a Plant.id, un servicio de Kindwise, una empresa de la República Checa. Sus condiciones le permiten conservar y reutilizar las fotos que recibe, entre otras cosas para entrenar sus modelos y mostrarlas a sus otros clientes. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
     }
+  },
+  "toasts": {
+    "dismiss": "Descartar notificación"
+  },
+  "dashboard": {
+    "toDoNow": "Por hacer ahora",
+    "yourPlants": "Tus plantas",
+    "recentActivity": "Actividad reciente",
+    "filterActivity": "Filtrar actividad"
+  },
+  "yearInReview": {
+    "totalCompleted": "Total de tareas completadas",
+    "topContributor": "Quien más ha contribuido",
+    "tasksPerWeek": "Tareas por semana"
   }
 }

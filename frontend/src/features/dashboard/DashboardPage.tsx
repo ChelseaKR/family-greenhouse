@@ -260,10 +260,10 @@ export function DashboardPage() {
           directly keeps the shipped spacing and no longer depends on which
           side of the gap the space-y utility happens to own. */}
       <dl className="flex flex-wrap items-baseline gap-x-4 sm:gap-x-8 gap-y-3 mt-10 text-sm">
-        <Metric label="Plants" value={plantCount} />
-        <Metric label="Due today" value={todayCount} />
+        <Metric label={t('nav.plants')} value={plantCount} />
+        <Metric label={t('today.dueToday')} value={todayCount} />
         <Metric
-          label="Overdue"
+          label={t('tasks.list.overdue')}
           value={overdueCount}
           emphasis={overdueCount && overdueCount > 0 ? 'alert' : undefined}
         />
@@ -277,7 +277,7 @@ export function DashboardPage() {
       <Card variant="paper" padding="none">
         <div className="px-6 py-5 border-b border-primary-100/70">
           <CardHeader
-            title="To do now"
+            title={t('dashboard.toDoNow')}
             description={
               // The rest-of-week count belongs here only when there is a list
               // above it to contrast with. With nothing to do, the empty state
@@ -387,7 +387,7 @@ export function DashboardPage() {
       {/* Recent Plants */}
       <Card variant="paper">
         <CardHeader
-          title="Your plants"
+          title={t('dashboard.yourPlants')}
           action={
             <Link to="/plants/new" className={buttonStyles({ size: 'sm' })}>
               Add plant
@@ -423,7 +423,7 @@ export function DashboardPage() {
           </div>
         ) : !plants || plants.length === 0 ? (
           <EmptyState
-            title="Let's add your first plant"
+            title={t('plants.list.emptyTitle')}
             description="Name it, or start from a species suggestion and we'll fill in the care details. We'll handle the watering reminders from there."
             action={
               <Link to="/plants/new" className={buttonStyles({ size: 'lg' })}>
@@ -474,11 +474,15 @@ export function DashboardPage() {
       <Card variant="paper" padding="none">
         <div className="px-6 py-5 border-b border-primary-100/70 space-y-3">
           <CardHeader
-            title="Recent activity"
+            title={t('dashboard.recentActivity')}
             description="What's been happening in your household"
           />
           {activity && activity.length > 0 && (
-            <div role="group" aria-label="Filter activity" className="flex flex-wrap gap-2">
+            <div
+              role="group"
+              aria-label={t('dashboard.filterActivity')}
+              className="flex flex-wrap gap-2"
+            >
               {(['all', 'tasks', 'plants', 'people'] as const).map((f) => (
                 <button
                   key={f}

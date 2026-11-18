@@ -458,6 +458,18 @@
         "body": "Create an account to set up your household, or sign in to the one you already share."
       },
       "haveAccount": "I already have an account"
+    },
+    "shellHomeLabel": "Family Greenhouse, Grow together, home",
+    "forgot": {
+      "title": "Reset your password"
+    },
+    "reset": {
+      "noEmailTitle": "No email on file",
+      "doneTitle": "Password reset",
+      "title": "Set a new password",
+      "codeLabel": "Reset code",
+      "newPassword": "New password",
+      "confirmNewPassword": "Confirm new password"
     }
   },
   "joinInvite": {
@@ -967,6 +979,37 @@
       "doAria": "{{label}}: {{task}} {{plant}}",
       "claim": "I’ll do it",
       "taskDue": "Due: {{date}}"
+    },
+    "add": {
+      "photoPreviewAlt": "Selected plant photo preview",
+      "namePlaceholder": "e.g., Living Room Monstera",
+      "recommendedTasks": "Recommended care tasks",
+      "tagsPlaceholder": "tropical, low-light, gift",
+      "notesPlaceholder": "Any additional notes about this plant..."
+    },
+    "careGuideCard": {
+      "title": "Care guide",
+      "family": "Family",
+      "cycle": "Cycle",
+      "hardinessZones": "Hardiness zones",
+      "sunlight": "Sunlight"
+    },
+    "careReport": {
+      "title": "Care report",
+      "activeTasks": "Active tasks",
+      "lastCare": "Last care"
+    },
+    "photoTimeline": {
+      "title": "Photo timeline"
+    },
+    "detailPage": {
+      "careTasksTitle": "Care Tasks",
+      "noTasksTitle": "No tasks",
+      "careHistoryTitle": "Care History",
+      "snoozeTask": "Snooze task"
+    },
+    "suggestedCare": {
+      "title": "Suggested care"
     }
   },
   "importPlants": {
@@ -1188,6 +1231,14 @@
       "everyDay": "Every day",
       "everyNDays": "Every {n} days",
       "notes": "Notes"
+    },
+    "modal": {
+      "customTaskName": "Custom task name",
+      "customTaskPlaceholder": "e.g., Rotate plant",
+      "frequencyDays": "Frequency (days)",
+      "notesPlaceholder": "Any notes about this task...",
+      "editTitle": "Edit task",
+      "customName": "Custom name"
     }
   },
   "today": {
@@ -1359,7 +1410,10 @@
       "endedOn": "{{label}} — ended {{date}}",
       "sharedBy": "Shared by {{name}}",
       "anotherMember": "another member",
-      "revokeNotYours": "Only its creator or an admin can revoke this"
+      "revokeNotYours": "Only its creator or an admin can revoke this",
+      "cardTitle": "Plant-sitter links",
+      "readyTitle": "Your sitter link is ready",
+      "labelPlaceholder": "e.g. The Smiths’ plants"
     },
     "goingAway": {
       "titleEntry": "Going away?",
@@ -1429,6 +1483,12 @@
       "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Plan status before you leave: once you’ve left, you can’t reach this household’s billing.",
       "billingConfirm": "Leave anyway",
       "left": "You left {{household}}."
+    },
+    "page": {
+      "inviteTitle": "Invite members",
+      "cityLabel": "City",
+      "cityPlaceholder": "e.g. Austin, US",
+      "removeMemberTitle": "Remove member"
     }
   },
   "householdAudit": {
@@ -1515,6 +1575,9 @@
       "tooLarge": "That photo is too large to send, even after shrinking it. Try a different one.",
       "readFailed": "We couldn’t read that photo. Please try another one.",
       "sendFailed": "We couldn’t send that photo just now. Please try again in a moment."
+    },
+    "page": {
+      "inactiveTitle": "This plant-sitting link is no longer active"
     }
   },
   "sitterBrief": {
@@ -1886,6 +1949,20 @@
       "rate": "Rate Family Greenhouse",
       "rateHint": "Opens the App Store, where you can leave a rating or review.",
       "rateHintAndroid": "Opens Google Play, where you can leave a rating or review."
+    },
+    "page": {
+      "sectionsNav": "Settings sections"
+    },
+    "accountPanel": {
+      "profileTitle": "Profile",
+      "changePasswordTitle": "Change password",
+      "downloadTitle": "Download my data",
+      "deleteConfirmTitle": "Delete account?"
+    },
+    "apiKeysPanel": {
+      "labelLabel": "Key label",
+      "labelPlaceholder": "Home Assistant, personal script…",
+      "revokeConfirmTitle": "Revoke API key?"
     }
   },
   "security": {
@@ -2034,7 +2111,12 @@
     "emailStatusUnknown": "We couldn't check whether your email is being delivered right now. This says nothing either way — try again in a moment.",
     "emailResume": "Resume email to this address",
     "emailResumed": "Email resumed. We'll try your address again on the next send.",
-    "reminderPreview": "A reminder reads like “Water the Monstera” and says when it is due. Where your device allows it, the notification itself offers Done and Snooze until tomorrow."
+    "reminderPreview": "A reminder reads like “Water the Monstera” and says when it is due. Where your device allows it, the notification itself offers Done and Snooze until tomorrow.",
+    "panel": {
+      "phoneLabel": "Phone number",
+      "quietStart": "Start",
+      "quietEnd": "End"
+    }
   },
   "pushActions": {
     "done": "{{plant}}: marked done.",
@@ -2059,6 +2141,9 @@
         "title": "Plant tags weren’t working",
         "body": "From September 4 to October 5, 2026, plant tags weren’t working. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. It was fixed in version 0.39.0 on October 5."
       }
+    },
+    "page": {
+      "title": "System status"
     }
   },
   "mobile": {
@@ -2088,7 +2173,8 @@
     "tooManyTags": "Too many tags"
   },
   "commandPalette": {
-    "title": "Search plants and tasks"
+    "title": "Search plants and tasks",
+    "placeholder": "Search plants and tasks..."
   },
   "chat": {
     "speakerYou": "You",
@@ -2121,6 +2207,13 @@
       "assignee": "Assigned to {{name}}",
       "createTask": "Create task",
       "dismiss": "Dismiss"
+    },
+    "page": {
+      "title": "Plant care chat",
+      "sources": "Sources",
+      "placeholder": "Ask about your plants...",
+      "messageLabel": "Chat message",
+      "send": "Send"
     }
   },
   "analytics": {
@@ -2177,6 +2270,14 @@
       "backupAssigned": "The next {{task}} on {{plant}} is now {{name}}’s.",
       "backupFailed": "We couldn’t hand that task over.",
       "noTasks": "No active tasks to hand over — add one on the plant page."
+    },
+    "page": {
+      "activeTasks": "Active tasks",
+      "doneLast7Days": "Done last 7 days",
+      "overdueNow": "Overdue now",
+      "last30Days": "Last 30 days",
+      "atRiskTitle": "Plants at risk",
+      "perPlantTitle": "Per plant"
     }
   },
   "climate": {
@@ -3072,6 +3173,13 @@
       "both": "{{name}} isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "cats": "The ASPCA’s list gives no verdict on {{name}} for cats, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "dogs": "The ASPCA’s list gives no verdict on {{name}} for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}})."
+    },
+    "page": {
+      "title": "Is this plant safe for pets?",
+      "searchLabel": "Search plant pet-toxicity",
+      "nameLabel": "Plant or species name",
+      "namePlaceholder": "e.g. snake plant, pothos, lily…",
+      "noMatchTitle": "No match yet"
     }
   },
   "appStore": {
@@ -3124,5 +3232,19 @@
       "title": "Send this photo to Plant.id?",
       "body": "To identify the plant, Family Greenhouse sends the photo to Plant.id, a service run by Kindwise in the Czech Republic. Its terms let it keep and reuse the photos it receives, including to train its models and to show them to its other customers. We ask once on this device; our privacy policy has the details."
     }
+  },
+  "toasts": {
+    "dismiss": "Dismiss notification"
+  },
+  "dashboard": {
+    "toDoNow": "To do now",
+    "yourPlants": "Your plants",
+    "recentActivity": "Recent activity",
+    "filterActivity": "Filter activity"
+  },
+  "yearInReview": {
+    "totalCompleted": "Total tasks completed",
+    "topContributor": "Top contributor",
+    "tasksPerWeek": "Tasks per week"
   }
 }

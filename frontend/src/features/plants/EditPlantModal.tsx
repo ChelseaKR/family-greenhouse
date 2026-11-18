@@ -182,7 +182,7 @@ export function EditPlantModal({ plant, isOpen, onClose }: EditPlantModalProps) 
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <Input
-                    label="Plant name"
+                    label={t('plants.nameLabel')}
                     required
                     error={errors.name?.message}
                     {...register('name')}

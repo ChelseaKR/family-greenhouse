@@ -150,7 +150,7 @@ export function CommandPalette() {
                     ref={inputRef}
                     className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
                     aria-label={t('commandPalette.title')}
-                    placeholder="Search plants and tasks..."
+                    placeholder={t('commandPalette.placeholder')}
                     onChange={(e) => setQuery(e.target.value)}
                   />
                 </div>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
@@ -18,6 +19,7 @@ const forgotPasswordSchema = z.object({
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation();
   useDocumentTitle('Forgot password');
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthShell
       contentLang="en"
-      title="Reset your password"
+      title={t('auth.forgot.title')}
       subtitle="Enter your email and we'll send you a reset code."
       footer={
         <>
@@ -67,7 +69,7 @@ export function ForgotPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Input
-          label="Email address"
+          label={t('auth.email')}
           type="email"
           autoComplete="email"
           required

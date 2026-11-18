@@ -143,17 +143,17 @@ export function AnalyticsPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Care rhythm"
-        title="Analytics"
+        title={t('nav.analytics')}
         description="How your household is doing on plant care."
       />
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiTile label="Plants" value={plantCount} />
-        <KpiTile label="Active tasks" value={taskCount} />
-        <KpiTile label="Done last 7 days" value={last7DaysCount} />
+        <KpiTile label={t('nav.plants')} value={plantCount} />
+        <KpiTile label={t('analytics.page.activeTasks')} value={taskCount} />
+        <KpiTile label={t('analytics.page.doneLast7Days')} value={last7DaysCount} />
         <KpiTile
-          label="Overdue now"
+          label={t('analytics.page.overdueNow')}
           value={overdueCount}
           // An unknown overdue count is not a calm one: only a real, positive
           // reading earns the reassuring-or-alarming tone either way.
@@ -187,7 +187,10 @@ export function AnalyticsPage() {
       {/* 30-day trend */}
       <Card padding="none">
         <div className="px-6 py-4 border-b border-primary-100/70">
-          <CardHeader title="Last 30 days" description="Completed tasks per day." />
+          <CardHeader
+            title={t('analytics.page.last30Days')}
+            description="Completed tasks per day."
+          />
         </div>
         <div className="p-6">
           {dailyLoading ? (
@@ -259,7 +262,7 @@ export function AnalyticsPage() {
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
             <CardHeader
-              title="Plants at risk"
+              title={t('analytics.page.atRiskTitle')}
               description="Tasks overdue — the most-overdue plant first."
             />
           </div>
@@ -332,7 +335,10 @@ export function AnalyticsPage() {
       {plants && tasks && (
         <Card padding="none">
           <div className="px-6 py-4 border-b border-primary-100/70">
-            <CardHeader title="Per plant" description="Recent task activity by plant." />
+            <CardHeader
+              title={t('analytics.page.perPlantTitle')}
+              description="Recent task activity by plant."
+            />
           </div>
           <ul className="divide-y divide-primary-100/60">
             {plants

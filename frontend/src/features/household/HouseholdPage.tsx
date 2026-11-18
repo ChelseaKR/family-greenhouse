@@ -242,7 +242,7 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Invite members"
+            title={t('household.page.inviteTitle')}
             description="Generate an invite link to add family members to your household"
           />
 
@@ -458,7 +458,7 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Location"
+            title={t('plants.locationLabel')}
             description="Used for climate-aware care tips (humidity warnings, freeze alerts, etc.)."
           />
           {climateQuery.isLoading ? (
@@ -514,8 +514,8 @@ export function HouseholdPage() {
               }}
             >
               <Input
-                label="City"
-                placeholder="e.g. Austin, US"
+                label={t('household.page.cityLabel')}
+                placeholder={t('household.page.cityPlaceholder')}
                 value={locationDraft}
                 onChange={(e) => setLocationDraft(e.target.value)}
                 helperText="Add a country if your city name is ambiguous."
@@ -661,7 +661,7 @@ export function HouseholdPage() {
         isOpen={!!memberToRemove}
         onClose={() => setMemberToRemove(null)}
         onConfirm={() => memberToRemove && removeMemberMutation.mutate(memberToRemove)}
-        title="Remove member"
+        title={t('household.page.removeMemberTitle')}
         message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, their caretaker seats, and any API key they issued."
         confirmLabel="Remove"
         isLoading={removeMemberMutation.isPending}

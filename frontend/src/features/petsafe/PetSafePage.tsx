@@ -180,7 +180,7 @@ export function PetSafePage() {
     <PublicShell>
       <PageIntro
         eyebrow="Pet safety"
-        title="Is this plant safe for pets?"
+        title={t('petSafety.page.title')}
         lede={
           <>
             Type a houseplant name and we’ll tell you, plainly, whether it’s toxic to cats and dogs.
@@ -201,13 +201,13 @@ export function PetSafePage() {
       <form
         className="mt-10"
         role="search"
-        aria-label="Search plant pet-toxicity"
+        aria-label={t('petSafety.page.searchLabel')}
         onSubmit={(e) => e.preventDefault()}
       >
         <Input
           type="search"
-          label="Plant or species name"
-          placeholder="e.g. snake plant, pothos, lily…"
+          label={t('petSafety.page.nameLabel')}
+          placeholder={t('petSafety.page.namePlaceholder')}
           autoComplete="off"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -222,7 +222,7 @@ export function PetSafePage() {
           polite announcement this wrapper exists to make. */}
       <div className="mt-8 space-y-4" aria-live="polite" aria-busy={status === 'loading'}>
         {status === 'error' && (
-          <Alert variant="error" title="Something went wrong" live="off">
+          <Alert variant="error" title={t('common.error')} live="off">
             We couldn’t check that just now. Give it another moment and try again.
           </Alert>
         )}
@@ -232,7 +232,7 @@ export function PetSafePage() {
         ))}
 
         {showEmpty && (
-          <Alert variant="info" title="No match yet" live="off">
+          <Alert variant="info" title={t('petSafety.page.noMatchTitle')} live="off">
             We don’t have that one in our checker yet. Double-check the spelling, or try the plant’s
             common name. When in doubt, assume it’s unsafe and keep it out of reach until you can
             confirm with your vet or the ASPCA.

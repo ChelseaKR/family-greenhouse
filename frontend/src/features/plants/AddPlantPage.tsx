@@ -529,7 +529,7 @@ export function AddPlantPage() {
                 {pickedPreview ? (
                   <img
                     src={pickedPreview}
-                    alt="Selected plant photo preview"
+                    alt={t('plants.add.photoPreviewAlt')}
                     width={128}
                     height={128}
                     decoding="async"
@@ -653,9 +653,9 @@ export function AddPlantPage() {
 
           <div className="space-y-1">
             <Input
-              label="Plant name"
+              label={t('plants.nameLabel')}
               required
-              placeholder="e.g., Living Room Monstera"
+              placeholder={t('plants.add.namePlaceholder')}
               error={errors.name?.message}
               {...register('name')}
             />
@@ -688,7 +688,7 @@ export function AddPlantPage() {
           {suggestedTaskTemplate && (
             <div
               className="rounded-lg border border-primary-200 bg-primary-50 p-4"
-              aria-label="Recommended care tasks"
+              aria-label={t('plants.add.recommendedTasks')}
             >
               <label
                 htmlFor="auto-add-care-tasks"
@@ -766,8 +766,8 @@ export function AddPlantPage() {
           </fieldset>
 
           <Input
-            label="Tags"
-            placeholder="tropical, low-light, gift"
+            label={t('plants.list.tags')}
+            placeholder={t('plants.add.tagsPlaceholder')}
             helperText="Comma-separated. Up to 10 tags. Useful for filtering later."
             error={errors.tags?.message}
             {...register('tags')}
@@ -781,7 +781,7 @@ export function AddPlantPage() {
               id="notes"
               rows={4}
               className="input"
-              placeholder="Any additional notes about this plant..."
+              placeholder={t('plants.add.notesPlaceholder')}
               {...register('notes')}
             />
             {errors.notes?.message && <p className="error-message">{errors.notes.message}</p>}

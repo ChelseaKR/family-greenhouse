@@ -70,7 +70,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
   return (
     <Card>
       <CardHeader
-        title="Care guide"
+        title={t('plants.careGuideCard.title')}
         description={
           data.commonName !== data.scientificName
             ? `${data.commonName} · ${data.scientificName}`
@@ -79,10 +79,14 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm">
-        {data.family && <Stat label="Family" value={data.family} />}
-        {data.cycle && <Stat label="Cycle" value={data.cycle} />}
-        {data.hardinessZone && <Stat label="Hardiness zones" value={data.hardinessZone} />}
-        {data.sunlight.length > 0 && <Stat label="Sunlight" value={data.sunlight.join(', ')} />}
+        {data.family && <Stat label={t('plants.careGuideCard.family')} value={data.family} />}
+        {data.cycle && <Stat label={t('plants.careGuideCard.cycle')} value={data.cycle} />}
+        {data.hardinessZone && (
+          <Stat label={t('plants.careGuideCard.hardinessZones')} value={data.hardinessZone} />
+        )}
+        {data.sunlight.length > 0 && (
+          <Stat label={t('plants.careGuideCard.sunlight')} value={data.sunlight.join(', ')} />
+        )}
       </dl>
 
       {data.sections.length === 0 ? (

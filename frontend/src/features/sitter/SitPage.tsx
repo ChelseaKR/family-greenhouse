@@ -197,7 +197,7 @@ export function SitPage() {
 
       {status === 'inactive' && (
         <div className="mt-8">
-          <Alert variant="info" title="This plant-sitting link is no longer active">
+          <Alert variant="info" title={t('sitter.page.inactiveTitle')}>
             The link may have expired or been turned off by the person who shared it. If you’re
             still helping out, ask them for a fresh link.
           </Alert>
@@ -206,7 +206,7 @@ export function SitPage() {
 
       {status === 'error' && (
         <div className="mt-8">
-          <Alert variant="error" title="Something went wrong">
+          <Alert variant="error" title={t('common.error')}>
             We couldn’t load the plant-sitting list just now. Please refresh and try again in a
             moment.
           </Alert>

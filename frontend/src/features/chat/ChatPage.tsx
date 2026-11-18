@@ -232,7 +232,7 @@ export function ChatPage() {
       <Card>
         <CardHeader
           as="h1"
-          title="Plant care chat"
+          title={t('chat.page.title')}
           description="Ask questions about your household."
         />
         <Alert variant="warning">{t('chat.availabilityCheckFailed')}</Alert>
@@ -356,7 +356,10 @@ export function ChatPage() {
               </p>
             )}
             {m.role === 'assistant' && m.citations && m.citations.length > 0 && (
-              <ul className="mt-2 max-w-xl space-y-1 text-xs text-gray-600" aria-label="Sources">
+              <ul
+                className="mt-2 max-w-xl space-y-1 text-xs text-gray-600"
+                aria-label={t('chat.page.sources')}
+              >
                 {m.citations.map((citation) => (
                   <li key={`${citation.source}:${citation.fetch_date}`}>
                     <a
@@ -425,21 +428,21 @@ export function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your plants..."
+            placeholder={t('chat.page.placeholder')}
             // Not disabled while a reply is on its way: a disabled field
             // cannot hold focus, so sending a question threw the keyboard
             // user to the top of the page, every time (WCAG 2.4.3).
             // handleSend refuses a second send until this one is back.
             rows={1}
             className="min-h-[44px] min-w-0 flex-1 resize-none rounded-lg border border-primary-200 px-3 py-3 text-base focus:border-primary-500 focus:ring-2 focus:ring-primary-500 disabled:bg-parchment/60 sm:text-sm"
-            aria-label="Chat message"
+            aria-label={t('chat.page.messageLabel')}
           />
           <button
             type="button"
             onClick={handleSend}
             disabled={!input.trim() || isSending}
             className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-lg bg-primary-700 px-3 py-2 text-white hover:bg-primary-800 forced-colors:border disabled:cursor-not-allowed disabled:bg-primary-200"
-            aria-label="Send"
+            aria-label={t('chat.page.send')}
           >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>

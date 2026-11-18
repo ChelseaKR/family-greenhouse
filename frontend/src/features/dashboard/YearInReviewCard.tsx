@@ -47,14 +47,17 @@ export function YearInReviewCard() {
         />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6">
-        <Stat label="Total tasks completed" value={review.totalCompletions.toLocaleString()} />
         <Stat
-          label="Top contributor"
+          label={t('yearInReview.totalCompleted')}
+          value={review.totalCompletions.toLocaleString()}
+        />
+        <Stat
+          label={t('yearInReview.topContributor')}
           value={topMember ? (topMember.name ?? t('analytics.unknownMember')) : '—'}
           sub={topMember ? `${topMember.count} tasks` : undefined}
         />
         <Stat
-          label="Tasks per week"
+          label={t('yearInReview.tasksPerWeek')}
           value={(review.totalCompletions / weeksElapsed(year)).toFixed(1)}
         />
       </div>

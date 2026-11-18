@@ -108,7 +108,7 @@ export function StatusPage() {
     <PublicShell>
       <PageIntro
         eyebrow="Health check"
-        title="System status"
+        title={t('statusPage.page.title')}
         lede="Live state of the services that keep Family Greenhouse running."
       />
 

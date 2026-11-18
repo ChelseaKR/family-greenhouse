@@ -464,7 +464,7 @@ export function NotificationSettings() {
   if (!householdId) {
     return (
       <Card>
-        <CardHeader title="Notifications" description="How you want to be reminded" />
+        <CardHeader title={t('notifications.title')} description="How you want to be reminded" />
         <Alert variant="info">{t('notifications.householdRequired')}</Alert>
       </Card>
     );
@@ -481,7 +481,7 @@ export function NotificationSettings() {
   if (!prefsQuery.data) {
     return (
       <Card>
-        <CardHeader title="Notifications" description="How you want to be reminded" />
+        <CardHeader title={t('notifications.title')} description="How you want to be reminded" />
         <div className="space-y-3">
           <Alert variant="error">
             {getErrorMessage(prefsQuery.error) || t('notifications.loadFailed')}
@@ -517,7 +517,7 @@ export function NotificationSettings() {
   return (
     <Card>
       <CardHeader
-        title="Notifications"
+        title={t('notifications.title')}
         description="Choose how you want to be reminded about overdue plant care."
       />
       <div className="space-y-6">
@@ -759,7 +759,7 @@ export function NotificationSettings() {
               <div className="flex items-end gap-3">
                 <div className="flex-1">
                   <Input
-                    label="Phone number"
+                    label={t('notifications.panel.phoneLabel')}
                     type="tel"
                     inputMode="tel"
                     // The person's own number: let the browser or a password
@@ -859,7 +859,7 @@ export function NotificationSettings() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-start">
             <Input
-              label="Start"
+              label={t('notifications.panel.quietStart')}
               type="time"
               value={dndStartDraft}
               disabled={saveMutation.isPending}
@@ -867,7 +867,7 @@ export function NotificationSettings() {
               helperText="24-hour, your local time"
             />
             <Input
-              label="End"
+              label={t('notifications.panel.quietEnd')}
               type="time"
               value={dndEndDraft}
               disabled={saveMutation.isPending}
@@ -884,7 +884,7 @@ export function NotificationSettings() {
                 value={tzDraft}
                 disabled={saveMutation.isPending}
                 onChange={(e) => setTzDraft(e.target.value)}
-                placeholder="America/New_York"
+                placeholder={t('household.timeZonePlaceholder')}
               />
             </div>
           </div>

@@ -129,7 +129,7 @@ export function ApiKeysSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader
-          title="API keys"
+          title={t('settings.tabs.apiKeys')}
           description="Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing API-key entitlement; paid plan changes are paused."
         />
 
@@ -184,8 +184,8 @@ export function ApiKeysSettings() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <Input
-                  label="Key label"
-                  placeholder="Home Assistant, personal script…"
+                  label={t('settings.apiKeysPanel.labelLabel')}
+                  placeholder={t('settings.apiKeysPanel.labelPlaceholder')}
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   helperText="Shown in the list to identify the key — can't be changed later."
@@ -297,7 +297,7 @@ export function ApiKeysSettings() {
         isOpen={!!revokeId}
         onClose={() => setRevokeId(null)}
         onConfirm={() => revokeId && revokeMutation.mutate(revokeId)}
-        title="Revoke API key?"
+        title={t('settings.apiKeysPanel.revokeConfirmTitle')}
         message="The key will stop working immediately. Anything currently using it will get 401 on the next request."
         confirmLabel="Revoke"
         variant="danger"

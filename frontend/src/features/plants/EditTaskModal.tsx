@@ -182,7 +182,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
 
                   {watchType === 'custom' && (
                     <Input
-                      label="Custom name"
+                      label={t('tasks.modal.customName')}
                       error={errors.customType?.message}
                       {...register('customType')}
                     />
@@ -199,7 +199,7 @@ export function EditTaskModal({ task, isOpen, onClose }: EditTaskModalProps) {
                     increaseLabel={t('tasks.frequencyStepper.more')}
                   >
                     <Input
-                      label="Frequency (days)"
+                      label={t('tasks.modal.frequencyDays')}
                       type="number"
                       inputMode="numeric"
                       min={1}

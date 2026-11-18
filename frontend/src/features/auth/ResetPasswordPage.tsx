@@ -3,6 +3,7 @@ import { useLocation, Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
@@ -30,6 +31,7 @@ const resetPasswordSchema = z
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation();
   useDocumentTitle('Reset password');
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function ResetPasswordPage() {
     return (
       <AuthShell
         contentLang="en"
-        title="No email on file"
+        title={t('auth.reset.noEmailTitle')}
         subtitle="Start the reset flow from the beginning."
       >
         <p className="text-center text-gray-700">No email address provided.</p>
@@ -88,7 +90,7 @@ export function ResetPasswordPage() {
     return (
       <AuthShell
         contentLang="en"
-        title="Password reset"
+        title={t('auth.reset.doneTitle')}
         subtitle="You're all set — sign back in to continue."
       >
         <Alert variant="success" className="mb-6">
@@ -104,7 +106,7 @@ export function ResetPasswordPage() {
   return (
     <AuthShell
       contentLang="en"
-      title="Set a new password"
+      title={t('auth.reset.title')}
       subtitle={
         <>
           Enter the code we sent to <strong>{email}</strong>
@@ -119,7 +121,7 @@ export function ResetPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Input
-          label="Reset code"
+          label={t('auth.reset.codeLabel')}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
@@ -131,7 +133,7 @@ export function ResetPasswordPage() {
         />
 
         <Input
-          label="New password"
+          label={t('auth.reset.newPassword')}
           type="password"
           autoComplete="new-password"
           minLength={12}
@@ -142,7 +144,7 @@ export function ResetPasswordPage() {
         />
 
         <Input
-          label="Confirm new password"
+          label={t('auth.reset.confirmNewPassword')}
           type="password"
           autoComplete="new-password"
           minLength={12}

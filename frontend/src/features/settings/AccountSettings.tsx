@@ -162,7 +162,7 @@ export function AccountSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader
-          title="Profile"
+          title={t('settings.accountPanel.profileTitle')}
           description={
             hasHousehold
               ? "Update how your name shows up in your household. Email changes aren't supported yet."
@@ -190,7 +190,7 @@ export function AccountSettings() {
           }}
         >
           <Input
-            label="Name"
+            label={t('plants.list.groupName')}
             type="text"
             // The person's own name (WCAG 1.3.5).
             autoComplete="name"
@@ -220,7 +220,7 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Change password"
+          title={t('settings.accountPanel.changePasswordTitle')}
           description="You'll need your current password — we don't keep it on the server."
         />
         {changePassword.isError && (
@@ -241,7 +241,7 @@ export function AccountSettings() {
           }}
         >
           <Input
-            label="Current password"
+            label={t('security.totp.currentPassword')}
             type="password"
             autoComplete="current-password"
             required
@@ -249,7 +249,7 @@ export function AccountSettings() {
             onChange={(e) => setOldPassword(e.target.value)}
           />
           <Input
-            label="New password"
+            label={t('auth.reset.newPassword')}
             type="password"
             autoComplete="new-password"
             required
@@ -259,7 +259,7 @@ export function AccountSettings() {
             helperText="At least 12 characters with uppercase, lowercase, and number."
           />
           <Input
-            label="Confirm new password"
+            label={t('auth.reset.confirmNewPassword')}
             type="password"
             autoComplete="new-password"
             required
@@ -278,7 +278,7 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Download my data"
+          title={t('settings.accountPanel.downloadTitle')}
           description="Export your data anytime. The full export is a single JSON document covering your profile, notification preferences, household memberships, and the plants and tasks of every household you belong to. The CSV option is a spreadsheet-friendly subset (plants and tasks for your active household)."
         />
         {(exportJson.isError || exportData.isError) && (
@@ -328,7 +328,7 @@ export function AccountSettings() {
 
       <Card>
         <CardHeader
-          title="Delete account"
+          title={t('footer.deleteAccount')}
           description="Permanently removes your login and your household membership. If you're the only admin in a multi-member household, promote someone else first."
         />
         {/* Deleting the account cannot cancel an App Store subscription: Apple
@@ -354,7 +354,7 @@ export function AccountSettings() {
         isOpen={deleteConfirm}
         onClose={() => setDeleteConfirm(false)}
         onConfirm={() => deleteMe.mutate()}
-        title="Delete account?"
+        title={t('settings.accountPanel.deleteConfirmTitle')}
         message="Your login and notification tokens are removed, and you lose access to every household. Shared care history is retained without your name. This cannot be undone."
         confirmLabel="Yes, delete"
         variant="danger"

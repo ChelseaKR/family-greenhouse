@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { speciesService } from '@/services/speciesService';
 
 interface SuggestedCareCardProps {
@@ -19,6 +20,7 @@ export function SuggestedCareCard({
   perenualSpeciesId,
   showWateringTaskNotice,
 }: SuggestedCareCardProps) {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['species', 'care-suggestions', perenualSpeciesId],
     queryFn: () => speciesService.careSuggestions(perenualSpeciesId!),
@@ -31,7 +33,7 @@ export function SuggestedCareCard({
   return (
     <div
       className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm"
-      aria-label="Suggested care"
+      aria-label={t('plants.suggestedCare.title')}
     >
       <p className="font-semibold text-primary-900">Suggested care</p>
       <p className="mt-1 text-primary-900">{data.summary}</p>

@@ -104,7 +104,7 @@ export function SettingsPage() {
       </label>
 
       <div className="hidden border-b border-primary-100/80 sm:block native-frame:hidden">
-        <nav aria-label="Settings sections">
+        <nav aria-label={t('settings.page.sectionsNav')}>
           <div
             className="-mb-px flex gap-3 overflow-x-auto sm:gap-6"
             role="tablist"
