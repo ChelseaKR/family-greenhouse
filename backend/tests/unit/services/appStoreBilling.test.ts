@@ -82,6 +82,15 @@ vi.mock('../../../src/utils/dynamodb.js', () => {
   };
 });
 
+const captured = vi.hoisted(
+  () => [] as Array<{ householdId: string; event: string; properties: Record<string, unknown> }>
+);
+vi.mock('../../../src/utils/serverAnalytics.js', () => ({
+  capture: vi.fn(async (householdId: string, event: string, properties = {}) => {
+    captured.push({ householdId, event, properties });
+  }),
+}));
+
 import {
   applyNotification,
   applyVerifiedTransaction,
@@ -123,6 +132,7 @@ function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
 
 beforeEach(() => {
   table.clear();
+  captured.length = 0;
   household('hh-1');
   household('hh-2');
 });
@@ -408,5 +418,86 @@ describe('the double-billing guards', () => {
     expect(await appStoreBlocksWebCheckout('hh-1', NOW)).toBe(true);
     expect(await appStoreBlocksWebCheckout('hh-1', new Date(NOW.getTime() + 31 * DAY))).toBe(false);
     expect(await appStoreBlocksWebCheckout('hh-2', NOW)).toBe(false);
+  });
+});
+
+describe('the App Store purchase product event', () => {
+  const activation = (householdId: string, plan: string, interval: string) => ({
+    householdId,
+    event: 'subscription_activated',
+    properties: { plan, interval, store: 'app_store' },
+  });
+
+  it('sends subscription_activated once when a Production purchase is bound to its household', async () => {
+    const token = await getOrCreateAccountToken('hh-1');
+    await applyVerifiedTransaction(tx({ appAccountToken: token }), null, 'hh-1', NOW);
+    expect(captured).toEqual([activation('hh-1', 'garden', 'month')]);
+  });
+
+  it('names the yearly cadence for the yearly product', async () => {
+    await applyVerifiedTransaction(
+      tx({
+        productId: 'net.familygreenhouse.app.garden.yearly',
+        expiresDate: NOW.getTime() + 365 * DAY,
+      }),
+      null,
+      'hh-1',
+      NOW
+    );
+    expect(captured).toEqual([activation('hh-1', 'garden', 'year')]);
+  });
+
+  it('sends nothing more for a renewal, a restore or a repeat of the same subscription', async () => {
+    await applyVerifiedTransaction(tx(), null, 'hh-1', NOW);
+    const renewed = tx({
+      transactionId: '2000000002',
+      signedDate: NOW.getTime() + 30 * DAY,
+      expiresDate: NOW.getTime() + 60 * DAY,
+    });
+    expect((await applyVerifiedTransaction(renewed, null, null, NOW)).outcome).toBe('applied');
+    expect((await applyVerifiedTransaction(renewed, null, 'hh-1', NOW)).outcome).toBe('applied');
+    expect(captured).toHaveLength(1);
+  });
+
+  it('sends nothing for a Sandbox purchase, even where Sandbox is opted in', async () => {
+    vi.stubEnv('APP_STORE_ENVIRONMENTS', 'Production,Sandbox');
+    const result = await applyVerifiedTransaction(
+      tx({ environment: 'Sandbox' }),
+      null,
+      'hh-1',
+      NOW
+    );
+    expect(result.outcome).toBe('applied');
+    expect(captured).toEqual([]);
+  });
+
+  it('sends nothing for a subscription that has already ended when it is first posted', async () => {
+    const ended = tx({
+      signedDate: NOW.getTime() - 60 * DAY,
+      expiresDate: NOW.getTime() - 30 * DAY,
+    });
+    expect((await applyVerifiedTransaction(ended, null, 'hh-1', NOW)).outcome).toBe('applied');
+    expect(captured).toEqual([]);
+  });
+
+  it('sends nothing when the purchase is refused for another household', async () => {
+    const token = await getOrCreateAccountToken('hh-1');
+    const result = await applyVerifiedTransaction(
+      tx({ appAccountToken: token }),
+      null,
+      'hh-2',
+      NOW
+    );
+    expect(result.outcome).toBe('linked_elsewhere');
+    expect(captured).toEqual([]);
+  });
+
+  it('sends nothing for a second Apple subscription refused while the first is live', async () => {
+    await applyVerifiedTransaction(tx(), null, 'hh-1', NOW);
+    const second = tx({ originalTransactionId: '3000000000', transactionId: '3000000001' });
+    expect((await applyVerifiedTransaction(second, null, 'hh-1', NOW)).outcome).toBe(
+      'other_subscription'
+    );
+    expect(captured).toHaveLength(1);
   });
 });

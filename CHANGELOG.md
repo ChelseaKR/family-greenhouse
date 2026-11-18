@@ -113,6 +113,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   gratuito admite 8 plantas; Garden, 200."). `scripts/check-plan-copy.mjs` now
   derives both figures from `backend/src/models/plans.ts` for this sentence, in
   both languages.
+- **An App Store purchase is counted like a Stripe one.** The first time the
+  backend binds a Production App Store subscription to a household, it sends
+  the first-party product event `subscription_activated` with `plan`,
+  `interval` and `store: 'app_store'`, and the log line names `app_store` as
+  its source. Before this, a purchase in the iPhone app sent no product event
+  at all. Renewals, restores, Apple's notifications and Sandbox purchases send
+  nothing. Nothing a customer sees changes. `docs/analytics.md` says how to
+  count it.
 - **The day-10 trial email asks a household with no plant to add one first.**
   When the household's plant count reads as 0, the email leads with "You have
   not added a plant yet. Add your first plant and say how often it needs
