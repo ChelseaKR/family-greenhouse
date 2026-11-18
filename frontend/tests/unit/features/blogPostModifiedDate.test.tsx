@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BlogPost } from '@/features/blog/BlogPost';
 import { POSTS } from '@/features/blog/posts';
+import { formatContentDate } from '@/utils/contentDate';
 
 /**
  * A blog post's modified date, as its page publishes it.
@@ -52,6 +53,50 @@ describe('blog post modified date', () => {
     const { article } = renderPost('signs-of-overwatering-and-how-to-fix-it');
     expect(article.datePublished).toBe('2026-07-29');
     expect((article.dateModified as string) >= '2026-11-17').toBe(true);
+  });
+
+  it('shows "Updated" and the date above the title of a post that has changed', () => {
+    // Approved 2026-11-17: the one word "Updated", between the publish date
+    // and the reading time. The page's style prints the line in capitals.
+    const post = POSTS.find((p) => p.slug === 'signs-of-overwatering-and-how-to-fix-it')!;
+    renderPost(post.slug);
+    const line = document.querySelector('[data-testid="post-dates"]')!;
+    expect(line.textContent).toBe(
+      `July 29, 2026 · Updated ${formatContentDate(post.updated!)} · ${post.readingMinutes} min read`
+    );
+    // The date a reader sees is the date the markup publishes.
+    const time = line.querySelector('time')!;
+    expect(time.getAttribute('datetime')).toBe(post.updated);
+    expect(time.textContent).toBe(formatContentDate(post.updated!));
+  });
+
+  it.each(POSTS.filter((p) => p.updated && p.updated !== p.date).map((p) => [p.slug] as const))(
+    '%s shows its updated date once',
+    (slug) => {
+      const post = POSTS.find((p) => p.slug === slug)!;
+      renderPost(slug);
+      const text = document.querySelector('[data-testid="post-dates"]')!.textContent!;
+      expect(text.split('Updated').length - 1).toBe(1);
+      expect(text).toContain(`Updated ${formatContentDate(post.updated!)}`);
+    }
+  );
+
+  it.each([
+    ['has no updated date', undefined],
+    ['was updated the day it was published', 'same'],
+  ] as const)('shows no "Updated" on a post that %s (negative control)', (_name, updated) => {
+    const original = POSTS[0]!;
+    POSTS[0] = { ...original, updated: updated === 'same' ? original.date : undefined };
+    try {
+      renderPost(original.slug);
+      const line = document.querySelector('[data-testid="post-dates"]')!;
+      expect(line.textContent).toBe(
+        `${formatContentDate(original.date)} · ${original.readingMinutes} min read`
+      );
+      expect(line.querySelector('time')).toBeNull();
+    } finally {
+      POSTS[0] = original;
+    }
   });
 
   it('gives an unedited post one date and no modified time', () => {

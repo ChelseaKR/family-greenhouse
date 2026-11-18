@@ -121,6 +121,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the same named source; no fact is new. The short answer under "How often
   to water" is still the year-round one. 23 guides give a winter instruction
   in their water line, and only one asked the winter question.
+- **A blog post that has changed shows when.** The line above a post's
+  title reads, for example, "July 29, 2026 · Updated November 17, 2026 · 6 min
+  read". The second date is the post's `updated` date, the one its markup and
+  the sitemap already publish, so a reader sees the date a crawler does. A
+  post that has not changed since it was published shows its publish date
+  alone. Blog posts are English only, so the word is not in the catalogs.
 
 ### Fixed
 
@@ -144,8 +150,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   takes the newest of them. A new check in `npm run test:edge` fails when a
   post's text, title or descriptions change and its `updated` does not
   (`frontend/scripts/blog-posts-lastmod.json`, written by
-  `npm run blog:lastmod --workspace frontend`). The date a reader sees on a
-  post is unchanged: it is still the publish date.
+  `npm run blog:lastmod --workspace frontend`). The publish date a reader
+  sees on a post is unchanged.
 
 ## [0.52.0] - 2026-11-17
 

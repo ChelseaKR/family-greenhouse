@@ -144,8 +144,22 @@ export function BlogPost() {
       </Link>
 
       <header className="mt-6 mb-10">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700">
-          {formatContentDate(post.date)} · {post.readingMinutes} min read
+        {/* The publish date, then the date the post last changed when that
+            is later. The second date is the one the Article markup and the
+            sitemap publish (`updated` in the manifest), so a reader sees the
+            same date a crawler does. */}
+        <p
+          data-testid="post-dates"
+          className="text-xs font-medium uppercase tracking-[0.2em] text-primary-700"
+        >
+          {formatContentDate(post.date)}
+          {post.updated && post.updated !== post.date && (
+            <>
+              {' '}
+              · Updated <time dateTime={post.updated}>{formatContentDate(post.updated)}</time>
+            </>
+          )}{' '}
+          · {post.readingMinutes} min read
         </p>
         <h1 className="mt-3 font-serif text-4xl tracking-tight text-ink sm:text-5xl">
           {post.title}
