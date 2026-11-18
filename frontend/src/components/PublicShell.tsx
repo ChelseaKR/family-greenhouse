@@ -33,10 +33,22 @@ interface PublicShellProps {
   /** Drop the nav links + app CTA. The sitter page uses this: a guest
    *  doing someone a favor shouldn't be marketed at from the header. */
   plainHeader?: boolean;
+  /** The language the page's own content is written in, when that is fixed
+   *  whatever language the visitor chose. The help pages, the blog and the
+   *  changelog are English by design (docs/i18n.md), and sat inside
+   *  `<html lang="es">` for a Spanish-speaking visitor: a screen reader read
+   *  English words with Spanish pronunciation rules (WCAG 3.1.2). The header
+   *  and footer are translated and stay in the page language. */
+  contentLang?: 'en';
   children: ReactNode;
 }
 
-export function PublicShell({ width = 'prose', plainHeader = false, children }: PublicShellProps) {
+export function PublicShell({
+  width = 'prose',
+  plainHeader = false,
+  contentLang,
+  children,
+}: PublicShellProps) {
   const { t } = useTranslation();
   // The apps have no plans page (it opens Settings → Plan status), so the
   // header does not offer one: see WEB_ONLY_LINKS in Footer.tsx.
@@ -143,7 +155,10 @@ export function PublicShell({ width = 'prose', plainHeader = false, children }: 
         </nav>
       </header>
 
-      <main className={clsx('flex-1 mx-auto w-full px-6 py-12 sm:py-16', WIDTHS[width])}>
+      <main
+        lang={contentLang}
+        className={clsx('flex-1 mx-auto w-full px-6 py-12 sm:py-16', WIDTHS[width])}
+      >
         {children}
       </main>
 

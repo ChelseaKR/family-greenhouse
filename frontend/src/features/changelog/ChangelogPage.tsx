@@ -341,7 +341,7 @@ export function ChangelogPage() {
   const grouped = groupByMonth(visibleEntries(isNativeApp()));
 
   return (
-    <PublicShell>
+    <PublicShell contentLang="en">
       <PageIntro
         eyebrow="Changelog"
         title={'What’s new'}
