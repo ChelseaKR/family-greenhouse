@@ -98,6 +98,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   out of the signed URL, and a real-handler test pins that shape. It also
   treats any client-error status as storage refusing an upload of a different
   size, where it had required exactly 403. No app code changed.
+- **A blog post's modified date is the date it last changed.** Each post
+  told search engines it was last modified the day it was published: the
+  sitemap `<lastmod>` and the Article `dateModified` were both the publish
+  date, and there was no `article:modified_time`. All 14 posts had been edited
+  since. The overwatering post said 2026-07-29 after two retitles and after
+  two other posts were merged into it (live 2026-11-17). The post manifest
+  gains an `updated` field, set for each post to the day its newest change was
+  released, and the sitemap, the
+  Article markup and `article:modified_time` read it. `/blog` in the sitemap
+  takes the newest of them. A new check in `npm run test:edge` fails when a
+  post's text, title or descriptions change and its `updated` does not
+  (`frontend/scripts/blog-posts-lastmod.json`, written by
+  `npm run blog:lastmod --workspace frontend`). The date a reader sees on a
+  post is unchanged: it is still the publish date.
 
 ## [0.52.0] - 2026-11-17
 

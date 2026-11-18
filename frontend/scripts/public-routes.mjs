@@ -172,13 +172,29 @@ export function stalePlantPagesLedgerEntries(
   return Object.keys(ledger?.pages ?? {}).filter((slug) => !published.has(slug));
 }
 
-/** Blog slugs → ISO publish date, read from the post manifest. */
-export function readBlogDates() {
-  const src = readFileSync(POSTS, 'utf8');
-  const re = /slug:\s*'([^']+)'[\s\S]*?date:\s*'([^']+)'/g;
+/**
+ * Blog slugs → the ISO date that post's content last CHANGED: its `updated`
+ * field, or its publish `date` when it has none. This is the post's
+ * `<lastmod>`, and the same value BlogPost.tsx publishes as `dateModified`.
+ *
+ * Before 2026-11-17 `<lastmod>` was the publish date. Every one of the 14
+ * posts had been edited since, so each advertised a `<lastmod>` between 10
+ * days and 5 months older than its content; the overwatering post said
+ * 2026-07-29 after two retitles and a merge that went live 2026-11-17. See the note on
+ * `readCareGuides` for why understating it matters.
+ *
+ * Read entry by entry, so a post with no `updated` can never pick up the next
+ * entry's. `source` is a parameter for tests.
+ */
+export function readBlogLastmods(source = readFileSync(POSTS, 'utf8')) {
   const out = new Map();
-  let m;
-  while ((m = re.exec(src)) !== null) out.set(m[1], m[2]);
+  const starts = [...source.matchAll(/slug:\s*'([^']+)'/g)];
+  starts.forEach((m, i) => {
+    const entry = source.slice(m.index, starts[i + 1]?.index ?? source.length);
+    const date = /\bdate:\s*'([^']+)'/.exec(entry)?.[1];
+    const updated = /\bupdated:\s*'([^']+)'/.exec(entry)?.[1];
+    out.set(m[1], updated ?? date);
+  });
   return out;
 }
 
@@ -283,7 +299,7 @@ export function readHelpTopics() {
 export function publicRoutes() {
   const today = new Date().toISOString().slice(0, 10);
 
-  const blogEntries = [...readBlogDates().entries()].map(([slug, date]) => ({
+  const blogEntries = [...readBlogLastmods().entries()].map(([slug, date]) => ({
     path: `/blog/${slug}`,
     priority: 0.7,
     changefreq: 'monthly',
@@ -330,7 +346,7 @@ export function publicRoutes() {
   // date that moves at midnight is both a lie and unverifiable.
   const newest = (dates) => [...dates].sort().at(-1);
   const hubLastmod = new Map([
-    ['/blog', newest(readBlogDates().values())],
+    ['/blog', newest(readBlogLastmods().values())],
     ['/care', newest(readCareGuides().values())],
     ['/changelog', newest(readChangelogEntryDates())],
   ]);
