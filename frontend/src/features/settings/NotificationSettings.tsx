@@ -762,6 +762,9 @@ export function NotificationSettings() {
                     label="Phone number"
                     type="tel"
                     inputMode="tel"
+                    // The person's own number: let the browser or a password
+                    // manager fill it (WCAG 1.3.5).
+                    autoComplete="tel"
                     placeholder="+15551234567"
                     helperText="E.164 format. Leading + and country code required."
                     value={phoneDraft}
@@ -801,6 +804,10 @@ export function NotificationSettings() {
                     <Input
                       label={t('notifications.phoneCodeLabel')}
                       inputMode="numeric"
+                      // Lets the phone offer the code from the text message
+                      // it just received, instead of making the person
+                      // remember or copy it (WCAG 1.3.5, 3.3.8).
+                      autoComplete="one-time-code"
                       placeholder="123456"
                       helperText={t('notifications.phoneCodeHelper')}
                       value={codeDraft}

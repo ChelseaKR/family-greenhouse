@@ -192,6 +192,8 @@ export function AccountSettings() {
           <Input
             label="Name"
             type="text"
+            // The person's own name (WCAG 1.3.5).
+            autoComplete="name"
             required
             maxLength={80}
             value={nameDraft}

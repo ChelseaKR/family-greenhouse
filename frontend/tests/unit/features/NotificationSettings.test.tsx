@@ -178,6 +178,8 @@ describe('NotificationSettings', () => {
     // Send the code.
     const sendCode = screen.getByRole('button', { name: 'Send code' });
     expect(sendCode).toBeDisabled(); // no phone yet
+    // The person's own number, so a browser or password manager may fill it.
+    expect(screen.getByLabelText('Phone number')).toHaveAttribute('autocomplete', 'tel');
     await user.type(screen.getByLabelText('Phone number'), '+15551234567');
     expect(sendCode).toBeEnabled();
     await user.click(sendCode);
@@ -187,6 +189,8 @@ describe('NotificationSettings', () => {
 
     // Enter + confirm the code.
     const codeInput = await screen.findByLabelText('Verification code');
+    // So the phone can offer the code from the text it just received.
+    expect(codeInput).toHaveAttribute('autocomplete', 'one-time-code');
     const verify = screen.getByRole('button', { name: 'Verify' });
     expect(verify).toBeDisabled(); // 6 digits required
     await user.type(codeInput, '123456');
