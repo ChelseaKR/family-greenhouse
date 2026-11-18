@@ -1757,11 +1757,11 @@
       "metaTitle": "Plant-sitting — Family Greenhouse",
       "metaDescription": "See which plants need care and check them off. No sign-up needed.",
       "noPlantInstruction": {
-        "water": "Water the this plant",
-        "fertilize": "Feed the this plant",
-        "prune": "Prune the this plant",
-        "repot": "Repot the this plant",
-        "other": "{{task}} — this plant"
+        "water": "Water your plant",
+        "fertilize": "Feed your plant",
+        "prune": "Prune your plant",
+        "repot": "Repot your plant",
+        "other": "{{task}} — your plant"
       }
     }
   },

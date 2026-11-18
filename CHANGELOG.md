@@ -225,12 +225,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   marked `lang="en"` for screen readers. On the sitter page, a task with no
   plant name reads "Riega tu planta" (and "Abona", "Poda", "Trasplanta tu
   planta") instead of a named sentence with a stand-in; tasks with a name are
-  unchanged ("Riega la Monstera"), and so is the English. Twelve strings stay
+  unchanged ("Riega la Monstera"). Twelve strings stay
   English until Chelsea has seen them on screen. English text is unchanged
   except two fixes that come with the catalog, both approved: "Passwords do
   not match." now reads "Passwords don't match" (the reset-password wording),
   and Year in review says "1 task", not "1 tasks". Spanish approved by
   Chelsea on 2026-11-18; no native speaker has reviewed it.
+- **A sitter task with no plant name reads "Water your plant".** The English
+  read "Water the this plant" (and "Feed", "Prune", "Repot the this plant",
+  and "Misting — this plant" for a custom task). It now reads "Water your
+  plant", "Feed your plant", "Prune your plant", "Repot your plant" and
+  "Misting — your plant". Tasks with a name ("Water the Monstera") and the
+  Spanish are unchanged. Wording approved by Chelsea on 2026-11-18.
 
 ## [0.52.0] - 2026-11-17
 
