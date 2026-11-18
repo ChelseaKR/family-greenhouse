@@ -88,6 +88,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   trust"). A release cut before that stops at its first job or at the plan
   check, with nothing applied. A staging deploy now asks for one approval.
 
+### Changed
+
+- **Every care guide ends with the "Holiday plants" list.** It is the list
+  the home page and `/care` already show, with the same heading and the same
+  link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen
+  and Rosemary. It is the last thing on the page, below the related plants,
+  and a holiday guide leaves itself out. Search Console shows the guides that
+  reach the first page of US results are holiday and less-common ones. Three
+  of them are on this list (amaryllis, cyclamen, paperwhite), and November to
+  January is when they are searched, so each guide on the list now has a link
+  from every other guide and not only from the home page and `/care`.
+  `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
+  off everywhere.
+
 ### Fixed
 
 - **The post-deploy smoke test reads the stored photo from the signed URL the
@@ -98,6 +112,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   out of the signed URL, and a real-handler test pins that shape. It also
   treats any client-error status as storage refusing an upload of a different
   size, where it had required exactly 403. No app code changed.
+- **A blog post's modified date is the date it last changed.** Each post
+  told search engines it was last modified the day it was published: the
+  sitemap `<lastmod>` and the Article `dateModified` were both the publish
+  date, and there was no `article:modified_time`. All 14 posts had been edited
+  since. The overwatering post said 2026-07-29 after two retitles and after
+  two other posts were merged into it (live 2026-11-17). The post manifest
+  gains an `updated` field, set for each post to the day its newest change was
+  released, and the sitemap, the
+  Article markup and `article:modified_time` read it. `/blog` in the sitemap
+  takes the newest of them. A new check in `npm run test:edge` fails when a
+  post's text, title or descriptions change and its `updated` does not
+  (`frontend/scripts/blog-posts-lastmod.json`, written by
+  `npm run blog:lastmod --workspace frontend`). The date a reader sees on a
+  post is unchanged: it is still the publish date.
 
 ## [0.52.0] - 2026-11-17
 

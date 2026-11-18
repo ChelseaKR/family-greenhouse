@@ -17,6 +17,7 @@ import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { careGuideHeading, type CareGuide } from './careGuides';
+import { HolidayCareGuides } from './HolidayCareGuides';
 import { wateringAnswer } from './wateringAnswer';
 import {
   careGuideResource,
@@ -553,6 +554,18 @@ export function CareGuidePage() {
           </ul>
         </section>
       )}
+
+      {/* The "Holiday plants" list from the home page and /care, with the same
+          heading and the same link words, at the foot of every guide. The
+          guides that reach the first page of US results are holiday and
+          less-common ones, and three of them are on this list (amaryllis,
+          cyclamen, paperwhite). November to January is when they are
+          searched, so each guide on the list now has a link from every other
+          guide and not only from the home page and /care. It is the last
+          thing on the page: nothing moves above the sign-up link. A holiday
+          guide leaves itself out. Off with the same switch as the other two
+          pages (holidayGuideList.ts). */}
+      <HolidayCareGuides id="care-holiday-guides" className="mt-12" exclude={guide.slug} />
     </PublicShell>
   );
 }

@@ -41,6 +41,27 @@ export interface BlogPost {
   metaDescription?: string;
   /** ISO date string. Drives sort order on the index. */
   date: string;
+  /**
+   * ISO date this post's content last CHANGED: its text, its links, or its
+   * title and descriptions here. Feeds the Article `dateModified`,
+   * `article:modified_time` and the sitemap's `<lastmod>`; `date` stays the
+   * publish date. Absent means the post is as it was published.
+   *
+   * It exists for the reason `updated` does on a care guide (careGuides.ts).
+   * Until 2026-11-17 the manifest had `date` alone, so every post told
+   * crawlers it was last modified the day it was published. The overwatering
+   * post said 2026-07-29 after it was retitled twice and had two other posts
+   * merged into it (live 2026-11-17), and it is the post with the most search
+   * impressions. The values below are the day each post's newest change went
+   * live: the date of the first release tag that holds its newest commit, in
+   * `git log` over its own file and its entry here.
+   *
+   * MUST be set to the ship date whenever a post or its entry here changes.
+   * `scripts/blog-posts-lastmod.test.mjs` (in `npm run test:edge`) fails when
+   * a post's content no longer matches the digest recorded for its date; then
+   * set this and run `npm run blog:lastmod --workspace frontend`.
+   */
+  updated?: string;
   /** Reading time in minutes — rough estimate, shown on the index. */
   readingMinutes: number;
   Component: ComponentType;
@@ -55,6 +76,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Why sticky notes and calendar reminders fail to keep plants watered, and what a real plant-care app does differently, ranked worst to best.',
     date: '2026-05-05',
+    updated: '2026-10-24',
     readingMinutes: 5,
     Component: RememberingToWater,
   },
@@ -64,6 +86,7 @@ export const POSTS: BlogPost[] = [
     description:
       "Almost every couple I've talked to has the same plant-care argument. Here's the structural fix that doesn't require either of you to remember more.",
     date: '2026-05-13',
+    updated: '2026-10-24',
     readingMinutes: 6,
     Component: SharingPlantCare,
   },
@@ -75,6 +98,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Seven houseplants that genuinely survive neglect, ranked by how much forgetting each one forgives — and how they fail when you push it too far.',
     date: '2026-05-21',
+    updated: '2026-11-05',
     readingMinutes: 5,
     Component: LowWaterPlants,
   },
@@ -86,6 +110,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'What changed between losing eight plants in a move and losing none: packing, the first week in a new home, and the freeze risk nobody warns you about.',
     date: '2026-05-28',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: MovingWithPlants,
   },
@@ -97,6 +122,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Pothos, snake plant and aloe are all toxic. Here is the shorter, honest list of plants that clear both bars, ranked by how much neglect they forgive.',
     date: '2026-06-15',
+    updated: '2026-10-23',
     readingMinutes: 6,
     Component: PetSafeHardToKill,
   },
@@ -108,6 +134,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'The most common toxic houseplants, what each one actually does to a cat or dog, and a genuinely pet-safe plant to buy instead. Grounded in ASPCA data.',
     date: '2026-06-16',
+    updated: '2026-11-05',
     readingMinutes: 6,
     Component: CommonToxicHouseplants,
   },
@@ -119,6 +146,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       '"We\'ll both just do it" is the arrangement that reliably fails. Four ways to actually divide plant care in a household, and what each one costs you.',
     date: '2026-06-24',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: SplitPlantCare,
   },
@@ -130,6 +158,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Water well and go for up to five days. For one to two weeks, group plants together or use a wick or bath tray. Past two weeks, you need a person.',
     date: '2026-07-01',
+    updated: '2026-11-03',
     readingMinutes: 6,
     Component: WateringWhileOnVacation,
   },
@@ -141,6 +170,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Write actions, not conditions. The five things to leave a plant sitter, how to word instructions they can follow, and the permission most people forget.',
     date: '2026-07-08',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: PlantSitterHandoff,
   },
@@ -152,6 +182,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'You can only delegate doing, not noticing. How to hand over your plants so the instructions survive contact with a housemate who does not care.',
     date: '2026-07-15',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: NonPlantPeople,
   },
@@ -163,6 +194,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Quarantine, duplicates, the awkward truth about "our" plants, and how to reconcile two watering schedules without starting an argument about it.',
     date: '2026-07-22',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: MergingCollections,
   },
@@ -174,6 +206,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Overwatering causes soft yellow lower leaves and wilting in wet soil, so it looks like thirst. How to tell in two minutes and fix an overwatered plant.',
     date: '2026-07-29',
+    updated: '2026-11-17',
     readingMinutes: 6,
     Component: SignsOfOverwatering,
   },
@@ -185,6 +218,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'The shadow test for measuring indoor light, why brightness falls off faster than it looks away from a window, and what to do about a genuinely dark home.',
     date: '2026-08-12',
+    updated: '2026-09-14',
     readingMinutes: 6,
     Component: RoomLight,
   },
@@ -196,6 +230,7 @@ export const POSTS: BlogPost[] = [
     metaDescription:
       'Yes, and it is the main cause of death of potted plants. What too much water does to roots, and how to water by checking the soil instead of the calendar.',
     date: '2026-11-05',
+    updated: '2026-11-17',
     readingMinutes: 5,
     Component: CanYouOverwaterAPlant,
   },

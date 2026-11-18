@@ -327,9 +327,11 @@ describe('CareGuidePage structure', () => {
       ).toBe(true);
       expect(headings, guide.slug).toContain('Light and humidity');
       expect(headings, guide.slug).toContain('Related plants');
-      const related = [...container.querySelectorAll('section a[href^="/care/"]')].map((a) =>
-        a.getAttribute('href')
-      );
+      // The holiday list at the foot of the page is a section of /care links
+      // too (holidayGuidesOnCarePages.test.tsx); it is not the related plants.
+      const related = [...container.querySelectorAll('section a[href^="/care/"]')]
+        .filter((a) => !a.closest('[aria-labelledby="care-holiday-guides"]'))
+        .map((a) => a.getAttribute('href'));
       expect(related, guide.slug).toEqual(guide.related.map((s) => `/care/${s}`));
       expect(
         container.ownerDocument.querySelector('link[rel="canonical"]')?.getAttribute('href'),

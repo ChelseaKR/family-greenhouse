@@ -32,9 +32,14 @@ export function BlogPost() {
           description: post.metaDescription ?? post.description,
           canonical: `${SITE_URL}/blog/${post.slug}`,
           ogType: 'article',
-          // Only publishedTime: the manifest has no `modified` field, so
-          // there is no honest value for article:modified_time.
-          article: { publishedTime: post.date, section: 'Blog' },
+          // modifiedTime only for a post that has changed since it was
+          // published (`updated` in the manifest); an unedited post has no
+          // second date to give.
+          article: {
+            publishedTime: post.date,
+            ...(post.updated ? { modifiedTime: post.updated } : {}),
+            section: 'Blog',
+          },
           // Article schema makes the post eligible for Google's article
           // rich-results treatment. Publisher logo and `image` are both set
           // below; a per-post hero image and a named Person author are the
@@ -62,7 +67,11 @@ export function BlogPost() {
                   height: 630,
                 },
                 datePublished: post.date,
-                dateModified: post.date,
+                // The date the post's content last changed, which is also its
+                // sitemap <lastmod> (public-routes.mjs reads the same field).
+                // It was `post.date`, so every edited post published a
+                // dateModified older than its own text.
+                dateModified: post.updated ?? post.date,
                 // One Organization with `publisher` (same @id), plus the
                 // `url` Google's Article guidance asks an author to carry.
                 author: {
