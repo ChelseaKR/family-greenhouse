@@ -2160,11 +2160,11 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Euphorbia pulcherrima',
     alsoKnownAs: ['Christmas Flower', 'Christmas Star', 'Euphorbia'],
     related: ['christmas-cactus', 'amaryllis', 'anthurium'],
-    metaTitle: 'Poinsettia Care and Pet Safety: Past the Holidays',
+    metaTitle: 'How Often to Water a Poinsettia: When the Surface Is Dry',
     metaDescription:
-      'How to water a poinsettia, the light it needs, how to keep it alive after the holidays, and what the ASPCA says about poinsettias and cats and dogs.',
+      'Water a poinsettia when the soil surface is dry to the touch, then let it drain. Check it daily. Plus the light it needs and keeping it past the holidays.',
     reviewed: '2026-11-03',
-    updated: '2026-11-04',
+    updated: '2026-11-17',
     summary:
       'A poinsettia is the one houseplant most people bring home in December and lose by February, usually from too much water or a cold drafty doorway. It can last for months with a bright window and a careful hand, and the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {

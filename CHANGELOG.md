@@ -101,6 +101,14 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   from every other guide and not only from the home page and `/care`.
   `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
   off everywhere.
+- **The poinsettia guide's search title and description lead with the
+  watering answer.** The title is now "How Often to Water a Poinsettia: When
+  the Surface Is Dry" (it was "Poinsettia Care and Pet Safety: Past the
+  Holidays"), and the description opens with the same answer. Both restate
+  the guide's own cited watering answer; no fact changes, and the page's
+  heading and pet section are as they were. The other holiday guides that
+  lead this way are the ones that reach the first page of US results, and the
+  poinsettia guide had no US search impressions in the 28 days to 2026-11-16.
 
 ### Fixed
 
