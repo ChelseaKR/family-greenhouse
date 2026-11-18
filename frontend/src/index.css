@@ -510,12 +510,20 @@ html[data-text-size='large'] .whitespace-nowrap {
 
   .input {
     /* text-base at mobile keeps iOS from auto-zooming on focus (<16px does);
-       brand-tinted border replaces the stock gray. */
-    @apply block w-full bg-white/80 px-3 py-2 border border-primary-200 rounded-lg shadow-xs placeholder-gray-500 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
+       brand-tinted border replaces the stock gray.
+
+       border-primary-500, not -200: the border is the only thing that shows
+       where a field is (its fill is the page colour), and primary-200 on
+       white is 1.5:1. WCAG 1.4.11 asks 3:1 of the boundary of a control;
+       primary-500 is 3.4:1 on white and 3.2:1 on paper. Pinned by
+       tests/unit/styles/inputBorderContrast.test.ts. */
+    @apply block w-full bg-white/80 px-3 py-2 border border-primary-500 rounded-lg shadow-xs placeholder-gray-500 focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 text-base sm:text-sm;
   }
 
+  /* red-600, not -300: a field in error must not be fainter than one that is
+     fine (red-300 on white is 1.9:1). */
   .input-error {
-    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+    @apply border-red-600 focus:ring-red-500 focus:border-red-500;
   }
 
   .label {
