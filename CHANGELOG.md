@@ -167,6 +167,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   people activity" and "No all activity". They now read "No task activity…",
   "No plant activity…", "No activity about people…" and "No activity…". The
   Spanish was already right and is unchanged.
+- **The line under the chat's message box says plainly when a reminder is
+  created.** "Reminder suggestions wait for your confirm before being created"
+  is now "Suggested reminders are created only after you confirm them.", and
+  in Spanish "Los recordatorios sugeridos solo se crean cuando los
+  confirmas." It uses the words on the suggestion card itself. The line's
+  first two sentences are unchanged.
 
 ## [0.52.0] - 2026-11-17
 

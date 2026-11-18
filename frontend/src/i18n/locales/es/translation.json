@@ -2449,7 +2449,7 @@
       "placeholder": "Pregunta por tus plantas…",
       "messageLabel": "Mensaje del chat",
       "send": "Enviar",
-      "disclaimer": "Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Las sugerencias de recordatorios esperan tu confirmación antes de crearse.",
+      "disclaimer": "Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Los recordatorios sugeridos solo se crean cuando los confirmas.",
       "budgetUsed": "{{percent}} % usado este mes",
       "replying": "El chat de cuidado de plantas está respondiendo",
       "documentTitle": "Chat de cuidado de plantas"

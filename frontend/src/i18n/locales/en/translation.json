@@ -2394,7 +2394,7 @@
       "placeholder": "Ask about your plants...",
       "messageLabel": "Chat message",
       "send": "Send",
-      "disclaimer": "AI-generated — verify before acting. Refuses pesticide / dosage advice. Reminder suggestions wait for your confirm before being created.",
+      "disclaimer": "AI-generated — verify before acting. Refuses pesticide / dosage advice. Suggested reminders are created only after you confirm them.",
       "budgetUsed": "{{percent}}% used this month",
       "replying": "Plant care chat is replying",
       "documentTitle": "Plant Care Chat"

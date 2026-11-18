@@ -6,6 +6,8 @@ import { ChatPage } from '@/features/chat/ChatPage';
 import { billingService } from '@/services/billingService';
 import { chatService } from '@/services/chatService';
 import { useAuthStore } from '@/store/authStore';
+import enCatalog from '@/i18n/locales/en/translation.json';
+import esCatalog from '@/i18n/locales/es/translation.json';
 
 vi.mock('@/hooks/useActiveHouseholdId', () => ({
   useActiveHouseholdId: () => 'hh-1',
@@ -149,6 +151,33 @@ describe('ChatPage plan availability', () => {
 
     expect(await screen.findByLabelText('Chat message')).toBeInTheDocument();
     expect(chatService.getBudget).toHaveBeenCalledOnce();
+  });
+
+  it('says under the message box that suggested reminders wait for a confirmation', async () => {
+    // Approved 2026-11-18. The third sentence read "Reminder suggestions wait
+    // for your confirm before being created", with "confirm" as a noun. The
+    // first two sentences are unchanged.
+    vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({
+      planId: 'garden',
+    });
+    renderPage();
+
+    expect(
+      await screen.findByText(
+        'AI-generated — verify before acting. Refuses pesticide / dosage advice. Suggested reminders are created only after you confirm them.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/your confirm before/)).not.toBeInTheDocument();
+  });
+
+  it('says the same in Spanish, with the word the reminder card uses', () => {
+    expect(esCatalog.chat.page.disclaimer).toBe(
+      'Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Los recordatorios sugeridos solo se crean cuando los confirmas.'
+    );
+    // "Suggested reminder" / "Recordatorio sugerido" is the card's own title.
+    expect(enCatalog.chat.proposal.suggested.startsWith('Suggested reminder')).toBe(true);
+    expect(esCatalog.chat.proposal.suggested.startsWith('Recordatorio sugerido')).toBe(true);
+    expect(enCatalog.chat.page.disclaimer.includes('your confirm before')).toBe(false);
   });
 
   it('renders the composer for a household on the no-card Garden trial (ADR 0027)', async () => {
