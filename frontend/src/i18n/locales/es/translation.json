@@ -20,8 +20,9 @@
     "never": "Nunca",
     "daysAgo_one": "hace {{count}} día",
     "daysAgo_other": "hace {{count}} días",
-    "daysAgo_many": "{{count}} days ago",
-    "loadingDots": "Cargando…"
+    "daysAgo_many": "hace {{count}} días",
+    "loadingDots": "Cargando…",
+    "unexpectedError": "Se produjo un error inesperado"
   },
   "activity": {
     "aPlant": "una planta",
@@ -727,7 +728,8 @@
       "libraryDenied": "Family Greenhouse no puede abrir tus fotos. Activa el acceso a las fotos para Family Greenhouse en los Ajustes del teléfono, o toma una foto.",
       "noCamera": "Este dispositivo no tiene cámara. Elige una foto.",
       "failed": "No se pudo abrir esa foto. Inténtalo de nuevo o elige otra.",
-      "prepareFailed": "No se pudo preparar esa foto para subirla. Prueba con una foto JPEG, PNG o WebP."
+      "prepareFailed": "No se pudo preparar esa foto para subirla. Prueba con una foto JPEG, PNG o WebP.",
+      "decodeFailed": "No se pudo leer la imagen"
     },
     "petToxicity": {
       "toxicTitle": "Tóxica para las mascotas",
@@ -781,7 +783,10 @@
       "lowConfidenceBody": "La mejor conjetura solo tiene un {{percent}}% de certeza, por debajo del {{floor}}% que consideramos una coincidencia. Todas las opciones siguen aquí y puedes usarlas — compruébalas antes con la planta. La especie que elijas determina los consejos de riego, luz y seguridad para mascotas de esta planta.",
       "candidate": "{{scientificName}} • {{percent}}% de certeza",
       "use": "Usar",
-      "fromPhoto": "Identificada a partir de una foto"
+      "fromPhoto": "Identificada a partir de una foto",
+      "tooLarge": "La imagen es demasiado grande para identificarla: prueba con una foto más pequeña o con menos detalle.",
+      "unavailable": "La identificación por foto no está disponible en este momento. Aun así, puedes escribir la especie manualmente.",
+      "noSuggestions": "No llegaron sugerencias: escribe la especie manualmente."
     },
     "identifyFromPhoto": "Identificar desde foto",
     "status": {
@@ -819,7 +824,7 @@
       "childrenLabel": "Esquejes",
       "childrenCount_one": "{{count}} esqueje",
       "childrenCount_other": "{{count}} esquejes",
-      "childrenCount_many": "{{count}} cuttings",
+      "childrenCount_many": "{{count}} esquejes",
       "hasCuttings": "Tiene esquejes"
     },
     "share": {
@@ -1069,7 +1074,9 @@
     "careGuidance": {
       "light": "Luz",
       "water": "Riego",
-      "humidity": "Humedad"
+      "humidity": "Humedad",
+      "title": "Cuidados para {{name}}",
+      "description": "Consejos seleccionados para {{scientific}}."
     },
     "careGuideCard": {
       "title": "Guía de cuidado",
@@ -1077,7 +1084,9 @@
       "cycle": "Ciclo",
       "hardinessZones": "Zonas de rusticidad",
       "sunlight": "Luz solar",
-      "none": "Aún no hay guía de cuidado para esta especie."
+      "none": "Aún no hay guía de cuidado para esta especie.",
+      "watering": "Riego",
+      "pruning": "Poda"
     },
     "careReport": {
       "title": "Informe de cuidados",
@@ -1091,7 +1100,12 @@
       "noneInLast": "ninguna en las últimas {{limit}}",
       "best": "mejor racha {{value}}",
       "last": "último {{value}}",
-      "never": "nunca"
+      "never": "nunca",
+      "completions": "Tareas completadas (últimas {{limit}})",
+      "bestStreak": "Mejor racha (últimas {{limit}})",
+      "cycles_one": "{{count}} ciclo",
+      "cycles_many": "{{count}} ciclos",
+      "cycles_other": "{{count}} ciclos"
     },
     "editTitle": "Editar planta",
     "noCareData": {
@@ -1100,7 +1114,8 @@
     },
     "photoTimeline": {
       "loading": "Cargando fotos…",
-      "title": "Cronología de fotos"
+      "title": "Cronología de fotos",
+      "photoAlt": "Foto del {{date}}"
     },
     "detailPage": {
       "remove": "Quitar",
@@ -1115,18 +1130,54 @@
       "snoozeTask": "Posponer tarea",
       "everyDays_one": "Cada día",
       "everyDays_other": "Cada {{count}} días",
-      "everyDays_many": "Cada {{count}} días"
+      "everyDays_many": "Cada {{count}} días",
+      "titleFallback": "Planta",
+      "restoredToast": "Planta restaurada",
+      "snoozedToast": "Tarea pospuesta",
+      "notFound": "No se encontró la planta",
+      "careTasksDescription": "Tareas de cuidado programadas para esta planta",
+      "snooze": {
+        "oneDay": "1 día",
+        "threeDays": "3 días",
+        "oneWeek": "1 semana"
+      },
+      "lastDone": "Último cuidado: {{date}}"
     },
     "photoUpload": {
       "formats": "JPEG, PNG o WebP. Hasta 5 MB tras redimensionarla.",
       "upload": "Subir foto",
       "uploading": "Subiendo foto…",
       "wrongType": "La imagen debe ser un archivo JPEG, PNG o WebP.",
-      "tooLarge": "La imagen es demasiado grande (máx. {{max}} MB)."
+      "tooLarge": "La imagen es demasiado grande (máx. {{max}} MB).",
+      "failedStatus": "No se pudo subir la foto (estado {{status}})",
+      "networkError": "Error de red al subir la foto"
     },
     "suggestedCare": {
       "title": "Cuidados sugeridos",
       "wateringNotice": "Crearemos una tarea de riego cada {{days}} días cuando guardes esta planta. Puedes editarla cuando quieras."
+    },
+    "image": {
+      "photoAlt": "Foto de {{name}}",
+      "stockPhotoAlt": "Foto de archivo de {{name}}"
+    },
+    "speciesPlaceholder": "p. ej., Monstera deliciosa",
+    "addedWithTasks_one": "{{name}} añadida con {{count}} tarea de cuidado",
+    "addedWithTasks_many": "{{name}} añadida con {{count}} tareas de cuidado",
+    "addedWithTasks_other": "{{name}} añadida con {{count}} tareas de cuidado",
+    "addedToast": "{{name}} añadida",
+    "tasksSetupFailedToast": "La planta se guardó, pero no se pudieron añadir sus tareas recomendadas.",
+    "streak": {
+      "label_one": "Racha de {{count}} ciclo de {{activity}}",
+      "label_many": "Racha de {{count}} ciclos de {{activity}}",
+      "label_other": "Racha de {{count}} ciclos de {{activity}}",
+      "labelTruncated": "Racha de {{count}}+ ciclos de {{activity}} (entre las últimas {{limit}} registradas)",
+      "activity": {
+        "water": "riego",
+        "fertilize": "abonado",
+        "prune": "poda",
+        "repot": "trasplante",
+        "care": "cuidado"
+      }
     }
   },
   "importPlants": {
@@ -1347,7 +1398,8 @@
       "daysOverdue_other": "{{count}} días de retraso",
       "daysOverdue_many": "{{count}} días de retraso",
       "assignedTo": "Asignada a {{name}}",
-      "assignedToYou": "Asignada a ti"
+      "assignedToYou": "Asignada a ti",
+      "unassigned": "Sin asignar"
     },
     "frequencyStepper": {
       "less": "Un día menos",
@@ -1372,7 +1424,8 @@
       "editTitle": "Editar tarea",
       "type": "Tipo",
       "customName": "Nombre personalizado"
-    }
+    },
+    "completedToast": "Tarea completada"
   },
   "today": {
     "title": "Hoy, en todos tus hogares",
@@ -1555,7 +1608,8 @@
       "readyTitle": "Tu enlace de cuidador está listo",
       "readyBody": "Cópialo ahora: por seguridad, no volveremos a mostrar el enlace completo. Siempre puedes crear uno nuevo.",
       "labelPlaceholder": "p. ej., Las plantas de los García",
-      "create": "Crear enlace de cuidador"
+      "create": "Crear enlace de cuidador",
+      "revokeAria": "Revocar el enlace de cuidador {{label}}"
     },
     "goingAway": {
       "titleEntry": "¿Te vas de viaje?",
@@ -1652,7 +1706,13 @@
       "removeMemberMessage": "¿Seguro que quieres quitar a este miembro del hogar? Perderá el acceso a todas las plantas y tareas compartidas. Todo lo que haya configurado para otras personas también dejará de funcionar: sus etiquetas de plantas (tendrás que imprimir otras nuevas), sus enlaces de cuidador, su pantalla de pared, sus plazas de cuidador y cualquier clave de API que haya emitido.",
       "removeMemberConfirm": "Quitar",
       "locationCurrent": "Configurada actualmente en <b>{{city}}</b>.",
-      "members": "Miembros"
+      "members": "Miembros",
+      "notFound": "No se encontró el hogar",
+      "roleAdmin": "Administrador",
+      "roleMember": "Miembro",
+      "makeAdmin": "Hacer administrador",
+      "makeMember": "Hacer miembro",
+      "removeMemberAria": "Quitar a {{name}}"
     }
   },
   "householdAudit": {
@@ -1748,7 +1808,11 @@
       "inactiveBody": "Puede que el enlace haya caducado o que lo haya desactivado quien lo compartió. Si sigues ayudando, pídele un enlace nuevo.",
       "loadFailed": "No pudimos cargar la lista de cuidados en este momento. Actualiza la página y vuelve a intentarlo en un momento.",
       "intro": "Esto es lo que necesita un poco de cuidado mientras están fuera. Toca <strong>Hecho</strong> cuando hayas atendido cada planta; no hace falta cuenta.",
-      "footer": "¿Cuidas plantas a menudo? <appLink>Family Greenhouse</appLink> reúne el cuidado de las plantas de todo un hogar en un solo lugar compartido."
+      "footer": "¿Cuidas plantas a menudo? <appLink>Family Greenhouse</appLink> reúne el cuidado de las plantas de todo un hogar en un solo lugar compartido.",
+      "heading": "{{label}}: lo que hay que hacer",
+      "headingNoLabel": "¡Gracias por cuidar las plantas!",
+      "metaTitle": "Cuidado de plantas — Family Greenhouse",
+      "metaDescription": "Mira qué plantas necesitan cuidados y márcalas como hechas. Sin registrarte."
     }
   },
   "sitterBrief": {
@@ -1843,7 +1907,9 @@
         "900": "Cada 15 minutos (menos de un centavo al mes)",
         "3600": "Cada hora (menos de un centavo al mes)"
       }
-    }
+    },
+    "metaTitle": "Cuidado de plantas de hoy — Family Greenhouse",
+    "metaDescription": "Una pantalla de pared del hogar con el cuidado de plantas que toca hoy."
   },
   "householdChannel": {
     "title": "Canal de chat del hogar",
@@ -2143,7 +2209,9 @@
       "deleteConfirmTitle": "¿Eliminar la cuenta?",
       "deleteConfirmMessage": "Se eliminan tu inicio de sesión y tus tokens de notificación, y pierdes el acceso a todos los hogares. El historial de cuidados compartido se conserva sin tu nombre. Esto no se puede deshacer.",
       "deleteConfirmLabel": "Sí, eliminar",
-      "importHint": "¿Vas en sentido contrario? <importLink>Importa plantas desde un archivo CSV o JSON</importLink>, incluidas las exportaciones de esta aplicación."
+      "importHint": "¿Vas en sentido contrario? <importLink>Importa plantas desde un archivo CSV o JSON</importLink>, incluidas las exportaciones de esta aplicación.",
+      "profileDescriptionHousehold": "Cambia cómo se muestra tu nombre en tu hogar. Todavía no se puede cambiar el correo electrónico.",
+      "profileDescription": "Cambia el nombre de tu cuenta. Todavía no se puede cambiar el correo electrónico."
     },
     "apiKeysPanel": {
       "description": "Genera claves para acceder a los datos de tu hogar: Home Assistant, scripts, etc. Las claves son de solo lectura salvo que concedas explícitamente acceso de escritura. La disponibilidad depende del derecho a claves de API que ya tenga el hogar; los cambios a planes de pago están en pausa.",
@@ -2161,7 +2229,16 @@
       "revokeConfirmTitle": "¿Revocar la clave de API?",
       "revokeConfirmMessage": "La clave dejará de funcionar de inmediato. Todo lo que la esté usando recibirá un 401 en la siguiente solicitud.",
       "keyLine": "fg_… <mono>{{last4}}</mono> · Generada el {{date}}",
-      "lastUsed": "Último uso: {{date}}"
+      "lastUsed": "Último uso: {{date}}",
+      "activeTitle": "Claves activas",
+      "activeTitleCount": "Claves activas ({{count}})",
+      "revokeAria": "Revocar la clave {{label}}",
+      "scope": {
+        "readPlants": "Leer plantas",
+        "readTasks": "Leer tareas",
+        "readActivity": "Leer actividad",
+        "writeTasks": "Completar y posponer tareas"
+      }
     }
   },
   "security": {
@@ -2329,7 +2406,13 @@
       "quietEndHelper": "Si el fin es anterior al inicio, el intervalo continúa pasada la medianoche.",
       "timezone": "Zona horaria",
       "clear": "Borrar"
-    }
+    },
+    "overdueAlertTitle": "A {{plant}} le vendría bien un poco de cuidado",
+    "browserActiveHint": "Los avisos aparecen mientras tengas una pestaña abierta o la aplicación instalada.",
+    "browserDeniedHint": "Permiso denegado: actualiza la configuración del navegador para volver a activarlas.",
+    "browserEnableHint": "Actívalas para recibir un aviso cuando aparezcan tareas atrasadas en el panel.",
+    "smsHint": "Recordatorios breves por SMS cuando una tarea vence o está atrasada. Pueden aplicarse las tarifas habituales de mensajes.",
+    "phoneFormatError": "Usa el formato +15551234567"
   },
   "pushActions": {
     "done": "{{plant}}: marcada como hecha.",
@@ -2370,7 +2453,11 @@
       "lastSuccessful": "Última comprobación correcta: {{when}}.",
       "lastChecked": "Última comprobación: {{when}}.",
       "footnote": "El estado se comprueba en vivo con <code>GET /health</code> cada 60 segundos. Para saber en tiempo real si hay acceso, te recomendamos guardar esta página en tus marcadores."
-    }
+    },
+    "degraded": "Algunos sistemas funcionan con problemas",
+    "down": "Estamos investigando un problema",
+    "metaTitle": "Estado — Family Greenhouse",
+    "metaDescription": "Estado en tiempo real de la base de datos, el inicio de sesión y el envío de correos y SMS de Family Greenhouse, comprobado cada 60 segundos, además de un registro de incidentes anteriores."
   },
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
@@ -2396,7 +2483,8 @@
     "speciesTooLong": "El nombre de la especie es demasiado largo",
     "locationTooLong": "La ubicación es demasiado larga",
     "notesTooLong": "Las notas son demasiado largas",
-    "tooManyTags": "Demasiadas etiquetas"
+    "tooManyTags": "Demasiadas etiquetas",
+    "frequencyMin": "La frecuencia debe ser de al menos 1 día"
   },
   "commandPalette": {
     "title": "Buscar plantas y tareas",
@@ -2432,7 +2520,7 @@
       "created": "Recordatorio creado: {{type}} para {{plant}}",
       "frequency_one": "Cada día",
       "frequency_other": "Cada {{count}} días",
-      "frequency_many": "Every {{count}} days",
+      "frequency_many": "Cada {{count}} días",
       "assignee": "Asignado a {{name}}",
       "createTask": "Crear tarea",
       "dismiss": "Descartar"
@@ -2452,7 +2540,8 @@
       "disclaimer": "Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Los recordatorios sugeridos solo se crean cuando los confirmas.",
       "budgetUsed": "{{percent}} % usado este mes",
       "replying": "El chat de cuidado de plantas está respondiendo",
-      "documentTitle": "Chat de cuidado de plantas"
+      "documentTitle": "Chat de cuidado de plantas",
+      "budgetTitle": "{{percent}} % de la cuota mensual del chat usada"
     }
   },
   "analytics": {
@@ -2536,7 +2625,15 @@
       "worstDays": "peor: {{days}} d",
       "taskCount_one": "{{count}} tarea",
       "taskCount_other": "{{count}} tareas",
-      "taskCount_many": "{{count}} tareas"
+      "taskCount_many": "{{count}} tareas",
+      "completedCount_one": "{{count}} completada",
+      "completedCount_many": "{{count}} completadas",
+      "completedCount_other": "{{count}} completadas",
+      "completedUnknown": "— completadas",
+      "trendAria": "Tendencia de tareas completadas en 30 días: {{total}} tareas en total. Con la media móvil de 7 días superpuesta.",
+      "dayTitle_one": "{{date}}: {{count}} tarea",
+      "dayTitle_many": "{{date}}: {{count}} tareas",
+      "dayTitle_other": "{{date}}: {{count}} tareas"
     }
   },
   "climate": {
@@ -2546,7 +2643,8 @@
       "title": "Clima local",
       "setLocationBody": "Indica la ubicación de tu hogar para recibir consejos de cuidado según el clima: avisos de humedad, alertas de heladas y sugerencias para saltarte un riego.",
       "setLocationLink": "Añadir la ubicación del hogar →",
-      "outdoorHumidity": "{{percent}} % de humedad exterior"
+      "outdoorHumidity": "{{percent}} % de humedad exterior",
+      "weatherUnavailable": "Los datos del clima no están disponibles temporalmente."
     }
   },
   "moveDay": {
@@ -2947,7 +3045,9 @@
     "registerCta": "Crear una cuenta gratuita",
     "navLink": "Regalar una suscripción",
     "unavailableHeading": "Los regalos aún no están disponibles",
-    "unavailableBody": "Todavía no hemos abierto las suscripciones de regalo, así que ahora mismo no hay nada que comprar aquí. Vuelve más tarde; esta página ofrecerá regalos en cuanto estén a la venta."
+    "unavailableBody": "Todavía no hemos abierto las suscripciones de regalo, así que ahora mismo no hay nada que comprar aquí. Vuelve más tarde; esta página ofrecerá regalos en cuanto estén a la venta.",
+    "metaTitle": "Envía una suscripción de regalo de Family Greenhouse",
+    "metaDescription": "Paga una sola vez varios meses de Garden o Greenhouse para el hogar de otra persona. Recibirá un código de canje; no necesitas tener tu propio hogar para enviarlo."
   },
   "caretaker": {
     "seats": {
@@ -3549,13 +3649,25 @@
       "tasks": "No hay actividad de tareas en los últimos 50 eventos.",
       "plants": "No hay actividad de plantas en los últimos 50 eventos.",
       "people": "No hay actividad de personas en los últimos 50 eventos."
-    }
+    },
+    "toDoNowDescription": "Atrasadas y para hoy",
+    "toDoNowDescriptionLater_one": "Atrasadas y para hoy: {{count}} más adelante esta semana",
+    "toDoNowDescriptionLater_many": "Atrasadas y para hoy: {{count}} más adelante esta semana",
+    "toDoNowDescriptionLater_other": "Atrasadas y para hoy: {{count}} más adelante esta semana"
   },
   "yearInReview": {
     "description": "El trabajo de cuidado que este hogar ha hecho en lo que va de año.",
     "totalCompleted": "Total de tareas completadas",
     "topContributor": "Quien más ha contribuido",
     "tasksPerWeek": "Tareas por semana",
-    "whereWorkWent": "A dónde fue el trabajo"
+    "whereWorkWent": "A dónde fue el trabajo",
+    "title": "Tu {{year}}",
+    "type": {
+      "water": "Riego",
+      "fertilize": "Abonado",
+      "prune": "Poda",
+      "repot": "Trasplante",
+      "custom": "Otras"
+    }
   }
 }

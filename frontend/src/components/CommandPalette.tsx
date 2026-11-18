@@ -82,15 +82,17 @@ export function CommandPalette() {
           matches(t.plantName, q) || matches(t.customType ?? t.type, q) || matches(t.notes, q)
       )
       .slice(0, 8)
-      .map((t: Task) => ({
+      .map((task: Task) => ({
         kind: 'task',
-        id: t.id,
-        label: `${t.customType ?? t.type} — ${t.plantName}`,
-        sub: t.assignedToName ? `Assigned to ${t.assignedToName}` : 'Unassigned',
-        href: `/plants/${t.plantId}`,
+        id: task.id,
+        label: `${task.customType ?? task.type} — ${task.plantName}`,
+        sub: task.assignedToName
+          ? t('tasks.page.assignedTo', { name: task.assignedToName })
+          : t('tasks.page.unassigned'),
+        href: `/plants/${task.plantId}`,
       }));
     return [...plantHits, ...taskHits];
-  }, [query, plants, tasks]);
+  }, [query, plants, tasks, t]);
 
   function close() {
     setOpen(false);

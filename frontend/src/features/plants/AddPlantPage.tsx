@@ -231,18 +231,16 @@ export function AddPlantPage() {
       const blob = await prepareImageForUpload(pickedFile, IDENTIFY_PHOTO_MAX_EDGE);
       const dataUrl = await fileToBase64(blob);
       if (dataUrl.length > MAX_BASE64_CHARS) {
-        setError('Image is too large to identify — try a smaller or less detailed photo.');
+        setError(t('plants.identify.tooLarge'));
         return;
       }
       const result = await plantService.identifyPlant(dataUrl);
       if (!result.configured) {
-        setIdentifyNotice(
-          'Photo identification is unavailable right now. You can still enter the species manually.'
-        );
+        setIdentifyNotice(t('plants.identify.unavailable'));
         return;
       }
       if (!result.suggestions || result.suggestions.length === 0) {
-        setIdentifyNotice('No suggestions came back — fill in the species manually.');
+        setIdentifyNotice(t('plants.identify.noSuggestions'));
       } else {
         setSuggestions(result.suggestions);
         setConfidence(
@@ -433,11 +431,11 @@ export function AddPlantPage() {
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(
         tasksAdded > 0
-          ? `${plant.name} added with ${tasksAdded} care task${tasksAdded === 1 ? '' : 's'}`
-          : `${plant.name} added`
+          ? t('plants.addedWithTasks', { name: plant.name, count: tasksAdded })
+          : t('plants.addedToast', { name: plant.name })
       );
       if (taskSetupFailed) {
-        toast.info('The plant was saved, but its recommended tasks could not be added.');
+        toast.info(t('plants.tasksSetupFailedToast'));
       }
       if (photoUploadFailed) {
         toast.info(t('plants.photoRecovery.toast'));
@@ -715,7 +713,8 @@ export function AddPlantPage() {
                 {suggestedTaskTemplate.tasks.map((task) => (
                   <li key={`${task.type}-${task.customType ?? ''}`}>
                     <span className="font-medium">
-                      {task.customType || taskTypeLabels[task.type]}
+                      {task.customType ||
+                        t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type)}
                     </span>{' '}
                     {t('tasks.seasonal.interval', { count: task.frequencyDays })}
                   </li>

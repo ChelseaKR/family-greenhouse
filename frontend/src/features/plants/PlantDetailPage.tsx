@@ -121,7 +121,7 @@ export function PlantDetailPage() {
 
   // Title reflects the plant once it's loaded; falls back to a generic
   // "Plant" label during the loading flash.
-  useDocumentTitle(plant?.name ?? 'Plant');
+  useDocumentTitle(plant?.name ?? t('plants.detailPage.titleFallback'));
 
   // A reminder about one task links to this page's care section
   // (`/plants/:id?task=…#care`, services/reminders.ts). A pushState
@@ -193,7 +193,7 @@ export function PlantDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       setShowRemove(false);
       if (status === 'active') {
-        toast.success('Plant restored');
+        toast.success(t('plants.detailPage.restoredToast'));
       } else {
         // It's left the active list — back to the (active) plants view.
         const message = {
@@ -256,7 +256,7 @@ export function PlantDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['plants', householdId, plantId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       playHaptic('snoozed');
-      toast.info('Task snoozed');
+      toast.info(t('plants.detailPage.snoozedToast'));
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -362,7 +362,9 @@ export function PlantDetailPage() {
           <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
           {t('plants.backToPlants')}
         </Link>
-        <Alert variant="error">{error ? getErrorMessage(error) : 'Plant not found'}</Alert>
+        <Alert variant="error">
+          {error ? getErrorMessage(error) : t('plants.detailPage.notFound')}
+        </Alert>
       </div>
     );
   }
@@ -702,7 +704,7 @@ export function PlantDetailPage() {
           title={t('plants.detailPage.careTasksTitle')}
           description={
             (plant.status ?? 'active') === 'active'
-              ? 'Scheduled care tasks for this plant'
+              ? t('plants.detailPage.careTasksDescription')
               : t('plants.archive.tasksPausedDescription')
           }
           action={
@@ -891,12 +893,23 @@ interface TaskRowProps {
   isMatchingSchedule: boolean;
 }
 
-const SNOOZE_OPTIONS = [
-  { label: '1 day', days: 1 },
-  { label: '3 days', days: 3 },
-  { label: '1 week', days: 7 },
+/**
+ * `labelKey` is a catalog key. "Skip cycle" has no Spanish yet (its wording is
+ * waiting on a review of the menu in use), so it keeps its English `label`.
+ */
+const SNOOZE_OPTIONS: ReadonlyArray<{ days: number; labelKey?: string; label?: string }> = [
+  { labelKey: 'plants.detailPage.snooze.oneDay', days: 1 },
+  { labelKey: 'plants.detailPage.snooze.threeDays', days: 3 },
+  { labelKey: 'plants.detailPage.snooze.oneWeek', days: 7 },
   { label: 'Skip cycle', days: 0 }, // resolved at click time using task.frequency
 ];
+
+function snoozeOptionLabel(
+  opt: (typeof SNOOZE_OPTIONS)[number],
+  t: ReturnType<typeof useTranslation>['t']
+): string {
+  return opt.labelKey ? t(opt.labelKey) : (opt.label ?? '');
+}
 
 function TaskRow({
   task,
@@ -918,7 +931,7 @@ function TaskRow({
   // reading may be a floor rather than a count. streakLabel renders the
   // difference; don't collapse it back to a number here.
   const streakReading = computeStreak(task, completions);
-  const streakText = streakLabel(task, streakReading);
+  const streakText = streakLabel(task, streakReading, t);
   const style = taskTypeStyle(task.type);
   const { Icon } = style;
   // What the schedule will actually advance by on the next completion.
@@ -939,7 +952,8 @@ function TaskRow({
             )}
           >
             <Icon className={clsx('h-5 w-5', style.iconColor)} aria-hidden="true" />
-            {task.customType || taskTypeLabels[task.type]}
+            {task.customType ||
+              t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type)}
           </span>
           <div className="min-w-0">
             {/* The interval IN FORCE, not the base `frequency`: on a task with
@@ -964,7 +978,8 @@ function TaskRow({
                 )}
               >
                 {t('plants.detail.taskDue', { date: formatDate(task.nextDue) })}
-                {task.lastCompleted && ` • Last: ${formatDate(task.lastCompleted)}`}
+                {task.lastCompleted &&
+                  ` • ${t('plants.detailPage.lastDone', { date: formatDate(task.lastCompleted) })}`}
               </p>
             )}
             {streakText && (
@@ -1040,7 +1055,10 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
     event.preventDefault();
     if (isSnoozing) return;
     const from = event.currentTarget;
-    const options = SNOOZE_OPTIONS.map((opt) => ({ id: `snooze-${opt.days}`, title: opt.label }));
+    const options = SNOOZE_OPTIONS.map((opt) => ({
+      id: `snooze-${opt.days}`,
+      title: snoozeOptionLabel(opt, t),
+    }));
     void import('@/services/nativePresent')
       .then(({ chooseFromMenu }) =>
         chooseFromMenu({ title: t('tasks.snooze'), options, cancel: t('common.cancel'), from })
@@ -1068,7 +1086,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
       </summary>
       <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-paper shadow-lg ring-1 ring-primary-100/80 py-1 large-text:static large-text:w-full large-text:max-w-none">
         {SNOOZE_OPTIONS.map((opt) => (
-          <li key={opt.label}>
+          <li key={opt.days}>
             <button
               type="button"
               className="flex min-h-touch w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-parchment/60 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
@@ -1078,7 +1096,7 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
                 (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
               }}
             >
-              {opt.label}
+              {snoozeOptionLabel(opt, t)}
             </button>
           </li>
         ))}

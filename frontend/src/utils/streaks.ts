@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { RECENT_COMPLETIONS_LIMIT } from '@/services/plantService';
 import type { TaskCompletion, Task } from '@/services/plantService';
 
@@ -131,21 +132,23 @@ export function longestStreak(task: Task, completions: TaskCompletion[]): number
 export function streakLabel(
   task: Task,
   reading: StreakReading,
+  t: TFunction,
   windowLimit: number = RECENT_COMPLETIONS_LIMIT
 ): string | null {
   if (reading.cycles < 2) return null;
-  const verbBase =
-    task.type === 'water'
-      ? 'watering'
-      : task.type === 'fertilize'
-        ? 'fertilizing'
-        : task.type === 'prune'
-          ? 'pruning'
-          : task.type === 'repot'
-            ? 'repotting'
-            : (task.customType?.toLowerCase() ?? 'care');
+  const activity =
+    task.type === 'water' ||
+    task.type === 'fertilize' ||
+    task.type === 'prune' ||
+    task.type === 'repot'
+      ? t(`plants.streak.activity.${task.type}`)
+      : (task.customType?.toLowerCase() ?? t('plants.streak.activity.care'));
   if (reading.truncated) {
-    return `${reading.cycles}+ cycle ${verbBase} streak (within the last ${windowLimit} logged)`;
+    return t('plants.streak.labelTruncated', {
+      count: reading.cycles,
+      activity,
+      limit: windowLimit,
+    });
   }
-  return `${reading.cycles}-cycle ${verbBase} streak`;
+  return t('plants.streak.label', { count: reading.cycles, activity });
 }

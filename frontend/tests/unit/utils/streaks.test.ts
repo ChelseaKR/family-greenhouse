@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import i18n from '@/i18n';
 import { computeStreak, longestStreak, streakLabel } from '@/utils/streaks';
 import type { Task, TaskCompletion } from '@/services/plantService';
 
@@ -158,42 +159,44 @@ describe('longestStreak', () => {
 });
 
 describe('streakLabel', () => {
+  // Rendered with the app's own English catalog, so these pin the English copy.
+  const t = i18n.getFixedT('en');
   const exact = (cycles: number) => ({ cycles, truncated: false });
   const floor = (cycles: number) => ({ cycles, truncated: true });
 
   it('returns null for streak < 2', () => {
-    expect(streakLabel(baseTask, exact(0))).toBeNull();
-    expect(streakLabel(baseTask, exact(1))).toBeNull();
+    expect(streakLabel(baseTask, exact(0), t)).toBeNull();
+    expect(streakLabel(baseTask, exact(1), t)).toBeNull();
     // Even a truncated one-cycle reading claims nothing worth a chip.
-    expect(streakLabel(baseTask, floor(1))).toBeNull();
+    expect(streakLabel(baseTask, floor(1), t)).toBeNull();
   });
 
   it('uses the task type as a verb', () => {
-    expect(streakLabel(baseTask, exact(5))).toContain('watering');
-    expect(streakLabel({ ...baseTask, type: 'fertilize' }, exact(3))).toContain('fertilizing');
-    expect(streakLabel({ ...baseTask, type: 'prune' }, exact(4))).toContain('pruning');
+    expect(streakLabel(baseTask, exact(5), t)).toContain('watering');
+    expect(streakLabel({ ...baseTask, type: 'fertilize' }, exact(3), t)).toContain('fertilizing');
+    expect(streakLabel({ ...baseTask, type: 'prune' }, exact(4), t)).toContain('pruning');
   });
 
   it('falls back to custom type for custom tasks', () => {
     const task = { ...baseTask, type: 'custom' as const, customType: 'Misting' };
-    expect(streakLabel(task, exact(3))).toContain('misting');
+    expect(streakLabel(task, exact(3), t)).toContain('misting');
   });
 
   it('states an exact reading as a plain count', () => {
-    expect(streakLabel(baseTask, exact(4))).toBe('4-cycle watering streak');
+    expect(streakLabel(baseTask, exact(4), t)).toBe('4-cycle watering streak');
   });
 
   it('marks a truncated reading as a floor and names the window', () => {
     // The defect: this used to render "4-cycle watering streak" for a run the
     // window could not see the end of.
-    const label = streakLabel(baseTask, floor(4), 10);
+    const label = streakLabel(baseTask, floor(4), t, 10);
     expect(label).toBe('4+ cycle watering streak (within the last 10 logged)');
     expect(label).not.toBe('4-cycle watering streak');
   });
 
   it('never renders a truncated reading without the + marker', () => {
     for (const cycles of [2, 3, 10, 25]) {
-      expect(streakLabel(baseTask, floor(cycles))).toContain(`${cycles}+ cycle`);
+      expect(streakLabel(baseTask, floor(cycles), t)).toContain(`${cycles}+ cycle`);
     }
   });
 });

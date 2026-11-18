@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import i18n from '@/i18n';
 import { Task } from '@/services/plantService';
 import { isOverdue, overdueAt } from '@/utils/date';
 import { isEnabledLocally, notify } from '@/utils/notifications';
@@ -139,7 +140,7 @@ export function useOverdueAlerts(
         // Only a notification that was actually shown counts as announced.
         // Marking before the send meant a browser that rejected construction
         // (iOS standalone PWA) silently lost the alert for the whole session.
-        const shown = notify(`${task.plantName} could use a little care`, {
+        const shown = notify(i18n.t('notifications.overdueAlertTitle', { plant: task.plantName }), {
           body: `${task.customType ?? task.type} is ready whenever you are.`,
           tag: `task-${task.id}`,
         });

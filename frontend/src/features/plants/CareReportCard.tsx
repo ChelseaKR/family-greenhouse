@@ -55,12 +55,16 @@ export function CareReportCard({ plant }: CareReportCardProps) {
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm large-text:grid-cols-1">
         <Stat label={t('plants.careReport.activeTasks')} value={totalTasks.toString()} />
         <Stat
-          label={`Completions (last ${RECENT_COMPLETIONS_LIMIT})`}
+          label={t('plants.careReport.completions', { limit: RECENT_COMPLETIONS_LIMIT })}
           value={totalCompletions.toString()}
         />
         <Stat
-          label={`Best streak (last ${RECENT_COMPLETIONS_LIMIT})`}
-          value={overallBestStreak >= 2 ? `${overallBestStreak} cycles` : '—'}
+          label={t('plants.careReport.bestStreak', { limit: RECENT_COMPLETIONS_LIMIT })}
+          value={
+            overallBestStreak >= 2
+              ? t('plants.careReport.cycles', { count: overallBestStreak })
+              : '—'
+          }
         />
         <Stat
           label={t('plants.careReport.lastCare')}

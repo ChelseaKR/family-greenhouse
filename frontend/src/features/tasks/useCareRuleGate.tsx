@@ -4,6 +4,7 @@
  * kept out of CareRuleDialog.tsx so react-refresh stays happy.)
  */
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Task } from '@/services/plantService';
 import { taskTypeLabels } from '@/utils/taskTypeConfig';
 import { CareRuleDialog } from './CareRuleDialog';
@@ -36,6 +37,7 @@ export function useCareRuleGate<T extends GateTask>(
   ruleFor: (task: T) => string | null,
   onConfirm: (task: T) => void
 ) {
+  const { t } = useTranslation();
   const [pending, setPending] = useState<{ task: T; rule: string } | null>(null);
 
   const request = (task: T) => {
@@ -55,7 +57,8 @@ export function useCareRuleGate<T extends GateTask>(
   };
 
   const taskLabel = pending
-    ? pending.task.customType || taskTypeLabels[pending.task.type] || pending.task.type
+    ? pending.task.customType ||
+      t(`tasks.types.${pending.task.type}`, taskTypeLabels[pending.task.type] ?? pending.task.type)
     : '';
 
   const dialog = (

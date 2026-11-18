@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { api } from './api';
+import i18n from '@/i18n';
 import { track } from './analytics';
 import { getNativePlatform } from '@/lib/platform';
 import type { IdentifyCreditBalance } from './billingService';
@@ -404,9 +405,9 @@ export const plantService = {
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error(`Upload failed with status ${xhr.status}`));
+        else reject(new Error(i18n.t('plants.photoUpload.failedStatus', { status: xhr.status })));
       };
-      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onerror = () => reject(new Error(i18n.t('plants.photoUpload.networkError')));
       // Abort the in-flight PUT when the caller cancels (e.g. unmount) so an
       // abandoned upload doesn't run to completion and confirm server-side.
       xhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'));

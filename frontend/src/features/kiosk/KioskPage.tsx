@@ -117,8 +117,8 @@ export function KioskPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Plant care today — Family Greenhouse',
-    description: 'A household wall display of the plant care due today.',
+    title: t('kiosk.metaTitle'),
+    description: t('kiosk.metaDescription'),
   });
 
   const [tasks, setTasks] = useState<KioskTask[] | null>(null);

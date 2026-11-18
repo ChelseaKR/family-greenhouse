@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { playHaptic } from '@/services/nativeHaptics';
 import { NumberStepper } from '@/components/NumberStepper';
@@ -17,14 +17,16 @@ import { Alert } from '@/components/Alert';
 import { hasNativeFormSheet } from '@/lib/platform';
 import { addTaskFormRequest, formSheetValues, type AddTaskValues } from '@/config/nativeFormSheet';
 
-const taskSchema = z.object({
-  type: z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']),
-  customType: z.string().max(50).optional(),
-  frequency: z.number().min(1, 'Frequency must be at least 1 day').max(365),
-  notes: z.string().max(500).optional(),
-});
+// Built with `t` so the minimum-frequency message is localized.
+const buildTaskSchema = (t: ReturnType<typeof useTranslation>['t']) =>
+  z.object({
+    type: z.enum(['water', 'fertilize', 'prune', 'repot', 'custom']),
+    customType: z.string().max(50).optional(),
+    frequency: z.number().min(1, t('validation.frequencyMin')).max(365),
+    notes: z.string().max(500).optional(),
+  });
 
-type TaskFormData = z.infer<typeof taskSchema>;
+type TaskFormData = z.infer<ReturnType<typeof buildTaskSchema>>;
 
 interface AddTaskModalProps {
   plantId: string;
@@ -36,6 +38,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
   const { t } = useTranslation();
+  const taskSchema = useMemo(() => buildTaskSchema(t), [t]);
 
   const {
     register,

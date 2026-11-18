@@ -216,7 +216,9 @@ export function HouseholdPage() {
   if (isLoading) return <HouseholdSkeleton />;
 
   if (error || !household) {
-    return <Alert variant="error">{error ? getErrorMessage(error) : 'Household not found'}</Alert>;
+    return (
+      <Alert variant="error">{error ? getErrorMessage(error) : t('household.page.notFound')}</Alert>
+    );
   }
 
   return (
@@ -586,7 +588,9 @@ export function HouseholdPage() {
                       : 'bg-parchment text-gray-700 ring-1 ring-primary-200/50'
                   )}
                 >
-                  {member.role === 'admin' ? 'Admin' : 'Member'}
+                  {member.role === 'admin'
+                    ? t('household.page.roleAdmin')
+                    : t('household.page.roleMember')}
                 </span>
 
                 {/* A member whose address bounced silently stops receiving
@@ -622,14 +626,16 @@ export function HouseholdPage() {
                           Make admin") matched nothing (WCAG 2.5.3). The name
                           now starts with the visible words and adds whose
                           role it is. */}
-                      {member.role === 'admin' ? 'Make member' : 'Make admin'}
+                      {member.role === 'admin'
+                        ? t('household.page.makeMember')
+                        : t('household.page.makeAdmin')}
                       <span className="sr-only">, {member.name}</span>
                     </Button>
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => setMemberToRemove(member.userId)}
-                      aria-label={`Remove ${member.name}`}
+                      aria-label={t('household.page.removeMemberAria', { name: member.name })}
                     >
                       <TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />
                     </Button>

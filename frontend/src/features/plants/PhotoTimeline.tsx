@@ -52,7 +52,10 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
               <img
                 src={photo.imageUrl}
                 alt={
-                  photo.caption ?? `Photo from ${new Date(photo.uploadedAt).toLocaleDateString()}`
+                  photo.caption ??
+                  t('plants.photoTimeline.photoAlt', {
+                    date: new Date(photo.uploadedAt).toLocaleDateString(),
+                  })
                 }
                 width={128}
                 height={128}

@@ -8,10 +8,10 @@ interface CareGuideCardProps {
   perenualSpeciesId: number;
 }
 
-const sectionLabels: Record<'watering' | 'sunlight' | 'pruning', string> = {
-  watering: 'Watering',
-  sunlight: 'Sunlight',
-  pruning: 'Pruning',
+const sectionLabelKeys: Record<'watering' | 'sunlight' | 'pruning', string> = {
+  watering: 'plants.careGuideCard.watering',
+  sunlight: 'plants.careGuideCard.sunlight',
+  pruning: 'plants.careGuideCard.pruning',
 };
 
 /**
@@ -95,7 +95,7 @@ export function CareGuideCard({ perenualSpeciesId }: CareGuideCardProps) {
         <div className="space-y-4">
           {data.sections.map((s) => (
             <section key={s.type}>
-              <h4 className="text-sm font-semibold text-gray-900">{sectionLabels[s.type]}</h4>
+              <h4 className="text-sm font-semibold text-gray-900">{t(sectionLabelKeys[s.type])}</h4>
               <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{s.description}</p>
             </section>
           ))}

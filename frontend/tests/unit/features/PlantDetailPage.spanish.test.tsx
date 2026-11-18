@@ -171,7 +171,9 @@ describe('the task interval on the plant page', () => {
     renderDetail(withFrequency(frequency));
 
     expect(await screen.findByText(text, { selector: 'p' })).toBeInTheDocument();
-    expect(screen.queryByText(/\b1 days\b|\b1 día\b/)).not.toBeInTheDocument();
+    // Only the interval line: the Snooze menu's "1 day" / "1 día" option is
+    // correct wording and sits on the same page.
+    expect(screen.queryByText(/\b1 days\b|\b1 día\b/, { selector: 'p' })).not.toBeInTheDocument();
   });
 
   it('holds the approved words in both catalogs', async () => {

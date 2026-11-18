@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { PublicShell } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
@@ -27,20 +28,20 @@ import { MapPinIcon } from '@heroicons/react/24/outline';
  */
 
 /** Turn a task type + plant name into a warm, plain instruction. */
-function instructionFor(task: SitterTask): string {
+function instructionFor(task: SitterTask, t: TFunction): string {
   const plant = task.plantName || 'this plant';
   switch (task.taskType) {
     case 'water':
-      return `Water the ${plant}`;
+      return t('caretaker.page.instructionWater', { plant });
     case 'fertilize':
-      return `Feed the ${plant}`;
+      return t('caretaker.page.instructionFeed', { plant });
     case 'prune':
-      return `Prune the ${plant}`;
+      return t('caretaker.page.instructionPrune', { plant });
     case 'repot':
-      return `Repot the ${plant}`;
+      return t('caretaker.page.instructionRepot', { plant });
     default:
       // Custom task types come through as free text — show them as-is.
-      return `${task.taskType} — ${plant}`;
+      return t('caretaker.page.instructionOther', { task: task.taskType, plant });
   }
 }
 
@@ -52,12 +53,12 @@ function instructionFor(task: SitterTask): string {
  * "Overdue" every afternoon. `null` (an unreadable date) shows no label rather
  * than a guessed one.
  */
-function dueLabel(days: number | null): string | null {
+function dueLabel(days: number | null, t: TFunction): string | null {
   if (days === null) return null;
-  if (days < 0) return 'Overdue';
-  if (days === 0) return 'Due today';
-  if (days === 1) return 'Due tomorrow';
-  return `Due in ${days} days`;
+  if (days < 0) return t('caretaker.page.overdue');
+  if (days === 0) return t('caretaker.page.dueToday');
+  if (days === 1) return t('caretaker.page.dueTomorrow');
+  return t('caretaker.page.dueInDays', { count: days });
 }
 
 /**
@@ -73,8 +74,8 @@ export function SitPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Plant-sitting — Family Greenhouse',
-    description: 'See which plants need care and check them off. No sign-up needed.',
+    title: t('sitter.page.metaTitle'),
+    description: t('sitter.page.metaDescription'),
   });
 
   const [label, setLabel] = useState<string | null>(null);
@@ -138,7 +139,9 @@ export function SitPage() {
         // it falls to <body> and the next Done button is a full page of Tab
         // presses away). This page IS that one interaction, for a guest with
         // no account to fall back on.
-        setStatusMessage(t('sitter.markedDone', { plant: task.plantName || instructionFor(task) }));
+        setStatusMessage(
+          t('sitter.markedDone', { plant: task.plantName || instructionFor(task, t) })
+        );
         setJustCompleted({ taskId, seq: completionSeq.current++ });
       } catch (err) {
         if (err instanceof SitterLinkInactiveError) {
@@ -214,7 +217,7 @@ export function SitPage() {
       {status === 'ready' && (
         <>
           <h1 className="font-serif text-3xl tracking-tight text-ink sm:text-4xl">
-            {label ? `${label}: what needs doing` : 'Thanks for plant-sitting!'}
+            {label ? t('sitter.page.heading', { label }) : t('sitter.page.headingNoLabel')}
           </h1>
           <p className="mt-3 text-base text-gray-600">
             <Trans i18nKey="sitter.page.intro" components={{ strong: <strong /> }} />
@@ -268,14 +271,14 @@ export function SitPage() {
                   const isPending = pending.has(task.taskId);
                   const location = [task.spaceName, task.placementNote].filter(Boolean).join(' · ');
                   const days = dueDayOffset(task.dueDate, now);
-                  const label = dueLabel(days);
+                  const label = dueLabel(days, t);
                   return (
                     <li
                       key={task.taskId}
                       className="flex items-center justify-between gap-4 rounded-xl border border-primary-100/80 bg-white p-4 shadow-journal"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900">{instructionFor(task)}</p>
+                        <p className="font-medium text-gray-900">{instructionFor(task, t)}</p>
                         {location && (
                           <p className="mt-1 flex items-start gap-1 text-sm text-primary-800">
                             <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -302,7 +305,7 @@ export function SitPage() {
                         size="sm"
                         isLoading={isPending}
                         onClick={() => handleComplete(task.taskId)}
-                        aria-label={`Mark "${instructionFor(task)}" as done`}
+                        aria-label={`Mark "${instructionFor(task, t)}" as done`}
                       >
                         {t('common.done')}
                       </Button>

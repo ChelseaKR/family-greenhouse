@@ -13,7 +13,7 @@ import {
   API_SCOPES,
   READ_API_SCOPES,
   WRITE_API_SCOPES,
-  SCOPE_LABELS,
+  SCOPE_LABEL_KEYS,
   type ApiScope,
 } from '@/services/apiKeyService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -146,7 +146,7 @@ export function ApiKeysSettings() {
                 onClick={handleCopy}
                 leftIcon={<ClipboardDocumentIcon className="h-4 w-4" aria-hidden="true" />}
               >
-                {copyOk ? 'Copied!' : 'Copy'}
+                {copyOk ? t('household.share.copied') : t('household.share.copy')}
               </Button>
               <Button
                 variant="secondary"
@@ -211,7 +211,7 @@ export function ApiKeysSettings() {
                       checked={scopes.includes(scope)}
                       onChange={() => toggleScope(scope)}
                     />
-                    {SCOPE_LABELS[scope]}
+                    {t(SCOPE_LABEL_KEYS[scope])}
                   </label>
                 ))}
               </div>
@@ -233,7 +233,13 @@ export function ApiKeysSettings() {
       <Card padding="none">
         <div className="px-6 py-4 border-b border-gray-200">
           <CardHeader
-            title={keysUnavailable ? 'Active keys' : `Active keys (${keysQuery.data?.length ?? 0})`}
+            title={
+              keysUnavailable
+                ? t('settings.apiKeysPanel.activeTitle')
+                : t('settings.apiKeysPanel.activeTitleCount', {
+                    count: keysQuery.data?.length ?? 0,
+                  })
+            }
             description={t('settings.apiKeysPanel.revokeDescription')}
           />
         </div>
@@ -277,7 +283,7 @@ export function ApiKeysSettings() {
                         key={scope}
                         className="inline-flex rounded-sm bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-800"
                       >
-                        {SCOPE_LABELS[scope] ?? scope}
+                        {SCOPE_LABEL_KEYS[scope] ? t(SCOPE_LABEL_KEYS[scope]) : scope}
                       </span>
                     ))}
                   </div>
@@ -289,7 +295,7 @@ export function ApiKeysSettings() {
                     className="w-full sm:w-auto"
                     onClick={() => setRevokeId(key.id)}
                     leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
-                    aria-label={`Revoke key ${key.label}`}
+                    aria-label={t('settings.apiKeysPanel.revokeAria', { label: key.label })}
                   >
                     {t('caretaker.seats.revoke')}
                   </Button>

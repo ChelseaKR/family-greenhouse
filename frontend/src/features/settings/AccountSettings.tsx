@@ -165,8 +165,8 @@ export function AccountSettings() {
           title={t('settings.accountPanel.profileTitle')}
           description={
             hasHousehold
-              ? "Update how your name shows up in your household. Email changes aren't supported yet."
-              : "Update the name on your account. Email changes aren't supported yet."
+              ? t('settings.accountPanel.profileDescriptionHousehold')
+              : t('settings.accountPanel.profileDescription')
           }
         />
         {updateProfile.isError && (
@@ -266,7 +266,7 @@ export function AccountSettings() {
             minLength={12}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            error={passwordMismatch ? 'Passwords do not match.' : undefined}
+            error={passwordMismatch ? t('auth.passwordMismatch') : undefined}
           />
           <div className="flex justify-end">
             <Button type="submit" isLoading={changePassword.isPending} disabled={!canSubmit}>

@@ -11,11 +11,12 @@ export const READ_API_SCOPES = ['read:plants', 'read:tasks', 'read:activity'] as
 /** Scopes that allow mutations; the UI shows a trust warning when selected. */
 export const WRITE_API_SCOPES: readonly ApiScope[] = ['write:tasks'];
 
-export const SCOPE_LABELS: Record<ApiScope, string> = {
-  'read:plants': 'Read plants',
-  'read:tasks': 'Read tasks',
-  'read:activity': 'Read activity',
-  'write:tasks': 'Complete & snooze tasks',
+/** Catalog keys for each scope's label (settings.apiKeysPanel.scope.*). */
+export const SCOPE_LABEL_KEYS: Record<ApiScope, string> = {
+  'read:plants': 'settings.apiKeysPanel.scope.readPlants',
+  'read:tasks': 'settings.apiKeysPanel.scope.readTasks',
+  'read:activity': 'settings.apiKeysPanel.scope.readActivity',
+  'write:tasks': 'settings.apiKeysPanel.scope.writeTasks',
 };
 
 export interface ApiKeyRecord {
