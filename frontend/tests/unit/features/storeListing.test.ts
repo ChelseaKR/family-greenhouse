@@ -15,7 +15,7 @@ const ROOT = join(__dirname, '../../../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
 const metadata = JSON.parse(read('store-assets/metadata/en-US.json')) as {
-  appStore: { description: string };
+  appStore: { description: string; keywords: string; name: string; subtitle: string };
   googlePlay: { fullDescription: string };
 };
 const plans = read('backend/src/models/plans.ts');
@@ -62,5 +62,45 @@ describe('Google Play description', () => {
     expect(metadata.googlePlay.fullDescription).toContain(
       'This app does not sell subscriptions and collects no payment.'
     );
+  });
+});
+
+describe('App Store keywords', () => {
+  // Approved 2026-11-17 for the submission already planned for January: the
+  // existing eleven words, then `water`. "Watering" is in the subtitle, and
+  // the bare word was in none of the three fields Apple indexes.
+  const KEYWORDS =
+    'houseplant,tracker,schedule,reminder,roommate,housemate,chores,indoor,garden,sitter,journal,water';
+  const keywords = metadata.appStore.keywords;
+
+  it('is the approved list, within Apple’s 100 characters', () => {
+    expect(keywords).toBe(KEYWORDS);
+    expect(keywords.length).toBe(97);
+    expect(keywords.length).toBeLessThanOrEqual(100);
+  });
+
+  it('adds one word and changes nothing else in the field', () => {
+    const words = keywords.split(',');
+    expect(words.at(-1)).toBe('water');
+    expect(words.slice(0, -1).join(',')).toBe(
+      'houseplant,tracker,schedule,reminder,roommate,housemate,chores,indoor,garden,sitter,journal'
+    );
+    expect(new Set(words).size).toBe(words.length);
+    for (const word of words) expect(word, word).toBe(word.trim().toLowerCase());
+  });
+
+  it('repeats no word of the name or the subtitle, which Apple already indexes', () => {
+    expect(metadata.appStore.name).toBe('Family Greenhouse: Plant Care');
+    expect(metadata.appStore.subtitle).toBe('Shared watering for households');
+    const indexed = `${metadata.appStore.name} ${metadata.appStore.subtitle}`
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.replace(':', ''));
+    for (const word of keywords.split(',')) expect(indexed, word).not.toContain(word);
+  });
+
+  it('is the list docs/APP-STORE.md tells the submitter to paste', () => {
+    const doc = read('docs/APP-STORE.md');
+    expect(doc).toContain(`\`${KEYWORDS}\` (97/100 chars)`);
   });
 });

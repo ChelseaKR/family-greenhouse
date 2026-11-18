@@ -127,6 +127,11 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the sitemap already publish, so a reader sees the date a crawler does. A
   post that has not changed since it was published shows its publish date
   alone. Blog posts are English only, so the word is not in the catalogs.
+- **The App Store keyword field gains `water`.** It is now 97 of 100
+  characters. "Watering" is in the subtitle, and the bare word was in none of
+  the three fields Apple indexes. It is for the iPhone submission already
+  planned; nothing else in the listing changes
+  (`store-assets/metadata/en-US.json`, `docs/APP-STORE.md`).
 
 ### Fixed
 
