@@ -25,8 +25,12 @@ function sourceFiles(dir: string): string[] {
 }
 
 // An opening <Link>, <NavLink> or <a> whose first child is a <Button> or <button>.
+// The attributes are read as a run of either one plain character or one whole
+// `{...}` expression (which may hold `>` and one nested `{...}`, as a template
+// literal does). The two choices never start with the same character, so the
+// pattern cannot backtrack between them.
 const LINK_WRAPPING_BUTTON =
-  /<(?:Link|NavLink|a)\b[^<>]*(?:\{[^{}]*\}[^<>]*)*>\s*<(?:Button|button)\b/g;
+  /<(?:Link|NavLink|a)\b(?:[^<>{}]|\{(?:[^{}]|\{[^{}]*\})*\})*>\s*<(?:Button|button)\b/g;
 
 describe('links never wrap buttons', () => {
   it('finds no <Link>/<a> whose child is a <Button>', () => {
@@ -46,7 +50,13 @@ describe('links never wrap buttons', () => {
     const withExpression =
       '<Link to={`/plants/${id}`} className="block">\n<Button>Open</Button></Link>';
     expect(withExpression.match(LINK_WRAPPING_BUTTON)).not.toBeNull();
+    const withArrow = '<a href="/x" onClick={() => go(1)}><button>Go</button></a>';
+    expect(withArrow.match(LINK_WRAPPING_BUTTON)).not.toBeNull();
     const fine = '<Link to="/tasks" className={buttonStyles()}>View all</Link>';
     expect(fine.match(LINK_WRAPPING_BUTTON)).toBeNull();
+    // A long run of braces must be rejected quickly, not by trying every split.
+    const started = Date.now();
+    expect(`<a ${'{{}}'.repeat(5000)}`.match(LINK_WRAPPING_BUTTON)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
