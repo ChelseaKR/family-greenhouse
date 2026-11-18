@@ -170,8 +170,11 @@ export function CommandPalette() {
                               >
                                 <PlantBullet />
                                 <span className="flex-auto truncate">{r.label}</span>
+                                {/* opacity-90, not 75: on the highlighted row
+                                    this is white on the brand green, and at
+                                    75% it was 4.3:1. */}
                                 {r.sub && (
-                                  <span className="text-xs italic opacity-75 truncate">
+                                  <span className="text-xs italic opacity-90 truncate">
                                     {r.sub}
                                   </span>
                                 )}
@@ -203,7 +206,7 @@ export function CommandPalette() {
                                   aria-hidden="true"
                                 />
                                 <span className="flex-auto truncate">{r.label}</span>
-                                <span className="text-xs opacity-75 truncate">{r.sub}</span>
+                                <span className="text-xs opacity-90 truncate">{r.sub}</span>
                               </Combobox.Option>
                             ))}
                         </ul>
