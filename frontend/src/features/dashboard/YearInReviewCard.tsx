@@ -4,12 +4,13 @@ import { Card, CardHeader } from '@/components/Card';
 import { householdService } from '@/services/householdService';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
 
-const TYPE_LABELS: Record<string, string> = {
-  water: 'Watering',
-  fertilize: 'Fertilizing',
-  prune: 'Pruning',
-  repot: 'Repotting',
-  custom: 'Other',
+/** Catalog keys for the "where the work went" bars; an unknown type shows as stored. */
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  water: 'yearInReview.type.water',
+  fertilize: 'yearInReview.type.fertilize',
+  prune: 'yearInReview.type.prune',
+  repot: 'yearInReview.type.repot',
+  custom: 'yearInReview.type.custom',
 };
 
 /**
@@ -41,7 +42,10 @@ export function YearInReviewCard() {
   return (
     <Card padding="none">
       <div className="px-6 py-4 border-b border-primary-100/70">
-        <CardHeader title={`Your ${year}`} description={t('yearInReview.description')} />
+        <CardHeader
+          title={t('yearInReview.title', { year })}
+          description={t('yearInReview.description')}
+        />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6">
         <Stat
@@ -51,7 +55,7 @@ export function YearInReviewCard() {
         <Stat
           label={t('yearInReview.topContributor')}
           value={topMember ? (topMember.name ?? t('analytics.unknownMember')) : '—'}
-          sub={topMember ? `${topMember.count} tasks` : undefined}
+          sub={topMember ? t('analytics.page.taskCount', { count: topMember.count }) : undefined}
         />
         <Stat
           label={t('yearInReview.tasksPerWeek')}
@@ -70,7 +74,7 @@ export function YearInReviewCard() {
             return (
               <li key={row.type} className="flex items-center gap-3">
                 <span className="w-24 text-sm text-gray-700">
-                  {TYPE_LABELS[row.type] ?? row.type}
+                  {TYPE_LABEL_KEYS[row.type] ? t(TYPE_LABEL_KEYS[row.type]) : row.type}
                 </span>
                 <span
                   className="h-3 rounded-full bg-primary-600"

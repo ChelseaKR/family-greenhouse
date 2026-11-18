@@ -82,9 +82,8 @@ export function GiftLandingPage() {
   const availability = useGiftAvailability();
 
   useMetaTags({
-    title: 'Send a Family Greenhouse gift subscription',
-    description:
-      "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code — no household of your own required to send one.",
+    title: t('giftLanding.metaTitle'),
+    description: t('giftLanding.metaDescription'),
     canonical: siteUrl('/gift'),
   });
 

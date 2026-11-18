@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { useRefreshSignedPhotos } from '@/hooks/useRefreshSignedPhotos';
 
@@ -23,6 +24,7 @@ interface PlantImageProps {
  * resolves via 302 redirect — the browser follows transparently.
  */
 export function PlantImage({ plant, className, width, height }: PlantImageProps) {
+  const { t } = useTranslation();
   const [thumbFailed, setThumbFailed] = useState(false);
   const refreshSignedPhotos = useRefreshSignedPhotos();
 
@@ -31,7 +33,7 @@ export function PlantImage({ plant, className, width, height }: PlantImageProps)
     return (
       <img
         src={plant.imageUrl}
-        alt={`Photo of ${plant.name}`}
+        alt={t('plants.image.photoAlt', { name: plant.name })}
         width={width}
         height={height}
         loading="lazy"
@@ -46,7 +48,7 @@ export function PlantImage({ plant, className, width, height }: PlantImageProps)
     return (
       <img
         src={`${API_URL}/species/${plant.perenualSpeciesId}/thumbnail`}
-        alt={`Stock photo for ${plant.name}`}
+        alt={t('plants.image.stockPhotoAlt', { name: plant.name })}
         width={width}
         height={height}
         loading="lazy"

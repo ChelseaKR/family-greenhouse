@@ -80,9 +80,8 @@ export function StatusPage() {
   const { t } = useTranslation();
 
   useMetaTags({
-    title: 'Status — Family Greenhouse',
-    description:
-      "Live status for Family Greenhouse's database, sign-in, and email/SMS delivery, checked every 60 seconds, plus a log of past incidents.",
+    title: t('statusPage.metaTitle'),
+    description: t('statusPage.metaDescription'),
   });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -170,8 +169,8 @@ export function StatusPage() {
               }`}
             >
               {overallStatus === 'ok' && t('statusPage.coreApiOperational')}
-              {overallStatus === 'degraded' && 'Some systems degraded'}
-              {overallStatus === 'down' && 'We are investigating an issue'}
+              {overallStatus === 'degraded' && t('statusPage.degraded')}
+              {overallStatus === 'down' && t('statusPage.down')}
             </p>
           </div>
           {data?.checkedAt && (

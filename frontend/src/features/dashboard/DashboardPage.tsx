@@ -284,8 +284,8 @@ export function DashboardPage() {
               // below already says it, and saying it twice on one card reads
               // as a bug rather than emphasis.
               laterTasks.length > 0 && actionableTasks.length > 0
-                ? `Overdue and due today — ${laterTasks.length} more later this week`
-                : 'Overdue and due today'
+                ? t('dashboard.toDoNowDescriptionLater', { count: laterTasks.length })
+                : t('dashboard.toDoNowDescription')
             }
             action={
               <Link to="/tasks" className={buttonStyles({ variant: 'secondary', size: 'sm' })}>
@@ -919,7 +919,10 @@ function TaskItem({
             {task.plantName}
           </Link>
           <p className="text-xs text-gray-600">
-            <span className="font-medium">{task.customType || taskTypeLabels[task.type]}</span>
+            <span className="font-medium">
+              {task.customType ||
+                t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type)}
+            </span>
             {' • '}
             <span className={clsx(overdue && 'text-accent-700 font-medium')}>
               {formatDueDate(task.nextDue)}
@@ -965,7 +968,9 @@ function TaskItem({
           aria-label={
             isPending
               ? t('plants.list.undoAria', {
-                  task: task.customType || taskTypeLabels[task.type],
+                  task:
+                    task.customType ||
+                    t(`tasks.types.${task.type}`, taskTypeLabels[task.type] ?? task.type),
                   plant: task.plantName,
                 })
               : undefined

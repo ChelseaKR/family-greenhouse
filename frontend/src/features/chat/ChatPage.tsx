@@ -265,7 +265,7 @@ export function ChatPage() {
           {budget && (
             <div
               className="w-full text-left text-xs text-gray-600 sm:w-auto sm:text-right"
-              title={`${budgetPct}% of monthly chat budget used`}
+              title={t('chat.page.budgetTitle', { percent: budgetPct })}
             >
               {t('chat.page.budgetUsed', { percent: budgetPct })}
               <div className="mt-1 h-1.5 w-full overflow-hidden rounded-sm bg-gray-200 sm:w-32">

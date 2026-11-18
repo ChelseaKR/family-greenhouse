@@ -542,10 +542,10 @@ export function NotificationSettings() {
               <p className="text-sm font-medium text-gray-900">{t('notifications.browser')}</p>
               <p className="text-sm text-gray-600">
                 {browserActive
-                  ? 'Pop-ups appear while a tab is open or the app is installed.'
+                  ? t('notifications.browserActiveHint')
                   : permission === 'denied'
-                    ? 'Permission denied — update your browser settings to re-enable.'
-                    : 'Enable to be alerted when overdue tasks appear in the dashboard.'}
+                    ? t('notifications.browserDeniedHint')
+                    : t('notifications.browserEnableHint')}
               </p>
               <p className="mt-1 text-sm text-gray-500">{t('notifications.reminderPreview')}</p>
             </div>
@@ -739,7 +739,7 @@ export function NotificationSettings() {
                 {!smsAvailable
                   ? t('notifications.smsUnavailableShort')
                   : phoneIsVerified || prefs.sms
-                    ? 'Short SMS reminders when tasks are due or overdue. Standard message rates may apply.'
+                    ? t('notifications.smsHint')
                     : t('notifications.phoneUnverifiedHint')}
               </p>
             </div>
@@ -781,7 +781,7 @@ export function NotificationSettings() {
                     }}
                     error={
                       phoneDraft && !E164.test(phoneDraft)
-                        ? 'Use the format +15551234567'
+                        ? t('notifications.phoneFormatError')
                         : undefined
                     }
                   />

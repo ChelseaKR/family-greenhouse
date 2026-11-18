@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { calendarDaysBetween, isOverdue } from '@/utils/date';
+import { taskTypeLabels } from '@/utils/taskTypeConfig';
 import { DoubleCareCard } from './DoubleCareCard';
 import clsx from 'clsx';
 import { CoverageCard } from './CoverageCard';
@@ -30,14 +31,6 @@ import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
  * /year-in-review, /tasks, and /plants — everything else is computed
  * client-side from data the dashboard already needs anyway.
  */
-
-const TASK_TYPE_LABELS: Record<string, string> = {
-  water: 'Water',
-  fertilize: 'Fertilize',
-  prune: 'Prune',
-  repot: 'Repot',
-  custom: 'Custom',
-};
 
 // Bar hues mirror taskTypeConfig chips so charts match task chips app-wide.
 const TASK_TYPE_COLORS: Record<string, string> = {
@@ -233,7 +226,7 @@ export function AnalyticsPage() {
                   return (
                     <li key={b.type} className="flex items-center gap-3 px-6 py-3 text-sm">
                       <span className="w-32 capitalize text-gray-900">
-                        {TASK_TYPE_LABELS[b.type] ?? b.type}
+                        {t(`tasks.types.${b.type}`, taskTypeLabels[b.type] ?? b.type)}
                       </span>
                       <span
                         className={clsx(
@@ -369,7 +362,9 @@ export function AnalyticsPage() {
                     {t('analytics.page.taskCount', { count: taskCount })}
                   </span>
                   <span className="ml-auto text-gray-600 tabular-nums">
-                    {count === null ? '— completed' : `${count} completed`}
+                    {count === null
+                      ? t('analytics.page.completedUnknown')
+                      : t('analytics.page.completedCount', { count })}
                   </span>
                 </li>
               ))}
@@ -413,7 +408,7 @@ function DailyTrend({ series }: DailyTrendProps) {
       <div
         className="relative flex items-end gap-1 h-24"
         role="img"
-        aria-label={`30-day completion trend, total ${total} tasks. 7-day moving average overlaid.`}
+        aria-label={t('analytics.page.trendAria', { total })}
       >
         {series.map((d) => {
           const heightPct = (d.count / max) * 100;
@@ -421,7 +416,7 @@ function DailyTrend({ series }: DailyTrendProps) {
             <div
               key={d.date}
               className="flex-1 group relative"
-              title={`${d.date}: ${d.count} task${d.count === 1 ? '' : 's'}`}
+              title={t('analytics.page.dayTitle', { date: d.date, count: d.count })}
             >
               <div
                 className={clsx(

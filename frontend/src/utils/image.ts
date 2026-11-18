@@ -13,6 +13,7 @@
  * see `imageMetadata.ts`.
  */
 
+import i18n from '@/i18n';
 import { stripImageMetadata } from './imageMetadata';
 
 export const MAX_LONG_EDGE = 1600;
@@ -50,7 +51,7 @@ async function decodeImage(file: Blob): Promise<ImageBitmap | HTMLImageElement> 
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Could not decode image'));
+      reject(new Error(i18n.t('plants.photoPicker.decodeFailed')));
     };
     img.src = url;
   });

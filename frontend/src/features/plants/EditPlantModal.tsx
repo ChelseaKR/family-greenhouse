@@ -15,11 +15,12 @@ import { Alert } from '@/components/Alert';
 import { SpeciesCombobox } from '@/components/SpeciesCombobox';
 import { SpacePicker } from './SpacePicker';
 
-// Built with `t` so the house-rule length message is localized; the other
-// messages are unchanged from the module-level schema this replaces.
+// Built with `t` so the required-name and house-rule length messages are
+// localized; the other messages are unchanged from the module-level schema
+// this replaces.
 const buildPlantSchema = (t: ReturnType<typeof useTranslation>['t']) =>
   z.object({
-    name: z.string().min(1, 'Name is required').max(100),
+    name: z.string().min(1, t('validation.nameRequired')).max(100),
     species: z.string().max(100).optional(),
     spaceId: z.string().optional(),
     placementNote: z.string().max(120).optional(),

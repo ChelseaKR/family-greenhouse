@@ -420,7 +420,9 @@ export function SitterLinksCard({
                         isLoading={revokeMutation.isPending && revokeMutation.variables === link.id}
                         onClick={() => revokeMutation.mutate(link.id)}
                         leftIcon={<TrashIcon className="h-4 w-4 text-red-500" aria-hidden="true" />}
-                        aria-label={`Revoke sitter link ${link.label || ''}`.trim()}
+                        aria-label={t('household.sitterLinks.revokeAria', {
+                          label: link.label || '',
+                        }).trim()}
                       >
                         {t('caretaker.seats.revoke')}
                       </Button>
