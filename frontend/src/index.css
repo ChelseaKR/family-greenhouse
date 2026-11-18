@@ -294,6 +294,45 @@ html[data-text-size='large'] .whitespace-nowrap {
     @apply outline-hidden ring-2 ring-primary-500 ring-offset-2;
   }
 
+  /* A native checkbox or radio gets a real outline as well. The ring above is
+     a box-shadow, and WebKit does not paint a box-shadow on a control it
+     draws itself (appearance: auto); `outline-hidden` had already taken the
+     browser's own ring away. In Safari, and in the iPhone app with a
+     keyboard, a focused checkbox showed nothing at all (WCAG 2.4.7). The
+     outline sits where the ring does, so Chromium and Firefox look as they
+     did. Pinned by tests/unit/styles/checkboxFocusOutline.test.ts. */
+  input[type='checkbox']:focus-visible,
+  input[type='radio']:focus-visible {
+    outline: 2px solid var(--color-primary-500);
+    outline-offset: 2px;
+  }
+
+  /* Forced colors (Windows High Contrast) replaces every background the page
+     sets with the system's. Which view is selected, which filter is pressed,
+     which settings tab is open and which page the sidebar is on were all
+     shown by a background tint alone, so in that mode each of them looked
+     exactly like its neighbours (WCAG 1.4.1, 1.4.11). The selected one now
+     takes the system's own selection colours. `!important` because these
+     must beat the utility classes, which sit in a later layer. Pinned by
+     tests/unit/styles/forcedColorsSelectedState.test.ts. */
+  @media (forced-colors: active) {
+    [aria-pressed='true'],
+    [aria-current='page'],
+    [role='tab'][aria-selected='true'] {
+      forced-color-adjust: none !important;
+      background-color: Highlight !important;
+      border-color: Highlight !important;
+      color: HighlightText !important;
+    }
+
+    [aria-pressed='true'] *,
+    [aria-current='page'] *,
+    [role='tab'][aria-selected='true'] * {
+      background-color: transparent !important;
+      color: HighlightText !important;
+    }
+  }
+
   /* Reduced motion preference */
   @media (prefers-reduced-motion: reduce) {
     *,
