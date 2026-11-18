@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, TABLE_NAME } from '../utils/dynamodb.js';
 import { logger } from '../utils/logger.js';
+import { capture } from '../utils/serverAnalytics.js';
 import {
+  APP_STORE_PRODUCT_CADENCE,
   appStoreState,
   subscriptionFromTransaction,
   type AppStoreRenewalInfo,
@@ -131,8 +133,15 @@ async function householdForOriginalTransaction(otid: string): Promise<string | n
   return typeof id === 'string' ? id : null;
 }
 
-/** Bind an Apple subscription to a household, once. Returns the household it is bound to. */
-async function bindOriginalTransaction(otid: string, householdId: string): Promise<string> {
+/**
+ * Bind an Apple subscription to a household, once. Returns the household it
+ * is bound to, and whether this call made the binding: the one write per
+ * Apple subscription that exactly one caller can win.
+ */
+async function bindOriginalTransaction(
+  otid: string,
+  householdId: string
+): Promise<{ householdId: string; created: boolean }> {
   try {
     await dynamodb.send(
       new PutCommand({
@@ -146,10 +155,13 @@ async function bindOriginalTransaction(otid: string, householdId: string): Promi
         ConditionExpression: 'attribute_not_exists(PK)',
       })
     );
-    return householdId;
+    return { householdId, created: true };
   } catch (err) {
     if (!isConditionalFailure(err)) throw err;
-    return (await householdForOriginalTransaction(otid)) ?? householdId;
+    return {
+      householdId: (await householdForOriginalTransaction(otid)) ?? householdId,
+      created: false,
+    };
   }
 }
 
@@ -237,12 +249,18 @@ export async function applyVerifiedTransaction(
   if (householdId && postedBy && householdId !== postedBy) {
     return { outcome: 'linked_elsewhere' };
   }
+  // True only for the call that bound this Apple subscription to its
+  // household, which happens once per subscription: renewals, restores and
+  // Apple's notifications about it all find the binding already there.
+  let newlyBound = false;
   if (!householdId) {
     const fromToken = await householdForToken(tx.appAccountToken);
     if (postedBy && fromToken && fromToken !== postedBy) return { outcome: 'linked_elsewhere' };
     const target = fromToken ?? postedBy;
     if (!target) return { outcome: 'unknown_household' };
-    householdId = await bindOriginalTransaction(tx.originalTransactionId, target);
+    const binding = await bindOriginalTransaction(tx.originalTransactionId, target);
+    householdId = binding.householdId;
+    newlyBound = binding.created;
     if (postedBy && householdId !== postedBy) return { outcome: 'linked_elsewhere' };
   }
 
@@ -262,6 +280,23 @@ export async function applyVerifiedTransaction(
     const current = await getHouseholdSubscription(householdId);
     if (hasLiveStripeSubscription(current)) {
       logger.warn({ householdId }, 'app_store_and_stripe_both_live');
+    }
+    // The App Store counterpart of the Stripe webhook's `subscription_activated`
+    // (docs/analytics.md, "Server-confirmed events"): a household bought a
+    // plan in the iPhone app. Once per Apple subscription, because only the
+    // call that made the binding sends it. Production transactions only: a
+    // Sandbox purchase (TestFlight, or App Review while production accepts
+    // Sandbox) is a test nobody paid for. Without an introductory offer Apple
+    // charges when the person confirms, so unlike most Stripe activations this
+    // one is money. If the process stops between the binding and this line the
+    // event is lost, never sent twice: an undercount, the safe direction.
+    // Fire-and-forget: `capture` never throws.
+    if (newlyBound && tx.environment === 'Production') {
+      void capture(householdId, 'subscription_activated', {
+        plan: sub.planId,
+        interval: APP_STORE_PRODUCT_CADENCE[sub.productId],
+        store: 'app_store',
+      });
     }
   }
   return { outcome, householdId, planId: sub.planId };

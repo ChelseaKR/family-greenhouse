@@ -132,12 +132,28 @@ Three events, one per real subscription transition. **Only the middle one is mon
 | `subscription_paid`        | `customer.subscription.updated` where `previous_attributes.status` shows the subscription was not `active` and now is. | **The paid conversion.** Stripe only moves a subscription to `active` after an invoice is actually paid. Properties: `plan`, `interval`, `from: 'trialing' \| 'past_due' \| 'unpaid' \| 'incomplete' \| 'paused' \| 'other'`.                                                                                                                                                                                                                                                                          |
 | `subscription_deactivated` | `customer.subscription.deleted` — the subscription is gone at Stripe.                                                  | **Churn.** Properties: `plan` (the tier _lost_, read before the row is rewritten), `interval`, and `churnReason: 'requested' \| 'payment_failed' \| 'payment_disputed' \| 'other'` when Stripe recorded one.                                                                                                                                                                                                                                                                                           |
 
+**App Store purchases** (ADR 0041) send one more `subscription_activated`, from
+`backend/src/services/appStoreBilling.ts`, with `store: 'app_store'` beside
+`plan` and `interval: 'month' | 'year'`; its first-party log line carries
+`source: 'app_store'` instead of `stripe_webhook`. It fires once per Apple
+subscription: only the call that first binds Apple's original transaction to
+the household sends it (`APPSTORE_TXN#<id>`, a conditional write one caller
+wins), so renewals, restores and Apple's notifications are silent. It fires
+only for an active subscription signed for Apple's **Production** environment;
+a Sandbox purchase (TestFlight, or App Review while production accepts
+Sandbox, ADR 0045) sends nothing. Apple charges when the person confirms and
+there is no introductory offer, so unlike most Stripe activations **this one is
+money**. Like the Stripe events it can undercount (a stop between the binding
+and the emit loses it) and never double-counts. Apple's renewals, refunds and
+cancellations send no event; App Store Connect's sales reports are the record
+of what Apple billed.
+
 How to count each question:
 
-- **Trials started** → `subscription_activated` where `interval != 'lifetime'`.
+- **Trials started** → `subscription_activated` where `interval != 'lifetime'` and `store` is absent.
 - **Trials converted to paid** → `subscription_paid` where `from = 'trialing'`.
 - **Recovered payments** (a failed charge later succeeded) → `subscription_paid` where `from != 'trialing'`. Real revenue, but **not** a new conversion — do not add it to the line above.
-- **Revenue at the moment it lands** → `subscription_paid` **plus** `subscription_activated` where `interval = 'lifetime'`.
+- **Revenue at the moment it lands** → `subscription_paid` **plus** `subscription_activated` where `interval = 'lifetime'` **plus** `subscription_activated` where `store = 'app_store'`.
 - **Churn** → `subscription_deactivated`, split by `churnReason` (voluntary vs. dunning failure have completely different remedies).
 
 Why `customer.subscription.updated` and not the first `invoice.payment_succeeded`:
