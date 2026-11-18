@@ -213,6 +213,21 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   in Spanish "Los recordatorios sugeridos solo se crean cuando los
   confirmas." It uses the words on the suggestion card itself. The line's
   first two sentences are unchanged.
+- **More of the app is in Spanish for a Spanish-language user.** About a
+  hundred strings that the hardcoded-string check cannot see (they sat in
+  props, toasts, form errors, helper functions and lists of labels) now come
+  from the catalog: on the plant page (toasts, snooze lengths, care report,
+  streaks, photo descriptions), Add plant, the dashboard, Year in review,
+  Analytics, Household, Settings (account, API keys, notifications), the
+  sitter page, /status, the wall display and /gift. The three Spanish plural
+  forms for counts of a million copy the ordinary plural, so no catalog value
+  is left as pending English. The curated care tips stay English and are now
+  marked `lang="en"` for screen readers. Thirteen strings stay English until
+  Chelsea has seen them on screen. English text is unchanged except two
+  fixes that come with the catalog: "Passwords do not match." now reads
+  "Passwords don't match" (the reset-password wording), and Year in review says
+  "1 task", not "1 tasks". Spanish approved by Chelsea on 2026-11-18; no
+  native speaker has reviewed it.
 
 ## [0.52.0] - 2026-11-17
 
