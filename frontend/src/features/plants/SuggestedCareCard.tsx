@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { speciesService } from '@/services/speciesService';
 
 interface SuggestedCareCardProps {
@@ -19,6 +20,7 @@ export function SuggestedCareCard({
   perenualSpeciesId,
   showWateringTaskNotice,
 }: SuggestedCareCardProps) {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['species', 'care-suggestions', perenualSpeciesId],
     queryFn: () => speciesService.careSuggestions(perenualSpeciesId!),
@@ -31,14 +33,13 @@ export function SuggestedCareCard({
   return (
     <div
       className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm"
-      aria-label="Suggested care"
+      aria-label={t('plants.suggestedCare.title')}
     >
-      <p className="font-semibold text-primary-900">Suggested care</p>
+      <p className="font-semibold text-primary-900">{t('plants.suggestedCare.title')}</p>
       <p className="mt-1 text-primary-900">{data.summary}</p>
       {showWateringTaskNotice && data.wateringDays !== null && (
         <p className="mt-2 text-xs text-primary-700">
-          We&rsquo;ll create a watering task on a {data.wateringDays}-day cadence after you save
-          this plant. You can edit it any time.
+          {t('plants.suggestedCare.wateringNotice', { days: data.wateringDays })}
         </p>
       )}
     </div>

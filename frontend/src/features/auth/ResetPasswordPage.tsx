@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation, Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { authService } from '@/services/authService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
@@ -11,26 +13,31 @@ import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { AuthShell } from './AuthShell';
 
-const resetPasswordSchema = z
-  .object({
-    code: z.string().regex(/^\d{6}$/, 'Reset code must be 6 digits'),
-    newPassword: z
-      .string()
-      .min(12, 'Password must be at least 12 characters')
-      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-      .regex(/[0-9]/, 'Password must contain at least one number'),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  });
+// Built per call so the messages are in the visitor's language, as
+// loginSchema.ts does.
+const makeResetPasswordSchema = (t: TFunction) =>
+  z
+    .object({
+      code: z.string().regex(/^\d{6}$/, t('auth.reset.codeLength')),
+      newPassword: z
+        .string()
+        .min(12, t('auth.passwordMin'))
+        .regex(/[A-Z]/, t('auth.passwordUppercase'))
+        .regex(/[a-z]/, t('auth.passwordLowercase'))
+        .regex(/[0-9]/, t('auth.passwordNumber')),
+      confirmPassword: z.string(),
+    })
+    .refine((data) => data.newPassword === data.confirmPassword, {
+      message: t('auth.passwordMismatch'),
+      path: ['confirmPassword'],
+    });
 
-type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+type ResetPasswordFormData = z.infer<ReturnType<typeof makeResetPasswordSchema>>;
 
 export function ResetPasswordPage() {
-  useDocumentTitle('Reset password');
+  const { t } = useTranslation();
+  useDocumentTitle(t('auth.reset.documentTitle'));
+  const schema = useMemo(() => makeResetPasswordSchema(t), [t]);
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -43,23 +50,19 @@ export function ResetPasswordPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<ResetPasswordFormData>({
-    resolver: zodResolver(resetPasswordSchema),
+    resolver: zodResolver(schema),
   });
 
   if (!email) {
     return (
-      <AuthShell
-        contentLang="en"
-        title="No email on file"
-        subtitle="Start the reset flow from the beginning."
-      >
-        <p className="text-center text-gray-700">No email address provided.</p>
+      <AuthShell title={t('auth.reset.noEmailTitle')} subtitle={t('auth.reset.noEmailSubtitle')}>
+        <p className="text-center text-gray-700">{t('auth.reset.noEmailBody')}</p>
         <div className="mt-4 text-center">
           <Link
             to="/forgot-password"
             className="text-sm font-medium text-primary-700 hover:text-primary-600"
           >
-            Request password reset
+            {t('auth.reset.requestAgain')}
           </Link>
         </div>
       </AuthShell>
@@ -86,16 +89,12 @@ export function ResetPasswordPage() {
 
   if (success) {
     return (
-      <AuthShell
-        contentLang="en"
-        title="Password reset"
-        subtitle="You're all set — sign back in to continue."
-      >
+      <AuthShell title={t('auth.reset.doneTitle')} subtitle={t('auth.reset.doneSubtitle')}>
         <Alert variant="success" className="mb-6">
-          Your password has been reset successfully.
+          {t('auth.reset.doneBody')}
         </Alert>
         <Link to="/login" className="btn-primary inline-block w-full text-center">
-          Sign in
+          {t('auth.signInButton')}
         </Link>
       </AuthShell>
     );
@@ -103,11 +102,14 @@ export function ResetPasswordPage() {
 
   return (
     <AuthShell
-      contentLang="en"
-      title="Set a new password"
+      title={t('auth.reset.title')}
       subtitle={
         <>
-          Enter the code we sent to <strong>{email}</strong>
+          <Trans
+            i18nKey="auth.reset.codeSentTo"
+            values={{ email }}
+            components={{ strong: <strong /> }}
+          />
         </>
       }
     >
@@ -119,7 +121,7 @@ export function ResetPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Input
-          label="Reset code"
+          label={t('auth.reset.codeLabel')}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
@@ -131,18 +133,18 @@ export function ResetPasswordPage() {
         />
 
         <Input
-          label="New password"
+          label={t('auth.reset.newPassword')}
           type="password"
           autoComplete="new-password"
           minLength={12}
           required
           error={errors.newPassword?.message}
-          helperText="At least 12 characters with uppercase, lowercase, and number"
+          helperText={t('auth.passwordHelper')}
           {...register('newPassword')}
         />
 
         <Input
-          label="Confirm new password"
+          label={t('auth.reset.confirmNewPassword')}
           type="password"
           autoComplete="new-password"
           minLength={12}
@@ -152,7 +154,7 @@ export function ResetPasswordPage() {
         />
 
         <Button type="submit" className="w-full" isLoading={isLoading}>
-          Reset password
+          {t('auth.reset.submit')}
         </Button>
       </form>
     </AuthShell>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   ArrowLeftIcon,
   ArrowUturnLeftIcon,
@@ -360,7 +360,7 @@ export function PlantDetailPage() {
           className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
         >
           <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
-          Back to plants
+          {t('plants.backToPlants')}
         </Link>
         <Alert variant="error">{error ? getErrorMessage(error) : 'Plant not found'}</Alert>
       </div>
@@ -377,7 +377,7 @@ export function PlantDetailPage() {
         className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
-        Back to plants
+        {t('plants.backToPlants')}
       </Link>
 
       {photoUploadNeedsRetry && (
@@ -548,7 +548,7 @@ export function PlantDetailPage() {
                   onClick={() => setShowEditPlant(true)}
                   leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
                 >
-                  Edit
+                  {t('common.edit')}
                 </Button>
                 {(plant.status ?? 'active') === 'active' ? (
                   <Button
@@ -558,7 +558,7 @@ export function PlantDetailPage() {
                     onClick={() => setShowRemove(true)}
                     leftIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
                   >
-                    Remove
+                    {t('plants.detailPage.remove')}
                   </Button>
                 ) : (
                   <Button
@@ -568,7 +568,7 @@ export function PlantDetailPage() {
                     onClick={() => statusMutation.mutate('active')}
                     isLoading={statusMutation.isPending}
                   >
-                    Restore
+                    {t('trash.restore')}
                   </Button>
                 )}
               </div>
@@ -579,7 +579,7 @@ export function PlantDetailPage() {
             {/* On a phone the header already says where the plant lives. */}
             {!compact && (plant.spaceId || plant.location) && (
               <div>
-                <dt className="text-sm font-medium text-gray-500">Space</dt>
+                <dt className="text-sm font-medium text-gray-500">{t('plants.list.groupRoom')}</dt>
                 <dd className="text-sm text-gray-900">
                   {plantLocationLabel(
                     plant,
@@ -610,7 +610,7 @@ export function PlantDetailPage() {
               </div>
             )}
             <div>
-              <dt className="text-sm font-medium text-gray-500">Added</dt>
+              <dt className="text-sm font-medium text-gray-500">{t('plants.detailPage.added')}</dt>
               <dd className="text-sm text-gray-900">{formatDate(plant.createdAt)}</dd>
             </div>
             {/* House rule first: it is the one line the next person must read.
@@ -627,7 +627,7 @@ export function PlantDetailPage() {
                 fails axe's `dlitem` rule. */}
             {plant.notes && (
               <div className="col-span-full">
-                <dt className="text-sm font-medium text-gray-500">Notes</dt>
+                <dt className="text-sm font-medium text-gray-500">{t('plants.notesLabel')}</dt>
                 <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{plant.notes}</dd>
               </div>
             )}
@@ -699,7 +699,7 @@ export function PlantDetailPage() {
       {/* Tasks. `id="care"` is the fragment a single-task reminder links to. */}
       <Card id="care">
         <CardHeader
-          title="Care Tasks"
+          title={t('plants.detailPage.careTasksTitle')}
           description={
             (plant.status ?? 'active') === 'active'
               ? 'Scheduled care tasks for this plant'
@@ -712,7 +712,7 @@ export function PlantDetailPage() {
                 onClick={() => setShowAddTask(true)}
                 leftIcon={<PlusIcon className="h-4 w-4" aria-hidden="true" />}
               >
-                Add task
+                {t('tasks.addTask')}
               </Button>
             ) : undefined
           }
@@ -720,11 +720,13 @@ export function PlantDetailPage() {
 
         {plant.upcomingTasks.length === 0 ? (
           <EmptyState
-            title="No tasks"
-            description="Add care tasks to track watering, fertilizing, and more."
+            title={t('plants.detailPage.noTasksTitle')}
+            description={t('plants.detailPage.noTasksDescription')}
             action={
               (plant.status ?? 'active') === 'active' ? (
-                <Button onClick={() => setShowAddTask(true)}>Add first task</Button>
+                <Button onClick={() => setShowAddTask(true)}>
+                  {t('plants.detailPage.addFirstTask')}
+                </Button>
               ) : undefined
             }
           />
@@ -765,7 +767,10 @@ export function PlantDetailPage() {
 
       {/* Care history */}
       <Card>
-        <CardHeader title="Care History" description="Recent task completions" />
+        <CardHeader
+          title={t('plants.detailPage.careHistoryTitle')}
+          description={t('plants.detailPage.careHistoryDescription')}
+        />
 
         {/* Who last watered this — the household question the app could
             already answer and never did (ADR 0016). Read off the plant
@@ -785,7 +790,7 @@ export function PlantDetailPage() {
         </p>
 
         {plant.recentCompletions.length === 0 ? (
-          <p className="text-sm text-gray-500">No care history yet.</p>
+          <p className="text-sm text-gray-500">{t('plants.detailPage.noCareHistory')}</p>
         ) : (
           <ul className="space-y-3">
             {plant.recentCompletions.map((completion) => (
@@ -795,8 +800,11 @@ export function PlantDetailPage() {
                 </span>
                 <div>
                   <p className="text-gray-900">
-                    <span className="font-medium">{completion.completedByName}</span> completed{' '}
-                    <span className="font-medium">{completion.taskType}</span>
+                    <Trans
+                      i18nKey="activity.taskCompleted"
+                      values={{ actor: completion.completedByName, task: completion.taskType }}
+                      components={{ b: <span className="font-medium" /> }}
+                    />
                   </p>
                   <p className="text-gray-500">{formatDate(completion.completedAt)}</p>
                 </div>
@@ -940,7 +948,9 @@ function TaskRow({
                 one expression between two text nodes — so the interval reads as
                 a single normalised string. The chip underneath names the season
                 and when it changes. */}
-            <p className="text-sm text-gray-900">Every {intervalInForce} days</p>
+            <p className="text-sm text-gray-900">
+              {t('plants.detailPage.everyDays', { count: intervalInForce })}
+            </p>
             <SeasonalCadenceBadge task={task} latitude={latitude} />
             {isReadOnly ? (
               <p className="text-xs font-medium text-amber-800">
@@ -984,9 +994,9 @@ function TaskRow({
               className="w-full sm:w-auto"
               onClick={onEdit}
               leftIcon={<PencilIcon className="h-4 w-4" aria-hidden="true" />}
-              aria-label="Edit task"
+              aria-label={t('tasks.modal.editTitle')}
             >
-              Edit
+              {t('common.edit')}
             </Button>
             <Button
               size="sm"
@@ -1051,10 +1061,10 @@ function SnoozeMenu({ isSnoozing, onPick }: SnoozeMenuProps) {
           'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
           isSnoozing && 'opacity-50 cursor-wait'
         )}
-        aria-label="Snooze task"
+        aria-label={t('plants.detailPage.snoozeTask')}
       >
         <ClockIcon className="h-4 w-4" aria-hidden="true" />
-        Snooze
+        {t('tasks.snooze')}
       </summary>
       <ul className="absolute right-0 z-10 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md bg-paper shadow-lg ring-1 ring-primary-100/80 py-1 large-text:static large-text:w-full large-text:max-w-none">
         {SNOOZE_OPTIONS.map((opt) => (

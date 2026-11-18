@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeAll, describe, it, expect } from 'vitest';
+import i18n from '@/i18n';
+import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -33,6 +35,28 @@ function renderAt(path: string, route: string, element: ReactElement) {
   );
 }
 
+describe('pages that have since been translated are no longer marked English', () => {
+  beforeAll(async () => {
+    await ensureLocaleCatalog(i18n, 'es');
+  });
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  // Forgot and reset password were English-only and carried lang="en". They
+  // are in the catalog now, so the mark has to go: left on a Spanish page it
+  // would have a screen reader read Spanish by English rules.
+  it.each([
+    ['/forgot-password', <ForgotPasswordPage key="f" />, 'Restablece tu contraseña'],
+    ['/reset-password', <ResetPasswordPage key="r" />, 'Falta el correo electrónico'],
+  ])('%s is Spanish in Spanish, with no lang override', async (path, element, heading) => {
+    await i18n.changeLanguage('es');
+    renderAt(path, path, element);
+    expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toHaveAttribute('lang');
+  });
+});
+
 describe('English-only pages say so', () => {
   it('PublicShell puts the content language on <main>, and only when given one', () => {
     const { unmount } = render(
@@ -58,8 +82,6 @@ describe('English-only pages say so', () => {
   });
 
   it.each([
-    ['/forgot-password', '/forgot-password', <ForgotPasswordPage key="f" />],
-    ['/reset-password?email=a%40example.com', '/reset-password', <ResetPasswordPage key="r" />],
     ['/help', '/help', <HelpPage key="h" />],
     ['/help/getting-started', '/help/:topicId', <HelpTopicPage key="t" />],
     ['/blog', '/blog', <BlogIndex key="b" />],

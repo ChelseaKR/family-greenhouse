@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import i18n from '@/i18n';
 import { reportFrontendError } from '@/services/frontendTelemetry';
 import { isAbandonedChunkLoad } from '@/lib/pageLeaving';
 
@@ -39,24 +40,23 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (!this.state.error) return this.props.children;
+    // A class cannot use the hook, so the catalog is read directly. This notice
+    // is drawn once, when a chunk fails to load; it does not need to follow a
+    // language change.
+    const t = (key: string) => i18n.t(key);
     return (
       <div
         role="alert"
         className="mx-auto my-12 max-w-md rounded-md border border-amber-300 bg-amber-50 p-6"
       >
-        <h2 className="mb-2 text-lg font-semibold text-amber-900">
-          We couldn&apos;t load this page
-        </h2>
-        <p className="mb-4 text-sm text-amber-900">
-          The page&apos;s code couldn&apos;t be fetched. This usually means the app updated while
-          your tab was open. Refreshing should fix it.
-        </p>
+        <h2 className="mb-2 text-lg font-semibold text-amber-900">{t('routeError.title')}</h2>
+        <p className="mb-4 text-sm text-amber-900">{t('routeError.body')}</p>
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="rounded-md bg-amber-900 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 min-h-touch min-w-touch"
         >
-          Refresh
+          {t('routeError.refresh')}
         </button>
       </div>
     );

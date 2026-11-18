@@ -107,15 +107,19 @@ describe('the plant page in Spanish', () => {
     renderDetail();
 
     await screen.findByText(/^Vence: /);
-    expect(valueBeside('Added')).toHaveTextContent(/^Nunca$/);
+    // The label is Spanish now too; it used to be a hardcoded "Added".
+    expect(valueBeside('Añadida')).toHaveTextContent(/^Nunca$/);
+    expect(screen.queryByText('Added')).not.toBeInTheDocument();
     expect(screen.queryByText('Never')).not.toBeInTheDocument();
   });
 
   it('says "Nunca", not "Never", for last care on the care report', () => {
     render(<CareReportCard plant={PLANT as unknown as PlantWithTasks} />);
 
-    const lastCare = valueBeside('Last care');
+    // The label is Spanish now too; it used to be a hardcoded "Last care".
+    const lastCare = valueBeside('Último cuidado');
     expect(within(lastCare).getByText('Nunca')).toBeInTheDocument();
+    expect(screen.queryByText('Last care')).not.toBeInTheDocument();
     expect(screen.queryByText('Never')).not.toBeInTheDocument();
   });
 });

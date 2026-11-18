@@ -91,8 +91,8 @@ async function fileToBase64(file: Blob): Promise<string> {
 }
 
 export function AddPlantPage() {
-  useDocumentTitle('Add plant');
   const { t } = useTranslation();
+  useDocumentTitle(t('plants.addPlant'));
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -186,11 +186,11 @@ export function AddPlantPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError('Image must be a JPEG, PNG, or WebP file.');
+      setError(t('plants.photoUpload.wrongType'));
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+      setError(t('plants.photoUpload.tooLarge', { max: MAX_BYTES / 1024 / 1024 }));
       return;
     }
     await acceptPhoto(file);
@@ -371,7 +371,7 @@ export function AddPlantPage() {
           // presign carries the blob's type and size; the PUT must match both.
           const blob = await prepareImageForUpload(pickedFile);
           if (blob.size > MAX_BYTES) {
-            throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+            throw new Error(t('plants.photoUpload.tooLarge', { max: MAX_BYTES / 1024 / 1024 }));
           }
           const contentType = blob.type;
           const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
@@ -472,17 +472,15 @@ export function AddPlantPage() {
         className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
-        Back to plants
+        {t('plants.backToPlants')}
       </Link>
 
       <div>
         <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
-          Add a new plant
+          {t('plants.add.title')}
         </h1>
         <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
-        <p className="mt-1 text-sm text-gray-600">
-          Enter the details of your plant to start tracking its care.
-        </p>
+        <p className="mt-1 text-sm text-gray-600">{t('plants.add.intro')}</p>
       </div>
 
       <PlanCapPrompt cap="plants" />
@@ -523,13 +521,13 @@ export function AddPlantPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
           {/* Photo + identification */}
           <div className="space-y-3">
-            <span className="label">Photo (optional)</span>
+            <span className="label">{t('plants.photoLabel')}</span>
             <div className="flex items-start gap-4">
               <div className="h-32 w-32 shrink-0 overflow-hidden rounded-lg bg-parchment">
                 {pickedPreview ? (
                   <img
                     src={pickedPreview}
-                    alt="Selected plant photo preview"
+                    alt={t('plants.add.photoPreviewAlt')}
                     width={128}
                     height={128}
                     decoding="async"
@@ -553,7 +551,7 @@ export function AddPlantPage() {
                   />
                 ) : (
                   <label className="block">
-                    <span className="sr-only">Choose a photo</span>
+                    <span className="sr-only">{t('plants.leafHealth.pickPhoto')}</span>
                     <input
                       type="file"
                       accept={ACCEPTED_TYPES.join(',')}
@@ -571,7 +569,7 @@ export function AddPlantPage() {
                     isLoading={isIdentifying}
                     leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
                   >
-                    Identify from photo
+                    {t('plants.identifyFromPhoto')}
                   </Button>
                 )}
                 {plantIdConsent.dialog}
@@ -653,9 +651,9 @@ export function AddPlantPage() {
 
           <div className="space-y-1">
             <Input
-              label="Plant name"
+              label={t('plants.nameLabel')}
               required
-              placeholder="e.g., Living Room Monstera"
+              placeholder={t('plants.add.namePlaceholder')}
               error={errors.name?.message}
               {...register('name')}
             />
@@ -675,7 +673,7 @@ export function AddPlantPage() {
             }}
             onPerenualPick={setPerenualSpeciesId}
             error={errors.species?.message}
-            helperText="Type to search common names; pick a suggestion to autofill the scientific name."
+            helperText={t('plants.add.speciesHelper')}
           />
 
           <PetToxicityNote perenualSpeciesId={perenualSpeciesId} />
@@ -688,13 +686,13 @@ export function AddPlantPage() {
           {suggestedTaskTemplate && (
             <div
               className="rounded-lg border border-primary-200 bg-primary-50 p-4"
-              aria-label="Recommended care tasks"
+              aria-label={t('plants.add.recommendedTasks')}
             >
               <label
                 htmlFor="auto-add-care-tasks"
                 className="flex cursor-pointer items-start gap-3"
               >
-                <span className="sr-only">Automatically add recommended care tasks</span>
+                <span className="sr-only">{t('plants.add.autoTasksLabel')}</span>
                 <input
                   id="auto-add-care-tasks"
                   type="checkbox"
@@ -704,10 +702,12 @@ export function AddPlantPage() {
                 />
                 <span>
                   <span className="block text-sm font-semibold text-primary-900">
-                    Automatically add {suggestedTaskTemplate.name.toLowerCase()} care tasks
+                    {t('plants.add.autoTasksNamed', {
+                      name: suggestedTaskTemplate.name.toLowerCase(),
+                    })}
                   </span>
                   <span className="mt-1 block text-xs text-primary-800">
-                    Based on “{speciesValue}”. You can edit or remove these tasks any time.
+                    {t('plants.add.autoTasksBasis', { species: speciesValue })}
                   </span>
                 </span>
               </label>
@@ -717,7 +717,7 @@ export function AddPlantPage() {
                     <span className="font-medium">
                       {task.customType || taskTypeLabels[task.type]}
                     </span>{' '}
-                    every {task.frequencyDays} day{task.frequencyDays === 1 ? '' : 's'}
+                    {t('tasks.seasonal.interval', { count: task.frequencyDays })}
                   </li>
                 ))}
               </ul>
@@ -766,22 +766,22 @@ export function AddPlantPage() {
           </fieldset>
 
           <Input
-            label="Tags"
-            placeholder="tropical, low-light, gift"
-            helperText="Comma-separated. Up to 10 tags. Useful for filtering later."
+            label={t('plants.list.tags')}
+            placeholder={t('plants.add.tagsPlaceholder')}
+            helperText={t('plants.add.tagsHelper')}
             error={errors.tags?.message}
             {...register('tags')}
           />
 
           <div>
             <label htmlFor="notes" className="label">
-              Notes
+              {t('plants.notesLabel')}
             </label>
             <textarea
               id="notes"
               rows={4}
               className="input"
-              placeholder="Any additional notes about this plant..."
+              placeholder={t('plants.add.notesPlaceholder')}
               {...register('notes')}
             />
             {errors.notes?.message && <p className="error-message">{errors.notes.message}</p>}
@@ -789,10 +789,10 @@ export function AddPlantPage() {
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={() => navigate('/plants')}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={mutation.isPending}>
-              Add plant
+              {t('plants.addPlant')}
             </Button>
           </div>
         </form>

@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
 
 interface AuthShellProps {
@@ -8,10 +9,11 @@ interface AuthShellProps {
   children: ReactNode;
   /** Optional sub-footer below the card (e.g. "Don't have an account?"). */
   footer?: ReactNode;
-  /** Set on the screens that are not translated yet (forgot and reset
-   *  password). Their English sat inside `<html lang="es">` for a
-   *  Spanish-speaking visitor, so a screen reader pronounced it as Spanish
-   *  (WCAG 3.1.2). */
+  /** For a screen that is not translated yet: its English would sit inside
+   *  `<html lang="es">` for a Spanish-speaking visitor, and a screen reader
+   *  would pronounce it as Spanish (WCAG 3.1.2). Forgot and reset password
+   *  used it until they went into the catalog; no screen passes it today, and
+   *  one that is translated must not. */
   contentLang?: 'en';
 }
 
@@ -25,6 +27,7 @@ interface AuthShellProps {
  * mobile so the form has room to breathe on small screens.
  */
 export function AuthShell({ title, subtitle, children, footer, contentLang }: AuthShellProps) {
+  const { t } = useTranslation();
   return (
     // <main>, not <div>: the sign-in, sign-up, confirm and reset screens had no
     // landmark at all, so a screen-reader user had nothing to jump to and the
@@ -43,11 +46,11 @@ export function AuthShell({ title, subtitle, children, footer, contentLang }: Au
       />
 
       <div className="relative sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link to="/" aria-label="Family Greenhouse, Grow together, home" className="inline-block">
+        <Link to="/" aria-label={t('auth.shellHomeLabel')} className="inline-block">
           <img src="/brand/icon.svg" alt="" aria-hidden="true" className="mx-auto h-14 w-auto" />
           <p className="mt-3 font-serif text-xl text-ink leading-none">Family Greenhouse</p>{' '}
           <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-primary-700 font-semibold">
-            Grow together
+            {t('brand.tagline')}
           </p>
         </Link>
         <h1 className="mt-8 font-serif text-3xl text-ink leading-tight">{title}</h1>

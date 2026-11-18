@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   ArrowUpOnSquareIcon,
   ClipboardDocumentIcon,
@@ -41,8 +41,8 @@ import { HouseholdAuditCard } from './HouseholdAuditCard';
 import { PlanCapPrompt } from '@/features/billing/PlanCapPrompt';
 
 export function HouseholdPage() {
-  useDocumentTitle('Household');
   const { t, i18n } = useTranslation();
+  useDocumentTitle(t('nav.household'));
   const user = useAuthStore((state) => state.user);
   // Operate on the ACTIVE household (multi-household users can switch);
   // user.householdId is only the Cognito-claim default.
@@ -222,9 +222,9 @@ export function HouseholdPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Your household"
+        eyebrow={t('dashboard.eyebrow')}
         title={household.name}
-        description="Manage your household members and settings."
+        description={t('household.page.description')}
       />
 
       {/* How the care is actually split. Shown to every member, not just
@@ -242,8 +242,8 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Invite members"
-            description="Generate an invite link to add family members to your household"
+            title={t('household.page.inviteTitle')}
+            description={t('household.page.inviteDescription')}
           />
 
           {/* At the member cap an invite can be sent but not accepted, so say
@@ -256,10 +256,7 @@ export function HouseholdPage() {
           {household.members.length === 1 && !inviteLink && (
             <div className="mb-4 flex items-center gap-4 rounded-lg border border-primary-100 bg-primary-50 p-4">
               <EmptyMembers className="h-20 w-auto shrink-0" />
-              <p className="text-sm text-primary-900">
-                You&rsquo;re the only one here. Plant care is more fun (and more reliable) with
-                someone else helping — share an invite link with whoever lives with you.
-              </p>
+              <p className="text-sm text-primary-900">{t('household.page.onlyOneHere')}</p>
             </div>
           )}
 
@@ -367,7 +364,7 @@ export function HouseholdPage() {
               isLoading={createInviteMutation.isPending}
               leftIcon={<UserPlusIcon className="h-4 w-4" aria-hidden="true" />}
             >
-              Generate invite link
+              {t('household.page.generateInvite')}
             </Button>
           )}
 
@@ -458,8 +455,8 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Location"
-            description="Used for climate-aware care tips (humidity warnings, freeze alerts, etc.)."
+            title={t('plants.locationLabel')}
+            description={t('household.page.locationDescription')}
           />
           {climateQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-600" role="status">
@@ -491,8 +488,11 @@ export function HouseholdPage() {
           ) : household.location ? (
             <div className="space-y-3">
               <p className="text-sm">
-                Currently set to{' '}
-                <span className="font-medium text-gray-900">{household.location.city}</span>.
+                <Trans
+                  i18nKey="household.page.locationCurrent"
+                  values={{ city: household.location.city }}
+                  components={{ b: <span className="font-medium text-gray-900" /> }}
+                />
               </p>
               <div className="flex gap-2">
                 <Button
@@ -500,7 +500,7 @@ export function HouseholdPage() {
                   onClick={() => setLocationMutation.mutate(null)}
                   isLoading={setLocationMutation.isPending}
                 >
-                  Clear location
+                  {t('household.page.clearLocation')}
                 </Button>
               </div>
             </div>
@@ -514,18 +514,18 @@ export function HouseholdPage() {
               }}
             >
               <Input
-                label="City"
-                placeholder="e.g. Austin, US"
+                label={t('household.page.cityLabel')}
+                placeholder={t('household.page.cityPlaceholder')}
                 value={locationDraft}
                 onChange={(e) => setLocationDraft(e.target.value)}
-                helperText="Add a country if your city name is ambiguous."
+                helperText={t('household.page.cityHelper')}
               />
               <Button
                 type="submit"
                 isLoading={setLocationMutation.isPending}
                 disabled={locationDraft.trim().length === 0}
               >
-                Save location
+                {t('household.page.saveLocation')}
               </Button>
             </form>
           )}
@@ -541,7 +541,7 @@ export function HouseholdPage() {
       <Card padding="none">
         <div className="px-6 py-4 border-b border-primary-100/70">
           <h2 className="font-serif text-lg text-ink">
-            Members
+            {t('household.page.members')}
             <span className="ml-2 text-sm font-normal text-gray-600">
               ({household.members.length})
             </span>
@@ -562,7 +562,7 @@ export function HouseholdPage() {
                   <p className="text-sm font-medium text-gray-900">
                     {member.name}
                     {member.userId === user?.id && (
-                      <span className="ml-2 text-gray-500">(you)</span>
+                      <span className="ml-2 text-gray-500">{t('household.page.you')}</span>
                     )}
                   </p>
                   {householdId && (
@@ -661,9 +661,9 @@ export function HouseholdPage() {
         isOpen={!!memberToRemove}
         onClose={() => setMemberToRemove(null)}
         onConfirm={() => memberToRemove && removeMemberMutation.mutate(memberToRemove)}
-        title="Remove member"
-        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, their caretaker seats, and any API key they issued."
-        confirmLabel="Remove"
+        title={t('household.page.removeMemberTitle')}
+        message={t('household.page.removeMemberMessage')}
+        confirmLabel={t('household.page.removeMemberConfirm')}
         isLoading={removeMemberMutation.isPending}
       />
     </div>

@@ -124,7 +124,7 @@ than the route gap does.
 ### 3.1 — Readable
 
 - **3.1.1 Language of Page (A)** — `<html lang>` set per user's chosen language. ✅
-- **3.1.2 Language of Parts (AA)** — Spanish content lives in its own translation file. The pages that are English whatever the visitor chose (help, blog, changelog, forgot and reset password) mark their content `lang="en"` (`tests/unit/a11y/englishOnlyPages.a11y.test.tsx`). Still unmarked: English strings inside otherwise Spanish screens — everything `frontend/scripts/i18n-hardcoded-baseline.json` counts — and the care, pet-safe and status pages, which mix the two. ⚠️
+- **3.1.2 Language of Parts (AA)** — Spanish content lives in its own translation file. The pages that are English whatever the visitor chose (help, blog, changelog) mark their content `lang="en"` (`tests/unit/a11y/englishOnlyPages.a11y.test.tsx`); forgot and reset password did too until they were translated. The hardcoded-string ratchet is at zero, so the accessible names it can see are in the catalog. Still unmarked: the English it cannot see (see docs/i18n.md, "What is still English") and the care pages, which mix the two. ⚠️
 
 ### 3.2 — Predictable
 

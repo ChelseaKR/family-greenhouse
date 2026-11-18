@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { PublicShell } from '@/components/PublicShell';
 import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
@@ -191,24 +191,22 @@ export function SitPage() {
       {status === 'loading' && (
         <div className="flex min-h-[40vh] items-center justify-center" role="status">
           <LoadingSpinner size="lg" />
-          <span className="sr-only">Loading plant-sitting tasks…</span>
+          <span className="sr-only">{t('sitter.page.loading')}</span>
         </div>
       )}
 
       {status === 'inactive' && (
         <div className="mt-8">
-          <Alert variant="info" title="This plant-sitting link is no longer active">
-            The link may have expired or been turned off by the person who shared it. If you’re
-            still helping out, ask them for a fresh link.
+          <Alert variant="info" title={t('sitter.page.inactiveTitle')}>
+            {t('sitter.page.inactiveBody')}
           </Alert>
         </div>
       )}
 
       {status === 'error' && (
         <div className="mt-8">
-          <Alert variant="error" title="Something went wrong">
-            We couldn’t load the plant-sitting list just now. Please refresh and try again in a
-            moment.
+          <Alert variant="error" title={t('common.error')}>
+            {t('sitter.page.loadFailed')}
           </Alert>
         </div>
       )}
@@ -219,8 +217,7 @@ export function SitPage() {
             {label ? `${label}: what needs doing` : 'Thanks for plant-sitting!'}
           </h1>
           <p className="mt-3 text-base text-gray-600">
-            Here’s what needs a little care while they’re away. Tap <strong>Done</strong> once
-            you’ve looked after each one — no account needed.
+            <Trans i18nKey="sitter.page.intro" components={{ strong: <strong /> }} />
           </p>
           {expiresAt && (
             <p className="mt-2 text-sm text-gray-600">
@@ -307,7 +304,7 @@ export function SitPage() {
                         onClick={() => handleComplete(task.taskId)}
                         aria-label={`Mark "${instructionFor(task)}" as done`}
                       >
-                        Done
+                        {t('common.done')}
                       </Button>
                     </li>
                   );
@@ -325,14 +322,17 @@ export function SitPage() {
           />
 
           <p className="mt-10 text-sm text-gray-600">
-            Looking after plants regularly?{' '}
-            <Link
-              to={SITTER_FOOTER_HREF}
-              className="text-primary-700 underline hover:text-primary-800"
-            >
-              Family Greenhouse
-            </Link>{' '}
-            keeps a whole household’s plant care in one shared place.
+            <Trans
+              i18nKey="sitter.page.footer"
+              components={{
+                appLink: (
+                  <Link
+                    to={SITTER_FOOTER_HREF}
+                    className="text-primary-700 underline hover:text-primary-800"
+                  />
+                ),
+              }}
+            />
           </p>
         </>
       )}
