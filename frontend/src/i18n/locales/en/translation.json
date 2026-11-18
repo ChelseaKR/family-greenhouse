@@ -3473,10 +3473,10 @@
       "people": "People"
     },
     "activityEmptyFiltered": {
-      "all": "No all activity in the last 50 events.",
-      "tasks": "No tasks activity in the last 50 events.",
-      "plants": "No plants activity in the last 50 events.",
-      "people": "No people activity in the last 50 events."
+      "all": "No activity in the last 50 events.",
+      "tasks": "No task activity in the last 50 events.",
+      "plants": "No plant activity in the last 50 events.",
+      "people": "No activity about people in the last 50 events."
     }
   },
   "yearInReview": {

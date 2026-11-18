@@ -161,6 +161,12 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   "Every 1 days", and in Spanish "Cada 1 día": the singular form held the
   plural sentence. It now reads "Every day" and "Cada día". Every other
   interval is unchanged ("Every 2 days", "Cada 2 días").
+- **The dashboard's empty activity filters read as sentences.** When a
+  filter matched none of the last 50 events, the English dropped the filter's
+  name into "No ___ activity": "No tasks activity", "No plants activity", "No
+  people activity" and "No all activity". They now read "No task activity…",
+  "No plant activity…", "No activity about people…" and "No activity…". The
+  Spanish was already right and is unchanged.
 
 ## [0.52.0] - 2026-11-17
 
