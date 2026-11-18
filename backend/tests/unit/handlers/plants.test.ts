@@ -6,6 +6,7 @@ vi.mock('../../../src/services/trashService.js');
 vi.mock('../../../src/services/spaceService.js');
 vi.mock('../../../src/services/taskService.js');
 vi.mock('../../../src/services/activity.js');
+vi.mock('../../../src/services/accountMilestones.js');
 vi.mock('../../../src/services/enrichment.js', () => ({
   getSpeciesCached: vi.fn(),
   lookupSpeciesCached: vi.fn(),
@@ -47,10 +48,14 @@ vi.mock('../../../src/utils/s3.js', () => ({
   s3: { send: vi.fn() },
   IMAGES_BUCKET: 'test-bucket',
 }));
-// The server-side metadata strip has its own suites (services/photoIntake,
-// integration/photo-upload-strip). Here it passes unless a test says not.
-vi.mock('../../../src/services/photoIntake.js', () => ({
-  sanitizeUploadedPhoto: vi.fn(async () => ({ ok: true, changed: false })),
+// The server-side check, strip and copy have their own suites
+// (services/photoIntake, integration/photo-upload-strip). Here the confirm
+// step's storage half is a stub that a test fills in; the presign half is the
+// real one, over the mocked signer, so what it asks to have signed is visible.
+vi.mock('../../../src/services/photoIntake.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/services/photoIntake.js')>()),
+  acceptUploadedPhoto: vi.fn(),
+  discardAcceptedPhoto: vi.fn(async () => undefined),
 }));
 
 function buildEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
@@ -267,6 +272,51 @@ describe('plants handler', () => {
     });
     const res = (await createPlant(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(400);
+  });
+
+  it("createPlant marks the account's first plant only when the milestone service says so", async () => {
+    const plantService = await import('../../../src/services/plantService.js');
+    const accountMilestones = await import('../../../src/services/accountMilestones.js');
+    const { createPlant } = await import('../../../src/handlers/plants/handler.js');
+    const created = {
+      id: 'p2',
+      householdId: 'hh-1',
+      name: 'Pothos',
+      species: null,
+      location: null,
+      imageUrl: null,
+      notes: null,
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+    };
+    const event = () =>
+      buildEvent({
+        httpMethod: 'POST',
+        body: JSON.stringify({ name: 'Pothos' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('first');
+    const first = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(first.statusCode).toBe(201);
+    expect(JSON.parse(first.body)).toEqual({ ...created, firstPlantForAccount: true });
+    expect(accountMilestones.claimFirstPlant).toHaveBeenCalledWith('user-1', 'hh-1');
+
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('not_first');
+    const later = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(later.statusCode).toBe(201);
+    // Absent, not false: the field exists only on the one create that counts.
+    expect(JSON.parse(later.body)).toEqual(created);
+
+    // Unknown (DynamoDB failed) fails closed: saved, no flag.
+    vi.mocked(plantService.createPlant).mockResolvedValueOnce(created);
+    vi.mocked(accountMilestones.claimFirstPlant).mockResolvedValueOnce('unknown');
+    const unknown = (await createPlant(event(), fakeContext, () => {})) as APIGatewayProxyResult;
+    expect(unknown.statusCode).toBe(201);
+    expect(JSON.parse(unknown.body)).toEqual(created);
   });
 
   it('createPlant creates a plant with valid input, passing the plan cap to the service', async () => {
@@ -1023,28 +1073,49 @@ describe('plants handler', () => {
   };
 
   describe('getImageUploadUrl', () => {
-    it('returns presigned URL but does not commit imageUrl (defaults to jpeg)', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const event = buildEvent({
+    const presignEvent = (body: unknown) =>
+      buildEvent({
         httpMethod: 'POST',
         pathParameters: { id: 'p1' },
+        ...(body === undefined
+          ? {}
+          : { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }),
       });
-      const res = (await getImageUploadUrl(event, fakeContext, () => {})) as APIGatewayProxyResult;
+
+    it('returns a presigned URL for a holding key and does not commit imageUrl (defaults to jpeg)', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+      const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+      const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+      const res = (await getImageUploadUrl(
+        presignEvent({ contentLength: 1234 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.uploadUrl).toBe('https://upload.example.test/signed');
-      // No ASSETS_BASE_URL in unit tests → raw S3 URL form.
+      // No ASSETS_BASE_URL in unit tests → raw S3 URL form. The reference
+      // names the upload under `uploads/`, never a stored photo.
       expect(body.imageUrl).toMatch(
-        /^https:\/\/test-bucket\.s3\.amazonaws\.com\/plants\/hh-1\/p1\/[A-Za-z0-9-]+\.jpg$/
+        /^https:\/\/test-bucket\.s3\.amazonaws\.com\/uploads\/hh-1\/p1\/[A-Za-z0-9-]+\.jpg$/
       );
-      // The presigned PUT is signed for the default content type.
-      expect(vi.mocked(PutObjectCommand).mock.calls[0][0]).toMatchObject({
+      // The presigned PUT is for the default content type and the declared size...
+      const put = vi.mocked(PutObjectCommand).mock.calls[0][0];
+      expect(put).toMatchObject({
         Bucket: 'test-bucket',
         ContentType: 'image/jpeg',
+        ContentLength: 1234,
       });
+      expect(put.Key).toMatch(/^uploads\/hh-1\/p1\/[A-Za-z0-9-]+\.jpg$/);
+      // ...and both headers are named for the signature, for five minutes.
+      const options = vi.mocked(getSignedUrl).mock.calls[0][2] as {
+        expiresIn: number;
+        signableHeaders: Set<string>;
+      };
+      expect(options.expiresIn).toBe(300);
+      expect([...options.signableHeaders].sort()).toEqual(['content-length', 'content-type']);
       // Regression check on a previously-removed code path: getImageUploadUrl
       // must not mutate plant state until the client calls /image/confirm.
       expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
@@ -1055,18 +1126,17 @@ describe('plants handler', () => {
       const { PutObjectCommand } = await import('@aws-sdk/client-s3');
       const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
       vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ contentType: 'image/webp' }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await getImageUploadUrl(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      const res = (await getImageUploadUrl(
+        presignEvent({ contentType: 'image/webp', contentLength: 5 * 1024 * 1024 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.imageUrl).toMatch(/\.webp$/);
       expect(vi.mocked(PutObjectCommand).mock.calls[0][0]).toMatchObject({
         ContentType: 'image/webp',
+        ContentLength: 5 * 1024 * 1024,
       });
       expect(vi.mocked(PutObjectCommand).mock.calls[0][0].Key).toMatch(/\.webp$/);
     });
@@ -1074,27 +1144,64 @@ describe('plants handler', () => {
     it('rejects a non-allowlisted contentType with 400', async () => {
       const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
       const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ contentType: 'image/gif' }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await getImageUploadUrl(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      const res = (await getImageUploadUrl(
+        presignEvent({ contentType: 'image/gif', contentLength: 1234 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(400);
       expect(vi.mocked(getSignedUrl)).not.toHaveBeenCalled();
     });
 
     it('rejects image/svg+xml (XSS vector) with 400', async () => {
       const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ contentType: 'image/svg+xml' }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await getImageUploadUrl(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      const res = (await getImageUploadUrl(
+        presignEvent({ contentType: 'image/svg+xml', contentLength: 1234 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(400);
+    });
+
+    it('signs nothing for a request that does not say how big the file is', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+      const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
+      // No body at all, and a body from a client that predates the size field.
+      for (const body of [undefined, { contentType: 'image/jpeg' }]) {
+        vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+        const res = (await getImageUploadUrl(
+          presignEvent(body),
+          fakeContext,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).message).toMatch(/reload the page or update the app/i);
+      }
+      expect(vi.mocked(getSignedUrl)).not.toHaveBeenCalled();
+    });
+
+    it('signs nothing for a size over 5 MiB, or one that is not a positive whole number', async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+      const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+      const tooBig = (await getImageUploadUrl(
+        presignEvent({ contentLength: 5 * 1024 * 1024 + 1 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(tooBig.statusCode).toBe(400);
+      expect(tooBig.body).toMatch(/5 MiB/);
+      for (const contentLength of [0, -1, 12.5, '1234']) {
+        const res = (await getImageUploadUrl(
+          presignEvent({ contentLength }),
+          fakeContext,
+          () => {}
+        )) as APIGatewayProxyResult;
+        expect(res.statusCode, String(contentLength)).toBe(400);
+      }
+      expect(vi.mocked(getSignedUrl)).not.toHaveBeenCalled();
     });
 
     it('mints the imageUrl from ASSETS_BASE_URL when set', async () => {
@@ -1102,289 +1209,132 @@ describe('plants handler', () => {
       const plantService = await import('../../../src/services/plantService.js');
       const { getImageUploadUrl } = await import('../../../src/handlers/plants/handler.js');
       vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ contentType: 'image/png' }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await getImageUploadUrl(event, fakeContext, () => {})) as APIGatewayProxyResult;
+      const res = (await getImageUploadUrl(
+        presignEvent({ contentType: 'image/png', contentLength: 1234 }),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       // Trailing slash on the env var must not produce a double slash.
       expect(body.imageUrl).toMatch(
-        /^https:\/\/familygreenhouse\.net\/plants\/hh-1\/p1\/[A-Za-z0-9-]+\.png$/
+        /^https:\/\/familygreenhouse\.net\/uploads\/hh-1\/p1\/[A-Za-z0-9-]+\.png$/
       );
     });
   });
 
   describe('confirmImageUpload', () => {
-    function mockHeadOk(contentLength = 1234, contentType = 'image/jpeg') {
-      return import('../../../src/utils/s3.js').then(({ s3 }) => {
-        (s3.send as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          ContentLength: contentLength,
-          ContentType: contentType,
-        });
-      });
-    }
-
-    it('writes imageUrl after a matching key is presented and HeadObject passes', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      await mockHeadOk();
-      const url = 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg';
-      vi.mocked(plantService.appendPlantPhoto).mockResolvedValueOnce({
-        id: 'photo-1',
-        plantId: 'p1',
-        imageUrl: url,
-        uploadedBy: 'user-1',
-        uploadedAt: '',
-        caption: null,
-      });
-      const event = buildEvent({
+    const UPLOAD_URL = 'https://test-bucket.s3.amazonaws.com/uploads/hh-1/p1/abc.jpg';
+    const STORED_KEY = 'plants/hh-1/p1/11111111-2222-4333-8444-555555555555.jpg';
+    const STORED_URL = `https://test-bucket.s3.amazonaws.com/${STORED_KEY}`;
+    const confirmEvent = (imageUrl: string) =>
+      buildEvent({
         httpMethod: 'POST',
         pathParameters: { id: 'p1' },
-        body: JSON.stringify({ imageUrl: url }),
+        body: JSON.stringify({ imageUrl }),
         headers: { 'content-type': 'application/json' },
       });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(200);
-      // appendPlantPhoto is the only writer (updates the primary imageUrl
-      // atomically via a TransactWriteCommand).
-      expect(plantService.appendPlantPhoto).toHaveBeenCalledWith('hh-1', 'p1', url, 'user-1');
-      expect(vi.mocked(HeadObjectCommand).mock.calls[0][0]).toEqual({
-        Bucket: 'test-bucket',
-        Key: 'plants/hh-1/p1/abc.jpg',
+    const photoRow = {
+      id: 'photo-1',
+      plantId: 'p1',
+      imageUrl: STORED_URL,
+      uploadedBy: 'user-1',
+      uploadedAt: '',
+      caption: null,
+    };
+
+    it("attaches the server's stored copy, not the reference the client sent", async () => {
+      const plantService = await import('../../../src/services/plantService.js');
+      const { acceptUploadedPhoto } = await import('../../../src/services/photoIntake.js');
+      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+      vi.mocked(acceptUploadedPhoto).mockResolvedValueOnce({
+        ok: true,
+        key: STORED_KEY,
+        imageUrl: STORED_URL,
+        changed: true,
       });
-      // The photo was cleaned, as the type it was uploaded as, before it was attached.
-      const { sanitizeUploadedPhoto } = await import('../../../src/services/photoIntake.js');
-      expect(sanitizeUploadedPhoto).toHaveBeenCalledWith('plants/hh-1/p1/abc.jpg', 'image/jpeg');
-      expect(vi.mocked(sanitizeUploadedPhoto).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(plantService.appendPlantPhoto).mockResolvedValueOnce(photoRow);
+      const res = (await confirmImageUpload(
+        confirmEvent(UPLOAD_URL),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(200);
+      // The upload was checked for this household and plant...
+      expect(acceptUploadedPhoto).toHaveBeenCalledWith('hh-1', 'p1', UPLOAD_URL);
+      // ...before anything was attached, and what was attached is the stored
+      // copy. appendPlantPhoto is the only writer (it updates the primary
+      // imageUrl atomically via a TransactWriteCommand).
+      expect(plantService.appendPlantPhoto).toHaveBeenCalledWith(
+        'hh-1',
+        'p1',
+        STORED_URL,
+        'user-1'
+      );
+      expect(vi.mocked(acceptUploadedPhoto).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(plantService.appendPlantPhoto).mock.invocationCallOrder[0]
       );
+      expect(JSON.parse(res.body).imageUrl).toBe(STORED_URL);
     });
 
-    it('attaches nothing when the server-side strip refuses the photo', async () => {
+    it('attaches nothing when the upload is refused, and says why', async () => {
       const plantService = await import('../../../src/services/plantService.js');
-      const { sanitizeUploadedPhoto } = await import('../../../src/services/photoIntake.js');
+      const { acceptUploadedPhoto } = await import('../../../src/services/photoIntake.js');
       const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      await mockHeadOk();
-      vi.mocked(sanitizeUploadedPhoto).mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        message: 'Uploaded file is not a valid image',
-      });
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(400);
-      expect(JSON.parse(res.body).message).toBe('Uploaded file is not a valid image');
-      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
-    });
-
-    it('accepts the ASSETS_BASE_URL form of the minted URL', async () => {
-      vi.stubEnv('ASSETS_BASE_URL', 'https://familygreenhouse.net');
-      const plantService = await import('../../../src/services/plantService.js');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      await mockHeadOk();
-      const url = 'https://familygreenhouse.net/plants/hh-1/p1/abc.webp';
-      vi.mocked(plantService.appendPlantPhoto).mockResolvedValueOnce({
-        id: 'photo-1',
-        plantId: 'p1',
-        imageUrl: url,
-        uploadedBy: 'user-1',
-        uploadedAt: '',
-        caption: null,
-      });
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ imageUrl: url }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(200);
-      expect(plantService.appendPlantPhoto).toHaveBeenCalledWith('hh-1', 'p1', url, 'user-1');
-    });
-
-    it('rejects URLs from a different plant prefix', async () => {
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/OTHER/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('rejects a smuggled key suffix (extra path segment / bad extension)', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      for (const bad of [
-        'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg?x=1',
-        'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/nested/abc.jpg',
-        'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.svg',
+      for (const message of [
+        'Uploaded file is not a valid image',
+        'Image exceeds the 5 MiB limit',
+        'Uploaded image not found; upload it before confirming',
+        'imageUrl does not match a key issued for this plant',
       ]) {
-        const event = buildEvent({
-          httpMethod: 'POST',
-          pathParameters: { id: 'p1' },
-          body: JSON.stringify({ imageUrl: bad }),
-          headers: { 'content-type': 'application/json' },
-        });
+        vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
+        vi.mocked(acceptUploadedPhoto).mockResolvedValueOnce({ ok: false, status: 400, message });
         const res = (await confirmImageUpload(
-          event,
+          confirmEvent(UPLOAD_URL),
           fakeContext,
           () => {}
         )) as APIGatewayProxyResult;
         expect(res.statusCode).toBe(400);
+        expect(JSON.parse(res.body).message).toBe(message);
       }
       expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
     });
 
-    it('rejects (400) and best-effort deletes an oversized upload', async () => {
+    it('removes the stored copy when the photo row cannot be written', async () => {
       const plantService = await import('../../../src/services/plantService.js');
-      const { s3 } = await import('../../../src/utils/s3.js');
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const { acceptUploadedPhoto, discardAcceptedPhoto } =
+        await import('../../../src/services/photoIntake.js');
       const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
       vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const send = s3.send as ReturnType<typeof vi.fn>;
-      send.mockResolvedValueOnce({ ContentLength: 6 * 1024 * 1024 }); // HeadObject
-      send.mockResolvedValueOnce({}); // best-effort DeleteObject
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
+      vi.mocked(acceptUploadedPhoto).mockResolvedValueOnce({
+        ok: true,
+        key: STORED_KEY,
+        imageUrl: STORED_URL,
+        changed: false,
       });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toMatch(/5 MiB/);
-      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
-      expect(vi.mocked(DeleteObjectCommand).mock.calls[0][0]).toEqual({
-        Bucket: 'test-bucket',
-        Key: 'plants/hh-1/p1/abc.jpg',
-      });
+      vi.mocked(plantService.appendPlantPhoto).mockRejectedValueOnce(new Error('ddb down'));
+      const res = (await confirmImageUpload(
+        confirmEvent(UPLOAD_URL),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(500);
+      expect(discardAcceptedPhoto).toHaveBeenCalledWith(STORED_KEY);
     });
 
-    it('rejects and removes an empty upload instead of attaching a broken image', async () => {
+    it('checks nothing for a plant that is not in the household', async () => {
       const plantService = await import('../../../src/services/plantService.js');
-      const { s3 } = await import('../../../src/utils/s3.js');
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const { acceptUploadedPhoto } = await import('../../../src/services/photoIntake.js');
       const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const send = s3.send as ReturnType<typeof vi.fn>;
-      send.mockResolvedValueOnce({ ContentLength: 0, ContentType: 'image/jpeg' });
-      send.mockResolvedValueOnce({});
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
-      });
-
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toMatch(/image is empty/i);
-      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
-      expect(vi.mocked(DeleteObjectCommand).mock.calls[0][0]).toEqual({
-        Bucket: 'test-bucket',
-        Key: 'plants/hh-1/p1/abc.jpg',
-      });
-    });
-
-    it('rejects (400) and best-effort deletes an upload whose real Content-Type is not an allowed image type', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { s3 } = await import('../../../src/utils/s3.js');
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      const send = s3.send as ReturnType<typeof vi.fn>;
-      // Client presigned for image/jpeg, but the actual PUT landed with a
-      // different Content-Type — the presigned URL can't enforce this.
-      send.mockResolvedValueOnce({ ContentLength: 1234, ContentType: 'text/html' }); // HeadObject
-      send.mockResolvedValueOnce({}); // best-effort DeleteObject
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toMatch(/not a valid image/i);
-      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
-      expect(vi.mocked(DeleteObjectCommand).mock.calls[0][0]).toEqual({
-        Bucket: 'test-bucket',
-        Key: 'plants/hh-1/p1/abc.jpg',
-      });
-    });
-
-    it('confirms successfully when the real Content-Type matches the claimed/allowed type', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      await mockHeadOk(1234, 'image/jpeg');
-      const url = 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg';
-      vi.mocked(plantService.appendPlantPhoto).mockResolvedValueOnce({
-        id: 'photo-1',
-        plantId: 'p1',
-        imageUrl: url,
-        uploadedBy: 'user-1',
-        uploadedAt: '',
-        caption: null,
-      });
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({ imageUrl: url }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(200);
-      expect(plantService.appendPlantPhoto).toHaveBeenCalledWith('hh-1', 'p1', url, 'user-1');
-    });
-
-    it('rejects (400) when the object was never uploaded (HeadObject 404)', async () => {
-      const plantService = await import('../../../src/services/plantService.js');
-      const { s3 } = await import('../../../src/utils/s3.js');
-      const { confirmImageUpload } = await import('../../../src/handlers/plants/handler.js');
-      vi.mocked(plantService.getPlant).mockResolvedValueOnce(seedPlant);
-      (s3.send as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        Object.assign(new Error('NotFound'), { name: 'NotFound' })
-      );
-      const event = buildEvent({
-        httpMethod: 'POST',
-        pathParameters: { id: 'p1' },
-        body: JSON.stringify({
-          imageUrl: 'https://test-bucket.s3.amazonaws.com/plants/hh-1/p1/abc.jpg',
-        }),
-        headers: { 'content-type': 'application/json' },
-      });
-      const res = (await confirmImageUpload(event, fakeContext, () => {})) as APIGatewayProxyResult;
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toMatch(/not found/i);
-      expect(plantService.appendPlantPhoto).not.toHaveBeenCalled();
+      vi.mocked(plantService.getPlant).mockResolvedValueOnce(null);
+      const res = (await confirmImageUpload(
+        confirmEvent(UPLOAD_URL),
+        fakeContext,
+        () => {}
+      )) as APIGatewayProxyResult;
+      expect(res.statusCode).toBe(404);
+      expect(acceptUploadedPhoto).not.toHaveBeenCalled();
     });
   });
 });

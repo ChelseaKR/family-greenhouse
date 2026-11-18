@@ -103,6 +103,47 @@ describe('CaretakerSeatsCard', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  describe('a seat turned off because its creator left', () => {
+    const turnedOff = {
+      id: 's3',
+      name: 'Rowan',
+      status: 'revoked',
+      revokedReason: 'creator_left',
+      revokedAt: '2026-11-02T18:00:00.000Z',
+      startsAt: iso(-DAY),
+      expiresAt: iso(DAY),
+    };
+
+    it('stays on the card with why it stopped and how to replace it', async () => {
+      renderCard([turnedOff]);
+      expect(await screen.findByText(/Rowan: turned off on Nov 2, 2026/)).toBeInTheDocument();
+      expect(screen.getByText(/we can’t tell Rowan for you/)).toBeInTheDocument();
+      expect(await screen.findByText(/create a new seat above/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Revoke — Rowan' })).not.toBeInTheDocument();
+      expect(screen.queryByText('No caretaker seats yet.')).not.toBeInTheDocument();
+    });
+
+    it('does not offer a new seat to a household whose plan cannot create one', async () => {
+      renderCard([turnedOff], 'off');
+      expect(await screen.findByText(/your plan doesn’t include it/)).toBeInTheDocument();
+      expect(screen.getByText(/share a sitter link/)).toBeInTheDocument();
+      expect(screen.queryByText(/create a new seat above/)).not.toBeInTheDocument();
+    });
+
+    it('does not guess when the plan could not be read', async () => {
+      renderCard([turnedOff], 'fail');
+      expect(await screen.findByText(/couldn’t check whether your plan/)).toBeInTheDocument();
+      expect(screen.queryByText(/create a new seat above/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/your plan doesn’t include it/)).not.toBeInTheDocument();
+    });
+
+    it('leaves a seat an admin revoked by hand off the list', async () => {
+      renderCard([{ ...turnedOff, revokedReason: undefined, revokedAt: undefined }]);
+      expect(await screen.findByText('No caretaker seats yet.')).toBeInTheDocument();
+      expect(screen.queryByText(/Rowan/)).not.toBeInTheDocument();
+    });
+  });
+
   it('says "none yet" only when the read actually succeeded and was empty', async () => {
     renderCard([]);
     expect(await screen.findByText('No caretaker seats yet.')).toBeInTheDocument();

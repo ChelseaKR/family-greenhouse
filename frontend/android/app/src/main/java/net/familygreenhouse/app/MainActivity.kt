@@ -9,6 +9,7 @@ import net.familygreenhouse.app.frame.NativeFrameController
 import net.familygreenhouse.app.intro.NativeIntroPlugin
 import net.familygreenhouse.app.review.NativeReviewPlugin
 import net.familygreenhouse.app.push.NativePushActionsPlugin
+import net.familygreenhouse.app.push.ReminderNotifications
 
 /**
  * Capacitor's bridge activity, plus the plugins that live in this app rather
@@ -37,6 +38,11 @@ class MainActivity : BridgeActivity() {
         onBackPressedDispatcher.addCallback(placeholder.callback)
 
         super.onCreate(savedInstanceState)
+
+        // The reminder channel exists from the first launch, named in the
+        // device's language, so Settings > Notifications has it before any
+        // reminder arrives (ReminderNotifications.ensureChannel).
+        ReminderNotifications.ensureChannel(this)
 
         val bridge = bridge ?: return
         val controller = NativeFrameController(this, bridge.webView)

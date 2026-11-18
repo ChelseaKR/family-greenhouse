@@ -42,15 +42,17 @@ export interface PlanPrice {
   withdrawn: readonly BillingInterval[];
 }
 
+// Garden is $2.99 / $24.99 since 2026-11-07 (ADR 0042); annual is sold again.
+// (Kept outside the rows: frontend/scripts/llms-txt.test.mjs reads them by shape.)
 export const PLAN_PRICES: readonly PlanPrice[] = [
   { id: 'seedling', name: 'Seedling', monthly: 0, annual: null, lifetime: null, withdrawn: [] },
   {
     id: 'garden',
     name: 'Garden',
-    monthly: 4.99,
-    annual: 39.99,
+    monthly: 2.99,
+    annual: 24.99,
     lifetime: 149,
-    withdrawn: ['year', 'lifetime'],
+    withdrawn: ['lifetime'],
   },
   {
     id: 'greenhouse',

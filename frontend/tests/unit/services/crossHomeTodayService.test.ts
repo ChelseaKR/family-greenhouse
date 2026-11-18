@@ -62,6 +62,29 @@ describe('crossHomeTodayService', () => {
     expect(result.households).toEqual([]);
   });
 
+  it('sends confirmDuplicate only when the member chose to log a double care', async () => {
+    useAuthStore.setState({ accessToken: 'access-1', activeHouseholdId: 'hh-active' });
+    const seen: Array<{ household: string | null; body: unknown }> = [];
+    server.use(
+      http.post(`${API}/tasks/t1/complete`, async ({ request }) => {
+        seen.push({ household: request.headers.get('x-household-id'), body: await request.json() });
+        return HttpResponse.json({ id: 't1', type: 'water' });
+      })
+    );
+    await crossHomeTodayService.completeTask('hh-other', 't1', '2026-09-03T09:00:00.000Z');
+    await crossHomeTodayService.completeTask('hh-other', 't1', '2026-09-03T09:00:00.000Z', {
+      confirmDuplicate: true,
+    });
+    expect(seen).toEqual([
+      // An ordinary completion carries no flag at all, as before.
+      { household: 'hh-other', body: { expectedNextDue: '2026-09-03T09:00:00.000Z' } },
+      {
+        household: 'hh-other',
+        body: { expectedNextDue: '2026-09-03T09:00:00.000Z', confirmDuplicate: true },
+      },
+    ]);
+  });
+
   it('unclaims in the row’s own household, overriding the active-household pin', async () => {
     useAuthStore.setState({ accessToken: 'access-1', activeHouseholdId: 'hh-active' });
     let household: string | null = null;

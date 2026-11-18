@@ -240,7 +240,13 @@ describe('notifyMemberLeft', () => {
     const { dynamodb } = await import('../../../src/utils/dynamodb.js');
 
     const queued = await notifyMemberLeft(
-      { householdId: 'hh', leftUserId: 'u3', memberName: 'Priya', releasedTasks: 3 },
+      {
+        householdId: 'hh',
+        leftUserId: 'u3',
+        memberName: 'Priya',
+        releasedTasks: 3,
+        caretakerSeats: 2,
+      },
       NOW
     );
 
@@ -251,6 +257,7 @@ describe('notifyMemberLeft', () => {
       memberName: 'Priya',
       householdName: 'The Kim House',
       releasedTasks: 3,
+      caretakerSeats: 2,
       householdUrl: 'https://app.example.net/household',
     });
     // Keyed on the departure instant, so a later leave after a re-invite is
@@ -264,7 +271,13 @@ describe('notifyMemberLeft', () => {
     const { notifyMemberLeft } = await import('../../../src/services/householdEmails.js');
     expect(
       await notifyMemberLeft(
-        { householdId: 'hh', leftUserId: 'u3', memberName: 'Priya', releasedTasks: 0 },
+        {
+          householdId: 'hh',
+          leftUserId: 'u3',
+          memberName: 'Priya',
+          releasedTasks: 0,
+          caretakerSeats: 0,
+        },
         NOW
       )
     ).toBe(0);
@@ -293,6 +306,47 @@ describe('notifyMemberLeft', () => {
     expect(es?.text).toContain('Tenía una tarea a su nombre');
     const none = renderQueued(row(0), 'en', NOW);
     expect(none?.text).not.toMatch(/up for grabs/);
+  });
+});
+
+describe('the caretaker seats a member-left email reports', () => {
+  const row = (caretakerSeats?: number) =>
+    ({
+      kind: 'member_left',
+      items: [
+        JSON.stringify({
+          memberName: 'Priya',
+          householdName: 'The Kim House',
+          releasedTasks: 0,
+          ...(caretakerSeats === undefined ? {} : { caretakerSeats }),
+          householdUrl: 'https://app.example.net/household',
+        }),
+      ],
+    }) as never;
+
+  it('names the count and what to do, and does not promise the caretaker was told', async () => {
+    const { renderQueued } = await import('../../../src/services/householdEmails.js');
+    const one = renderQueued(row(1), 'en', NOW)?.text;
+    expect(one).toContain('One caretaker seat they created was turned off');
+    expect(one).toContain('We can’t tell the caretaker');
+    expect(one).toContain('https://app.example.net/household');
+    expect(renderQueued(row(3), 'en', NOW)?.text).toContain(
+      '3 caretaker seats they created were turned off'
+    );
+    const oneEs = renderQueued(row(1), 'es', NOW)?.text;
+    expect(oneEs).toContain('Se desactivó una plaza de cuidador que creó');
+    expect(oneEs).toContain('No podemos avisar al cuidador');
+    expect(renderQueued(row(3), 'es', NOW)?.text).toContain(
+      'Se desactivaron 3 plazas de cuidador que creó'
+    );
+  });
+
+  it('says nothing about seats when none ended, or when an older queued row has no count', async () => {
+    const { renderQueued } = await import('../../../src/services/householdEmails.js');
+    for (const value of [0, undefined]) {
+      expect(renderQueued(row(value), 'en', NOW)?.text).not.toMatch(/caretaker/i);
+      expect(renderQueued(row(value), 'es', NOW)?.text).not.toMatch(/plaza/i);
+    }
   });
 });
 

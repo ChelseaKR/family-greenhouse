@@ -126,8 +126,10 @@ describe('caretakerVisitService', () => {
     const file = new File(['bytes'], 'leaf.heic', { type: 'image/heic' });
     await caretakerVisitService.addPhoto(TOKEN, 'p1', file);
     expect(prepareImageForUpload).toHaveBeenCalledWith(file);
+    // The presign declares the type and the exact size of what is uploaded.
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
       contentType: 'image/webp',
+      contentLength: PREPARED.size,
     });
     const put = fetchMock.mock.calls[1][1] as RequestInit;
     expect(put.body).toBe(PREPARED);

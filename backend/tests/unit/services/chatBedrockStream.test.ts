@@ -165,6 +165,28 @@ describe('invokeChatModelStream', () => {
     expect(bedrockSend.mock.calls[0][1]).toHaveProperty('abortSignal');
   });
 
+  // #889: the streaming path builds the same payload, so today's date rides
+  // after the breakpoint here too.
+  it('sends uncachedContext after the breakpoint on the streaming path as well', async () => {
+    bedrockSend.mockResolvedValueOnce({
+      body: iterate([chunk({ type: 'message_stop' })]),
+    });
+    await drain(
+      invokeChatModelStream({ ...args, uncachedContext: 'Today is Monday, 2026-03-09, in UTC.' })
+    );
+
+    const command = bedrockSend.mock.calls[0][0] as { input: { body: string } };
+    const body = JSON.parse(command.input.body) as {
+      system: string;
+      messages: Array<{ content: Array<Record<string, unknown>> }>;
+    };
+    expect(body.system).toBe('system prompt');
+    expect(body.messages[0].content).toEqual([
+      { type: 'text', text: 'hi', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'Today is Monday, 2026-03-09, in UTC.' },
+    ]);
+  });
+
   it('surfaces a hung stream as a timeout rather than holding the Lambda', async () => {
     const abortErr = new Error('aborted');
     abortErr.name = 'AbortError';

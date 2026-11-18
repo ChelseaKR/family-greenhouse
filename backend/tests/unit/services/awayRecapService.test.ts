@@ -59,7 +59,7 @@ function completed(
 }
 
 describe('pickRecapLink', () => {
-  it('returns the explicitly requested link in any state, or null when it is not there', async () => {
+  it('returns the explicitly requested link, open or ended, or null when it is not there', async () => {
     const { pickRecapLink } = await import('../../../src/services/awayRecapService.js');
     const live = link({ id: 'live', expiresAt: '2026-12-01T00:00:00.000Z' });
     expect(pickRecapLink([live], 'live', NOW)).toBe(live);
@@ -87,6 +87,139 @@ describe('pickRecapLink', () => {
     });
     const expired = link({ id: 'expired', expiresAt: '2026-08-24T00:00:00.000Z' });
     expect(pickRecapLink([expired, revoked], undefined, NOW)?.id).toBe('revoked');
+  });
+});
+
+// Audit 2026-11-08, finding 10. A link revoked BEFORE its start date has no
+// window: nobody could open it. It used to count as the most recently ended
+// link, with a window running from next week back to now.
+describe('a link whose window never opened', () => {
+  const realRecap = link({ id: 'real', createdAt: '2026-08-01T00:00:00.000Z' });
+  const revokedBeforeStart = link({
+    id: 'never-opened',
+    status: 'revoked',
+    createdAt: '2026-09-02T00:00:00.000Z',
+    startsAt: '2026-09-10T00:00:00.000Z', // a week after NOW
+    expiresAt: '2026-09-17T00:00:00.000Z',
+  });
+  const scheduled = link({
+    id: 'scheduled',
+    createdAt: '2026-09-02T00:00:00.000Z',
+    startsAt: '2026-09-10T00:00:00.000Z',
+    expiresAt: '2026-09-17T00:00:00.000Z',
+  });
+
+  it('the fixture is the case in question: revoked, and its start is still ahead of now', () => {
+    expect(revokedBeforeStart.status).toBe('revoked');
+    expect(revokedBeforeStart.startsAt > NOW.toISOString()).toBe(true);
+    expect(realRecap.expiresAt < NOW.toISOString()).toBe(true);
+  });
+
+  it('does not hide the real recap: the default pick skips it for the window that did happen', async () => {
+    const { pickRecapLink } = await import('../../../src/services/awayRecapService.js');
+    expect(pickRecapLink([revokedBeforeStart, realRecap], undefined, NOW)?.id).toBe('real');
+    expect(pickRecapLink([realRecap, revokedBeforeStart], undefined, NOW)?.id).toBe('real');
+  });
+
+  it('is not a recap on its own: with nothing else ended the pick is null (the 404), not an empty window', async () => {
+    const { pickRecapLink } = await import('../../../src/services/awayRecapService.js');
+    expect(pickRecapLink([revokedBeforeStart], undefined, NOW)).toBeNull();
+    expect(pickRecapLink([revokedBeforeStart, scheduled], undefined, NOW)).toBeNull();
+  });
+
+  it('cannot be asked for by id either, revoked or merely not started yet', async () => {
+    const { pickRecapLink } = await import('../../../src/services/awayRecapService.js');
+    expect(pickRecapLink([revokedBeforeStart, realRecap], 'never-opened', NOW)).toBeNull();
+    expect(pickRecapLink([scheduled, realRecap], 'scheduled', NOW)).toBeNull();
+    // The same link the moment its window opens is a recap like any other.
+    const atStart = new Date(scheduled.startsAt);
+    expect(pickRecapLink([scheduled], 'scheduled', atStart)?.id).toBe('scheduled');
+  });
+
+  it('has no window: recapWindow refuses rather than return one that runs backwards', async () => {
+    const { recapWindow, RecapWindowNotOpenError } =
+      await import('../../../src/services/awayRecapService.js');
+    for (const unopened of [revokedBeforeStart, scheduled]) {
+      let window: { from: string; to: string } | undefined;
+      let thrown: unknown;
+      try {
+        window = recapWindow(unopened, NOW);
+      } catch (err) {
+        thrown = err;
+      }
+      // Stated as the property first, so the old behavior fails on what was
+      // wrong with it (from 2026-09-10, to 2026-09-03) and not on a class name.
+      expect(window === undefined || window.from <= window.to).toBe(true);
+      expect(thrown).toBeInstanceOf(RecapWindowNotOpenError);
+    }
+  });
+
+  it('every window recapWindow does return runs forwards', async () => {
+    const { recapWindow } = await import('../../../src/services/awayRecapService.js');
+    const opened = [
+      realRecap,
+      link({ expiresAt: '2026-12-01T00:00:00.000Z' }),
+      link({ status: 'revoked', expiresAt: '2026-12-01T00:00:00.000Z' }),
+      link({ startsAt: NOW.toISOString(), expiresAt: '2026-12-01T00:00:00.000Z' }),
+    ];
+    for (const l of opened) {
+      const w = recapWindow(l, NOW);
+      expect(w.from <= w.to).toBe(true);
+    }
+  });
+
+  it('never reaches DynamoDB, whose BETWEEN refuses a lower bound above the upper', async () => {
+    const { dynamodb } = await import('../../../src/utils/dynamodb.js');
+    const { listSitterWindowActivity, RecapWindowNotOpenError } =
+      await import('../../../src/services/awayRecapService.js');
+    vi.clearAllMocks();
+    // A fake that keeps DynamoDB's rule. The stock mock in this file answers
+    // any bounds at all, which is how this defect passed every test here.
+    vi.mocked(dynamodb.send).mockImplementation((async (command: {
+      input: { ExpressionAttributeValues: Record<string, string> };
+    }) => {
+      const { ':from': from, ':to': to } = command.input.ExpressionAttributeValues;
+      if (from > to) {
+        throw Object.assign(
+          new Error(
+            'Invalid KeyConditionExpression: The BETWEEN operator requires upper bound to be greater than or equal to lower bound'
+          ),
+          { name: 'ValidationException' }
+        );
+      }
+      return { Items: [] };
+    }) as never);
+
+    // The fake does refuse a backwards range, so a pass below means the
+    // query was not sent, not that the fake let it through.
+    await expect(
+      dynamodb.send({
+        input: { ExpressionAttributeValues: { ':from': 'b', ':to': 'a' } },
+      } as never)
+    ).rejects.toMatchObject({ name: 'ValidationException' });
+    vi.mocked(dynamodb.send).mockClear();
+
+    const outcome: unknown = await listSitterWindowActivity('hh-1', revokedBeforeStart, NOW).then(
+      () => 'resolved',
+      (err: unknown) => err
+    );
+    expect(dynamodb.send).not.toHaveBeenCalled();
+    expect(outcome).toBeInstanceOf(RecapWindowNotOpenError);
+    // And a window that did open still reads through the same fake.
+    await expect(listSitterWindowActivity('hh-1', realRecap, NOW)).resolves.toEqual({
+      events: [],
+      truncated: false,
+    });
+    expect(dynamodb.send).toHaveBeenCalledTimes(1);
+    vi.mocked(dynamodb.send).mockReset();
+  });
+
+  it('cannot be folded into a recap by a caller that skipped the pick', async () => {
+    const { buildAwayRecap, RecapWindowNotOpenError } =
+      await import('../../../src/services/awayRecapService.js');
+    expect(() => buildAwayRecap(revokedBeforeStart, [], false, NOW)).toThrow(
+      RecapWindowNotOpenError
+    );
   });
 });
 

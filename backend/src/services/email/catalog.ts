@@ -260,7 +260,7 @@ const es: Catalog = {
   'digest.lastCare.unavailable': 'No pudimos cargar el historial de cuidados de esta planta.',
   'digest.assigned.to': 'Normalmente se encarga {{name}}.',
   'digest.assigned.covering': 'Ahora mismo {{cover}} está cubriendo a {{away}}.',
-  'digest.assigned.nobody': 'Todavía nadie la ha cogido.',
+  'digest.assigned.nobody': 'Todavía nadie la ha tomado.',
   'digest.cta': 'Abrir Family Greenhouse',
   'digest.weatherHeading': 'Fuera, esta semana',
   'digest.weather.unavailable': 'Esta semana no pudimos consultar la previsión de tu zona.',

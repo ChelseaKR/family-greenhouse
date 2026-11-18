@@ -107,7 +107,7 @@ reactivation runbook before changing any of these controls.
 1. Sign up at https://dashboard.stripe.com/.
 2. **Stay in test mode** until you're done iterating. The toggle's in the top-right of the dashboard.
 3. **Create products + prices**:
-   - Products → Add product → "Garden" → recurring monthly → $4.99 → save. Copy the **Price ID** (`price_…`).
+   - Products → Add product → "Garden" → recurring monthly → $2.99 → save, then add a second recurring price, yearly, $24.99 (ADR 0042). Copy each **Price ID** (`price_…`).
    - Same for "Greenhouse" at $9.99.
 4. **Create a webhook**:
    - Developers → Webhooks → Add endpoint
@@ -150,7 +150,7 @@ When you're ready to actually charge:
    `docs/COMMERCIAL-STATUS.md`: update the dated status, wire the exact runtime
    gate, confirm live-mode prices, restore paid controls, and deploy through a
    reviewed non-production test first.
-4. **Tax**: configure registrations in Stripe Tax, assign the appropriate SaaS tax code to each product, then set `stripe_automatic_tax_enabled = "1"`. Checkout will collect the minimum billing-address fields required and save refreshed addresses for returning customers. Do not flip this flag before the Stripe-side tax setup is complete.
+4. **Tax**: in the Stripe Dashboard, confirm the head-office address under Tax settings, set the product tax code `txcd_10103000` (Software as a service, personal use) on every product sold — Garden, Greenhouse and the Identification pack — and add the state registrations (California from 2027-01-01, when SB 122 taxes remotely accessed software). Then set `stripe_automatic_tax_enabled = "1"`. Checkout collects the minimum billing-address fields the calculation needs and saves refreshed addresses for returning customers. Do not flip this flag before the Stripe-side setup is complete: with it on, the price reconciliation refuses to sell a price whose product carries any other tax code or none, so a forgotten product is a refused checkout, not a sale taxed as the wrong thing. The flag shapes new Checkout Sessions only; a subscription that already exists keeps automatic tax off until it is updated in Stripe (Tax → Migrations, live mode only).
 
 ### Checkout reliability and webhook checks
 

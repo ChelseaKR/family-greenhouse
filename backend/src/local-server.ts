@@ -60,6 +60,7 @@ import {
   getEntitledPlan,
   getEntitledPlanForIssuedGrant,
   getMeteredPlanId,
+  type PlanId,
   hasHouseholdToolkit,
   noCardTrialState,
   giftState,
@@ -114,7 +115,11 @@ import {
   planMoves,
 } from './services/moveDayPlan.js';
 import type { MoveDayList } from './services/moveDayPlan.js';
-import { identifyTopUpSummary } from './models/identifyTopUp.js';
+import {
+  identifyRefusalMessage,
+  identifyTopUpSummary,
+  identifyUpgradeTargetName,
+} from './models/identifyTopUp.js';
 import {
   IDENTIFICATION_CONFIDENCE_FLOOR,
   isPlantIdentificationConfigured,
@@ -321,7 +326,14 @@ interface Invite {
   createdBy: string;
   createdAt: string;
   expiresAt: string;
+  /** How many people may join with it, and how many have (ADR 0047). */
+  maxUses: number;
+  uses: number;
 }
+
+/** Mirrors INVITE_LINK_MAX_USES / INVITE_EMAIL_MAX_USES in services/householdService.ts. */
+const LOCAL_INVITE_LINK_MAX_USES = 5;
+const LOCAL_INVITE_EMAIL_MAX_USES = 1;
 
 interface Plant {
   id: string;
@@ -451,6 +463,8 @@ interface Caretaker {
   startsAt: string;
   expiresAt: string;
   status: 'active' | 'revoked';
+  revokedReason?: 'creator_left';
+  revokedAt?: string;
 }
 
 /** Mirrors caretakerService.CaretakerVisit. `startedAt` is the timestamp of
@@ -622,6 +636,7 @@ interface Completion {
 interface MockUploadGrant {
   key: string;
   contentType: string;
+  contentLength: number;
 }
 
 interface MockImageObject {
@@ -775,8 +790,11 @@ export let seedTaskId = '';
  */
 const moveDayRecords = new Map<string, MoveDayList>(); // `${householdId}#${season}`
 const identifyUsage = new Map<string, number>(); // `${yyyy-mm}#${bucketId}`
+/** Accounts that have claimed the first-plant milestone (services/accountMilestones.ts). */
+const firstPlantClaimedBy = new Set<string>();
 
 export function resetDb(): void {
+  firstPlantClaimedBy.clear();
   db.users.clear();
   db.households.clear();
   db.invites.clear();
@@ -1485,6 +1503,10 @@ app.delete('/me', authMiddleware, (req, res) => {
       }
       db.households.delete(m.householdId);
     }
+
+    // The household that keeps going loses its invites so far, as when a
+    // member leaves or is removed (ADR 0047).
+    revokeLocalInvites(m.householdId);
 
     // Retained shared records preserve the household's care history without
     // retaining the departing member's name or stable account id.
@@ -2288,6 +2310,8 @@ app.post('/households/:id/invites', authMiddleware, requireHousehold, requireAdm
     createdBy: user.userId,
     createdAt: now.toISOString(),
     expiresAt,
+    maxUses: LOCAL_INVITE_LINK_MAX_USES,
+    uses: 0,
   });
 
   const baseUrl =
@@ -2380,6 +2404,8 @@ app.post(
       createdBy: user.userId,
       createdAt: now.toISOString(),
       expiresAt,
+      maxUses: LOCAL_INVITE_EMAIL_MAX_USES,
+      uses: 0,
     });
     const baseUrl =
       process.env.FRONTEND_URL ||
@@ -3461,13 +3487,45 @@ function getActiveSitterLink(token: string): SitterLink | null {
   return link;
 }
 
-/** Expiry-checked invite lookup; mirrors householdService.getInvite. */
+/** Expiry- and use-checked invite lookup; mirrors householdService.getInvite. */
 function getValidInvite(code: string): Invite | null {
   const invite = db.invites.get(code);
   if (!invite) return null;
   if (new Date(invite.expiresAt) < new Date()) return null;
+  if (invite.uses >= invite.maxUses) return null;
   return invite;
 }
+
+/**
+ * Turn off every invite the household has made so far. Mirrors
+ * householdService.revokeHouseholdInvites, which stamps the household row
+ * instead of deleting; here the invites are simply removed, which reads the
+ * same from every route.
+ */
+function revokeLocalInvites(householdId: string): void {
+  for (const [code, invite] of db.invites.entries()) {
+    if (invite.householdId === householdId) db.invites.delete(code);
+  }
+}
+
+// DELETE /households/:id/invites — mirrors handlers/households revokeInvites.
+app.delete(
+  '/households/:id/invites',
+  authMiddleware,
+  requireHousehold,
+  requireAdmin,
+  (req, res) => {
+    const user = (req as any).user;
+    if (user.householdId !== req.params.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (!db.households.has(req.params.id)) {
+      return res.status(404).json({ message: 'Household not found' });
+    }
+    revokeLocalInvites(req.params.id);
+    res.json({ revokedAt: new Date().toISOString() });
+  }
+);
 
 // GET /households/invites/:inviteCode
 // Unauthenticated by design — invite recipients haven't signed in yet.
@@ -3485,8 +3543,8 @@ app.get('/households/invites/:inviteCode', (req, res) => {
 
 // POST /households/join/:inviteCode
 // Mirrors handlers/households/handler.ts:joinHousehold — invite validation
-// (existence + expiry), member-cap check against the household's plan, and
-// an already-a-member guard.
+// (existence, expiry and uses left), member-cap check against the household's
+// plan, and an already-a-member guard. A join takes one of the invite's uses.
 app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
   const user = (req as any).user;
   const dbUser = db.users.get(user.userId);
@@ -3537,6 +3595,8 @@ app.post('/households/join/:inviteCode', authMiddleware, (req, res) => {
     role: 'member',
     joinedAt: new Date().toISOString(),
   });
+  // Joining takes one of the invite's uses (ADR 0047).
+  invite.uses += 1;
   // Same default-household rule as createHousehold: only stamp the claim
   // on the first one.
   if (!dbUser.householdId) {
@@ -3628,17 +3688,26 @@ function departLocalHousehold(
     sitterLinks: number;
     kioskLinks: number;
     cuttingShares: number;
+    caretakerSeats: number;
   };
 } {
   const summary = {
     releasedTasks: 0,
     rotationsUpdated: 0,
     helpAsksAnonymized: 0,
-    revokedCredentials: { plantTags: 0, sitterLinks: 0, kioskLinks: 0, cuttingShares: 0 },
+    revokedCredentials: {
+      plantTags: 0,
+      sitterLinks: 0,
+      kioskLinks: 0,
+      cuttingShares: 0,
+      caretakerSeats: 0,
+    },
   };
   const revoked = summary.revokedCredentials;
   const userId = target.id;
   target.memberships = target.memberships.filter((m) => m.householdId !== householdId);
+  // Whoever goes, the household's invites so far stop working (ADR 0047).
+  revokeLocalInvites(householdId);
   // Revoke what they minted, BEFORE `createdBy` is scrubbed below (#449).
   for (const [token, link] of db.sitterLinks.entries()) {
     if (link.householdId === householdId && link.createdBy === userId) {
@@ -3662,6 +3731,15 @@ function departLocalHousehold(
     if (share.householdId === householdId && share.createdBy === userId) {
       db.shares.delete(code);
       revoked.cuttingShares += 1;
+    }
+  }
+  // Revoked, not deleted: as in production, visits outlive the seat.
+  for (const seat of db.caretakers.values()) {
+    if (seat.householdId === householdId && seat.createdBy === userId && seat.status === 'active') {
+      seat.status = 'revoked';
+      seat.revokedReason = 'creator_left';
+      seat.revokedAt = new Date().toISOString();
+      revoked.caretakerSeats += 1;
     }
   }
   for (const [token, calendar] of db.calendarTokens.entries()) {
@@ -4183,7 +4261,14 @@ app.post(
         : { plantId, plantName: plant.name },
     });
 
-    res.status(201).json(plant);
+    // Mirrors services/accountMilestones.claimFirstPlant: the account's first
+    // plant, once per account, and only when it starts an empty household.
+    let firstPlantForAccount = false;
+    if (!firstPlantClaimedBy.has(user.userId)) {
+      firstPlantClaimedBy.add(user.userId);
+      firstPlantForAccount = existing.length === 0;
+    }
+    res.status(201).json(firstPlantForAccount ? { ...plant, firstPlantForAccount: true } : plant);
   }
 );
 
@@ -4534,7 +4619,7 @@ const identifySchema = z.object({
 // Mirrors services/identifyBudget.ts: in-memory monthly identification usage
 // keyed `${yyyy-mm}#${householdId | user:userId}`. Enforcement only when
 // IDENTIFY_METERING_ENABLED=1, matching production (default off for beta).
-const IDENTIFY_ALLOWANCES: Record<string, number> = { seedling: 1, garden: 30, greenhouse: 100 };
+const IDENTIFY_ALLOWANCES: Record<PlanId, number> = { seedling: 1, garden: 0, greenhouse: 100 };
 
 function identifyMeterFor(user: { userId: string; householdId: string | null }) {
   const ym = new Date().toISOString().slice(0, 7);
@@ -4553,7 +4638,11 @@ function identifyMeterFor(user: { userId: string; householdId: string | null }) 
   return {
     key,
     planName: plan.name,
+    meteredPlanId,
     allowance: IDENTIFY_ALLOWANCES[meteredPlanId] ?? IDENTIFY_ALLOWANCES.seedling,
+    onNoCardTrial: user.householdId
+      ? noCardTrialState(subscriptionOf(user.householdId)) === 'active'
+      : false,
     used: identifyUsage.get(key) ?? 0,
     meteringEnabled: process.env.IDENTIFY_METERING_ENABLED === '1',
   };
@@ -4567,9 +4656,17 @@ app.post('/plants/identify', authMiddleware, validateBody(identifySchema), async
     // the top-up `details`. The mock sells no packs (checkout is 503 below),
     // so the offer is never available and the balance is a real zero.
     return res.status(402).json({
-      message: `Your ${meter.planName} plan is limited to ${meter.allowance} plant identifications per month. Upgrade for a higher monthly allowance.`,
+      message: identifyRefusalMessage({
+        planName: meter.planName,
+        allowance: meter.allowance,
+        onNoCardTrial: meter.onNoCardTrial,
+        upgradeTo: identifyUpgradeTargetName(meter.meteredPlanId, IDENTIFY_ALLOWANCES),
+        topUp: null,
+      }),
       details: {
         code: 'IDENTIFY_BUDGET_EXHAUSTED',
+        allowance: meter.allowance,
+        planName: meter.planName,
         topUpAvailable: false,
         credits: (req as any).user.householdId ? { remaining: 0, expiresAt: null } : null,
         topUp: null,
@@ -4688,11 +4785,18 @@ app.post(
 );
 
 // Image upload contract (mirrors handlers/plants/handler.ts):
-//   POST /plants/:id/image           — optional { contentType } ∈ jpeg/png/webp
-//                                      (default jpeg); key extension matches.
-//   PUT  /mock-upload/:token          — local stand-in for the presigned S3 PUT.
-//   POST /plants/:id/image/confirm   — imageUrl must match a key we'd mint for
-//                                      this plant and the PUT must have landed.
+//   POST /plants/:id/image           — { contentType?, contentLength } with
+//                                      contentType ∈ jpeg/png/webp (default
+//                                      jpeg) and contentLength ≤ 5 MiB; the
+//                                      grant is for a holding key under
+//                                      uploads/ (ADR 0046).
+//   PUT  /mock-upload/:token          — local stand-in for the presigned S3 PUT;
+//                                      refuses a type or size other than the
+//                                      grant's, as the signature does.
+//   POST /plants/:id/image/confirm   — imageUrl must name a holding key we'd
+//                                      mint for this plant and the PUT must
+//                                      have landed; the photo is stored under
+//                                      a new plants/ key and that is returned.
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -4700,13 +4804,16 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
 };
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-// Mirrors imageUploadRequestSchema in handlers/plants/handler.ts (body is
-// optional/nullable for legacy clients that POST with no body).
+// Mirrors imageUploadRequestSchema in handlers/plants/handler.ts. The handler
+// refuses a request with no contentLength in words (readUploadRequest).
 const imageUploadRequestSchema = z
   .object({
     contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
+    contentLength: z.number().int().positive().optional(),
   })
   .nullable();
+const UPLOAD_NEEDS_SIZE_MESSAGE =
+  "This version of the app can't add photos. Reload the page or update the app, then try again.";
 
 const IMAGES_BUCKET = process.env.IMAGES_BUCKET || 'family-greenhouse-images-local';
 
@@ -4721,6 +4828,80 @@ function imageBaseUrl(): string {
   return `http://localhost:${PORT}/mock-images`;
 }
 
+/** Mirrors presignPhotoUpload + readUploadRequest (services/photoIntake.ts). */
+function grantMockUpload(
+  householdId: string,
+  plantId: string,
+  body: { contentType?: string; contentLength?: number } | null | undefined
+):
+  | { status: 200; json: { uploadUrl: string; imageUrl: string } }
+  | { status: 400; message: string } {
+  const contentType = body?.contentType ?? 'image/jpeg';
+  const contentLength = body?.contentLength;
+  if (contentLength === undefined) return { status: 400, message: UPLOAD_NEEDS_SIZE_MESSAGE };
+  if (contentLength > MAX_IMAGE_BYTES) {
+    return { status: 400, message: 'Image exceeds the 5 MiB limit' };
+  }
+  const key = `uploads/${householdId}/${plantId}/${uuidv4()}.${IMAGE_CONTENT_TYPES[contentType]}`;
+  const uploadToken = uuidv4();
+  db.mockUploadGrants.set(uploadToken, { key, contentType, contentLength });
+  return {
+    status: 200,
+    json: {
+      // The page CSP explicitly permits localhost:4000 for API connections.
+      // 127.0.0.1 is a different CSP origin and made the former URL fail
+      // before it ever reached Express.
+      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
+      imageUrl: `${imageBaseUrl()}/${key}`,
+    },
+  };
+}
+
+/**
+ * Mirrors acceptUploadedPhoto (services/photoIntake.ts): the holding object
+ * must exist and pass the size and type checks; it is then stored under a new
+ * `plants/` key, removed from `uploads/`, and the new reference returned.
+ */
+function acceptMockUpload(
+  householdId: string,
+  plantId: string,
+  imageUrl: string
+): { ok: true; imageUrl: string } | { ok: false; message: string } {
+  const keyPrefix = `uploads/${householdId}/${plantId}/`;
+  // Accept the local served form plus whichever URL forms production can
+  // mint; all map to the same object key.
+  const expectedPrefixes = [
+    `${imageBaseUrl()}/${keyPrefix}`,
+    `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
+  ];
+  const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
+  // The remainder must look exactly like a key we minted (uuid.ext) — no
+  // slashes, dots, or query strings smuggling a different object.
+  const filename = matchedPrefix ? imageUrl.slice(matchedPrefix.length) : '';
+  const extension = /^[A-Za-z0-9-]+\.(jpg|png|webp)$/.exec(filename)?.[1];
+  if (!matchedPrefix || !extension) {
+    return { ok: false, message: 'imageUrl does not match a key issued for this plant' };
+  }
+  const uploadKey = `${keyPrefix}${filename}`;
+  // Mirror production's gate: never attach a URL until the PUT actually
+  // landed with non-empty, allowed image bytes.
+  const uploaded = db.mockImages.get(uploadKey);
+  if (!uploaded) {
+    return { ok: false, message: 'Uploaded image not found; upload it before confirming' };
+  }
+  db.mockImages.delete(uploadKey);
+  if (uploaded.body.length === 0) return { ok: false, message: 'Uploaded image is empty' };
+  if (uploaded.body.length > MAX_IMAGE_BYTES) {
+    return { ok: false, message: 'Image exceeds the 5 MiB limit' };
+  }
+  if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
+    return { ok: false, message: 'Uploaded file is not a valid image' };
+  }
+  const key = `plants/${householdId}/${plantId}/${uuidv4()}.${extension}`;
+  db.mockImages.set(key, uploaded);
+  return { ok: true, imageUrl: `${imageBaseUrl()}/${key}` };
+}
+
 app.post(
   '/plants/:id/image',
   authMiddleware,
@@ -4732,19 +4913,13 @@ app.post(
     if (!plant || plant.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    const body = (req as any).validatedBody;
-    const contentType = body?.contentType ?? 'image/jpeg';
-    const ext = IMAGE_CONTENT_TYPES[contentType];
-    const key = `plants/${user.householdId}/${String(req.params.id)}/${uuidv4()}.${ext}`;
-    const uploadToken = uuidv4();
-    db.mockUploadGrants.set(uploadToken, { key, contentType });
-    res.json({
-      // The page CSP explicitly permits localhost:4000 for API connections.
-      // 127.0.0.1 is a different CSP origin and made the former URL fail
-      // before it ever reached Express.
-      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
-      imageUrl: `${imageBaseUrl()}/${key}`,
-    });
+    const grant = grantMockUpload(
+      user.householdId,
+      String(req.params.id),
+      (req as any).validatedBody
+    );
+    if (grant.status !== 200) return res.status(400).json({ message: grant.message });
+    res.json(grant.json);
   }
 );
 
@@ -4755,52 +4930,17 @@ app.post(
   validateBody(confirmImageUploadSchema),
   (req, res) => {
     const user = (req as any).user;
-    const { imageUrl } = (req as any).validatedBody;
-    const keyPrefix = `plants/${user.householdId}/${String(req.params.id)}/`;
-    // Accept the local served form plus whichever URL forms production can
-    // mint; all map to the same object key.
-    const expectedPrefixes = [
-      `${imageBaseUrl()}/${keyPrefix}`,
-      `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
-    ];
-    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
-    if (!matchedPrefix) {
-      return res
-        .status(400)
-        .json({ message: 'imageUrl does not match a key issued for this plant' });
-    }
-    // The remainder must look exactly like a key we minted (uuid.ext) — no
-    // slashes, dots, or query strings smuggling a different object.
-    const filename = imageUrl.slice(matchedPrefix.length);
-    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
-      return res
-        .status(400)
-        .json({ message: 'imageUrl does not match a key issued for this plant' });
-    }
-    const key = `${keyPrefix}${filename}`;
     const plant = db.plants.get(req.params.id);
     if (!plant || plant.householdId !== user.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    // Mirror production's HeadObject gate: never attach a URL until the PUT
-    // actually landed with non-empty, allowed image bytes.
-    const uploaded = db.mockImages.get(key);
-    if (!uploaded) {
-      return res
-        .status(400)
-        .json({ message: 'Uploaded image not found; upload it before confirming' });
-    }
-    if (uploaded.body.length === 0) {
-      return res.status(400).json({ message: 'Uploaded image is empty' });
-    }
-    if (uploaded.body.length > MAX_IMAGE_BYTES) {
-      db.mockImages.delete(key);
-      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
-    }
-    if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
-      db.mockImages.delete(key);
-      return res.status(400).json({ message: 'Uploaded file is not a valid image' });
-    }
+    const accepted = acceptMockUpload(
+      user.householdId,
+      String(req.params.id),
+      (req as any).validatedBody.imageUrl
+    );
+    if (!accepted.ok) return res.status(400).json({ message: accepted.message });
+    const imageUrl = accepted.imageUrl;
     plant.imageUrl = imageUrl;
     plant.updatedAt = new Date().toISOString();
     const photoId = uuidv4();
@@ -5582,15 +5722,13 @@ app.post(
     if (!plant || plant.householdId !== caretaker.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    const contentType = (req as any).validatedBody?.contentType ?? 'image/jpeg';
-    const ext = IMAGE_CONTENT_TYPES[contentType];
-    const key = `plants/${caretaker.householdId}/${String(req.params.plantId)}/${uuidv4()}.${ext}`;
-    const uploadToken = uuidv4();
-    db.mockUploadGrants.set(uploadToken, { key, contentType });
-    res.json({
-      uploadUrl: `http://localhost:${PORT}/mock-upload/${uploadToken}`,
-      imageUrl: `${imageBaseUrl()}/${key}`,
-    });
+    const grant = grantMockUpload(
+      caretaker.householdId,
+      String(req.params.plantId),
+      (req as any).validatedBody
+    );
+    if (grant.status !== 200) return res.status(400).json({ message: grant.message });
+    res.json(grant.json);
   }
 );
 
@@ -5607,39 +5745,13 @@ app.post(
     if (!plant || plant.householdId !== caretaker.householdId) {
       return res.status(404).json({ message: 'Plant not found' });
     }
-    const { imageUrl } = (req as any).validatedBody;
-    const keyPrefix = `plants/${caretaker.householdId}/${String(req.params.plantId)}/`;
-    const expectedPrefixes = [
-      `${imageBaseUrl()}/${keyPrefix}`,
-      `https://${IMAGES_BUCKET}.s3.amazonaws.com/${keyPrefix}`,
-    ];
-    const matchedPrefix = expectedPrefixes.find((p) => imageUrl.startsWith(p));
-    if (!matchedPrefix) {
-      return res
-        .status(400)
-        .json({ message: 'imageUrl does not match a key issued for this plant' });
-    }
-    const filename = imageUrl.slice(matchedPrefix.length);
-    if (!/^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(filename)) {
-      return res
-        .status(400)
-        .json({ message: 'imageUrl does not match a key issued for this plant' });
-    }
-    const uploaded = db.mockImages.get(`${keyPrefix}${filename}`);
-    if (!uploaded) {
-      return res
-        .status(400)
-        .json({ message: 'Uploaded image not found; upload it before confirming' });
-    }
-    if (uploaded.body.length === 0) {
-      return res.status(400).json({ message: 'Uploaded image is empty' });
-    }
-    if (uploaded.body.length > MAX_IMAGE_BYTES) {
-      return res.status(400).json({ message: 'Image exceeds the 5 MiB limit' });
-    }
-    if (!(uploaded.contentType in IMAGE_CONTENT_TYPES)) {
-      return res.status(400).json({ message: 'Uploaded file is not a valid image' });
-    }
+    const accepted = acceptMockUpload(
+      caretaker.householdId,
+      String(req.params.plantId),
+      (req as any).validatedBody.imageUrl
+    );
+    if (!accepted.ok) return res.status(400).json({ message: accepted.message });
+    const imageUrl = accepted.imageUrl;
 
     const actorId = `caretaker:${caretaker.id}`;
     const now = new Date().toISOString();
@@ -6838,6 +6950,12 @@ app.get('/billing/me', authMiddleware, requireHousehold, (req, res) => {
     usageDetail: usage,
     // The mock sells no top-up packs, so the balance is a real zero.
     identifyCredits: { remaining: 0, expiresAt: null },
+    identifyAllowance: {
+      monthly:
+        IDENTIFY_ALLOWANCES[getMeteredPlanId(subscriptionOf(user.householdId))] ??
+        IDENTIFY_ALLOWANCES.seedling,
+      planName: plan.name,
+    },
     // Mirrors handlers/billing/handler.ts (ADR 0027).
     noCardTrial: (() => {
       const trialState = noCardTrialState(subscriptionOf(user.householdId));
@@ -8294,6 +8412,12 @@ app.put(
       return res.status(400).json({ message: 'Upload body must contain image bytes' });
     }
     const body = Buffer.from(req.body);
+    // The real URL is signed for one exact size; storage refuses any other.
+    if (body.length !== grant.contentLength) {
+      return res
+        .status(403)
+        .json({ message: 'Upload Content-Length does not match the signed request' });
+    }
     db.mockImages.set(grant.key, { body: Buffer.from(body), contentType });
     res.status(200).end();
   }
@@ -8310,7 +8434,8 @@ app.get(/^\/mock-images\/(.+)$/, (req, res) => {
     return res.status(400).json({ message: 'Image key must be a string' });
   }
   const key = rawKey;
-  const image = db.mockImages.get(key);
+  // An upload waiting for its confirm call is never served (ADR 0046).
+  const image = key.startsWith('uploads/') ? undefined : db.mockImages.get(key);
   if (!image) return res.status(404).json({ message: 'Image not found' });
   res.set('Cache-Control', 'no-store');
   res.set('X-Content-Type-Options', 'nosniff');

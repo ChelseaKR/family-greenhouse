@@ -3,7 +3,10 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
+import { createInstance } from 'i18next';
+import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
+import es from '@/i18n/locales/es/translation.json';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { useAuthStore } from '@/store/authStore';
 import { server } from '../../msw/server';
@@ -34,7 +37,15 @@ function task(overrides: Record<string, unknown>) {
   };
 }
 
-function renderDashboard({ upcoming, all }: { upcoming: unknown[]; all: unknown[] | 'failing' }) {
+function renderDashboard({
+  upcoming,
+  all,
+  i18nInstance = i18n,
+}: {
+  upcoming: unknown[];
+  all: unknown[] | 'failing';
+  i18nInstance?: typeof i18n;
+}) {
   server.use(
     http.get(`${API}/tasks/upcoming`, () => HttpResponse.json(upcoming as never)),
     http.get(`${API}/tasks`, () =>
@@ -67,11 +78,13 @@ function renderDashboard({ upcoming, all }: { upcoming: unknown[]; all: unknown[
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/dashboard']}>
-        <DashboardPage />
-      </MemoryRouter>
-    </QueryClientProvider>
+    <I18nextProvider i18n={i18nInstance}>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <DashboardPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </I18nextProvider>
   );
 }
 
@@ -105,6 +118,21 @@ describe('dashboard empty week', () => {
     expect(await screen.findByText(`Next up: Water Aloe on ${expectedDate}.`)).toBeInTheDocument();
     expect(screen.queryByText('No tasks yet')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View all tasks' })).toHaveAttribute('href', '/tasks');
+  });
+
+  it('names the next task in Spanish on a Spanish screen, not with the English task type', async () => {
+    const spanish = createInstance();
+    await spanish.init({
+      lng: 'es',
+      fallbackLng: 'es',
+      resources: { es: { translation: es } },
+      interpolation: { escapeValue: false },
+    });
+    const soon = task({ id: 't2', plantName: 'Aloe', nextDue: '2030-03-10T12:00:00.000Z' });
+    renderDashboard({ upcoming: [], all: [soon], i18nInstance: spanish as typeof i18n });
+
+    const line = await screen.findByText(/^Lo próximo: Regar \(Aloe\), el .+\.$/);
+    expect(line.textContent).not.toMatch(/Water/);
   });
 
   it('never claims "No tasks yet" when the full task list could not be read', async () => {

@@ -15,7 +15,7 @@ import {
   verdictLabelKey,
 } from './petVerdict';
 import { Link } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import {
   PET_SAFE_GROUPS,
@@ -25,6 +25,9 @@ import {
   type PetSafetyLevel,
 } from './petSafeSpecies';
 import { PLANT_SAFETY_PAGES } from './plantSafetyPages';
+
+/** In season each December. Names only, from the table; see `HolidayPlants`. */
+const HOLIDAY_PLANT_SLUGS = ['christmas-cactus', 'poinsettia'];
 
 const PAGE_TITLE = 'Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker';
 const PAGE_DESCRIPTION =
@@ -176,21 +179,24 @@ export function PetSafePage() {
   return (
     <PublicShell>
       <PageIntro
-        eyebrow="Pet safety"
-        title="Is this plant safe for pets?"
+        eyebrow={t('petSafety.page.eyebrow')}
+        title={t('petSafety.page.title')}
         lede={
           <>
-            Type a houseplant name and we’ll tell you, plainly, whether it’s toxic to cats and dogs.
-            No sign-up, no fuss. Based on the{' '}
-            <a
-              href="https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary-700 underline hover:text-primary-800"
-            >
-              ASPCA’s plant safety data
-            </a>
-            .
+            <Trans
+              i18nKey="petSafety.page.lede"
+              components={{
+                aspcaLink: (
+                  // eslint-disable-next-line jsx-a11y/anchor-has-content -- link text is the <aspcaLink> span of the catalog string
+                  <a
+                    href="https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-700 underline hover:text-primary-800"
+                  />
+                ),
+              }}
+            />
           </>
         }
       />
@@ -198,17 +204,17 @@ export function PetSafePage() {
       <form
         className="mt-10"
         role="search"
-        aria-label="Search plant pet-toxicity"
+        aria-label={t('petSafety.page.searchLabel')}
         onSubmit={(e) => e.preventDefault()}
       >
         <Input
           type="search"
-          label="Plant or species name"
-          placeholder="e.g. snake plant, pothos, lily…"
+          label={t('petSafety.page.nameLabel')}
+          placeholder={t('petSafety.page.namePlaceholder')}
           autoComplete="off"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          helperText="Try a common name or a scientific name."
+          helperText={t('petSafety.page.nameHelper')}
         />
       </form>
 
@@ -219,8 +225,8 @@ export function PetSafePage() {
           polite announcement this wrapper exists to make. */}
       <div className="mt-8 space-y-4" aria-live="polite" aria-busy={status === 'loading'}>
         {status === 'error' && (
-          <Alert variant="error" title="Something went wrong" live="off">
-            We couldn’t check that just now. Give it another moment and try again.
+          <Alert variant="error" title={t('common.error')} live="off">
+            {t('petSafety.page.errorBody')}
           </Alert>
         )}
 
@@ -229,33 +235,34 @@ export function PetSafePage() {
         ))}
 
         {showEmpty && (
-          <Alert variant="info" title="No match yet" live="off">
-            We don’t have that one in our checker yet. Double-check the spelling, or try the plant’s
-            common name. When in doubt, assume it’s unsafe and keep it out of reach until you can
-            confirm with your vet or the ASPCA.
+          <Alert variant="info" title={t('petSafety.page.noMatchTitle')} live="off">
+            {t('petSafety.page.noMatchBody')}
           </Alert>
         )}
       </div>
 
       {/* General, always-visible caveat for kids and pets. */}
       <aside className="mt-12 rounded-xl border border-primary-200 bg-primary-50/60 p-5">
-        <h2 className="font-serif text-lg text-ink">A note on kids and pets</h2>
+        <h2 className="font-serif text-lg text-ink">{t('petSafety.page.kidsTitle')}</h2>
         <p className="mt-2 text-sm text-gray-700">
-          Even “non-toxic” plants can cause a mild upset stomach if a curious pet or toddler eats a
-          big mouthful — non-toxic means not poisonous, not that it’s food. With anything truly
-          toxic, the safest move is height: put it where paws and little hands can’t reach. If you
-          think a pet has eaten something harmful, call your vet or the{' '}
-          <a
-            href="https://www.aspca.org/pet-care/animal-poison-control"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary-700 underline hover:text-primary-800"
-          >
-            ASPCA Animal Poison Control
-          </a>{' '}
-          line right away.
+          <Trans
+            i18nKey="petSafety.page.kidsBody"
+            components={{
+              poisonLink: (
+                // eslint-disable-next-line jsx-a11y/anchor-has-content -- link text is the <poisonLink> span of the catalog string
+                <a
+                  href="https://www.aspca.org/pet-care/animal-poison-control"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-700 underline hover:text-primary-800"
+                />
+              ),
+            }}
+          />
         </p>
       </aside>
+
+      <HolidayPlants />
 
       <SpeciesDirectory />
 
@@ -281,6 +288,43 @@ export function PetSafePage() {
         </section>
       )}
     </PublicShell>
+  );
+}
+
+/**
+ * The two gift plants people ask about in December, ahead of the long list.
+ * The names come from the table and the verdicts stay on each plant's page, so
+ * this says nothing about either one. A plant the table stops publishing drops
+ * out rather than linking to a page that is gone.
+ */
+function HolidayPlants() {
+  const { t } = useTranslation();
+  const pages = HOLIDAY_PLANT_SLUGS.flatMap((slug) =>
+    PLANT_SAFETY_PAGES.filter((page) => page.slug === slug)
+  );
+  if (pages.length === 0) return null;
+  return (
+    <section className="mt-12" aria-labelledby="pet-safe-holiday-heading">
+      <h2
+        id="pet-safe-holiday-heading"
+        className="font-serif text-xl tracking-tight text-ink sm:text-2xl"
+      >
+        {t('petSafeSpecies.holidayHeading')}
+      </h2>
+      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        {pages.map((page) => (
+          <li key={page.slug}>
+            <Link
+              to={`/pet-safe/${page.slug}`}
+              lang="en"
+              className="text-primary-700 underline hover:text-primary-800"
+            >
+              {page.commonName}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -329,7 +373,14 @@ function SpeciesDirectory() {
                     className="group block h-full rounded-xl border border-primary-100/80 bg-white p-4 shadow-journal transition hover:border-primary-300 hover:shadow-journal-hover"
                   >
                     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="font-serif text-lg text-ink group-hover:text-primary-700">
+                      {/* lang="en": the names and verdict sentences come from the
+                          ASPCA-sourced table and stay English on purpose
+                          (docs/i18n.md), so a Spanish screen reader must be
+                          told (WCAG 3.1.2). The Latin name says so too. */}
+                      <span
+                        lang="en"
+                        className="font-serif text-lg text-ink group-hover:text-primary-700"
+                      >
                         {species.commonName}
                       </span>
                       <span
@@ -338,13 +389,16 @@ function SpeciesDirectory() {
                         {t(BADGE_LABEL[species.level])}
                       </span>
                     </span>
-                    <span className="mt-1 block text-xs italic text-gray-600">
+                    <span lang="la" className="mt-1 block text-xs italic text-gray-600">
                       {species.scientificName}
                     </span>
-                    <span className="mt-2 block text-sm text-gray-700">{species.verdict}</span>
+                    <span lang="en" className="mt-2 block text-sm text-gray-700">
+                      {species.verdict}
+                    </span>
                     {species.caution && (
                       <span
                         data-testid="species-caution"
+                        lang="en"
                         className="mt-2 block text-sm font-medium text-gray-900"
                       >
                         {species.caution}
@@ -381,6 +435,7 @@ function SpeciesDirectory() {
               <li key={page.slug}>
                 <Link
                   to={`/pet-safe/${page.slug}`}
+                  lang="en"
                   className="text-primary-700 underline hover:text-primary-800"
                 >
                   {page.commonName}
@@ -460,7 +515,9 @@ function ToxicityCard({ match }: { match: ToxicityMatch }) {
   // `live="off"`: PetSafePage renders these inside its own polite region.
   return (
     <Alert variant={variant} title={title} live="off">
-      <p className="italic">{match.scientificName}</p>
+      <p lang="la" className="italic">
+        {match.scientificName}
+      </p>
       <ul className="mt-2 space-y-1">
         <li data-verdict-animal="cats" data-verdict={match.cats}>
           <span className="font-medium">{t('petSafety.cats')}</span>{' '}
@@ -471,7 +528,11 @@ function ToxicityCard({ match }: { match: ToxicityMatch }) {
           {t(verdictLabelKey(match.dogs))}
         </li>
       </ul>
-      {match.note && <p className="mt-2">{match.note}</p>}
+      {match.note && (
+        <p lang="en" className="mt-2">
+          {match.note}
+        </p>
+      )}
       {caution && (
         <p className="mt-2 font-medium" data-testid="checker-caution">
           {caution}{' '}

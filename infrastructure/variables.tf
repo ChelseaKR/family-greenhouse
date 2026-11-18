@@ -86,6 +86,12 @@ variable "monthly_budget_usd" {
   default     = "50"
 }
 
+variable "cognito_mau_alert_threshold" {
+  description = "Monthly active users on the Cognito pool above which alert_email is notified (a Budgets usage budget on the billed MAU usage type; modules/monitoring/main.tf). The 2026-11-10 unit-economics review put the early warning at 15. Cost Explorer showed the pool at 57 in September and 25 in October 2026, so expect the default to fire and raise it here once the number has been read."
+  type        = number
+  default     = 15
+}
+
 variable "enable_monitoring_alarms" {
   description = "Create the CloudWatch metric alarms (~$0.10/alarm/month). Defaults true so production is unaffected; staging sets it false because its alerts topic has no subscribers, so the alarms notified nobody."
   type        = bool
@@ -150,6 +156,37 @@ variable "github_repo" {
   description = "GitHub repo name for OIDC deploy role binding (e.g. 'family-greenhouse'). Skip CI/CD provisioning if blank."
   type        = string
   default     = ""
+}
+
+# GitHub environments whose jobs may assume the deploy role, the one CI/CD
+# role with IAM writes (ADR 0049). EVERY environment named here must carry a
+# required reviewer in the repository's settings. AWS cannot check that: the
+# reviewer is what stands between a workflow run and this role.
+variable "cicd_deploy_environments" {
+  description = "GitHub environments trusted to assume the deploy role. Each must have a required reviewer."
+  type        = list(string)
+  default     = ["production"]
+}
+
+# The one-time move to environment-only OIDC trust (ADR 0049). Left empty,
+# the deploy role is assumable only from the `production` GitHub environment.
+# docs/cicd-setup.md says when an admin passes a value on the command line,
+# and when to stop. It is never set in a tfvars file.
+variable "cicd_legacy_allowed_refs" {
+  description = "Git refs the deploy role may also be assumed from, for the one-time move to environment-only trust. Empty by default and in every tfvars file."
+  type        = list(string)
+  default     = []
+}
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). The boundary
+# policy is created by modules/cicd in the production state and named by ARN
+# here, so the staging state can use it too. Turn it on for an environment
+# only after an admin has applied modules/cicd, or the roles would name a
+# policy that does not exist.
+variable "iam_permissions_boundary_enabled" {
+  description = "Attach the project permissions boundary to this environment's Lambda execution roles. The boundary policy must already exist (modules/cicd, applied by an admin)."
+  type        = bool
+  default     = false
 }
 
 # --- External integrations referenced from the api module ---
@@ -564,13 +601,25 @@ variable "stripe_webhook_secret" {
 }
 
 variable "stripe_price_id_garden" {
-  description = "Stripe price ID for the Garden tier MONTHLY ($4.99/mo). Required for /billing/checkout monthly."
+  description = "LEGACY (ADR 0042): the Stripe price ID Garden MONTHLY was sold at until 2026-11-07 ($4.99/mo). Not sold any more; kept so households that bought at $4.99 keep renewing and the webhook still maps the price to Garden. Never archive the price while a subscription is on it."
   type        = string
   default     = ""
 }
 
 variable "stripe_price_id_garden_annual" {
-  description = "Stripe price ID for the Garden tier ANNUAL ($39.99/yr). Required for /billing/checkout with interval=year."
+  description = "LEGACY (ADR 0042): the Stripe price ID Garden ANNUAL was sold at until 2026-09-02 ($39.99/yr, withdrawn by ADR 0012). Not sold any more; kept so households still on it keep renewing and the webhook still maps the price to Garden."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_299" {
+  description = "Stripe price ID for the Garden tier MONTHLY at $2.99/mo (ADR 0042, the current price). Set together with stripe_price_id_garden_annual_2499: the commercial_gate_guard precondition refuses a plan with exactly one of the pair set, and GET /billing/plans publishes Garden as unavailable while this is blank. Create the price under the existing Garden product in Stripe; the amount is in the variable name because a Stripe price's amount can never change."
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_garden_annual_2499" {
+  description = "Stripe price ID for the Garden tier ANNUAL at $24.99/yr (ADR 0042, the current price). Set together with stripe_price_id_garden_299; the same precondition refuses a plan with exactly one of the pair set, and GET /billing/plans publishes Garden yearly as unavailable while this is blank."
   type        = string
   default     = ""
 }
@@ -612,7 +661,7 @@ variable "stripe_price_id_gift_greenhouse_month" {
 }
 
 variable "stripe_automatic_tax_enabled" {
-  description = "Set to '1' only after Stripe Tax registrations and product tax codes are configured."
+  description = "Set to exactly '1' to pass automatic_tax to every Stripe Checkout Session (plan, identification pack, gift). Prerequisites, all in the Stripe Dashboard: Stripe Tax active with the head-office address confirmed; tax code txcd_10103000 (Software as a service, personal use) on EVERY product sold (Garden, Greenhouse, Identification pack), because with the flag on the backend refuses to sell a price whose product carries any other code or none (backend/src/services/stripePrices.ts); a tax registration for each state collected in (California from 2027-01-01). The flag only shapes NEW Checkout Sessions: a subscription that already exists keeps automatic_tax off until it is updated in Stripe (Tax > Migrations)."
   type        = string
   default     = ""
 }
@@ -641,6 +690,21 @@ variable "app_store_billing_enabled" {
   validation {
     condition     = contains(["0", "1"], var.app_store_billing_enabled)
     error_message = "app_store_billing_enabled must be exactly \"0\" or \"1\". The backend compares it to the literal string \"1\"."
+  }
+}
+
+# Which App Store environments' signed transactions grant a plan (ADR 0045).
+# Production only by default. "Production,Sandbox" is an opt-in an environment
+# makes in its own tfvars: staging always, production only for the days App
+# Review needs it.
+variable "app_store_environments" {
+  description = "App Store environments whose transactions grant entitlement: \"Production\" (default) or \"Production,Sandbox\". Sandbox purchases are free, so accept them only where that is intended."
+  type        = string
+  default     = "Production"
+
+  validation {
+    condition     = contains(["Production", "Production,Sandbox"], var.app_store_environments)
+    error_message = "app_store_environments must be exactly \"Production\" or \"Production,Sandbox\"."
   }
 }
 

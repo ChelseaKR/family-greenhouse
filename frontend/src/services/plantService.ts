@@ -1,8 +1,17 @@
 import axios from 'axios';
 import { api } from './api';
 import { track } from './analytics';
+import { getNativePlatform } from '@/lib/platform';
 import type { IdentifyCreditBalance } from './billingService';
 import type { SeasonalCadence } from '@/features/tasks/seasonalCadence';
+
+/**
+ * `POST /plants` answers with the plant, plus `firstPlantForAccount: true`
+ * on the one create that was this account's first plant (decided once per
+ * account on the server, backend services/accountMilestones.ts). It is what
+ * gates GA4 `first_plant_added`; it is absent on every other create.
+ */
+export type CreatedPlant = Plant & { firstPlantForAccount?: true };
 
 export type { SeasonalCadence };
 
@@ -110,13 +119,15 @@ export interface CreatePlantData {
 
 export interface UpdatePlantData {
   name?: string;
-  species?: string;
+  /** null clears it; omit to leave it untouched. */
+  species?: string | null;
   location?: string;
   spaceId?: string | null;
   placementNote?: string | null;
   summerSpaceId?: string | null;
   winterSpaceId?: string | null;
-  notes?: string;
+  /** null clears them; omit to leave them untouched. */
+  notes?: string | null;
   /** null clears the rule; omit to leave it untouched. */
   careRule?: string | null;
   tags?: string[];
@@ -280,6 +291,7 @@ export interface ImportPlantsResponse {
 
 export interface ImageUploadResponse {
   uploadUrl: string;
+  /** Names the upload, for the confirm call. It is not the stored photo. */
   imageUrl: string;
 }
 
@@ -310,8 +322,8 @@ export const plantService = {
     return response.data;
   },
 
-  async createPlant(data: CreatePlantData): Promise<Plant> {
-    const response = await api.post<Plant>('/plants', data);
+  async createPlant(data: CreatePlantData): Promise<CreatedPlant> {
+    const response = await api.post<CreatedPlant>('/plants', data);
     return response.data;
   },
 
@@ -349,13 +361,19 @@ export const plantService = {
   },
 
   /**
-   * Presign an image upload. `contentType` must be one of image/jpeg,
-   * image/png, image/webp and MUST match the Content-Type header of the
-   * subsequent PUT — the backend signs the URL against it.
+   * Presign an image upload for one file. `contentType` must be one of
+   * image/jpeg, image/png, image/webp and `contentLength` is the file's exact
+   * size in bytes. The backend signs the URL for both, so the subsequent PUT
+   * MUST send that Content-Type header and a body of exactly that size.
    */
-  async getImageUploadUrl(plantId: string, contentType: string): Promise<ImageUploadResponse> {
+  async getImageUploadUrl(
+    plantId: string,
+    contentType: string,
+    contentLength: number
+  ): Promise<ImageUploadResponse> {
     const response = await api.post<ImageUploadResponse>(`/plants/${plantId}/image`, {
       contentType,
+      contentLength,
     });
     return response.data;
   },
@@ -415,9 +433,16 @@ export const plantService = {
     return response.data;
   },
 
+  /**
+   * Inside the iPhone app the request says `useTopUpCredits: false`, so the
+   * server spends only the plan's monthly allowance and never an
+   * identification pack bought on the website (ADR 0044, App Review
+   * Guideline 3.1.3(b)). The website and the Android app send nothing extra.
+   */
   async identifyPlant(imageBase64: string): Promise<IdentifyResponse> {
     const response = await api.post<IdentifyResponse>('/plants/identify', {
       image: imageBase64,
+      ...(getNativePlatform() === 'ios' ? { useTopUpCredits: false } : {}),
     });
     return response.data;
   },
@@ -498,9 +523,20 @@ export interface IdentifyResponse {
  */
 export interface IdentifyBudgetExhausted {
   message: string;
+  /** The plan's monthly allowance. 0 is a plan that bundles none (ADR 0042),
+   *  which has nothing to use up and nothing to reset; `null` is a backend
+   *  that did not say. */
+  allowance: number | null;
+  planName: string | null;
   topUpAvailable: boolean;
   credits: IdentifyCreditBalance | null;
   topUp: { credits: number; priceUsd: number | null } | null;
+}
+
+/** The plan's name when the refusal came from a plan that bundles no
+ *  identifications (ADR 0042); `null` for a spent allowance or an unknown one. */
+export function identifyNotIncludedIn(exhausted: IdentifyBudgetExhausted): string | null {
+  return exhausted.allowance === 0 ? exhausted.planName : null;
 }
 
 /**
@@ -533,6 +569,8 @@ export function identifyBudgetExhaustedFromError(error: unknown): IdentifyBudget
       : null;
   return {
     message: typeof data?.message === 'string' ? data.message : '',
+    allowance: typeof details.allowance === 'number' ? details.allowance : null,
+    planName: typeof details.planName === 'string' ? details.planName : null,
     topUpAvailable: details.topUpAvailable === true && topUp !== null,
     credits,
     topUp,

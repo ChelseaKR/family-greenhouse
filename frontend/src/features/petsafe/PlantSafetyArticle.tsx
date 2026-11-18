@@ -16,6 +16,7 @@ import {
   headName,
   plantSafetyDetails,
   plantSafetyFaq,
+  plantSafetyLead,
   type AnimalClaim,
   type AnyAnimal,
   type CitedSource,
@@ -35,9 +36,31 @@ export function PlantSafetyArticle({ page }: { page: PlantSafetyPage }) {
   const { t } = useTranslation();
   const details = plantSafetyDetails(page);
   const faq = plantSafetyFaq(page, details, t);
+  const lead = plantSafetyLead(page, faq);
+  const leadClaim = page.lead ? page.claims[page.lead] : null;
 
   return (
     <article data-plant-safety={page.slug}>
+      {/* A lead page (the table's `leadAnimal`) answers its searched question
+          first: that animal's FAQ answer, verbatim, with its listing. Every
+          other page opens with the hotline aside. The gate allows this block,
+          and only this block, ahead of the aside. */}
+      {lead && leadClaim && leadClaim.state !== 'not-assessed' && (
+        <section data-plant-lead={page.slug} aria-labelledby="plant-safety-lead" className="mb-6">
+          <p
+            id="plant-safety-lead"
+            data-claim="lead-question"
+            className="font-serif text-2xl tracking-tight text-ink"
+          >
+            {lead.question}
+          </p>
+          <p data-claim="lead-answer" className="mt-2 text-gray-800">
+            {lead.answer}
+          </p>
+          <SourceLine sources={[leadClaim.source]} />
+        </section>
+      )}
+
       <EmergencyAside />
 
       <Link
@@ -229,7 +252,8 @@ export function EmergencyAside() {
       className="rounded-xl border border-primary-200 bg-primary-50/60 p-5"
     >
       {/* Not a heading: this aside must come before the page's h1 (the
-          build gate requires it to be the first text in <main>), and an h2
+          build gate requires it to be the first text in <main>, after a lead
+          page's lead), and an h2
           there put the outline out of order. It still names the aside, so
           it is announced and reachable as the "If your pet may have eaten
           some" landmark, and it is the first thing after the skip link. */}

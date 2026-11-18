@@ -136,6 +136,7 @@ export interface LeaveHouseholdResult {
     sitterLinks: number;
     kioskLinks: number;
     cuttingShares: number;
+    caretakerSeats: number;
   };
   /** The default household after leaving; null when the caller has none left. */
   defaultHouseholdId: string | null;
@@ -183,6 +184,15 @@ export const householdService = {
 
   async joinHousehold(householdId: string, data: JoinHouseholdData): Promise<Household> {
     const response = await api.post<Household>(`/households/${householdId}/join`, data);
+    return response.data;
+  },
+
+  /**
+   * Turn off every invite this household has made so far, links and emailed
+   * invitations alike. Invites made afterwards work as usual. Admin only.
+   */
+  async revokeInvites(householdId: string): Promise<{ revokedAt: string }> {
+    const response = await api.delete<{ revokedAt: string }>(`/households/${householdId}/invites`);
     return response.data;
   },
 

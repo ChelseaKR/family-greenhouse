@@ -188,7 +188,7 @@ describe('PlanCapPrompt', () => {
     );
     expect(screen.getByRole('link', { name: 'Change plan' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

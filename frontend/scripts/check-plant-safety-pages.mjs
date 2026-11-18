@@ -59,7 +59,10 @@
  *      none of these elements may appear.
  *   6. EMERGENCY. The page opens with one `<aside data-plant-emergency>`: no
  *      text in `<main>` comes before it, so it precedes the verdicts on every
- *      page, "Not assessed" ones included. It lists both POISON_HOTLINES in
+ *      page, "Not assessed" ones included. The one exception is a lead page
+ *      (the table's `leadAnimal`, plantLead()): its `<section data-plant-lead>`,
+ *      which holds that animal's FAQ answer verbatim and its citation, may
+ *      come first, and nothing else. A lead on any other page fails. It lists both POISON_HOTLINES in
  *      order, each a `tel:` link whose visible digits are the dialed number
  *      and whose text and fee sentence are the hotline's catalog strings. Its
  *      only links are those two; nothing in it is affiliate, sponsored or paid.
@@ -86,11 +89,12 @@ import {
   loadPetToxicityTable,
   plantDetails,
   plantFaq,
+  plantLead,
   plantPage,
   publishedPagesBySlug,
   publishedPlantPages,
 } from './pet-toxicity-table.mjs';
-import { FRONTEND_ROOT, SITE, publicRoutePaths } from './public-routes.mjs';
+import { FRONTEND_ROOT, SITE, plantPageRoutes, publicRoutePaths } from './public-routes.mjs';
 
 const DIST = join(FRONTEND_ROOT, 'dist');
 const EN_CATALOG = join(FRONTEND_ROOT, 'src', 'i18n', 'locales', 'en', 'translation.json');
@@ -218,7 +222,7 @@ const telDigits = (href) =>
  * Check the emergency aside of one page's `<main>` (assertion 6). Returns
  * failure messages without the page prefix.
  */
-export function checkEmergencyAside(main, window) {
+export function checkEmergencyAside(main, window, { leadAllowed = false } = {}) {
   const failures = [];
   const asides = main.querySelectorAll('aside[data-plant-emergency]');
   if (asides.length !== 1) {
@@ -227,9 +231,12 @@ export function checkEmergencyAside(main, window) {
   }
   const aside = asides[0];
 
+  const leads = leadAllowed ? main.querySelectorAll('[data-plant-lead]') : [];
+  const lead = leads.length === 1 ? leads[0] : null;
   const walker = main.ownerDocument.createTreeWalker(main, window.NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!squash(node.textContent)) continue;
+    if (lead?.contains(node)) continue;
     if (!aside.contains(node)) {
       failures.push(
         `the emergency aside is not first: "${squash(node.textContent).slice(0, 80)}" comes before it`
@@ -316,6 +323,8 @@ const CLAIM_KINDS = new Set([
   'linked-verdict',
   'faq-question',
   'faq-answer',
+  'lead-question',
+  'lead-answer',
 ]);
 /** Claim kinds that exist only on a detailed page. */
 const DETAIL_CLAIMS = [...CLAIM_KINDS].filter((k) => !['verdict', 'citation', 'note'].includes(k));
@@ -354,10 +363,18 @@ function interpolate(template, values) {
 const headName = faqName;
 
 /** What the head must say, recomposed from the table and the catalog. */
-function expectedHead(entry, page, catalog) {
+function expectedHead(entry, page, catalog, lead) {
   const label = (animal) => catalog[VERDICT_LABEL_KEY[page.claims[animal].state]];
+  const leadState = lead ? page.claims[lead.id]?.state : undefined;
   return {
-    title: interpolate(catalog['plantSafetyPage.metaTitle'], { name: headName(entry.commonName) }),
+    title:
+      leadState === 'toxic' || leadState === 'non-toxic'
+        ? interpolate(catalog['plantSafetyPage.leadTitle'], {
+            name: headName(entry.commonName),
+            animal: catalog[`plantSafetyPage.faq.animal.${lead.id}`],
+            verdict: label(lead.id).toLowerCase(),
+          })
+        : interpolate(catalog['plantSafetyPage.metaTitle'], { name: headName(entry.commonName) }),
     description: interpolate(catalog['plantSafetyPage.metaDescription'], {
       name: headName(entry.commonName),
       scientificName: entry.scientificName,
@@ -616,6 +633,19 @@ export function checkDetails({ main, entry, page, details, faq, catalog, table }
 }
 
 /**
+ * Each plant page's sitemap `<lastmod>`, by path: the ledger's date, and only
+ * for a page whose table entry still has the digest that date was given to
+ * (`plantPageRoutes`). A page whose entry changed since has no date here.
+ */
+export function plantPageLastmods(table = loadPetToxicityTable()) {
+  return new Map(
+    plantPageRoutes(table)
+      .filter((route) => typeof route.lastmod === 'string')
+      .map((route) => [route.path, route.lastmod])
+  );
+}
+
+/**
  * Check one prerendered plant page. Returns a list of failures (empty = pass).
  *
  * `entry` is the table entry the page is for; `aspcaOrigin` the table's URL
@@ -632,10 +662,12 @@ export function checkPlantSafetyPageHtml({
   routes = declaredRoutes().paths,
   publishedPaths = publicRoutePaths(),
   shop = loadPlantShop(),
+  lastmods = plantPageLastmods(),
 }) {
   const page = plantPage(entry, aspcaOrigin);
   const details = plantDetails(entry, { ...table, aspcaOrigin });
   const faq = plantFaq(entry, details, catalog, aspcaOrigin);
+  const lead = plantLead(entry, faq);
   const where = page.path;
   const failures = [];
   const fail = (message) => failures.push(`${where}: ${message}`);
@@ -854,12 +886,50 @@ export function checkPlantSafetyPageHtml({
     fail(message);
   }
 
+  // 6a. The lead: only where plantLead() composes one, holding exactly that
+  // FAQ answer and its animal's citation.
+  const leadBlocks = main.querySelectorAll('[data-plant-lead]');
+  if (!lead) {
+    if (leadBlocks.length > 0 || main.querySelector('[data-claim^="lead-"]')) {
+      fail(`carries a lead, but the table gives ${entry.slug} none`);
+    }
+  } else if (leadBlocks.length !== 1) {
+    fail(`expected one lead (data-plant-lead), found ${leadBlocks.length}`);
+  } else {
+    const block = leadBlocks[0];
+    const one = (kind) => {
+      const inside = block.querySelectorAll(`[data-claim="${kind}"]`);
+      const all = main.querySelectorAll(`[data-claim="${kind}"]`);
+      return inside.length === 1 && all.length === 1 ? squash(inside[0].textContent) : null;
+    };
+    if (one('lead-question') !== squash(lead.question)) {
+      fail(`the lead question is not "${lead.question}"`);
+    }
+    if (one('lead-answer') !== squash(lead.answer)) {
+      fail(`the lead answer differs from the ${lead.id} FAQ answer the table composes`);
+    }
+    const url = page.claims[lead.id].source.url;
+    if (
+      ![...block.querySelectorAll('a[data-claim="citation"]')].some(
+        (a) => a.getAttribute('href') === url
+      )
+    ) {
+      fail(`the lead has no citation beside it linking ${url}`);
+    }
+  }
+
   // 6. Emergency aside.
-  for (const message of checkEmergencyAside(main, window)) fail(message);
+  for (const message of checkEmergencyAside(main, window, { leadAllowed: lead !== null })) {
+    fail(message);
+  }
 
   // 4. Head.
-  const head = expectedHead(entry, page, catalog);
-  for (const key of ['plantSafetyPage.metaTitle', 'plantSafetyPage.metaDescription']) {
+  const head = expectedHead(entry, page, catalog, lead);
+  for (const key of [
+    'plantSafetyPage.metaTitle',
+    'plantSafetyPage.leadTitle',
+    'plantSafetyPage.metaDescription',
+  ]) {
     const safety = catalog[key]?.replace(HEAD_QUESTION, '').match(SAFETY_WORDING);
     if (safety) fail(`catalog string ${key} asserts safety ("${safety[0]}") in template copy`);
   }
@@ -928,6 +998,16 @@ export function checkPlantSafetyPageHtml({
     if (webPage.description !== head.description) fail('JSON-LD WebPage.description differs');
     if (webPage.url !== `${SITE}${where}`) fail('JSON-LD WebPage.url is not the canonical URL');
     if (webPage.about?.name !== entry.commonName) fail('JSON-LD WebPage.about is not this plant');
+    // The page's date is the sitemap's date for it, or neither has one. The
+    // build date, a hand-typed date and a date left behind by an edited entry
+    // all fail here, as does a page that drops the date the sitemap states.
+    const lastmod = lastmods.get(where);
+    if (webPage.dateModified !== lastmod) {
+      fail(
+        `JSON-LD WebPage.dateModified is ${JSON.stringify(webPage.dateModified)}, ` +
+          `but the sitemap's <lastmod> for this page is ${JSON.stringify(lastmod)}`
+      );
+    }
     const cited = [webPage.citation ?? []]
       .flat()
       .map((c) => c?.url)
@@ -970,6 +1050,7 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
   const routes = declaredRoutes().paths;
   const publishedPaths = publicRoutePaths();
   const published = publishedPlantPages(table);
+  const lastmods = plantPageLastmods(table);
   const failures = [];
 
   const dir = join(dist, ...PLANT_PAGE_PREFIX.split('/').filter(Boolean));
@@ -986,6 +1067,14 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
       failures.push(`${page.path}: the table publishes it, but no page was prerendered`);
       continue;
     }
+    // Without this, a page with no date and no dateModified would agree with
+    // itself and pass: nothing to compare is not the same as equal.
+    if (!lastmods.has(page.path)) {
+      failures.push(
+        `${page.path}: no verified <lastmod> in the ledger, so its dateModified cannot be checked; ` +
+          'run `npm run plant-pages:lastmod --workspace frontend`'
+      );
+    }
     failures.push(
       ...checkPlantSafetyPageHtml({
         html: readFileSync(file, 'utf8'),
@@ -995,6 +1084,7 @@ export function checkPlantSafetyPages({ dist = DIST } = {}) {
         catalog,
         routes,
         publishedPaths,
+        lastmods,
       })
     );
   }

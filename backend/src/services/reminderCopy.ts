@@ -212,7 +212,7 @@ const COPY: Record<ReminderLocale, Copy> = {
     dueDaysAgo: (days) => `Tocaba hace ${days} días.`,
     dueUnknown: 'No pudimos leer su fecha; compruébala en la aplicación.',
     singleUnclaimed: 'Nadie la ha tomado todavía, así que cualquiera puede hacerlo.',
-    singleNext: 'Márcala como hecha cuando la hagas, o pospónla hasta mañana.',
+    singleNext: 'Márcala como hecha cuando la hagas, o posponla hasta mañana.',
     namesTwo: (first, second) => `${first} y ${second}`,
     namesAndMore: (names, more) => `${names} y ${more} más`,
     countOverdue: { one: '1 atrasada', other: '{{count}} atrasadas' },

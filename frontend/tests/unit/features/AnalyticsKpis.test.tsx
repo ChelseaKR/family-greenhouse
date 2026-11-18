@@ -408,7 +408,7 @@ describe('analytics history window (ADR 0014)', () => {
     expect(screen.getByText(/Nothing older is deleted/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 
@@ -476,7 +476,7 @@ describe('the free plan’s history-window note', () => {
     expect(await screen.findByText(NOTE)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See plans' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

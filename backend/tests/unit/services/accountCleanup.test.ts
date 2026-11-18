@@ -28,6 +28,9 @@ vi.mock('../../../src/services/billing.js', () => ({
 vi.mock('../../../src/services/plantTagService.js', () => ({ revokeTagsCreatedBy: vi.fn() }));
 vi.mock('../../../src/services/sitterService.js', () => ({ revokeSitterLinksCreatedBy: vi.fn() }));
 vi.mock('../../../src/services/kioskService.js', () => ({ revokeKioskLinksCreatedBy: vi.fn() }));
+vi.mock('../../../src/services/caretakerService.js', () => ({
+  revokeCaretakersCreatedBy: vi.fn(),
+}));
 vi.mock('../../../src/services/plantService.js', () => ({
   revokePlantSharesCreatedBy: vi.fn(),
 }));
@@ -593,6 +596,8 @@ describe('revokeCredentialsCreatedBy', () => {
     const sitterService = await import('../../../src/services/sitterService.js');
     const kioskService = await import('../../../src/services/kioskService.js');
     const plantService = await import('../../../src/services/plantService.js');
+    const caretakerService = await import('../../../src/services/caretakerService.js');
+    vi.mocked(caretakerService.revokeCaretakersCreatedBy).mockResolvedValue(4);
     vi.mocked(plantTagService.revokeTagsCreatedBy).mockResolvedValue(3);
     vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(1);
     vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(1);
@@ -606,7 +611,9 @@ describe('revokeCredentialsCreatedBy', () => {
       // The public one. A cutting link needs no credential at all, so a
       // departure that left it live left the widest door of the four open.
       cuttingShares: 2,
+      caretakerSeats: 4,
     });
+    expect(caretakerService.revokeCaretakersCreatedBy).toHaveBeenCalledWith('hh', 'u1');
     expect(plantTagService.revokeTagsCreatedBy).toHaveBeenCalledWith('hh', 'u1');
     expect(sitterService.revokeSitterLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
     expect(kioskService.revokeKioskLinksCreatedBy).toHaveBeenCalledWith('hh', 'u1');
@@ -618,6 +625,8 @@ describe('revokeCredentialsCreatedBy', () => {
     const sitterService = await import('../../../src/services/sitterService.js');
     const kioskService = await import('../../../src/services/kioskService.js');
     const plantService = await import('../../../src/services/plantService.js');
+    const caretakerService = await import('../../../src/services/caretakerService.js');
+    vi.mocked(caretakerService.revokeCaretakersCreatedBy).mockResolvedValue(0);
     vi.mocked(plantTagService.revokeTagsCreatedBy).mockRejectedValue(new Error('ddb throttled'));
     vi.mocked(sitterService.revokeSitterLinksCreatedBy).mockResolvedValue(0);
     vi.mocked(kioskService.revokeKioskLinksCreatedBy).mockResolvedValue(0);

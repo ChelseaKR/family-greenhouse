@@ -80,18 +80,18 @@ point of the route is leaving without having to ask the admin.
 
 Every dangling reference has a stated outcome:
 
-| Reference                                     | Outcome                                                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Tasks assigned to or claimed by the leaver    | unassigned — up for grabs; the count is returned, put in the feed row and in the admins' email         |
-| `SpaceRotation.memberIds`                     | the leaver is removed, anchor kept; a rotation left with fewer than two people is cleared              |
-| A space's `defaultCaregiverId`                | cleared                                                                                                |
-| Vacation windows naming the leaver            | deleted (as away member or as cover)                                                                   |
-| Open "ask family" requests they raised        | stay open (the task is already up for grabs); the asker reads as Former member                         |
-| Sitter links, kiosk links, plant tags, shares | revoked                                                                                                |
-| Their calendar-feed token for the household   | deleted                                                                                                |
-| Pending household emails about the household  | dropped from their queue                                                                               |
-| Notification preferences, phone verification  | untouched — both belong to the account (`USER#` partition), not to a household                         |
-| The Cognito default claim                     | unchanged for a secondary household; re-pointed at a remaining membership, or cleared when none remain |
+| Reference                                                      | Outcome                                                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Tasks assigned to or claimed by the leaver                     | unassigned — up for grabs; the count is returned, put in the feed row and in the admins' email         |
+| `SpaceRotation.memberIds`                                      | the leaver is removed, anchor kept; a rotation left with fewer than two people is cleared              |
+| A space's `defaultCaregiverId`                                 | cleared                                                                                                |
+| Vacation windows naming the leaver                             | deleted (as away member or as cover)                                                                   |
+| Open "ask family" requests they raised                         | stay open (the task is already up for grabs); the asker reads as Former member                         |
+| Sitter links, kiosk links, plant tags, shares, caretaker seats | revoked                                                                                                |
+| Their calendar-feed token for the household                    | deleted                                                                                                |
+| Pending household emails about the household                   | dropped from their queue                                                                               |
+| Notification preferences, phone verification                   | untouched — both belong to the account (`USER#` partition), not to a household                         |
+| The Cognito default claim                                      | unchanged for a secondary household; re-pointed at a remaining membership, or cleared when none remain |
 
 A token issued before the leave still carries the old `custom:household_id`
 until it refreshes. With no `X-Household-Id`, `authMiddleware` finds no

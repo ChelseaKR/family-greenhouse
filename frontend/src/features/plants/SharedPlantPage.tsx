@@ -22,6 +22,15 @@ import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
 import { setPendingShareCode } from './pendingShareCode';
 
 /**
+ * True only when the server answered 404, which is the one way it says a share
+ * link is unknown or expired. A 5xx, a rate limit, a timeout or no answer at
+ * all is a read that failed, and says nothing about the link.
+ */
+function isNotFound(error: unknown): boolean {
+  return (error as { response?: { status?: unknown } } | null)?.response?.status === 404;
+}
+
+/**
  * PUBLIC landing page for a shared cutting link (/shared/:code).
  *
  * This is the share-worthy face of the propagation loop: a logged-out visitor
@@ -63,7 +72,9 @@ export function SharedPlantPage() {
   const {
     data: preview,
     isLoading,
+    isFetching,
     error,
+    refetch,
   } = useQuery({
     queryKey: ['sharedPlant', code],
     queryFn: () => plantService.getSharedPlant(code!),
@@ -115,6 +126,19 @@ export function SharedPlantPage() {
   }
 
   if (error || !preview) {
+    // "Invalid or expired" only when the server said so (or the address holds
+    // no code to ask about). Every other failure is a read we did not get:
+    // telling someone with a good link to go and ask for a new one, because of
+    // a 503 or a dropped connection, was the defect.
+    const linkIsGone = !code || isNotFound(error);
+    const homeLink = (
+      <Link
+        to={isAuthenticated ? '/plants' : '/'}
+        className={buttonStyles({ variant: 'secondary' })}
+      >
+        {isAuthenticated ? t('plants.backToPlants') : 'Family Greenhouse'}
+      </Link>
+    );
     return (
       <div className="flex min-h-screen flex-col justify-center bg-paper px-4 py-12">
         <div className="mx-auto w-full max-w-md">
@@ -122,16 +146,23 @@ export function SharedPlantPage() {
             <BrandMark variant="wordmark" />
           </div>
           <Card variant="paper">
-            <div className="space-y-4 text-center">
-              <Alert variant="error">{t('plants.shared.invalid')}</Alert>
-              <p className="text-sm text-gray-500">{t('plants.shared.askForNew')}</p>
-              <Link
-                to={isAuthenticated ? '/plants' : '/'}
-                className={buttonStyles({ variant: 'secondary' })}
-              >
-                {isAuthenticated ? t('plants.backToPlants') : 'Family Greenhouse'}
-              </Link>
-            </div>
+            {linkIsGone ? (
+              <div className="space-y-4 text-center">
+                <Alert variant="error">{t('plants.shared.invalid')}</Alert>
+                <p className="text-sm text-gray-500">{t('plants.shared.askForNew')}</p>
+                {homeLink}
+              </div>
+            ) : (
+              <div className="space-y-4 text-center">
+                <Alert variant="error">{t('plants.shared.loadFailed')}</Alert>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button onClick={() => void refetch()} isLoading={isFetching}>
+                    {t('common.retry')}
+                  </Button>
+                  {homeLink}
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       </div>

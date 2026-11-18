@@ -14,24 +14,45 @@ import type { PlanId } from './plans.js';
  */
 
 /**
- * The auto-renewable subscriptions, one per paid tier, in ONE subscription
- * group so Apple handles upgrades and downgrades between them itself (a
- * person can hold only one subscription in a group at a time).
+ * The auto-renewable subscriptions, in ONE subscription group so Apple
+ * handles upgrades and downgrades between them itself (a person can hold
+ * only one subscription in a group at a time). Garden has a monthly and a
+ * yearly product at the same level (ADR 0042), so switching between them
+ * is a crossgrade Apple applies at the next renewal; Greenhouse has a
+ * monthly product one level up.
  *
  * The ids are fixed once created in App Store Connect and can never be
  * reused, even after deletion, so they are spelled out here rather than
- * derived. The local StoreKit configuration
- * (frontend/ios/App/App/FamilyGreenhouse.storekit) and the owner steps
- * name the same four strings; a unit test holds them together.
+ * derived. `garden.monthly` keeps its id across the repricing: the price of
+ * an existing product is changed in App Store Connect (to the $2.99 price
+ * point), and existing subscribers are preserved at their price there. The
+ * local StoreKit configuration (frontend/ios/App/App/FamilyGreenhouse.storekit)
+ * and the owner steps name the same strings; a unit test holds them
+ * together.
  */
 export const APP_STORE_SUBSCRIPTION_GROUP = 'Family Greenhouse plans';
 
 export const APP_STORE_PRODUCTS = {
   'net.familygreenhouse.app.garden.monthly': 'garden',
+  'net.familygreenhouse.app.garden.yearly': 'garden',
   'net.familygreenhouse.app.greenhouse.monthly': 'greenhouse',
 } as const satisfies Record<string, Exclude<PlanId, 'seedling'>>;
 
 export type AppStoreProductId = keyof typeof APP_STORE_PRODUCTS;
+
+/** The cadences an App Store product can recur at. No lifetime: Apple's
+ *  auto-renewable subscriptions renew. */
+export type AppStoreCadence = 'month' | 'year';
+
+/**
+ * How often each product renews, read by the plans card to label a price
+ * and by the purchase intent to pick the product a household asked for.
+ */
+export const APP_STORE_PRODUCT_CADENCE = {
+  'net.familygreenhouse.app.garden.monthly': 'month',
+  'net.familygreenhouse.app.garden.yearly': 'year',
+  'net.familygreenhouse.app.greenhouse.monthly': 'month',
+} as const satisfies Record<AppStoreProductId, AppStoreCadence>;
 
 export function isAppStoreProductId(id: unknown): id is AppStoreProductId {
   return typeof id === 'string' && Object.hasOwn(APP_STORE_PRODUCTS, id);
@@ -41,9 +62,17 @@ export function planForAppStoreProduct(id: unknown): Exclude<PlanId, 'seedling'>
   return isAppStoreProductId(id) ? APP_STORE_PRODUCTS[id] : null;
 }
 
-export function appStoreProductForPlan(planId: string): AppStoreProductId | null {
+/**
+ * The product that sells `planId` at `cadence`, or null when there is none
+ * (every tier has a monthly product; only Garden has a yearly one).
+ */
+export function appStoreProductForPlan(
+  planId: string,
+  cadence: AppStoreCadence = 'month'
+): AppStoreProductId | null {
   for (const [productId, plan] of Object.entries(APP_STORE_PRODUCTS)) {
-    if (plan === planId) return productId as AppStoreProductId;
+    if (plan === planId && APP_STORE_PRODUCT_CADENCE[productId as AppStoreProductId] === cadence)
+      return productId as AppStoreProductId;
   }
   return null;
 }

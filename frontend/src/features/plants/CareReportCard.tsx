@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { RECENT_COMPLETIONS_LIMIT } from '@/services/plantService';
 import type { PlantWithTasks, Task } from '@/services/plantService';
@@ -25,6 +26,7 @@ interface CareReportCardProps {
  * have to be aggregated server-side, not inferred from this list.
  */
 export function CareReportCard({ plant }: CareReportCardProps) {
+  const { t } = useTranslation();
   const completions = plant.recentCompletions;
   const totalTasks = plant.upcomingTasks.length;
   const totalCompletions = completions.length;
@@ -35,23 +37,23 @@ export function CareReportCard({ plant }: CareReportCardProps) {
   // task has ever been done.
   const lastCompletion = newest([
     ...completions.map((c) => c.completedAt),
-    ...plant.upcomingTasks.map((t) => t.lastCompleted),
+    ...plant.upcomingTasks.map((task) => task.lastCompleted),
   ]);
 
   const overallBestStreak = plant.upcomingTasks.reduce(
-    (max, t) => Math.max(max, longestStreak(t, completions)),
+    (max, task) => Math.max(max, longestStreak(task, completions)),
     0
   );
 
   return (
     <Card>
       <CardHeader
-        title="Care report"
-        description={`How this plant has been cared for across its last ${RECENT_COMPLETIONS_LIMIT} logged completions. Older care is not counted here.`}
+        title={t('plants.careReport.title')}
+        description={t('plants.careReport.description', { limit: RECENT_COMPLETIONS_LIMIT })}
       />
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-sm large-text:grid-cols-1">
-        <Stat label="Active tasks" value={totalTasks.toString()} />
+        <Stat label={t('plants.careReport.activeTasks')} value={totalTasks.toString()} />
         <Stat
           label={`Completions (last ${RECENT_COMPLETIONS_LIMIT})`}
           value={totalCompletions.toString()}
@@ -60,17 +62,20 @@ export function CareReportCard({ plant }: CareReportCardProps) {
           label={`Best streak (last ${RECENT_COMPLETIONS_LIMIT})`}
           value={overallBestStreak >= 2 ? `${overallBestStreak} cycles` : '—'}
         />
-        <Stat label="Last care" value={lastCompletion ? formatRelative(lastCompletion) : 'Never'} />
+        <Stat
+          label={t('plants.careReport.lastCare')}
+          value={lastCompletion ? formatRelative(lastCompletion) : t('common.never')}
+        />
       </dl>
 
       {plant.upcomingTasks.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
-            By task, within those {RECENT_COMPLETIONS_LIMIT}
+            {t('plants.careReport.byTask', { limit: RECENT_COMPLETIONS_LIMIT })}
           </h4>
           <ul className="divide-y divide-primary-100/60 text-sm">
-            {plant.upcomingTasks.map((t) => (
-              <TaskRow key={t.id} task={t} completions={completions} />
+            {plant.upcomingTasks.map((task) => (
+              <TaskRow key={task.id} task={task} completions={completions} />
             ))}
           </ul>
         </div>
@@ -95,6 +100,7 @@ function TaskRow({
   task: Task;
   completions: PlantWithTasks['recentCompletions'];
 }) {
+  const { t } = useTranslation();
   const own = completions.filter((c) => c.taskId === task.id);
   const best = longestStreak(task, completions);
   // The task's own `lastCompleted` is the true last date; the window only
@@ -103,15 +109,21 @@ function TaskRow({
   const last = newest([task.lastCompleted, ...own.map((c) => c.completedAt)]);
   const label = task.customType ?? task.type;
   const doneLabel =
-    own.length > 0 || !last ? `${own.length} done` : `none in last ${RECENT_COMPLETIONS_LIMIT}`;
+    own.length > 0 || !last
+      ? t('plants.careReport.doneCount', { count: own.length })
+      : t('plants.careReport.noneInLast', { limit: RECENT_COMPLETIONS_LIMIT });
 
   return (
     <li className="flex items-center justify-between py-2">
       <span className="font-medium capitalize text-gray-900">{label}</span>
       <div className="flex gap-4 text-gray-600">
         <span>{doneLabel}</span>
-        <span>best {best >= 2 ? `${best}×` : '—'}</span>
-        <span className="hidden sm:inline">last {last ? formatRelative(last) : 'never'}</span>
+        <span>{t('plants.careReport.best', { value: best >= 2 ? `${best}×` : '—' })}</span>
+        <span className="hidden sm:inline">
+          {t('plants.careReport.last', {
+            value: last ? formatRelative(last) : t('plants.careReport.never'),
+          })}
+        </span>
       </div>
     </li>
   );

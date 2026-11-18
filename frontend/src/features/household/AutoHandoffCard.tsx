@@ -20,6 +20,7 @@ import { Alert } from '@/components/Alert';
 import { Button } from '@/components/Button';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 /** The thresholds offered. 5 is the server-side floor; nothing lower is sold. */
 const ESCALATION_THRESHOLDS = [5, 7, 10, 14] as const;
@@ -86,7 +87,7 @@ export function AutoHandoffCard({ householdId, household }: AutoHandoffCardProps
           <p className="text-sm text-gray-700">{t('household.autoHandoff.locked')}</p>
           {/* No "see plans" button in the apps (Guideline 3.1.1). */}
           {isNativeApp() ? (
-            <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+            <p className="text-sm text-gray-600">{t(nativePlanNoteKey())}</p>
           ) : (
             <Link
               to="/pricing"

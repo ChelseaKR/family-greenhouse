@@ -30,7 +30,9 @@ import { findPlantSafetyPage, plantSafetyMeta } from './plantSafetyPages';
  * (The body lives in PlantSafetyArticle.tsx, so this module exports only the
  * route component `App.tsx` lazy-loads.) The page opens with the emergency
  * aside (two poison hotlines, each a `tel:` link with its fee in its own
- * words), ahead of the verdicts, on every page; the gate checks that too.
+ * words), ahead of the verdicts, on every page; the gate checks that too. A
+ * page whose table entry sets `leadAnimal` puts that animal's cited FAQ answer
+ * (`data-claim="lead-question"`/`"lead-answer"`) first, then the aside.
  *
  * `scripts/check-plant-safety-pages.mjs` fails the build if any text sits
  * outside those, if a chrome string differs from its catalog entry, or if a

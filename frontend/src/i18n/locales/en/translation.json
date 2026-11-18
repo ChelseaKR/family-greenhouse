@@ -17,8 +17,10 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "yesterday": "Yesterday",
+    "never": "Never",
     "daysAgo_one": "{{count}} day ago",
-    "daysAgo_other": "{{count}} days ago"
+    "daysAgo_other": "{{count}} days ago",
+    "loadingDots": "Loading..."
   },
   "activity": {
     "aPlant": "a plant",
@@ -50,7 +52,23 @@
     "caretakerNote": "{{actor}} left a note: {{note}}",
     "memberLeft": "A member left the household",
     "memberLeftReleased_one": "A member left the household — {{count}} task went back up for grabs",
-    "memberLeftReleased_other": "A member left the household — {{count}} tasks went back up for grabs"
+    "memberLeftReleased_other": "A member left the household — {{count}} tasks went back up for grabs",
+    "taskCompleted": "<b>{{actor}}</b> completed <b>{{task}}</b>",
+    "taskSnoozed": "<b>{{actor}}</b> snoozed <b>{{task}}</b>",
+    "forPlant": "for {{plant}}",
+    "reasonRain": "rain expected",
+    "reasonFrost": "frost expected",
+    "reasonHeat": "heat wave",
+    "taskClaimed": "<b>{{actor}}</b> claimed <b>{{task}}</b>",
+    "taskReleased": "<b>{{actor}}</b> released <b>{{task}}</b>",
+    "plantAdded": "<b>{{actor}}</b> added <b>{{plant}}</b>",
+    "plantArchived": "<b>{{actor}}</b> archived <b>{{plant}}</b>",
+    "plantRestored": "<b>{{actor}}</b> restored <b>{{plant}}</b>",
+    "plantDied": "<b>{{actor}}</b> recorded the loss of <b>{{plant}}</b>",
+    "plantGaveAway": "<b>{{actor}}</b> recorded giving away <b>{{plant}}</b>",
+    "photoUploaded": "<b>{{actor}}</b> uploaded a new photo",
+    "memberJoined": "<b>{{actor}}</b> joined the household",
+    "plantDeleted": "<b>{{actor}}</b> deleted a plant"
   },
   "spaces": {
     "all": "All spaces",
@@ -238,7 +256,7 @@
       "nameTooLong": "That name is too long.",
       "speciesLabel": "Species (optional)",
       "speciesPlaceholder": "Monstera deliciosa",
-      "speciesHelp": "If we recognise the species, we can set up its care schedule for you.",
+      "speciesHelp": "If we recognize the species, we can set up its care schedule for you.",
       "speciesTooLong": "That species name is too long.",
       "scheduleNoSpecies": "Add a species and we'll look for a care schedule to go with it.",
       "scheduleChecking": "Checking for a care schedule…",
@@ -256,14 +274,17 @@
       "created": "{{name}} is in your greenhouse.",
       "createdWithSchedule": "{{name}} is in, with its care schedule set up.",
       "createdWithStartingPoint": "{{name}} is in, with a watering reminder every {{days}} days to start.",
-      "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page."
+      "scheduleFailed": "{{name}} was saved, but its care schedule couldn't be added. You can add tasks from its own page.",
+      "createdCheckRecent": "{{name}} is in. We'll remind you to check the soil in {{soon}} days, then every {{days}} days.",
+      "createdCheckSoon": "{{name}} is in. Since it's been a while, we'll remind you to check the soil in {{soon}} days, then every {{days}} days.",
+      "createdCheckUnsure": "{{name}} is in. Since you're not sure when it was last watered, we'll remind you to check the soil tomorrow, then every {{days}} days."
     },
     "picker": {
       "heading": "Pick a common houseplant",
-      "hint": "One tap adds it with a watering reminder to start. You can change the reminder any time.",
+      "hint": "Tap your plant, then say when you last watered it. We'll set a reminder to check the soil, and you can change it any time.",
       "saving": "Adding your plant…",
       "somethingElse": "Something else? Type its name",
-      "fromGuide": "You came from our {{name}} care guide, so it's first. One tap adds it with a reminder to check the soil every {{days}} days.",
+      "fromGuide": "You came from our {{name}} care guide, so it's first. Tap it, say when you last watered it, and we'll remind you to check the soil every {{days}} days from there.",
       "plants": {
         "pothos": "Pothos",
         "snake-plant": "Snake plant",
@@ -274,7 +295,16 @@
         "aloe-vera": "Aloe vera",
         "orchid": "Moth orchid",
         "fiddle-leaf-fig": "Fiddle leaf fig",
-        "jade-plant": "Jade plant"
+        "jade-plant": "Jade plant",
+        "rosemary": "Rosemary"
+      },
+      "lastWatered": {
+        "question": "{{name}}: when did you last water it?",
+        "hint": "Your answer only sets the first reminder to check the soil. After that it repeats on the plant's usual rhythm.",
+        "recent": "In the last few days",
+        "whileAgo": "A week or more ago",
+        "unsure": "Not sure",
+        "back": "Pick a different plant"
       }
     },
     "invite": {
@@ -369,6 +399,7 @@
     "signUpTitle": "Sign up",
     "registerTitle": "Start your greenhouse",
     "registerSubtitle": "Free for one home, up to 2 household members and 8 plants. No credit card. Your household starts with 14 days of Garden.",
+    "guidePlantNext": "Next: add your {{name}} and pick when you last watered it.",
     "fullName": "Full name",
     "confirmPassword": "Confirm password",
     "showPassword": "Show password",
@@ -444,11 +475,47 @@
         "body": "Create an account to set up your household, or sign in to the one you already share."
       },
       "haveAccount": "I already have an account"
+    },
+    "shellHomeLabel": "Family Greenhouse, Grow together, home",
+    "forgot": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email and we'll send you a reset code.",
+      "remember": "Remember your password?",
+      "submit": "Send reset code",
+      "documentTitle": "Forgot password"
+    },
+    "reset": {
+      "noEmailTitle": "No email on file",
+      "noEmailSubtitle": "Start the reset flow from the beginning.",
+      "noEmailBody": "No email address provided.",
+      "requestAgain": "Request password reset",
+      "doneTitle": "Password reset",
+      "doneSubtitle": "You're all set — sign back in to continue.",
+      "doneBody": "Your password has been reset successfully.",
+      "title": "Set a new password",
+      "codeLabel": "Reset code",
+      "newPassword": "New password",
+      "confirmNewPassword": "Confirm new password",
+      "submit": "Reset password",
+      "codeSentTo": "Enter the code we sent to <strong>{{email}}</strong>",
+      "codeLength": "Reset code must be 6 digits",
+      "documentTitle": "Reset password"
     }
   },
   "joinInvite": {
     "signInOrCreate": "Please sign in or create an account to accept this invitation.",
-    "signInExisting": "Please sign in with an existing account to accept this invitation."
+    "signInExisting": "Please sign in with an existing account to accept this invitation.",
+    "loadFailed": "We couldn’t load this invite just now. Try again in a moment.",
+    "title": "Join Household",
+    "invalid": "This invite link is invalid or has expired.",
+    "askNewLink": "Please ask for a new invite link from a household admin.",
+    "goToOnboarding": "Go to onboarding",
+    "goToHousehold": "Go to your household",
+    "invitedToJoin": "You've been invited to join",
+    "join": "Join household",
+    "alreadyMember": "You’re already a member of <strong>{{household}}</strong>.",
+    "invitedToJoinNamed": "You've been invited to join <strong>{{household}}</strong>",
+    "documentTitle": "Join household"
   },
   "pricingStatus": {
     "freeAccountQuestion": "Can I create an account?",
@@ -462,9 +529,9 @@
     "trialQuestion": "How does the trial work?",
     "trialAnswer": "A new household starts with 14 days of Garden that need no card. Nothing is charged, and when the 14 days end the household moves to the free Seedling plan on its own, keeping everything it added; each account gets one. If you choose a paid plan during those 14 days, you add a card at checkout and your first charge is on the day the free days end, not 14 days later: the trials do not add up. Choose it in the last two days, or after the free days have ended, and the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead, with nothing charged until it ends. A household that has had a trial before is charged when it subscribes again, and canceling before the first charge costs nothing.",
     "changeQuestion": "Can I change or cancel later?",
-    "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Billing, which opens our payment provider's portal. Cancelling returns your household to the free Seedling tier at the end of the paid period.",
+    "changeAnswer": "Yes. Plan changes and cancellation are self-service from Settings → Plan status, which opens our payment provider's portal. Canceling returns your household to the free Seedling tier at the end of the paid period.",
     "whereQuestion": "Where do I buy?",
-    "whereAnswer": "Plan changes happen inside your account, under Settings → Billing, and are made by a household admin. Purchases are not offered in the mobile apps.",
+    "whereAnswer": "Plan changes happen inside your account, under Settings → Plan status, and are made by a household admin. Purchases are not offered in the mobile apps.",
     "dataQuestion": "What happens to existing data?",
     "dataAnswerHeld": "Existing plants, household records, tasks, and care history remain available under the current plan limits. The hold does not delete user data.",
     "dataAnswerOpen": "Nothing is deleted when a plan changes. If a downgrade puts you over the new caps, existing plants, members and homes stay readable and editable — only adding more is blocked until you are back under the limit. Export and your care history are never behind a plan.",
@@ -480,6 +547,14 @@
     "browsePrompt": "Just browsing? Read our",
     "careGuides": "plant care guides"
   },
+  "careHolidayGuides": {
+    "amaryllis": "Amaryllis",
+    "paperwhite": "Paperwhite",
+    "poinsettia": "Poinsettia",
+    "christmasCactus": "Christmas Cactus",
+    "cyclamen": "Cyclamen",
+    "rosemary": "Rosemary"
+  },
   "petSafeSpecies": {
     "title": "Every plant we have a guide for, and its pet verdict",
     "lede": "The line under each plant is the toxicity note from that plant’s own care guide, word for word. Open a guide for the rest — watering, light, and what usually goes wrong.",
@@ -494,11 +569,13 @@
     "readingHeading": "More on plants and pets",
     "readingSafeIntro": "Shopping for something new?",
     "readingToxicIntro": "Already living with one from the second list?",
+    "holidayHeading": "Holiday plants",
     "citedPagesHeading": "Plants with a cited verdict page",
     "citedPagesLede": "One page per plant, each verdict printed beside the ASPCA listing it comes from."
   },
   "plantSafetyPage": {
     "metaTitle": "Is {{name}} toxic to cats and dogs? What to know",
+    "leadTitle": "Is {{name}} toxic to {{animal}}? Listed as {{verdict}}",
     "metaDescription": "Is {{name}} ({{scientificName}}) poisonous or safe for pets? The source, and who to call if a pet ate some. Cats: {{cats}}. Dogs: {{dogs}}.",
     "eyebrow": "Pets and plants",
     "heading": "Is {{questionName}} toxic to cats and dogs?",
@@ -583,11 +660,14 @@
       "animal": {
         "cats": "cats",
         "dogs": "dogs",
-        "horses": "horses"
+        "horses": "horses",
+        "rats": "rats"
       },
       "question": "Is {{name}} toxic to {{animal}}?",
+      "and": "and",
       "answerToxic": "Yes. The ASPCA lists {{title}} ({{scientificName}}) as toxic to {{animal}}.",
       "answerNonToxic": "No. The ASPCA lists {{title}} ({{scientificName}}) as non-toxic to {{animal}}.",
+      "answerUnlisted": "We can’t say. The ASPCA listing for {{title}} ({{scientificName}}) covers {{animals}} and has no entry for {{animal}}. Ask an exotic-animal vet.",
       "answerDetails": "Its listing names the toxic principles: {{principles}}. The signs it lists are on this page, under “Clinical signs”.",
       "answerAnyPlant": "Its plant list also notes that eating any plant can cause vomiting or stomach upset in dogs and cats.",
       "partsQuestion": "Which parts of {{name}} are poisonous?",
@@ -772,6 +852,7 @@
       "provenance": "Grown by {{name}}, passed on to you.",
       "invalid": "This share link is invalid or has expired.",
       "askForNew": "Ask the sender for a fresh link — they expire after 14 days.",
+      "loadFailed": "We couldn’t load this cutting just now. Try again in a moment.",
       "houseRuleLabel": "House rule",
       "addToGreenhouse": "Add to my greenhouse",
       "added": "{{name}} added to your greenhouse",
@@ -936,7 +1017,93 @@
       "remove": "Remove…",
       "restore": "Restore to active care",
       "doAria": "{{label}}: {{task}} {{plant}}",
-      "claim": "I’ll do it"
+      "claim": "I’ll do it",
+      "taskDue": "Due: {{date}}"
+    },
+    "add": {
+      "title": "Add a new plant",
+      "intro": "Enter the details of your plant to start tracking its care.",
+      "photoPreviewAlt": "Selected plant photo preview",
+      "namePlaceholder": "e.g., Living Room Monstera",
+      "speciesHelper": "Type to search common names; pick a suggestion to autofill the scientific name.",
+      "recommendedTasks": "Recommended care tasks",
+      "autoTasksLabel": "Automatically add recommended care tasks",
+      "tagsPlaceholder": "tropical, low-light, gift",
+      "tagsHelper": "Comma-separated. Up to 10 tags. Useful for filtering later.",
+      "notesPlaceholder": "Any additional notes about this plant...",
+      "autoTasksNamed": "Automatically add {{name}} care tasks",
+      "autoTasksBasis": "Based on “{{species}}”. You can edit or remove these tasks any time."
+    },
+    "bulkApply": {
+      "title": "Apply care template",
+      "template": "Template",
+      "pickOne": "— pick one —",
+      "noPlants": "No plants yet.",
+      "plantsSelected_one": "Plants ({{count}} selected)",
+      "plantsSelected_other": "Plants ({{count}} selected)",
+      "plantsSelectedOver": "Plants ({{count}} selected — over the 50-plant cap, deselect some)",
+      "applyTo_one": "Apply to {{count}} plant",
+      "applyTo_other": "Apply to {{count}} plants"
+    },
+    "careGuidance": {
+      "light": "Light",
+      "water": "Water",
+      "humidity": "Humidity"
+    },
+    "careGuideCard": {
+      "title": "Care guide",
+      "family": "Family",
+      "cycle": "Cycle",
+      "hardinessZones": "Hardiness zones",
+      "sunlight": "Sunlight",
+      "none": "No care guide available for this species yet."
+    },
+    "careReport": {
+      "title": "Care report",
+      "activeTasks": "Active tasks",
+      "lastCare": "Last care",
+      "description": "Counts and streaks cover this plant's last {{limit}} logged completions. Last care covers all of its history.",
+      "byTask": "By task, within those {{limit}}",
+      "doneCount_one": "{{count}} done",
+      "doneCount_other": "{{count}} done",
+      "noneInLast": "none in last {{limit}}",
+      "best": "best {{value}}",
+      "last": "last {{value}}",
+      "never": "never"
+    },
+    "editTitle": "Edit plant",
+    "noCareData": {
+      "title": "No care guide for this species yet",
+      "body": "We don't recognise this species, so the care guide and suggested schedule are hidden — we'd rather show nothing than guess. You can still add your own care tasks below, or pick a recognised species when editing this plant."
+    },
+    "photoTimeline": {
+      "loading": "Loading photos…",
+      "title": "Photo timeline"
+    },
+    "detailPage": {
+      "remove": "Remove",
+      "added": "Added",
+      "careTasksTitle": "Care Tasks",
+      "noTasksTitle": "No tasks",
+      "noTasksDescription": "Add care tasks to track watering, fertilizing, and more.",
+      "addFirstTask": "Add first task",
+      "careHistoryTitle": "Care History",
+      "careHistoryDescription": "Recent task completions",
+      "noCareHistory": "No care history yet.",
+      "snoozeTask": "Snooze task",
+      "everyDays_one": "Every day",
+      "everyDays_other": "Every {{count}} days"
+    },
+    "photoUpload": {
+      "formats": "JPEG, PNG, or WebP. Up to 5 MB after resizing.",
+      "upload": "Upload photo",
+      "uploading": "Uploading photo…",
+      "wrongType": "Image must be a JPEG, PNG, or WebP file.",
+      "tooLarge": "Image is too large (max {{max}} MB)."
+    },
+    "suggestedCare": {
+      "title": "Suggested care",
+      "wateringNotice": "We’ll create a watering task on a {{days}}-day cadence after you save this plant. You can edit it any time."
     }
   },
   "importPlants": {
@@ -1072,7 +1239,7 @@
       "title": "Ask the family about {{plant}}?",
       "explainer": "This puts the task up for grabs and tells everyone at home except you, anyone away, and anyone inside their quiet hours.",
       "noteLabel": "Add a note (optional)",
-      "notePlaceholder": "I’m travelling until Sunday",
+      "notePlaceholder": "I’m traveling until Sunday",
       "confirm": "Ask the family"
     },
     "coveringFor": "Covering for {{name}}",
@@ -1158,6 +1325,16 @@
       "everyDay": "Every day",
       "everyNDays": "Every {n} days",
       "notes": "Notes"
+    },
+    "modal": {
+      "taskType": "Task type",
+      "customTaskName": "Custom task name",
+      "customTaskPlaceholder": "e.g., Rotate plant",
+      "frequencyDays": "Frequency (days)",
+      "notesPlaceholder": "Any notes about this task...",
+      "editTitle": "Edit task",
+      "type": "Type",
+      "customName": "Custom name"
     }
   },
   "today": {
@@ -1231,6 +1408,13 @@
     "inviteByEmailSent": "Invitation sent. The link below is the same one, if you'd rather also send it yourself.",
     "inviteByEmailCooldown": "That address was invited to this household in the last 24 hours. The link below still works.",
     "inviteByEmailUnavailable": "We couldn't send that email, so we haven't said it went out. Copy the link below and send it yourself.",
+    "inviteLinkLimits": "This link works for 7 days and for up to 5 people.",
+    "inviteEmailLinkLimits": "This link works for 7 days and for one person.",
+    "revokeInvites": {
+      "hint": "Turning invite links off stops every link and emailed invitation made so far. They also stop working when anyone leaves or is removed from this household.",
+      "button": "Turn off invite links",
+      "done": "Invite links are off. Links made before now no longer work. You can make a new one."
+    },
     "climateCheckFailed": "Climate availability could not be checked. Location changes are paused; try again later.",
     "climateUnavailable": "Climate-aware tips are unavailable right now. Location setup will return when the weather integration is enabled.",
     "climateSavedLocation": "Your saved location is {{city}}.",
@@ -1322,7 +1506,13 @@
       "endedOn": "{{label}} — ended {{date}}",
       "sharedBy": "Shared by {{name}}",
       "anotherMember": "another member",
-      "revokeNotYours": "Only its creator or an admin can revoke this"
+      "revokeNotYours": "Only its creator or an admin can revoke this",
+      "cardTitle": "Plant-sitter links",
+      "cardDescription": "Going away? Share a temporary link so a neighbour or friend can see due care, plant names, current spaces, and placement notes — never your saved city, private notes, or member details. The link expires on its own, and you can revoke it any time.",
+      "readyTitle": "Your sitter link is ready",
+      "readyBody": "Copy it now — for security, we won’t show the full link again. You can always create a new one.",
+      "labelPlaceholder": "e.g. The Smiths’ plants",
+      "create": "Create sitter link"
     },
     "goingAway": {
       "titleEntry": "Going away?",
@@ -1333,12 +1523,14 @@
       "freeNow_other": "On the free plan, a sitter link lasts up to {{days}} days, and {{count}} can be live at a time.",
       "gardenAdds": "Garden adds, for the whole household:",
       "gardenAddsPrice": "Garden is {{price}} a month for the whole household. It adds:",
+      "gardenAddsPrices": "Garden is {{annualPrice}} a year or {{price}} a month for the whole household. It adds:",
       "lineLinks_one": "Sitter links of up to {{days}} days, with {{count}} live at a time",
       "lineLinks_other": "Sitter links of up to {{days}} days, with up to {{count}} live at once",
       "lineBrief": "A printable care brief for your sitter, with each plant’s latest photo and your house rules",
       "linePhotos": "Photos from your sitter while you’re away, added to each plant’s timeline",
       "lineRecap": "A recap of what happened, waiting when you get back",
       "upgrade": "Upgrade to Garden for {{price}} a month",
+      "choosePlan": "Choose a Garden plan",
       "useFree_one": "Use {{count}} day instead",
       "useFree_other": "Use {{count}} days instead",
       "keepFree_one": "Your free {{count}}-day link is still yours. You don’t need to upgrade to make it.",
@@ -1367,7 +1559,7 @@
     "timeZoneLabel": "IANA time zone",
     "timeZoneBrowserHint": "This browser reports {{zone}}. Nothing is saved until you choose.",
     "timeZoneNoBrowserZone": "This browser cannot report its own zone, so there is nothing to suggest.",
-    "timeZoneInvalid": "That is not a time zone name this app recognises. Use an IANA name such as America/New_York or Europe/Madrid.",
+    "timeZoneInvalid": "That is not a time zone name this app recognizes. Use an IANA name such as America/New_York or Europe/Madrid.",
     "timeZoneSave": "Save time zone",
     "timeZoneClear": "Clear time zone",
     "timeZoneSaved": "Time zone saved.",
@@ -1380,16 +1572,35 @@
       "blockedLastMember": "You’re the only member, so there’s nobody to leave this household to. Invite someone and make them an admin first. If you’re done with Family Greenhouse altogether, you can delete your account in Settings instead — that removes you from every household.",
       "blockedLastAdmin": "You’re the only admin. Make another member an admin above, and then you can leave.",
       "confirmTitle": "Leave {{household}}?",
-      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags and wall-display links you created stop working. To come back, an admin would have to invite you again.",
+      "confirmMessage": "You’ll lose access to this household’s plants, tasks and activity straight away. The household keeps its care history, with your name shown as “Former member”. Sitter links, plant tags, wall-display links and caretaker seats you created stop working. To come back, an admin would have to invite you again.",
       "confirmTasks_one": "You have {{count}} task with your name on it; it goes back up for grabs.",
       "confirmTasks_other": "You have {{count}} tasks with your name on them; they go back up for grabs.",
       "confirmTasksUnknown": "Any tasks with your name on them go back up for grabs.",
       "confirmLabel": "Leave household",
       "cancel": "Stay",
       "billingTitle": "This household’s paid plan keeps renewing",
-      "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Billing before you leave: once you’ve left, you can’t reach this household’s billing.",
+      "billingMessage": "Leaving doesn’t cancel or change the plan — everyone else keeps it. If it’s billed to your card, update the payment method or cancel the plan in Settings → Plan status before you leave: once you’ve left, you can’t reach this household’s billing.",
       "billingConfirm": "Leave anyway",
       "left": "You left {{household}}."
+    },
+    "page": {
+      "description": "Manage your household members and settings.",
+      "inviteTitle": "Invite members",
+      "inviteDescription": "Generate an invite link to add family members to your household",
+      "onlyOneHere": "You’re the only one here. Plant care is more fun (and more reliable) with someone else helping — share an invite link with whoever lives with you.",
+      "generateInvite": "Generate invite link",
+      "locationDescription": "Used for climate-aware care tips (humidity warnings, freeze alerts, etc.).",
+      "clearLocation": "Clear location",
+      "cityLabel": "City",
+      "cityPlaceholder": "e.g. Austin, US",
+      "cityHelper": "Add a country if your city name is ambiguous.",
+      "saveLocation": "Save location",
+      "you": "(you)",
+      "removeMemberTitle": "Remove member",
+      "removeMemberMessage": "Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, their caretaker seats, and any API key they issued.",
+      "removeMemberConfirm": "Remove",
+      "locationCurrent": "Currently set to <b>{{city}}</b>.",
+      "members": "Members"
     }
   },
   "householdAudit": {
@@ -1442,7 +1653,7 @@
       "unknown": "A change to the household this version of the app can’t describe"
     },
     "detail": {
-      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}}",
+      "revokedWith": "Turned off with it: sitter links {{sitterLinks}} · plant tags {{plantTags}} · wall displays {{kioskLinks}} · cutting links {{cuttingShares}} · caretaker seats {{caretakerSeats}}",
       "scopes": "Access: {{scopes}}",
       "expires": "Expires {{date}}",
       "giftEnds": "Runs until {{date}}",
@@ -1476,6 +1687,14 @@
       "tooLarge": "That photo is too large to send, even after shrinking it. Try a different one.",
       "readFailed": "We couldn’t read that photo. Please try another one.",
       "sendFailed": "We couldn’t send that photo just now. Please try again in a moment."
+    },
+    "page": {
+      "loading": "Loading plant-sitting tasks…",
+      "inactiveTitle": "This plant-sitting link is no longer active",
+      "inactiveBody": "The link may have expired or been turned off by the person who shared it. If you’re still helping out, ask them for a fresh link.",
+      "loadFailed": "We couldn’t load the plant-sitting list just now. Please refresh and try again in a moment.",
+      "intro": "Here’s what needs a little care while they’re away. Tap <strong>Done</strong> once you’ve looked after each one — no account needed.",
+      "footer": "Looking after plants regularly? <appLink>Family Greenhouse</appLink> keeps a whole household’s plant care in one shared place."
     }
   },
   "sitterBrief": {
@@ -1484,7 +1703,7 @@
     "title": "The plant-care brief",
     "titleLabelled": "{{label}}: the plant-care brief",
     "window": "Covering {{start}} to {{end}}.",
-    "intro": "Every care note below was written by the household — nothing here is generated advice. The one thing we add is the pet-safety line, from our verified list. If a plant has no note, it says so, and your judgement is as good as ours.",
+    "intro": "Every care note below was written by the household — nothing here is generated advice. The one thing we add is the pet-safety line, from our verified list. If a plant has no note, it says so, and your judgment is as good as ours.",
     "print": "Print",
     "loading": "Loading the plant-care brief…",
     "backToList": "Back to what needs doing today",
@@ -1684,6 +1903,12 @@
       "analyticsOffBySignal": "Analytics is off: your browser sends a privacy signal.",
       "analyticsPrivacyLink": "Privacy page"
     },
+    "account": {
+      "pageTitle": "Account & data",
+      "exportJson": "Download full data (JSON)",
+      "deleteButton": "Delete my account",
+      "deleteAppStoreNote": "Deleting your account does not cancel an App Store subscription. Cancel it first: Settings, Plan status, Manage subscription, or your iPhone’s Settings, your name, Subscriptions."
+    },
     "apiKeys": {
       "writeScopeWarning": "This key will be able to complete and snooze tasks in your household. Only grant write access to integrations you trust.",
       "loadFailed": "We couldn’t load your API keys, so this list is not a record of what exists. Nothing changed: a key that was working a moment ago still is, until you revoke it, the member who issued it leaves, or the household leaves Greenhouse.",
@@ -1719,6 +1944,7 @@
     "billing": {
       "usageTitle": "Usage",
       "currentPlan": "Your household is on the {{plan}} plan.",
+      "planStatusDescription": "View your household’s current plan limits.",
       "currentPlanTrial": "Your household is on the {{plan}} plan (free trial).",
       "currentPlanUnpaid": "Your household is on the {{plan}} plan, but its last payment has not gone through.",
       "paymentRetryingTitle": "Your last payment didn’t go through",
@@ -1733,7 +1959,7 @@
         "actionView": "See the details in Settings → Plan status"
       },
       "planUnknownTitle": "We couldn't check which plan you're on",
-      "planUnknownBody": "Your plan didn't load, so we can't say which plan your household is on, or how it stands against its limits. This is a problem reading your plan, not a change to it — your plan and any subscription are exactly as they were, and nothing has been charged or cancelled. Reload the page to try again.",
+      "planUnknownBody": "Your plan didn't load, so we can't say which plan your household is on, or how it stands against its limits. This is a problem reading your plan, not a change to it — your plan and any subscription are exactly as they were, and nothing has been charged or canceled. Reload the page to try again.",
       "changePlanUnavailable": "Plan changes are paused here until we can check which plan your household is already on — offering one now could mean buying a plan you already have. Reload the page to try again.",
       "plantsUsage": "{{n}} of {{max}} plants",
       "plantsUsageUnavailable": "— of {{max}} plants — usage unavailable",
@@ -1770,9 +1996,9 @@
       "ownedForLife": "You own this plan permanently.",
       "errorLifetimeOwned": "Your household already owns this plan permanently. There is nothing more to buy at this tier.",
       "errorCheckoutPending": "A checkout for this household is already in progress. If you just paid, your plan updates here as soon as our payment provider confirms it — please do not check out again, a second purchase would start a second subscription. If you left a checkout unfinished, it releases on its own within the hour.",
-      "cancelPending": "Cancelled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
-      "cancelPendingNoDate": "Cancelled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
-      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and cancelling any time before it costs nothing.",
+      "cancelPending": "Canceled — your {{plan}} plan ends on {{date}}, then your household returns to Seedling.",
+      "cancelPendingNoDate": "Canceled — your {{plan}} plan ends when the current period does, then your household returns to Seedling.",
+      "trialEnds": "Your free trial ends on {{date}}. You will not be charged before then, and canceling any time before it costs nothing.",
       "noCardTrial": {
         "startedTitle": "Your household is trying Garden free until {{date}}",
         "endingSoonTitle": "Your household’s Garden trial ends on {{date}}",
@@ -1840,6 +2066,48 @@
       "rate": "Rate Family Greenhouse",
       "rateHint": "Opens the App Store, where you can leave a rating or review.",
       "rateHintAndroid": "Opens Google Play, where you can leave a rating or review."
+    },
+    "page": {
+      "eyebrow": "Your account",
+      "accountDescription": "Manage your profile, download your data, or permanently delete your account.",
+      "sectionLabel": "Settings section",
+      "sectionsNav": "Settings sections"
+    },
+    "accountPanel": {
+      "profileTitle": "Profile",
+      "nameUpdated": "Name updated.",
+      "saveName": "Save name",
+      "changePasswordTitle": "Change password",
+      "changePasswordDescription": "You'll need your current password — we don't keep it on the server.",
+      "passwordUpdated": "Password updated.",
+      "passwordHelper": "At least 12 characters with uppercase, lowercase, and number.",
+      "updatePassword": "Update password",
+      "downloadTitle": "Download my data",
+      "downloadDescription": "Export your data anytime. The full export is a single JSON document covering your profile, notification preferences, household memberships, and the plants and tasks of every household you belong to. The CSV option is a spreadsheet-friendly subset (plants and tasks for your active household).",
+      "downloadCsv": "Download CSV",
+      "deleteDescription": "Permanently removes your login and your household membership. If you're the only admin in a multi-member household, promote someone else first.",
+      "deleteConfirmTitle": "Delete account?",
+      "deleteConfirmMessage": "Your login and notification tokens are removed, and you lose access to every household. Shared care history is retained without your name. This cannot be undone.",
+      "deleteConfirmLabel": "Yes, delete",
+      "importHint": "Moving in the other direction? <importLink>Import plants from a CSV or JSON file</importLink> — including exports from this app."
+    },
+    "apiKeysPanel": {
+      "description": "Issue keys for access to your household data — Home Assistant, scripts, etc. Keys are read-only unless you explicitly grant write access. Availability depends on the household’s existing API-key entitlement; paid plan changes are paused.",
+      "created": "New key created — copy it now, it won't be shown again.",
+      "copyFailed": "Could not copy automatically. Select the key and copy it manually.",
+      "labelLabel": "Key label",
+      "labelPlaceholder": "Home Assistant, personal script…",
+      "labelHelper": "Shown in the list to identify the key — can't be changed later.",
+      "issue": "Issue key",
+      "scopes": "Scopes",
+      "scopesHelp": "Grant only what the key needs. A request to an endpoint outside the key’s scopes is refused with a 403.",
+      "scopeRequired": "Select at least one scope.",
+      "revokeDescription": "Revoking is immediate — clients using the key will start getting 401 on the next request.",
+      "none": "No keys yet.",
+      "revokeConfirmTitle": "Revoke API key?",
+      "revokeConfirmMessage": "The key will stop working immediately. Anything currently using it will get 401 on the next request.",
+      "keyLine": "fg_… <mono>{{last4}}</mono> · Issued {{date}}",
+      "lastUsed": "Last used {{date}}"
     }
   },
   "security": {
@@ -1934,6 +2202,7 @@
     "email": "Email",
     "emailDescription": "A daily roll-up to your account email on the day tasks are due, and each day they stay overdue.",
     "quietHoursDescription": "Nothing is sent during this window: not email, not text messages, not browser notifications. Your daily reminder arrives when it ends. With no quiet hours set, it arrives at 8:00 in the time zone below.",
+    "saveQuietHours": "Save quiet hours",
     "sms": "Text message",
     "deviceTitle": "This device",
     "deviceActive": "Push notifications are enabled on this device.",
@@ -1987,7 +2256,26 @@
     "emailStatusUnknown": "We couldn't check whether your email is being delivered right now. This says nothing either way — try again in a moment.",
     "emailResume": "Resume email to this address",
     "emailResumed": "Email resumed. We'll try your address again on the next send.",
-    "reminderPreview": "A reminder reads like “Water the Monstera” and says when it is due. Where your device allows it, the notification itself offers Done and Snooze until tomorrow."
+    "reminderPreview": "A reminder reads like “Water the Monstera” and says when it is due. Where your device allows it, the notification itself offers Done and Snooze until tomorrow.",
+    "panel": {
+      "shortDescription": "How you want to be reminded",
+      "description": "Choose how you want to be reminded about overdue plant care.",
+      "enable": "Enable",
+      "emailToggle": "Email notifications",
+      "smsToggle": "SMS notifications",
+      "phoneLabel": "Phone number",
+      "phoneHelper": "E.164 format. Leading + and country code required.",
+      "pestTitle": "Seasonal pest heads-ups",
+      "pestDescription": "When a plant in your household enters a typical pest season (spider mites, aphids, etc.) we’ll send one nudge per quarter to check it. Only fires for plants with a recognized species.",
+      "pestToggle": "Pest alerts",
+      "quietHours": "Quiet hours",
+      "quietStart": "Start",
+      "quietStartHelper": "24-hour, your local time",
+      "quietEnd": "End",
+      "quietEndHelper": "If end is earlier than start, the window wraps past midnight.",
+      "timezone": "Timezone",
+      "clear": "Clear"
+    }
   },
   "pushActions": {
     "done": "{{plant}}: marked done.",
@@ -2000,7 +2288,35 @@
     "notActivelyChecked": "Not actively checked",
     "coreApiOperational": "Core API operational",
     "checkingTitle": "Checking live system status…",
-    "checkingBody": "Waiting for a fresh response from the production health endpoint."
+    "checkingBody": "Waiting for a fresh response from the production health endpoint.",
+    "recentIncidents": "Recent incidents",
+    "resolved": "Resolved",
+    "investigating": "Investigating",
+    "historyUnavailable": "Incident history unavailable right now.",
+    "detailsToFollow": "Details for the current issue will be posted here as we learn more.",
+    "emptyLog": "Incidents are written up by hand, and none have been posted here yet. An empty log does not measure uptime.",
+    "incidents": {
+      "plantTags2026": {
+        "title": "Plant tags weren’t working",
+        "body": "From September 4 to October 5, 2026, plant tags weren’t working. Tags could not be created, removed, listed, scanned or protected with a PIN, and tasks could not be completed from a tag. People saw “We couldn’t load your plant tags” on the tags page, “That didn’t work” when changing a tag, and “Something went wrong” on a scan page. It was fixed in version 0.39.0 on October 5."
+      }
+    },
+    "page": {
+      "operational": "Operational",
+      "degraded": "Degraded",
+      "down": "Down",
+      "eyebrow": "Health check",
+      "title": "System status",
+      "unreachableTitle": "Can’t reach the status API from your network",
+      "components": "Components",
+      "checking": "Checking…",
+      "noResponse": "No response",
+      "lede": "Live state of the services that keep Family Greenhouse running.",
+      "unreachableBody": "This page checks <code>GET /health</code> from your browser, and that request got no response. That can mean our API is down, but it can also be your connection, a VPN, or an ad blocker. Try reloading, or check from another network.",
+      "lastSuccessful": "Last successful check {{when}}.",
+      "lastChecked": "Last checked {{when}}.",
+      "footnote": "Status is checked live against <code>GET /health</code> every 60 seconds. For real-time reach we recommend bookmarking this page."
+    }
   },
   "mobile": {
     "accountPrompt": "Need to manage or delete this account?",
@@ -2028,7 +2344,15 @@
     "notesTooLong": "Notes are too long",
     "tooManyTags": "Too many tags"
   },
+  "commandPalette": {
+    "title": "Search plants and tasks",
+    "placeholder": "Search plants and tasks...",
+    "noMatches": "No matches for “{{query}}”.",
+    "hint": "Type to search plants and tasks. Press <kbd>Esc</kbd> to close."
+  },
   "chat": {
+    "speakerYou": "You",
+    "speakerAssistant": "Plant care chat",
     "availabilityChecking": "Checking chat availability…",
     "availabilityCheckFailed": "Chat availability could not be checked. Try this page again in a moment.",
     "seedlingUnavailableTitle": "Plant care chat isn’t available on Seedling",
@@ -2057,6 +2381,23 @@
       "assignee": "Assigned to {{name}}",
       "createTask": "Create task",
       "dismiss": "Dismiss"
+    },
+    "page": {
+      "title": "Plant care chat",
+      "errorDescription": "Ask questions about your household.",
+      "intro": "Ask about your plants, tasks, or local climate. Answers are based on your household's actual data and a curated plant-care knowledge base.",
+      "tryAsking": "Try asking:",
+      "example1": "\"What plants do I have?\"",
+      "example2": "\"Why does my monstera have brown leaf tips?\"",
+      "example3": "\"Set up a watering schedule for Bertha.\"",
+      "sources": "Sources",
+      "placeholder": "Ask about your plants...",
+      "messageLabel": "Chat message",
+      "send": "Send",
+      "disclaimer": "AI-generated — verify before acting. Refuses pesticide / dosage advice. Suggested reminders are created only after you confirm them.",
+      "budgetUsed": "{{percent}}% used this month",
+      "replying": "Plant care chat is replying",
+      "documentTitle": "Plant Care Chat"
     }
   },
   "analytics": {
@@ -2113,11 +2454,39 @@
       "backupAssigned": "The next {{task}} on {{plant}} is now {{name}}’s.",
       "backupFailed": "We couldn’t hand that task over.",
       "noTasks": "No active tasks to hand over — add one on the plant page."
+    },
+    "page": {
+      "eyebrow": "Care rhythm",
+      "description": "How your household is doing on plant care.",
+      "activeTasks": "Active tasks",
+      "doneLast7Days": "Done last 7 days",
+      "overdueNow": "Overdue now",
+      "last30Days": "Last 30 days",
+      "last30DaysDescription": "Completed tasks per day.",
+      "dailyFailed": "We couldn’t load the last 30 days just now.",
+      "careMixDescription": "What kind of care your household has put in.",
+      "atRiskTitle": "Plants at risk",
+      "atRiskDescription": "Tasks overdue — the most-overdue plant first.",
+      "byMemberDescription": "Tasks each member has completed.",
+      "perPlantTitle": "Per plant",
+      "perPlantDescription": "Recent task activity by plant.",
+      "trendLegend": "Bars: tasks completed per day. Line: 7-day moving average.",
+      "overdueCount_one": "{{count}} overdue",
+      "overdueCount_other": "{{count}} overdue",
+      "worstDays": "worst {{days}}d",
+      "taskCount_one": "{{count}} task",
+      "taskCount_other": "{{count}} tasks"
     }
   },
   "climate": {
     "unavailableTitle": "Local climate unavailable.",
-    "unavailableBody": "We couldn’t read your local weather just now, so any frost, heat, or rain warning for tonight is unchecked rather than clear."
+    "unavailableBody": "We couldn’t read your local weather just now, so any frost, heat, or rain warning for tonight is unchecked rather than clear.",
+    "card": {
+      "title": "Local climate",
+      "setLocationBody": "Set a household location to get climate-aware care tips — humidity warnings, freeze alerts, and skip-watering nudges.",
+      "setLocationLink": "Add household location →",
+      "outdoorHumidity": "{{percent}}% outdoor humidity"
+    }
   },
   "moveDay": {
     "titleWinter": "Move day: bring these plants in",
@@ -2143,36 +2512,38 @@
   },
   "pricing": {
     "monthlyPriceLine": "Garden is ${{garden}} a month and Greenhouse is ${{greenhouse}} a month, each covering the whole household.",
+    "priceLineWithGardenYear": "Garden is ${{garden}} a month or ${{gardenYear}} a year, and Greenhouse is ${{greenhouse}} a month, each covering the whole household.",
     "intervalLabel": "Billing interval",
     "intervalMonthly": "Monthly",
     "intervalYearly": "Yearly",
     "intervalLifetime": "Lifetime",
-    "hintAnnualSaving": "Save ~33%",
+    "hintAnnualSaving": "Save ~{{percent}}%",
     "hintOneTime": "One-time",
     "currentPlanBadge": "Current plan",
     "notAvailableOneTime": "Not available as a one-time purchase",
     "notAvailableInterval": "Not available at this interval",
+    "billedMonthlyNote": "Billed monthly",
     "perMonth": "per month",
     "perYear": "per year",
     "onceOff": "once",
     "startFree": "Start free",
     "choosePlan": "Choose {{plan}}",
     "featureReminders": "Care reminders",
-    "featureIdentification": "Plant identification",
     "featureSharedHousehold": "One shared home: invites, task claiming, activity feed",
     "featureEverythingSeedling": "Everything in Seedling",
-    "featureMoreIdentification": "More plant identifications each month",
     "featureEverythingGarden": "Everything in Garden",
+    "identificationNote": "Plant identification is not included in Garden. It is sold as a pack of {{credits}} identifications for {{price}}.",
+    "identificationNoteNoPack": "Plant identification is not included in Garden.",
     "featureApiAccess": "API access for automation",
     "featureImportExport": "Import, export and calendar feed (CSV, JSON, .ics)",
     "trialNote": "A new household starts with 14 days of Garden, no card needed, then moves to the free plan on its own. Choose a paid plan during those days and checkout collects a card, but your first charge is on the day they end, not 14 days later; with two days or fewer left, or after they end, the first charge is the day you subscribe. A household that never had the free days gets a 14-day trial on its first paid subscription instead. Trials are once per household, and canceling before the first charge costs nothing.",
-    "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Billing. Nothing is purchased from this page.",
+    "howToBuyNote": "Plans are chosen inside your account: create a free account first, then a household admin starts a paid plan from Settings → Plan status. Nothing is purchased from this page.",
     "giftNote": "Buying this for someone else?",
     "whyHeading": "Why a paid plan",
     "whyHouseholdTitle": "One bill for the house",
     "whyHouseholdBody": "A plan covers the whole household on a single subscription. The people you share your plants with are members of your plan, not extra seats to buy.",
     "whyLeaveTitle": "Nothing locked away if you leave",
-    "whyLeaveBody": "Cancelling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time.",
+    "whyLeaveBody": "Canceling returns your household to the free plan at the end of the paid period. Records above the free limit stay readable and editable — only adding more is blocked — and you can export your data at any time.",
     "capHomesOne": "1 home",
     "capHomes": "{{count}} homes",
     "capHomesUnlimited": "Unlimited homes",
@@ -2231,6 +2602,7 @@
   "locked": {
     "includedWith": "Included with {{plan}}",
     "includedWithPrice": "Included with {{plan}} — {{price}} a month for the whole household",
+    "includedWithPrices": "Included with {{plan}} — {{annualPrice}} a year or {{price}} a month for the whole household",
     "adminChangePlan": "Change plan",
     "adminHint": "You’re an admin, so you can change the household’s plan in Settings → Plan status.",
     "ask": "Ask {{names}} to upgrade",
@@ -2246,7 +2618,7 @@
     "failed": "We couldn’t send that just now. Nothing was charged — try again in a moment.",
     "features": {
       "chat": "Plant care chat",
-      "identifications": "More plant identifications each month",
+      "identifications": "Plant identifications included each month",
       "leaf_health": "More leaf-health checks each month",
       "plant_cap": "Room for more plants",
       "member_cap": "Room for more household members",
@@ -2403,8 +2775,15 @@
     "title": "Need more identifications?",
     "body": "Buy a one-time pack of extra plant identifications. Credits are used only after your plan's monthly allowance runs out, and nothing renews automatically.",
     "exhaustedTitle": "This month's identifications are used up",
-    "exhaustedBody": "Your plan's monthly identification allowance is spent and your household has no credits left. Buy a pack to keep identifying, or upgrade your plan for a higher monthly allowance.",
+    "exhaustedBody": "Your plan's monthly identification allowance is spent and your household has no credits left. Your allowance resets at the start of next month, or buy a pack to keep identifying.",
     "exhaustedNoPack": "This month's plant identifications are used up. Your allowance resets at the start of next month.",
+    "notIncludedTitle": "Plant identification is sold separately",
+    "notIncludedBody": "Identification is sold as a {{credits}}-identification pack for {{price}}; it is not included in {{plan}}.",
+    "notIncludedBodyNoPack": "Plant identification isn't included in {{plan}}.",
+    "notIncludedNoPack": "Plant identification isn't included in {{plan}}, and identification packs aren't available right now. You can still enter the species yourself.",
+    "notIncludedInApp": "Plant identification isn't included in {{plan}}. You can still enter the species yourself.",
+    "notIncludedTerms": "One-time purchase. Credits are valid for {{days}} days from purchase. Nothing renews automatically.",
+    "notIncludedTermsNoDays": "One-time purchase. Nothing renews automatically.",
     "offer": "{{credits}} identifications for {{price}}",
     "terms": "One-time purchase. Credits are valid for {{days}} days from purchase and are used only after your plan's monthly allowance. Nothing renews automatically.",
     "termsNoDays": "One-time purchase. Credits are used only after your plan's monthly allowance. Nothing renews automatically.",
@@ -2425,7 +2804,7 @@
   },
   "giftSubscription": {
     "title": "Give Family Greenhouse as a gift",
-    "body": "Pay once for months of Garden or Greenhouse for another household. You get a code to pass on; they redeem it in Settings → Billing, and the gift runs from the day they do. Nothing renews, and nothing is charged to them.",
+    "body": "Pay once for months of Garden or Greenhouse for another household. You get a code to pass on; they redeem it in Settings → Plan status, and the gift runs from the day they do. Nothing renews, and nothing is charged to them.",
     "activeTitle": "Your household has {{plan}} as a gift until {{date}}",
     "activeBody": "Somebody paid for it. Nothing is charged to your household and nothing renews. On {{date}} the household returns to its own plan, and nothing you added is deleted.",
     "giveTitle": "Give a gift",
@@ -2482,14 +2861,14 @@
   "giftLanding": {
     "eyebrow": "Gifts",
     "title": "Give a Family Greenhouse gift",
-    "lede": "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code to enter in Settings → Billing — you don't need a household of your own to send one.",
+    "lede": "Pay once for months of Garden or Greenhouse for someone else's household. They get a redemption code to enter in Settings → Plan status — you don't need a household of your own to send one.",
     "howItWorksHeading": "How it works",
     "step1Title": "Choose a plan and length",
     "step1Body": "Garden or Greenhouse, from 1 to 12 months.",
     "step2Title": "Pay once, on your own card",
     "step2Body": "One payment, nothing renews. We send a receipt and a redemption code to pass on.",
     "step3Title": "They redeem it",
-    "step3Body": "Whoever you're gifting it to enters the code in Settings → Billing, and the gift starts that day.",
+    "step3Body": "Whoever you're gifting it to enters the code in Settings → Plan status, and the gift starts that day.",
     "signInHeading": "Sign in to send a gift",
     "signInBody": "Buying a gift charges your own card, so we need an account to send the receipt and code to. It does not need a household of your own — this is the only place gifting works without one.",
     "signInCta": "Sign in",
@@ -2534,6 +2913,11 @@
       "revoke": "Revoke",
       "revokeHint": "Revoking stops the link straight away. Visits already recorded are kept.",
       "loadFailed": "We couldn’t load your caretaker seats just now. That isn’t the same as having none — any seats you created are still active.",
+      "turnedOffHeading": "Turned off when someone left",
+      "turnedOffRow": "{{name}}: turned off on {{date}}, when the person who created this seat left the household. The old link no longer works, and we can’t tell {{name}} for you.",
+      "turnedOffNextEntitled": "If they’re still helping, create a new seat above and send them the new link.",
+      "turnedOffNextLocked": "A new caretaker seat needs Greenhouse, and your plan doesn’t include it. If they’re still helping, you can share a sitter link from this page instead, but what they do won’t be logged under their name.",
+      "turnedOffNextUnknown": "We couldn’t check whether your plan can create a new seat just now. If they’re still helping, they’ll need a new link.",
       "reportLink": "Open the visit report"
     },
     "page": {
@@ -2658,7 +3042,8 @@
       "snakePlant": "Snake plant",
       "spiderPlant": "Spider plant",
       "bostonFern": "Boston fern",
-      "fiddleLeafFig": "Fiddle leaf fig"
+      "fiddleLeafFig": "Fiddle leaf fig",
+      "rosemary": "Rosemary"
     },
     "facts": {
       "free": {
@@ -2785,7 +3170,23 @@
       "startWithGuide": "Start with a guide",
       "allGuides": "All care guides",
       "readBlog": "Read the blog",
-      "petSafeChecker": "Check a plant for pets"
+      "petSafeChecker": "Check a plant for pets",
+      "startWithList": "Or start with a list",
+      "lists": {
+        "forgiving": "Seven houseplants that survive being forgotten",
+        "petSafe": "Pet-safe houseplants that are hard to kill",
+        "toxicSwaps": "Common toxic houseplants and safer swaps"
+      },
+      "householdHeading": "Sharing the plants at home",
+      "household": {
+        "remember": "How to actually remember to water your plants",
+        "sharing": "Sharing plant care without becoming the household nag"
+      },
+      "holidayHeading": "Holiday plants and pets",
+      "holidayPets": {
+        "christmasCactus": "Christmas cactus and pets",
+        "poinsettia": "Poinsettia and pets"
+      }
     },
     "plans": {
       "eyebrow": "Plans",
@@ -2863,7 +3264,7 @@
         "heldClosed": "Plan status — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse is priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. Garden is for a household that has to coordinate; Greenhouse is for many homes and many hands. A new household starts with 14 days of Garden free, with no card.",
+        "open": "Priced per household, not per person. Start free with one home, up to 2 household members and 8 plants. New households get 14 days of Garden free, no card.",
         "heldOpen": "Create a free Family Greenhouse account for one home, up to 2 people and 8 plants. Paid plans, purchases, and plan changes remain paused.",
         "heldClosed": "Paid plans, purchases, plan changes, and new account registration are paused."
       }
@@ -2976,12 +3377,27 @@
       "both": "{{name}} isn’t on the ASPCA’s list, so we can’t give a verdict. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "cats": "The ASPCA’s list gives no verdict on {{name}} for cats, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}}).",
       "dogs": "The ASPCA’s list gives no verdict on {{name}} for dogs, so we can’t give one. Keep it out of reach of pets, and if a pet eats some, call your vet or the ASPCA Animal Poison Control Center ({{phone}})."
+    },
+    "page": {
+      "eyebrow": "Pet safety",
+      "title": "Is this plant safe for pets?",
+      "searchLabel": "Search plant pet-toxicity",
+      "nameLabel": "Plant or species name",
+      "namePlaceholder": "e.g. snake plant, pothos, lily…",
+      "nameHelper": "Try a common name or a scientific name.",
+      "errorBody": "We couldn’t check that just now. Give it another moment and try again.",
+      "noMatchTitle": "No match yet",
+      "noMatchBody": "We don’t have that one in our checker yet. Double-check the spelling, or try the plant’s common name. When in doubt, assume it’s unsafe and keep it out of reach until you can confirm with your vet or the ASPCA.",
+      "kidsTitle": "A note on kids and pets",
+      "lede": "Type a houseplant name and we’ll tell you, plainly, whether it’s toxic to cats and dogs. No sign-up, no fuss. Based on the <aspcaLink>ASPCA’s plant safety data</aspcaLink>.",
+      "kidsBody": "Even “non-toxic” plants can cause a mild upset stomach if a curious pet or toddler eats a big mouthful — non-toxic means not poisonous, not that it’s food. With anything truly toxic, the safest move is height: put it where paws and little hands can’t reach. If you think a pet has eaten something harmful, call your vet or the <poisonLink>ASPCA Animal Poison Control</poisonLink> line right away."
     }
   },
   "appStore": {
     "title": "Plans",
     "description": "Subscribe with your Apple ID. One plan covers everyone in this household.",
     "perMonth": "{{price}} a month",
+    "perYear": "{{price}} a year",
     "subscribe": "Subscribe to {{plan}}",
     "restore": "Restore purchases",
     "manage": "Manage subscription",
@@ -3002,11 +3418,72 @@
     "linkedElsewhere": "This Apple ID’s subscription belongs to another household.",
     "otherSubscription": "This household already has an App Store subscription from another Apple ID.",
     "refusedActive": "This household already has an App Store subscription. Use Manage subscription to change it.",
-    "disclosure": "Payment is charged to your Apple ID when you confirm. The subscription renews automatically each month at the price shown unless you cancel at least 24 hours before the period ends. Manage or cancel it in your Apple ID’s subscription settings.",
+    "disclosure": "Payment is charged to your Apple ID when you confirm. The subscription renews automatically at the end of each period, monthly or yearly as shown, at the price shown unless you cancel at least 24 hours before the period ends. Manage or cancel it in your Apple ID’s subscription settings.",
     "terms": "Terms of Use",
     "privacy": "Privacy Policy",
     "lockedSeePlans": "See plans",
     "lockedMember": "A household admin can change the plan in Settings.",
-    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions)."
+    "webBilledByApple": "{{plan}} is billed through the App Store. Change or cancel it in your iPhone’s subscription settings (Settings, your name, Subscriptions).",
+    "plansInSettings": "Plans are in Settings → Plan status, where a household admin can subscribe.",
+    "includesGarden": "Up to {{plants}} plants in one home, any number of people, the plant care assistant, and plant sitter links of up to {{sitterDays}} days.",
+    "includesGreenhouse": "Everything in Garden, plus any number of homes with up to {{plants}} plants in each, caretaker seats, a wall display link and API keys."
+  },
+  "thirdPartyConsent": {
+    "allow": "Allow",
+    "notNow": "Not now",
+    "chat": {
+      "title": "Send your question to Amazon Bedrock?",
+      "body": "To answer, Family Greenhouse sends your question and details of your household’s plants and tasks to Amazon Bedrock, an AI service from Amazon Web Services that runs Anthropic’s Claude model for us. We ask once on this device; our privacy policy has the details."
+    },
+    "leafHealth": {
+      "title": "Send this leaf photo to Amazon Bedrock?",
+      "body": "To check the leaf, Family Greenhouse sends the photo and the plant’s name to Amazon Bedrock, an AI service from Amazon Web Services that runs Anthropic’s Claude model for us. We ask once on this device; our privacy policy has the details."
+    },
+    "identify": {
+      "title": "Send this photo to Plant.id?",
+      "body": "To identify the plant, Family Greenhouse sends the photo to Plant.id, a service run by Kindwise in the Czech Republic. Its terms let it keep and reuse the photos it receives, including to train its models and to show them to its other customers. We ask once on this device; our privacy policy has the details."
+    }
+  },
+  "routeError": {
+    "title": "We couldn't load this page",
+    "body": "The page's code couldn't be fetched. This usually means the app updated while your tab was open. Refreshing should fix it.",
+    "refresh": "Refresh"
+  },
+  "toasts": {
+    "dismiss": "Dismiss notification"
+  },
+  "dashboard": {
+    "eyebrow": "Your household",
+    "description": "Here's what's happening with your plants today.",
+    "toDoNow": "To do now",
+    "viewAll": "View all",
+    "yourPlants": "Your plants",
+    "firstPlantDescription": "Name it, or start from a species suggestion and we'll fill in the care details. We'll handle the watering reminders from there.",
+    "firstPlantHint": "Takes less than a minute.",
+    "recentActivity": "Recent activity",
+    "recentActivityDescription": "What's been happening in your household",
+    "filterActivity": "Filter activity",
+    "activityEmpty": "No activity yet — complete a task to see it here.",
+    "welcomeBack": "Welcome back, {{name}}",
+    "welcomeBackNoName": "Welcome back, friend",
+    "activityFilters": {
+      "all": "All",
+      "tasks": "Tasks",
+      "plants": "Plants",
+      "people": "People"
+    },
+    "activityEmptyFiltered": {
+      "all": "No activity in the last 50 events.",
+      "tasks": "No task activity in the last 50 events.",
+      "plants": "No plant activity in the last 50 events.",
+      "people": "No activity about people in the last 50 events."
+    }
+  },
+  "yearInReview": {
+    "description": "Care work this household has done so far this year.",
+    "totalCompleted": "Total tasks completed",
+    "topContributor": "Top contributor",
+    "tasksPerWeek": "Tasks per week",
+    "whereWorkWent": "Where the work went"
   }
 }

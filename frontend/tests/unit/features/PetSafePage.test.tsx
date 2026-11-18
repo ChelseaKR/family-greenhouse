@@ -67,6 +67,12 @@ describe('PetSafePage', () => {
     const results = within(container.querySelector('[aria-live="polite"]')!);
     expect(await results.findByText(/can be harmful to pets/i)).toBeInTheDocument();
     expect(results.getByText(/Dracaena trifasciata/)).toBeInTheDocument();
+    // The plant data stays English (and Latin) whatever language the page is
+    // in, so it says which it is: on a Spanish page a screen reader would
+    // otherwise read it by Spanish rules.
+    expect(results.getByText(/Dracaena trifasciata/)).toHaveAttribute('lang', 'la');
+    const englishData = container.querySelectorAll('main [lang="en"]');
+    expect(englishData.length).toBeGreaterThan(0);
     // Verdict lines for both species are present.
     expect(results.getByText(/Cats:/)).toBeInTheDocument();
     expect(results.getByText(/Dogs:/)).toBeInTheDocument();
@@ -250,10 +256,13 @@ describe('PetSafePage directory caution', () => {
     const expected = PET_SAFE_SPECIES.filter((s) => s.caution !== null);
     // The guides whose plant has no ASPCA listing of its own, in directory order.
     expect(expected.map((s) => s.slug)).toEqual([
+      'air-plant',
+      'birds-nest-fern',
       'chinese-money-plant',
       'croton',
       'prayer-plant',
       'string-of-pearls',
+      'tradescantia',
       'zz-plant',
     ]);
     expect(cautions.map((c) => c.textContent)).toEqual(expected.map((s) => s.caution));

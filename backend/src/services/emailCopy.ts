@@ -311,6 +311,9 @@ export interface MemberLeftCopyInput {
   /** Tasks that carried their name and are now up for grabs. A real count of
    *  rows the departure rewrote (accountCleanup.DepartureCleanupSummary). */
   releasedTasks: number;
+  /** Caretaker seats the departure revoked. Undefined on a row queued before
+   *  this field existed, which says nothing rather than reading as none. */
+  caretakerSeats?: number;
   householdUrl: string;
   tasksUrl: string;
   settingsUrl: string;
@@ -322,6 +325,7 @@ export function composeMemberLeftEmail(
 ): ComposedEmail {
   const home = input.householdName;
   const n = input.releasedTasks;
+  const seats = input.caretakerSeats ?? 0;
   if (locale === 'es') {
     const subject = input.memberName
       ? home
@@ -339,14 +343,25 @@ export function composeMemberLeftEmail(
       lines.push(
         '',
         n === 1
-          ? 'Tenía una tarea a su nombre; ahora está libre para quien pueda cogerla.'
-          : `Tenía ${formatNumber(n, 'es')} tareas a su nombre; ahora están libres para quien pueda cogerlas.`,
+          ? 'Tenía una tarea a su nombre; ahora está libre para quien pueda tomarla.'
+          : `Tenía ${formatNumber(n, 'es')} tareas a su nombre; ahora están libres para quien pueda tomarlas.`,
         `Ver las tareas: ${input.tasksUrl}`
       );
     }
     lines.push(
       '',
-      'Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creó han dejado de funcionar.',
+      'Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creó han dejado de funcionar.'
+    );
+    if (seats > 0) {
+      lines.push(
+        '',
+        seats === 1
+          ? 'Se desactivó una plaza de cuidador que creó, y su enlace ya no funciona.'
+          : `Se desactivaron ${formatNumber(seats, 'es')} plazas de cuidador que creó, y sus enlaces ya no funcionan.`,
+        'No podemos avisar al cuidador. Si sigue ayudando, la página del hogar explica qué puedes hacer.'
+      );
+    }
+    lines.push(
       '',
       `Miembros del hogar: ${input.householdUrl}`,
       ...footer(
@@ -380,7 +395,18 @@ export function composeMemberLeftEmail(
   }
   lines.push(
     '',
-    'Sitter links, plant tags and wall-display links they created have stopped working.',
+    'Sitter links, plant tags and wall-display links they created have stopped working.'
+  );
+  if (seats > 0) {
+    lines.push(
+      '',
+      seats === 1
+        ? 'One caretaker seat they created was turned off, and its link no longer works.'
+        : `${formatNumber(seats, 'en')} caretaker seats they created were turned off, and their links no longer work.`,
+      'We can’t tell the caretaker. If they are still helping, the Household page explains what you can do.'
+    );
+  }
+  lines.push(
     '',
     `Household members: ${input.householdUrl}`,
     ...footer(
@@ -536,8 +562,8 @@ export function composeUpForGrabsEmail(
         : `${formatNumber(input.totalCount, 'es')} tareas de la próxima semana no tienen dueño`;
     const lines = [
       input.totalCount === 1
-        ? `Esta tarea de ${input.householdName ?? 'vuestro hogar'} toca la semana que viene y todavía no la tiene nadie:`
-        : `Estas tareas de ${input.householdName ?? 'vuestro hogar'} tocan la semana que viene y todavía no las tiene nadie:`,
+        ? `Esta tarea de ${input.householdName ?? 'tu hogar'} toca la semana que viene y todavía no la tiene nadie:`
+        : `Estas tareas de ${input.householdName ?? 'tu hogar'} tocan la semana que viene y todavía no las tiene nadie:`,
       '',
       ...listed,
     ];
@@ -547,11 +573,11 @@ export function composeUpForGrabsEmail(
     lines.push(
       '',
       input.totalCount === 1
-        ? 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: si te viene bien, cógela y el resto del hogar verá que ya tiene dueño.'
-        : 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: coge las que te vengan bien y el resto del hogar verá que ya tienen dueño.',
+        ? 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: si te viene bien, tómala y el resto del hogar verá que ya tiene a alguien.'
+        : 'Nada de esto va con retraso todavía, y por eso te escribimos ahora: toma las que te vengan bien y el resto del hogar verá que ya tienen a alguien.',
       'Si no te viene bien, no pasa nada: este correo va a todo el hogar, no solo a ti.',
       '',
-      `Coger una tarea: ${input.claimUrl}`,
+      `Tomar una tarea: ${input.claimUrl}`,
       ...footer(
         input.settingsUrl,
         'Recibes este correo una vez por semana cuando hay tareas próximas sin asignar en tu hogar.',
@@ -670,11 +696,11 @@ export function composeCoverageEmail(input: CoverageCopyInput, locale: EmailLoca
       subject,
       text: [
         who
-          ? `${who} estará fuera ${range} y tú figuras como la persona que cubre sus tareas en ${input.householdName ?? 'vuestro hogar'}.`
-          : `Alguien de ${input.householdName ?? 'vuestro hogar'} estará fuera ${range} y tú figuras como la persona que cubre sus tareas. No hemos podido leer su nombre; en la app aparece.`,
+          ? `${who} estará fuera ${range} y tú figuras como la persona que cubre sus tareas en ${input.householdName ?? 'tu hogar'}.`
+          : `Alguien de ${input.householdName ?? 'tu hogar'} estará fuera ${range} y tú figuras como la persona que cubre sus tareas. No hemos podido leer su nombre; en la app aparece.`,
         '',
         'Durante esas fechas, sus tareas te llegarán a ti en los recordatorios diarios.',
-        'No hace falta que hagas nada ahora: esto es solo para que no te pille por sorpresa.',
+        'No hace falta que hagas nada ahora: esto es solo para que no te tome por sorpresa.',
         '',
         ...listLines(),
         '',

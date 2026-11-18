@@ -89,6 +89,11 @@ import { DynamoDBItem } from '../models/types.js';
 
 export type CaretakerStatus = 'active' | 'revoked';
 
+/** Set only when a departure ended the seat, so the household's remaining admins
+ *  can be shown what happened. A seat an admin revoked by hand carries neither
+ *  this nor `revokedAt`: they already know. */
+export type CaretakerRevokedReason = 'creator_left';
+
 /**
  * Everything a caretaker may do, in full. Strictly narrower than `member`.
  * Adding an entry here without an ADR update is a review failure, not a
@@ -151,6 +156,8 @@ export interface Caretaker {
   /** End of the engagement window (ISO). Enforced on every public call. */
   expiresAt: string;
   status: CaretakerStatus;
+  revokedReason?: CaretakerRevokedReason;
+  revokedAt?: string;
 }
 
 /** A caretaker seat as shown to the household — never the token, and never
@@ -274,6 +281,8 @@ function itemToCaretaker(item: Record<string, unknown>): Caretaker {
     startsAt: item.startsAt as string,
     expiresAt: item.expiresAt as string,
     status: item.status as CaretakerStatus,
+    ...(item.revokedReason ? { revokedReason: item.revokedReason as CaretakerRevokedReason } : {}),
+    ...(item.revokedAt ? { revokedAt: item.revokedAt as string } : {}),
   };
 }
 
@@ -420,6 +429,43 @@ export async function listCaretakers(householdId: string): Promise<Caretaker[]> 
     exclusiveStartKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (exclusiveStartKey);
   return items.map(itemToCaretaker);
+}
+
+/**
+ * Revoke every currently-ACTIVE seat a given member created. Called when that
+ * member leaves or is removed: a seat opens the household's tasks and spaces,
+ * plus completion, photos and notes, for up to 180 days, and its URL was shown
+ * to the person who created it. Visits already recorded stay.
+ *
+ * A read failure PROPAGATES rather than being swallowed into 0 — "we could not
+ * look" must never be reported to the caller as "there was nothing to revoke"
+ * (ADR 0010), because the caller writes the number into an audit line.
+ */
+export async function revokeCaretakersCreatedBy(
+  householdId: string,
+  userId: string
+): Promise<number> {
+  const seats = (await listCaretakers(householdId)).filter(
+    (seat) => seat.createdBy === userId && seat.status === 'active'
+  );
+  for (const seat of seats) {
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: caretakerPk(seat.keyToken), SK: 'METADATA' },
+        UpdateExpression: 'SET #status = :revoked, revokedReason = :reason, revokedAt = :at',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':revoked': 'revoked',
+          ':reason': 'creator_left',
+          ':at': new Date().toISOString(),
+        },
+        // Guard against a row swept by TTL between the list read and this write.
+        ConditionExpression: 'attribute_exists(PK)',
+      })
+    );
+  }
+  return seats.length;
 }
 
 /**

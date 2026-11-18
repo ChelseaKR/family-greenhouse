@@ -1,11 +1,13 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HouseholdPage } from '@/features/household/HouseholdPage';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
+import { Toaster } from '@/components/Toaster';
 import { server } from '../../msw/server';
 
 const API = 'http://localhost:4000';
@@ -252,6 +254,115 @@ describe('HouseholdPage', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Invite link')).toHaveValue('http://localhost:3000/join/ABC')
     );
+    // An emailed invitation admits one person, and the line under it says so.
+    expect(screen.getByText('This link works for 7 days and for one person.')).toBeVisible();
+  });
+
+  it('says a generated link works for 7 days and for up to 5 people', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toHaveValue(
+      'http://localhost:3000/join/LINK'
+    );
+    expect(screen.getByText('This link works for 7 days and for up to 5 people.')).toBeVisible();
+    // The button that was pressed is gone. Focus goes to the link it made
+    // rather than to the top of the page, so the link is also read out.
+    expect(screen.getByLabelText('Invite link')).toHaveFocus();
+  });
+
+  it('turns off invite links: asks the server, clears the link on screen and says so', async () => {
+    becomeAdmin();
+    let revokeRequests = 0;
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      ),
+      http.delete(`${API}/households/hh-1/invites`, () => {
+        revokeRequests += 1;
+        return HttpResponse.json({ revokedAt: '2026-11-17T12:00:00.000Z' });
+      })
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toBeVisible();
+    // What it does is said before the button is pressed.
+    expect(screen.getByText(/stops every link and emailed invitation made so far/i)).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Turn off invite links' }));
+
+    expect(
+      await screen.findByText(
+        'Invite links are off. Links made before now no longer work. You can make a new one.'
+      )
+    ).toBeVisible();
+    expect(revokeRequests).toBe(1);
+    // The link that just stopped working is not left on screen as if usable.
+    expect(screen.queryByLabelText('Invite link')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Generate invite link/i })).toBeVisible();
+
+    // Making a new one clears the notice.
+    await user.click(screen.getByRole('button', { name: /Generate invite link/i }));
+    expect(await screen.findByLabelText('Invite link')).toBeVisible();
+    expect(screen.queryByText(/Invite links are off/)).not.toBeInTheDocument();
+  });
+
+  it('says so when invite links could not be turned off, and leaves the link on screen', async () => {
+    becomeAdmin();
+    server.use(
+      http.post(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json(
+          {
+            code: 'LINK',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            url: 'http://localhost:3000/join/LINK',
+          },
+          { status: 201 }
+        )
+      ),
+      http.delete(`${API}/households/hh-1/invites`, () =>
+        HttpResponse.json({ message: 'Admin access required' }, { status: 403 })
+      )
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Generate invite link/i }));
+    await screen.findByLabelText('Invite link');
+    await user.click(screen.getByRole('button', { name: 'Turn off invite links' }));
+
+    expect(await screen.findByText('Admin access required')).toBeVisible();
+    expect(screen.queryByText(/Invite links are off/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Invite link')).toBeVisible();
+  });
+
+  it('does not offer the control to a member who is not an admin', async () => {
+    renderPage();
+    await screen.findByText('The Kelly-Reifs');
+    expect(screen.queryByRole('button', { name: 'Turn off invite links' })).not.toBeInTheDocument();
   });
 
   it('never claims a send that did not happen, and still hands over the link', async () => {
@@ -361,6 +472,126 @@ describe('HouseholdPage', () => {
 
     expect(await screen.findByLabelText('City')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save location' })).toBeDisabled();
+  });
+
+  // Audit 2026-11-08, finding 11: neither mutation had an `onError`, so a
+  // refused or failed remove/role change did nothing at all on screen. The
+  // admin was left looking at an unchanged roster with no reason given.
+  describe('a member change that fails says so', () => {
+    function renderWithToasts() {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <HouseholdPage />
+            <Toaster />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    }
+    const notifications = () => screen.getByRole('region', { name: 'Notifications' });
+
+    beforeEach(() => {
+      useToastStore.setState({ toasts: [] });
+    });
+
+    it('shows the server’s reason when removing a member is refused', async () => {
+      becomeAdmin();
+      server.use(
+        http.delete(`${API}/households/hh-1/members/user-2`, () =>
+          HttpResponse.json(
+            { message: 'Promote another member to admin before removing the last admin' },
+            { status: 400 }
+          )
+        )
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Remove Bob' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+      expect(
+        await within(notifications()).findByText(
+          'Promote another member to admin before removing the last admin'
+        )
+      ).toBeInTheDocument();
+      // The confirmation is closed, so the message is not left behind it.
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
+      );
+      // Nothing was removed, and the page does not pretend otherwise: Bob is
+      // still on the roster, with his remove button.
+      expect(await screen.findByRole('button', { name: 'Remove Bob' })).toBeInTheDocument();
+    });
+
+    it('says the app could not be reached when removing a member gets no answer', async () => {
+      becomeAdmin();
+      server.use(http.delete(`${API}/households/hh-1/members/user-2`, () => HttpResponse.error()));
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Remove Bob' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove' }));
+
+      expect(
+        await within(notifications()).findByText(
+          "Can't reach Family Greenhouse. Check your connection and try again."
+        )
+      ).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Remove Bob' })).toBeInTheDocument();
+    });
+
+    it('names the role button with the words on it first, then whose role it is', async () => {
+      // It read "Make member" and was named "Demote Bob to member": someone
+      // using voice control who says what they see matched nothing (2.5.3).
+      becomeAdmin();
+      renderWithToasts();
+      const button = await screen.findByRole('button', { name: 'Make member, Bob' });
+      expect(button).toHaveTextContent(/^Make member/);
+      expect(button).not.toHaveAttribute('aria-label');
+    });
+
+    it('shows the server’s reason when a role change is refused', async () => {
+      becomeAdmin();
+      server.use(
+        http.put(`${API}/households/hh-1/members/user-2/role`, () =>
+          HttpResponse.json(
+            { message: 'Promote another member to admin before demoting the last admin' },
+            { status: 400 }
+          )
+        )
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Make member, Bob' }));
+
+      expect(
+        await within(notifications()).findByText(
+          'Promote another member to admin before demoting the last admin'
+        )
+      ).toBeInTheDocument();
+      // Still an admin: the button still offers the demotion.
+      expect(screen.getByRole('button', { name: 'Make member, Bob' })).toBeInTheDocument();
+    });
+
+    it('says the app could not be reached when a role change gets no answer', async () => {
+      becomeAdmin();
+      server.use(
+        http.put(`${API}/households/hh-1/members/user-2/role`, () => HttpResponse.error())
+      );
+      const user = userEvent.setup();
+      renderWithToasts();
+
+      await user.click(await screen.findByRole('button', { name: 'Make member, Bob' }));
+
+      expect(
+        await within(notifications()).findByText(
+          "Can't reach Family Greenhouse. Check your connection and try again."
+        )
+      ).toBeInTheDocument();
+    });
   });
 
   it('shows the household audit log to an admin', async () => {

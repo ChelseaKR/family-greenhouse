@@ -76,12 +76,17 @@ describe('CareReportCard', () => {
     expect(screen.queryByText('Longest streak')).not.toBeInTheDocument();
   });
 
-  it('says in the card description that older care is not counted', () => {
+  it('says in the card description which figures are windowed and that last care is not', () => {
     render(<CareReportCard plant={plantWith([completion(0)])} />);
 
-    expect(
-      screen.getByText(new RegExp(`last ${RECENT_COMPLETIONS_LIMIT} logged completions`, 'i'))
-    ).toBeInTheDocument();
+    const description = screen.getByText(
+      new RegExp(`last ${RECENT_COMPLETIONS_LIMIT} logged completions`, 'i')
+    );
+    expect(description).toHaveTextContent(/Counts and streaks cover/);
+    expect(description).toHaveTextContent(/Last care covers all of its history/);
+    // Last care reads every task's own lastCompleted, so "older care is not
+    // counted" would be false for it.
+    expect(description).not.toHaveTextContent(/Older care is not counted/i);
   });
 
   it('cannot report more completions than the endpoint returns', () => {

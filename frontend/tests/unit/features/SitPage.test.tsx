@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { SitPage } from '@/features/sitter/SitPage';
+import { gaPageLocation, gaReferrer } from '@/services/googleAnalytics';
 import {
   sitterService,
   SitterLinkInactiveError,
@@ -51,6 +52,53 @@ const view: SitterView = {
   expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
   tasks: [waterTask],
 };
+
+const SITTER_TOKEN = 'b'.repeat(64);
+/** Every place in a link's address a sitter token could hide. */
+const carriesToken = (href: string) => decodeURIComponent(href).includes(SITTER_TOKEN);
+
+describe('SitPage footer link', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  async function footerHref(): Promise<string> {
+    getView.mockResolvedValue(view);
+    renderPage(SITTER_TOKEN);
+    const link = await screen.findByRole('link', { name: 'Family Greenhouse' });
+    return link.getAttribute('href') ?? '';
+  }
+
+  it('is tagged with a fixed source and medium, so the loop can be read in GA', async () => {
+    const href = await footerHref();
+    const url = new URL(href, 'https://familygreenhouse.net');
+    expect(url.pathname).toBe('/');
+    expect(Array.from(url.searchParams.keys())).toEqual(['utm_source', 'utm_medium']);
+    expect(url.searchParams.get('utm_source')).toBe('sitter_link');
+    expect(url.searchParams.get('utm_medium')).toBe('referral');
+  });
+
+  it('never carries the token', async () => {
+    expect(carriesToken(await footerHref())).toBe(false);
+  });
+
+  it('GA receives the tag unchanged on the home page, and no token from the sitter page', async () => {
+    const href = await footerHref();
+    const url = new URL(href, 'https://familygreenhouse.net');
+    expect(gaPageLocation(url.origin, url.pathname, url.search)).toBe(url.href);
+    expect(gaPageLocation(url.origin, `/sit/${SITTER_TOKEN}`, '')).toBe(`${url.origin}/sit/:token`);
+    expect(gaPageLocation(url.origin, `/sit/${SITTER_TOKEN}/brief`, '')).toBe(
+      `${url.origin}/sit/:token/brief`
+    );
+    expect(gaReferrer(`${url.origin}/sit/${SITTER_TOKEN}`, url.origin)).toBe(
+      `${url.origin}/sit/:token`
+    );
+  });
+
+  it('negative control: the token check catches a token in the path, query or encoded', () => {
+    expect(carriesToken(`/sit/${SITTER_TOKEN}`)).toBe(true);
+    expect(carriesToken(`/?utm_content=${SITTER_TOKEN}`)).toBe(true);
+    expect(carriesToken(`/?next=${encodeURIComponent(`/sit/${SITTER_TOKEN}`)}`)).toBe(true);
+  });
+});
 
 describe('SitPage handoff-brief link', () => {
   beforeEach(() => vi.clearAllMocks());

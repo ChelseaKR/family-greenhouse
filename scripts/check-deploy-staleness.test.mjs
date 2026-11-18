@@ -16,7 +16,7 @@
  * The sharpest cases are `test_the_rollback_signature`. `cd-production.yml` restores
  * the previous frontend snapshot when the post-deploy smoke test fails, and neither
  * its `smoke-tests` job nor its `rollback` job declares an `environment:`, so the
- * three `production` deployment rows still say `success` at the tagged commit. A
+ * `production` deployment row still says `success` at the tagged commit. A
  * sentinel built on the deployment record alone would call a rolled-back release
  * live. These tests are what keep the frontend fingerprint authoritative.
  */
@@ -148,6 +148,37 @@ test('a deployment that never succeeded is a refusal', () => {
     () => publishedDeployments([deployment()], { 6422679341: [{ state: 'failure' }] }),
     (error) => error instanceof StalenessUnknown && /successful publish/.test(error.message)
   );
+});
+
+test('a published row is dated from its success, not from the wait for approval', () => {
+  // v0.49.0's Terraform row, measured: opened 16:57, succeeded 21:21. A release now
+  // has only this row, so `created_at` would date the build by how long the reviewer
+  // took. The wait here is two days so the wrong answer changes the date.
+  const [row] = publishedDeployments([deployment({ id: 3, created_at: '2026-11-08T16:57:36Z' })], {
+    3: [
+      { state: 'success', created_at: '2026-11-10T21:21:13Z' },
+      { state: 'in_progress', created_at: '2026-11-10T21:19:52Z' },
+      { state: 'waiting', created_at: '2026-11-08T16:57:36Z' },
+    ],
+  });
+  assert.equal(row.createdAt.toISOString(), '2026-11-10T21:21:13.000Z');
+});
+
+test('a superseded row keeps the date of its success, not of its inactivation', () => {
+  const [row] = publishedDeployments([deployment({ id: 4, created_at: '2026-11-01T00:00:00Z' })], {
+    4: [
+      { state: 'inactive', created_at: '2026-11-08T21:21:13Z' },
+      { state: 'success', created_at: '2026-11-02T00:00:00Z' },
+    ],
+  });
+  assert.equal(row.createdAt.toISOString(), '2026-11-02T00:00:00.000Z');
+});
+
+test('a success with no time falls back to the date on the row', () => {
+  const [row] = publishedDeployments([deployment({ created_at: '2026-09-13T14:34:43Z' })], {
+    6422679341: [{ state: 'success' }],
+  });
+  assert.equal(row.createdAt.toISOString(), '2026-09-13T14:34:43.000Z');
 });
 
 test('a failed newer deployment does not hide the successful older one', () => {
@@ -426,9 +457,9 @@ test('the threshold boundary is exclusive', () => {
 // --- the rollback, which the deployment record cannot see --------------------
 
 test('the rollback signature: the record says shipped, the frontend says otherwise', () => {
-  // Measured on 2026-09-13: `smoke-tests` and `rollback` declare no
-  // `environment:`, so all three production rows still report success at the
-  // tagged commit after an auto-rollback has put the previous bytes back. Trusting
+  // Measured on 2026-09-13, when a release had three production rows: `smoke-tests`
+  // and `rollback` declare no `environment:`, so the rows still report success at
+  // the tagged commit after an auto-rollback has put the previous bytes back. Trusting
   // the record here is exactly the direction of error this file exists to prevent.
   const result = verdict({
     frontendSha: OTHER,
@@ -465,6 +496,96 @@ test('a half-applied release is reported even when nothing is waiting', () => {
   assert.equal(result.recordDisagrees, true);
   assert.equal(result.apiDisagrees, false);
   assert.equal(result.overdue, true);
+});
+
+// --- one approval means one row, and that row turns green before anything ships ---
+
+/**
+ * The record as it stands after a release, in the one-row shape: `Terraform Apply`
+ * owns the only row, and it says `success` as soon as Terraform finishes. Runs the
+ * whole `measure` path, so `published` and `evaluate` both have to get this right.
+ */
+function afterRelease({ newRowStatuses, servedFrom, healthFrom }) {
+  const root = clone();
+  const previous = commit(root, 'frontend/src/App.tsx', { daysAgo: 5 });
+  const released = commit(root, 'frontend/src/Card.tsx', { daysAgo: 1 });
+  const shas = { previous, released };
+  return {
+    released,
+    previous,
+    result: measure({
+      deployments: [
+        { id: 2, sha: released, ref: 'v0.50.0', created_at: '2026-09-12T10:00:00Z' },
+        { id: 1, sha: previous, ref: 'v0.49.0', created_at: '2026-09-08T10:00:00Z' },
+      ],
+      statusesById: {
+        2: newRowStatuses,
+        1: [{ state: 'inactive' }, { state: 'success' }],
+      },
+      serviceWorker: serviceWorker(shas[servedFrom]),
+      health: { status: 'ok', version: shas[healthFrom] },
+      head: 'HEAD',
+      now: NOW,
+      repoRoot: root,
+    }),
+  };
+}
+
+test('one green row is not reported as live when the backend or frontend deploy failed', () => {
+  // Either failure leaves the same record: Terraform's row says `success`, the frontend
+  // bytes never changed, and /health names the new release because Terraform stamps
+  // GIT_SHA whether or not the code that goes with it shipped.
+  const { result, previous, released } = afterRelease({
+    newRowStatuses: [{ state: 'success' }, { state: 'in_progress' }, { state: 'waiting' }],
+    servedFrom: 'previous',
+    healthFrom: 'released',
+  });
+  assert.equal(result.frontendSha, previous, 'the live commit is the bytes, not the green row');
+  assert.equal(result.deployedRef, 'v0.49.0', 'dated from the release visitors really have');
+  assert.equal(result.recordSha, released);
+  assert.equal(result.recordDisagrees, true);
+  assert.equal(result.apiDisagrees, true);
+  assert.equal(result.overdue, true, 'reported at once, not after the fourteen-day threshold');
+  assert.match(report(result), /ROLLED BACK OR HALF-APPLIED/);
+  assert.match(report(result), /The release the record claims is not live/);
+  assert.match(report(result), /SPLIT STACK/);
+  assert.doesNotMatch(report(result), /Up to date/);
+});
+
+test('a whole release in the one-row shape reads as live, with nothing to report', () => {
+  const { result, released } = afterRelease({
+    newRowStatuses: [{ state: 'success' }, { state: 'in_progress' }, { state: 'waiting' }],
+    servedFrom: 'released',
+    healthFrom: 'released',
+  });
+  assert.equal(result.frontendSha, released);
+  assert.equal(result.deployedRef, 'v0.50.0');
+  assert.equal(result.recordDisagrees, false);
+  assert.equal(result.apiDisagrees, false);
+  assert.equal(result.overdue, false);
+});
+
+test('a rejected approval leaves no published row, so the previous release stays the record', () => {
+  // Nothing ran, nothing disagrees, and the commit is simply still waiting.
+  const { result, previous } = afterRelease({
+    newRowStatuses: [{ state: 'failure' }, { state: 'waiting' }],
+    servedFrom: 'previous',
+    healthFrom: 'previous',
+  });
+  assert.equal(result.frontendSha, previous);
+  assert.equal(result.recordSha, previous);
+  assert.equal(result.recordDisagrees, false);
+  assert.equal(result.visitorCommits, 1);
+});
+
+test('a row still waiting for its reviewer has published nothing', () => {
+  const { result, previous } = afterRelease({
+    newRowStatuses: [{ state: 'waiting' }],
+    servedFrom: 'previous',
+    healthFrom: 'previous',
+  });
+  assert.equal(result.recordSha, previous);
+  assert.equal(result.recordDisagrees, false);
 });
 
 test('bytes from a commit no deployment names is a refusal', () => {

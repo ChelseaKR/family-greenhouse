@@ -88,11 +88,42 @@ describe('content-page sign-up links are counted', () => {
     const { href, sent } = await clickOn('/care/monstera', () =>
       screen.getByRole('link', { name: /try the app/i })
     );
-    // The header link itself is unchanged.
-    expect(href).toBe('/register');
+    // On a care guide the header link carries the plant, like the page's own.
+    expect(href).toBe('/register?plant=monstera');
     expect(sent).toEqual([
       { name: 'landing_cta_click', source: 'care_guide', plant: 'monstera', placement: 'header' },
     ]);
+  });
+
+  it('carries the plant in the header link on a pet-safety page too', async () => {
+    const { href, sent } = await clickOn('/pet-safe/peace-lily', () =>
+      screen.getByRole('link', { name: /try the app/i })
+    );
+    expect(href).toBe('/register?plant=peace-lily');
+    expect(sent).toEqual([
+      { name: 'landing_cta_click', source: 'pet_safe', plant: 'peace-lily', placement: 'header' },
+    ]);
+  });
+
+  it('keeps the header link plain where there is no plant the first run can offer (negative control)', async () => {
+    // A real guide outside the first run's list: counted with its plant, as
+    // before, but the link does not promise a plant the first run can't offer.
+    const ivy = await clickOn('/care/english-ivy', () =>
+      screen.getByRole('link', { name: /try the app/i })
+    );
+    expect(ivy.href).toBe('/register');
+    expect(ivy.sent).toEqual([
+      {
+        name: 'landing_cta_click',
+        source: 'care_guide',
+        plant: 'english-ivy',
+        placement: 'header',
+      },
+    ]);
+    const blog = await clickOn(`/blog/${POSTS[0]!.slug}`, () =>
+      screen.getByRole('link', { name: /try the app/i })
+    );
+    expect(blog.href).toBe('/register');
   });
 
   it('counts the pet-safety page sign-up link, carrying the plant', async () => {

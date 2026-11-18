@@ -45,12 +45,14 @@ honest statement of coverage:
   an individual article is not.
 - **`/confirm-email` and `/reset-password`** need a live code/token in the URL
   and are not scanned.
-- **Five modals are opened by no test at all** and so are never in the DOM for
-  axe to see: `CommandPalette` (Cmd/Ctrl+K, mounted on every authenticated
-  page), `CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, and the
+- **Four modals are opened by no test at all** and so are never in the DOM for
+  axe to see: `CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, and the
   mobile sidebar drawer in `Layout.tsx` — the only navigation on mobile.
   `responsive-ux.spec.ts` does open and scan eight other dialogs at 320px, so
-  modal coverage is better than route coverage; these five are the remainder.
+  modal coverage is better than route coverage; these four are the remainder.
+  `CommandPalette` (Cmd/Ctrl+K, mounted on every authenticated page) was the
+  fifth until 2026-11: `a11y-authenticated.spec.ts` now opens it with results
+  and a highlighted row, which is where its one contrast failure was.
 
 A modal that is never opened is never scanned, so that last bullet matters more
 than the route gap does.
@@ -80,7 +82,7 @@ than the route gap does.
 - **1.4.4 Resize Text (AA)** — Layout reflows correctly at 200% zoom. ✅
 - **1.4.5 Images of Text (AA)** — All textual content is real text. ✅
 - **1.4.10 Reflow (AA)** — Content reflows at 320 CSS px without 2D scrolling. ✅
-- **1.4.11 Non-text Contrast (AA)** — Form input borders ≥3:1 against background. Focus rings 3.5:1. ✅
+- **1.4.11 Non-text Contrast (AA)** — The shared `.input` border is `primary-500`, 3.4:1 on white and 3.2:1 on paper (it was `primary-200`, 1.5:1, until 2026-11; `tests/unit/styles/inputBorderContrast.test.ts` computes it from the tokens). Focus rings 3.4:1. In forced colors the selected toggle, filter chip, settings tab and sidebar page take the system Highlight colours (`tests/unit/styles/forcedColorsSelectedState.test.ts`). Not yet 3:1: the handful of fields that set their own border (help search, the coverage and email-language selects, unchecked checkboxes), and the selected-state tint of toggles and chips outside forced colors. ⚠️
 - **1.4.12 Text Spacing (AA)** — Tailwind defaults give comfortable line-height (1.5). No pixel-locked text. ✅
 - **1.4.13 Content on Hover or Focus (AA)** — Tooltips on icon-only buttons use `aria-label`, not hover state. ✅
 
@@ -103,11 +105,11 @@ than the route gap does.
 
 - **2.4.1 Bypass Blocks (A)** — Skip-link is the first focusable element on every page; target wrapper exists on both authenticated and public routes. ✅
 - **2.4.2 Page Titled (A)** — Every route sets a specific title through `useDocumentTitle()` or `useMetaTags()`; the hook coverage includes lazy public and authenticated pages. ✅
-- **2.4.3 Focus Order (A)** — Tab order matches visual order. Mobile sidebar dialog traps focus while open (HeadlessUI). ✅
+- **2.4.3 Focus Order (A)** — Tab order matches visual order. Mobile sidebar dialog traps focus while open (HeadlessUI). `Button` is `aria-disabled`, not `disabled`, while loading, so a pressed button keeps focus through its request; a control that replaces itself (the vacation form, a new invite link) hands focus to what replaced it. ✅
 - **2.4.4 Link Purpose (A)** — Link text describes destination. ✅
 - **2.4.5 Multiple Ways (AA)** — Sidebar nav + breadcrumb anchors on detail pages. ✅
 - **2.4.6 Headings and Labels (AA)** — Headings descriptive ("Add a new plant"). Labels match data ("Plant name"). ✅
-- **2.4.7 Focus Visible (AA)** — `:focus-visible` shows 2px primary-500 ring with offset. ✅
+- **2.4.7 Focus Visible (AA)** — `:focus-visible` shows 2px primary-500 ring with offset. Native checkboxes and radios also get an outline, because WebKit does not paint the ring (a box-shadow) on a control it draws itself (`tests/unit/styles/checkboxFocusOutline.test.ts`). The skip link sits above the sidebar and the sticky header when focused. ✅
 - **2.4.11 Focus Not Obscured (Minimum) (AA)** — _WCAG 2.2 new_. Focused elements aren't obscured by sticky chrome. The mobile sticky header is a fixed height and never overlaps interactive content. ✅
 
 ### 2.5 — Input Modalities
@@ -122,7 +124,7 @@ than the route gap does.
 ### 3.1 — Readable
 
 - **3.1.1 Language of Page (A)** — `<html lang>` set per user's chosen language. ✅
-- **3.1.2 Language of Parts (AA)** — Spanish content lives in its own translation file. ✅
+- **3.1.2 Language of Parts (AA)** — Spanish content lives in its own translation file. The pages that are English whatever the visitor chose (help, blog, changelog) mark their content `lang="en"` (`tests/unit/a11y/englishOnlyPages.a11y.test.tsx`); forgot and reset password did too until they were translated. The hardcoded-string ratchet is at zero, so the accessible names it can see are in the catalog. Still unmarked: the English it cannot see (see docs/i18n.md, "What is still English") and the care pages, which mix the two. ⚠️
 
 ### 3.2 — Predictable
 
@@ -145,17 +147,17 @@ than the route gap does.
 
 - **4.1.1 Parsing** — Removed in WCAG 2.2. ✅
 - **4.1.2 Name, Role, Value (A)** — ARIA used correctly throughout. Settings tabs have `aria-current` on active. ✅
-- **4.1.3 Status Messages (AA)** — Alert components have `role="alert"`. ✅
+- **4.1.3 Status Messages (AA)** — Alert components have `role="alert"`. A route change is announced by `RouteAnnouncer` (the new page's title, in a polite status region at the app root); focus stays where it was. The chat conversation is a `role="log"`, with the streaming text hidden from assistive technology so a reply is read once when it lands. Photo upload says when it starts and finishes. ✅
 
 ## Known gaps
 
-| Criterion               | Gap                                                                                                                                                                           | Status |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1.4.6 Contrast (AAA)    | Token discipline, not an automated gate: the axe suite enforces AA only, so a regression to a lower-contrast AAA token would not fail CI.                                     | Open   |
-| 2.5.5 Target Size (AAA) | The 44×44 floor is maintained by convention and review; axe does not mechanically check target size.                                                                          | Open   |
-| 4.1.2 Name, Role, Value | Five modals (`CommandPalette`, `CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, the mobile sidebar drawer) are opened by no test, so axe never sees them in the DOM. | Open   |
-| Coverage (all criteria) | Token routes are scanned only in their invalid-token state; the populated `/tag/:token`, `/kiosk/:token` and `/sit/:token/brief` pages are not.                               | Open   |
-| Coverage (all criteria) | Per-item content routes (`/blog/:slug`, `/care/:slug`, `/help/:topicId`), `/confirm-email` and `/reset-password` are not scanned.                                             | Open   |
+| Criterion               | Gap                                                                                                                                                         | Status |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1.4.6 Contrast (AAA)    | Token discipline, not an automated gate: the axe suite enforces AA only, so a regression to a lower-contrast AAA token would not fail CI.                   | Open   |
+| 2.5.5 Target Size (AAA) | The 44×44 floor is maintained by convention and review; axe does not mechanically check target size.                                                        | Open   |
+| 4.1.2 Name, Role, Value | Four modals (`CareRuleDialog`, `DoubleCarePrompt`, `MovePlantsDialog`, the mobile sidebar drawer) are opened by no test, so axe never sees them in the DOM. | Open   |
+| Coverage (all criteria) | Token routes are scanned only in their invalid-token state; the populated `/tag/:token`, `/kiosk/:token` and `/sit/:token/brief` pages are not.             | Open   |
+| Coverage (all criteria) | Per-item content routes (`/blog/:slug`, `/care/:slug`, `/help/:topicId`), `/confirm-email` and `/reset-password` are not scanned.                           | Open   |
 
 Each row above is stated in "What the axe sweep does not reach" and in the
 target-size and contrast notes earlier in this document. The table said "(none

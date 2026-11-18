@@ -1,6 +1,6 @@
 {
   "name": "family-greenhouse",
-  "version": "0.47.0",
+  "version": "0.52.0",
   "license": "Elastic-2.0",
   "private": true,
   "description": "A shared plant-care journal for the whole household — per-plant schedules, reminders that find the right person in the browser or by email, and a care log everyone can see. React + TypeScript on AWS Lambda + DynamoDB + Cognito.",
@@ -86,7 +86,7 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.12.0",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-i18next": "^6.1.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
@@ -98,7 +98,7 @@
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.72.0"
   },
   "lint-staged": {
     "backend/src/**/*.ts": [

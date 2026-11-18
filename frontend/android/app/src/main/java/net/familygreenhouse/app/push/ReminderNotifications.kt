@@ -40,14 +40,29 @@ object ReminderNotifications {
 
     private fun language(): String = Locale.getDefault().language
 
-    /** Creates the channel once; the system keeps the person's choices for it. */
+    /**
+     * Creates the channel, or renames it to the device's current language.
+     * MainActivity calls this at every launch, so the channel is in the
+     * system's notification settings before the first reminder arrives, and a
+     * language change renames it the next time the app opens. Re-registering
+     * the existing channel object changes only its name: the system keeps the
+     * person's choices (importance, sound, badge) for it.
+     */
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        val name = ReminderMessage.channelName(language())
+        val existing = manager.getNotificationChannel(CHANNEL_ID)
+        if (existing != null) {
+            if (existing.name?.toString() != name) {
+                existing.name = name
+                manager.createNotificationChannel(existing)
+            }
+            return
+        }
         val channel = NotificationChannel(
             CHANNEL_ID,
-            ReminderMessage.channelName(language()),
+            name,
             NotificationManager.IMPORTANCE_HIGH,
         ).apply { setShowBadge(true) }
         manager.createNotificationChannel(channel)

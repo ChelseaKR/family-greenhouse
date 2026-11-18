@@ -24,6 +24,7 @@ import {
 } from '@/services/upgradeRequestService';
 import { formatCurrency, formatDate } from '@/i18n/format';
 import { formatNameList } from '@/utils/nameList';
+import { CHANGE_PLAN_ROUTE } from '@/features/billing/changePlanLink';
 
 /**
  * Everything the ask needs, shared by the card and the inline button. Reads
@@ -180,6 +181,9 @@ interface LockedFeatureProps {
   /** One or two sentences on what the feature does — already translated. */
   children?: ReactNode;
   className?: string;
+  /** `h1` where the locked card is the whole page (chat on Seedling), which
+   *  otherwise has no level-one heading. Looks the same. */
+  headingAs?: 'h1' | 'h2';
 }
 
 /**
@@ -192,7 +196,13 @@ interface LockedFeatureProps {
  * backend/src/models/upgradeFeatures.ts and `locked.features` in both
  * catalogs, then wrap the gated UI in `<LockedFeature feature="…">`.
  */
-export function LockedFeature({ feature, title, children, className }: LockedFeatureProps) {
+export function LockedFeature({
+  feature,
+  title,
+  children,
+  className,
+  headingAs: Heading = 'h2',
+}: LockedFeatureProps) {
   const { t } = useTranslation();
   const ask = useUpgradeAsk(feature);
   const heading = title ?? t(`locked.features.${feature}`);
@@ -207,13 +217,24 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
   // Apple's purchase sheet is.
   const appStoreInApp = native && appStorePurchasesAvailable();
 
+  // Both prices when the plan sells yearly, the yearly one first: the admin's
+  // "Change plan" button opens the plan grid on its Yearly tab (ADR 0042), so
+  // a card naming only the monthly price opened onto a different number. A
+  // tier with no yearly price (Greenhouse) keeps the monthly sentence.
+  const annualPrice = ask.targetPlan?.annualPrice;
   const includedWith =
     !native && ask.targetPlan
       ? typeof ask.targetPlan.monthlyPrice === 'number'
-        ? t('locked.includedWithPrice', {
-            plan: ask.targetPlan.name,
-            price: formatCurrency(ask.targetPlan.monthlyPrice),
-          })
+        ? typeof annualPrice === 'number' && annualPrice > 0
+          ? t('locked.includedWithPrices', {
+              plan: ask.targetPlan.name,
+              annualPrice: formatCurrency(annualPrice),
+              price: formatCurrency(ask.targetPlan.monthlyPrice),
+            })
+          : t('locked.includedWithPrice', {
+              plan: ask.targetPlan.name,
+              price: formatCurrency(ask.targetPlan.monthlyPrice),
+            })
         : t('locked.includedWith', { plan: ask.targetPlan.name })
       : appStoreInApp && ask.targetPlan
         ? t('locked.includedWith', { plan: ask.targetPlan.name })
@@ -229,7 +250,7 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
           <LockClosedIcon className="h-5 w-5 text-primary-800" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-lg text-ink">{heading}</h2>
+          <Heading className="font-serif text-lg text-ink">{heading}</Heading>
           {includedWith && (
             <p className="mt-1 text-sm font-medium text-primary-900" data-testid="locked-included">
               {includedWith}
@@ -249,7 +270,7 @@ export function LockedFeature({ feature, title, children, className }: LockedFea
               <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
             ) : ask.role === 'admin' ? (
               <div className="space-y-2">
-                <Link to="/settings/billing" className={buttonStyles({})}>
+                <Link to={CHANGE_PLAN_ROUTE} className={buttonStyles({})}>
                   {t('locked.adminChangePlan')}
                 </Link>
                 <p className="text-xs text-gray-600">{t('locked.adminHint')}</p>

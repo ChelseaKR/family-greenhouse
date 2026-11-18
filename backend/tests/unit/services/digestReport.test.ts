@@ -1002,7 +1002,7 @@ describe('composeDigestEmail', () => {
     expect(html).toContain('<html lang="es"');
     expect(text).toContain('Empecemos por lo bueno: 4 de tus plantas van al día.');
     expect(text).toContain('Riego · 6 días de retraso');
-    expect(text).toContain('Todavía nadie la ha cogido.');
+    expect(text).toContain('Todavía nadie la ha tomado.');
   });
 
   it('writes the drift reading in Spanish, singular and plural', () => {

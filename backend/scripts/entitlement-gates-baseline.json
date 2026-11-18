@@ -45,6 +45,10 @@
       "reason": "CONTINUING, dev server. Mirrors handlers/tasks/sitterPhotos.ts::awayKitEnabledFor above. Both callers are the anonymous sitter photo routes (GET and POST /sitter/:token/photos), reached only after getActiveSitterLink validated the link; the per-link photo cap is enforced separately. The away RECAP deliberately does NOT call this — it is read by a signed-in member of the buying household and resolves through `entitledPlan`, exactly as handlers/households/awayRecap.ts does.",
       "arg": "subscriptionOf(householdId)"
     },
+    "models/identifyTopUp.ts::identifyUpgradeTargetName::getPlan": {
+      "arg": "target",
+      "reason": "Not entitlement — an upsell target, same shape as models/upgradeFeatures.ts's two getPlan entries below. `target` comes from PLAN_ORDER, never a household's row, and only its display name is read, to word the identification refusal (ADR 0042)."
+    },
     "models/upgradeFeatures.ts::composeUpgradeRequestEmail::getPlan": {
       "reason": "Not entitlement. Names the TARGET tier in the email a member sends their admin (`input.targetPlanId`, already resolved by resolveTargetPlan). Copy, not a grant.",
       "arg": "input.targetPlanId"

@@ -29,6 +29,15 @@ vi.mock('@/services/taskService', async () => {
   };
 });
 
+// The App Store question is answered by the build and the iOS bridge; the
+// deletion note's tests set it directly.
+vi.mock('@/services/appStoreAvailability', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appStoreAvailability')>(
+    '@/services/appStoreAvailability'
+  );
+  return { ...actual, appStorePurchasesAvailable: vi.fn(() => false) };
+});
+
 // Stub the actual DOM download side-effect (Blob/anchor-click/URL APIs);
 // we only care about what content was handed to it.
 vi.mock('@/utils/csv', async () => {
@@ -99,6 +108,27 @@ describe('AccountSettings — CSV export', () => {
     expect(plantsCsvCall?.[1]).toContain('Fiddle Leaf Fig');
   });
 
+  it('stamps the export with the local calendar day, not the UTC one', async () => {
+    const { plantService } = await import('@/services/plantService');
+    const { downloadCsv } = await import('@/utils/csv');
+    vi.mocked(plantService.getPlants).mockResolvedValueOnce([]);
+    // 21:30 on Sep 3 in New York (this suite's zone) is already Sep 4 in UTC.
+    vi.useFakeTimers({ now: new Date('2026-09-04T01:30:00.000Z'), toFake: ['Date'] });
+    try {
+      renderSettings();
+      await userEvent.click(screen.getByRole('button', { name: /download csv/i }));
+      await waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const filenames = vi.mocked(downloadCsv).mock.calls.map(([filename]) => filename);
+    expect(filenames).toEqual([
+      'family-greenhouse-plants-2026-09-03.csv',
+      'family-greenhouse-tasks-2026-09-03.csv',
+    ]);
+  });
+
   it('keeps deletion available before household setup and hides household-only exports', () => {
     useAuthStore.setState({
       user: {
@@ -112,6 +142,8 @@ describe('AccountSettings — CSV export', () => {
     renderSettings();
 
     expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+    // The person's own name: identified so it can be filled in (WCAG 1.3.5).
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute('autocomplete', 'name');
     expect(screen.getByRole('button', { name: 'Download full data (JSON)' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument();
     expect(screen.queryByText('Calendar feed')).not.toBeInTheDocument();
@@ -297,5 +329,39 @@ describe('AccountSettings — calendar feed link', () => {
     expect(
       screen.queryByRole('button', { name: 'Generate calendar link' })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('AccountSettings — deletion and App Store subscriptions', () => {
+  beforeEach(() => {
+    useAuthStore.setState({
+      user: {
+        id: 'u-1',
+        email: 'a@b.com',
+        name: 'Alice',
+        householdId: null,
+        householdRole: null,
+      },
+    } as never);
+  });
+
+  it('tells the person in the iPhone app that deletion does not cancel an App Store subscription', async () => {
+    const { appStorePurchasesAvailable } = await import('@/services/appStoreAvailability');
+    vi.mocked(appStorePurchasesAvailable).mockReturnValue(true);
+    renderSettings();
+
+    expect(screen.getByTestId('delete-app-store-note')).toHaveTextContent(
+      'Deleting your account does not cancel an App Store subscription.'
+    );
+    expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+  });
+
+  it('says nothing about the App Store where it sells nothing (website, Android)', async () => {
+    const { appStorePurchasesAvailable } = await import('@/services/appStoreAvailability');
+    vi.mocked(appStorePurchasesAvailable).mockReturnValue(false);
+    renderSettings();
+
+    expect(screen.queryByTestId('delete-app-store-note')).not.toBeInTheDocument();
+    expect(screen.queryByText(/App Store/)).not.toBeInTheDocument();
   });
 });

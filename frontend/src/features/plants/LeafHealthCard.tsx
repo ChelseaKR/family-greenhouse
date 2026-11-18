@@ -11,6 +11,7 @@ import { Button } from '@/components/Button';
 import { Alert } from '@/components/Alert';
 import { getErrorMessage } from '@/services/api';
 import { prepareImageForUpload } from '@/utils/image';
+import { useThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 
 interface LeafHealthCardProps {
   plantId: string;
@@ -125,6 +126,9 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
   const checkMutation = useMutation({
     mutationFn: (imageBase64: string) => plantService.checkLeafHealth(plantId, imageBase64),
   });
+  // In the apps, the photo goes to Bedrock only after a yes on this device
+  // (Guideline 5.1.2(i)).
+  const bedrockConsent = useThirdPartyConsent('leafHealth');
 
   const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -250,7 +254,7 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
                         {preview && (
                           <Button
                             type="button"
-                            onClick={() => checkMutation.mutate(preview)}
+                            onClick={() => bedrockConsent.run(() => checkMutation.mutate(preview))}
                             isLoading={checkMutation.isPending}
                             leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
                           >
@@ -266,6 +270,7 @@ export function LeafHealthCard({ plantId, isOpen, onClose }: LeafHealthCardProps
                         <Alert variant="error">{getErrorMessage(checkMutation.error)}</Alert>
                       )}
                       {checkMutation.data && <LeafHealthResults result={checkMutation.data} />}
+                      {bedrockConsent.dialog}
                     </div>
                   </div>
                 </div>

@@ -12,6 +12,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { getErrorMessage } from '@/services/api';
 import { printPage } from '@/services/nativePrint';
 import { formatDate, formatTime } from '@/i18n/format';
+import { toEndOfDayIso, toStartOfDayIso } from '@/features/household/localDates';
 
 /**
  * The proof-of-visit report: the artefact a household hands to whoever is
@@ -36,6 +37,25 @@ function todayValue(offsetDays = 0): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
+const DATE_INPUT = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A picked calendar day → the instant its local day starts (or ends).
+ *
+ * The server reads a bare `YYYY-MM-DD` as a UTC day, so sending the input's
+ * value as-is asked for the wrong window everywhere but UTC: in New York the
+ * last five hours of the "to" day were left out (an evening visit was missing
+ * from the report), and the heading — which formats the instants the server
+ * echoes back in local time — named the day before the one picked as "from".
+ * Sending local-day instants makes the window and the heading both the days
+ * on screen. An empty or partial field sends nothing, which leaves that end to
+ * the server's default rather than throwing on an invalid date.
+ */
+function localDayBound(value: string, end: boolean): string | undefined {
+  if (!DATE_INPUT.test(value)) return undefined;
+  return end ? toEndOfDayIso(value) : toStartOfDayIso(value);
+}
+
 export function CaretakerReportPage() {
   const { t } = useTranslation();
   const { householdId } = useActiveHousehold();
@@ -45,7 +65,12 @@ export function CaretakerReportPage() {
 
   const reportQuery = useQuery({
     queryKey: ['caretaker-report', householdId, range.from, range.to],
-    queryFn: () => caretakerSeatsService.getReport(householdId!, range.from, range.to),
+    queryFn: () =>
+      caretakerSeatsService.getReport(
+        householdId!,
+        localDayBound(range.from, false),
+        localDayBound(range.to, true)
+      ),
     enabled: Boolean(householdId),
   });
   const { data: report, isLoading, isError, error } = reportQuery;

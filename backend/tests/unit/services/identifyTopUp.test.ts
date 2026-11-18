@@ -187,13 +187,32 @@ describe('createIdentifyTopUpCheckoutSession', () => {
     });
   });
 
-  it('enables automatic tax only when configured', async () => {
+  it('enables automatic tax only when configured, on a product carrying the SaaS tax code', async () => {
     process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    pricesRetrieve.mockResolvedValueOnce({
+      ...CATALOG_TOP_UP_PRICE,
+      product: { id: 'prod_pack', tax_code: 'txcd_10103000' },
+    });
     vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
     const { createIdentifyTopUpCheckoutSession } =
       await import('../../../src/services/identifyTopUp.js');
     await createIdentifyTopUpCheckoutSession(ARGS);
     expect(sessionsCreate.mock.calls[0][0].automatic_tax).toEqual({ enabled: true });
+  });
+
+  it('with automatic tax on, refuses a pack whose product has no tax code', async () => {
+    // The live "Identification pack" product carries none today; Stripe
+    // would tax it under the account preset. That is a refusal once tax is on.
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    pricesRetrieve.mockResolvedValueOnce({
+      ...CATALOG_TOP_UP_PRICE,
+      product: { id: 'prod_pack', tax_code: null },
+    });
+    vi.mocked(dynamodb.send).mockResolvedValueOnce({ Item: undefined } as never);
+    const { createIdentifyTopUpCheckoutSession } =
+      await import('../../../src/services/identifyTopUp.js');
+    await expect(createIdentifyTopUpCheckoutSession(ARGS)).rejects.toThrow(/carries no tax code/);
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
   it('throws when Stripe returns no URL', async () => {
@@ -219,7 +238,7 @@ describe('createIdentifyTopUpCheckoutSession', () => {
       const { createIdentifyTopUpCheckoutSession } =
         await import('../../../src/services/identifyTopUp.js');
       await createIdentifyTopUpCheckoutSession(ARGS);
-      expect(pricesRetrieve).toHaveBeenCalledWith('price_topup');
+      expect(pricesRetrieve).toHaveBeenCalledWith('price_topup', { expand: ['product'] });
       expect(pricesRetrieve.mock.invocationCallOrder[0]).toBeLessThan(
         sessionsCreate.mock.invocationCallOrder[0]
       );

@@ -30,6 +30,7 @@ const prerenderCoverage = read('frontend/scripts/check-prerender-coverage.mjs');
 const prerender = read('frontend/scripts/prerender.mjs');
 const seoConfig = read('frontend/src/config/seo.ts');
 const billingService = read('backend/src/services/billing.ts');
+const authTf = read('infrastructure/modules/auth/main.tf');
 
 /**
  * The body of one `resource "TYPE" "NAME" { ... }` block, or '' if absent.
@@ -224,6 +225,19 @@ const latencyBurnAlarms = {
   fast: tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'latency_fast_burn'),
   slow: tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'latency_slow_burn'),
 };
+
+/**
+ * The Cognito monthly-active-user budget watches a TIER-SPECIFIC usage type:
+ * the Plus tier bills as USE1-CognitoPlusMAU, Essentials as
+ * USE1-CognitoEssentialsMAU. The tier itself is declared in modules/auth.
+ * Move the pool and leave the budget alone, and it keeps watching a meter that
+ * no longer accrues — a permanent zero that reads as "under budget" when it
+ * means "not measured". So the usage type is derived from the tier here, and
+ * the check below asserts the budget names it.
+ */
+const cognitoTier = /user_pool_tier\s*=\s*"([A-Z]+)"/u.exec(authTf)?.[1] ?? '';
+const cognitoMauUsageType = `USE1-Cognito${cognitoTier.charAt(0)}${cognitoTier.slice(1).toLowerCase()}MAU`;
+const cognitoMauBudget = tfResource(monitoring, 'aws_budgets_budget', 'cognito_mau');
 
 const checks = [
   ['28-day SLO window', /window_days:\s*28/u.test(slo)],
@@ -730,6 +744,24 @@ const checks = [
     /API_URL:\s*\$\{\{ needs\.terraform\.outputs\.api_url \}\}/u.test(productionDeployBackend) &&
       /url="\$\{API_URL\}\/health"/u.test(productionDeployBackend) &&
       /components\?\.database\?\.status\s*!==\s*'ok'/u.test(productionDeployBackend),
+  ],
+  // The one uncapped per-household cost is members, billed by Cognito per
+  // monthly active user. See the comment on aws_budgets_budget.cognito_mau for
+  // why this is a usage budget on the billed meter and not a CloudWatch alarm.
+  [
+    'the Cognito MAU budget watches the usage type of the tier the pool is on',
+    cognitoTier !== '' &&
+      cognitoMauBudget !== '' &&
+      /budget_type\s*=\s*"USAGE"/u.test(cognitoMauBudget) &&
+      stripHclComments(cognitoMauBudget).includes(`"${cognitoMauUsageType}"`),
+  ],
+  [
+    'the Cognito MAU budget emails alert_email when the month passes the threshold',
+    /notification_type\s*=\s*"ACTUAL"/u.test(cognitoMauBudget) &&
+      /threshold_type\s*=\s*"ABSOLUTE_VALUE"/u.test(cognitoMauBudget) &&
+      /threshold\s*=\s*var\.cognito_mau_alert_threshold/u.test(cognitoMauBudget) &&
+      /subscriber_email_addresses\s*=\s*\[var\.alert_email\]/u.test(cognitoMauBudget) &&
+      /variable "cognito_mau_alert_threshold"/u.test(monitoringVars),
   ],
 ];
 

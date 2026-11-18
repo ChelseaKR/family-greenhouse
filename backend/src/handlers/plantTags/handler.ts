@@ -330,10 +330,43 @@ function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? '';
 }
 
+/**
+ * Actors that are a SURFACE, not a person. Their `completedByName` is a label
+ * the server wrote, not a name anyone typed: "a plant sitter" (sitter link,
+ * handlers/tasks/handler.ts), "the kiosk display" (handlers/tasks/kiosk.ts)
+ * and "Former member" (a departed member's rows, services/accountCleanup.ts
+ * and services/trashService.ts).
+ *
+ * `firstName` exists to keep a member's surname off a photographed label. A
+ * label has no surname to protect, and cutting one to its first word printed
+ * "Last watered today by a." on the public page. So these print whole.
+ *
+ * Matched on the ACTOR ID, never on what the name says: a member whose stored
+ * name happens to read like a label is still a member, and still gets cut.
+ * Everything not listed here keeps the first-name rule, including caretaker
+ * seats and API keys, whose names are household-typed text.
+ *
+ * The ids are copies: two of the three writers keep theirs private to another
+ * Lambda group. tests/unit/handlers/plantTags.test.ts fails if a writer's id
+ * moves and these do not.
+ */
+const SITTER_ACTOR_PREFIX = 'sitter:';
+const KIOSK_ACTOR_PREFIX = 'kiosk:';
+const DELETED_USER_ID = 'deleted-user';
+
+function isSurfaceActor(completedBy: string): boolean {
+  return (
+    completedBy.startsWith(SITTER_ACTOR_PREFIX) ||
+    completedBy.startsWith(KIOSK_ACTOR_PREFIX) ||
+    completedBy === DELETED_USER_ID
+  );
+}
+
 interface CareProjection {
   taskType: string;
   completedAt: string;
-  /** First name of the member (or the tag scanner's display name). */
+  /** First name of the member, the tag scanner's display name, or the whole
+   *  label of a surface that is not a person ("a plant sitter"). */
   completedByName: string;
   /** True when this completion came through a plant tag. */
   viaTag: boolean;
@@ -342,10 +375,13 @@ interface CareProjection {
 function projectCompletion(completion: TaskCompletion | undefined): CareProjection | null {
   if (!completion) return null;
   const viaTag = completion.completedBy.startsWith(plantTagService.TAG_ACTOR_PREFIX);
+  const printWhole = viaTag || isSurfaceActor(completion.completedBy);
   return {
     taskType: completion.taskType,
     completedAt: completion.completedAt,
-    completedByName: viaTag ? completion.completedByName : firstName(completion.completedByName),
+    completedByName: printWhole
+      ? completion.completedByName
+      : firstName(completion.completedByName),
     viaTag,
   };
 }

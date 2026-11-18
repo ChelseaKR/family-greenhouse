@@ -17,12 +17,14 @@ export interface CreateTaskData {
 
 export interface UpdateTaskData {
   type?: 'water' | 'fertilize' | 'prune' | 'repot' | 'custom';
-  customType?: string;
+  /** `null` clears it; omitted leaves it as it is. */
+  customType?: string | null;
   frequency?: number;
   /** `null` clears the seasonal profile; omitted leaves it as it is. */
   seasonalCadences?: SeasonalCadence[] | null;
   assignedTo?: string | null;
-  notes?: string;
+  /** `null` clears them; omitted leaves them as they are. */
+  notes?: string | null;
   nextDue?: string;
 }
 

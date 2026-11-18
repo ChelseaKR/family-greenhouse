@@ -41,27 +41,29 @@ export function YearInReviewCard() {
   return (
     <Card padding="none">
       <div className="px-6 py-4 border-b border-primary-100/70">
-        <CardHeader
-          title={`Your ${year}`}
-          description="Care work this household has done so far this year."
-        />
+        <CardHeader title={`Your ${year}`} description={t('yearInReview.description')} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6">
-        <Stat label="Total tasks completed" value={review.totalCompletions.toLocaleString()} />
         <Stat
-          label="Top contributor"
+          label={t('yearInReview.totalCompleted')}
+          value={review.totalCompletions.toLocaleString()}
+        />
+        <Stat
+          label={t('yearInReview.topContributor')}
           value={topMember ? (topMember.name ?? t('analytics.unknownMember')) : '—'}
           sub={topMember ? `${topMember.count} tasks` : undefined}
         />
         <Stat
-          label="Tasks per week"
+          label={t('yearInReview.tasksPerWeek')}
           value={(review.totalCompletions / weeksElapsed(year)).toFixed(1)}
         />
       </div>
 
       {/* Bar chart by task type */}
       <div className="px-6 pb-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Where the work went</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">
+          {t('yearInReview.whereWorkWent')}
+        </h3>
         <ul className="space-y-2">
           {review.byTaskType.map((row) => {
             const pct = max ? (row.count / max) * 100 : 0;

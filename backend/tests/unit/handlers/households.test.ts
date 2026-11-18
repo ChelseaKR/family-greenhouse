@@ -221,6 +221,8 @@ describe('households handler', () => {
         createdBy: 'user-9',
         createdAt: '',
         expiresAt: '2099-01-01T00:00:00.000Z',
+        maxUses: 5,
+        uses: 0,
       });
       vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
         id: 'hh-target',
@@ -254,6 +256,8 @@ describe('households handler', () => {
         createdBy: 'user-9',
         createdAt: '',
         expiresAt: '2099-01-01T00:00:00.000Z',
+        maxUses: 5,
+        uses: 0,
       });
       vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
         id: 'hh-gh',
@@ -292,7 +296,10 @@ describe('households handler', () => {
         'user-2',
         'Bob',
         'b@b.com',
-        null
+        null,
+        'member',
+        // The join takes one of this invite's uses in the same transaction.
+        expect.objectContaining({ code: 'CODE', maxUses: 5 })
       );
       vi.mocked(billing.getHouseholdSubscription).mockImplementation(async () => ({
         planId: 'garden',
@@ -922,6 +929,8 @@ describe('households handler', () => {
       createdBy: 'user-1',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     const event = buildEvent(adminClaims, {
       httpMethod: 'POST',
@@ -965,6 +974,8 @@ describe('households handler', () => {
       createdBy: 'user-1',
       createdAt: '',
       expiresAt: '2099-01-01T00:00:00.000Z',
+      maxUses: 5,
+      uses: 0,
     });
   }
 
@@ -1001,6 +1012,9 @@ describe('households handler', () => {
         locale: 'es',
       })
     );
+    // An emailed invite is addressed to one person and admits one (ADR 0047).
+    const householdService = await import('../../../src/services/householdService.js');
+    expect(householdService.createInvite).toHaveBeenCalledWith('hh-1', 'user-1', 'email');
   });
 
   it('emailInvite requires admin role', async () => {
@@ -1089,6 +1103,8 @@ describe('households handler', () => {
       createdBy: 'inviter-1',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1133,6 +1149,8 @@ describe('households handler', () => {
       createdBy: 'inviter-1',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1193,6 +1211,118 @@ describe('households handler', () => {
     );
     const res = (await joinHousehold(event, fakeContext, () => {})) as APIGatewayProxyResult;
     expect(res.statusCode).toBe(400);
+  });
+
+  // --- Invites are counted and can be turned off (ADR 0047) ----------------
+
+  const openInvite = {
+    code: 'CODE',
+    householdId: 'hh-9',
+    createdBy: 'admin',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+    maxUses: 5,
+    uses: 0,
+  };
+  const homeNine = { id: 'hh-9', name: 'Home', createdAt: '', createdBy: 'admin' };
+
+  it('validateInvite answers valid:false for an invite the household turned off', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { validateInvite } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce(openInvite);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+      ...homeNine,
+      invitesRevokedAt: '2026-11-02T00:00:00.000Z',
+    });
+    vi.mocked(householdService.inviteRevokedByHousehold).mockReturnValueOnce(true);
+    const res = (await validateInvite(
+      buildEvent(null, { pathParameters: { inviteCode: 'CODE' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    // The same answer as an unknown code: no household name is given away.
+    expect(JSON.parse(res.body)).toEqual({ valid: false });
+  });
+
+  it('joinHousehold refuses an invite the household turned off, and adds nobody', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce(openInvite);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce(homeNine);
+    vi.mocked(householdService.inviteRevokedByHousehold).mockReturnValueOnce(true);
+    const res = (await joinHousehold(
+      buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      ),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toBe('Invalid or expired invite');
+    expect(householdService.addMember).not.toHaveBeenCalled();
+  });
+
+  it('joinHousehold answers 400 when the invite ran out between the lookup and the write', async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const cognitoUsers = await import('../../../src/services/cognitoUsers.js');
+    const { joinHousehold } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.getInvite).mockResolvedValueOnce(openInvite);
+    vi.mocked(householdService.getHousehold).mockResolvedValueOnce(homeNine);
+    vi.mocked(cognitoUsers.getUserName).mockResolvedValueOnce('Bob');
+    vi.mocked(householdService.getMemberByUserId).mockResolvedValueOnce(null);
+    vi.mocked(householdService.addMember).mockRejectedValueOnce(
+      Object.assign(new Error('Invite is no longer valid'), { name: 'InviteUnavailableError' })
+    );
+    const res = (await joinHousehold(
+      buildEvent(
+        { sub: 'user-2', email: 'b@b.com' },
+        { httpMethod: 'POST', pathParameters: { inviteCode: 'CODE' } }
+      ),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toBe('Invalid or expired invite');
+    expect(cognitoUsers.setHouseholdClaims).not.toHaveBeenCalled();
+  });
+
+  it("revokeInvites turns off the household's invites and says when", async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { revokeInvites } = await import('../../../src/handlers/households/handler.js');
+    vi.mocked(householdService.revokeHouseholdInvites).mockResolvedValueOnce(
+      '2026-11-17T12:00:00.000Z'
+    );
+    const res = (await revokeInvites(
+      buildEvent(adminClaims, { httpMethod: 'DELETE', pathParameters: { id: 'hh-1' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ revokedAt: '2026-11-17T12:00:00.000Z' });
+    expect(householdService.revokeHouseholdInvites).toHaveBeenCalledWith('hh-1');
+  });
+
+  it("revokeInvites is admin-only, and only for the caller's own household", async () => {
+    const householdService = await import('../../../src/services/householdService.js');
+    const { revokeInvites } = await import('../../../src/handlers/households/handler.js');
+    const other = (await revokeInvites(
+      buildEvent(adminClaims, { httpMethod: 'DELETE', pathParameters: { id: 'hh-other' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(other.statusCode).toBe(403);
+
+    const { setCachedMembership } = await import('../../../src/utils/membershipCache.js');
+    setCachedMembership('user-1', 'hh-1', 'member');
+    const member = (await revokeInvites(
+      buildEvent(memberClaims, { httpMethod: 'DELETE', pathParameters: { id: 'hh-1' } }),
+      fakeContext,
+      () => {}
+    )) as APIGatewayProxyResult;
+    expect(member.statusCode).toBe(403);
+    expect(householdService.revokeHouseholdInvites).not.toHaveBeenCalled();
   });
 
   it('removeMember refuses self-removal', async () => {
@@ -1413,6 +1543,8 @@ describe('households handler', () => {
       createdBy: 'admin',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1449,6 +1581,8 @@ describe('households handler', () => {
       createdBy: 'admin',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1515,6 +1649,8 @@ describe('households handler', () => {
       createdBy: 'admin',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1548,7 +1684,10 @@ describe('households handler', () => {
       'user-2',
       'Bob',
       'b@b.com',
-      null
+      null,
+      'member',
+      // The join takes one of this invite's uses in the same transaction.
+      expect.objectContaining({ code: 'CODE', maxUses: 5 })
     );
     // The roster IS read after the join now, to address the "someone joined
     // your household" email (#431). What must not come back is the pre-count
@@ -1582,6 +1721,8 @@ describe('households handler', () => {
         createdBy: 'admin',
         createdAt: '',
         expiresAt: '2099-01-01',
+        maxUses: 5,
+        uses: 0,
       });
       vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
         id: 'hh-9',
@@ -1610,7 +1751,10 @@ describe('households handler', () => {
         'user-2',
         'Bob',
         'b@b.com',
-        2
+        2,
+        'member',
+        // The join takes one of this invite's uses in the same transaction.
+        expect.objectContaining({ code: 'CODE', maxUses: 5 })
       );
     }
   );
@@ -1630,6 +1774,8 @@ describe('households handler', () => {
       createdBy: 'admin',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     });
     vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
       id: 'hh-9',
@@ -1658,7 +1804,10 @@ describe('households handler', () => {
       'user-2',
       'Bob',
       'b@b.com',
-      null
+      null,
+      'member',
+      // The join takes one of this invite's uses in the same transaction.
+      expect.objectContaining({ code: 'CODE', maxUses: 5 })
     );
   });
 
@@ -1672,6 +1821,8 @@ describe('households handler', () => {
       createdBy: 'admin',
       createdAt: '',
       expiresAt: '2099-01-01',
+      maxUses: 5,
+      uses: 0,
     };
     const household = {
       id: 'hh-9',

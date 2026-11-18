@@ -17,6 +17,7 @@ import * as billing from '../../services/billing.js';
 import { ALL_PLANS } from '../../services/billing.js';
 import { getHouseholdCounters } from '../../services/householdUsage.js';
 import { getCreditBalance } from '../../services/identifyCredits.js';
+import { allowanceForPlan } from '../../services/identifyBudget.js';
 import {
   createIdentifyTopUpCheckoutSession,
   IDENTIFICATION_NOT_CONFIGURED,
@@ -37,6 +38,7 @@ import * as appStore from './appStore.js';
 import { appStoreState } from '../../models/appStore.js';
 import {
   getEntitledPlan,
+  getMeteredPlanId,
   getPlan,
   giftState,
   isIntervalOffered,
@@ -145,7 +147,11 @@ export const listPlans = createHandler((): Promise<APIGatewayProxyResult> => {
           active: COMMERCIAL_HOLD_ACTIVE,
           effectiveDate: COMMERCIAL_HOLD_EFFECTIVE_DATE,
         },
-        plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable)),
+        // `process.env` is the readiness gate (ADR 0042): a cadence whose
+        // current Stripe price id is blank here publishes null, the same
+        // "not available" the client renders for a withdrawn cadence, so a
+        // repriced tier is never advertised at an amount checkout refuses.
+        plans: ALL_PLANS.map((plan) => billing.planSummary(plan, paymentsAvailable, process.env)),
         // The identification top-up offer, on the same fail-closed terms as
         // the plan prices: `available` is true only when payments are on, a
         // Stripe price is configured, AND this process holds the vendor key
@@ -223,6 +229,13 @@ export const getCurrentSubscription = createHandler(
       ...(usage ? { usage } : {}),
       usageDetail,
       identifyCredits,
+      // What the household spends against each month, so Settings can tell a
+      // plan with an allowance from one that bundles none (ADR 0042). Metered,
+      // not entitled: a no-card trial has Garden's features and Seedling's 1.
+      identifyAllowance: {
+        monthly: allowanceForPlan(getMeteredPlanId(sub, now)),
+        planName: plan.name,
+      },
       // The App Store subscription (ADR 0041), with its state decided by the
       // server's clock like the trial's and the gift's. `null`: none recorded.
       appStore: sub.appStore ? { ...sub.appStore, state: appStoreState(sub, now) } : null,

@@ -376,6 +376,16 @@ const iosBuilds = [...xcodeProject.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)
   Number(item[1])
 );
 for (const build of new Set(iosBuilds)) assertEqual(build, expectedBuildNumber, 'iOS build number');
+// iPhone only until a new ADR brings iPad back (ADR 0043). Every build
+// configuration of the app target must say so; Xcode's default for a new or
+// regenerated project is "1,2".
+const iosDeviceFamilies = [
+  ...xcodeProject.matchAll(/TARGETED_DEVICE_FAMILY = ("?)([^;"]+)\1;/g),
+].map((item) => item[2]);
+if (iosDeviceFamilies.length === 0) fail('iOS project sets no TARGETED_DEVICE_FAMILY');
+for (const family of new Set(iosDeviceFamilies)) {
+  assertEqual(family, '1', 'iOS TARGETED_DEVICE_FAMILY (iPhone only, ADR 0043)');
+}
 
 const privacyManifest = read('frontend/ios/App/App/PrivacyInfo.xcprivacy');
 for (const dataType of [
@@ -400,6 +410,9 @@ for (const dataType of [
   // summaries keyed to a random session id, sent from the shells too. Not
   // linked, not tracking, App Functionality.
   'CrashData',
+  // App Store subscriptions (ADR 0041): the server keeps each household's
+  // App Store transaction state to grant its plan. Linked, App Functionality.
+  'PurchaseHistory',
 ]) {
   if (!privacyManifest.includes(`NSPrivacyCollectedDataType${dataType}`)) {
     fail(`iOS privacy manifest is missing collected data type ${dataType}`);

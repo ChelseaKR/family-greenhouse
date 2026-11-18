@@ -180,7 +180,7 @@ describe('composeUpgradeRequestEmail', () => {
     expect(subject).toBe('Sam asked to upgrade The Kelly-Reifs');
     expect(text).toContain('Hi Maria,');
     expect(text).toContain('Plant care chat');
-    expect(text).toContain('Garden plan, $4.99 a month');
+    expect(text).toContain('Garden plan, $2.99 a month');
     expect(text).toContain('https://app.example.net/settings/billing');
     expect(text).not.toContain('https://app.example.net//');
     expect(text).toContain('Nothing has been');

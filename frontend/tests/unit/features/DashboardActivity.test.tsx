@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { http, HttpResponse } from 'msw';
 import i18n from '@/i18n';
+import { ensureLocaleCatalog } from '@/i18n/nonEnglishCatalog';
+import enCatalog from '@/i18n/locales/en/translation.json';
+import esCatalog from '@/i18n/locales/es/translation.json';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { filterActivity } from '@/features/dashboard/activityFeed';
 import type {
@@ -450,5 +453,75 @@ describe('dashboard activity feed states', () => {
     expect(card).not.toBeNull();
     await waitFor(() => expect(within(card as HTMLElement).getByRole('alert')).toBeInTheDocument());
     expect(screen.queryByText(/No activity yet/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The sentence a filter shows when none of the last 50 events matches it
+ * (approved 2026-11-18). The English used to drop the filter's name into
+ * "No ___ activity", which read "No tasks activity", "No people activity"
+ * and "No all activity". The Spanish was already right and is unchanged.
+ */
+describe('the activity filter with nothing to show', () => {
+  const EMPTY_EN = {
+    all: 'No activity in the last 50 events.',
+    tasks: 'No task activity in the last 50 events.',
+    plants: 'No plant activity in the last 50 events.',
+    people: 'No activity about people in the last 50 events.',
+  };
+  const EMPTY_ES = {
+    all: 'No hay actividad en los últimos 50 eventos.',
+    tasks: 'No hay actividad de tareas en los últimos 50 eventos.',
+    plants: 'No hay actividad de plantas en los últimos 50 eventos.',
+    people: 'No hay actividad de personas en los últimos 50 eventos.',
+  };
+
+  beforeAll(async () => {
+    await ensureLocaleCatalog(i18n, 'es');
+  });
+  afterAll(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  /** A feed that is all about plants, so Tasks and People match nothing. */
+  const plantsOnly = () => [event('plants.imported', { count: 3 })];
+
+  it.each([
+    ['en', 'Tasks', EMPTY_EN.tasks],
+    ['en', 'People', EMPTY_EN.people],
+    ['es', 'Tareas', EMPTY_ES.tasks],
+    ['es', 'Personas', EMPTY_ES.people],
+  ] as const)('in %s, the %s filter says "%s"', async (language, button, sentence) => {
+    await i18n.changeLanguage(language);
+    renderDashboardActivity(plantsOnly());
+    await screen.findByText(language === 'en' ? 'Chelsea imported 3 plants' : /3 plantas/);
+
+    fireEvent.click(screen.getByRole('button', { name: button }));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+  });
+
+  it('shows the plant row, not an empty sentence, under Plants', async () => {
+    renderDashboardActivity(plantsOnly());
+    await screen.findByText('Chelsea imported 3 plants');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Plants' }));
+
+    expect(screen.getByText('Chelsea imported 3 plants')).toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_EN.plants)).not.toBeInTheDocument();
+  });
+
+  it('holds the approved sentences in both catalogs', () => {
+    expect(enCatalog.dashboard.activityEmptyFiltered).toEqual(EMPTY_EN);
+    expect(esCatalog.dashboard.activityEmptyFiltered).toEqual(EMPTY_ES);
+  });
+
+  it('leaves no sentence built from a filter name (negative control)', () => {
+    const broken = ['No all ', 'No tasks ', 'No plants ', 'No people '];
+    for (const sentence of Object.values(enCatalog.dashboard.activityEmptyFiltered)) {
+      for (const start of broken) expect(sentence.startsWith(start), sentence).toBe(false);
+    }
+    // The check is not vacuous: the old sentences fail it.
+    expect('No tasks activity in the last 50 events.'.startsWith('No tasks ')).toBe(true);
   });
 });

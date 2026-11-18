@@ -45,7 +45,14 @@ export const IDENTIFY_ALLOWANCES: Record<PlanId, number> = {
   // the single largest line in the free tier's AI ceiling; ADR 0014 re-cuts
   // the tiers so the reason to upgrade is coordination, not this allowance.
   seedling: 1,
-  garden: 30,
+  // Garden drops 30 -> 0 (ADR 0042, 2026-11-07): identification left the
+  // plan when it was repriced to $2.99 / $24.99 a year, and is sold only by
+  // the pack (ADR 0019). Thirty credits were $1.76 of the tier's $3.49
+  // monthly AI ceiling — more than half — and the one line with a hard
+  // per-call vendor cost. A Garden household's identifications come from
+  // packs, which `reserveIdentification` draws on the moment an allowance of
+  // zero is refused. Greenhouse is untouched by that decision.
+  garden: 0,
   greenhouse: 100,
 };
 

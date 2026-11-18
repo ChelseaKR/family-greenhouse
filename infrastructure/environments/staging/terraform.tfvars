@@ -71,6 +71,15 @@ stripe_price_id_garden_annual     = "price_1UB39YAhnUt8CMG0n38Jx1Ol"
 stripe_price_id_garden_lifetime   = "price_1UB39YAhnUt8CMG0z0D2bIqs"
 stripe_price_id_greenhouse        = "price_1UB3AhAhnUt8CMG0oeGJZKqH"
 stripe_price_id_greenhouse_annual = "price_1UB3A7AhnUt8CMG0kyrXPGtH"
+# Garden repriced 2026-11-07 (ADR 0042): $2.99 a month or $24.99 a year. The
+# `garden` and `garden_annual` ids above are now LEGACY ($4.99 / $39.99) and
+# only resolve renewals. The two CURRENT prices below are blank until the owner
+# creates them in Stripe TEST mode under the Garden product (monthly $2.99,
+# yearly $24.99, metadata plan_id=garden interval=month|year adr=0042) and
+# pastes the ids here. While both are blank Garden publishes as not available;
+# the commercial_gate_guard precondition refuses a plan with exactly one set.
+stripe_price_id_garden_299         = ""
+stripe_price_id_garden_annual_2499 = ""
 # Identification top-up pack (ADR 0019): a ONE-TIME test-mode price for
 # "20 identifications, $1.99". Blank = not for sale; checkout answers 400
 # TOP_UP_NOT_CONFIGURED and nothing is granted. Owner step: create the price in
@@ -80,6 +89,11 @@ stripe_price_id_identify_top_up = ""
 # block in main.tf only requires the attestation for an sk_live_ key.
 stripe_price_ids_are_live = false
 
+# Stripe Tax is per mode: the test-mode products need tax code txcd_10103000
+# and a test-mode California registration before this can be "1" here, or
+# every checkout is refused by the price reconciliation. Rehearse the
+# production flip here first: a California billing address must add tax to a
+# Garden checkout and a Texas address must not.
 stripe_automatic_tax_enabled = ""
 
 # Runtime commercial gate, exactly as in production. Open here FIRST, so the
@@ -98,3 +112,16 @@ payments_enabled = "1"
 # are verified against the pinned Apple Root CA - G3. Set back to "0" and apply
 # to close the routes again; a recorded subscription keeps its entitlement.
 app_store_billing_enabled = "1"
+
+# Staging accepts Sandbox purchases on purpose (ADR 0045): this is where a
+# Sandbox Apple Account buys from a build pointed at this API. Staging has no
+# real customers, so a free Sandbox plan here costs nothing.
+app_store_environments = "Production,Sandbox"
+
+# Permissions boundary on the Lambda execution roles (ADR 0049). On here
+# FIRST, the way payments were: staging's roles carry the boundary and its
+# deployed smoke test runs under it before production's roles get it. The
+# boundary policy lives in the production state and must already exist (an
+# admin applies modules/cicd; docs/cicd-setup.md). CD can turn this on and
+# cannot turn it off again: removing a boundary is an admin action.
+iam_permissions_boundary_enabled = true

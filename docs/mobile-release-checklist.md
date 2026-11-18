@@ -16,14 +16,19 @@
       "Store payment rules" and "In-App Purchase".
 - [ ] In-App Purchase, if this build sells through the App Store: the App
       Store Connect subscription group and both products exist and are
-      attached to the version, the server switch is on in production, the
+      attached to the version, the server switch is on in production,
+      production accepts Sandbox for the review
+      (`app_store_environments = "Production,Sandbox"` deployed before the
+      TestFlight check, and set back to `"Production"` in the first release
+      after approval; ADR 0045), the
       App Store Server Notifications v2 URL is set for Production and
       Sandbox, the build was made with `VITE_APP_STORE_PURCHASES=true`, a
       Sandbox purchase and a restore were checked on a device, and the Terms
       wording for the app is the owner's. Leave unchecked for a build
       without purchases.
-- [x] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send: 11
-      data types, with `NSPrivacyTracking` false. The shells run the same web
+- [x] `ios/App/App/PrivacyInfo.xcprivacy` declares what the shells send: 12
+      data types, with `NSPrivacyTracking` false (Purchase History joined
+      with App Store purchases). The shells run the same web
       bundle, so they post `/telemetry/product` (Product Interaction, keyed to
       the Cognito sub and the household id) and `/telemetry/frontend` (web
       vitals as Performance Data, and sanitized error summaries as Crash Data,
@@ -31,7 +36,7 @@
       the last one missing; it is declared from 0.37.1. `docs/APP-STORE.md` §2
       is the table to answer App Privacy from, and
       `validate-store-release.mjs` fails a build whose manifest drops any of
-      the 11. If any of it is ever linked to a person for advertising, ad
+      the 12. If any of it is ever linked to a person for advertising, ad
       measurement or a data broker, `NSPrivacyTracking` is true, the domains
       go in `NSPrivacyTrackingDomains`, and App Tracking Transparency applies
       (a native prompt the WebView cannot show).
@@ -102,7 +107,9 @@ frontend`) and carries the real Team ID; `npm run aasa:check` and
       doesn't include the aps-environment entitlement", enable it by hand
       under Certificates, Identifiers & Profiles → Identifiers →
       `net.familygreenhouse.app`.
-- [ ] Physical iPhone, iPad, and Android smoke tests pass against production.
+- [ ] Physical iPhone and Android smoke tests pass against production. The
+      iOS app is iPhone-only (ADR 0043), so on an iPad check it once in iPhone
+      compatibility mode: App Review can open it there.
 
 ## Build and test
 

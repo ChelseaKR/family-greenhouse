@@ -11,6 +11,8 @@
 //
 // This function now decides the WHOLE routing question, in four kinds:
 //
+//   0. A page that moved (MOVED below). Answered here with one 301 to its new
+//      path, the only response this function writes itself.
 //   1. `/assets/...`  content-addressed build output. Left alone, always. The
 //      name contains the hash of the bytes, so the object either exists or it
 //      genuinely does not, and "does not" must reach the viewer as a 404.
@@ -19,8 +21,10 @@
 //      extensionless, so rule (3) would rewrite it to the shell and Apple
 //      would never see the file the deploy uploaded.
 //   2. A prerendered public page (PRERENDERED below). Mapped onto its object:
-//      `/care/monstera` -> `/care/monstera/index.html`.
-//   2b. One segment under a PREFIXED namespace, mapped the same way unlisted.
+//      `/pricing` -> `/pricing/index.html`.
+//   2b. One segment under a PREFIXED namespace (blog, care, help, pet-safe),
+//      mapped the same way unlisted: `/care/monstera` ->
+//      `/care/monstera/index.html`; an unpublished slug has no object, so 404.
 //   3. An extensionless path the APP routes (APP_EXACT / APP_PATTERNS below).
 //      Rewritten to `/app-shell.html` BY NAME — the object always exists, so
 //      the request is a hit rather than an error.
@@ -40,13 +44,12 @@
 // if either drifts. `/` is in no list because it is handled directly.
 //
 // Covered by frontend/scripts/spa-router.test.mjs — edit both together. The
-// test also asserts this file stays under CloudFront's 10 KB function limit,
-// which the generated map is the only thing here that grows.
+// test also holds this file under 9,000 bytes (CloudFront's limit is 10,240).
+// A new post or guide costs nothing here; only a new static page grows it.
 
 // --- generated from public-routes.mjs: do not edit by hand -------------------
 var PRERENDERED = {
   '/pricing': 1,
-  '/gift': 1,
   '/blog': 1,
   '/care': 1,
   '/help': 1,
@@ -57,81 +60,20 @@ var PRERENDERED = {
   '/legal/terms': 1,
   '/support': 1,
   '/account-deletion': 1,
-  '/blog/how-to-remember-to-water-plants': 1,
-  '/blog/sharing-plant-care-without-becoming-the-nag': 1,
-  '/blog/low-maintenance-houseplants-for-forgetful-people': 1,
-  '/blog/how-to-move-plants-without-killing-them': 1,
-  '/blog/pet-safe-houseplants-that-are-hard-to-kill': 1,
-  '/blog/most-common-toxic-houseplants-and-safer-swaps': 1,
-  '/blog/how-to-split-plant-care-with-your-partner': 1,
-  '/blog/how-to-water-plants-while-on-vacation': 1,
-  '/blog/what-to-leave-for-a-plant-sitter': 1,
-  '/blog/plant-care-instructions-for-non-plant-people': 1,
-  '/blog/merging-plant-collections-when-you-move-in-together': 1,
-  '/blog/signs-of-overwatering-and-how-to-fix-it': 1,
-  '/blog/why-are-my-plant-leaves-turning-yellow': 1,
-  '/blog/how-much-light-does-my-room-get': 1,
-  '/care/pothos': 1,
-  '/care/snake-plant': 1,
-  '/care/monstera': 1,
-  '/care/spider-plant': 1,
-  '/care/peace-lily': 1,
-  '/care/heartleaf-philodendron': 1,
-  '/care/zz-plant': 1,
-  '/care/aloe-vera': 1,
-  '/care/dieffenbachia': 1,
-  '/care/calathea': 1,
-  '/care/fiddle-leaf-fig': 1,
-  '/care/rubber-plant': 1,
-  '/care/bird-of-paradise': 1,
-  '/care/anthurium': 1,
-  '/care/chinese-evergreen': 1,
-  '/care/jade-plant': 1,
-  '/care/english-ivy': 1,
-  '/care/boston-fern': 1,
-  '/care/money-tree': 1,
-  '/care/christmas-cactus': 1,
-  '/care/parlor-palm': 1,
-  '/care/orchid': 1,
-  '/care/hoya': 1,
-  '/care/nerve-plant': 1,
-  '/care/african-violet': 1,
-  '/care/poinsettia': 1,
-  '/care/sago-palm': 1,
-  '/care/asparagus-fern': 1,
-  '/care/haworthia': 1,
-  '/care/burros-tail': 1,
-  '/care/blue-echeveria': 1,
-  '/care/begonia': 1,
-  '/care/lily': 1,
-  '/care/string-of-pearls': 1,
-  '/care/prayer-plant': 1,
-  '/care/croton': 1,
-  '/care/chinese-money-plant': 1,
-  '/care/peperomia': 1,
-  '/care/alocasia': 1,
-  '/care/cast-iron-plant': 1,
-  '/care/corn-plant': 1,
-  '/care/amaryllis': 1,
-  '/care/norfolk-island-pine': 1,
-  '/care/cyclamen': 1,
-  '/care/kalanchoe': 1,
-  '/help/getting-started': 1,
-  '/help/plants': 1,
-  '/help/tasks': 1,
-  '/help/reminders': 1,
-  '/help/households': 1,
-  '/help/sitters': 1,
-  '/help/billing': 1,
-  '/help/data': 1,
-  '/help/limits': 1,
 };
-var PREFIXED = '/pet-safe/';
+var PREFIXED = '/pet-safe/ /blog/ /care/ /help/';
 // --- end generated -----------------------------------------------------------
+
+// --- generated from src/config/redirects.json: do not edit by hand -----------
+var MOVED = {
+  '/blog/do-yellow-leaves-mean-overwatering': '/blog/signs-of-overwatering-and-how-to-fix-it',
+  '/blog/why-are-my-plant-leaves-turning-yellow': '/blog/signs-of-overwatering-and-how-to-fix-it',
+};
+// --- end generated redirects -------------------------------------------------
 
 // --- generated from App.tsx: do not edit by hand -----------------------------
 var APP_EXACT =
-  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
+  '/account /analytics /away-recap /chat /confirm-email /dashboard /forgot-password /gift /household /household/caretaker-report /login /onboarding /plants /plants/import /plants/new /register /reset-password /settings /settings/billing /tags /tasks /today /welcome';
 var APP_PATTERNS =
   '/caretaker/* /join/* /kiosk/* /plants/* /plants/*/passport /shared/* /sit/* /sit/*/brief /tag/*';
 // --- end generated App.tsx ---------------------------------------------------
@@ -171,19 +113,8 @@ function handler(event) {
     return request;
   }
 
-  // (1b) `/.well-known/...` is a registry of well-known URIs (RFC 8615), not a
-  // route. `assetlinks.json` would survive rule (3) by accident — its last
-  // segment has a dot — but `apple-app-site-association` is extensionless by
-  // Apple's spec, so without this it is rewritten to `/app-shell.html` and
-  // Apple's CDN fetches `200 text/html` no matter what the deploy uploaded.
-  // The file would be in the bucket, correctly typed, and unreachable.
-  //
-  // Passing it through also means a MISSING association file answers 404
-  // rather than 200-with-the-shell, which is the difference between Android's
-  // verifier reporting "no such file" and reporting a JSON parse error on a
-  // page of HTML. Same reasoning as `/assets/` above, and it works for the
-  // same reason: the frontend bucket grants `s3:ListBucket`, so a missing
-  // object is a 404 that no `custom_error_response` turns into a 200.
+  // (1b) Well-known URIs (RFC 8615) are files, never routes, so a missing one
+  // is a 404. Why: build-spa-router.mjs, "Why /.well-known passes through".
   if (uri === '/.well-known' || uri.indexOf('/.well-known/') === 0) {
     return request;
   }
@@ -191,6 +122,16 @@ function handler(event) {
   // Normalise one trailing slash away so `/care/monstera/` and
   // `/care/monstera` resolve to the same object.
   var path = uri.length > 1 && uri.charAt(uri.length - 1) === '/' ? uri.slice(0, -1) : uri;
+
+  // (0) Why a 301 and not a rewrite: build-spa-router.mjs movedPages().
+  var moved = MOVED[path.toLowerCase()];
+  if (typeof moved === 'string') {
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: { location: { value: moved } },
+    };
+  }
 
   if (path === '/') {
     // The prerendered homepage.

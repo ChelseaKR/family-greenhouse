@@ -37,11 +37,28 @@ describe('ChangelogPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Paid plans are open' })).toBeInTheDocument();
-    expect(screen.getByText(/\$4\.99 a month/)).toBeInTheDocument();
+    // Two entries name $4.99: the 2026-09-02 opening, and the 2026-11-08 reprice ("It was ...").
+    expect(screen.getAllByText(/\$4\.99 a month/)).toHaveLength(2);
     expect(screen.getByText(/can now be bought on the web/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'See the plans' })).toHaveAttribute('href', '/pricing');
+    const planLinks = screen.getAllByRole('link', { name: 'See the plans' });
+    expect(planLinks).toHaveLength(2);
+    for (const link of planLinks) expect(link).toHaveAttribute('href', '/pricing');
     expect(
       screen.getByRole('heading', { name: 'A cancelled plan now says it is cancelled' })
+    ).toBeInTheDocument();
+  });
+
+  it('on the website: the newest entries state the current Garden price and free plan', () => {
+    setNative(false);
+    renderPage();
+    expect(
+      screen.getByRole('heading', { name: 'Garden is $2.99 a month, or $24.99 a year' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Garden now costs \$2\.99 a month or \$24\.99 a year/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'The free plan is 2 people and 8 plants' })
     ).toBeInTheDocument();
   });
 

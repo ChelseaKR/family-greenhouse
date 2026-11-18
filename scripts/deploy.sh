@@ -88,6 +88,7 @@ aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
     --exclude "push-handler.js" \
     --exclude "*.json" \
     --exclude "robots.txt" \
+    --exclude "llms.txt" \
     --exclude "sitemap.xml" \
     --exclude ".well-known/*"
 
@@ -101,6 +102,11 @@ aws s3 sync frontend/dist "s3://${FRONTEND_BUCKET}" \
 aws s3 cp frontend/dist/robots.txt "s3://${FRONTEND_BUCKET}/robots.txt" \
     --cache-control "max-age=3600,public"
 aws s3 cp frontend/dist/sitemap.xml "s3://${FRONTEND_BUCKET}/sitemap.xml" \
+    --cache-control "max-age=3600,public"
+# /llms.txt (llmstxt.org) for AI assistants, typed explicitly. Before
+# the file existed the path fell through to the 404 page as text/html.
+aws s3 cp frontend/dist/llms.txt "s3://${FRONTEND_BUCKET}/llms.txt" \
+    --content-type "text/plain; charset=utf-8" \
     --cache-control "max-age=3600,public"
 aws s3 cp frontend/dist/sw.js "s3://${FRONTEND_BUCKET}/sw.js" \
     --cache-control "max-age=0,no-cache,no-store,must-revalidate"

@@ -127,7 +127,8 @@ data "aws_region" "current" {}
 resource "aws_iam_role" "lambda" {
   provider = aws.iam
 
-  name = "${var.project_name}-lambda-${var.environment}"
+  name                 = "${var.project_name}-lambda-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -519,14 +520,19 @@ locals {
   }
 
   stripe_environment = {
-    STRIPE_SECRET_KEY                 = var.stripe_secret_key
-    STRIPE_WEBHOOK_SECRET             = var.stripe_webhook_secret
-    STRIPE_PRICE_ID_GARDEN            = var.stripe_price_id_garden
-    STRIPE_PRICE_ID_GARDEN_ANNUAL     = var.stripe_price_id_garden_annual
-    STRIPE_PRICE_ID_GARDEN_LIFETIME   = var.stripe_price_id_garden_lifetime
-    STRIPE_PRICE_ID_GREENHOUSE        = var.stripe_price_id_greenhouse
-    STRIPE_PRICE_ID_GREENHOUSE_ANNUAL = var.stripe_price_id_greenhouse_annual
-    STRIPE_PRICE_ID_IDENTIFY_TOP_UP   = var.stripe_price_id_identify_top_up
+    STRIPE_SECRET_KEY     = var.stripe_secret_key
+    STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
+    # Garden's two LEGACY prices ($4.99 monthly, $39.99 annual; ADR 0042) stay
+    # in the environment so renewals on them still resolve to Garden. The two
+    # CURRENT prices follow; the backend sells only at those.
+    STRIPE_PRICE_ID_GARDEN             = var.stripe_price_id_garden
+    STRIPE_PRICE_ID_GARDEN_ANNUAL      = var.stripe_price_id_garden_annual
+    STRIPE_PRICE_ID_GARDEN_299         = var.stripe_price_id_garden_299
+    STRIPE_PRICE_ID_GARDEN_ANNUAL_2499 = var.stripe_price_id_garden_annual_2499
+    STRIPE_PRICE_ID_GARDEN_LIFETIME    = var.stripe_price_id_garden_lifetime
+    STRIPE_PRICE_ID_GREENHOUSE         = var.stripe_price_id_greenhouse
+    STRIPE_PRICE_ID_GREENHOUSE_ANNUAL  = var.stripe_price_id_greenhouse_annual
+    STRIPE_PRICE_ID_IDENTIFY_TOP_UP    = var.stripe_price_id_identify_top_up
     # Gift subscriptions (ADR 0028): ONE-TIME prices for one gift month of each
     # paid tier, charged with quantity = months. Blank = that tier cannot be
     # given here; checkout answers 400 GIFT_NOT_CONFIGURED.
@@ -535,6 +541,7 @@ locals {
     STRIPE_AUTOMATIC_TAX_ENABLED          = var.stripe_automatic_tax_enabled
     PAYMENTS_ENABLED                      = var.payments_enabled
     APP_STORE_BILLING_ENABLED             = var.app_store_billing_enabled
+    APP_STORE_ENVIRONMENTS                = var.app_store_environments
     POSTHOG_KEY                           = var.posthog_key
     POSTHOG_HOST                          = var.posthog_host
   }
@@ -845,7 +852,8 @@ resource "aws_lambda_permission" "api_gateway" {
 resource "aws_iam_role" "chat_stream" {
   provider = aws.iam
 
-  name = "${var.project_name}-chat-stream-${var.environment}"
+  name                 = "${var.project_name}-chat-stream-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1208,6 +1216,7 @@ locals {
     "GET /households/{id}"                                = { group = "households", auth = "jwt" }
     "POST /households/{id}/invites"                       = { group = "households", auth = "jwt" }
     "POST /households/{id}/invites/email"                 = { group = "households", auth = "jwt" }
+    "DELETE /households/{id}/invites"                     = { group = "households", auth = "jwt" }
     "GET /households/invites/{inviteCode}"                = { group = "households", auth = "none" }
     "POST /households/join/{inviteCode}"                  = { group = "households", auth = "jwt" }
     "GET /households/{id}/activity"                       = { group = "households", auth = "jwt" }

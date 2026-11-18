@@ -987,13 +987,18 @@ describe('runChatTurn', () => {
         content: [{ type: 'text', text: 'What is the current humidity?' }],
       },
     ]);
-    vi.mocked(householdService.getHousehold).mockResolvedValueOnce({
+    // Twice: the turn reads the household itself first, for its time zone
+    // (#889), and then the climate tool reads it for the location.
+    const home = {
       id: 'hh-1',
       name: 'Home',
       location: { city: 'Davis', lat: 38.54, lon: -121.74 },
       createdAt: '2025-01-01',
       createdBy: 'u1',
-    });
+    };
+    vi.mocked(householdService.getHousehold)
+      .mockResolvedValueOnce(home)
+      .mockResolvedValueOnce(home);
     vi.mocked(climateService.getWeatherCached).mockResolvedValueOnce({
       observedAt: '2026-07-12T10:00:00.000Z',
       tempC: 24,

@@ -77,6 +77,7 @@ describe('GA4 sign_up from the register form', () => {
   afterAll(() => {
     vi.unstubAllEnvs();
     delete window.dataLayer;
+    delete window.__fgGoogleAnalyticsBoot;
   });
 
   it('pushes one sign_up, with nothing from the form, once the API accepts the account', async () => {

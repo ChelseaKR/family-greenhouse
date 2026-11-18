@@ -44,6 +44,7 @@ import { SITE_URL, siteUrl } from '@/config/site';
 import { PUBLIC_REGISTRATION_AVAILABLE, COMMERCIAL_HOLD_ACTIVE } from '@/config/commercialStatus';
 import { planBandFor } from './planBand';
 import clsx from 'clsx';
+import { HolidayCareGuides } from '@/features/care/HolidayCareGuides';
 
 // Hero copy for the two framings under test. Variant A (control) is the
 // existing household / shared-care-journal hero. Variant B leads with
@@ -201,15 +202,47 @@ const differentiators = [
 ];
 
 // A few care guides to surface by name in the "before you buy" band.
-// Slugs match features/care/careGuides.ts. Monstera and Pothos are genus
-// names, the same in every locale; the other two have common names that
+// Slugs match features/care/careGuides.ts. Monstera, Pothos and Haworthia are
+// genus names, the same in every locale; the others have common names that
 // differ, so they come from the catalog.
+//
+// Haworthia and rosemary were added 2026-11-15: Google had not indexed either
+// guide (URL Inspection, fg-seo-data-2026-11-15), and the home page is the
+// page it crawls most. Their labels are the guides' own names; rosemary's
+// Spanish one is the catalog's existing "Romero".
 const featuredGuides = [
   { slug: 'pothos', name: 'Pothos' },
   { slug: 'snake-plant', nameKey: 'landing.plants.snakePlant' },
   { slug: 'spider-plant', nameKey: 'landing.plants.spiderPlant' },
   { slug: 'monstera', name: 'Monstera' },
+  { slug: 'haworthia', name: 'Haworthia' },
+  { slug: 'rosemary', nameKey: 'landing.plants.rosemary' },
 ];
+
+// The ranked and list-style blog posts, linked by name from the same band so
+// the home page reaches them directly. Slugs match features/blog/posts/index.ts
+// (LandingGuideLists.test.tsx fails if one stops resolving). The labels are
+// the posts' own titles, shortened, so the links promise nothing the posts
+// don't say. The posts are English-only, which the Spanish heading says.
+const featuredLists = [
+  { slug: 'low-maintenance-houseplants-for-forgetful-people', key: 'forgiving' },
+  { slug: 'pet-safe-houseplants-that-are-hard-to-kill', key: 'petSafe' },
+  { slug: 'most-common-toxic-houseplants-and-safer-swaps', key: 'toxicSwaps' },
+] as const;
+
+// The two posts closest to what the product does. Google had not indexed either
+// and nothing but /blog and two other posts linked them (2026-11-08 read).
+const householdPosts = [
+  { slug: 'how-to-remember-to-water-plants', key: 'remember' },
+  { slug: 'sharing-plant-care-without-becoming-the-nag', key: 'sharing' },
+] as const;
+
+// Names only, like the list on /pet-safe. The verdict stays on each plant's own
+// page beside its citation, so a label here can't state or imply one.
+const holidayPetPages = [
+  { slug: 'christmas-cactus', key: 'christmasCactus' },
+  { slug: 'poinsettia', key: 'poinsettia' },
+] as const;
 
 /** Shown in the mock browser's address bar. */
 const MOCK_HOST = 'familygreenhouse.net';
@@ -903,6 +936,53 @@ export function LandingPage() {
                     </li>
                   ))}
                 </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.startWithList')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {featuredLists.map((list) => (
+                    <li key={list.slug}>
+                      <Link
+                        to={`/blog/${list.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.lists.${list.key}`)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.householdHeading')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {householdPosts.map((post) => (
+                    <li key={post.slug}>
+                      <Link
+                        to={`/blog/${post.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.household.${post.key}`)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 font-serif text-lg text-ink">
+                  {t('landing.care.holidayHeading')}
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {holidayPetPages.map((plant) => (
+                    <li key={plant.slug}>
+                      <Link
+                        to={`/pet-safe/${plant.slug}`}
+                        className="text-sm font-medium text-primary-700 hover:underline"
+                      >
+                        {t(`landing.care.holidayPets.${plant.key}`)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {/* Holiday care guides; see holidayGuideList.ts. */}
+                <HolidayCareGuides id="landing-holiday-care" as="h3" className="mt-6" />
                 <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
                   <Link to="/care" className="text-primary-700 hover:underline">
                     {t('landing.care.allGuides')} <span aria-hidden="true">→</span>

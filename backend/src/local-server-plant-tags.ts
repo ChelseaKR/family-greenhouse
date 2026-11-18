@@ -155,6 +155,17 @@ function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? '';
 }
 
+/** A surface, not a person: its name is a server-written label ("a plant
+ *  sitter", "the kiosk display", "Former member") and prints whole. Mirrors
+ *  isSurfaceActor in handlers/plantTags/handler.ts; see the note there. */
+function isSurfaceActor(completedBy: string): boolean {
+  return (
+    completedBy.startsWith('sitter:') ||
+    completedBy.startsWith('kiosk:') ||
+    completedBy === 'deleted-user'
+  );
+}
+
 function cleanDisplayName(raw: string): string {
   return raw
     .replace(/[\p{Cc}\p{Cf}]/gu, '')
@@ -442,7 +453,10 @@ export function registerPlantTagRoutes(app: express.Express, deps: PlantTagDeps)
       return {
         taskType: c.taskType,
         completedAt: c.completedAt,
-        completedByName: viaTag ? c.completedByName : firstName(c.completedByName),
+        completedByName:
+          viaTag || isSurfaceActor(c.completedBy)
+            ? c.completedByName
+            : firstName(c.completedByName),
         viaTag,
       };
     };

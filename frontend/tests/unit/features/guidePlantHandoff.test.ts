@@ -7,6 +7,7 @@ import {
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
+import { GUIDE_HANDOFF_PLANTS } from '@/features/onboarding/guideHandoffPlants';
 
 afterEach(() => {
   sessionStorage.clear();
@@ -16,11 +17,13 @@ afterEach(() => {
 describe('guidePlantHandoff', () => {
   it('knows every first-run plant and nothing else', () => {
     for (const plant of COMMON_PLANTS) expect(guidePlant(plant.slug)).toBe(plant);
+    for (const plant of GUIDE_HANDOFF_PLANTS) expect(guidePlant(plant.slug)).toBe(plant);
     for (const value of [
       null,
       undefined,
       '',
       'bird-of-paradise', // a real guide, but not a one-tap first-run plant
+      'air-plant', // a real guide with a cited interval, held back (guideHandoffPlants.ts)
       'ZZ-PLANT',
       ' zz-plant',
       'zz-plant/../admin',
@@ -34,6 +37,8 @@ describe('guidePlantHandoff', () => {
     expect(registerHrefForPlant('zz-plant')).toBe('/register?plant=zz-plant');
     expect(registerHrefForPlant('aloe-vera')).toBe('/register?plant=aloe-vera');
     expect(registerHrefForPlant('bird-of-paradise')).toBe('/register');
+    expect(registerHrefForPlant('rosemary')).toBe('/register?plant=rosemary');
+    expect(registerHrefForPlant('air-plant')).toBe('/register');
     expect(registerHrefForPlant('not a plant & more')).toBe('/register');
   });
 

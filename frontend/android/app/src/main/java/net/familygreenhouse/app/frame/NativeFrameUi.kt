@@ -61,11 +61,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -311,14 +313,23 @@ fun FrameDialogs(ui: FrameUiState, frame: NativeFrameController) {
         val config = ui.configuration
         AlertDialog(
             onDismissRequest = { frame.confirmSignOut(false) },
-            title = { Text(config?.signOutTitle.orEmpty()) },
+            // The configuration carries the localized words. If it has not
+            // arrived, fall back to the item's own title and the system's
+            // localized "Cancel" rather than a blank title and an unlabeled
+            // button.
+            title = { Text(config?.signOutTitle?.takeIf { it.isNotBlank() } ?: item.title) },
             confirmButton = {
                 TextButton(onClick = { frame.confirmSignOut(true) }) {
-                    Text(config?.signOutConfirm ?: item.title, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        config?.signOutConfirm?.takeIf { it.isNotBlank() } ?: item.title,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { frame.confirmSignOut(false) }) { Text(config?.signOutCancel.orEmpty()) }
+                TextButton(onClick = { frame.confirmSignOut(false) }) {
+                    Text(config?.signOutCancel?.takeIf { it.isNotBlank() } ?: stringResource(android.R.string.cancel))
+                }
             },
         )
     }
@@ -433,7 +444,14 @@ private fun FormSheet(form: PresentedForm, frame: NativeFrameController) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 request.message?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    // A live region, so TalkBack announces an error that appears
+                    // after Submit instead of leaving it silent.
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 }
                 request.fields.filter { request.isVisible(it, form.values) }.forEach { field ->
                     FormField(field, form)

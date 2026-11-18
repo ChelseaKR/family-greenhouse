@@ -13,12 +13,20 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { track } from '@/services/analytics';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
+
+/**
+ * True only when the server answered 404. A 5xx, a rate limit, a timeout or no
+ * answer at all is a read that failed, and says nothing about the invite.
+ */
+function isNotFound(error: unknown): boolean {
+  return (error as { response?: { status?: unknown } } | null)?.response?.status === 404;
+}
 
 export function JoinHouseholdPage() {
   const { t } = useTranslation();
-  useDocumentTitle('Join household');
+  useDocumentTitle(t('joinInvite.documentTitle'));
   const { inviteCode } = useParams<{ inviteCode: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, setHousehold } = useAuthStore();
@@ -27,7 +35,9 @@ export function JoinHouseholdPage() {
   const {
     data: inviteData,
     isLoading,
+    isFetching: isFetchingInvite,
     error: validateError,
+    refetch: refetchInvite,
   } = useQuery({
     queryKey: ['invite', inviteCode],
     queryFn: () => householdService.validateInvite(inviteCode!),
@@ -87,48 +97,70 @@ export function JoinHouseholdPage() {
     );
   }
 
-  const isInvalid = validateError || !inviteData?.valid;
+  // "Invalid or expired" only when the server said so: `valid: false`, or a
+  // 404 (or an address with no code to ask about). `validateError ||
+  // !inviteData?.valid` used to put every failed read here too, so a 503 or a
+  // dropped connection sent someone holding a good invite back to the admin
+  // for a new one. Anything short of a verdict is a read we did not get.
+  const verdict = inviteData?.valid;
+  const isInvalid =
+    verdict === false || (verdict === undefined && (!inviteCode || isNotFound(validateError)));
+  const loadFailed = !isInvalid && verdict !== true;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
+    // <main> and <h1>: the page had no landmark and its title was an h2.
+    <main className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-paper">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <BrandMark variant="wordmark" />
         </div>
-        <h2 className="mt-6 text-center font-serif text-2xl text-ink">Join Household</h2>
+        <h1 className="mt-6 text-center font-serif text-2xl text-ink">{t('joinInvite.title')}</h1>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <Card>
           {isInvalid ? (
             <div className="text-center space-y-4">
-              <Alert variant="error">This invite link is invalid or has expired.</Alert>
-              <p className="text-sm text-gray-500">
-                Please ask for a new invite link from a household admin.
-              </p>
+              <Alert variant="error">{t('joinInvite.invalid')}</Alert>
+              <p className="text-sm text-gray-500">{t('joinInvite.askNewLink')}</p>
               {isAuthenticated ? (
                 <Link to="/onboarding" className={buttonStyles({ variant: 'secondary' })}>
-                  Go to onboarding
+                  {t('joinInvite.goToOnboarding')}
                 </Link>
               ) : (
                 <Link to="/login" className={buttonStyles({ variant: 'secondary' })}>
-                  Sign in
+                  {t('auth.signInButton')}
                 </Link>
               )}
+            </div>
+          ) : loadFailed ? (
+            <div className="text-center space-y-4">
+              <Alert variant="error">{t('joinInvite.loadFailed')}</Alert>
+              <Button onClick={() => void refetchInvite()} isLoading={isFetchingInvite}>
+                {t('common.retry')}
+              </Button>
             </div>
           ) : isAlreadyMember ? (
             <div className="text-center space-y-4">
               <Alert variant="info">
-                You&rsquo;re already a member of <strong>{inviteData?.household.name}</strong>.
+                <Trans
+                  i18nKey="joinInvite.alreadyMember"
+                  values={{ household: inviteData?.household.name }}
+                  components={{ strong: <strong /> }}
+                />
               </Alert>
               <Link to="/" className={buttonStyles({ variant: 'secondary' })}>
-                Go to your household
+                {t('joinInvite.goToHousehold')}
               </Link>
             </div>
           ) : !isAuthenticated ? (
             <div className="text-center space-y-4">
               <p className="text-gray-600">
-                You've been invited to join <strong>{inviteData?.household.name}</strong>
+                <Trans
+                  i18nKey="joinInvite.invitedToJoinNamed"
+                  values={{ household: inviteData?.household.name }}
+                  components={{ strong: <strong /> }}
+                />
               </p>
               <p className="text-sm text-gray-500">
                 {PUBLIC_REGISTRATION_AVAILABLE
@@ -137,7 +169,7 @@ export function JoinHouseholdPage() {
               </p>
               <div className="flex gap-3 justify-center">
                 <Link to={`/login?redirect=/join/${inviteCode}`} className={buttonStyles()}>
-                  Sign in
+                  {t('auth.signInButton')}
                 </Link>
                 {PUBLIC_REGISTRATION_AVAILABLE && (
                   <Link
@@ -153,21 +185,21 @@ export function JoinHouseholdPage() {
             <div className="text-center space-y-6">
               {error && <Alert variant="error">{error}</Alert>}
 
-              <p className="text-gray-600">You've been invited to join</p>
+              <p className="text-gray-600">{t('joinInvite.invitedToJoin')}</p>
               <p className="text-xl font-semibold text-gray-900">{inviteData?.household.name}</p>
 
               <div className="flex gap-3 justify-center">
                 <Link to="/onboarding" className={buttonStyles({ variant: 'secondary' })}>
-                  Cancel
+                  {t('common.cancel')}
                 </Link>
                 <Button onClick={() => joinMutation.mutate()} isLoading={joinMutation.isPending}>
-                  Join household
+                  {t('joinInvite.join')}
                 </Button>
               </div>
             </div>
           )}
         </Card>
       </div>
-    </div>
+    </main>
   );
 }

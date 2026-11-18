@@ -79,7 +79,13 @@ export interface FeatureSpec {
 
 export const FEATURE_CATALOG: Record<UpgradeFeature, FeatureSpec> = {
   chat: { label: 'Plant care chat', minimumPlan: 'garden' },
-  identifications: { label: 'More plant identifications each month', minimumPlan: 'garden' },
+  // Garden bundles no identifications since ADR 0042 (they are sold by the
+  // pack, ADR 0019); Greenhouse is the one tier whose price includes a
+  // monthly allowance, so it is the only honest answer to this ask.
+  identifications: {
+    label: 'Plant identifications included each month',
+    minimumPlan: 'greenhouse',
+  },
   leaf_health: { label: 'More leaf-health checks each month', minimumPlan: 'garden' },
   plant_cap: { label: 'Room for more plants', minimumPlan: 'next_plant_cap' },
   member_cap: { label: 'Room for more household members', minimumPlan: 'next_member_cap' },

@@ -106,11 +106,11 @@ describe('Terms of Service plan status matches the plan catalog', () => {
         'same change, then update this pin. Withdrawing a cadence also means saying that ' +
         'households already on it keep it (that is what `withdrawnIntervals` exists to ' +
         'preserve), and bringing one back means saying it is sold again.'
-    ).toEqual(['month']);
+    ).toEqual(['month', 'year']);
 
     // The other half of the same fact, so a re-launch and a withdrawal are
     // both visible here rather than only one of them.
-    expect(cadencesWithdrawn()).toEqual(['year', 'lifetime']);
+    expect(cadencesWithdrawn()).toEqual(['lifetime']);
   });
 
   it.each(LOCALES)(

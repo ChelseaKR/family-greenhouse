@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
  */
 export function AccountPage() {
   const { t } = useTranslation();
-  useDocumentTitle('Account');
+  useDocumentTitle(t('settings.tabs.account'));
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-dew/60 bg-paper/95 native-frame:hidden!">
@@ -31,9 +31,9 @@ export function AccountPage() {
       </header>
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 sm:py-12">
         <PageHeader
-          eyebrow="Your account"
-          title="Account & data"
-          description="Manage your profile, download your data, or permanently delete your account."
+          eyebrow={t('settings.page.eyebrow')}
+          title={t('settings.account.pageTitle')}
+          description={t('settings.page.accountDescription')}
         />
         <AccountSettings />
       </main>

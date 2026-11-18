@@ -7,7 +7,7 @@
 # until someone cuts a release, which is deliberate and which this workflow does not
 # change. And the auto-rollback is invisible from outside: when the post-deploy smoke
 # test fails, `cd-production.yml` puts the previous frontend snapshot back, while the
-# three `production` deployment rows it already wrote keep saying `success` at the
+# `production` deployment row it already wrote keeps saying `success` at the
 # tagged commit. See scripts/check-deploy-staleness.mjs for how that was measured and
 # what this reads instead.
 #

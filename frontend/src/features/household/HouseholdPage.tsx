@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   ArrowUpOnSquareIcon,
   ClipboardDocumentIcon,
@@ -24,6 +24,7 @@ import { HouseholdSkeleton } from '@/components/Skeleton';
 import { Alert } from '@/components/Alert';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { getErrorMessage } from '@/services/api';
+import { toast } from '@/store/toastStore';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useActiveHousehold } from '@/hooks/useActiveHousehold';
@@ -40,8 +41,8 @@ import { HouseholdAuditCard } from './HouseholdAuditCard';
 import { PlanCapPrompt } from '@/features/billing/PlanCapPrompt';
 
 export function HouseholdPage() {
-  useDocumentTitle('Household');
   const { t, i18n } = useTranslation();
+  useDocumentTitle(t('nav.household'));
   const user = useAuthStore((state) => state.user);
   // Operate on the ACTIVE household (multi-household users can switch);
   // user.householdId is only the Cognito-claim default.
@@ -52,6 +53,12 @@ export function HouseholdPage() {
   const [searchParams] = useSearchParams();
   const awayEntry = searchParams.get('away') === '1';
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // A link admits up to five people, an emailed invitation one; the line
+  // under the link says which this is.
+  const [inviteLinkKind, setInviteLinkKind] = useState<'link' | 'email'>('link');
+  // Set once the admin has turned the household's invites off on this visit,
+  // and cleared when they make a new one.
+  const [invitesTurnedOff, setInvitesTurnedOff] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   // In the native shells the invite goes out through the share sheet.
@@ -83,10 +90,27 @@ export function HouseholdPage() {
     document.getElementById('sitter-links')?.scrollIntoView?.({ block: 'start' });
   }, [awayEntry, householdLoaded]);
 
+  // "Generate invite link" is replaced by the link it made. The button that
+  // had focus is gone, so focus fell to the top of the document and nothing
+  // was announced: a keyboard or screen-reader user had made a link and had to
+  // go looking for it (WCAG 2.4.3, 4.1.3). Focus now lands on the link field,
+  // which reads its label and the link.
+  const inviteLinkRef = useRef<HTMLInputElement>(null);
+  const focusInviteLink = useRef(false);
+  useEffect(() => {
+    if (inviteLink && focusInviteLink.current) {
+      focusInviteLink.current = false;
+      inviteLinkRef.current?.focus();
+    }
+  }, [inviteLink]);
+
   const createInviteMutation = useMutation({
     mutationFn: () => householdService.createInvite(householdId!),
     onSuccess: (data) => {
+      focusInviteLink.current = true;
       setInviteLink(data.url);
+      setInviteLinkKind('link');
+      setInvitesTurnedOff(false);
       setCopyError(false);
     },
   });
@@ -100,9 +124,27 @@ export function HouseholdPage() {
       ),
     onSuccess: (data) => {
       setInviteLink(data.url);
+      setInviteLinkKind('email');
+      setInvitesTurnedOff(false);
       setInviteEmailStatus(data.status);
       setCopyError(false);
       if (data.status === 'accepted') setInviteEmailDraft('');
+    },
+  });
+
+  // Every invite made so far stops working, so the one on screen is cleared
+  // rather than left looking usable.
+  const forgetShownInvite = () => {
+    setInviteLink(null);
+    setInviteEmailStatus(null);
+    setCopyError(false);
+  };
+
+  const revokeInvitesMutation = useMutation({
+    mutationFn: () => householdService.revokeInvites(householdId!),
+    onSuccess: () => {
+      forgetShownInvite();
+      setInvitesTurnedOff(true);
     },
   });
 
@@ -111,6 +153,16 @@ export function HouseholdPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['household', householdId] });
       setMemberToRemove(null);
+      // Removing someone turns off the household's invites so far, the one
+      // on screen included.
+      forgetShownInvite();
+    },
+    // A refused or failed removal used to do nothing on screen. Close the
+    // confirmation first: while the dialog is open the toast sits under its
+    // backdrop, in the part of the page the dialog makes inert.
+    onError: (err) => {
+      setMemberToRemove(null);
+      toast.error(getErrorMessage(err));
     },
   });
 
@@ -120,6 +172,8 @@ export function HouseholdPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['household', householdId] });
     },
+    // Same silence as removal: the role stayed as it was and nothing said why.
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const setLocationMutation = useMutation({
@@ -168,9 +222,9 @@ export function HouseholdPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Your household"
+        eyebrow={t('dashboard.eyebrow')}
         title={household.name}
-        description="Manage your household members and settings."
+        description={t('household.page.description')}
       />
 
       {/* How the care is actually split. Shown to every member, not just
@@ -188,8 +242,8 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Invite members"
-            description="Generate an invite link to add family members to your household"
+            title={t('household.page.inviteTitle')}
+            description={t('household.page.inviteDescription')}
           />
 
           {/* At the member cap an invite can be sent but not accepted, so say
@@ -202,10 +256,7 @@ export function HouseholdPage() {
           {household.members.length === 1 && !inviteLink && (
             <div className="mb-4 flex items-center gap-4 rounded-lg border border-primary-100 bg-primary-50 p-4">
               <EmptyMembers className="h-20 w-auto shrink-0" />
-              <p className="text-sm text-primary-900">
-                You&rsquo;re the only one here. Plant care is more fun (and more reliable) with
-                someone else helping — share an invite link with whoever lives with you.
-              </p>
+              <p className="text-sm text-primary-900">{t('household.page.onlyOneHere')}</p>
             </div>
           )}
 
@@ -263,6 +314,7 @@ export function HouseholdPage() {
             <div className="space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
+                  ref={inviteLinkRef}
                   type="text"
                   readOnly
                   value={inviteLink}
@@ -300,7 +352,11 @@ export function HouseholdPage() {
                   {t('household.share.copyFailed')}
                 </p>
               )}
-              <p className="text-xs text-gray-600">This link will expire in 7 days.</p>
+              <p className="text-xs text-gray-600">
+                {inviteLinkKind === 'email'
+                  ? t('household.inviteEmailLinkLimits')
+                  : t('household.inviteLinkLimits')}
+              </p>
             </div>
           ) : (
             <Button
@@ -308,7 +364,7 @@ export function HouseholdPage() {
               isLoading={createInviteMutation.isPending}
               leftIcon={<UserPlusIcon className="h-4 w-4" aria-hidden="true" />}
             >
-              Generate invite link
+              {t('household.page.generateInvite')}
             </Button>
           )}
 
@@ -317,6 +373,29 @@ export function HouseholdPage() {
               {getErrorMessage(createInviteMutation.error)}
             </Alert>
           )}
+
+          {/* Taking invites back. There is no list to choose from: a link is
+              shown once, when it is made, so the control turns off every
+              invite made so far (ADR 0047). */}
+          <div className="mt-6 space-y-2 border-t border-gray-200 pt-4">
+            <p className="text-xs text-gray-600">{t('household.revokeInvites.hint')}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => revokeInvitesMutation.mutate()}
+              isLoading={revokeInvitesMutation.isPending}
+            >
+              {t('household.revokeInvites.button')}
+            </Button>
+            {/* Rendered unconditionally so the live region exists before it
+                has anything to say. */}
+            <p className="text-sm text-primary-800" role="status">
+              {invitesTurnedOff ? t('household.revokeInvites.done') : ''}
+            </p>
+            {revokeInvitesMutation.isError && (
+              <Alert variant="error">{getErrorMessage(revokeInvitesMutation.error)}</Alert>
+            )}
+          </div>
         </Card>
       )}
 
@@ -376,8 +455,8 @@ export function HouseholdPage() {
       {isAdmin && (
         <Card>
           <CardHeader
-            title="Location"
-            description="Used for climate-aware care tips (humidity warnings, freeze alerts, etc.)."
+            title={t('plants.locationLabel')}
+            description={t('household.page.locationDescription')}
           />
           {climateQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-600" role="status">
@@ -409,8 +488,11 @@ export function HouseholdPage() {
           ) : household.location ? (
             <div className="space-y-3">
               <p className="text-sm">
-                Currently set to{' '}
-                <span className="font-medium text-gray-900">{household.location.city}</span>.
+                <Trans
+                  i18nKey="household.page.locationCurrent"
+                  values={{ city: household.location.city }}
+                  components={{ b: <span className="font-medium text-gray-900" /> }}
+                />
               </p>
               <div className="flex gap-2">
                 <Button
@@ -418,7 +500,7 @@ export function HouseholdPage() {
                   onClick={() => setLocationMutation.mutate(null)}
                   isLoading={setLocationMutation.isPending}
                 >
-                  Clear location
+                  {t('household.page.clearLocation')}
                 </Button>
               </div>
             </div>
@@ -432,18 +514,18 @@ export function HouseholdPage() {
               }}
             >
               <Input
-                label="City"
-                placeholder="e.g. Austin, US"
+                label={t('household.page.cityLabel')}
+                placeholder={t('household.page.cityPlaceholder')}
                 value={locationDraft}
                 onChange={(e) => setLocationDraft(e.target.value)}
-                helperText="Add a country if your city name is ambiguous."
+                helperText={t('household.page.cityHelper')}
               />
               <Button
                 type="submit"
                 isLoading={setLocationMutation.isPending}
                 disabled={locationDraft.trim().length === 0}
               >
-                Save location
+                {t('household.page.saveLocation')}
               </Button>
             </form>
           )}
@@ -459,7 +541,7 @@ export function HouseholdPage() {
       <Card padding="none">
         <div className="px-6 py-4 border-b border-primary-100/70">
           <h2 className="font-serif text-lg text-ink">
-            Members
+            {t('household.page.members')}
             <span className="ml-2 text-sm font-normal text-gray-600">
               ({household.members.length})
             </span>
@@ -480,7 +562,7 @@ export function HouseholdPage() {
                   <p className="text-sm font-medium text-gray-900">
                     {member.name}
                     {member.userId === user?.id && (
-                      <span className="ml-2 text-gray-500">(you)</span>
+                      <span className="ml-2 text-gray-500">{t('household.page.you')}</span>
                     )}
                   </p>
                   {householdId && (
@@ -533,13 +615,15 @@ export function HouseholdPage() {
                         })
                       }
                       disabled={updateRoleMutation.isPending}
-                      aria-label={
-                        member.role === 'admin'
-                          ? `Demote ${member.name} to member`
-                          : `Promote ${member.name} to admin`
-                      }
                     >
+                      {/* PROPOSED WORDING. The name was "Promote Sam to admin"
+                          over a button that reads "Make admin", so someone
+                          using voice control who says what they see ("click
+                          Make admin") matched nothing (WCAG 2.5.3). The name
+                          now starts with the visible words and adds whose
+                          role it is. */}
                       {member.role === 'admin' ? 'Make member' : 'Make admin'}
+                      <span className="sr-only">, {member.name}</span>
                     </Button>
                     <Button
                       variant="secondary"
@@ -577,9 +661,9 @@ export function HouseholdPage() {
         isOpen={!!memberToRemove}
         onClose={() => setMemberToRemove(null)}
         onConfirm={() => memberToRemove && removeMemberMutation.mutate(memberToRemove)}
-        title="Remove member"
-        message="Are you sure you want to remove this member from the household? They will lose access to all shared plants and tasks. Anything they set up for other people also stops working: their plant-tag labels (you will need to print new ones), their sitter links, their wall display, and any API key they issued."
-        confirmLabel="Remove"
+        title={t('household.page.removeMemberTitle')}
+        message={t('household.page.removeMemberMessage')}
+        confirmLabel={t('household.page.removeMemberConfirm')}
         isLoading={removeMemberMutation.isPending}
       />
     </div>

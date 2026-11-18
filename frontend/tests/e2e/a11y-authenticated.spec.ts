@@ -144,6 +144,24 @@ test.describe('A11y — authenticated routes', () => {
     await expectNoA11yViolations(page, 'tasks');
   });
 
+  // The command palette is mounted on every signed-in page and was opened by
+  // no test, so axe never saw it (docs/accessibility.md, known gaps). With
+  // results showing, the highlighted row's secondary text was white at 75%
+  // opacity on the brand green: 4.3:1.
+  test('command palette, with results and a highlighted row', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
+    await page.keyboard.press('ControlOrMeta+k');
+    const search = page.getByRole('combobox');
+    await expect(search).toBeFocused();
+    // Empty, it shows a hint with an Esc key cap, which was gray-500 on
+    // parchment: 4.2:1.
+    await expectNoA11yViolations(page, 'command-palette-empty');
+    await search.fill('monstera');
+    await expect(page.getByRole('option').first()).toBeVisible({ timeout: 15000 });
+    await page.keyboard.press('ArrowDown');
+    await expectNoA11yViolations(page, 'command-palette');
+  });
+
   test('household', async ({ page }) => {
     await page.goto('/household');
     await page.waitForLoadState('networkidle');

@@ -166,7 +166,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                     className="inline-flex min-h-touch min-w-touch items-center justify-center rounded-md bg-paper text-gray-600 hover:text-gray-800 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
                     onClick={handleClose}
                   >
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">{t('common.close')}</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                   </button>
                 </div>
@@ -175,7 +175,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                   as="h3"
                   className="mb-4 pr-12 font-serif text-2xl tracking-tight text-ink"
                 >
-                  Add care task
+                  {t('tasks.formSheet.addTitle')}
                 </Dialog.Title>
 
                 {mutation.isError && (
@@ -187,22 +187,22 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <div>
                     <label htmlFor="type" className="label">
-                      Task type
+                      {t('tasks.modal.taskType')}
                     </label>
                     <select id="type" className="input" {...register('type')}>
-                      <option value="water">Water</option>
-                      <option value="fertilize">Fertilize</option>
-                      <option value="prune">Prune</option>
-                      <option value="repot">Repot</option>
-                      <option value="custom">Custom</option>
+                      <option value="water">{t('tasks.types.water')}</option>
+                      <option value="fertilize">{t('tasks.types.fertilize')}</option>
+                      <option value="prune">{t('tasks.types.prune')}</option>
+                      <option value="repot">{t('tasks.types.repot')}</option>
+                      <option value="custom">{t('tasks.types.custom')}</option>
                     </select>
                   </div>
 
                   {taskType === 'custom' && (
                     <Input
-                      label="Custom task name"
+                      label={t('tasks.modal.customTaskName')}
                       required
-                      placeholder="e.g., Rotate plant"
+                      placeholder={t('tasks.modal.customTaskPlaceholder')}
                       error={errors.customType?.message}
                       {...register('customType')}
                     />
@@ -219,7 +219,7 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                     increaseLabel={t('tasks.frequencyStepper.more')}
                   >
                     <Input
-                      label="Frequency (days)"
+                      label={t('tasks.modal.frequencyDays')}
                       type="number"
                       min={1}
                       max={365}
@@ -231,13 +231,13 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
 
                   <div>
                     <label htmlFor="notes" className="label">
-                      Notes
+                      {t('plants.notesLabel')}
                     </label>
                     <textarea
                       id="notes"
                       rows={3}
                       className="input"
-                      placeholder="Any notes about this task..."
+                      placeholder={t('tasks.modal.notesPlaceholder')}
                       {...register('notes')}
                     />
                   </div>
@@ -249,10 +249,10 @@ export function AddTaskModal({ plantId, isOpen, onClose }: AddTaskModalProps) {
                       onClick={handleClose}
                       disabled={mutation.isPending}
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button type="submit" isLoading={mutation.isPending}>
-                      Add task
+                      {t('tasks.addTask')}
                     </Button>
                   </div>
                 </form>

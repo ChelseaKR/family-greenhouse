@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { CaretakerPage } from '@/features/caretaker/CaretakerPage';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import {
   caretakerVisitService,
   CaretakerLinkInactiveError,
@@ -191,5 +192,138 @@ describe('CaretakerPage', () => {
 
     expect(await screen.findByText(/note didn’t save/)).toBeInTheDocument();
     expect(box).toHaveValue('Something to pass on.');
+  });
+
+  // A completed row is removed from the list, and two things leave with it:
+  // the focus the row's Done button held (it falls to <body>, so the next
+  // task is a whole page of Tab presses away) and any words about what just
+  // happened (a polite region announces insertions, never removals). The
+  // sitter page already replaces both; this page did neither.
+  describe('after Done', () => {
+    const second: CaretakerTask = {
+      taskId: 't2',
+      plantId: 'p2',
+      plantName: 'Fern',
+      taskType: 'water',
+      dueDate: new Date(Date.now() + 86_400_000).toISOString(),
+      spaceName: 'Kitchen',
+      placementNote: null,
+      overdue: false,
+    };
+    const saved = (task: CaretakerTask) => ({
+      taskId: task.taskId,
+      plantName: task.plantName,
+      taskType: task.taskType,
+      dueDate: new Date().toISOString(),
+      overdue: false,
+      visitRecorded: true,
+    });
+
+    it('moves focus to the next task and says what was done', async () => {
+      getView.mockResolvedValue({ ...view, tasks: [waterTask, second] });
+      completeTask.mockResolvedValue(saved(waterTask));
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Water the Monstera/ }));
+
+      const next = await screen.findByRole('button', { name: 'Mark “Water the Fern” as done' });
+      await waitFor(() => expect(document.activeElement).toBe(next));
+      // The sentence arrives as new content inside the page's own polite
+      // region, which is what makes a screen reader say it.
+      const said = screen.getByText('Marked as done: Monstera.');
+      expect(said.closest('[aria-live="polite"]')).not.toBeNull();
+    });
+
+    describe('in Spanish', () => {
+      afterEach(async () => {
+        await i18n.changeLanguage('en');
+      });
+
+      it('says what was done in Spanish', async () => {
+        await ensureLanguageCatalog('es');
+        await i18n.changeLanguage('es');
+        getView.mockResolvedValue({ ...view, tasks: [waterTask, second] });
+        completeTask.mockResolvedValue(saved(waterTask));
+        const user = userEvent.setup();
+        renderPage();
+
+        await user.click(await screen.findByRole('button', { name: /^Marcar .*Monstera/ }));
+
+        expect(await screen.findByText('Marcado como hecho: Monstera.')).toBeInTheDocument();
+        expect(screen.queryByText(/Marked as done/)).not.toBeInTheDocument();
+      });
+    });
+
+    it('goes back to the first task left when the last row in the list is completed', async () => {
+      getView.mockResolvedValue({ ...view, tasks: [waterTask, second] });
+      completeTask.mockResolvedValue(saved(second));
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Water the Fern/ }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /Water the Fern/ })).not.toBeInTheDocument()
+      );
+      const first = screen.getByRole('button', { name: 'Mark “Water the Monstera” as done' });
+      await waitFor(() => expect(document.activeElement).toBe(first));
+    });
+
+    it('moves focus to the closing summary when that was the last task', async () => {
+      getView.mockResolvedValue(view);
+      completeTask.mockResolvedValue(saved(waterTask));
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Water the Monstera/ }));
+
+      const summaryTitle = await screen.findByText('All caught up — thank you');
+      await waitFor(() => {
+        // `<body>` contains everything, so "contains the summary" alone would
+        // pass on exactly the bug this asserts against.
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toHaveAttribute('tabindex', '-1');
+        expect(document.activeElement?.contains(summaryTitle)).toBe(true);
+      });
+    });
+
+    it('says each completion, including a second task for the same plant', async () => {
+      // Two tasks on one plant produce the same sentence twice. Text that
+      // does not change is not an insertion, so the second one has to arrive
+      // as a new node or it is never announced.
+      const feed: CaretakerTask = { ...waterTask, taskId: 't3', taskType: 'fertilize' };
+      getView.mockResolvedValue({ ...view, tasks: [waterTask, feed] });
+      // Keyed on the task rather than queued with `...Once`: `clearAllMocks`
+      // does not drain a queue, so a leftover value would answer the next
+      // test's call.
+      completeTask.mockImplementation(async (_token, taskId) =>
+        saved(taskId === feed.taskId ? feed : waterTask)
+      );
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: /Water the Monstera/ }));
+      const firstSaid = await screen.findByText('Marked as done: Monstera.');
+
+      await user.click(await screen.findByRole('button', { name: /Feed the Monstera/ }));
+      await screen.findByText('All caught up — thank you');
+      const secondSaid = screen.getByText('Marked as done: Monstera.');
+      expect(secondSaid).not.toBe(firstSaid);
+    });
+
+    it('leaves focus on the Done button when the completion did not save', async () => {
+      getView.mockResolvedValue({ ...view, tasks: [waterTask, second] });
+      completeTask.mockRejectedValue(new Error('network'));
+      const user = userEvent.setup();
+      renderPage();
+
+      const done = await screen.findByRole('button', { name: /Water the Monstera/ });
+      await user.click(done);
+
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(document.activeElement).toBe(done);
+      expect(screen.queryByText('Marked as done: Monstera.')).not.toBeInTheDocument();
+    });
   });
 });

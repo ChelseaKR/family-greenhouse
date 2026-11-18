@@ -44,7 +44,7 @@ describe('one task', () => {
     // No article: the household chose the name, and its gender is unknown.
     expect(copy.title).toBe('Monstera necesita riego');
     expect(copy.body).toBe(
-      'Toca hoy. Márcala como hecha cuando la hagas, o pospónla hasta mañana.'
+      'Toca hoy. Márcala como hecha cuando la hagas, o posponla hasta mañana.'
     );
     expect(copy.actions).toEqual({ done: 'Hecho', snoozeUntilTomorrow: 'Posponer hasta mañana' });
   });

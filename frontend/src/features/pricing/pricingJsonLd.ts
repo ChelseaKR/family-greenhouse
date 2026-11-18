@@ -75,8 +75,63 @@ function publishableOffers(): Record<string, unknown>[] {
   });
 }
 
-export function pricingJsonLd(): Record<string, unknown> {
+/** One question the page answers, as the two catalog keys it is rendered from. */
+export interface PricingQuestion {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+/**
+ * The "Common questions" list on /pricing, in page order.
+ *
+ * `PricingPage` renders its `<dl>` from this list and `pricingJsonLd` builds
+ * the FAQPage node from it, so the structured data cannot hold a question the
+ * page does not show, or an answer worded differently from the one a person
+ * reads. Which questions appear follows the same two commercial flags as the
+ * rest of the page: the account question only while sign-up is open, and the
+ * buying questions swapped for the paused-plans ones while the hold is on.
+ */
+export function pricingQuestions(): PricingQuestion[] {
+  const topics = COMMERCIAL_HOLD_ACTIVE
+    ? (['paidOffer', 'reactivation'] as const)
+    : // `household` and `card` lead: "does everyone need to pay?" and "will
+      // you take my card?" are the two questions a hesitant buyer has before
+      // the ones about changing plans later.
+      (['household', 'trial', 'card', 'change', 'where'] as const);
+  return [
+    ...(PUBLIC_REGISTRATION_AVAILABLE
+      ? [
+          {
+            id: 'freeAccount',
+            question: 'pricingStatus.freeAccountQuestion',
+            answer: 'pricingStatus.freeAccountAnswer',
+          },
+        ]
+      : []),
+    ...topics.map((topic) => ({
+      id: topic,
+      question: `pricingStatus.${topic}Question`,
+      answer: `pricingStatus.${topic}Answer`,
+    })),
+    {
+      id: 'data',
+      question: 'pricingStatus.dataQuestion',
+      answer: COMMERCIAL_HOLD_ACTIVE
+        ? 'pricingStatus.dataAnswerHeld'
+        : 'pricingStatus.dataAnswerOpen',
+    },
+  ];
+}
+
+/**
+ * @param t The page's translator. Given one, the graph also carries a FAQPage
+ *          with the page's own questions and answers; without one it carries
+ *          none, because there is no text to put in it.
+ */
+export function pricingJsonLd(t?: (key: string) => string): Record<string, unknown> {
   const offers = publishableOffers();
+  const questions = t ? pricingQuestions() : [];
   return {
     '@context': 'https://schema.org',
     '@graph': [
@@ -114,6 +169,22 @@ export function pricingJsonLd(): Record<string, unknown> {
         // exist and something on the page shows them.
         ...(offers.length > 0 ? { offers } : {}),
       },
+      // The questions the page answers in its "Common questions" list, word
+      // for word. Help topics, care guides and pet pages already publish
+      // theirs; /pricing showed seven and marked up none.
+      ...(t && questions.length > 0
+        ? [
+            {
+              '@type': 'FAQPage',
+              '@id': `${siteUrl('/pricing')}#faq`,
+              mainEntity: questions.map(({ question, answer }) => ({
+                '@type': 'Question',
+                name: t(question),
+                acceptedAnswer: { '@type': 'Answer', text: t(answer) },
+              })),
+            },
+          ]
+        : []),
     ],
   };
 }

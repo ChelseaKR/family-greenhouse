@@ -529,6 +529,106 @@ export function isSignedS3GetFor(rawUrl: string, target: SmokeS3ObjectTarget): b
   );
 }
 
+/**
+ * True when `rawUrl` is a SigV4-signed S3 GET for some key under `keyPrefix`
+ * in `bucket` (ADR 0046).
+ *
+ * A confirmed photo is stored under a key the server chooses at confirm time,
+ * so the smoke cannot know the exact key when it has to start listening for
+ * the image. It listens for the plant's own prefix instead, and compares the
+ * exact key once the confirm response has named it. Returns false, never
+ * throws, and never echoes the URL, for the reasons `isSignedS3GetFor` gives.
+ */
+export function isSignedS3GetUnder(rawUrl: string, bucket: string, keyPrefix: string): boolean {
+  let candidate: SmokeS3ObjectTarget;
+  try {
+    candidate = s3ObjectTargetFromPresignedUrl(rawUrl);
+  } catch {
+    return false;
+  }
+  return (
+    keyPrefix.endsWith('/') &&
+    candidate.bucket === bucket &&
+    candidate.key.startsWith(keyPrefix) &&
+    isSignedS3GetFor(rawUrl, candidate)
+  );
+}
+
+/**
+ * The headers a presigned URL's signature covers, lower-cased. An upload URL
+ * that binds the file's type and exact size lists `content-type` and
+ * `content-length` here; storage then refuses a PUT that sends any other.
+ * Returns an empty list for a URL that is not one. Never echoes the URL.
+ */
+export function signedHeadersOf(rawUrl: string): string[] {
+  try {
+    return (new URL(rawUrl).searchParams.get('X-Amz-SignedHeaders') ?? '')
+      .toLowerCase()
+      .split(';')
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The object key a stored photo reference names: the path of
+ * `${ASSETS_BASE_URL}/plants/{householdId}/{plantId}/{uuid}.{ext}`, and only
+ * when it is exactly that shape under `keyPrefix`. Null otherwise.
+ */
+export function storedPhotoKeyFromReference(reference: string, keyPrefix: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(reference);
+  } catch {
+    return null;
+  }
+  if (url.search || url.hash) return null;
+  let key: string;
+  try {
+    key = decodeURIComponent(url.pathname).replace(/^\//, '');
+  } catch {
+    return null;
+  }
+  if (!keyPrefix.endsWith('/') || !key.startsWith(keyPrefix)) return null;
+  return /^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(key.slice(keyPrefix.length)) ? key : null;
+}
+
+/**
+ * The stored photo a confirm response names, as a bucket and key, or null.
+ *
+ * A deployed API does not answer with the stored reference: every `imageUrl`
+ * in a response is swapped for a short-lived signed S3 GET (ADR 0033), the
+ * confirm response included. So this reads the object out of that signed URL
+ * and requires it to be in the bucket the upload went to, under the plant's
+ * own prefix, with a file name of the shape the server mints. The plain
+ * reference form is accepted too, for a server that does not sign.
+ *
+ * Returns null, never throws, and never echoes the URL, whose query string
+ * carries temporary credentials.
+ */
+export function storedPhotoTargetFromConfirm(
+  imageUrl: string,
+  bucket: string,
+  keyPrefix: string
+): SmokeS3ObjectTarget | null {
+  const plainKey = storedPhotoKeyFromReference(imageUrl, keyPrefix);
+  if (plainKey) return { bucket, key: plainKey };
+
+  let candidate: SmokeS3ObjectTarget;
+  try {
+    candidate = s3ObjectTargetFromPresignedUrl(imageUrl);
+  } catch {
+    return null;
+  }
+  if (!isSignedS3GetFor(imageUrl, candidate)) return null;
+  if (candidate.bucket !== bucket) return null;
+  if (!keyPrefix.endsWith('/') || !candidate.key.startsWith(keyPrefix)) return null;
+  return /^[A-Za-z0-9-]+\.(jpg|png|webp)$/.test(candidate.key.slice(keyPrefix.length))
+    ? candidate
+    : null;
+}
+
 export interface SmokeS3VersionIdentifier {
   key: string;
   versionId: string;

@@ -70,21 +70,54 @@ export function linkHasEnded(link: SitterLink, now: Date): boolean {
 }
 
 /**
- * Choose which link to recap. An explicit id wins (any state — a household
+ * Whether the link's window has begun. A link made for next week has no
+ * window yet, and one revoked before its start date never will: nobody could
+ * open it, so nothing happened in it and there is nothing to recap.
+ *
+ * This is the question `linkHasEnded` cannot answer. A link revoked before it
+ * started reads as "ended" there, which made it the most recently ended link
+ * with a window running from next week back to now. DynamoDB's BETWEEN
+ * refuses a lower bound above its upper bound, so the read threw and the page
+ * said "couldn't load" over the real recap (audit 2026-11-08, finding 10).
+ *
+ * What this cannot see: a revoked link carries no revoke time, so once the
+ * start date of a link revoked beforehand has passed, it is indistinguishable
+ * here from one revoked mid-window.
+ */
+export function windowHasOpened(link: SitterLink, now: Date): boolean {
+  return link.startsAt <= isoNow(now);
+}
+
+/** Thrown instead of handing back a window that runs backwards. Reaching it
+ *  means a caller skipped `pickRecapLink`; it is a bug, not a user state. */
+export class RecapWindowNotOpenError extends Error {
+  constructor(linkId: string) {
+    super(`Sitter link ${linkId} has no recap window: its start date has not arrived`);
+    this.name = 'RecapWindowNotOpenError';
+  }
+}
+
+/**
+ * Choose which link to recap. An explicit id wins, open or ended (a household
  * may want to peek at an in-progress window). Otherwise the most recently
  * ENDED link: the one whose window closed last, revoked links counted as
  * ending at whichever came first of their expiry and now. Null when nothing
  * has ended yet — the handler turns that into an explicit 404, not an empty
  * recap.
+ *
+ * Either way, only a link whose window has opened is a candidate (see
+ * `windowHasOpened`). One that never opened is skipped, so the recap of the
+ * window that did happen is what shows; alone, it is the same 404 as no link.
  */
 export function pickRecapLink(
   links: SitterLink[],
   linkId: string | undefined,
   now: Date
 ): SitterLink | null {
-  if (linkId) return links.find((l) => l.id === linkId) ?? null;
+  const opened = links.filter((l) => windowHasOpened(l, now));
+  if (linkId) return opened.find((l) => l.id === linkId) ?? null;
   const nowIso = isoNow(now);
-  const ended = links.filter((l) => linkHasEnded(l, now));
+  const ended = opened.filter((l) => linkHasEnded(l, now));
   if (ended.length === 0) return null;
   const endedAt = (l: SitterLink) => (l.expiresAt < nowIso ? l.expiresAt : nowIso);
   ended.sort((a, b) => {
@@ -94,7 +127,16 @@ export function pickRecapLink(
   return ended[0];
 }
 
+/**
+ * The slice of time a recap covers: link start → min(expiry, now).
+ *
+ * Throws `RecapWindowNotOpenError` for a link whose window has not opened.
+ * There is no honest window to return for one: `from` would sit after `to`,
+ * and clamping it to now would present a window that never happened as an
+ * empty one that did.
+ */
 export function recapWindow(link: SitterLink, now: Date): { from: string; to: string } {
+  if (!windowHasOpened(link, now)) throw new RecapWindowNotOpenError(link.id);
   const nowIso = isoNow(now);
   return { from: link.startsAt, to: link.expiresAt < nowIso ? link.expiresAt : nowIso };
 }

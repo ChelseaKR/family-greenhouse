@@ -17,6 +17,8 @@ import { PlantShopLink } from '@/features/plantShop/PlantShopLink';
 import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 import { trackGoogleConversion } from '@/services/googleAnalytics';
 import { careGuideHeading, type CareGuide } from './careGuides';
+import { HolidayCareGuides } from './HolidayCareGuides';
+import { wateringAnswer } from './wateringAnswer';
 import {
   careGuideResource,
   findCareGuideEntry,
@@ -185,10 +187,13 @@ function Paragraphs({ items }: { items: string[] }) {
  *
  * FAQPage carries only questions whose answers are printed on the page, and
  * the pet-toxicity question only when every animal's verdict is cited (see
- * careToxicity.ts). Since 2023 Google shows FAQ rich results only for
- * well-known government and health sites, so the markup describes the page
- * rather than buying a rich result; URL Inspection on 2026-10-02 detected
- * only Breadcrumbs on these pages.
+ * careToxicity.ts). Google stopped showing FAQ rich results on 2026-05-07
+ * and removed their documentation on 2026-06-15 (Search Central changelog),
+ * and HowTo rich results went in 2023, so neither type buys anything in
+ * Google. FAQPage stays because it is valid schema.org that describes the
+ * page and matches its visible text, which is what Google asks of any markup
+ * read for AI features. What Google can quote is the visible answer, so the
+ * watering section opens with it (wateringAnswer.ts).
  */
 export function CareGuidePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -202,6 +207,7 @@ export function CareGuidePage() {
   // the generated pet question. Only the sourced ones go into FAQPage.
   const faqs = guide && toxicity ? [...guide.faqs, toxicity.faq] : [];
   const markedUpFaqs = guide && toxicity ? (toxicity.sourced ? faqs : guide.faqs) : [];
+  const shortWaterAnswer = guide ? wateringAnswer(guide) : undefined;
 
   useMetaTags(
     guide
@@ -240,7 +246,16 @@ export function CareGuidePage() {
                 // older than their own content (see careGuides.ts).
                 datePublished: guide.reviewed,
                 dateModified: guide.updated,
-                author: { '@type': 'Organization', name: 'Family Greenhouse' },
+                // The same Organization node as `publisher` and the
+                // homepage graph, with the `url` Google's Article guidance
+                // asks an author to carry. A bare name left the author an
+                // unidentified entity on every guide.
+                author: {
+                  '@type': 'Organization',
+                  '@id': `${SITE}/#organization`,
+                  name: 'Family Greenhouse',
+                  url: SITE,
+                },
                 publisher: {
                   '@type': 'Organization',
                   '@id': `${SITE}/#organization`,
@@ -431,6 +446,10 @@ export function CareGuidePage() {
 
       <article className="prose-fg mt-12">
         <h2>How often to water {nameInSentence(guide.commonName)}</h2>
+        {/* The short answer first, as one paragraph straight under the
+            question it answers: the shape a results page quotes. It is the
+            guide's own FAQ answer, word for word (see wateringAnswer.ts). */}
+        {shortWaterAnswer && <p data-testid="care-water-answer">{withLinks(shortWaterAnswer)}</p>}
         <Paragraphs items={guide.sections.watering} />
 
         <h2>Light and humidity</h2>
@@ -535,6 +554,18 @@ export function CareGuidePage() {
           </ul>
         </section>
       )}
+
+      {/* The "Holiday plants" list from the home page and /care, with the same
+          heading and the same link words, at the foot of every guide. The
+          guides that reach the first page of US results are holiday and
+          less-common ones, and three of them are on this list (amaryllis,
+          cyclamen, paperwhite). November to January is when they are
+          searched, so each guide on the list now has a link from every other
+          guide and not only from the home page and /care. It is the last
+          thing on the page: nothing moves above the sign-up link. A holiday
+          guide leaves itself out. Off with the same switch as the other two
+          pages (holidayGuideList.ts). */}
+      <HolidayCareGuides id="care-holiday-guides" className="mt-12" exclude={guide.slug} />
     </PublicShell>
   );
 }

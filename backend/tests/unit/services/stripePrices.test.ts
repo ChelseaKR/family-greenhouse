@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import type Stripe from 'stripe';
 import {
   CATALOG_CURRENCY,
+  CATALOG_TAX_CODE,
   PriceReconciliationError,
+  automaticTaxEnabled,
+  compareTaxCodeToCatalog,
+  assertGiftPriceMatchesCatalog,
   assertIdentifyTopUpPriceMatchesCatalog,
   assertPriceMatchesCatalog,
   comparePriceToCatalog,
@@ -36,7 +40,7 @@ function fakeStripe(prices: Record<string, Partial<Stripe.Price> | Error>) {
 
 function priceLike(over: Partial<Stripe.Price> = {}): Partial<Stripe.Price> {
   return {
-    unit_amount: 499,
+    unit_amount: 299,
     currency: 'usd',
     active: true,
     recurring: { interval: 'month', interval_count: 1 } as Stripe.Price.Recurring,
@@ -67,7 +71,9 @@ describe('catalog expansion', () => {
     expect(rows.sort()).toEqual([
       'garden:lifetime',
       'garden:month',
+      'garden:month', // the legacy $4.99 price (ADR 0042)
       'garden:year',
+      'garden:year', // the legacy $39.99 price
       'gift-garden-month:one_time',
       'gift-greenhouse-month:one_time',
       'greenhouse:month',
@@ -82,7 +88,7 @@ describe('catalog expansion', () => {
       cadence: 'one_time',
       env: 'STRIPE_PRICE_ID_GIFT_GARDEN_MONTH',
       dollars: PLANS.garden.monthlyPrice,
-      unitAmount: 499,
+      unitAmount: 299, // ADR 0042: a gift month is the monthly price
     });
     expect(giftExpectedPrice('greenhouse')).toMatchObject({
       env: 'STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH',
@@ -108,7 +114,7 @@ describe('catalog expansion', () => {
     // Reading through PLANS is the point: if someone edits the catalog, this
     // reconciliation follows, instead of silently checking a stale copy.
     expect(expectedPriceFor('garden', 'month')).toMatchObject({
-      env: 'STRIPE_PRICE_ID_GARDEN',
+      env: 'STRIPE_PRICE_ID_GARDEN_299',
       dollars: PLANS.garden.monthlyPrice,
       unitAmount: unitAmountFor(PLANS.garden.monthlyPrice),
     });
@@ -136,8 +142,8 @@ describe('comparePriceToCatalog', () => {
     );
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('999 cents');
-    expect(problems[0]).toContain('499 cents');
-    expect(problems[0]).toContain('STRIPE_PRICE_ID_GARDEN');
+    expect(problems[0]).toContain('299 cents');
+    expect(problems[0]).toContain('STRIPE_PRICE_ID_GARDEN_299');
   });
 
   it('catches a foreign currency even when the digits match', () => {
@@ -251,12 +257,165 @@ describe('reconcilePrice — fails closed', () => {
   });
 });
 
+describe('tax code — only when automatic tax is on', () => {
+  /** A price whose product arrived expanded, carrying the given tax code. */
+  function withProduct(tax_code: string | null | { id: string }, over: Partial<Stripe.Price> = {}) {
+    return priceLike({
+      product: { id: 'prod_garden', object: 'product', tax_code } as unknown as Stripe.Product,
+      ...over,
+    });
+  }
+
+  it('reads the flag as exactly "1", like every other runtime gate', () => {
+    expect(automaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: '1' })).toBe(true);
+    for (const value of [undefined, '', '0', 'true', ' 1', '01']) {
+      expect(automaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: value })).toBe(false);
+    }
+  });
+
+  it('accepts a product carrying the SaaS code, as a string or as an expanded TaxCode', () => {
+    expect(
+      compareTaxCodeToCatalog(GARDEN_MONTHLY, withProduct(CATALOG_TAX_CODE) as Stripe.Price)
+    ).toEqual([]);
+    expect(
+      compareTaxCodeToCatalog(GARDEN_MONTHLY, withProduct({ id: CATALOG_TAX_CODE }) as Stripe.Price)
+    ).toEqual([]);
+  });
+
+  it('names a product with NO tax code rather than letting the account preset stand in', () => {
+    const problems = compareTaxCodeToCatalog(GARDEN_MONTHLY, withProduct(null) as Stripe.Price);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('carries no tax code');
+    expect(problems[0]).toContain('prod_garden');
+    expect(problems[0]).toContain(CATALOG_TAX_CODE);
+    expect(problems[0]).toContain(GARDEN_MONTHLY.env);
+  });
+
+  it('refuses the general preset code the account carries today', () => {
+    const problems = compareTaxCodeToCatalog(
+      GARDEN_MONTHLY,
+      withProduct('txcd_10000000') as Stripe.Price
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('txcd_10000000');
+    expect(problems[0]).toContain(CATALOG_TAX_CODE);
+  });
+
+  it('refuses a product that was not expanded — a code that cannot be read is not assumed', () => {
+    const problems = compareTaxCodeToCatalog(
+      GARDEN_MONTHLY,
+      priceLike({ product: 'prod_garden' }) as Stripe.Price
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('cannot be checked');
+  });
+
+  it('refuses a deleted product', () => {
+    const problems = compareTaxCodeToCatalog(
+      GARDEN_MONTHLY,
+      priceLike({
+        product: {
+          id: 'prod_gone',
+          object: 'product',
+          deleted: true,
+        } as unknown as Stripe.DeletedProduct,
+      }) as Stripe.Price
+    );
+    expect(problems).toEqual([expect.stringContaining('deleted')]);
+  });
+
+  it('is NOT part of the comparison while automatic tax is off (today’s products pass)', async () => {
+    const { stripe } = fakeStripe({
+      price_preset: withProduct('txcd_10000000'),
+      price_bare: priceLike(),
+    });
+    await expect(reconcilePrice(stripe, GARDEN_MONTHLY, 'price_preset')).resolves.toMatchObject({
+      status: 'ok',
+    });
+    await expect(
+      reconcilePrice(stripe, GARDEN_MONTHLY, 'price_bare', { automaticTax: false })
+    ).resolves.toMatchObject({ status: 'ok' });
+  });
+
+  it('is demanded the moment automatic tax is on, on the same single retrieve', async () => {
+    const { stripe, retrieve } = fakeStripe({
+      price_preset: withProduct('txcd_10000000'),
+      price_saas: withProduct(CATALOG_TAX_CODE),
+    });
+    await expect(
+      reconcilePrice(stripe, GARDEN_MONTHLY, 'price_preset', { automaticTax: true })
+    ).resolves.toMatchObject({
+      status: 'mismatch',
+      problems: [expect.stringContaining('txcd_10000000')],
+    });
+    await expect(
+      reconcilePrice(stripe, GARDEN_MONTHLY, 'price_saas', { automaticTax: true })
+    ).resolves.toMatchObject({ status: 'ok' });
+    // The product is expanded on every retrieve, flag or no flag.
+    expect(retrieve).toHaveBeenCalledTimes(2);
+    expect(retrieve).toHaveBeenCalledWith('price_preset', { expand: ['product'] });
+    expect(retrieve).toHaveBeenCalledWith('price_saas', { expand: ['product'] });
+  });
+
+  it('the sweep reads the flag from the env it was handed', async () => {
+    const { stripe } = fakeStripe({ price_preset: withProduct('txcd_10000000') });
+    const env = {
+      STRIPE_PRICE_ID_GARDEN_299: 'price_preset',
+      STRIPE_AUTOMATIC_TAX_ENABLED: '1',
+    } as NodeJS.ProcessEnv;
+    const rows = await reconcileConfiguredPrices(stripe, env);
+    const garden = rows.find((r) => r.env === 'STRIPE_PRICE_ID_GARDEN_299');
+    expect(garden).toMatchObject({ status: 'mismatch' });
+    expect(garden?.problems.join(' ')).toContain(CATALOG_TAX_CODE);
+    const off = await reconcileConfiguredPrices(stripe, {
+      ...env,
+      STRIPE_AUTOMATIC_TAX_ENABLED: '',
+    } as NodeJS.ProcessEnv);
+    expect(off.find((r) => r.env === 'STRIPE_PRICE_ID_GARDEN_299')).toMatchObject({ status: 'ok' });
+  });
+
+  it('every checkout gate refuses to sell under the wrong code once the flag is "1"', async () => {
+    const before = process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    try {
+      const { stripe } = fakeStripe({
+        price_garden: withProduct(null),
+        price_topup: withProduct(null, { unit_amount: 199, recurring: null }),
+        price_gift: withProduct('txcd_10502000', { recurring: null }),
+        price_right: withProduct(CATALOG_TAX_CODE),
+      });
+      await expect(
+        assertPriceMatchesCatalog(stripe, 'garden', 'month', 'price_garden')
+      ).rejects.toSatisfy(isPriceReconciliationError);
+      await expect(assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup')).rejects.toSatisfy(
+        isPriceReconciliationError
+      );
+      // A gift month is prepaid months of the tier, not a multi-purpose gift card.
+      await expect(assertGiftPriceMatchesCatalog(stripe, 'garden', 'price_gift')).rejects.toThrow(
+        /txcd_10502000/
+      );
+      await expect(
+        assertPriceMatchesCatalog(stripe, 'garden', 'month', 'price_right')
+      ).resolves.toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+      else process.env.STRIPE_AUTOMATIC_TAX_ENABLED = before;
+    }
+  });
+});
+
 describe('reconcileConfiguredPrices', () => {
   it('sweeps every configured cadence and names the mismatched one', async () => {
     const { stripe, retrieve } = fakeStripe({
-      p_garden_m: priceLike(),
-      // Transposed: the annual slot points at a monthly-shaped price.
+      // The LEGACY $4.99 / $39.99 slots (ADR 0042) are reconciled at their own
+      // amounts. Transposed: the legacy annual slot points at a monthly shape.
+      p_garden_m: priceLike({ unit_amount: 499 }),
       p_garden_y: priceLike({ unit_amount: 499 }),
+      p_garden_299: priceLike(),
+      p_garden_2499: priceLike({
+        unit_amount: 2499,
+        recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
+      }),
       p_garden_l: priceLike({ unit_amount: 14900, recurring: null }),
       p_gh_m: priceLike({ unit_amount: 999 }),
       p_gh_y: priceLike({
@@ -264,7 +423,7 @@ describe('reconcileConfiguredPrices', () => {
         recurring: { interval: 'year', interval_count: 1 } as Stripe.Price.Recurring,
       }),
       p_topup: priceLike({ unit_amount: 199, recurring: null }),
-      p_gift_garden: priceLike({ unit_amount: 499, recurring: null }),
+      p_gift_garden: priceLike({ unit_amount: 299, recurring: null }),
       // A recurring price in a gift slot would bill the buyer monthly for a
       // one-time gift: a mismatch, not a lifetime tier.
       p_gift_gh: priceLike({ unit_amount: 999 }),
@@ -272,6 +431,8 @@ describe('reconcileConfiguredPrices', () => {
     const results = await reconcileConfiguredPrices(stripe, {
       STRIPE_PRICE_ID_GARDEN: 'p_garden_m',
       STRIPE_PRICE_ID_GARDEN_ANNUAL: 'p_garden_y',
+      STRIPE_PRICE_ID_GARDEN_299: 'p_garden_299',
+      STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: 'p_garden_2499',
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'p_garden_l',
       STRIPE_PRICE_ID_GREENHOUSE: 'p_gh_m',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'p_gh_y',
@@ -280,11 +441,13 @@ describe('reconcileConfiguredPrices', () => {
       STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH: 'p_gift_gh',
     });
 
-    expect(retrieve).toHaveBeenCalledTimes(8);
+    expect(retrieve).toHaveBeenCalledTimes(10);
     const byEnv = Object.fromEntries(results.map((r) => [r.env, r.status]));
     expect(byEnv).toEqual({
       STRIPE_PRICE_ID_GARDEN: 'ok',
       STRIPE_PRICE_ID_GARDEN_ANNUAL: 'mismatch',
+      STRIPE_PRICE_ID_GARDEN_299: 'ok',
+      STRIPE_PRICE_ID_GARDEN_ANNUAL_2499: 'ok',
       STRIPE_PRICE_ID_GARDEN_LIFETIME: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE: 'ok',
       STRIPE_PRICE_ID_GREENHOUSE_ANNUAL: 'ok',
@@ -299,7 +462,7 @@ describe('reconcileConfiguredPrices', () => {
     // production price id is blank on purpose (docs/billing.md).
     const { stripe, retrieve } = fakeStripe({});
     const results = await reconcileConfiguredPrices(stripe, {});
-    expect(results).toHaveLength(8);
+    expect(results).toHaveLength(10);
     expect(results.every((r) => r.status === 'unconfigured')).toBe(true);
     expect(retrieve).not.toHaveBeenCalled();
   });
@@ -350,7 +513,7 @@ describe('assertIdentifyTopUpPriceMatchesCatalog', () => {
     await expect(
       assertIdentifyTopUpPriceMatchesCatalog(stripe, 'price_topup')
     ).resolves.toBeUndefined();
-    expect(retrieve).toHaveBeenCalledWith('price_topup');
+    expect(retrieve).toHaveBeenCalledWith('price_topup', { expand: ['product'] });
   });
 
   it('refuses a price that would charge an amount the pack never published', async () => {

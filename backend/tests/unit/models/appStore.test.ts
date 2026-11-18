@@ -15,6 +15,7 @@ import {
   type AppStoreTransaction,
 } from '../../../src/models/appStore.js';
 import {
+  PLANS,
   getEntitledPlan,
   getEntitledPlanForIssuedGrant,
   getMeteredPlanId,
@@ -46,8 +47,10 @@ const active = {
 };
 
 describe('the App Store product catalog', () => {
-  it('maps one monthly product to each paid tier', () => {
-    expect(Object.values(APP_STORE_PRODUCTS).sort()).toEqual(['garden', 'greenhouse']);
+  it('maps a monthly product to each paid tier and a yearly one to Garden (ADR 0042)', () => {
+    expect(Object.values(APP_STORE_PRODUCTS).sort()).toEqual(['garden', 'garden', 'greenhouse']);
+    expect(appStoreProductForPlan('garden', 'year')).toBe('net.familygreenhouse.app.garden.yearly');
+    expect(appStoreProductForPlan('greenhouse', 'year')).toBeNull();
     expect(appStoreProductForPlan('garden')).toBe('net.familygreenhouse.app.garden.monthly');
     expect(appStoreProductForPlan('greenhouse')).toBe(
       'net.familygreenhouse.app.greenhouse.monthly'
@@ -71,8 +74,19 @@ describe('the App Store product catalog', () => {
         p.displayPrice,
       ])
     );
-    expect(price['net.familygreenhouse.app.garden.monthly']).toBe('4.99');
+    expect(price['net.familygreenhouse.app.garden.monthly']).toBe(
+      String(PLANS.garden.monthlyPrice)
+    );
+    expect(price['net.familygreenhouse.app.garden.yearly']).toBe(String(PLANS.garden.annualPrice));
     expect(price['net.familygreenhouse.app.greenhouse.monthly']).toBe('9.99');
+    const period = Object.fromEntries(
+      products.map((p: { productID: string; recurringSubscriptionPeriod: string }) => [
+        p.productID,
+        p.recurringSubscriptionPeriod,
+      ])
+    );
+    expect(period['net.familygreenhouse.app.garden.yearly']).toBe('P1Y');
+    expect(period['net.familygreenhouse.app.garden.monthly']).toBe('P1M');
     expect(config.subscriptionGroups).toHaveLength(1);
   });
 });

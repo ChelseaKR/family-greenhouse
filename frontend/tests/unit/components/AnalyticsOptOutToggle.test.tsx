@@ -56,6 +56,7 @@ const gaDisabled = () => (window as unknown as Record<string, unknown>)[`ga-disa
 function reset() {
   localStorage.clear();
   delete window.dataLayer;
+  delete window.__fgGoogleAnalyticsBoot;
   document
     .querySelectorAll('script[src^="https://www.googletagmanager.com/gtag/js"]')
     .forEach((script) => script.remove());

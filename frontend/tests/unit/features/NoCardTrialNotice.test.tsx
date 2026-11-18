@@ -369,7 +369,7 @@ describe('NoCardTrialNotice: what keeping Garden costs, on the dashboard', () =>
     renderView(trialEndingIn(11 * DAY, 'active'));
     expect(screen.getByRole('link', { name: 'Keep Garden for $4.99 a month' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
     // The plain link stays beside it.
     expect(screen.getByRole('link', { name: 'Plans and billing' })).toBeInTheDocument();
@@ -382,7 +382,7 @@ describe('NoCardTrialNotice: what keeping Garden costs, on the dashboard', () =>
     renderView(trialEndingIn(-DAY, 'ended'));
     expect(screen.getByRole('link', { name: 'Get Garden back for $4.99 a month' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
   });
 

@@ -360,7 +360,9 @@ private fun IntroPageDots(count: Int, index: Int, label: String, onMove: (Int) -
                 label = "dot",
             )
             Box(
-                Modifier.size(30.dp).clickable { onMove(dot) },
+                // 48 dp: the minimum touch target, even though the dot drawn
+                // inside is 8 dp.
+                Modifier.size(48.dp).clickable { onMove(dot) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(

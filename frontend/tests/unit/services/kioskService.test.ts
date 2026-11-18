@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   kioskService,
+  KioskCompletionNotFoundError,
   KioskLinkInactiveError,
   KIOSK_FALLBACK_POLL_SECONDS,
 } from '@/services/kioskService';
@@ -84,10 +85,35 @@ describe('kioskService.completeTask', () => {
     });
   });
 
-  it('raises KioskLinkInactiveError when the link died mid-session', async () => {
-    mockFetch(404, { message: 'nope' });
-    await expect(
-      kioskService.completeTask(TOKEN, 't1', '2026-09-03T00:00:00.000Z')
-    ).rejects.toBeInstanceOf(KioskLinkInactiveError);
+  // Audit 2026-11-08, finding 9. The completion route answers 404 for a
+  // revoked link AND for a task someone deleted a moment ago ("Task not
+  // found"). Reporting both as the link being inactive turned a live wall
+  // display off for good over one deleted task.
+  it.each([
+    ['a deleted task', 404, { message: 'Task not found' }],
+    ['a revoked link', 404, { message: 'This kiosk link is invalid or has been turned off.' }],
+    ['a 410', 410, { message: 'Gone' }],
+  ])(
+    'does not report the link as turned off on a completion answered with %s',
+    async (_, status, body) => {
+      mockFetch(status, body);
+      const error = await kioskService
+        .completeTask(TOKEN, 't1', '2026-09-03T00:00:00.000Z')
+        .catch((e: unknown) => e);
+      // The completion's answer cannot tell the two apart; only the link's own
+      // read can, so the page asks that.
+      expect(error).toBeInstanceOf(KioskCompletionNotFoundError);
+      expect(error).not.toBeInstanceOf(KioskLinkInactiveError);
+    }
+  );
+
+  it('raises a plain error for a server failure on a completion', async () => {
+    mockFetch(503, { message: 'Service Unavailable' });
+    const error = await kioskService
+      .completeTask(TOKEN, 't1', '2026-09-03T00:00:00.000Z')
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(KioskCompletionNotFoundError);
+    expect(error).not.toBeInstanceOf(KioskLinkInactiveError);
   });
 });

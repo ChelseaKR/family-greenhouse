@@ -80,11 +80,21 @@ export const crossHomeTodayService = {
     return response.data;
   },
 
-  /** Complete a row in ITS home. `expectedNextDue` keeps transport retries idempotent. */
-  async completeTask(householdId: string, taskId: string, expectedNextDue: string): Promise<Task> {
+  /**
+   * Complete a row in ITS home. `expectedNextDue` keeps transport retries
+   * idempotent. `confirmDuplicate` is sent only when the member has seen the
+   * double-care notice and chose to log it anyway; an ordinary completion
+   * carries no flag at all.
+   */
+  async completeTask(
+    householdId: string,
+    taskId: string,
+    expectedNextDue: string,
+    options?: { confirmDuplicate?: boolean }
+  ): Promise<Task> {
     const response = await api.post<Task>(
       `/tasks/${taskId}/complete`,
-      { expectedNextDue },
+      options?.confirmDuplicate ? { expectedNextDue, confirmDuplicate: true } : { expectedNextDue },
       forHousehold(householdId)
     );
     track('task_completed', {

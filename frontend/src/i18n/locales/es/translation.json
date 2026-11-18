@@ -17,9 +17,11 @@
     "today": "Hoy",
     "tomorrow": "Mañana",
     "yesterday": "Ayer",
+    "never": "Nunca",
     "daysAgo_one": "hace {{count}} día",
     "daysAgo_other": "hace {{count}} días",
-    "daysAgo_many": "{{count}} days ago"
+    "daysAgo_many": "{{count}} days ago",
+    "loadingDots": "Cargando…"
   },
   "activity": {
     "aPlant": "una planta",
@@ -54,7 +56,23 @@
     "memberLeft": "Un miembro ha salido del hogar",
     "memberLeftReleased_one": "Un miembro ha salido del hogar: {{count}} tarea ha quedado libre",
     "memberLeftReleased_many": "Un miembro ha salido del hogar: {{count}} tareas han quedado libres",
-    "memberLeftReleased_other": "Un miembro ha salido del hogar: {{count}} tareas han quedado libres"
+    "memberLeftReleased_other": "Un miembro ha salido del hogar: {{count}} tareas han quedado libres",
+    "taskCompleted": "<b>{{actor}}</b> completó <b>{{task}}</b>",
+    "taskSnoozed": "<b>{{actor}}</b> pospuso <b>{{task}}</b>",
+    "forPlant": "para {{plant}}",
+    "reasonRain": "se espera lluvia",
+    "reasonFrost": "se esperan heladas",
+    "reasonHeat": "ola de calor",
+    "taskClaimed": "<b>{{actor}}</b> tomó <b>{{task}}</b>",
+    "taskReleased": "<b>{{actor}}</b> soltó <b>{{task}}</b>",
+    "plantAdded": "<b>{{actor}}</b> añadió <b>{{plant}}</b>",
+    "plantArchived": "<b>{{actor}}</b> archivó <b>{{plant}}</b>",
+    "plantRestored": "<b>{{actor}}</b> restauró <b>{{plant}}</b>",
+    "plantDied": "<b>{{actor}}</b> registró la pérdida de <b>{{plant}}</b>",
+    "plantGaveAway": "<b>{{actor}}</b> registró que regaló <b>{{plant}}</b>",
+    "photoUploaded": "<b>{{actor}}</b> subió una foto nueva",
+    "memberJoined": "<b>{{actor}}</b> se unió al hogar",
+    "plantDeleted": "<b>{{actor}}</b> eliminó una planta"
   },
   "spaces": {
     "all": "Todos los espacios",
@@ -268,14 +286,17 @@
       "created": "{{name}} ya está en tu invernadero.",
       "createdWithSchedule": "{{name}} ya está, con su calendario de cuidados preparado.",
       "createdWithStartingPoint": "{{name}} ya está, con un recordatorio de riego cada {{days}} días para empezar.",
-      "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página."
+      "scheduleFailed": "Se guardó {{name}}, pero no se pudo añadir su calendario de cuidados. Puedes añadir tareas desde su propia página.",
+      "createdCheckRecent": "{{name}} ya está. Te recordaremos revisar la tierra dentro de {{soon}} días y después cada {{days}} días.",
+      "createdCheckSoon": "{{name}} ya está. Como ha pasado un tiempo, te recordaremos revisar la tierra dentro de {{soon}} días y después cada {{days}} días.",
+      "createdCheckUnsure": "{{name}} ya está. Como no sabes cuándo fue su último riego, te recordaremos revisar la tierra mañana y después cada {{days}} días."
     },
     "picker": {
       "heading": "Elige una planta de interior común",
-      "hint": "Con un toque la añadimos con un recordatorio de riego para empezar. Puedes cambiarlo cuando quieras.",
+      "hint": "Toca tu planta y dinos cuándo la regaste por última vez. Pondremos un recordatorio para revisar la tierra y puedes cambiarlo cuando quieras.",
       "saving": "Añadiendo tu planta…",
       "somethingElse": "¿Otra planta? Escribe su nombre",
-      "fromGuide": "Vienes de nuestra guía de cuidados de {{name}}, así que aparece primero. Con un toque la añadimos con un recordatorio para revisar la tierra cada {{days}} días.",
+      "fromGuide": "Vienes de nuestra guía de cuidados de {{name}}, así que aparece primero. Tócala, dinos cuándo fue su último riego y te recordaremos revisar la tierra cada {{days}} días a partir de ahí.",
       "plants": {
         "pothos": "Poto",
         "snake-plant": "Sansevieria",
@@ -286,7 +307,16 @@
         "aloe-vera": "Aloe vera",
         "orchid": "Orquídea mariposa",
         "fiddle-leaf-fig": "Ficus lira",
-        "jade-plant": "Árbol de jade"
+        "jade-plant": "Árbol de jade",
+        "rosemary": "Romero"
+      },
+      "lastWatered": {
+        "question": "{{name}}: ¿cuándo fue su último riego?",
+        "hint": "Tu respuesta solo fija el primer recordatorio para revisar la tierra. Después se repite con el ritmo habitual de la planta.",
+        "recent": "En los últimos días",
+        "whileAgo": "Hace una semana o más",
+        "unsure": "No lo sé",
+        "back": "Elegir otra planta"
       }
     },
     "invite": {
@@ -314,7 +344,7 @@
     "noneTitle": "Todavía no hay tareas",
     "noneBody": "Agrega tareas a tus plantas para verlas aquí.",
     "notThisWeekTitle": "Nada para esta semana",
-    "notThisWeekNext": "Lo próximo: {{task}} {{plant}}, el {{date}}.",
+    "notThisWeekNext": "Lo próximo: {{task}} ({{plant}}), el {{date}}.",
     "notThisWeekBody": "No hay nada atrasado ni para los próximos siete días.",
     "viewTasks": "Ver todas las tareas",
     "viewPlants": "Ver plantas"
@@ -382,6 +412,7 @@
     "signUpTitle": "Crear una cuenta",
     "registerTitle": "Empieza tu invernadero",
     "registerSubtitle": "Gratis para un hogar, hasta 2 miembros del hogar y 8 plantas. Sin tarjeta de crédito. Tu hogar empieza con 14 días de Garden.",
+    "guidePlantNext": "Después: añade tu {{name}} y dinos cuándo fue su último riego.",
     "fullName": "Nombre completo",
     "confirmPassword": "Confirmar contraseña",
     "showPassword": "Mostrar contraseña",
@@ -457,11 +488,47 @@
         "body": "Crea una cuenta para preparar tu hogar o inicia sesión en el que ya compartes."
       },
       "haveAccount": "Ya tengo una cuenta"
+    },
+    "shellHomeLabel": "Family Greenhouse, Crecer juntos, inicio",
+    "forgot": {
+      "title": "Restablece tu contraseña",
+      "subtitle": "Introduce tu correo y te enviaremos un código para restablecerla.",
+      "remember": "¿Recuerdas tu contraseña?",
+      "submit": "Enviar código de restablecimiento",
+      "documentTitle": "Contraseña olvidada"
+    },
+    "reset": {
+      "noEmailTitle": "Falta el correo electrónico",
+      "noEmailSubtitle": "Empieza de nuevo el restablecimiento desde el principio.",
+      "noEmailBody": "No se indicó ningún correo electrónico.",
+      "requestAgain": "Solicitar restablecimiento de contraseña",
+      "doneTitle": "Contraseña restablecida",
+      "doneSubtitle": "Todo listo: vuelve a iniciar sesión para continuar.",
+      "doneBody": "Tu contraseña se restableció correctamente.",
+      "title": "Elige una contraseña nueva",
+      "codeLabel": "Código de restablecimiento",
+      "newPassword": "Contraseña nueva",
+      "confirmNewPassword": "Confirmar la contraseña nueva",
+      "submit": "Restablecer contraseña",
+      "codeSentTo": "Introduce el código que enviamos a <strong>{{email}}</strong>",
+      "codeLength": "El código de restablecimiento debe tener 6 dígitos",
+      "documentTitle": "Restablecer contraseña"
     }
   },
   "joinInvite": {
     "signInOrCreate": "Inicia sesión o crea una cuenta para aceptar esta invitación.",
-    "signInExisting": "Inicia sesión con una cuenta existente para aceptar esta invitación."
+    "signInExisting": "Inicia sesión con una cuenta existente para aceptar esta invitación.",
+    "loadFailed": "No pudimos cargar esta invitación ahora mismo. Inténtalo de nuevo en un momento.",
+    "title": "Unirse al hogar",
+    "invalid": "Este enlace de invitación no es válido o ha caducado.",
+    "askNewLink": "Pide un enlace de invitación nuevo a una persona administradora del hogar.",
+    "goToOnboarding": "Ir a la configuración inicial",
+    "goToHousehold": "Ir a tu hogar",
+    "invitedToJoin": "Te han invitado a unirte a",
+    "join": "Unirme al hogar",
+    "alreadyMember": "Ya eres miembro de <strong>{{household}}</strong>.",
+    "invitedToJoinNamed": "Te han invitado a unirte a <strong>{{household}}</strong>",
+    "documentTitle": "Unirse al hogar"
   },
   "pricingStatus": {
     "freeAccountQuestion": "¿Puedo crear una cuenta?",
@@ -473,18 +540,18 @@
     "reactivationQuestion": "¿Se puede reactivar la facturación automáticamente?",
     "reactivationAnswer": "No. La reactivación requiere una decisión de estado con fecha, cambios revisados en el código y la infraestructura, verificación fuera de producción y un despliegue aprobado por separado.",
     "trialQuestion": "¿Cómo funciona la prueba gratuita?",
-    "trialAnswer": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Plántula y conserva todo lo que haya añadido; cada cuenta tiene una. Si eliges un plan de pago durante esos 14 días, añades una tarjeta en el proceso de pago y el primer cobro es el día en que terminan los días gratis, no 14 días después: las pruebas no se suman. Si lo eliges en los dos últimos días, o cuando ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo los días gratis tiene en su lugar una prueba de 14 días en su primera suscripción de pago, sin ningún cobro hasta que termina. Un hogar que ya ha tenido una prueba se cobra cuando vuelve a suscribirse, y cancelar antes del primer cobro no cuesta nada.",
+    "trialAnswer": "Un hogar nuevo empieza con 14 días de Garden sin tarjeta. No se cobra nada y, cuando terminan los 14 días, el hogar pasa por sí solo al plan gratuito Seedling y conserva todo lo que haya añadido; cada cuenta tiene una. Si eliges un plan de pago durante esos 14 días, añades una tarjeta en el proceso de pago y el primer cobro es el día en que terminan los días gratis, no 14 días después: las pruebas no se suman. Si lo eliges en los dos últimos días, o cuando ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo los días gratis tiene en su lugar una prueba de 14 días en su primera suscripción de pago, sin ningún cobro hasta que termina. Un hogar que ya ha tenido una prueba se cobra cuando vuelve a suscribirse, y cancelar antes del primer cobro no cuesta nada.",
     "changeQuestion": "¿Puedo cambiar o cancelar más adelante?",
-    "changeAnswer": "Sí. Los cambios de plan y la cancelación se gestionan desde Ajustes → Facturación, que abre el portal de nuestro proveedor de pagos. Al cancelar, tu hogar vuelve al plan gratuito Plántula al final del periodo pagado.",
+    "changeAnswer": "Sí. Los cambios de plan y la cancelación se gestionan desde Ajustes → Estado del plan, que abre el portal de nuestro proveedor de pagos. Al cancelar, tu hogar vuelve al plan gratuito Seedling al final del periodo pagado.",
     "whereQuestion": "¿Dónde se compra?",
-    "whereAnswer": "Los cambios de plan se hacen dentro de tu cuenta, en Ajustes → Facturación, y los realiza una persona administradora del hogar. Las compras no están disponibles en las aplicaciones móviles.",
+    "whereAnswer": "Los cambios de plan se hacen dentro de tu cuenta, en Ajustes → Estado del plan, y los realiza una persona administradora del hogar. Las compras no están disponibles en las aplicaciones móviles.",
     "dataQuestion": "¿Qué pasa con los datos existentes?",
     "dataAnswerHeld": "Las plantas, los registros del hogar, las tareas y el historial de cuidados siguen disponibles dentro de los límites del plan actual. La pausa no elimina datos.",
     "dataAnswerOpen": "No se elimina nada al cambiar de plan. Si al bajar de plan superas los nuevos límites, las plantas, los miembros y los hogares existentes se pueden seguir viendo y editando; solo se bloquea añadir más hasta que vuelvas a estar por debajo del límite. La exportación y tu historial de cuidados nunca dependen del plan.",
     "householdQuestion": "¿Cada persona de mi hogar necesita su propio plan?",
-    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta dos personas; los hogares Jardín e Invernadero no tienen límite de miembros.",
+    "householdAnswer": "No. Un plan cubre todo el hogar. Una persona administradora del hogar mantiene la suscripción y todos los miembros comparten las mismas plantas, tareas e historial de cuidados. Un hogar gratuito admite hasta dos personas; los hogares Garden y Greenhouse no tienen límite de miembros.",
     "cardQuestion": "¿Necesito tarjeta de crédito?",
-    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Jardín con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta. Si a los 14 días gratis de tu hogar les quedan más de dos días, el primer cobro es el día en que terminan; un hogar que nunca ha tenido una prueba tiene 14 días antes del primer cobro; en cualquier otro caso, la tarjeta se cobra en el momento del pago."
+    "cardAnswer": "Para una cuenta gratuita no, ni para los 14 días de Garden con los que empieza un hogar nuevo: ninguno de los dos pide tarjeta. Para activar un plan de pago se pasa por el proceso de pago de nuestro proveedor, que pide una tarjeta. Si a los 14 días gratis de tu hogar les quedan más de dos días, el primer cobro es el día en que terminan; un hogar que nunca ha tenido una prueba tiene 14 días antes del primer cobro; en cualquier otro caso, la tarjeta se cobra en el momento del pago."
   },
   "petSafeSignup": {
     "title": "Mantener un hogar seguro para las mascotas es más fácil cuando todos están coordinados",
@@ -492,6 +559,14 @@
     "cta": "Empezar",
     "browsePrompt": "¿Solo estás mirando? Lee nuestras",
     "careGuides": "guías de cuidado de plantas"
+  },
+  "careHolidayGuides": {
+    "amaryllis": "Amarilis",
+    "paperwhite": "Narciso de papel",
+    "poinsettia": "Flor de Pascua",
+    "christmasCactus": "Cactus de Navidad",
+    "cyclamen": "Ciclamen",
+    "rosemary": "Romero"
   },
   "petSafeSpecies": {
     "title": "Todas las plantas con guía, y su veredicto para mascotas",
@@ -507,11 +582,13 @@
     "readingHeading": "Más sobre plantas y mascotas",
     "readingSafeIntro": "¿Estás buscando una planta nueva?",
     "readingToxicIntro": "¿Ya convives con alguna de la segunda lista?",
+    "holidayHeading": "Plantas navideñas",
     "citedPagesHeading": "Plantas con una página de veredicto citado",
     "citedPagesLede": "Una página por planta, con cada veredicto junto a la ficha de la ASPCA de la que sale."
   },
   "plantSafetyPage": {
     "metaTitle": "¿La planta {{name}} es tóxica para gatos y perros?",
+    "leadTitle": "¿La planta {{name}} es tóxica para {{animal}}? Figura como {{verdict}}",
     "metaDescription": "El veredicto sobre {{name}} ({{scientificName}}) y las mascotas, con su fuente, y a quién llamar si tu mascota comió un poco. Gatos: {{cats}}. Perros: {{dogs}}.",
     "eyebrow": "Mascotas y plantas",
     "heading": "¿La planta {{questionName}} es tóxica para gatos y perros?",
@@ -596,11 +673,14 @@
       "animal": {
         "cats": "gatos",
         "dogs": "perros",
-        "horses": "caballos"
+        "horses": "caballos",
+        "rats": "ratas"
       },
       "question": "¿La planta {{name}} es tóxica para {{animal}}?",
+      "and": "y",
       "answerToxic": "Sí. La ASPCA clasifica {{title}} ({{scientificName}}) como tóxica para {{animal}}.",
       "answerNonToxic": "No. La ASPCA clasifica {{title}} ({{scientificName}}) como no tóxica para {{animal}}.",
+      "answerUnlisted": "No podemos decirlo. La ficha de la ASPCA de {{title}} ({{scientificName}}) cubre {{animals}} y no tiene entrada para {{animal}}. Consulta a un veterinario de animales exóticos.",
       "answerDetails": "Su ficha indica los principios tóxicos: {{principles}}. Los signos que enumera aparecen en esta página, en «Signos clínicos».",
       "answerAnyPlant": "Su lista de plantas también señala que comer cualquier planta puede causar vómitos o malestar estomacal en perros y gatos.",
       "partsQuestion": "¿Qué partes de la planta {{name}} son venenosas?",
@@ -786,6 +866,7 @@
       "provenance": "Cultivada por {{name}}, ahora pasa a tus manos.",
       "invalid": "Este enlace no es válido o ha caducado.",
       "askForNew": "Pide un enlace nuevo a quien lo envió — caducan a los 14 días.",
+      "loadFailed": "No pudimos cargar este esqueje ahora mismo. Inténtalo de nuevo en un momento.",
       "houseRuleLabel": "Regla de la casa",
       "addToGreenhouse": "Añadir a mi invernadero",
       "added": "{{name}} añadida a tu invernadero",
@@ -955,7 +1036,97 @@
       "remove": "Quitar…",
       "restore": "Volver al cuidado activo",
       "doAria": "{{label}}: {{task}} {{plant}}",
-      "claim": "Me encargo yo"
+      "claim": "Me encargo yo",
+      "taskDue": "Vence: {{date}}"
+    },
+    "add": {
+      "title": "Añadir una planta nueva",
+      "intro": "Introduce los datos de tu planta para empezar a llevar el control de sus cuidados.",
+      "photoPreviewAlt": "Vista previa de la foto elegida de la planta",
+      "namePlaceholder": "p. ej., Monstera de la sala",
+      "speciesHelper": "Escribe para buscar nombres comunes; elige una sugerencia para rellenar el nombre científico.",
+      "recommendedTasks": "Tareas de cuidado recomendadas",
+      "autoTasksLabel": "Añadir automáticamente las tareas de cuidado recomendadas",
+      "tagsPlaceholder": "tropical, poca luz, regalo",
+      "tagsHelper": "Separadas por comas. Hasta 10 etiquetas. Útiles para filtrar después.",
+      "notesPlaceholder": "Cualquier otra nota sobre esta planta…",
+      "autoTasksNamed": "Añadir automáticamente las tareas de cuidado de {{name}}",
+      "autoTasksBasis": "Según «{{species}}». Puedes editar o quitar estas tareas cuando quieras."
+    },
+    "bulkApply": {
+      "title": "Aplicar plantilla de cuidados",
+      "template": "Plantilla",
+      "pickOne": "— elige una —",
+      "noPlants": "Aún no hay plantas.",
+      "plantsSelected_one": "Plantas ({{count}} seleccionada)",
+      "plantsSelected_other": "Plantas ({{count}} seleccionadas)",
+      "plantsSelected_many": "Plantas ({{count}} seleccionadas)",
+      "plantsSelectedOver": "Plantas ({{count}} seleccionadas: supera el límite de 50 plantas, quita algunas)",
+      "applyTo_one": "Aplicar a {{count}} planta",
+      "applyTo_other": "Aplicar a {{count}} plantas",
+      "applyTo_many": "Aplicar a {{count}} plantas"
+    },
+    "careGuidance": {
+      "light": "Luz",
+      "water": "Riego",
+      "humidity": "Humedad"
+    },
+    "careGuideCard": {
+      "title": "Guía de cuidado",
+      "family": "Familia",
+      "cycle": "Ciclo",
+      "hardinessZones": "Zonas de rusticidad",
+      "sunlight": "Luz solar",
+      "none": "Aún no hay guía de cuidado para esta especie."
+    },
+    "careReport": {
+      "title": "Informe de cuidados",
+      "activeTasks": "Tareas activas",
+      "lastCare": "Último cuidado",
+      "description": "Los recuentos y las rachas cubren las últimas {{limit}} tareas completadas que se registraron de esta planta. «Último cuidado» abarca todo su historial.",
+      "byTask": "Por tarea, dentro de esas {{limit}}",
+      "doneCount_one": "{{count}} hecha",
+      "doneCount_other": "{{count}} hechas",
+      "doneCount_many": "{{count}} hechas",
+      "noneInLast": "ninguna en las últimas {{limit}}",
+      "best": "mejor racha {{value}}",
+      "last": "último {{value}}",
+      "never": "nunca"
+    },
+    "editTitle": "Editar planta",
+    "noCareData": {
+      "title": "Aún no hay guía de cuidado para esta especie",
+      "body": "No reconocemos esta especie, así que la guía de cuidado y el calendario sugerido están ocultos: preferimos no mostrar nada antes que adivinar. Puedes añadir tus propias tareas de cuidado más abajo o elegir una especie reconocida al editar esta planta."
+    },
+    "photoTimeline": {
+      "loading": "Cargando fotos…",
+      "title": "Cronología de fotos"
+    },
+    "detailPage": {
+      "remove": "Quitar",
+      "added": "Añadida",
+      "careTasksTitle": "Tareas de cuidado",
+      "noTasksTitle": "Sin tareas",
+      "noTasksDescription": "Añade tareas de cuidado para llevar el control del riego, el abonado y más.",
+      "addFirstTask": "Añadir la primera tarea",
+      "careHistoryTitle": "Historial de cuidados",
+      "careHistoryDescription": "Tareas completadas recientemente",
+      "noCareHistory": "Aún no hay historial de cuidados.",
+      "snoozeTask": "Posponer tarea",
+      "everyDays_one": "Cada día",
+      "everyDays_other": "Cada {{count}} días",
+      "everyDays_many": "Cada {{count}} días"
+    },
+    "photoUpload": {
+      "formats": "JPEG, PNG o WebP. Hasta 5 MB tras redimensionarla.",
+      "upload": "Subir foto",
+      "uploading": "Subiendo foto…",
+      "wrongType": "La imagen debe ser un archivo JPEG, PNG o WebP.",
+      "tooLarge": "La imagen es demasiado grande (máx. {{max}} MB)."
+    },
+    "suggestedCare": {
+      "title": "Cuidados sugeridos",
+      "wateringNotice": "Crearemos una tarea de riego cada {{days}} días cuando guardes esta planta. Puedes editarla cuando quieras."
     }
   },
   "importPlants": {
@@ -1191,6 +1362,16 @@
       "everyDay": "Cada día",
       "everyNDays": "Cada {n} días",
       "notes": "Notas"
+    },
+    "modal": {
+      "taskType": "Tipo de tarea",
+      "customTaskName": "Nombre de la tarea personalizada",
+      "customTaskPlaceholder": "p. ej., Girar la planta",
+      "frequencyDays": "Frecuencia (días)",
+      "notesPlaceholder": "Cualquier nota sobre esta tarea…",
+      "editTitle": "Editar tarea",
+      "type": "Tipo",
+      "customName": "Nombre personalizado"
     }
   },
   "today": {
@@ -1266,6 +1447,13 @@
     "inviteByEmailSent": "Invitación enviada. El enlace de abajo es el mismo, por si prefieres mandarlo tú también.",
     "inviteByEmailCooldown": "Esa dirección recibió una invitación a este hogar en las últimas 24 horas. El enlace de abajo sigue funcionando.",
     "inviteByEmailUnavailable": "No hemos podido enviar el correo, así que no decimos que salió. Copia el enlace de abajo y mándalo tú.",
+    "inviteLinkLimits": "Este enlace funciona durante 7 días y para un máximo de 5 personas.",
+    "inviteEmailLinkLimits": "Este enlace funciona durante 7 días y para una sola persona.",
+    "revokeInvites": {
+      "hint": "Al desactivar los enlaces de invitación dejan de funcionar todos los enlaces y las invitaciones por correo creados hasta ahora. También dejan de funcionar cuando alguien sale de este hogar o se le quita de él.",
+      "button": "Desactivar enlaces de invitación",
+      "done": "Los enlaces de invitación están desactivados. Los creados antes de ahora ya no funcionan. Puedes crear uno nuevo."
+    },
     "climateCheckFailed": "No se pudo comprobar la disponibilidad del clima. Los cambios de ubicación están pausados; inténtalo más tarde.",
     "climateUnavailable": "Los consejos según el clima no están disponibles ahora. La configuración de ubicación volverá cuando se active la integración meteorológica.",
     "climateSavedLocation": "Tu ubicación guardada es {{city}}.",
@@ -1361,7 +1549,13 @@
       "endedOn": "{{label}}: terminó el {{date}}",
       "sharedBy": "Compartido por {{name}}",
       "anotherMember": "otro miembro",
-      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo"
+      "revokeNotYours": "Solo quien lo creó o un administrador puede desactivarlo",
+      "cardTitle": "Enlaces de cuidador",
+      "cardDescription": "¿Te vas de viaje? Comparte un enlace temporal para que un vecino o un amigo vea los cuidados pendientes, los nombres de las plantas, sus espacios actuales y las notas de ubicación; nunca tu ciudad guardada, tus notas privadas ni los datos de los miembros. El enlace caduca solo y puedes revocarlo cuando quieras.",
+      "readyTitle": "Tu enlace de cuidador está listo",
+      "readyBody": "Cópialo ahora: por seguridad, no volveremos a mostrar el enlace completo. Siempre puedes crear uno nuevo.",
+      "labelPlaceholder": "p. ej., Las plantas de los García",
+      "create": "Crear enlace de cuidador"
     },
     "goingAway": {
       "titleEntry": "¿Te vas de viaje?",
@@ -1372,15 +1566,17 @@
       "freeNow_one": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y solo puede haber uno activo a la vez.",
       "freeNow_many": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y puede haber {{count}} activos a la vez.",
       "freeNow_other": "En el plan gratuito, un enlace de cuidador dura hasta {{days}} días y puede haber {{count}} activos a la vez.",
-      "gardenAdds": "Jardín añade, para todo el hogar:",
-      "gardenAddsPrice": "Jardín cuesta {{price}} al mes para todo el hogar. Añade:",
+      "gardenAdds": "Garden añade, para todo el hogar:",
+      "gardenAddsPrice": "Garden cuesta {{price}} al mes para todo el hogar. Añade:",
+      "gardenAddsPrices": "Garden cuesta {{annualPrice}} al año o {{price}} al mes para todo el hogar. Añade:",
       "lineLinks_one": "Enlaces de cuidador de hasta {{days}} días, con {{count}} activo a la vez",
       "lineLinks_many": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
       "lineLinks_other": "Enlaces de cuidador de hasta {{days}} días, con hasta {{count}} activos a la vez",
       "lineBrief": "Una guía de cuidados imprimible para tu cuidador, con la foto más reciente de cada planta y tus reglas de la casa",
       "linePhotos": "Fotos de tu cuidador mientras estás fuera, que se suman a la cronología de cada planta",
       "lineRecap": "Un resumen de lo que pasó, listo para cuando vuelvas",
-      "upgrade": "Pasa a Jardín por {{price}} al mes",
+      "upgrade": "Pasa a Garden por {{price}} al mes",
+      "choosePlan": "Elige un plan de Garden",
       "useFree_one": "Usar {{count}} día",
       "useFree_many": "Usar {{count}} días",
       "useFree_other": "Usar {{count}} días",
@@ -1427,7 +1623,7 @@
       "blockedLastMember": "Eres el único miembro, así que no hay nadie a quien dejarle este hogar. Invita a alguien y hazlo administrador primero. Si ya no quieres usar Family Greenhouse, puedes eliminar tu cuenta en Ajustes; eso te saca de todos tus hogares.",
       "blockedLastAdmin": "Eres la única persona administradora. Haz administrador a otro miembro más arriba y después podrás salir.",
       "confirmTitle": "¿Salir de {{household}}?",
-      "confirmMessage": "Dejarás de ver las plantas, las tareas y la actividad de este hogar de inmediato. El hogar conserva su historial de cuidados, con tu nombre mostrado como «Former member» (antiguo miembro). Los enlaces para cuidadores, las etiquetas de plantas y los enlaces de pantalla que creaste dejarán de funcionar. Para volver, una persona administradora tendría que invitarte de nuevo.",
+      "confirmMessage": "Dejarás de ver las plantas, las tareas y la actividad de este hogar de inmediato. El hogar conserva su historial de cuidados, con tu nombre mostrado como «Former member» (antiguo miembro). Los enlaces para cuidadores, las etiquetas de plantas, los enlaces de pantalla y las plazas de cuidador que creaste dejarán de funcionar. Para volver, una persona administradora tendría que invitarte de nuevo.",
       "confirmTasks_one": "Tienes {{count}} tarea a tu nombre; quedará libre para quien pueda hacerla.",
       "confirmTasks_many": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
       "confirmTasks_other": "Tienes {{count}} tareas a tu nombre; quedarán libres para quien pueda hacerlas.",
@@ -1435,9 +1631,28 @@
       "confirmLabel": "Salir del hogar",
       "cancel": "Quedarme",
       "billingTitle": "El plan de pago de este hogar se sigue renovando",
-      "billingMessage": "Salir no cancela ni cambia el plan: el resto del hogar lo conserva. Si se cobra en tu tarjeta, cambia el método de pago o cancela el plan en Ajustes → Facturación antes de salir: una vez fuera, no podrás acceder a la facturación de este hogar.",
+      "billingMessage": "Salir no cancela ni cambia el plan: el resto del hogar lo conserva. Si se cobra en tu tarjeta, cambia el método de pago o cancela el plan en Ajustes → Estado del plan antes de salir: una vez fuera, no podrás acceder a la facturación de este hogar.",
       "billingConfirm": "Salir de todos modos",
       "left": "Has salido de {{household}}."
+    },
+    "page": {
+      "description": "Gestiona los miembros y los ajustes de tu hogar.",
+      "inviteTitle": "Invitar miembros",
+      "inviteDescription": "Genera un enlace de invitación para añadir a tu familia al hogar",
+      "onlyOneHere": "Aquí solo estás tú. Cuidar las plantas es más divertido (y más fiable) cuando alguien más ayuda: comparte un enlace de invitación con quien viva contigo.",
+      "generateInvite": "Generar enlace de invitación",
+      "locationDescription": "Se usa para los consejos de cuidado según el clima (avisos de humedad, alertas de heladas, etc.).",
+      "clearLocation": "Borrar ubicación",
+      "cityLabel": "Ciudad",
+      "cityPlaceholder": "p. ej., Austin, US",
+      "cityHelper": "Añade el país si el nombre de tu ciudad es ambiguo.",
+      "saveLocation": "Guardar ubicación",
+      "you": "(tú)",
+      "removeMemberTitle": "Quitar miembro",
+      "removeMemberMessage": "¿Seguro que quieres quitar a este miembro del hogar? Perderá el acceso a todas las plantas y tareas compartidas. Todo lo que haya configurado para otras personas también dejará de funcionar: sus etiquetas de plantas (tendrás que imprimir otras nuevas), sus enlaces de cuidador, su pantalla de pared, sus plazas de cuidador y cualquier clave de API que haya emitido.",
+      "removeMemberConfirm": "Quitar",
+      "locationCurrent": "Configurada actualmente en <b>{{city}}</b>.",
+      "members": "Miembros"
     }
   },
   "householdAudit": {
@@ -1490,7 +1705,7 @@
       "unknown": "Un cambio en el hogar que esta versión de la aplicación no sabe describir"
     },
     "detail": {
-      "revokedWith": "Desactivados con ello: enlaces de cuidador {{sitterLinks}} · etiquetas de planta {{plantTags}} · pantallas de pared {{kioskLinks}} · enlaces de esqueje {{cuttingShares}}",
+      "revokedWith": "Desactivados con ello: enlaces de cuidador {{sitterLinks}} · etiquetas de planta {{plantTags}} · pantallas de pared {{kioskLinks}} · enlaces de esqueje {{cuttingShares}} · plazas de cuidador {{caretakerSeats}}",
       "scopes": "Acceso: {{scopes}}",
       "expires": "Caduca el {{date}}",
       "giftEnds": "Dura hasta el {{date}}",
@@ -1526,6 +1741,14 @@
       "tooLarge": "Esa foto es demasiado grande para enviarla, incluso después de reducirla. Prueba con otra.",
       "readFailed": "No hemos podido leer esa foto. Prueba con otra, por favor.",
       "sendFailed": "No hemos podido enviar esa foto ahora mismo. Vuelve a intentarlo en un momento."
+    },
+    "page": {
+      "loading": "Cargando las tareas de cuidado…",
+      "inactiveTitle": "Este enlace de cuidador ya no está activo",
+      "inactiveBody": "Puede que el enlace haya caducado o que lo haya desactivado quien lo compartió. Si sigues ayudando, pídele un enlace nuevo.",
+      "loadFailed": "No pudimos cargar la lista de cuidados en este momento. Actualiza la página y vuelve a intentarlo en un momento.",
+      "intro": "Esto es lo que necesita un poco de cuidado mientras están fuera. Toca <strong>Hecho</strong> cuando hayas atendido cada planta; no hace falta cuenta.",
+      "footer": "¿Cuidas plantas a menudo? <appLink>Family Greenhouse</appLink> reúne el cuidado de las plantas de todo un hogar en un solo lugar compartido."
     }
   },
   "sitterBrief": {
@@ -1734,10 +1957,16 @@
       "analyticsOffBySignal": "La analítica está desactivada: tu navegador envía una señal de privacidad.",
       "analyticsPrivacyLink": "Página de privacidad"
     },
+    "account": {
+      "pageTitle": "Cuenta y datos",
+      "exportJson": "Descargar todos los datos (JSON)",
+      "deleteButton": "Eliminar mi cuenta",
+      "deleteAppStoreNote": "Eliminar tu cuenta no cancela una suscripción del App Store. Cancélala antes: Ajustes, Estado del plan, Gestionar suscripción, o en los Ajustes de tu iPhone, tu nombre, Suscripciones."
+    },
     "apiKeys": {
       "writeScopeWarning": "Esta clave podrá completar y posponer tareas de tu hogar. Concede acceso de escritura solo a integraciones de confianza.",
       "loadFailed": "No pudimos cargar tus claves de API, así que esta lista no refleja lo que existe. No ha cambiado nada: una clave que funcionaba hace un momento sigue funcionando, hasta que la revoques, hasta que salga del hogar quien la emitió o hasta que el hogar deje de estar en Greenhouse.",
-      "lockedBody": "Las claves permiten que scripts y Home Assistant lean los datos de tu hogar; el acceso de escritura se concede de forma explícita. Emitir y usar claves forma parte del plan Greenhouse: una clave ya emitida deja de funcionar mientras el hogar no esté en ese plan, y vuelve a funcionar al subir de plan."
+      "lockedBody": "Las claves permiten que scripts y Home Assistant lean los datos de tu hogar; el acceso de escritura se concede de forma explícita. Generar y usar claves forma parte del plan Greenhouse: una clave ya emitida deja de funcionar mientras el hogar no esté en ese plan, y vuelve a funcionar al subir de plan."
     },
     "calendarFeed": {
       "title": "Calendario",
@@ -1769,13 +1998,14 @@
     "billing": {
       "usageTitle": "Uso",
       "currentPlan": "Tu hogar tiene el plan {{plan}}.",
+      "planStatusDescription": "Consulta los límites del plan actual de tu hogar.",
       "currentPlanTrial": "Tu hogar tiene el plan {{plan}} (prueba gratuita).",
       "currentPlanUnpaid": "Tu hogar tiene el plan {{plan}}, pero su último pago no se ha completado.",
       "paymentRetryingTitle": "Tu último pago no se ha completado",
-      "paymentRetryingBody": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva el plan {{plan}} y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Plántula (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservar {{plan}}.",
-      "paymentRetryingBodyNoPlan": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva su plan de pago y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Plántula (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservarlo.",
+      "paymentRetryingBody": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva el plan {{plan}} y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Seedling (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservar {{plan}}.",
+      "paymentRetryingBodyNoPlan": "Estamos reintentando cobrar tu tarjeta automáticamente y, mientras tanto, tu hogar conserva su plan de pago y todo lo que incluye; todavía no ha cambiado nada. Si falla el último reintento, tu suscripción se cancela y tu hogar pasa a los límites del plan gratuito Seedling (salvo que tenga un plan comprado de por vida o recibido como regalo, que conserva). No se borra nada de lo que hayas añadido. Actualiza la tarjeta para conservarlo.",
       "paymentFailedTitle": "No hemos podido cobrar tu último pago",
-      "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Plántula en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
+      "paymentFailedBody": "Hasta que se resuelva, tu hogar tiene los límites del plan gratuito Seedling en lugar de los de tu plan. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras del plan gratuito.",
       "paymentFailedActionAdmin": "Actualiza la tarjeta en “Gestionar suscripción”, más abajo.",
       "paymentFailedBodyOwned": "Hasta que se resuelva, tu hogar tiene los límites del plan que ya compró de por vida o que recibió como regalo, en lugar de los de tu suscripción. Todo lo que ya tienes sigue funcionando — puedes verlo, editarlo y eliminarlo, y no se borra nada — pero las plantas y los miembros nuevos quedan limitados a las cifras de ese plan.",
       "paymentFailedBanner": {
@@ -1807,7 +2037,7 @@
       "changePlanDescriptionTrialUntil": "Las mejoras se aplican de inmediato. Añade una tarjeta ahora; tu primer cobro será el {{date}}, el día en que termina la prueba gratuita de Garden de este hogar. No se cobra nada antes de esa fecha, y cancelar antes no cuesta nada.",
       "changePlanDescriptionTrialEndingSoon": "Las mejoras se aplican de inmediato. La prueba gratuita de Garden de este hogar termina el {{date}}, demasiado pronto para pasar el primer cobro a ese día, así que una suscripción nueva se cobra al empezarla.",
       "currentPlanNote": "Este es tu plan actual.",
-      "cancelToReturn": "Cancela en el portal de facturación para volver a Plántula.",
+      "cancelToReturn": "Cancela en el portal de facturación para volver a Seedling.",
       "usePortalToSwitch": "Usa “Gestionar suscripción” arriba para cambiar a {{plan}}.",
       "switchTo": "Cambiar a {{plan}}",
       "buyLifetime": "Comprar {{plan}} de por vida",
@@ -1820,31 +2050,31 @@
       "ownedForLife": "Ya tienes este plan de forma permanente.",
       "errorLifetimeOwned": "Tu hogar ya posee este plan de forma permanente. No hay nada más que comprar en este nivel.",
       "errorCheckoutPending": "Este hogar ya tiene un pago en curso. Si acabas de pagar, tu plan se actualizará aquí en cuanto lo confirme nuestro proveedor de pagos; no vuelvas a pasar por la caja, una segunda compra iniciaría una segunda suscripción. Si dejaste un pago sin terminar, se libera solo en menos de una hora.",
-      "cancelPending": "Cancelado: tu plan {{plan}} termina el {{date}} y luego tu hogar vuelve a Plántula.",
-      "cancelPendingNoDate": "Cancelado: tu plan {{plan}} termina al final del periodo actual y luego tu hogar vuelve a Plántula.",
+      "cancelPending": "Cancelado: tu plan {{plan}} termina el {{date}} y luego tu hogar vuelve a Seedling.",
+      "cancelPendingNoDate": "Cancelado: tu plan {{plan}} termina al final del periodo actual y luego tu hogar vuelve a Seedling.",
       "trialEnds": "Tu prueba gratuita termina el {{date}}. No se te cobrará antes de esa fecha, y cancelar en cualquier momento antes no cuesta nada.",
       "noCardTrial": {
-        "startedTitle": "Tu hogar está probando Jardín gratis hasta el {{date}}",
-        "endingSoonTitle": "La prueba de Jardín de tu hogar termina el {{date}}",
-        "endedTitle": "La prueba de Jardín de tu hogar terminó el {{date}}",
+        "startedTitle": "Tu hogar está probando Garden gratis hasta el {{date}}",
+        "endingSoonTitle": "La prueba de Garden de tu hogar termina el {{date}}",
+        "endedTitle": "La prueba de Garden de tu hogar terminó el {{date}}",
         "noCard": "No hace falta tarjeta y no se cobrará nada.",
-        "includes": "Hasta entonces, todo el hogar puede usar lo que añade Jardín: más de {{members}} miembros, hasta {{plants}} plantas, varios enlaces de cuidador a la vez de hasta {{sitterDays}} días con la guía de traspaso y el envío de fotos, etiquetas de plantas, el kit para hogares, el Día de mudanza, el historial completo de estadísticas y el asistente de cuidados con IA.",
+        "includes": "Hasta entonces, todo el hogar puede usar lo que añade Garden: más de {{members}} miembros, hasta {{plants}} plantas, varios enlaces de cuidador a la vez de hasta {{sitterDays}} días con la guía de traspaso y el envío de fotos, etiquetas de plantas, el kit para hogares, el Día de mudanza, el historial completo de estadísticas y el asistente de cuidados con IA.",
         "metered": "Durante la prueba, las identificaciones de plantas, las revisiones de salud foliar y el asistente de cuidados usan las asignaciones mensuales del plan gratuito.",
-        "after": "El {{date}} el hogar pasa por sí solo al plan gratuito Plántula. No se cobra nada y no se elimina nada de lo que hayas añadido.",
-        "endedNow": "El hogar está en el plan gratuito Plántula. No se cobró nada y no se eliminó nada.",
+        "after": "El {{date}} el hogar pasa por sí solo al plan gratuito Seedling. No se cobra nada y no se elimina nada de lo que hayas añadido.",
+        "endedNow": "El hogar está en el plan gratuito Seedling. No se cobró nada y no se eliminó nada.",
         "changesHeading": "Cuando termine:",
         "changedHeading": "Qué cambió:",
         "changePlants": "Todas las plantas se quedan y se pueden seguir editando. Para añadir una planta hará falta que haya menos de {{plants}} activas.",
         "changeMembers": "Todos siguen en el hogar. Nadie nuevo puede unirse hasta que el hogar tenga menos de {{members}} miembros.",
-        "changeTags": "Las etiquetas de plantas impresas siguen funcionando al escanearlas. Gestionar e imprimir etiquetas requiere Jardín.",
+        "changeTags": "Las etiquetas de plantas impresas siguen funcionando al escanearlas. Gestionar e imprimir etiquetas requiere Garden.",
         "changeSitter": "Los enlaces de cuidador ya compartidos conservan su lista de tareas hasta que caducan, sin la guía de traspaso ni el envío de fotos. Un enlace nuevo puede cubrir hasta {{sitterDays}} días, de uno en uno.",
-        "changeToolkit": "El kit para hogares, el resumen de vuelta del Kit de Viaje, el Día de mudanza y el asistente de cuidados requieren Jardín. Un ajuste de traspaso automático se conserva, pero no se aplica.",
+        "changeToolkit": "El kit para hogares, el resumen de vuelta del Kit de Viaje, el Día de mudanza y el asistente de cuidados requieren Garden. Un ajuste de traspaso automático se conserva, pero no se aplica.",
         "changeAnalytics": "Las estadísticas muestran los últimos {{days}} días. El historial anterior se conserva, no se elimina.",
         "subscribeReplaces": "Elegir un plan de pago sustituye esta prueba por una suscripción, que pasa por el proceso de pago y pide una tarjeta.",
         "billingLink": "Planes y facturación",
-        "currentPlan": "Tu hogar está probando Jardín gratis hasta el {{date}}. Después pasa al plan gratuito {{plan}}, salvo que un administrador elija un plan de pago.",
-        "keepGarden": "Quédate con Jardín por {{price}} al mes",
-        "getGardenBack": "Recupera Jardín por {{price}} al mes",
+        "currentPlan": "Tu hogar está probando Garden gratis hasta el {{date}}. Después pasa al plan gratuito {{plan}}, salvo que un administrador elija un plan de pago.",
+        "keepGarden": "Quédate con Garden por {{price}} al mes",
+        "getGardenBack": "Recupera Garden por {{price}} al mes",
         "planBadge": "Prueba gratis hasta el {{date}}",
         "keepPlan": "Quedarse con {{plan}}"
       },
@@ -1890,6 +2120,48 @@
       "rate": "Califica Family Greenhouse",
       "rateHint": "Abre la App Store, donde puedes dejar una calificación o una reseña.",
       "rateHintAndroid": "Abre Google Play, donde puedes dejar una calificación o una reseña."
+    },
+    "page": {
+      "eyebrow": "Tu cuenta",
+      "accountDescription": "Gestiona tu perfil, descarga tus datos o elimina tu cuenta definitivamente.",
+      "sectionLabel": "Sección de ajustes",
+      "sectionsNav": "Secciones de ajustes"
+    },
+    "accountPanel": {
+      "profileTitle": "Perfil",
+      "nameUpdated": "Nombre actualizado.",
+      "saveName": "Guardar nombre",
+      "changePasswordTitle": "Cambiar contraseña",
+      "changePasswordDescription": "Necesitarás tu contraseña actual: no la guardamos en el servidor.",
+      "passwordUpdated": "Contraseña actualizada.",
+      "passwordHelper": "Al menos 12 caracteres con mayúsculas, minúsculas y un número.",
+      "updatePassword": "Actualizar contraseña",
+      "downloadTitle": "Descargar mis datos",
+      "downloadDescription": "Exporta tus datos cuando quieras. La exportación completa es un único documento JSON con tu perfil, tus preferencias de notificaciones, los hogares a los que perteneces y las plantas y tareas de cada uno de ellos. La opción CSV es un subconjunto pensado para hojas de cálculo (las plantas y tareas de tu hogar activo).",
+      "downloadCsv": "Descargar CSV",
+      "deleteDescription": "Elimina de forma permanente tu inicio de sesión y tu pertenencia al hogar. Si eres la única persona administradora de un hogar con varios miembros, nombra antes a otra.",
+      "deleteConfirmTitle": "¿Eliminar la cuenta?",
+      "deleteConfirmMessage": "Se eliminan tu inicio de sesión y tus tokens de notificación, y pierdes el acceso a todos los hogares. El historial de cuidados compartido se conserva sin tu nombre. Esto no se puede deshacer.",
+      "deleteConfirmLabel": "Sí, eliminar",
+      "importHint": "¿Vas en sentido contrario? <importLink>Importa plantas desde un archivo CSV o JSON</importLink>, incluidas las exportaciones de esta aplicación."
+    },
+    "apiKeysPanel": {
+      "description": "Genera claves para acceder a los datos de tu hogar: Home Assistant, scripts, etc. Las claves son de solo lectura salvo que concedas explícitamente acceso de escritura. La disponibilidad depende del derecho a claves de API que ya tenga el hogar; los cambios a planes de pago están en pausa.",
+      "created": "Clave nueva creada: cópiala ahora, no se volverá a mostrar.",
+      "copyFailed": "No se pudo copiar automáticamente. Selecciona la clave y cópiala a mano.",
+      "labelLabel": "Etiqueta de la clave",
+      "labelPlaceholder": "Home Assistant, script personal…",
+      "labelHelper": "Se muestra en la lista para identificar la clave; no se puede cambiar después.",
+      "issue": "Generar clave",
+      "scopes": "Permisos",
+      "scopesHelp": "Concede solo lo que la clave necesite. Una solicitud a un endpoint que quede fuera de los permisos de la clave se rechaza con un 403.",
+      "scopeRequired": "Selecciona al menos un permiso.",
+      "revokeDescription": "La revocación es inmediata: los clientes que usen la clave empezarán a recibir un 401 en la siguiente solicitud.",
+      "none": "Aún no hay claves.",
+      "revokeConfirmTitle": "¿Revocar la clave de API?",
+      "revokeConfirmMessage": "La clave dejará de funcionar de inmediato. Todo lo que la esté usando recibirá un 401 en la siguiente solicitud.",
+      "keyLine": "fg_… <mono>{{last4}}</mono> · Generada el {{date}}",
+      "lastUsed": "Último uso: {{date}}"
     }
   },
   "security": {
@@ -1984,6 +2256,7 @@
     "email": "Correo",
     "emailDescription": "Un resumen diario en el correo de tu cuenta el día en que vencen tus tareas y cada día que sigan atrasadas.",
     "quietHoursDescription": "Durante este horario no enviamos nada: ni correos, ni mensajes de texto, ni notificaciones del navegador. Tu recordatorio diario llega cuando termina. Si no tienes horas de silencio, llega a las 8:00 en la zona horaria de abajo.",
+    "saveQuietHours": "Guardar horas de silencio",
     "sms": "Mensaje de texto",
     "deviceTitle": "Este dispositivo",
     "deviceActive": "Las notificaciones push están activadas en este dispositivo.",
@@ -2037,7 +2310,26 @@
     "emailStatusUnknown": "No pudimos comprobar si tu correo se está entregando en este momento. Esto no significa ni que sí ni que no: inténtalo de nuevo en un instante.",
     "emailResume": "Reanudar el correo a esta dirección",
     "emailResumed": "Correo reanudado. Volveremos a intentarlo en el próximo envío.",
-    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana."
+    "reminderPreview": "Un recordatorio dice, por ejemplo, «Monstera necesita riego» e indica cuándo toca. Si tu dispositivo lo permite, la propia notificación ofrece Hecho y Posponer hasta mañana.",
+    "panel": {
+      "shortDescription": "Cómo quieres que te lo recordemos",
+      "description": "Elige cómo quieres que te recordemos el cuidado atrasado de las plantas.",
+      "enable": "Activar",
+      "emailToggle": "Notificaciones por correo",
+      "smsToggle": "Notificaciones por SMS",
+      "phoneLabel": "Número de teléfono",
+      "phoneHelper": "Formato E.164. Debe empezar por + e incluir el código de país.",
+      "pestTitle": "Avisos de plagas de temporada",
+      "pestDescription": "Cuando una planta de tu hogar entra en una época típica de plagas (araña roja, pulgones, etc.), te enviaremos un aviso por trimestre para que la revises. Solo se envía para plantas con una especie reconocida.",
+      "pestToggle": "Alertas de plagas",
+      "quietHours": "Horas de silencio",
+      "quietStart": "Inicio",
+      "quietStartHelper": "Formato de 24 horas, en tu hora local",
+      "quietEnd": "Fin",
+      "quietEndHelper": "Si el fin es anterior al inicio, el intervalo continúa pasada la medianoche.",
+      "timezone": "Zona horaria",
+      "clear": "Borrar"
+    }
   },
   "pushActions": {
     "done": "{{plant}}: marcada como hecha.",
@@ -2050,7 +2342,35 @@
     "notActivelyChecked": "No se comprueba activamente",
     "coreApiOperational": "API principal operativa",
     "checkingTitle": "Comprobando el estado del sistema…",
-    "checkingBody": "Esperando una respuesta reciente del punto de estado de producción."
+    "checkingBody": "Esperando una respuesta reciente del punto de estado de producción.",
+    "recentIncidents": "Incidentes recientes",
+    "resolved": "Resuelto",
+    "investigating": "En investigación",
+    "historyUnavailable": "El historial de incidentes no está disponible en este momento.",
+    "detailsToFollow": "Publicaremos aquí los detalles del problema actual a medida que sepamos más.",
+    "emptyLog": "Los incidentes se redactan a mano y todavía no se ha publicado ninguno aquí. Un registro vacío no mide el tiempo de actividad.",
+    "incidents": {
+      "plantTags2026": {
+        "title": "Las etiquetas de plantas no funcionaban",
+        "body": "Del 4 de septiembre al 5 de octubre de 2026, las etiquetas de plantas no funcionaron. No se pudieron crear, quitar, listar, escanear ni proteger con PIN las etiquetas, ni completar tareas desde una etiqueta. Se veía «No pudimos cargar tus etiquetas de plantas» en la página de etiquetas, «Eso no funcionó» al cambiar una etiqueta y «Algo salió mal» en la página de escaneo. Se corrigió en la versión 0.39.0 el 5 de octubre."
+      }
+    },
+    "page": {
+      "operational": "Operativo",
+      "degraded": "Degradado",
+      "down": "Caído",
+      "eyebrow": "Comprobación de estado",
+      "title": "Estado del sistema",
+      "unreachableTitle": "No se puede acceder a la API de estado desde tu red",
+      "components": "Componentes",
+      "checking": "Comprobando…",
+      "noResponse": "Sin respuesta",
+      "lede": "Estado en vivo de los servicios que mantienen Family Greenhouse en funcionamiento.",
+      "unreachableBody": "Esta página comprueba <code>GET /health</code> desde tu navegador, y esa solicitud no obtuvo respuesta. Puede significar que nuestra API está caída, pero también puede deberse a tu conexión, a una VPN o a un bloqueador de anuncios. Prueba a recargar la página o compruébalo desde otra red.",
+      "lastSuccessful": "Última comprobación correcta: {{when}}.",
+      "lastChecked": "Última comprobación: {{when}}.",
+      "footnote": "El estado se comprueba en vivo con <code>GET /health</code> cada 60 segundos. Para saber en tiempo real si hay acceso, te recomendamos guardar esta página en tus marcadores."
+    }
   },
   "mobile": {
     "accountPrompt": "¿Necesitas gestionar o eliminar esta cuenta?",
@@ -2078,7 +2398,15 @@
     "notesTooLong": "Las notas son demasiado largas",
     "tooManyTags": "Demasiadas etiquetas"
   },
+  "commandPalette": {
+    "title": "Buscar plantas y tareas",
+    "placeholder": "Buscar plantas y tareas…",
+    "noMatches": "Sin resultados para «{{query}}».",
+    "hint": "Escribe para buscar plantas y tareas. Pulsa <kbd>Esc</kbd> para cerrar."
+  },
   "chat": {
+    "speakerYou": "Tú",
+    "speakerAssistant": "Chat de cuidado de plantas",
     "availabilityChecking": "Comprobando la disponibilidad del chat…",
     "availabilityCheckFailed": "No se pudo comprobar la disponibilidad del chat. Inténtalo de nuevo en unos instantes.",
     "seedlingUnavailableTitle": "El chat de cuidado no está disponible en Seedling",
@@ -2108,6 +2436,23 @@
       "assignee": "Asignado a {{name}}",
       "createTask": "Crear tarea",
       "dismiss": "Descartar"
+    },
+    "page": {
+      "title": "Chat de cuidado de plantas",
+      "errorDescription": "Haz preguntas sobre tu hogar.",
+      "intro": "Pregunta por tus plantas, tus tareas o el clima local. Las respuestas se basan en los datos reales de tu hogar y en una base de conocimientos seleccionada sobre el cuidado de plantas.",
+      "tryAsking": "Prueba a preguntar:",
+      "example1": "«¿Qué plantas tengo?»",
+      "example2": "«¿Por qué mi monstera tiene las puntas de las hojas marrones?»",
+      "example3": "«Crea un calendario de riego para Bertha.»",
+      "sources": "Fuentes",
+      "placeholder": "Pregunta por tus plantas…",
+      "messageLabel": "Mensaje del chat",
+      "send": "Enviar",
+      "disclaimer": "Generado por IA: verifícalo antes de actuar. No da consejos sobre pesticidas ni dosis. Los recordatorios sugeridos solo se crean cuando los confirmas.",
+      "budgetUsed": "{{percent}} % usado este mes",
+      "replying": "El chat de cuidado de plantas está respondiendo",
+      "documentTitle": "Chat de cuidado de plantas"
     }
   },
   "analytics": {
@@ -2168,11 +2513,41 @@
       "backupAssigned": "La próxima tarea de {{task}} de {{plant}} ahora es de {{name}}.",
       "backupFailed": "No pudimos traspasar esa tarea.",
       "noTasks": "No hay tareas activas que traspasar; añade una en la página de la planta."
+    },
+    "page": {
+      "eyebrow": "Ritmo de cuidados",
+      "description": "Cómo le va a tu hogar con el cuidado de las plantas.",
+      "activeTasks": "Tareas activas",
+      "doneLast7Days": "Hechas en los últimos 7 días",
+      "overdueNow": "Atrasadas ahora",
+      "last30Days": "Últimos 30 días",
+      "last30DaysDescription": "Tareas completadas por día.",
+      "dailyFailed": "No pudimos cargar los últimos 30 días en este momento.",
+      "careMixDescription": "Qué tipo de cuidados ha dedicado tu hogar.",
+      "atRiskTitle": "Plantas en riesgo",
+      "atRiskDescription": "Tareas atrasadas: primero la planta con más retraso.",
+      "byMemberDescription": "Tareas que ha completado cada miembro.",
+      "perPlantTitle": "Por planta",
+      "perPlantDescription": "Actividad reciente de tareas por planta.",
+      "trendLegend": "Barras: tareas completadas por día. Línea: media móvil de 7 días.",
+      "overdueCount_one": "{{count}} atrasada",
+      "overdueCount_other": "{{count}} atrasadas",
+      "overdueCount_many": "{{count}} atrasadas",
+      "worstDays": "peor: {{days}} d",
+      "taskCount_one": "{{count}} tarea",
+      "taskCount_other": "{{count}} tareas",
+      "taskCount_many": "{{count}} tareas"
     }
   },
   "climate": {
     "unavailableTitle": "Clima local no disponible.",
-    "unavailableBody": "No pudimos consultar el clima de tu zona en este momento, así que los avisos de helada, calor o lluvia de esta noche están sin comprobar, no descartados."
+    "unavailableBody": "No pudimos consultar el clima de tu zona en este momento, así que los avisos de helada, calor o lluvia de esta noche están sin comprobar, no descartados.",
+    "card": {
+      "title": "Clima local",
+      "setLocationBody": "Indica la ubicación de tu hogar para recibir consejos de cuidado según el clima: avisos de humedad, alertas de heladas y sugerencias para saltarte un riego.",
+      "setLocationLink": "Añadir la ubicación del hogar →",
+      "outdoorHumidity": "{{percent}} % de humedad exterior"
+    }
   },
   "moveDay": {
     "titleWinter": "Día de mudanza: hora de meter estas plantas",
@@ -2201,30 +2576,32 @@
   },
   "pricing": {
     "monthlyPriceLine": "Garden cuesta ${{garden}} al mes y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
+    "priceLineWithGardenYear": "Garden cuesta ${{garden}} al mes o ${{gardenYear}} al año, y Greenhouse ${{greenhouse}} al mes; cada plan cubre a todo el hogar.",
     "intervalLabel": "Intervalo de facturación",
     "intervalMonthly": "Mensual",
     "intervalYearly": "Anual",
     "intervalLifetime": "De por vida",
-    "hintAnnualSaving": "Ahorra ~33 %",
+    "hintAnnualSaving": "Ahorra ~{{percent}} %",
     "hintOneTime": "Pago único",
     "currentPlanBadge": "Plan actual",
     "notAvailableOneTime": "No disponible como pago único",
     "notAvailableInterval": "No disponible en este intervalo",
+    "billedMonthlyNote": "Se factura cada mes",
     "perMonth": "al mes",
     "perYear": "al año",
     "onceOff": "pago único",
     "startFree": "Empezar gratis",
     "choosePlan": "Elegir {{plan}}",
     "featureReminders": "Recordatorios de cuidado",
-    "featureIdentification": "Identificación de plantas",
+    "identificationNote": "La identificación de plantas no está incluida en Garden. Se vende como un paquete de {{credits}} identificaciones por {{price}}.",
+    "identificationNoteNoPack": "La identificación de plantas no está incluida en Garden.",
     "featureSharedHousehold": "Un hogar compartido: invitaciones, reclamar tareas, actividad",
-    "featureEverythingSeedling": "Todo lo de Plántula",
-    "featureMoreIdentification": "Más identificaciones de plantas al mes",
-    "featureEverythingGarden": "Todo lo de Jardín",
+    "featureEverythingSeedling": "Todo lo de Seedling",
+    "featureEverythingGarden": "Todo lo de Garden",
     "featureApiAccess": "Acceso a la API para automatizar",
     "featureImportExport": "Importación, exportación y calendario (CSV, JSON, .ics)",
-    "trialNote": "Un hogar nuevo empieza con 14 días de Jardín sin tarjeta y después pasa por sí solo al plan gratuito. Si eliges un plan de pago durante esos días, el proceso de pago pide una tarjeta, pero el primer cobro es el día en que terminan, no 14 días después; si quedan dos días o menos, o ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo esos días tiene en su lugar una prueba de 14 días en su primera suscripción de pago. Las pruebas son una sola por hogar, y cancelar antes del primer cobro no cuesta nada.",
-    "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Facturación. En esta página no se compra nada.",
+    "trialNote": "Un hogar nuevo empieza con 14 días de Garden sin tarjeta y después pasa por sí solo al plan gratuito. Si eliges un plan de pago durante esos días, el proceso de pago pide una tarjeta, pero el primer cobro es el día en que terminan, no 14 días después; si quedan dos días o menos, o ya terminaron, el primer cobro es el día en que te suscribes. Un hogar que nunca tuvo esos días tiene en su lugar una prueba de 14 días en su primera suscripción de pago. Las pruebas son una sola por hogar, y cancelar antes del primer cobro no cuesta nada.",
+    "howToBuyNote": "Los planes se eligen dentro de tu cuenta: primero crea una cuenta gratuita y después una persona administradora del hogar activa el plan de pago en Ajustes → Estado del plan. En esta página no se compra nada.",
     "giftNote": "¿Es para regalar?",
     "whyHeading": "Por qué un plan de pago",
     "whyHouseholdTitle": "Una sola factura para toda la casa",
@@ -2248,9 +2625,9 @@
     "featureSitterBasic": "1 enlace de cuidador a la vez, hasta 7 días",
     "featureAnalytics30": "30 días de estadísticas",
     "whyCoordinateTitle": "Para el hogar que necesita coordinarse",
-    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, dos personas, ocho plantas. Jardín es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
+    "whyCoordinateBody": "El plan gratuito es una pareja y sus plantas: un hogar, dos personas, ocho plantas. Garden es para una casa donde más personas se reparten el riego: miembros ilimitados, todo el historial de cuidados en tus estadísticas y el asistente.",
     "whyHomesTitle": "Para quienes ayudan en más de un hogar",
-    "whyHomesBody": "Invernadero es muchos hogares, muchas manos: forma parte de todos los hogares que cuidas —tu casa, la de tus padres, el alquiler— y añade acceso a la API para automatizar."
+    "whyHomesBody": "Greenhouse es muchos hogares, muchas manos: forma parte de todos los hogares que cuidas —tu casa, la de tus padres, el alquiler— y añade acceso a la API para automatizar."
   },
   "doubleCare": {
     "title": "Ya está hecho",
@@ -2295,6 +2672,7 @@
   "locked": {
     "includedWith": "Incluido en {{plan}}",
     "includedWithPrice": "Incluido en {{plan}} — {{price}} al mes para todo el hogar",
+    "includedWithPrices": "Incluido en {{plan}} — {{annualPrice}} al año o {{price}} al mes para todo el hogar",
     "adminChangePlan": "Cambiar de plan",
     "adminHint": "Eres administrador/a, así que puedes cambiar el plan del hogar en Ajustes → Estado del plan.",
     "ask": "Pedir a {{names}} que mejore el plan",
@@ -2310,7 +2688,7 @@
     "failed": "No pudimos enviarlo ahora mismo. No se ha cobrado nada; inténtalo de nuevo en un momento.",
     "features": {
       "chat": "Chat de cuidado de plantas",
-      "identifications": "Más identificaciones de plantas al mes",
+      "identifications": "Identificaciones de plantas incluidas cada mes",
       "leaf_health": "Más revisiones de salud foliar al mes",
       "plant_cap": "Espacio para más plantas",
       "member_cap": "Espacio para más miembros del hogar",
@@ -2468,8 +2846,15 @@
     "title": "¿Necesitas más identificaciones?",
     "body": "Compra un paquete único de identificaciones de plantas adicionales. Los créditos se usan solo cuando se agota la cuota mensual de tu plan, y nada se renueva automáticamente.",
     "exhaustedTitle": "Se han agotado las identificaciones de este mes",
-    "exhaustedBody": "La cuota mensual de identificaciones de tu plan está agotada y tu hogar no tiene créditos restantes. Compra un paquete para seguir identificando o mejora tu plan para tener una cuota mensual mayor.",
+    "exhaustedBody": "La cuota mensual de identificaciones de tu plan está agotada y tu hogar no tiene créditos restantes. Tu cuota se restablece al empezar el mes que viene, o compra un paquete para seguir identificando.",
     "exhaustedNoPack": "Se han agotado las identificaciones de plantas de este mes. Tu cuota se restablece al empezar el mes que viene.",
+    "notIncludedTitle": "La identificación de plantas se vende por separado",
+    "notIncludedBody": "La identificación se vende como un paquete de {{credits}} identificaciones por {{price}}; no está incluida en {{plan}}.",
+    "notIncludedBodyNoPack": "La identificación de plantas no está incluida en {{plan}}.",
+    "notIncludedNoPack": "La identificación de plantas no está incluida en {{plan}} y los paquetes de identificaciones no están disponibles en este momento. Aun así, puedes escribir la especie manualmente.",
+    "notIncludedInApp": "La identificación de plantas no está incluida en {{plan}}. Aun así, puedes escribir la especie manualmente.",
+    "notIncludedTerms": "Compra única. Los créditos son válidos durante {{days}} días desde la compra. Nada se renueva automáticamente.",
+    "notIncludedTermsNoDays": "Compra única. Nada se renueva automáticamente.",
     "offer": "{{credits}} identificaciones por {{price}}",
     "terms": "Compra única. Los créditos son válidos durante {{days}} días desde la compra y se usan solo después de la cuota mensual de tu plan. Nada se renueva automáticamente.",
     "termsNoDays": "Compra única. Los créditos se usan solo después de la cuota mensual de tu plan. Nada se renueva automáticamente.",
@@ -2490,7 +2875,7 @@
   },
   "giftSubscription": {
     "title": "Regala Family Greenhouse",
-    "body": "Paga una sola vez varios meses de Garden o Greenhouse para otro hogar. Recibirás un código para entregar; ese hogar lo canjea en Ajustes → Facturación y el regalo empieza el día en que lo hace. Nada se renueva y a ese hogar no se le cobra nada.",
+    "body": "Paga una sola vez varios meses de Garden o Greenhouse para otro hogar. Recibirás un código para entregar; ese hogar lo canjea en Ajustes → Estado del plan y el regalo empieza el día en que lo hace. Nada se renueva y a ese hogar no se le cobra nada.",
     "activeTitle": "Tu hogar tiene {{plan}} como regalo hasta el {{date}}",
     "activeBody": "Alguien lo ha pagado. A tu hogar no se le cobra nada y nada se renueva. El {{date}} el hogar vuelve a su propio plan, y nada de lo que hayas añadido se borra.",
     "giveTitle": "Hacer un regalo",
@@ -2547,14 +2932,14 @@
   "giftLanding": {
     "eyebrow": "Regalos",
     "title": "Regala una suscripción a Family Greenhouse",
-    "lede": "Paga una sola vez varios meses de Garden o Greenhouse para el hogar de otra persona. Recibirá un código de canje para introducir en Ajustes → Facturación; no necesitas tener tu propio hogar para enviarlo.",
+    "lede": "Paga una sola vez varios meses de Garden o Greenhouse para el hogar de otra persona. Recibirá un código de canje para introducir en Ajustes → Estado del plan; no necesitas tener tu propio hogar para enviarlo.",
     "howItWorksHeading": "Cómo funciona",
     "step1Title": "Elige un plan y la duración",
     "step1Body": "Garden o Greenhouse, de 1 a 12 meses.",
     "step2Title": "Paga una sola vez, con tu propia tarjeta",
     "step2Body": "Un único pago, nada se renueva. Te enviamos un recibo y un código de canje para que se lo entregues.",
     "step3Title": "Esa persona lo canjea",
-    "step3Body": "Quien reciba el regalo introduce el código en Ajustes → Facturación, y el regalo empieza ese mismo día.",
+    "step3Body": "Quien reciba el regalo introduce el código en Ajustes → Estado del plan, y el regalo empieza ese mismo día.",
     "signInHeading": "Inicia sesión para enviar un regalo",
     "signInBody": "Comprar un regalo se cobra en tu propia tarjeta, así que necesitamos una cuenta a la que enviar el recibo y el código. No hace falta tener un hogar propio: este es el único sitio donde regalar funciona sin uno.",
     "signInCta": "Iniciar sesión",
@@ -2599,6 +2984,11 @@
       "revoke": "Revocar",
       "revokeHint": "Revocar detiene el enlace de inmediato. Las visitas ya registradas se conservan.",
       "loadFailed": "No pudimos cargar tus plazas de cuidador ahora mismo. Eso no significa que no tengas ninguna: las que creaste siguen activas.",
+      "turnedOffHeading": "Desactivadas cuando alguien salió",
+      "turnedOffRow": "{{name}}: desactivada el {{date}}, cuando salió del hogar la persona que creó esta plaza. El enlace anterior ya no funciona, y no podemos avisar a {{name}} por ti.",
+      "turnedOffNextEntitled": "Si sigue ayudando, crea una plaza nueva arriba y envíale el enlace nuevo.",
+      "turnedOffNextLocked": "Una plaza de cuidador nueva requiere Greenhouse, y tu plan no lo incluye. Si sigue ayudando, puedes compartir un enlace de cuidador desde esta página, pero lo que haga no quedará registrado a su nombre.",
+      "turnedOffNextUnknown": "No pudimos comprobar ahora mismo si tu plan permite crear una plaza nueva. Si sigue ayudando, necesitará un enlace nuevo.",
       "reportLink": "Abrir el informe de visitas"
     },
     "page": {
@@ -2723,7 +3113,8 @@
       "snakePlant": "Lengua de suegra",
       "spiderPlant": "Mala madre",
       "bostonFern": "Helecho de Boston",
-      "fiddleLeafFig": "Ficus lira"
+      "fiddleLeafFig": "Ficus lira",
+      "rosemary": "Romero"
     },
     "facts": {
       "free": {
@@ -2850,7 +3241,23 @@
       "startWithGuide": "Empieza con una guía",
       "allGuides": "Todas las guías de cuidado (en inglés)",
       "readBlog": "Lee el blog (en inglés)",
-      "petSafeChecker": "Revisa una planta para mascotas"
+      "petSafeChecker": "Revisa una planta para mascotas",
+      "startWithList": "O empieza con una lista (en inglés)",
+      "lists": {
+        "forgiving": "Siete plantas de interior que sobreviven al olvido",
+        "petSafe": "Plantas seguras para mascotas y difíciles de matar",
+        "toxicSwaps": "Plantas de interior tóxicas comunes y alternativas más seguras"
+      },
+      "householdHeading": "Compartir las plantas en casa (en inglés)",
+      "household": {
+        "remember": "Cómo acordarte de verdad de regar tus plantas",
+        "sharing": "Compartir el cuidado de las plantas sin ser quien regaña en casa"
+      },
+      "holidayHeading": "Plantas navideñas y mascotas (en inglés)",
+      "holidayPets": {
+        "christmasCactus": "El cactus de Navidad y las mascotas",
+        "poinsettia": "La flor de Pascua y las mascotas"
+      }
     },
     "plans": {
       "eyebrow": "Planes",
@@ -2928,7 +3335,7 @@
         "heldClosed": "Estado de los planes — Family Greenhouse"
       },
       "description": {
-        "open": "Family Greenhouse se cobra por hogar, no por persona. Empieza gratis con un hogar, hasta 2 miembros del hogar y 8 plantas. Garden es para un hogar que necesita coordinarse; Greenhouse, para muchos hogares y muchas manos. Un hogar nuevo empieza con 14 días de Garden gratis, sin tarjeta.",
+        "open": "Precio por hogar, no por persona. Empieza gratis: un hogar, hasta 2 miembros del hogar y 8 plantas. Un hogar nuevo tiene 14 días de Garden gratis, sin tarjeta.",
         "heldOpen": "Crea una cuenta gratuita de Family Greenhouse para un hogar, hasta 2 personas y 8 plantas. Los planes de pago, las compras y los cambios de plan siguen en pausa.",
         "heldClosed": "Los planes de pago, las compras, los cambios de plan y el registro de cuentas nuevas están en pausa."
       }
@@ -3041,12 +3448,27 @@
       "both": "{{name}} no figura en la lista de la ASPCA, así que no podemos dar un veredicto. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "cats": "La lista de la ASPCA no da un veredicto sobre {{name}} para los gatos, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}}).",
       "dogs": "La lista de la ASPCA no da un veredicto sobre {{name}} para los perros, así que no podemos darlo. Mantén la planta fuera del alcance de las mascotas y, si una mascota come un poco, llama a tu veterinario o al Centro de Control de Envenenamiento Animal de la ASPCA ({{phone}})."
+    },
+    "page": {
+      "eyebrow": "Seguridad para mascotas",
+      "title": "¿Es segura esta planta para las mascotas?",
+      "searchLabel": "Buscar la toxicidad de una planta para mascotas",
+      "nameLabel": "Nombre de la planta o de la especie",
+      "namePlaceholder": "p. ej., snake plant, pothos, lily…",
+      "nameHelper": "Prueba con un nombre común (en inglés) o con el nombre científico.",
+      "errorBody": "No pudimos comprobarlo en este momento. Espera un poco y vuelve a intentarlo.",
+      "noMatchTitle": "Aún sin resultados",
+      "noMatchBody": "Todavía no tenemos esa planta en nuestro comprobador. Revisa la ortografía o prueba con el nombre común de la planta. Ante la duda, da por hecho que no es segura y mantenla fuera del alcance hasta que puedas confirmarlo con tu veterinario o con la ASPCA.",
+      "kidsTitle": "Una nota sobre niños y mascotas",
+      "lede": "Escribe el nombre de una planta de interior y te diremos, sin rodeos, si es tóxica para gatos y perros. Sin registrarte y sin complicaciones. Basado en los <aspcaLink>datos de seguridad de plantas de la ASPCA</aspcaLink>.",
+      "kidsBody": "Incluso las plantas «no tóxicas» pueden causar un leve malestar de estómago si una mascota curiosa o un niño pequeño se come un buen bocado: «no tóxica» significa que no es venenosa, no que sea comida. Con cualquier planta realmente tóxica, lo más seguro es la altura: ponla donde no lleguen las patas ni las manitas. Si crees que una mascota ha comido algo dañino, llama enseguida a tu veterinario o a la línea del <poisonLink>ASPCA Animal Poison Control</poisonLink>."
     }
   },
   "appStore": {
     "title": "Planes",
     "description": "Suscríbete con tu Apple ID. Un plan cubre a todas las personas de este hogar.",
     "perMonth": "{{price}} al mes",
+    "perYear": "{{price}} al año",
     "subscribe": "Suscribirse a {{plan}}",
     "restore": "Restaurar compras",
     "manage": "Gestionar suscripción",
@@ -3067,11 +3489,72 @@
     "linkedElsewhere": "La suscripción de este Apple ID pertenece a otro hogar.",
     "otherSubscription": "Este hogar ya tiene una suscripción del App Store de otro Apple ID.",
     "refusedActive": "Este hogar ya tiene una suscripción del App Store. Usa Gestionar suscripción para cambiarla.",
-    "disclosure": "El pago se carga a tu Apple ID al confirmar. La suscripción se renueva automáticamente cada mes al precio indicado salvo que la canceles al menos 24 horas antes de que termine el periodo. Gestiónala o cancélala en los ajustes de suscripciones de tu Apple ID.",
+    "disclosure": "El pago se carga a tu Apple ID al confirmar. La suscripción se renueva automáticamente al final de cada periodo, mensual o anual según se indique, al precio indicado salvo que la canceles al menos 24 horas antes de que termine el periodo. Gestiónala o cancélala en los ajustes de suscripciones de tu Apple ID.",
     "terms": "Condiciones de uso",
     "privacy": "Política de privacidad",
     "lockedSeePlans": "Ver planes",
     "lockedMember": "Un administrador del hogar puede cambiar el plan en Ajustes.",
-    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones)."
+    "webBilledByApple": "{{plan}} se cobra a través del App Store. Cámbialo o cancélalo en los ajustes de suscripciones de tu iPhone (Ajustes, tu nombre, Suscripciones).",
+    "plansInSettings": "Los planes están en Ajustes → Estado del plan, donde una persona administradora del hogar puede suscribirse.",
+    "includesGarden": "Hasta {{plants}} plantas en un hogar, cualquier número de personas, el asistente de cuidados y enlaces de cuidador de hasta {{sitterDays}} días.",
+    "includesGreenhouse": "Todo lo de Garden, más cualquier número de hogares con hasta {{plants}} plantas en cada uno, plazas de cuidador, un enlace de pantalla de pared y claves de API."
+  },
+  "thirdPartyConsent": {
+    "allow": "Permitir",
+    "notNow": "Ahora no",
+    "chat": {
+      "title": "¿Enviar tu pregunta a Amazon Bedrock?",
+      "body": "Para responder, Family Greenhouse envía tu pregunta y datos de las plantas y tareas de tu hogar a Amazon Bedrock, un servicio de IA de Amazon Web Services que ejecuta para nosotros el modelo Claude de Anthropic. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    },
+    "leafHealth": {
+      "title": "¿Enviar esta foto de la hoja a Amazon Bedrock?",
+      "body": "Para revisar la hoja, Family Greenhouse envía la foto y el nombre de la planta a Amazon Bedrock, un servicio de IA de Amazon Web Services que ejecuta para nosotros el modelo Claude de Anthropic. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    },
+    "identify": {
+      "title": "¿Enviar esta foto a Plant.id?",
+      "body": "Para identificar la planta, Family Greenhouse envía la foto a Plant.id, un servicio de Kindwise, una empresa de la República Checa. Sus condiciones le permiten conservar y reutilizar las fotos que recibe, entre otras cosas para entrenar sus modelos y mostrarlas a sus otros clientes. Solo te lo preguntamos una vez en este dispositivo; los detalles están en nuestra política de privacidad."
+    }
+  },
+  "routeError": {
+    "title": "No pudimos cargar esta página",
+    "body": "No se pudo descargar el código de la página. Suele pasar cuando la aplicación se actualiza mientras tenías la pestaña abierta. Actualizar la página debería solucionarlo.",
+    "refresh": "Actualizar"
+  },
+  "toasts": {
+    "dismiss": "Descartar notificación"
+  },
+  "dashboard": {
+    "eyebrow": "Tu hogar",
+    "description": "Esto es lo que pasa hoy con tus plantas.",
+    "toDoNow": "Por hacer ahora",
+    "viewAll": "Ver todo",
+    "yourPlants": "Tus plantas",
+    "firstPlantDescription": "Ponle nombre o parte de una especie sugerida y rellenaremos los detalles de cuidado. De los recordatorios de riego nos encargamos nosotros.",
+    "firstPlantHint": "Lleva menos de un minuto.",
+    "recentActivity": "Actividad reciente",
+    "recentActivityDescription": "Lo que ha pasado en tu hogar",
+    "filterActivity": "Filtrar actividad",
+    "activityEmpty": "Aún no hay actividad: completa una tarea para verla aquí.",
+    "welcomeBack": "Hola de nuevo, {{name}}",
+    "welcomeBackNoName": "Hola de nuevo",
+    "activityFilters": {
+      "all": "Todo",
+      "tasks": "Tareas",
+      "plants": "Plantas",
+      "people": "Personas"
+    },
+    "activityEmptyFiltered": {
+      "all": "No hay actividad en los últimos 50 eventos.",
+      "tasks": "No hay actividad de tareas en los últimos 50 eventos.",
+      "plants": "No hay actividad de plantas en los últimos 50 eventos.",
+      "people": "No hay actividad de personas en los últimos 50 eventos."
+    }
+  },
+  "yearInReview": {
+    "description": "El trabajo de cuidado que este hogar ha hecho en lo que va de año.",
+    "totalCompleted": "Total de tareas completadas",
+    "topContributor": "Quien más ha contribuido",
+    "tasksPerWeek": "Tareas por semana",
+    "whereWorkWent": "A dónde fue el trabajo"
   }
 }

@@ -77,6 +77,87 @@ describe('help content', () => {
     expect(visibleSections(true).some((s) => s.id === 'billing')).toBe(false);
   });
 
+  // The iPhone app can send push notifications and sell plans through In-App
+  // Purchase; the answer must not tell a reviewer the opposite, on either
+  // platform. Neither switch is on in every build, so it names the condition.
+  describe('the "different in the apps" answer', () => {
+    const article = (native: boolean) =>
+      visibleSections(native)
+        .flatMap((s) => s.articles)
+        .find((a) => a.id === 'mobile-apps')!;
+
+    it.each([true, false])(
+      'makes no blanket "no notifications" or "no purchases" claim (native %s)',
+      (native) => {
+        const { text } = article(native);
+        expect(text).not.toMatch(
+          /No notifications at all|No purchases|not shipped in the mobile apps/
+        );
+        expect(text).toContain('In-App Purchase');
+        expect(text).toContain('Settings → Notifications');
+      }
+    );
+
+    it('renders the same answer on the page as in its plain-text twin', () => {
+      render(<>{article(true).a}</>);
+      expect(screen.queryByText(/No notifications at all/)).toBeNull();
+      expect(screen.getByText(/In-App Purchase/)).toBeInTheDocument();
+    });
+  });
+
+  describe('the identify-photo answer (ADR 0042)', () => {
+    const article = (native: boolean) =>
+      visibleSections(native)
+        .flatMap((s) => s.articles)
+        .find((a) => a.id === 'identify-photo')!;
+
+    it('on the website states the pack, its price, and that Garden has nothing to reset', () => {
+      const { text } = article(false);
+      expect(text).toContain(
+        'Identification is sold as a 20-identification pack for $1.99; it is not included in Garden.'
+      );
+      expect(text).toContain('Settings then Billing');
+      expect(text).toContain('Garden has no monthly allowance');
+      expect(text).not.toMatch(/0 on Garden/);
+    });
+
+    it('in the apps states no price and no place to buy (Guideline 3.1.1)', () => {
+      const { text } = article(true);
+      expect(text).toContain("Plant identification isn't included in Garden.");
+      expect(text).toContain('1 identification on Seedling, 100 on Greenhouse');
+      expect(text).not.toMatch(/\$\d|pack|Billing|one-time purchase/i);
+    });
+
+    it('renders the same split on the page, not only in the plain-text twin', () => {
+      vi.mocked(isNativeApp).mockReturnValue(true);
+      const { unmount } = render(<>{article(true).a}</>);
+      expect(screen.queryByText(/\$1\.99/)).toBeNull();
+      expect(screen.queryByText(/Settings → Billing/)).toBeNull();
+      expect(screen.getByText(/isn.t included in Garden/)).toBeInTheDocument();
+      unmount();
+      vi.mocked(isNativeApp).mockReturnValue(false);
+      render(<>{article(false).a}</>);
+      expect(screen.getByText(/\$1\.99/)).toBeInTheDocument();
+    });
+  });
+
+  // docs/mobile.md, "Store payment rules": nothing in the apps sends a reader
+  // to the website to pay. The limits topic is shown in the apps, and its
+  // mobile-apps answer once ended "Use the website for anything to do with
+  // billing."
+  it('never points a reader in the apps to the website for billing', () => {
+    for (const section of visibleSections(true)) {
+      for (const article of section.articles) {
+        expect(article.text, `${section.id}#${article.id}`).not.toMatch(
+          /\b(use|on|visit|go to|open) (the|our) (website|web)\b|in a (web )?browser to (pay|buy|upgrade)/i
+        );
+      }
+    }
+    expect(articleText('limits', 'mobile-apps')).toMatch(
+      /plans aren’t bought or changed in the app/
+    );
+  });
+
   // The plan facts in these answers are also published as FAQPage JSON-LD, so
   // a stale number here is a wrong answer served to search engines as well as
   // to the person who came looking for it. Both articles below had drifted
@@ -195,7 +276,7 @@ describe('HelpPage', () => {
     renderAt('/help');
     // The cancellation answer must be present without anyone opening anything.
     expect(
-      screen.getByText(/only place a live subscription can be changed or cancelled/i)
+      screen.getByText(/only place a live subscription can be changed or canceled/i)
     ).toBeInTheDocument();
   });
 

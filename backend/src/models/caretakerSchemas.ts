@@ -47,6 +47,9 @@ export type CaretakerNoteInput = z.infer<typeof caretakerNoteSchema>;
 export const caretakerPhotoRequestSchema = z
   .object({
     contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
+    // The exact size of the file about to be uploaded, in bytes. Required by
+    // the handler, which answers a request without it in words (ADR 0046).
+    contentLength: z.number().int().positive().optional(),
   })
   .nullable();
 export type CaretakerPhotoRequestInput = z.infer<typeof caretakerPhotoRequestSchema>;

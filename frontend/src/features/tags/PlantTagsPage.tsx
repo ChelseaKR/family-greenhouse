@@ -22,6 +22,7 @@ import {
 import { getErrorMessage } from '@/services/api';
 import { printPage } from '@/services/nativePrint';
 import { QrCode } from './QrCode';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 /**
  * The members-only print sheet (ADR 0016). Two things happen here:
@@ -156,7 +157,7 @@ export function PlantTagsPage() {
           <CardHeader title={t('plantTags.lockedTitle')} description={t('plantTags.lockedBody')} />
           {/* No "see the plans" link in the apps (Guideline 3.1.1). */}
           {isNativeApp() ? (
-            <p className="text-sm text-gray-600">{t('settings.billing.nativeUnavailable')}</p>
+            <p className="text-sm text-gray-600">{t(nativePlanNoteKey())}</p>
           ) : (
             <Link to="/pricing" className="text-primary-700 underline hover:text-primary-800">
               {t('plantTags.lockedCta')}

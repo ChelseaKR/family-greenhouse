@@ -59,6 +59,7 @@ async function renderAt(path: string) {
 
 function reset() {
   delete window.dataLayer;
+  delete window.__fgGoogleAnalyticsBoot;
   document
     .querySelectorAll('script[src^="https://www.googletagmanager.com/gtag/js"]')
     .forEach((script) => script.remove());

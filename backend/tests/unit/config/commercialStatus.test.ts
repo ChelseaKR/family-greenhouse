@@ -176,12 +176,17 @@ describe('production IaC commercial-hold invariants', () => {
       rootModule.indexOf('check "web_push_vapid_configuration_complete"')
     );
     expect(guard).not.toBe('');
-    expect(guard.match(/precondition\s*{/g) ?? []).toHaveLength(4);
+    expect(guard.match(/precondition\s*{/g) ?? []).toHaveLength(5);
 
     // Opening the runtime gate while the committed status file still holds.
     expect(guard).toMatch(/commercialHoldActive == false/);
     // Opening it with blank Stripe configuration (buy buttons that 502).
-    expect(guard).toMatch(/var\.stripe_price_id_garden != ""/);
+    expect(guard).toMatch(/var\.stripe_price_id_greenhouse != ""/);
+    // Garden's two CURRENT prices (ADR 0042) are set together or not at all,
+    // and that pairing is enforced even while payments are off.
+    expect(guard).toMatch(
+      /\(var\.stripe_price_id_garden_299 == ""\) == \(var\.stripe_price_id_garden_annual_2499 == ""\)/
+    );
     expect(guard).toMatch(/var\.stripe_webhook_secret != ""/);
     // Opening it with a live key against unverified price ids.
     expect(guard).toMatch(/var\.stripe_price_ids_are_live/);
@@ -190,7 +195,10 @@ describe('production IaC commercial-hold invariants', () => {
 
     // Every precondition must be inert while payments are off, so the guard
     // never blocks an ordinary deploy of the held configuration.
+    // The one exception is the Garden price pair: it guards a tfvars mistake,
+    // not a launch, so it holds in every state.
     for (const condition of guard.match(/condition\s*=[\s\S]*?\n\s*error_message/g) ?? []) {
+      if (condition.includes('stripe_price_id_garden_299 ==')) continue;
       expect(condition).toContain('var.payments_enabled != "1"');
     }
   });
@@ -226,7 +234,7 @@ describe('production IaC commercial-hold invariants', () => {
     // variables), so a seventh stripe_price_id_* added later would silently
     // bypass the gate. This is the assertion that makes that impossible: every
     // declared price-id variable must appear in local.stripe_price_ids_in_use.
-    const declared = [...rootVariables.matchAll(/variable "(stripe_price_id_[a-z_]+)"/g)].map(
+    const declared = [...rootVariables.matchAll(/variable "(stripe_price_id_[a-z0-9_]+)"/g)].map(
       (m) => m[1]
     );
     expect(declared.length).toBeGreaterThanOrEqual(6);
@@ -243,7 +251,7 @@ describe('production IaC commercial-hold invariants', () => {
     // And nothing else: an entry here that is not a declared variable would
     // not compile, but an entry that is a declared NON-price variable would
     // widen the set with something the attestation was never about.
-    const referenced = [...inUse.matchAll(/var\.([a-z_]+),/g)].map((m) => m[1]);
+    const referenced = [...inUse.matchAll(/var\.([a-z0-9_]+),/g)].map((m) => m[1]);
     expect([...referenced].sort()).toEqual([...declared].sort());
   });
 
@@ -288,14 +296,22 @@ describe('production IaC commercial-hold invariants', () => {
       .split('\n')
       .filter(
         (line) =>
-          /^stripe_price_id_[a-z_]+\s*=/.test(line.trim()) &&
+          /^stripe_price_id_[a-z0-9_]+\s*=/.test(line.trim()) &&
           !/^stripe_price_id_identify_top_up\s*=/.test(line.trim())
       );
 
-    expect(priceLines).toHaveLength(5);
-    for (const line of priceLines) {
-      expect(line).toMatch(/^stripe_price_id_[a-z_]+\s*=\s*"price_[A-Za-z0-9]+"\s*$/);
+    // Seven declared: the five that were live before ADR 0042, plus Garden's
+    // two current prices, which stay blank until the owner creates them in
+    // Stripe and are paired (both blank or both set, enforced by Terraform).
+    expect(priceLines).toHaveLength(7);
+    const pair = /^stripe_price_id_garden(_annual)?_(299|2499)\s*=/;
+    const pairLines = priceLines.filter((l) => pair.test(l.trim()));
+    expect(pairLines).toHaveLength(2);
+    for (const line of priceLines.filter((l) => !pair.test(l.trim()))) {
+      expect(line).toMatch(/^stripe_price_id_[a-z0-9_]+\s*=\s*"price_[A-Za-z0-9]+"\s*$/);
     }
+    const blank = pairLines.map((l) => /=\s*""\s*$/.test(l.trim()));
+    expect(blank[0], 'Garden $2.99 and $24.99 ids must be set together').toBe(blank[1]);
   });
 
   it('leaves the identification top-up price blank or a real price id — never a placeholder', () => {

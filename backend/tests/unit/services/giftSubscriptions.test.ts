@@ -80,7 +80,7 @@ import { isPriceReconciliationError } from '../../../src/services/stripePrices.j
 /** What Stripe reports for a correctly configured gift month of Garden. */
 const GARDEN_GIFT_PRICE = {
   id: 'price_gift_garden',
-  unit_amount: 499,
+  unit_amount: 299,
   currency: 'usd',
   active: true,
   recurring: null,
@@ -110,6 +110,34 @@ describe('createGiftCheckoutSession', () => {
     delete process.env.PAYMENTS_ENABLED;
     delete process.env.STRIPE_PRICE_ID_GIFT_GARDEN_MONTH;
     delete process.env.STRIPE_PRICE_ID_GIFT_GREENHOUSE_MONTH;
+    delete process.env.STRIPE_AUTOMATIC_TAX_ENABLED;
+  });
+
+  it('enables automatic tax only when configured, on a product carrying the SaaS tax code', async () => {
+    // A gift is a guest checkout (no Stripe customer), so Checkout taxes it
+    // on the billing address it collects from the BUYER — which is also the
+    // address California sources a remote sale by. The Session needs nothing
+    // beyond the flag; the product needs the SaaS code, not the gift-card one.
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    pricesRetrieve.mockResolvedValueOnce({
+      ...GARDEN_GIFT_PRICE,
+      product: { id: 'prod_garden', tax_code: 'txcd_10103000' },
+    });
+    await createGiftCheckoutSession(ARGS);
+    const [params] = sessionsCreate.mock.calls[0];
+    expect(params.automatic_tax).toEqual({ enabled: true });
+    expect(params).not.toHaveProperty('customer');
+    expect(params).not.toHaveProperty('customer_update');
+  });
+
+  it('with automatic tax on, refuses a gift price whose product carries the gift-card code', async () => {
+    process.env.STRIPE_AUTOMATIC_TAX_ENABLED = '1';
+    pricesRetrieve.mockResolvedValueOnce({
+      ...GARDEN_GIFT_PRICE,
+      product: { id: 'prod_garden', tax_code: 'txcd_10502000' },
+    });
+    await expect(createGiftCheckoutSession(ARGS)).rejects.toSatisfy(isPriceReconciliationError);
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 
   it('refuses before Stripe while payment activity is paused', async () => {
@@ -148,7 +176,7 @@ describe('createGiftCheckoutSession', () => {
     await expect(createGiftCheckoutSession(ARGS)).rejects.toSatisfy(isPriceReconciliationError);
     pricesRetrieve.mockRejectedValueOnce(new Error('No such price'));
     await expect(createGiftCheckoutSession(ARGS)).rejects.toSatisfy(isPriceReconciliationError);
-    expect(pricesRetrieve).toHaveBeenCalledWith('price_gift_garden');
+    expect(pricesRetrieve).toHaveBeenCalledWith('price_gift_garden', { expand: ['product'] });
     expect(sessionsCreate).not.toHaveBeenCalled();
   });
 

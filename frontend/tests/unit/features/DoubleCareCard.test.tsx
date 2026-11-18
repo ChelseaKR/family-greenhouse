@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { DoubleCareCard } from '@/features/analytics/DoubleCareCard';
 import type { DailyAnalytics } from '@/services/householdService';
+import { NATIVE_PURCHASES_METHODS } from '@/services/appStoreAvailability';
 
 function renderCard(props: { loading: boolean; daily: DailyAnalytics | undefined }) {
   return render(
@@ -67,6 +68,34 @@ describe('DoubleCareCard', () => {
       expect(screen.queryByRole('link')).not.toBeInTheDocument();
     } finally {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+    }
+  });
+
+  // With In-App Purchase on, plans ARE changed in the iPhone app: the card
+  // must not say they aren't, and still links to no web plans page.
+  it('inside the iPhone app that sells plans, points at Plan status instead', () => {
+    vi.stubEnv('VITE_APP_STORE_PURCHASES', 'true');
+    (window as unknown as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+      PluginHeaders: [
+        { name: 'NativePurchases', methods: NATIVE_PURCHASES_METHODS.map((name) => ({ name })) },
+      ],
+    };
+    try {
+      renderCard({ loading: false, daily: daily({ status: 'not_in_plan' }) });
+      expect(
+        screen.queryByText(/Plan changes aren't available in the app/)
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Plans are in Settings → Plan status, where a household admin can subscribe\./
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'See plans' })).not.toBeInTheDocument();
+    } finally {
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+      vi.unstubAllEnvs();
     }
   });
 

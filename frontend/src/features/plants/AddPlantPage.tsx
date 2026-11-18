@@ -13,6 +13,7 @@ import { ArrowLeftIcon, SparklesIcon, CameraIcon } from '@heroicons/react/24/out
 import {
   plantService,
   identifyBudgetExhaustedFromError,
+  identifyNotIncludedIn,
   type IdentificationSuggestion,
   type IdentifyBudgetExhausted,
 } from '@/services/plantService';
@@ -42,6 +43,7 @@ import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 import { toast } from '@/store/toastStore';
 import { taskTypeLabels } from '@/utils/taskTypeConfig';
 import { isNativeApp } from '@/lib/platform';
+import { useThirdPartyConsent } from '@/hooks/useThirdPartyConsent';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -89,8 +91,8 @@ async function fileToBase64(file: Blob): Promise<string> {
 }
 
 export function AddPlantPage() {
-  useDocumentTitle('Add plant');
   const { t } = useTranslation();
+  useDocumentTitle(t('plants.addPlant'));
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -184,11 +186,11 @@ export function AddPlantPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError('Image must be a JPEG, PNG, or WebP file.');
+      setError(t('plants.photoUpload.wrongType'));
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+      setError(t('plants.photoUpload.tooLarge', { max: MAX_BYTES / 1024 / 1024 }));
       return;
     }
     await acceptPhoto(file);
@@ -204,6 +206,10 @@ export function AddPlantPage() {
     setConfidence(null);
     await acceptPhoto(file);
   };
+
+  // In the apps, the photo goes to Plant.id only after a yes on this device
+  // (Guideline 5.1.2(i)); "Not now" sends nothing.
+  const plantIdConsent = useThirdPartyConsent('identify');
 
   const runIdentify = async () => {
     if (!pickedFile) return;
@@ -253,9 +259,19 @@ export function AddPlantPage() {
         // configured, OR this is the iOS/Android app, which must never offer
         // an in-app purchase outside Apple's/Google's own billing — see
         // `native` above): say what happened and where the allowance comes
-        // from, in the reader's language.
-        if (!exhausted.topUpAvailable || native)
-          setIdentifyNotice(t('identifyTopUp.exhaustedNoPack'));
+        // from, in the reader's language. A plan that bundles none (ADR 0042)
+        // has nothing used up and no reset to promise; the apps name no pack
+        // and no price (docs/mobile.md, "Store payment rules").
+        if (!exhausted.topUpAvailable || native) {
+          const notIncludedIn = identifyNotIncludedIn(exhausted);
+          setIdentifyNotice(
+            notIncludedIn
+              ? t(native ? 'identifyTopUp.notIncludedInApp' : 'identifyTopUp.notIncludedNoPack', {
+                  plan: notIncludedIn,
+                })
+              : t('identifyTopUp.exhaustedNoPack')
+          );
+        }
         return;
       }
       setError(
@@ -352,15 +368,16 @@ export function AddPlantPage() {
           // Downscale client-side (max 1600px long edge, WebP ~0.8 / JPEG
           // fallback) and remove the metadata, GPS included; the original is
           // uploaded, still stripped, if the canvas pipeline fails. The
-          // presign contentType must match the PUT's Content-Type header.
+          // presign carries the blob's type and size; the PUT must match both.
           const blob = await prepareImageForUpload(pickedFile);
           if (blob.size > MAX_BYTES) {
-            throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024} MB).`);
+            throw new Error(t('plants.photoUpload.tooLarge', { max: MAX_BYTES / 1024 / 1024 }));
           }
           const contentType = blob.type;
           const { uploadUrl, imageUrl } = await plantService.getImageUploadUrl(
             plant.id,
-            contentType
+            contentType,
+            blob.size
           );
           await plantService.uploadImage(uploadUrl, blob, contentType, setUploadProgress);
           await plantService.confirmImageUpload(plant.id, imageUrl);
@@ -405,8 +422,10 @@ export function AddPlantPage() {
       track('plant_added', { ordinal: wasFirstPlant ? 'first' : 'subsequent' });
       // GA4 `household_activated`: the first plant is the product's activation
       // step. No plant name, id or note is sent.
-      if (wasFirstPlant) {
-        trackGoogleConversion({ name: 'household_activated' });
+      if (wasFirstPlant) trackGoogleConversion({ name: 'household_activated' });
+      // GA4 `first_plant_added`: once per account, as the server decided
+      // (`firstPlantForAccount`), not once per screen or reload.
+      if (plant.firstPlantForAccount === true) {
         trackGoogleConversion({ name: 'first_plant_added', method: 'full_form' });
       }
       playHaptic('added');
@@ -453,17 +472,15 @@ export function AddPlantPage() {
         className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 native-frame:hidden!"
       >
         <ArrowLeftIcon className="h-4 w-4 mr-1" aria-hidden="true" />
-        Back to plants
+        {t('plants.backToPlants')}
       </Link>
 
       <div>
         <h1 className="font-serif text-3xl text-ink leading-tight tracking-tight">
-          Add a new plant
+          {t('plants.add.title')}
         </h1>
         <TitleUnderline className="mt-1 h-3 w-28 text-primary-600" />
-        <p className="mt-1 text-sm text-gray-600">
-          Enter the details of your plant to start tracking its care.
-        </p>
+        <p className="mt-1 text-sm text-gray-600">{t('plants.add.intro')}</p>
       </div>
 
       <PlanCapPrompt cap="plants" />
@@ -496,6 +513,7 @@ export function AddPlantPage() {
               credits={identifyExhausted.topUp.credits}
               priceUsd={identifyExhausted.topUp.priceUsd}
               balance={identifyExhausted.credits}
+              notIncludedIn={identifyNotIncludedIn(identifyExhausted)}
             />
           </div>
         )}
@@ -503,13 +521,13 @@ export function AddPlantPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
           {/* Photo + identification */}
           <div className="space-y-3">
-            <span className="label">Photo (optional)</span>
+            <span className="label">{t('plants.photoLabel')}</span>
             <div className="flex items-start gap-4">
               <div className="h-32 w-32 shrink-0 overflow-hidden rounded-lg bg-parchment">
                 {pickedPreview ? (
                   <img
                     src={pickedPreview}
-                    alt="Selected plant photo preview"
+                    alt={t('plants.add.photoPreviewAlt')}
                     width={128}
                     height={128}
                     decoding="async"
@@ -533,7 +551,7 @@ export function AddPlantPage() {
                   />
                 ) : (
                   <label className="block">
-                    <span className="sr-only">Choose a photo</span>
+                    <span className="sr-only">{t('plants.leafHealth.pickPhoto')}</span>
                     <input
                       type="file"
                       accept={ACCEPTED_TYPES.join(',')}
@@ -547,17 +565,20 @@ export function AddPlantPage() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={runIdentify}
+                    onClick={() => plantIdConsent.run(() => void runIdentify())}
                     isLoading={isIdentifying}
                     leftIcon={<SparklesIcon className="h-4 w-4" aria-hidden="true" />}
                   >
-                    Identify from photo
+                    {t('plants.identifyFromPhoto')}
                   </Button>
                 )}
+                {plantIdConsent.dialog}
                 {mutation.isPending && pickedFile && (
                   <div
                     className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
                     role="progressbar"
+                    // A progressbar with no name is announced as a bare percentage.
+                    aria-label={t('caretaker.page.photoUploading')}
                     aria-valuenow={Math.round(uploadProgress * 100)}
                     aria-valuemin={0}
                     aria-valuemax={100}
@@ -630,9 +651,9 @@ export function AddPlantPage() {
 
           <div className="space-y-1">
             <Input
-              label="Plant name"
+              label={t('plants.nameLabel')}
               required
-              placeholder="e.g., Living Room Monstera"
+              placeholder={t('plants.add.namePlaceholder')}
               error={errors.name?.message}
               {...register('name')}
             />
@@ -652,7 +673,7 @@ export function AddPlantPage() {
             }}
             onPerenualPick={setPerenualSpeciesId}
             error={errors.species?.message}
-            helperText="Type to search common names; pick a suggestion to autofill the scientific name."
+            helperText={t('plants.add.speciesHelper')}
           />
 
           <PetToxicityNote perenualSpeciesId={perenualSpeciesId} />
@@ -665,13 +686,13 @@ export function AddPlantPage() {
           {suggestedTaskTemplate && (
             <div
               className="rounded-lg border border-primary-200 bg-primary-50 p-4"
-              aria-label="Recommended care tasks"
+              aria-label={t('plants.add.recommendedTasks')}
             >
               <label
                 htmlFor="auto-add-care-tasks"
                 className="flex cursor-pointer items-start gap-3"
               >
-                <span className="sr-only">Automatically add recommended care tasks</span>
+                <span className="sr-only">{t('plants.add.autoTasksLabel')}</span>
                 <input
                   id="auto-add-care-tasks"
                   type="checkbox"
@@ -681,10 +702,12 @@ export function AddPlantPage() {
                 />
                 <span>
                   <span className="block text-sm font-semibold text-primary-900">
-                    Automatically add {suggestedTaskTemplate.name.toLowerCase()} care tasks
+                    {t('plants.add.autoTasksNamed', {
+                      name: suggestedTaskTemplate.name.toLowerCase(),
+                    })}
                   </span>
                   <span className="mt-1 block text-xs text-primary-800">
-                    Based on “{speciesValue}”. You can edit or remove these tasks any time.
+                    {t('plants.add.autoTasksBasis', { species: speciesValue })}
                   </span>
                 </span>
               </label>
@@ -694,7 +717,7 @@ export function AddPlantPage() {
                     <span className="font-medium">
                       {task.customType || taskTypeLabels[task.type]}
                     </span>{' '}
-                    every {task.frequencyDays} day{task.frequencyDays === 1 ? '' : 's'}
+                    {t('tasks.seasonal.interval', { count: task.frequencyDays })}
                   </li>
                 ))}
               </ul>
@@ -743,22 +766,22 @@ export function AddPlantPage() {
           </fieldset>
 
           <Input
-            label="Tags"
-            placeholder="tropical, low-light, gift"
-            helperText="Comma-separated. Up to 10 tags. Useful for filtering later."
+            label={t('plants.list.tags')}
+            placeholder={t('plants.add.tagsPlaceholder')}
+            helperText={t('plants.add.tagsHelper')}
             error={errors.tags?.message}
             {...register('tags')}
           />
 
           <div>
             <label htmlFor="notes" className="label">
-              Notes
+              {t('plants.notesLabel')}
             </label>
             <textarea
               id="notes"
               rows={4}
               className="input"
-              placeholder="Any additional notes about this plant..."
+              placeholder={t('plants.add.notesPlaceholder')}
               {...register('notes')}
             />
             {errors.notes?.message && <p className="error-message">{errors.notes.message}</p>}
@@ -766,10 +789,10 @@ export function AddPlantPage() {
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={() => navigate('/plants')}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" isLoading={mutation.isPending}>
-              Add plant
+              {t('plants.addPlant')}
             </Button>
           </div>
         </form>

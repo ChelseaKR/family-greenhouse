@@ -244,6 +244,25 @@ Privacy Control or Do Not Track, the same `analyticsOptedOut()` PostHog uses.
 Under an opt-out the loader also deletes any `_ga`/`_ga_*` cookies left from
 before. Test fixtures are excluded by the smoke's GPC declaration (above).
 
+**When the first page view is sent (since 2026-11-07).** From the document,
+not from the app. `frontend/src/googleAnalyticsBoot.ts` is built as its own
+small entry (`frontend/vite.googleAnalyticsBoot.ts`) and placed in the `<head>`
+of every page the production web build emits, ahead of the app bundle. It
+applies the same conditions, pushes the same consent defaults and
+configuration, appends gtag.js, and — on a prerendered public page whose
+`data-prerendered` stamp equals the address being loaded — sends that page's
+view with the build-time title, `utm_*` only, and the referrer reduced to its
+origin. The app's loader then adopts that state (`window.__fgGoogleAnalyticsBoot`)
+instead of repeating it, and the route's own page view is deduplicated. The
+app shell (dashboard, plant pages, anything carrying a token) still gets its
+first page view from the app, scrubbed as before; so does the home page for a
+signed-in browser, which App redirects to `/dashboard`. Measured on the
+throttled phone profile, the care-page `page_view` moved from about 4.0 s
+into the load to well under 2 s, so visits that end sooner than that are now
+counted; expect the session count to rise after the deploy while engaged
+sessions do not, and do not compare session totals across that date as
+like-for-like.
+
 **What it is told.**
 
 - Consent Mode v2 defaults, never updated: `ad_storage`, `ad_user_data` and
@@ -274,6 +293,16 @@ before. Test fixtures are excluded by the smoke's GPC declaration (above).
 
 Because `set` carries these values, GA's automatic events inherit the scrubbed
 address and title rather than reading `location.href` and `document.title`.
+
+**The sitter page's footer link** goes to `/?utm_source=sitter_link&utm_medium=referral`,
+fixed text with no token. A click is a mid-visit route change, and GA keeps a
+session's source from its first hit, so `sessionSource` will usually not show it.
+Read it by page instead: `pagePathPlusQueryString` containing
+`utm_source=sitter_link`. Measured on 2026-11-08 with the real gtag.js and hits
+captured locally: the sitter page sends `/sit/:token`, the click sends the tagged
+home address with referrer `/sit/:token`, a new-tab open sends the referrer's
+origin only, and the token appears in no hit or `Referer` header. A deliberate
+raw-address hit was caught by the same check.
 
 **Measured against the real gtag.js (2026-09-17),** with every request to
 Google recorded and aborted in a headless browser, so nothing reached the
@@ -335,7 +364,7 @@ page view, and carries the same scrubbed `page_location`.
 | Sign-up       | `sign_up`               | the register form, once the API accepted the account (`RegisterPage.tsx`, beside PostHog's `signup_started`)                                                                                                                                                                                                                                                                                                                                                                                  | `method: 'email'`                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Confirmed     | `email_confirmed`       | the confirm-email form, once `POST /auth/confirm` succeeded (`ConfirmEmailPage.tsx`, beside PostHog's `signup_completed`)                                                                                                                                                                                                                                                                                                                                                                     | none beyond the scrubbed `page_location`                                                                                                                                                                                                                                                                                                                                                                            |
 | Activated     | `household_activated`   | the household's first plant saved: `FirstPlantStep.tsx`, or `AddPlantPage.tsx` when the household had no plants before. The product's own activation definition (funnel stage 3)                                                                                                                                                                                                                                                                                                              | none beyond the scrubbed `page_location`; no plant name, id or note                                                                                                                                                                                                                                                                                                                                                 |
-| First plant   | `first_plant_added`     | the same moment as `household_activated`, beside it, in the same places (and the dashboard's empty plants card)                                                                                                                                                                                                                                                                                                                                                                               | `method`: `common_plant` (a tap on the first run's houseplant shortcut), `typed` (the first run's name form), `full_form` (`AddPlantPage.tsx`) `dashboard_empty` (the same shortcut in the dashboard's empty plants card) or `guide_handoff` (a tap, in the first run, on the plant carried from the care guide the visitor signed up from, `/register?plant=<slug>`). Never which plant                            |
+| First plant   | `first_plant_added`     | the account's first plant, once per account: only when `POST /plants` answers `firstPlantForAccount: true`, which the server sets on one create per account ever, and only when that create left its household with one active plant (`services/accountMilestones.ts`). Sent from the same places as `household_activated` (and the dashboard's empty plants card), but a second household, a reload or a second device does not send it again                                                | `method`: `common_plant` (a tap on the first run's houseplant shortcut), `typed` (the first run's name form), `full_form` (`AddPlantPage.tsx`) `dashboard_empty` (the same shortcut in the dashboard's empty plants card) or `guide_handoff` (a tap, in the first run, on the plant carried from the care guide the visitor signed up from, `/register?plant=<slug>`). Never which plant                            |
 | Trial         | `start_trial`           | the onboarding screen, when `POST /households` answers with `noCardTrialEndsAt`, which the server includes only when that create began the account's no-card Garden trial (ADR 0027)                                                                                                                                                                                                                                                                                                          | `trial_plan: 'garden'`, `trial_days: 14`                                                                                                                                                                                                                                                                                                                                                                            |
 | Paid          | `purchase`              | Settings → Billing on Stripe's return from a plan checkout, once the purchase has settled (`features/billing/reportPlanPurchase.ts`)                                                                                                                                                                                                                                                                                                                                                          | `transaction_id`; and `currency: 'USD'`, `value`, `items: [{item_id: '<plan>_<interval>', price, quantity: 1}]` when the return address names the plan and cadence and the settled state shows that plan                                                                                                                                                                                                            |
 

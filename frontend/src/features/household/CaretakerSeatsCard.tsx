@@ -147,6 +147,12 @@ export function CaretakerSeatsCard({ householdId }: { householdId: string }) {
     return state === 'active' || state === 'scheduled';
   });
   const ended = seats.filter((seat) => sitterLinkState(seat) === 'expired');
+  // Ended by a departure, not by anyone looking at this card, so it stays listed
+  // with why it stopped until the row's TTL removes it. Nothing can tell the
+  // caretaker, so the card says that too. A seat revoked by hand stays off.
+  const turnedOff = seats.filter(
+    (seat) => seat.status === 'revoked' && seat.revokedReason && seat.revokedAt
+  );
 
   const windowLabel = (seat: Pick<CaretakerSummary, 'startsAt' | 'expiresAt' | 'status'>) =>
     sitterLinkState(seat) === 'scheduled'
@@ -312,7 +318,9 @@ export function CaretakerSeatsCard({ householdId }: { householdId: string }) {
             {t('caretaker.seats.currentHeading')}
           </h3>
           {live.length === 0 ? (
-            <p className="mt-1 text-sm text-gray-600">{t('caretaker.seats.none')}</p>
+            turnedOff.length === 0 && (
+              <p className="mt-1 text-sm text-gray-600">{t('caretaker.seats.none')}</p>
+            )
           ) : (
             <ul className="mt-2 divide-y divide-primary-100/60 rounded-lg border border-primary-100/70">
               {live.map((seat) => {
@@ -353,6 +361,33 @@ export function CaretakerSeatsCard({ householdId }: { householdId: string }) {
             </ul>
           )}
           <p className="mt-2 text-xs text-gray-600">{t('caretaker.seats.revokeHint')}</p>
+
+          {turnedOff.length > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <h4 className="text-sm font-medium text-gray-900">
+                {t('caretaker.seats.turnedOffHeading')}
+              </h4>
+              <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                {turnedOff.map((seat) => (
+                  <li key={seat.id}>
+                    {t('caretaker.seats.turnedOffRow', {
+                      name: seat.name,
+                      date: formatDate(seat.revokedAt),
+                    })}
+                  </li>
+                ))}
+              </ul>
+              {!checkingPlan && (
+                <p className="mt-2 text-sm text-gray-700">
+                  {entitled === undefined
+                    ? t('caretaker.seats.turnedOffNextUnknown')
+                    : entitled
+                      ? t('caretaker.seats.turnedOffNextEntitled')
+                      : t('caretaker.seats.turnedOffNextLocked')}
+                </p>
+              )}
+            </div>
+          )}
 
           {ended.length > 0 && (
             <ul className="mt-3 space-y-1">

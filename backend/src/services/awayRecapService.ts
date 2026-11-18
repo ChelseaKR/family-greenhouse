@@ -32,6 +32,8 @@ export {
   linkHasEnded,
   pickRecapLink,
   recapWindow,
+  RecapWindowNotOpenError,
+  windowHasOpened,
   type AwayRecap,
   type AwayRecapLink,
   type AwayRecapNote,
@@ -51,6 +53,11 @@ const PAGE_SIZE = 200;
  * BETWEEN on the ISO timestamp key; stops at AWAY_RECAP_MAX_SCANNED rows
  * examined and reports it. Throws on any read failure — the caller answers
  * 5xx rather than an empty recap.
+ *
+ * A link whose window has not opened has no range to read. `recapWindow`
+ * throws for it before any query is built, so a lower bound above the upper
+ * one never reaches DynamoDB (which rejects it) and never comes back as an
+ * empty list. `pickRecapLink` does not hand such a link to a caller.
  */
 export async function listSitterWindowActivity(
   householdId: string,

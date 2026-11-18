@@ -152,7 +152,8 @@ data "archive_file" "forwarder" {
 resource "aws_iam_role" "forwarder" {
   provider = aws.iam
 
-  name = "${var.project_name}-mail-forwarder-${var.environment}"
+  name                 = "${var.project_name}-mail-forwarder-${var.environment}"
+  permissions_boundary = var.permissions_boundary_arn == "" ? null : var.permissions_boundary_arn
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

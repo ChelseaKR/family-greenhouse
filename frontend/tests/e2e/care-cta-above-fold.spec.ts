@@ -14,7 +14,9 @@ import { expect, test } from '@playwright/test';
  * Safari with its bars showing (375x548), the near-page-one guides fit, but
  * eight guides with three-line headings (anthurium, hoya and others) end
  * 13-61px below; that case is checked for the near-page-one guides, the
- * 2026-11-03 watering guides and the 2026-11-04 holiday guides only.
+ * 2026-11-03 watering guides, the 2026-11-04 holiday guides, the 2026-11-05
+ * batch, the 2026-11-05 batch-5 guides and the 2026-11-07 watering batch 2
+ * only.
  */
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 375, height: 667 },
@@ -47,6 +49,28 @@ const WATERING_BATCH_1 = [
  * Norfolk Island pine has the longest heading of the four.
  */
 const HOLIDAY_GUIDES = ['amaryllis', 'norfolk-island-pine', 'cyclamen', 'kalanchoe'];
+/** The five guides added 2026-11-05, written to fit the smallest case too. */
+const BATCH_4 = ['air-plant', 'rosemary', 'ponytail-palm', 'areca-palm', 'schefflera'];
+/** The six batch-5 guides added 2026-11-05, written to fit the smallest case too. */
+const BATCH_5 = [
+  'satin-pothos',
+  'dragon-tree',
+  'arrowhead-plant',
+  'weeping-fig',
+  'polka-dot-plant',
+  'tradescantia',
+];
+/** The eight watering guides of batch 2, added 2026-11-07, written to fit the smallest case too. */
+const WATERING_BATCH_2 = [
+  'jasmine',
+  'lucky-bamboo',
+  'venus-flytrap',
+  'majesty-palm',
+  'kentia-palm',
+  'paperwhite',
+  'birds-nest-fern',
+  'purple-shamrock',
+];
 /** Plus the guides with the longest headings, which push the link lowest. */
 const GUIDES = [
   ...NEAR_PAGE_ONE,
@@ -56,6 +80,9 @@ const GUIDES = [
   'boston-fern',
   ...WATERING_BATCH_1,
   ...HOLIDAY_GUIDES,
+  ...BATCH_4,
+  ...BATCH_5,
+  ...WATERING_BATCH_2,
 ];
 
 const SMALLEST = { name: 'iPhone SE in Safari', width: 375, height: 548 } as const;
@@ -67,7 +94,17 @@ test.describe('care guide sign-up link above the fold', () => {
 
   const cases = [
     ...VIEWPORTS.map((viewport) => ({ viewport, slugs: GUIDES })),
-    { viewport: SMALLEST, slugs: [...NEAR_PAGE_ONE, ...WATERING_BATCH_1, ...HOLIDAY_GUIDES] },
+    {
+      viewport: SMALLEST,
+      slugs: [
+        ...NEAR_PAGE_ONE,
+        ...WATERING_BATCH_1,
+        ...HOLIDAY_GUIDES,
+        ...BATCH_4,
+        ...BATCH_5,
+        ...WATERING_BATCH_2,
+      ],
+    },
   ];
   for (const { viewport, slugs } of cases) {
     test(`is fully on the first screen at ${viewport.name} ${viewport.height}px`, async ({

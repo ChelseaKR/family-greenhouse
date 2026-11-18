@@ -63,11 +63,13 @@ export const SITE = process.env.SITE_URL || 'https://familygreenhouse.net';
 export const STATIC_ROUTES = [
   { path: '/', priority: 1.0, changefreq: 'weekly' },
   { path: '/pricing', priority: 0.9, changefreq: 'monthly' },
-  // Public gift-subscription landing page: the actual purchase flow
-  // (POST /billing/gift/checkout) needs a signed-in buyer, but browsing it —
-  // and understanding what it is — needs no account and no household, so it
-  // belongs in the crawlable set like /pricing rather than behind auth.
-  { path: '/gift', priority: 0.7, changefreq: 'monthly' },
+  // /gift is left out while gifts are not offered (2026-11-15). The footer
+  // hides its link then, and its prerender was only a heading over a loading
+  // spinner, so it was an indexed page with nothing on it. The page still
+  // works: /gift is an App.tsx route, so it is served by the noindex app
+  // shell. To restore it when gifts return, add this line back and run
+  // `npm run sitemap`, `npm run spa-router` and `npm run llms` (frontend):
+  //   { path: '/gift', priority: 0.7, changefreq: 'monthly' },
   { path: '/blog', priority: 0.8, changefreq: 'weekly' },
   { path: '/care', priority: 0.8, changefreq: 'weekly' },
   { path: '/help', priority: 0.8, changefreq: 'monthly' },
@@ -101,8 +103,15 @@ export const STATIC_ROUTES = [
  *
  * Every route under a prefix must be exactly one segment below it, since that
  * is all the edge rule maps; `build-spa-router.mjs` refuses anything else.
+ *
+ * `/blog/`, `/care/` and `/help/` joined `/pet-safe/` here when the per-page
+ * map had grown to 10,232 of the 10,240 bytes CloudFront allows, with two
+ * care-guide batches still waiting. Each guide had cost the function about
+ * 30 bytes; under a prefix it costs nothing. The 404 for an unpublished slug is
+ * unchanged (S3 has no such object either way), and `spa-router.test.mjs`
+ * replays every route against the function as it stood before this change.
  */
-export const PREFIX_SERVED_NAMESPACES = [PLANT_PAGE_PREFIX];
+export const PREFIX_SERVED_NAMESPACES = [PLANT_PAGE_PREFIX, '/blog/', '/care/', '/help/'];
 
 /** Human-readable name of the plant-page lastmod ledger, for error messages. */
 const LEDGER_NAME = 'frontend/scripts/plant-pages-lastmod.json';
@@ -163,13 +172,29 @@ export function stalePlantPagesLedgerEntries(
   return Object.keys(ledger?.pages ?? {}).filter((slug) => !published.has(slug));
 }
 
-/** Blog slugs → ISO publish date, read from the post manifest. */
-export function readBlogDates() {
-  const src = readFileSync(POSTS, 'utf8');
-  const re = /slug:\s*'([^']+)'[\s\S]*?date:\s*'([^']+)'/g;
+/**
+ * Blog slugs → the ISO date that post's content last CHANGED: its `updated`
+ * field, or its publish `date` when it has none. This is the post's
+ * `<lastmod>`, and the same value BlogPost.tsx publishes as `dateModified`.
+ *
+ * Before 2026-11-17 `<lastmod>` was the publish date. Every one of the 14
+ * posts had been edited since, so each advertised a `<lastmod>` between 10
+ * days and 5 months older than its content; the overwatering post said
+ * 2026-07-29 after two retitles and a merge that went live 2026-11-17. See the note on
+ * `readCareGuides` for why understating it matters.
+ *
+ * Read entry by entry, so a post with no `updated` can never pick up the next
+ * entry's. `source` is a parameter for tests.
+ */
+export function readBlogLastmods(source = readFileSync(POSTS, 'utf8')) {
   const out = new Map();
-  let m;
-  while ((m = re.exec(src)) !== null) out.set(m[1], m[2]);
+  const starts = [...source.matchAll(/slug:\s*'([^']+)'/g)];
+  starts.forEach((m, i) => {
+    const entry = source.slice(m.index, starts[i + 1]?.index ?? source.length);
+    const date = /\bdate:\s*'([^']+)'/.exec(entry)?.[1];
+    const updated = /\bupdated:\s*'([^']+)'/.exec(entry)?.[1];
+    out.set(m[1], updated ?? date);
+  });
   return out;
 }
 
@@ -274,7 +299,7 @@ export function readHelpTopics() {
 export function publicRoutes() {
   const today = new Date().toISOString().slice(0, 10);
 
-  const blogEntries = [...readBlogDates().entries()].map(([slug, date]) => ({
+  const blogEntries = [...readBlogLastmods().entries()].map(([slug, date]) => ({
     path: `/blog/${slug}`,
     priority: 0.7,
     changefreq: 'monthly',
@@ -321,7 +346,7 @@ export function publicRoutes() {
   // date that moves at midnight is both a lie and unverifiable.
   const newest = (dates) => [...dates].sort().at(-1);
   const hubLastmod = new Map([
-    ['/blog', newest(readBlogDates().values())],
+    ['/blog', newest(readBlogLastmods().values())],
     ['/care', newest(readCareGuides().values())],
     ['/changelog', newest(readChangelogEntryDates())],
   ]);

@@ -129,14 +129,21 @@ function detailLine(t: TFunction, entry: HouseholdAuditEntry): string | null {
   const d = entry.details;
   const count = (key: string) => (typeof d[key] === 'number' ? (d[key] as number) : 0);
   if (entry.kind === 'member.removed' || entry.kind === 'member.left') {
-    const revoked = ['sitterLinks', 'plantTags', 'kioskLinks', 'cuttingShares'].map(count);
+    const revoked = [
+      'sitterLinks',
+      'plantTags',
+      'kioskLinks',
+      'cuttingShares',
+      'caretakerSeats',
+    ].map(count);
     if (revoked.every((n) => n === 0)) return null;
-    const [sitterLinks, plantTags, kioskLinks, cuttingShares] = revoked;
+    const [sitterLinks, plantTags, kioskLinks, cuttingShares, caretakerSeats] = revoked;
     return t('householdAudit.detail.revokedWith', {
       sitterLinks,
       plantTags,
       kioskLinks,
       cuttingShares,
+      caretakerSeats,
     });
   }
   if (entry.kind === 'api_key.created' && typeof d.scopes === 'string') {

@@ -252,12 +252,17 @@ worker. One disposable account goes through the live `/register` form and real
 `POST /auth/signup` endpoint until Cognito reports it `UNCONFIRMED`; a separate
 admin-created confirmed account exercises login, onboarding, the dashboard,
 plant creation, image presigning, a non-empty S3 PUT, image confirmation, and
-the rendered image response/decoded width. Authenticated teardown first calls
+the rendered image response/decoded width. The presign must name a holding key
+under `uploads/` and sign the upload&rsquo;s Content-Type and Content-Length,
+the confirm must return a stored photo under `plants/`, the rendered image must
+be that stored photo, and a PUT of a different size to the same upload URL must
+be refused by S3 (ADR 0046). Authenticated teardown first calls
 the real `DELETE /me` path (which owns S3 photo cleanup), then runs idempotent
 Cognito/DynamoDB admin cleanup and verifies the fixture partitions are empty.
 A final independent fallback parses the exact bucket/key from the presign,
-paginates that one object&rsquo;s S3 Versions and DeleteMarkers, permanently
-deletes them, and re-lists to prove zero residue. Every cleanup branch is
+and the stored photo&rsquo;s key from the confirm response, paginates each
+object&rsquo;s S3 Versions and DeleteMarkers, permanently deletes them, and
+re-lists to prove zero residue. Every cleanup branch is
 attempted even when an earlier one fails; flows that fail before presign make no
 S3 calls. Failure diagnostics retain only response hostname/status or a safe AWS
 error class so presigned URL credentials cannot be written to CI output or

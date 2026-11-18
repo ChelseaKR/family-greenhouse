@@ -95,6 +95,13 @@ to one household.** Concretely:
   "clean up" would destroy the artefact the feature exists to produce. Account
   erasure still removes them, along with the seats themselves — both partitions
   are swept by `deleteAbandonedHouseholdData`.
+- A seat ends when the member who created it leaves or is removed, the same as
+  that member's sitter links. The caretaker sees the inactive-link page and asks
+  the household for a new link. A household no longer on Greenhouse cannot issue
+  one, because the plan gate is on creating a seat. The seat stays on the card
+  with why it stopped until its row's TTL removes it, and the email to the
+  remaining admins when someone leaves names the count. Removal sends no such
+  email, so the card and the audit log are how other admins learn of it.
 - A caretaker cannot be reached by the product: no email, no push, no reminder.
   That is the price of no account, and it is the right price — the household is
   the one with the schedule.

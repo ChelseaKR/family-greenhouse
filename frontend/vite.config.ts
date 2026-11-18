@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
 
 import { careGuideContent } from './vite.careGuideContent';
+import { googleAnalyticsBoot } from './vite.googleAnalyticsBoot';
 import { manualChunks } from './vite.manualChunks';
 import { NAVIGATE_FALLBACK_DENYLIST } from './vite.navigationFallback';
 
@@ -98,24 +99,40 @@ function apiOrigin(): Plugin {
 }
 
 /**
- * Preload the one font face that decides Largest Contentful Paint.
+ * The two font faces the first screen is set in, preloaded in this order.
  *
- * Measured on the throttled mobile profile: `/login` painted at FCP 2.5s but
- * recorded LCP at **3.9s**, on an `<h1 class="font-serif">` that is already in
- * the prerendered HTML. The markup was never the problem. The heading paints
- * immediately in the Georgia fallback, then Bitter arrives and re-paints it —
- * and that second paint is what Chrome records. The 1.4s between them is a
- * real wait for a real person, not a metric artifact.
+ * Bitter (latin, normal) decides Largest Contentful Paint. Measured on the
+ * throttled mobile profile: `/login` painted at FCP 2.5s but recorded LCP at
+ * **3.9s**, on an `<h1 class="font-serif">` that is already in the prerendered
+ * HTML. The markup was never the problem. The heading paints immediately in
+ * the Georgia fallback, then Bitter arrives and re-paints it — and that second
+ * paint is what Chrome records. The 1.4s between them is a real wait for a
+ * real person, not a metric artifact.
+ *
+ * Instrument Sans (latin, normal) is everything else above the fold: the
+ * header's links, the breadcrumb, the answer box. Measured on the same profile
+ * (2026-11-07, care pages): it was the only face still arriving late, at about
+ * 2.3 s, and its swap was the page's only layout shift — the header row
+ * re-flowing, up to 0.028 on /care/spider-plant. A face the CSS references is
+ * not requested until that CSS has been fetched and parsed; a preload asks for
+ * it from the HTML.
+ *
+ * Only these two: the italics, the extended ranges and the width axes are not
+ * on the first screen, and preloading them would compete for the connection
+ * and make LCP worse, which is the usual way this optimisation backfires.
+ */
+const PRELOADED_FONTS = [
+  /bitter-latin-wght-normal-[^/]*\.woff2$/,
+  /instrument-sans-latin-wght-normal-[^/]*\.woff2$/,
+];
+
+/**
+ * Preload the faces above.
  *
  * `font-display: swap` (already on all 12 faces) is what allows the early
  * fallback paint; it does not make the swap arrive sooner. Only a preload
  * does, because the font is otherwise not discovered until the CSS that
  * references it has been fetched and parsed.
- *
- * Exactly one face: latin, normal weight — the only one the above-the-fold
- * heading can use. Preloading the italic, the extended ranges or the sans
- * would compete for the same connection and make LCP worse, which is the
- * usual way this optimisation backfires.
  *
  * `order: 'post'` is load-bearing: at `'pre'` the bundle is not yet populated,
  * so the lookup finds nothing. That is not hypothetical — it is what the first
@@ -136,22 +153,24 @@ function fontPreload(): Plugin {
       order: 'post',
       handler(html, ctx) {
         if (!isBuild) return html;
-        const lcpFont = Object.keys(ctx.bundle ?? {}).find((name) =>
-          /bitter-latin-wght-normal-[^/]*\.woff2$/.test(name)
-        );
-        if (!lcpFont) {
-          // Never fail a build over a preload, but never let it vanish in
-          // silence either: a font rename would otherwise cost 1.4s of LCP
-          // with nothing in the diff or the logs to show for it.
-          warn(
-            '[font-preload] no bitter-latin-wght-normal woff2 in the bundle — LCP preload not emitted'
+        const assets = Object.keys(ctx.bundle ?? {});
+        const links: string[] = [];
+        for (const pattern of PRELOADED_FONTS) {
+          const font = assets.find((name) => pattern.test(name));
+          if (!font) {
+            // Never fail a build over a preload, but never let it vanish in
+            // silence either: a font rename would otherwise cost 1.4s of LCP,
+            // or bring the header's layout shift back, with nothing in the
+            // diff or the logs to show for it.
+            warn(`[font-preload] no ${pattern.source} woff2 in the bundle — preload not emitted`);
+            continue;
+          }
+          links.push(
+            `    <link rel="preload" as="font" type="font/woff2" href="/${font}" crossorigin />\n`
           );
-          return html;
         }
-        return html.replace(
-          '</head>',
-          `    <link rel="preload" as="font" type="font/woff2" href="/${lcpFont}" crossorigin />\n  </head>`
-        );
+        if (links.length === 0) return html;
+        return html.replace('</head>', `${links.join('')}  </head>`);
       },
     },
   };
@@ -168,6 +187,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     react(),
     apiOrigin(),
     fontPreload(),
+    googleAnalyticsBoot(),
     careGuideContent(),
     // The SSR pass (`vite build --ssr src/entry-server.tsx`) exists only to
     // produce a Node bundle for the prerender to import. Running the PWA plugin

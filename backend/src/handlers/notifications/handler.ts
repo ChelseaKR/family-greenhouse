@@ -8,6 +8,7 @@ import {
   AuthenticatedEvent,
   requireHousehold,
   rejectApiKeyPrincipal,
+  requireVerifiedEmail,
 } from '../../middleware/auth.js';
 import { validateBody, ValidatedEvent } from '../../middleware/validation.js';
 import { authRateLimit, rateLimit, userRateLimit } from '../../middleware/rateLimit.js';
@@ -222,9 +223,10 @@ export const getPrefs = createHandler(
  *
  * Put the caller's own address back on the send list after a bounce or a
  * complaint suppressed it. The address is taken from the verified JWT, never
- * from the request, so this can only ever un-suppress the caller's own
- * mailbox — including for a complaint, where the recipient's own action is
- * the only consent that counts.
+ * from the request, and the pool must have verified that the address reaches
+ * the caller (`requireVerifiedEmail`, ADR 0048), so this can only ever
+ * un-suppress the caller's own mailbox — including for a complaint, where the
+ * recipient's own action is the only consent that counts.
  *
  * Rate limited hard: without it, an address that bounces on every send could
  * be cleared and re-bounced in a loop, which is precisely the reputation
@@ -243,6 +245,7 @@ export const clearEmailSuppression = createHandler(
 )
   .use(authMiddleware())
   .use(rejectApiKeyPrincipal())
+  .use(requireVerifiedEmail())
   .use(userRateLimit({ perWindowMs: 60 * 60 * 1000, max: 5 }));
 
 // PUT /notifications/prefs

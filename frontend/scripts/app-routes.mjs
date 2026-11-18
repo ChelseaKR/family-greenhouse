@@ -55,40 +55,44 @@ import { FRONTEND_ROOT, PREFIX_SERVED_NAMESPACES } from './public-routes.mjs';
 const APP = join(FRONTEND_ROOT, 'src', 'App.tsx');
 
 /**
- * Dynamic routes whose valid members are ALREADY enumerated in the
+ * Dynamic routes whose valid members are enumerated one by one in the
  * prerendered-route map, and which are therefore deliberately NOT treated as
  * "any segment matches".
  *
- * These are the three content namespaces. Every real `/care/:slug`,
- * `/blog/:slug` and `/help/:topicId` comes from a manifest that
- * `public-routes.mjs` reads, is prerendered, and is listed in `sitemap.xml` —
- * so a path under one of them that is not in PRERENDERED cannot exist, and is
- * exactly the case #719 names as the most likely landing place for a stale
- * external link.
+ * Empty since `/blog/:slug`, `/care/:slug` and `/help/:topicId` moved to
+ * PREFIX_SERVED_NAMESPACE_ROUTES below: listing every post, guide and topic
+ * in the function cost ~30 bytes each against CloudFront's 10 KB limit, and
+ * the map had reached 10,232 bytes. They stay excluded from APP_PATTERNS for
+ * the same reason as before — every real member is prerendered, so a slug that
+ * is not cannot exist, and must be a 404 rather than 200 with the shell (#719).
  *
- * Listing them here rather than hard-coding the exclusion in the parser is the
- * point: `appRoutes()` throws if one of these is no longer a route in App.tsx,
- * so the day `/care/:slug` stops being manifest-driven, this decision is
- * revisited instead of silently 404ing real pages.
+ * Kept as a list so a namespace that has to be enumerated again has somewhere
+ * to go, and so `appRoutes()` still throws if one of its entries stops being a
+ * route in App.tsx.
  */
-export const ENUMERATED_NAMESPACE_ROUTES = ['/blog/:slug', '/care/:slug', '/help/:topicId'];
+export const ENUMERATED_NAMESPACE_ROUTES = [];
 
 /**
  * Dynamic routes whose valid members are served at the edge by PREFIX (see
  * `PREFIX_SERVED_NAMESPACES` in public-routes.mjs), and which are therefore
  * also NOT "any segment reaches the app".
  *
- * `/pet-safe/:slug` is generated from the curated pet-toxicity table. Its pages
- * are prerendered like the three namespaces above, but they are not listed in
- * `PRERENDERED` one by one (the function's 10 KB limit); the function maps any
- * single segment under the prefix onto its object, and a slug that was never
- * published is S3's 404. Routing it to the shell instead would answer 200 for
- * every plant name anyone types, which is #719 again.
+ * Every one of these is prerendered from a manifest or table: blog posts,
+ * care guides, help topics, and the per-plant `/pet-safe/` pages. None is
+ * listed in `PRERENDERED` one by one (the function's 10 KB limit); the
+ * function maps any single segment under the prefix onto its object, and a
+ * slug that was never published is S3's 404. Routing them to the shell instead
+ * would answer 200 for every slug anyone types, which is #719 again.
  *
  * `appRoutes()` throws if one of these stops being a route, or stops matching a
- * prefix in `PREFIX_SERVED_NAMESPACES`.
+ * prefix in `PREFIX_SERVED_NAMESPACES`. Order follows that list.
  */
-export const PREFIX_SERVED_NAMESPACE_ROUTES = ['/pet-safe/:slug'];
+export const PREFIX_SERVED_NAMESPACE_ROUTES = [
+  '/pet-safe/:slug',
+  '/blog/:slug',
+  '/care/:slug',
+  '/help/:topicId',
+];
 
 /** Every `path="…"` on a `<Route>` in App.tsx, in source order. */
 export function declaredRoutePaths(source = readFileSync(APP, 'utf8')) {

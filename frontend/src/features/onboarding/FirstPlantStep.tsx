@@ -193,7 +193,10 @@ export function FirstPlantStep({
       track('plant_added', { ordinal: 'first' });
       // GA4 `household_activated`; see AddPlantPage. Carries no plant data.
       trackGoogleConversion({ name: 'household_activated' });
-      trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
+      // Once per account, as the server decided; see AddPlantPage.
+      if (plant.firstPlantForAccount === true) {
+        trackGoogleConversion({ name: 'first_plant_added', method: 'typed' });
+      }
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', householdId] });
       toast.success(

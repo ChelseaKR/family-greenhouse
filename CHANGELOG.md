@@ -16,64 +16,773 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Security
+
+- **Production grants a plan only for Production App Store transactions**
+  (ADR 0045). The backend default for `APP_STORE_ENVIRONMENTS` is now
+  `Production`; it was `Production,Sandbox`. Terraform gains
+  `app_store_environments` (default `"Production"`, or `"Production,Sandbox"`),
+  which the billing Lambda reads. Production sets `"Production"` and staging
+  sets `"Production,Sandbox"`, each in its own tfvars. A Sandbox transaction
+  sent to production is verified, logged and ignored. **What the deploy
+  changes:** one environment variable on the billing Lambda in each
+  environment; no stored data is migrated, and a subscription already
+  recorded keeps its plan until its recorded expiry. **Before an App Store
+  submission,** production must be set to `"Production,Sandbox"` and deployed,
+  or the TestFlight purchase check and App Review's purchase will not finish;
+  it is set back in the first release after approval
+  (`docs/mobile-release-checklist.md`).
+- **A plant photo upload is bound to one file, and the photo is stored apart
+  from the upload** (ADR 0046). `POST /plants/{id}/image` and the caretaker
+  photo route now take `contentLength`, the file's exact size in bytes, and
+  refuse a request without it or above 5 MiB. The upload URL is signed for
+  that size and that content type, to a holding key under `uploads/`. The
+  confirm step checks the uploaded bytes, removes their metadata and stores
+  the result under a new `plants/` key of its own; the confirm response
+  returns that photo. The images bucket deletes anything left under
+  `uploads/` after one day. **Clients:** a browser tab or installed web app
+  still running the previous code gets a 400 that says to reload or update
+  when it adds a photo; a reload fixes it. The iPhone and Android apps get
+  the new code with their next store build, and no store build exists yet.
+- **A household invite admits a limited number of people and can be turned
+  off** (ADR 0047). An invite link admits up to 5 people and an emailed
+  invitation one, each for 7 days. Every invite a household has made stops
+  working when a member leaves or is removed. An admin can also turn them
+  off with "Turn off invite links" on the Household page
+  (`DELETE /households/{id}/invites`). An invite that was pending before
+  this release keeps working, as a link with 5 uses.
+- **A changed email address takes effect only after it is verified**
+  (ADR 0048). The user pool now holds an email change until the code sent to
+  the new address is entered, the ID token says whether the address is
+  verified, and turning email back on after a bounce or complaint is refused
+  for an address that is not. `docs/security.md` described the first of
+  these before it was configured; it now says what is configured, and a
+  test reads both.
+- **What the deploy changes.** Terraform updates the user pool and its app
+  client in place (read the plan: neither may be replaced), adds two
+  lifecycle rules to the images bucket and adds one API route. No stored
+  data is migrated: existing photos keep their keys, and existing invites
+  gain their counters on first use. The post-deploy smoke test now uploads
+  to the holding prefix and expects storage to refuse an upload of a
+  different size.
+- **AWS trusts GitHub environments, and the deploy pipeline cannot widen
+  itself** (ADR 0049). Three changes to the pipeline, none to the app:
+  - **Roles and trust.** The one CI/CD role becomes three: a deploy role for
+    `terraform apply`, a release role with no IAM writes for everything after
+    it, and a read-only role for the alert relay. Each can be assumed only
+    from named GitHub environments; no role trusts a branch or a tag. A
+    release still pauses for one approval.
+  - **IAM.** The deploy role is denied every change to the CI/CD roles, their
+    policies and the OIDC provider, must put a permissions boundary on any
+    role it creates, and cannot remove one. The boundary goes on the staging
+    Lambda roles now and on the production ones when
+    `iam_permissions_boundary_enabled` is set to `true`.
+  - **Installs.** Jobs that hold an OIDC token or a secret install with
+    `npm ci --ignore-scripts`.
+- **The pipeline change is applied by an admin, not by a release.** An admin
+  applies `infrastructure/modules/cicd` from a
+  terminal, adds two repository secrets (`AWS_RELEASE_ROLE_ARN`,
+  `AWS_ALERT_RELAY_ROLE_ARN`) and creates the `staging-infrastructure`
+  environment with a required reviewer, in the order
+  `docs/cicd-setup.md` gives ("Moving an existing account to environment-only
+  trust"). A release cut before that stops at its first job or at the plan
+  check, with nothing applied. A staging deploy now asks for one approval.
+
+### Changed
+
+- **Every care guide ends with the "Holiday plants" list.** It is the list
+  the home page and `/care` already show, with the same heading and the same
+  link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen
+  and Rosemary. It is the last thing on the page, below the related plants,
+  and a holiday guide leaves itself out. Search Console shows the guides that
+  reach the first page of US results are holiday and less-common ones. Three
+  of them are on this list (amaryllis, cyclamen, paperwhite), and November to
+  January is when they are searched, so each guide on the list now has a link
+  from every other guide and not only from the home page and `/care`.
+  `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
+  off everywhere.
+- **The poinsettia guide's search title and description lead with the
+  watering answer.** The title is now "How Often to Water a Poinsettia: When
+  the Surface Is Dry" (it was "Poinsettia Care and Pet Safety: Past the
+  Holidays"), and the description opens with the same answer. Both restate
+  the guide's own cited watering answer; no fact changes, and the page's
+  heading and pet section are as they were. The other holiday guides that
+  lead this way are the ones that reach the first page of US results, and the
+  poinsettia guide had no US search impressions in the 28 days to 2026-11-16.
+- **The Christmas cactus guide's search title leads with the watering
+  question.** It is now "How Often to Water a Christmas Cactus: Top Inch Dry"
+  (it was "How to Care for a Christmas Cactus: When to Water It"), from the
+  guide's own cited water line. The description, which already opens with
+  that answer, and the heading are unchanged.
+- **Six care guides answer "how often should I water it in winter?"** The
+  snake plant, jade plant, ponytail palm, hoya, haworthia and Boston fern
+  guides each gain that question, second in their FAQ and in the FAQ markup.
+  Each answer restates what the guide's watering section already says, with
+  the same named source; no fact is new. The short answer under "How often
+  to water" is still the year-round one. 23 guides give a winter instruction
+  in their water line, and only one asked the winter question.
+- **A blog post that has changed shows when.** The line above a post's
+  title reads, for example, "July 29, 2026 · Updated November 17, 2026 · 6 min
+  read". The second date is the post's `updated` date, the one its markup and
+  the sitemap already publish, so a reader sees the date a crawler does. A
+  post that has not changed since it was published shows its publish date
+  alone. Blog posts are English only, so the word is not in the catalogs.
+- **The App Store keyword field gains `water`.** It is now 97 of 100
+  characters. "Watering" is in the subtitle, and the bare word was in none of
+  the three fields Apple indexes. It is for the iPhone submission already
+  planned; nothing else in the listing changes
+  (`store-assets/metadata/en-US.json`, `docs/APP-STORE.md`).
+
+### Fixed
+
+- **The post-deploy smoke test reads the stored photo from the signed URL the
+  confirm response returns.** The check added with ADR 0046 expected the
+  stored reference there. A deployed API answers with a short-lived signed S3
+  URL for every photo (ADR 0033), so the first staging run failed at that
+  check with the upload itself working. The test now reads the bucket and key
+  out of the signed URL, and a real-handler test pins that shape. It also
+  treats any client-error status as storage refusing an upload of a different
+  size, where it had required exactly 403. No app code changed.
+- **A blog post's modified date is the date it last changed.** Each post
+  told search engines it was last modified the day it was published: the
+  sitemap `<lastmod>` and the Article `dateModified` were both the publish
+  date, and there was no `article:modified_time`. All 14 posts had been edited
+  since. The overwatering post said 2026-07-29 after two retitles and after
+  two other posts were merged into it (live 2026-11-17). The post manifest
+  gains an `updated` field, set for each post to the day its newest change was
+  released, and the sitemap, the
+  Article markup and `article:modified_time` read it. `/blog` in the sitemap
+  takes the newest of them. A new check in `npm run test:edge` fails when a
+  post's text, title or descriptions change and its `updated` does not
+  (`frontend/scripts/blog-posts-lastmod.json`, written by
+  `npm run blog:lastmod --workspace frontend`). The publish date a reader
+  sees on a post is unchanged.
+- **A task due every day reads "Every day" on the plant page.** It read
+  "Every 1 days", and in Spanish "Cada 1 día": the singular form held the
+  plural sentence. It now reads "Every day" and "Cada día". Every other
+  interval is unchanged ("Every 2 days", "Cada 2 días").
+- **The dashboard's empty activity filters read as sentences.** When a
+  filter matched none of the last 50 events, the English dropped the filter's
+  name into "No ___ activity": "No tasks activity", "No plants activity", "No
+  people activity" and "No all activity". They now read "No task activity…",
+  "No plant activity…", "No activity about people…" and "No activity…". The
+  Spanish was already right and is unchanged.
+- **The line under the chat's message box says plainly when a reminder is
+  created.** "Reminder suggestions wait for your confirm before being created"
+  is now "Suggested reminders are created only after you confirm them.", and
+  in Spanish "Los recordatorios sugeridos solo se crean cuando los
+  confirmas." It uses the words on the suggestion card itself. The line's
+  first two sentences are unchanged.
+
+## [0.52.0] - 2026-11-17
+
+**The release the next iPhone store build is cut from, and that build is for
+iPhone only: the apps ask before sending anything to Amazon Bedrock or
+Plant.id, the App Store plans card says what each plan includes, and the help,
+plan notes and legal pages say what the iPhone app sells.** The Privacy Policy
+and the account-deletion page take effect November 17, 2026. The Terms did not
+change.
+
+- **The iOS app targets iPhone only** (`TARGETED_DEVICE_FAMILY = 1`, was
+  `1,2`), for its first App Store review (ADR 0043). On an iPad it runs as an
+  iPhone app. `npm run mobile:validate` now fails if the iPad target comes
+  back without a new decision. The website and the Android app are unchanged.
+- **The iPhone app no longer spends identification packs bought on the
+  website** (ADR 0044). Photo identification in the iPhone app uses only the
+  plan's monthly allowance; when that is spent it says identification isn't
+  included, as before, and offers no pack. Packs keep working on the website.
+  The request carries `useTopUpCredits: false`; the website and the Android
+  app send nothing new.
+- **What the deploy changes.** Terraform adds one AWS Budgets usage budget,
+  `family-greenhouse-cognito-mau-production`, which emails
+  support@familygreenhouse.net above 15 Cognito monthly active users. The pool
+  read 25 in October, so expect it to fire, and raise
+  `cognito_mau_alert_threshold` once the number has been read. The CloudFront
+  router function changes, to answer the two merged yellow-leaves posts with a 301. The production tfvars change only comments. `stripe_automatic_tax_enabled`
+  stays blank, so the new tax-code refusal does nothing yet. No stored data is
+  migrated. The apps get these changes only with a store build. iPhone 0.52.0
+  (build 5200) is that build, uploaded on the day it is submitted.
+
 ### Added
 
-- **Eight new care guides that answer "how often to water".** String of
+- **The apps ask before sending data to Amazon Bedrock or Plant.id.** In the
+  iPhone and Android apps, the first chat question, leaf health check and photo
+  identification each open a dialog that names the service and what goes to it.
+  Not now sends nothing; Allow is remembered on that device. The website asks
+  nothing new (App Review Guideline 5.1.2(i)).
+- **The App Store plans card says what each plan includes,** from the plan
+  catalog's caps and the App Store's own subscription description (Guideline
+  3.1.2(c)).
+- **llms.txt lists every care guide and pet-safety page, and says when it last
+  changed.** /llms.txt is now generated (`npm run llms --workspace frontend`).
+  After the hand-kept summary it has one line per care guide (its water and
+  light lines) and one per pet-safety page (the verdict word the page shows for
+  cats and for dogs, with the ASPCA named as the source), from the data the
+  pages render, and a "Last updated" date that moves only when the file's text
+  does. /pricing marks up its seven "Common questions" as an FAQPage, from the
+  list the page renders. Each pet-safety page's structured data carries
+  `dateModified`, equal to its sitemap `<lastmod>`; the build fails if they
+  differ. No title or meta description changed.
+- **The public prices say what Garden costs now.** The price sentence a reader
+  without JavaScript gets on /pricing adds Garden's yearly price ("$2.99 a month
+  or $24.99 a year"), from the same table as the structured data, and falls back
+  to monthly prices if yearly is withdrawn. /changelog gains two website-only
+  entries, for the 2026-11-08 Garden price and the 2026-10-24 free plan; its
+  newest entry had still said Garden was $4.99.
+
+### Fixed
+
+- **Nothing in the iPhone app or its listing says the app sells nothing.** The
+  App Store description names the three In-App Purchase subscriptions and their
+  renewal terms. Help no longer says the apps have no notifications and no
+  purchases. Locked features in an iPhone build that sells plans point at
+  Settings → Plan status instead of "Plan changes aren't available in the app."
+- **Deleting an account does not cancel an App Store subscription, and now says
+  so,** on the Delete my account screen in the iPhone app and on the public
+  account deletion page. The iOS privacy manifest declares Purchase History.
+- **The privacy policy names Apple In-App Purchase** and what the server keeps
+  about an App Store subscription. Privacy and account deletion take a new
+  effective date at the next release.
+- **After Done, the page keeps your place and shows what changed.** On the
+  caretaker page and the plant label page, keyboard and screen-reader focus
+  moves to the next task, or to the thanks when none is left, instead of being
+  lost when the finished row leaves the list. The caretaker page says "Marked
+  as done" for each one, and each "I just did this" button on the label page
+  is named after its own task. On Today across your homes, a care someone
+  else already logged is offered back in plain words with a "Log it anyway"
+  button, in place of the API's own error text. On the plant page and the
+  dashboard, "Last watered", Care History and the activity feed show the
+  completion without leaving the page; what they show is read from the server
+  after the completion, never filled in by the browser.
+
+### Changed
+
+- **The three yellow-leaves posts are one page, and the guides Google had not
+  crawled get links from the pages it does.**
+  /blog/why-are-my-plant-leaves-turning-yellow and
+  /blog/do-yellow-leaves-mean-overwatering now answer a 301 to
+  /blog/signs-of-overwatering-and-how-to-fix-it, which had the most search
+  impressions of the three. The redirects live in `src/config/redirects.json`
+  and are served by the CloudFront router; the two posts left the sitemap.
+  The home page links the haworthia and rosemary guides, the monstera and aloe
+  vera guides list sago palm and blue echeveria among their related plants,
+  and the overwatering post's plant list adds haworthia, blue echeveria, sago
+  palm and rosemary. The home page and /care gain a "Holiday plants" list
+  (amaryllis, paperwhite, poinsettia, Christmas cactus, cyclamen, rosemary),
+  with Spanish names on the Spanish page. The overwatering post takes in what
+  only the merged posts said: Illinois Extension's root colours, with its
+  citation, and the six "If it is not the water" yellowing patterns.
+
+- **Every upgrade prompt opens Plan status at the plan choice.** "Change plan",
+  "Keep Garden", "Choose a Garden plan" and "See plans" now link to
+  `/settings/billing#change-plan`, and the page scrolls there. The Change plan
+  card moved up to sit right under Plan status, above the identification pack
+  and gifts, so a household that opens the page from either trial email also
+  finds it near the top. The Plan status heading and its one-line description
+  are translated. No price, plan or checkout rule changed.
+- **The cap and Going-away prompts name Garden's yearly price beside the
+  monthly one.** "Included with Garden — $24.99 a year or $2.99 a month for the
+  whole household", and "Garden is $24.99 a year or $2.99 a month for the whole
+  household. It adds:", with the button "Choose a Garden plan". The plan grid
+  those prompts open has led with the Yearly tab since ADR 0042, so a prompt
+  that named only "$2.99 a month" opened onto "$24.99 a year". A tier with no
+  yearly price (Greenhouse) keeps its monthly sentence. The no-card trial
+  notices are unchanged.
+- **The Christmas cactus pet page answers the cat question first, and the
+  spider plant page answers rats.** /pet-safe/christmas-cactus now opens with
+  "Is Christmas cactus toxic to cats?" and its cited ASPCA answer, ahead of
+  the hotline box, and its title is "Is Christmas cactus toxic to cats? Listed
+  as non-toxic". /pet-safe/spider-plant's FAQ adds "Is spider plant toxic to
+  rats?": the ASPCA listing has no rat entry, so the page says it can't say
+  and points to an exotic-animal vet. Both are per-page fields in the pet
+  table; no other page and no verdict changed.
+- **Two holiday care guides ask "how often to water it" in their heading.**
+  The amaryllis and cyclamen pages now have that H1 and
+  Article headline, where real US searches for the question already reach
+  positions 4 to 10. The amaryllis search description now gives the watering
+  rhythm its cited extension pages give: little until a new bulb sprouts, and
+  about once or twice a week in bloom. Titles and plant facts are unchanged.
+
+### Fixed
+
+- **The production price attestation now says which attested Stripe prices
+  still exist.** Three of the eight ids in `stripe_price_ids_attested` (the
+  withdrawn Garden annual, Garden lifetime and Greenhouse annual) were deleted
+  from Stripe and never sold; the tfvars comments said subscribers still renew
+  on them. Comments only: no id, variable, or runtime value changed.
+- **A failed load no longer reads as a dead link or a display that was turned
+  off.** The shared cutting page and the join page say they could not load,
+  with Try again, unless the server says the link is invalid or expired. A wall
+  display that taps Done on a task someone just deleted reads its list again
+  and keeps refreshing; it says it was turned off only when its own link is.
+  Removing a member or changing a role shows the reason when it fails. On a
+  Spanish screen the plant page says "Vence:" and "Nunca" where it said "Due:"
+  and "Never".
+- **Three backend fixes from the 2026-11-08 audit.** A scanned plant tag names
+  a completion by a plant sitter, the kiosk display or a former member in
+  full: it printed "Last watered today by a." A sitter link revoked before its
+  start date no longer makes the away recap fail to load; the recap of the
+  last window that did open shows. The care assistant is told today's date on
+  every question, in the household's time zone or in UTC when none is set
+  (#889), and the date stays out of the prompt cache.
+
+## [0.51.0] - 2026-11-09
+
+**A caretaker seat now ends when the member who made it leaves, and the site
+links its household posts and holiday pet pages.** Terms and Privacy text did
+not change.
+
+- **What the deploy changes.** No Terraform change since 0.50.0: `infrastructure/`
+  is untouched, so expect only the usual Lambda and frontend updates. No stored
+  data is migrated, and seats left live by earlier departures are not changed.
+  The apps get these changes only with a store build, and none is planned for
+  this release.
+
+### Changed
+
+- **Internal links and one campaign tag.** Home, /care and /help/households link
+  the two household blog posts, home and /pet-safe link the Christmas cactus and
+  poinsettia pet pages by name, and the sitter page's footer link carries a fixed
+  `utm_source` and `utm_medium`, never the sitter token.
+
+### Fixed
+
+- **A caretaker seat now ends when the member who created it leaves or is
+  removed.** Sitter links, plant tags and wall displays already did. A removed
+  admin who kept a seat URL could read tasks and spaces and complete tasks for
+  up to 180 days. The caretaker's visits stay on record, and the confirmations,
+  help pages and audit log now name seats. The product cannot tell the caretaker,
+  so the seat stays on the Household page with why it stopped and what an admin
+  can do next, including when the plan cannot create a new one, and the email to
+  the remaining admins when someone leaves gives the count. Seats left live by
+  earlier departures are not changed, because their creator was already scrubbed.
+
+## [0.50.0] - 2026-11-08
+
+**Garden is now $2.99 a month or $24.99 a year, and a production release needs
+one approval.** Plant identification is sold only by the 20-identification pack.
+Signing out now clears what the app has read, a renamed plant reaches its tasks,
+emptied fields stay empty, and the status page posts the plant tag outage. The
+Terms text changed with the new plan; Privacy did not.
+
+- **What the deploy changes.** Terraform sets the two new Garden price ids, the
+  100-check Garden leaf-health cap and `app_store_billing_enabled = "1"`, which
+  opens the `/billing/app-store/*` routes. No running subscription moves and no
+  stored data is migrated. The apps get these changes only with a store build,
+  and none is planned for this release.
+
+### Added
+
+- **Garden goes on sale at $2.99 a month and $24.99 a year at the next
+  production tag (ADR 0042).** Production now names both live Stripe prices and
+  attests them; existing Garden prices are untouched.
+- **Garden is $2.99 a month or $24.99 a year, and plant identification is
+  sold only by the 20-identification pack (ADR 0042).** Before: $4.99 a month
+  with 30 identifications. Garden annual returns at $24.99. Garden bundles no
+  identifications; Seedling keeps 1 and Greenhouse 100. Garden leaf-health
+  checks drop from 200 to 100 a month, because 200 left $0.04 a month on the
+  yearly price through Apple. Households that bought at $4.99 or $39.99 keep
+  renewing on those Stripe prices (new `legacyPrices` in the catalog; the
+  webhook still maps them to Garden). The new prices are the Terraform
+  variables `stripe_price_id_garden_299` and `stripe_price_id_garden_annual_2499`,
+  blank by default: the pricing page publishes Garden as unavailable while
+  they are blank, and the plan fails if only one of the pair is set. The
+  iPhone app gets a `garden.yearly` product beside `garden.monthly`. The
+  pricing page, FAQ, Terms and llms.txt, in English and Spanish, now say
+  "Identification is sold as a 20-identification pack for $1.99; it is not
+  included in Garden." Nothing changes in production until the owner creates
+  the two Stripe prices and pastes their ids.
+- **Yearly first (ADR 0042).** The pricing page and Settings → Plan status
+  open on the yearly Garden price, $24.99 with the derived "Save ~30%" hint;
+  Monthly is one tap away, and the tap is kept for the page load only, in
+  memory. On the Yearly tab Greenhouse, which has no yearly price, shows its
+  monthly price marked "Billed monthly" and checks out monthly. The iPhone app
+  lists the yearly product first. The day-10 and
+  day-14 trial emails name the yearly price first and then the monthly, each
+  once (ADR 0039 §7 amended): "If you would like to keep Garden, it is $24.99
+  a year, or $2.99 a month." Kill rule: fewer than 3 of the first 10 real
+  checkouts choosing yearly reverts the default.
+
+### Changed
+
+- **Production opens Apple In-App Purchase.**
+  `infrastructure/environments/production/terraform.tfvars` sets
+  `app_store_billing_enabled = "1"`, the way staging does, so at the next
+  production tag the billing Lambda gets `APP_STORE_BILLING_ENABLED = "1"` and
+  the three `/billing/app-store/*` routes stop answering 404. App Review buys
+  with a Sandbox Apple Account against production, and that purchase was
+  refused without it. Production keeps accepting Sandbox transactions (no
+  `APP_STORE_ENVIRONMENTS` is set). No secret, workflow or code change is
+  involved; Apple's signed data is verified against the pinned Apple Root
+  CA - G3 (ADR 0041). Setting it back to `"0"` and shipping a tag closes the
+  routes again, and a recorded subscription keeps its entitlement. A new
+  wiring test pins the switch, its path to the billing Lambda and the Sandbox
+  default.
+
+- **A production release needs one deploy approval, not three.** The reviewer on
+  the `production` environment now approves once, at the `terraform` job, and that
+  approval covers Terraform, the backend deploy and the frontend deploy. Rejecting
+  it stops all three. Re-running a failed deploy job no longer asks again. The
+  `production` deployment record now has one row per release, which turns green
+  when Terraform finishes; the staleness check still takes the live commit from
+  the service worker, so a failed backend or frontend deploy is reported as
+  half-applied, and it now dates a build from when its row succeeded rather than
+  from when approval was requested. This takes effect from the first tag cut after
+  it merges, because a run uses the workflow at its tagged commit.
+
+### Fixed
+
+- **A Garden household that tries plant identification is told it isn't
+  included, not that an allowance of 0 resets next month (ADR 0042).** The
+  website names the 20-identification pack, its catalog price and the buy
+  button; the apps name no price or pack. Upgrade wording now points at
+  Greenhouse, since Garden has no allowance, and Spanish matches.
+
+- **Signing out clears what the app has read.** The next person to sign in on
+  the same browser tab could see the previous account's homes in the switcher
+  and, by choosing one, its cached plants and private notes. The in-memory
+  query cache now empties whenever the signed-in account changes, however the
+  session ended.
+
+- **Renaming a plant now reaches its tasks.** Task lists, the sitter, caretaker
+  and kiosk pages and the calendar feed kept using the old name for good, because each task stored its own copy from the day it was created.
+  Saving a plant now updates those copies, which also repairs any left behind by
+  an earlier rename.
+
+- **Emptying a field on Edit Plant or Edit Task now clears it.** A plant's notes
+  and species and a task's notes came back after being deleted and saved, and a
+  custom task changed to another type kept showing its custom name.
+
+- **The status page no longer claims a clean record it never measured.** It
+  said "No incidents in the last 90 days" because a hand-kept list was empty,
+  including during the plant-tag outage fixed in #931. It now says the log is
+  written by hand and has no entries yet.
+
+- **The plant tag outage is posted on the status page.** All six plant tag
+  routes returned a server error from September 4 to October 5, 2026, until
+  #931 reached production in 0.39.0. The entry is in English and Spanish. Incident
+  dates no longer print a day early in United States time zones.
+
+## [0.49.0] - 2026-11-08
+
+**Eight new watering guides, answers up front, and a smoother first plant.**
+Care guides now open their watering section with the short answer, eight more
+plants have a cited watering guide, eleven others have new care guides, and a
+visitor who arrives from a guide is asked when the plant was last watered. The
+website's analytics now starts from the page head, so short visits to care and
+pet-safety pages are counted. Privacy and Terms text did not change.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.48.0 in
+  one file: `modules/frontend/functions/spa-router.js` matches `/blog/`,
+  `/care/` and `/help/` pages by prefix (#1105). Expect an in-place update of
+  the `spa-router` CloudFront function and the usual Lambda updates, with
+  nothing added or destroyed. No tfvars, price id or payments setting changed.
+  No stored data is migrated; `backfill:photo-metadata` (#852) is an operator
+  script and does not run on deploy.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.49.0, build 4900.
+
+### Added
+
+- **Care guides for air plant, rosemary, ponytail palm, areca palm and
+  schefflera (#1102).** Each answers "how often to water" first and cites the
+  Clemson, UF/IFAS, Iowa State, Illinois, Wisconsin and NC State extension
+  pages it was written from, read on 2026-11-05. Only two state a day count,
+  because only their sources give one: the air plant (about once a week, every
+  two weeks in cool, dim months) and the holiday rosemary tree (about once a
+  week, when the soil is dry). The rosemary guide links the six holiday guides.
+- **A pet-safety page for rosemary (#1102),** citing the ASPCA's "Rosemary"
+  listing (Rosmarinus officinalis, non-toxic to cats and dogs). The air plant
+  has no ASPCA listing, so its pet line reads "Unknown".
+- **Sign-up from the rosemary guide keeps the plant (#1102).** A visitor who
+  signs up from `/care/rosemary` sees rosemary first in the first run, with a
+  7-day reminder (the low end of its cited interval). It is not one of the ten
+  tiles, so the grid is unchanged for everyone else.
+- **The home page links the three list-style blog guides (#1110)**, in English
+  and Spanish, with a test that every link resolves to a published post.
+- **Watering guides for jasmine, lucky bamboo, Venus flytrap, majesty palm,
+  kentia palm, paperwhite, bird's nest fern and purple shamrock (#1112).** Each
+  answers "how often to water" first and cites the NC State, Clemson, UF/IFAS,
+  Iowa State, Wisconsin and RHS pages it was written from, read on
+  2026-11-07. The only interval any of those pages gives is NC State's "change
+  the water weekly" for lucky bamboo grown in water, so that is the only one
+  stated; the others give the source's soil rule instead.
+- **Pet-safety pages for lucky bamboo, Venus flytrap, majesty palm, kentia
+  palm, paperwhite and purple shamrock (#1112)**, each citing an ASPCA listing
+  that names the plant ("Ribbon Plant" for Dracaena, "Venus Fly Trap", "Majesty
+  Palm", "Kentia Palm", "Paper White" and "Shamrock Plant" for Oxalis). The
+  jasmine guide reads the existing Jasminum row. The bird's nest fern's pet
+  line reads "Unknown": the ASPCA has no listing for Asplenium nidus, and its
+  "Golden Bird's Nest" is a snake plant.
+- **Care guides for satin pothos, dragon tree, arrowhead plant, weeping fig,
+  polka dot plant and tradescantia (#1103).** Each answers "how often to water"
+  first and cites the NC State, Clemson, UF/IFAS, Illinois and Wisconsin
+  extension pages it was written from, read on 2026-11-05. None of those pages
+  gives a day count, so no guide states one: each gives the source's soil rule
+  instead. The satin pothos guide says plainly that it is a Scindapsus, not a
+  true pothos, and is watered differently.
+- **Pet-safety pages for satin pothos, dragon tree, arrowhead plant, weeping
+  fig and polka dot plant (#1103)**, each citing that plant's own ASPCA listing
+  ("Satin Pothos", "Madagascar Dragon Tree", "Arrow-Head Vine", the
+  genus-level "Weeping Fig" and "Polka Dot Plant"). The tradescantia's pet
+  line reads "Unknown": the ASPCA lists the inch plant only as Tradescantia
+  fluminensis, a different species. The pet checker answers "scindapsus",
+  "nephthytis" and "ficus benjamina" with the new rows, and still answers no
+  tradescantia name, including "spiderwort", with another plant's verdict.
+- **Two answer-first blog posts on overwatering (#1104).** "Do yellow leaves
+  mean overwatering?" and "Can you overwater a plant?" answer the two generic
+  question shapes Search Console showed with no page of their own (24
+  phrasings, 73 impressions from August to November). Each cites the Clemson
+  and Iowa State extension pages it was checked against (the first also cites
+  Illinois Extension), and links the overwatering post and the relevant care
+  guides. No care guide title, H1 or meta changed. No `infrastructure/` change:
+  the page router already matches `/blog/` pages by prefix.
+- **Cited detail on seven short pet-safety pages (#1101).** Rubber plant,
+  dieffenbachia, orchid, alocasia, begonia, cast iron plant and haworthia
+  were about 350 words and not indexed (Search Console, 2026-11-05). Each now
+  quotes its ASPCA listing's family and, where they are names, other names;
+  the toxic ones its principles, signs and advice line; a horse verdict where
+  the listing states one; NC State Extension where it has a matching page;
+  and similar and related plants with their own verdicts. Read off the live
+  pages on 2026-11-05 and pinned in petToxicity.test.ts. No verdict, title,
+  H1 or meta description changes.
+- **"When did you last water it?" in the first run (#1099).** Tapping a common
+  houseplant now asks one question before it is saved: "In the last few
+  days" keeps the first reminder one interval out, "A week or more ago"
+  checks the soil in 2 days, and "Not sure" checks it tomorrow and says why.
+  A ZZ plant from its care guide no longer gets its first reminder on the
+  day the 14-day trial ends. /register now names the guide's plant under the
+  subtitle, and the header's "Try the app" link on a care or pet-safe page
+  carries the plant the way the page's own links do.
+- **An operator backfill that strips location metadata from photos already
+  stored — built, not run (#852).** `backfill:photo-metadata` (backend) reads
+  every version under `plants/` and `trash/plants/`, finds EXIF GPS, XMP and
+  PNG-text place names, IPTC place fields and MPF trailing images, and with
+  `--confirm` rewrites each affected photo in place under the same key. The
+  image data is copied, not re-encoded, and a JPEG keeps its orientation. The
+  write is conditional on the ETag it read, so a photo deleted or replaced
+  mid-run is never brought back. `--delete-old-versions` also removes the
+  versioned originals. It is a dry run by default, and it prints counts and
+  short refs, never keys or coordinates. A read-only census on 2026-09-18 found
+  no location metadata in any stored photo or old version, so there's nothing
+  for it to do today. It's for photos stored between now and the release that
+  carries #849. Runbook: "Strip location metadata from stored photos".
+
+### Changed
+
+- **Search titles for seven care guides now show the watering answer (#1111).**
+  Search Console's 28 days to 2026-11-06 had monstera, English ivy, heartleaf
+  philodendron, money tree, nerve plant, rubber plant and bird of paradise at
+  positions 3 to 16 with 0 or 1 clicks. Six titles now open with "How often to
+  water" and the guide's own rule, and bird of paradise leads with light and
+  bloom age. Every phrase comes from the guide and its cited sources.
+- **Every care guide opens its watering section with the short answer
+  (#1113).** The guide's own FAQ answer, word for word, is now the first
+  paragraph under the watering heading. No guide text, title, H1 or meta
+  changed.
+- **Website analytics starts from the page head (#1115).** Google Analytics
+  now loads and sends a prerendered page's view from a small entry ahead of the
+  app bundle, with the same opt-outs, consent defaults and configuration as
+  before. Short visits that left before the app finished loading are now
+  counted, so sessions on care and pet-safety pages step up on release day
+  without any change in real visitors. The header's font (Instrument Sans) is
+  also preloaded so the header no longer shifts when it arrives.
+- **Help no longer sends app readers to the website for billing (#1076).** It
+  says the app shows the household's plan and what it includes, and that plans
+  are not bought or changed in the app.
+- **The pet checker no longer answers "air plant" with the spider plant's
+  verdict (#1102).** Its loose word match found "air" inside the spider plant's
+  "airplane plant" name and returned non-toxic for a different plant. Each
+  word of a multi-word search must now match a whole word of a plant's name.
+- **Android accessibility (#1097).** TalkBack reads form-sheet errors, the
+  sign-out dialog falls back to the item's title, intro page dots are 48 dp
+  touch targets, and the reminder channel is named in the device language.
+- **Dependencies.** AWS SDK 3.1147.0 to 3.1156.0 (#1069), Capacitor core 8.5.3,
+  push-notifications 8.1.3, camera 8.2.6 (#1074, #1073, #1075), eslint 10.13.0
+  (#1072), and the Android Gradle wrapper 8.14.3 to 9.8.0 (#1049).
+
+### Fixed
+
+- **"Rosary vine" no longer names string of pearls (#1114).** Rosary vine is
+  string of hearts (Ceropegia woodii), per Wisconsin Horticulture, but the
+  string of pearls guide listed it as an alias, on the page and in its
+  structured data. The name now belongs to no guide and no pet-safety row, and
+  a test keeps it that way until a string-of-hearts guide exists.
+- **GA4 `first_plant_added` counts accounts, not screens (#1106).** It was sent
+  whenever the first run or the empty dashboard saved a plant, so a second
+  household, a repeated first run or a second device counted again. The
+  server now records an account's first plant once (a timestamp row in the
+  account's own partition, erased with the account) and says so on that one
+  `POST /plants` answer as `firstPlantForAccount: true`; the web app sends the
+  event only then. An account whose household already had plants is not
+  counted. The event's parameters are unchanged (`method` and the scrubbed
+  page address), so the Privacy text needs no change.
+- **Room for more care guides at the edge (#1105).** The CloudFront function
+  that routes page requests listed every blog post, care guide and help topic,
+  and had reached 10,232 of the 10,240 bytes CloudFront allows. Those pages are
+  now matched by their `/blog/`, `/care/` and `/help/` prefix, as the
+  pet-safety pages already were, so the function is 8,245 bytes and a new guide
+  adds nothing to it. Every URL gets the same page or the same 404 as before; a
+  mis-capitalized guide URL now gets the prerendered page instead of the app
+  shell. Ships with this release's Terraform apply.
+- **A real `/llms.txt` (#1108).** The path fell through to the 404 page as
+  `text/html`; it now serves the file as `text/plain; charset=utf-8`.
+
+## [0.48.0] - 2026-11-05
+
+**Twelve new care guides, reminders on your own time zone, and a fuller
+Privacy Policy.** Eight watering guides and four holiday plants join the care
+guides, and the six holiday guides link to each other. Reminders and calendar
+dates now use your own time zone instead of UTC. The Privacy Policy says more
+about what website analytics records and names the time zone the app saves.
+The Privacy text changed (#1085, and this release), so its effective date is
+this release's.
+
+- **The Terraform plan is small.** `infrastructure/` changed since 0.47.0 in
+  one file: `modules/frontend/functions/spa-router.js` adds 12 prerendered
+  `/care` routes (#1083, #1089). Expect an in-place update of the `spa-router`
+  CloudFront function and the usual Lambda updates, with nothing added or
+  destroyed. No stored data is migrated. Notification-settings rows gain a
+  `timezoneChosen` field as they are written (#1092); older rows read as not
+  chosen.
+- **The Privacy effective date is November 5, 2026 (release 0.48.0).** Set by
+  hand in `PrivacyPage.tsx`. The Terms did not change, so `termsEffective.json`
+  stays at November 3, 2026 (release 0.47.0). The account-deletion page's
+  text changed (#1096), so its date moves from September 2 to November 5,
+  2026, also set by hand in `AccountDeletionPage.tsx`.
+- **The website gets every change at this tag; the apps get them only with a
+  store build.** The next store upload is 0.48.0, build 4800.
+
+### Added
+
+- **Eight new care guides that answer "how often to water" (#1083).** String of
   pearls, prayer plant (Maranta leuconeura), croton, Chinese money plant,
   peperomia (the baby rubber plant), alocasia, cast iron plant and corn plant
   now have `/care` pages. Each cites the university extension or RHS pages it
   was written from, read on 2026-11-03. None gives a day count for watering,
   because none of those sources does. Each says which dryness check to use.
-- **A pet-safety page for peperomia**, citing the ASPCA's "Baby Rubber Plant"
-  listing (Peperomia obtusifolia, non-toxic to cats and dogs). String of
-  pearls, prayer plant, croton and Chinese money plant have no ASPCA listing
-  of their own, so their pet line reads "Unknown".
+- **A pet-safety page for peperomia (#1083),** citing the ASPCA's "Baby Rubber
+  Plant" listing (Peperomia obtusifolia, non-toxic to cats and dogs). String
+  of pearls, prayer plant, croton and Chinese money plant have no ASPCA
+  listing of their own, so their pet line reads "Unknown".
 - **Care guides for four holiday plants: amaryllis, Norfolk Island pine,
-  cyclamen and kalanchoe.** People search for these in November and December.
-  Each guide answers "how often to water" first and cites the Clemson, Iowa
-  State, UF/IFAS and NC State extension pages it was written from, read on
-  2026-11-04. Each also has a pet-safety page citing the plant's own ASPCA
-  listing. The amaryllis row cites "Barbados Lily" (Hippeastrum), the genus
-  sold for the holidays, and not ASPCA's "Amaryllis" listing, which names a
-  different genus.
+  cyclamen and kalanchoe (#1089).** People search for these in November and
+  December. Each guide answers "how often to water" first and cites the
+  Clemson, Iowa State, UF/IFAS and NC State extension pages it was written
+  from, read on 2026-11-04. Each also has a pet-safety page citing the plant's
+  own ASPCA listing. The amaryllis row cites "Barbados Lily" (Hippeastrum),
+  the genus sold for the holidays, and not ASPCA's "Amaryllis" listing, which
+  names a different genus.
 
 ### Changed
 
-- **The six holiday care guides now link to each other.** The poinsettia,
-  Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and kalanchoe
-  guides each name the other five in a line under "Keeping it alive when you
-  share a home". The poinsettia's related plants now include the amaryllis,
-  and the Christmas cactus's include the kalanchoe.
+- **The six holiday care guides now link to each other (#1091).** The
+  poinsettia, Christmas cactus, amaryllis, Norfolk Island pine, cyclamen and
+  kalanchoe guides each name the other five in a line under "Keeping it alive
+  when you share a home". The poinsettia's related plants now include the
+  amaryllis, and the Christmas cactus's include the kalanchoe.
 - **The spider plant care guide's title now leads with "How often to water a
-  spider plant".** That query put the page at about position 5 in the week to
-  2026-11-03, with no clicks, and it was the only ranking watering guide whose
-  title still opened with "Spider Plant Care". The page's content is unchanged.
-- **"Prayer plant" and "maranta" now mean Maranta, not calathea.** The
+  spider plant" (#1088).** That query put the page at about position 5 in the
+  week to 2026-11-03, with no clicks, and it was the only ranking watering
+  guide whose title still opened with "Spider Plant Care". The page's content
+  is unchanged.
+- **"Prayer plant" and "maranta" now mean Maranta, not calathea (#1083).** The
   calathea guide and its pet-safety row no longer carry those names, so a
   search for either no longer answers with calathea's verdict.
 - **The Privacy Policy now lists what Google Analytics records toward a paid
-  plan.** It said six steps with no detail. It now names the content-page
-  sign-up clicks (the kind of page, where the link was and, on a care guide or
-  pet-safety page, that page's plant), how a first plant was added, and the
-  14-day Garden trial, and it no longer mentions the removed "See how it
-  works" link. Both locales. The page's effective date is set by the release
-  that ships it.
-- **Care guides are no longer in the JavaScript bundle.** The 41 guides were
-  one 53 kB (brotli) chunk that every `/care` and `/pet-safe` visitor
-  downloaded in full. The browser now gets a 2.5 kB index of names and
+  plan (#1085).** It said six steps with no detail. It now names the
+  content-page sign-up clicks (the kind of page, where the link was and, on a
+  care guide or pet-safety page, that page's plant), how a first plant was
+  added, and the 14-day Garden trial, and it no longer mentions the removed
+  "See how it works" link. Both locales.
+- **The Privacy Policy says the app saves your time zone.** A new line under
+  "What we collect" says the app saves the time zone your browser or phone
+  reports when you have not picked one, what it is used for (reminder times,
+  quiet hours, dates in our emails, calendar dates), where to change it, and
+  that it is in your data export and deleted with your account. English and
+  Spanish. It describes #1092.
+- **Care guides are no longer in the JavaScript bundle (#1087).** The 41
+  guides were one 53 kB (brotli) chunk that every `/care` and `/pet-safe`
+  visitor downloaded in full. The browser now gets a 2.5 kB index of names and
   quick facts, and each guide page carries its own guide as JSON in its
   prerendered HTML (about 0.4 kB more per page). Navigating to a guide from
   inside the app fetches that page. The prerendered pages are otherwise
   unchanged. All JS combined drops from 718.4 to 667.6 kB, so new guides no
-  longer spend that budget.
+  longer spend that budget. A guide your browser has never opened will not
+  open offline.
+- **The dashboard says when nothing is due this week (#1093).** When
+  every task was more than 7 days out, it said "No tasks yet. Add tasks to
+  your plants". It now says "Nothing due this week" with the next task and
+  its date. "No tasks yet" shows only when the household has no tasks.
+  English and Spanish.
+- **Help, email and push text match what the app does (#1096).** The
+  account-deletion email no longer suggests a deleted account can be
+  restored: it says it cannot be, and to write to us if you did not ask for
+  the deletion or are still being charged. Help says the app saves your time
+  zone for quiet hours (#1092), that the app is available in Spanish, and that
+  Preferences has a language picker. The account-deletion page says a paid
+  plan whose household has only you is canceled at once, and the Spanish
+  deletion guide names the buttons a Spanish reader sees. "Settings → Billing"
+  reads "Settings → Plan status" outside the Terms. English and Spanish.
 
 ### Fixed
 
-- **Google Analytics no longer credits a purchase to Stripe.** The page a
-  buyer returns to after Stripe Checkout or the billing portal now reports
-  our own site as its referrer instead of `checkout.stripe.com`, so the
-  `purchase` it records stays with the search, ad or page that brought the
-  buyer.
+- **Reminders arrive in your own time zone (#1092).** Anyone who never opened
+  Settings, Notifications had reminders on UTC, so the daily email came around
+  3 to 4 a.m. Eastern and counted days by the UTC date. The app now saves the
+  time zone your browser or phone reports, but only while you have not picked
+  one, and it changes no other setting. A zone you pick is never changed.
+  Accounts from before this release that still read UTC count as not picked,
+  so someone who chose UTC on purpose is switched once and keeps UTC if they
+  pick it again.
+- **Calendar dates match the app (#1092).** The calendar link wrote each
+  task's all-day date from the UTC day, so in the US most tasks showed a day
+  late in Google or Apple Calendar. Each date now uses the day in your
+  notification time zone.
+- **Google Analytics no longer credits a purchase to Stripe (#1086).** The
+  page a buyer returns to after Stripe Checkout or the billing portal now
+  reports our own site as its referrer instead of `checkout.stripe.com`, so
+  the `purchase` it records stays with the search, ad or page that brought
+  the buyer.
+- **A server error no longer signs you out (#1093).** A 5xx or 429
+  response at launch or during a token refresh used to end the session, in
+  the iPhone app too. Now only a 400, 401 or 403 does. Other errors keep you
+  signed in, and the page shows its usual error with a way to retry.
+- **Plant pages show each task's real last-care date (#1093).** Care
+  just outside the 10 newest entries read "0 done · last never", and a run of
+  misting could show "No watering has been logged". Each task now shows its
+  real last date, "none in last 10" when that is all the page knows, and
+  "never" only when it is true.
+- **The sitter page says so when Done fails (#1093).** A failed Done
+  stopped the spinner and said nothing. It now announces "That didn't save.
+  Check your connection and tap Done again.", and the task stays undone.
+- **Saving a plant or task while offline fails right away instead of
+  spinning (#1095).** Offline, Add Plant, Edit Plant, Add Task and Edit Task
+  spun with no end, and Snooze closed its sheet with nothing changed and
+  nothing said. A save left behind by Cancel could still land on reconnect, so
+  a plant added again came back twice. These saves, and Snooze on the Tasks
+  page and on plant rows, now send nothing while offline and say "You're
+  offline. Nothing was saved. Try again once you're connected." What you typed
+  stays in the form, and nothing is sent later. Care marked done still waits
+  for the connection, and the offline notice now says which is which. English
+  and Spanish.
+- **Care and pet-safety pages read correctly with a screen reader (#1094).**
+  The "At a glance" list on every care guide was malformed, so a screen
+  reader could not pair each label with its value; it is now a valid list
+  under its own heading (WCAG 1.3.1). The sign-up box on `/care` has a
+  heading, and the emergency box on each pet-safety page no longer puts a
+  heading ahead of the page title. On phones, the first link after "Skip to
+  main content" is no longer hidden under the sticky header (WCAG 2.4.11).
+- **The Spanish dashboard names the next task in Spanish (#1098).** The
+  "Nothing due this week" line from #1093 showed the English task type
+  ("Lo próximo: Water Fern…"). It now uses the app's Spanish task names
+  ("Lo próximo: Regar (Helecho)…"). Custom task names stay as typed.
+- **The care report says what it counts (#1098).** Its header said "Older care
+  is not counted here", though last care now reads each task's own last date.
+  It now says counts and streaks cover the plant's last 10 logged completions
+  and last care covers all of its history.
+
+<!-- internal: #1082 #1084 -->
 
 ## [0.47.0] - 2026-11-03
 
@@ -2651,8 +3360,6 @@ CHECKOUT_PENDING`; the web client says a checkout is already in progress and
   anywhere west of UTC. The renderer that gets this right is
   `formatContentDate` in `frontend/src/utils/contentDate.ts`, shared so the
   blog and changelog can stop making the same mistake.
-  <<<<<<< HEAD
-  \=======
 
 - **The deep-link gates could not tell this account's Enrollment ID from its
   Team ID.** An `appID` is `<Team ID>.<bundle id>`, and

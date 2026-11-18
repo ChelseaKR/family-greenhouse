@@ -14,6 +14,8 @@ import {
   planRank,
   PLANS,
   isIntervalWithdrawn,
+  priceEnvFor,
+  allPriceEnvs,
   HOUSEHOLD_CREATED_AT_UNKNOWN,
 } from '../models/plans.js';
 import { audit } from '../utils/auditLog.js';
@@ -31,7 +33,7 @@ import {
 import { grantCreditPack } from './identifyCredits.js';
 import { giftPurchaseFromEvent, type GiftPurchaseGrant } from '../models/giftSubscriptions.js';
 import { grantGiftPurchase } from './giftCodes.js';
-import { assertPriceMatchesCatalog } from './stripePrices.js';
+import { assertPriceMatchesCatalog, automaticTaxEnabled } from './stripePrices.js';
 import { recordBillingTransition } from './householdAudit.js';
 import {
   TRIAL_PERIOD_DAYS,
@@ -788,12 +790,10 @@ export async function createCheckoutSession(args: {
       `INTERVAL_WITHDRAWN: ${plan.name} is no longer sold at the '${interval}' cadence.`
     );
   }
-  const priceEnv =
-    interval === 'lifetime'
-      ? plan.lifetimeStripePriceEnv
-      : interval === 'year'
-        ? plan.annualStripePriceEnv
-        : plan.stripePriceEnv;
+  // The CURRENT price for the cadence. A legacy price (ADR 0042) is never
+  // read here: `priceEnvFor` knows only the slots the tier sells at today,
+  // so a repriced tier cannot sell its old amount by accident.
+  const priceEnv = priceEnvFor(plan, interval);
   if (!priceEnv) throw new Error(`Plan ${plan.id} is not billable ${interval}ly`);
   const priceId = process.env[priceEnv];
   if (!priceId) throw new Error(`Missing ${priceEnv} for plan ${plan.id}`);
@@ -901,7 +901,7 @@ export async function createCheckoutSession(args: {
     // Stripe Tax is opt-in because the Stripe account must first have its
     // registrations and product tax code configured. Once enabled, Checkout
     // collects the minimum address fields needed for the calculation.
-    automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX_ENABLED === '1' },
+    automatic_tax: { enabled: automaticTaxEnabled() },
     // Existing customers need this explicit opt-in for Checkout to save the
     // fresh billing address it uses for future automatic-tax calculations.
     customer_update: sub.stripeCustomerId
@@ -1090,16 +1090,18 @@ function churnReasonFromEvent(event: Stripe.Event): ServerEventProps['churnReaso
  * from the price the subscription actually carries fixes that. Returns null
  * when the price isn't one of ours (env unset — e.g. local/test — or a price
  * we don't sell), so callers fall back to metadata.
+ *
+ * Reads the tier's LEGACY price envs too (ADR 0042): a household that bought
+ * Garden at $4.99 renews on that Stripe price for as long as it stays
+ * subscribed, and its renewal events must keep resolving to Garden after the
+ * tier is sold at $2.99 — otherwise the first renewal after the repricing
+ * would drop a paying household to the free tier.
  */
 function planIdFromPriceId(priceId: string | null | undefined): PlanId | null {
   if (!priceId) return null;
   for (const plan of Object.values(PLANS)) {
-    for (const env of [
-      plan.stripePriceEnv,
-      plan.annualStripePriceEnv,
-      plan.lifetimeStripePriceEnv,
-    ]) {
-      if (env && process.env[env] === priceId) return plan.id;
+    for (const env of allPriceEnvs(plan)) {
+      if (process.env[env] === priceId) return plan.id;
     }
   }
   return null;

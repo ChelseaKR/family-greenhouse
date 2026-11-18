@@ -47,6 +47,7 @@ import {
   useCrossHomeCompleteMutation,
   useCrossHomeUnclaimMutation,
 } from './crossHomeMutations';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 interface RowActions {
   onComplete: (task: CrossHomeTodayRow) => void;
@@ -163,7 +164,7 @@ function LockedCard() {
     return (
       <Card>
         <CardHeader title={t('today.lockedTitle')} description={t('today.lockedDescription')} />
-        <Alert variant="info">{t('settings.billing.nativeUnavailable')}</Alert>
+        <Alert variant="info">{t(nativePlanNoteKey())}</Alert>
       </Card>
     );
   }

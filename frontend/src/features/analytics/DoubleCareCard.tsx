@@ -4,6 +4,7 @@ import { isNativeApp } from '@/lib/platform';
 import { Card, CardHeader } from '@/components/Card';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import type { DailyAnalytics } from '@/services/householdService';
+import { nativePlanNoteKey } from '@/services/appStoreAvailability';
 
 interface DoubleCareCardProps {
   loading: boolean;
@@ -55,7 +56,7 @@ export function DoubleCareCard({ loading, daily }: DoubleCareCardProps) {
           {t('doubleCare.analytics.locked')}{' '}
           {/* No "see plans" link in the apps (Guideline 3.1.1). */}
           {isNativeApp() ? (
-            t('settings.billing.nativeUnavailable')
+            t(nativePlanNoteKey())
           ) : (
             <Link to="/pricing" className="font-medium text-primary-700 underline">
               {t('doubleCare.analytics.seePlans')}

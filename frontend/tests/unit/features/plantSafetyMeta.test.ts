@@ -90,6 +90,7 @@ describe('the pet-safe page heads', () => {
 
   it('asks the searcher’s question in both words, in the title and the description', () => {
     for (const { page, title, description } of heads) {
+      if (page.lead !== null) continue; // a lead page asks about its one animal, below
       expect(title, page.slug).toMatch(/^Is .+ toxic to cats and dogs\? What to know$/);
       expect(description, page.slug).toContain('poisonous or safe for pets?');
     }
@@ -181,5 +182,33 @@ describe('negative controls: the checker can fail', () => {
     );
     expect('X is safe for pets.'.replace(HEAD_QUESTION, '')).toMatch(SAFETY_WORDING);
     expect('X is poisonous or safe for pets.'.replace(HEAD_QUESTION, '')).toMatch(SAFETY_WORDING);
+  });
+});
+
+/**
+ * A page that opts into a lead (`leadAnimal` in the table) answers in its
+ * title: the searched animal and that animal's cited verdict word. The word
+ * comes from the table through the verdict label, never from the template,
+ * and the ASPCA's name stays out of the title (#1077, license audit).
+ */
+describe('a lead page title', () => {
+  const page = PLANT_SAFETY_PAGES.find((p) => p.slug === 'christmas-cactus')!;
+
+  it('answers the cat question with the table’s verdict', () => {
+    expect(page.lead).toBe('cats');
+    const { title } = headFor(page);
+    expect(title).toBe('Is Christmas cactus toxic to cats? Listed as non-toxic');
+    expect(title.endsWith(tableWord('christmas-cactus', 'cats').toLowerCase())).toBe(true);
+    expect(title.length).toBeLessThanOrEqual(MAX_TITLE);
+  });
+
+  it('its template carries no safety wording of its own', () => {
+    expect(enCatalog.plantSafetyPage.leadTitle).not.toMatch(SAFETY_WORDING);
+    expect(enCatalog.plantSafetyPage.leadTitle).toContain('{{verdict}}');
+  });
+
+  it('every other page keeps the cats-and-dogs title', () => {
+    const leads = PLANT_SAFETY_PAGES.filter((p) => p.lead !== null).map((p) => p.slug);
+    expect(leads).toEqual(['christmas-cactus']);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PublicShell } from '@/components/PublicShell';
@@ -79,6 +79,13 @@ export function ScanTagPage() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [thanks, setThanks] = useState<string | null>(null);
   const [completionFailed, setCompletionFailed] = useState(false);
+  // Where focus goes once a completed row has left the list. The same pattern
+  // as the sitter page (features/sitter/SitPage.tsx).
+  const [justCompleted, setJustCompleted] = useState<{ taskId: string; seq: number } | null>(null);
+  const completionSeq = useRef(0);
+  const doneButtons = useRef(new Map<string, HTMLButtonElement>());
+  const thanksRef = useRef<HTMLDivElement>(null);
+  const rowIdBase = useId();
 
   const load = useCallback(
     (withPin: string, signal?: AbortSignal) => {
@@ -135,6 +142,9 @@ export function ScanTagPage() {
         rememberName(trimmed);
         setDoneIds((prev) => new Set(prev).add(task.taskId));
         setThanks(result.completedByName);
+        // The row is about to be removed and the focus it held would fall to
+        // <body>; the effect below puts it somewhere useful instead.
+        setJustCompleted({ taskId: task.taskId, seq: completionSeq.current++ });
       } catch (err) {
         if (err instanceof TagInactiveError) return setStatus('inactive');
         if (err instanceof TagLockedError) {
@@ -153,6 +163,22 @@ export function ScanTagPage() {
     },
     [name, pin, token]
   );
+
+  // Move focus to the next task's Done button once the completed row is gone,
+  // or to the thanks when that was the last one. Runs after the render that
+  // removed the row, and is keyed on a counter rather than on the task id so
+  // that every completion moves focus.
+  useEffect(() => {
+    if (!justCompleted) return;
+    const order = (view?.tasks ?? []).map((task) => task.taskId);
+    const from = order.indexOf(justCompleted.taskId);
+    const nextId =
+      order.slice(from + 1).find((id) => !doneIds.has(id)) ??
+      order.find((id) => !doneIds.has(id)) ??
+      null;
+    const target = nextId ? doneButtons.current.get(nextId) : thanksRef.current;
+    target?.focus();
+  }, [doneIds, justCompleted, view]);
 
   const careLine = (care: TagCare, waterOnly: boolean): string => {
     const taskLabel = t(`tasks.types.${care.taskType}`, { defaultValue: care.taskType });
@@ -267,13 +293,15 @@ export function ScanTagPage() {
               which defeats the wrapper entirely. */}
           <div className="mt-8 space-y-4" aria-live="polite">
             {thanks && (
-              <Alert
-                variant="success"
-                title={t('plantTags.scan.thanksTitle', { name: thanks })}
-                live="off"
-              >
-                {t('plantTags.scan.thanksBody')}
-              </Alert>
+              <div ref={thanksRef} tabIndex={-1} className="focus:outline-hidden">
+                <Alert
+                  variant="success"
+                  title={t('plantTags.scan.thanksTitle', { name: thanks })}
+                  live="off"
+                >
+                  {t('plantTags.scan.thanksBody')}
+                </Alert>
+              </div>
             )}
             {completionFailed && (
               <Alert variant="error" title={t('plantTags.scan.completeFailedTitle')} live="off">
@@ -307,13 +335,20 @@ export function ScanTagPage() {
                     const taskLabel = t(`tasks.types.${task.taskType}`, {
                       defaultValue: task.taskType,
                     });
+                    // Every Done button shows the same words, so each one's
+                    // accessible name is those words followed by its own
+                    // row's task line. Built from the text already on the
+                    // page (the button, then the line), so the visible label
+                    // stays first in the name.
+                    const titleId = `${rowIdBase}-task-${task.taskId}`;
+                    const doneId = `${rowIdBase}-done-${task.taskId}`;
                     return (
                       <li
                         key={task.taskId}
                         className="flex items-center justify-between gap-4 rounded-xl border border-primary-100/80 bg-white p-4 shadow-journal"
                       >
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-900">
+                          <p id={titleId} className="font-medium text-gray-900">
                             {t('plantTags.scan.taskDue', {
                               task: taskLabel,
                               plant: view.plantName,
@@ -332,6 +367,12 @@ export function ScanTagPage() {
                           </p>
                         </div>
                         <Button
+                          ref={(node) => {
+                            if (node) doneButtons.current.set(task.taskId, node);
+                            else doneButtons.current.delete(task.taskId);
+                          }}
+                          id={doneId}
+                          aria-labelledby={`${doneId} ${titleId}`}
                           variant="primary"
                           size="sm"
                           isLoading={pending === task.taskId}

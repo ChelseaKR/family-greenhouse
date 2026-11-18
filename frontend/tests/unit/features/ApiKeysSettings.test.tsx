@@ -96,7 +96,7 @@ describe('ApiKeysSettings', () => {
     // The admin viewer gets the change-plan link, not an ask button.
     expect(screen.getByRole('link', { name: 'Change plan' })).toHaveAttribute(
       'href',
-      '/settings/billing'
+      '/settings/billing#change-plan'
     );
     expect(screen.queryByRole('button', { name: 'Issue key' })).not.toBeInTheDocument();
     expect(await screen.findByText('Home Assistant')).toBeInTheDocument();

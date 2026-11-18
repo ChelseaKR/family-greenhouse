@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { formatDate, formatRelativeDay } from '@/i18n/format';
 import { playHaptic } from '@/services/nativeHaptics';
 import type { WhoText } from '@/features/plants/plantCareText';
@@ -126,8 +127,8 @@ export function TaskChecklist({
       <div className="px-6 pt-10 text-center">
         <h2 className="text-xl font-semibold text-ink">{t('tasks.list.emptyTitle')}</h2>
         <p className="mt-2 text-gray-600">{t('tasks.list.emptyBody')}</p>
-        <Link to="/plants/new" className="mt-5 inline-block">
-          <Button>{t('plants.addPlant')}</Button>
+        <Link to="/plants/new" className={buttonStyles({ className: 'mt-5' })}>
+          {t('plants.addPlant')}
         </Link>
       </div>
     );

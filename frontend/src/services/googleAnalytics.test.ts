@@ -72,6 +72,7 @@ beforeEach(() => {
   localStorage.clear();
   delete (window as { Capacitor?: unknown }).Capacitor;
   delete window.dataLayer;
+  delete window.__fgGoogleAnalyticsBoot;
   for (const script of gtagScripts()) script.remove();
   delete (window as unknown as Record<string, unknown>)[`ga-disable-${ID}`];
   clearCookies();
@@ -84,6 +85,7 @@ afterEach(() => {
   localStorage.clear();
   delete (window as { Capacitor?: unknown }).Capacitor;
   delete window.dataLayer;
+  delete window.__fgGoogleAnalyticsBoot;
   for (const script of gtagScripts()) script.remove();
   delete (window as unknown as Record<string, unknown>)[`ga-disable-${ID}`];
   clearCookies();
@@ -598,6 +600,7 @@ describe('conversion events', () => {
       // Sabotage 1: Global Privacy Control. Assert it applied before trusting
       // the empty result.
       delete window.dataLayer;
+      delete window.__fgGoogleAnalyticsBoot;
       for (const script of gtagScripts()) script.remove();
       setGpc(true);
       const gpc = await load();
@@ -701,6 +704,7 @@ describe('conversion events', () => {
     expect(conversions()).toHaveLength(1);
 
     delete window.dataLayer;
+    delete window.__fgGoogleAnalyticsBoot;
     for (const script of gtagScripts()) script.remove();
     setGpc(true);
     const gpc = await load();
