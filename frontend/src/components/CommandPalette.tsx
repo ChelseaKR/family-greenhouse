@@ -227,7 +227,10 @@ export function CommandPalette() {
                 {query !== '' && results.length === 0 && !searching && !readFailed && (
                   <div className="p-6 text-center">
                     <EmptySearch className="mx-auto h-24 w-auto" />
-                    <p className="mt-2 text-sm text-gray-500">
+                    {/* role="status", like the loading and error lines beside
+                        it: an empty result was the one outcome of typing here
+                        that a screen reader never heard (WCAG 4.1.3). */}
+                    <p className="mt-2 text-sm text-gray-500" role="status">
                       No matches for &ldquo;{query}&rdquo;.
                     </p>
                   </div>

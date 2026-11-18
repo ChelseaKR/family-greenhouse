@@ -76,7 +76,11 @@ describe('CommandPalette', () => {
     vi.mocked(taskService.getTasks).mockResolvedValue([]);
     await openAndType('cactus');
 
-    expect(await screen.findByText(/No matches for/)).toBeInTheDocument();
+    const empty = await screen.findByText(/No matches for/);
+    expect(empty).toBeInTheDocument();
+    // Announced, like the loading and failed lines: typing into a search that
+    // finds nothing was silent for a screen reader (WCAG 4.1.3).
+    expect(empty).toHaveAttribute('role', 'status');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
