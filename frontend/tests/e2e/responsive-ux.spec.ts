@@ -343,9 +343,10 @@ test.describe('Mobile-first UX correctness', () => {
     await navigateTo(page, /^plants$/i, /\/plants$/);
     const plantsHeading = page.getByRole('heading', { name: 'Plants', exact: true });
     await expect(plantsHeading).toBeVisible();
-    // On a phone the page leads with the list: Add stays a button beside the
-    // title and the bulk actions live in the "…" menu.
-    await expect(page.getByRole('button', { name: /add plant/i })).toBeVisible();
+    // On a phone the page leads with the list: Add stays beside the title and
+    // the bulk actions live in the "…" menu. It goes to /plants/new, so it is
+    // a link styled as a button, not a button inside a link.
+    await expect(page.getByRole('link', { name: /add plant/i })).toBeVisible();
     await expectNoDocumentOverflow(page, 'plants header');
 
     await page.getByLabel('More plant actions').click();

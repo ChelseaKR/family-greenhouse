@@ -14,6 +14,7 @@ import {
 } from '@/services/billingService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -283,8 +284,8 @@ function ImportFlow() {
               <Button onClick={reset} variant="secondary">
                 {t('importPlants.startOver')}
               </Button>
-              <Link to="/plants">
-                <Button>{t('importPlants.results.viewPlants')}</Button>
+              <Link to="/plants" className={buttonStyles()}>
+                {t('importPlants.results.viewPlants')}
               </Link>
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { plantService } from '@/services/plantService';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
@@ -232,10 +233,11 @@ export function PlantsPage() {
         description={t('plants.list.emptyDescription')}
         action={
           <div className="flex flex-col items-center gap-3">
-            <Link to="/plants/new">
-              <Button size="lg" leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}>
-                {t('plants.addFirst')}
-              </Button>
+            <Link to="/plants/new" className={buttonStyles({ size: 'lg' })}>
+              <span className="mr-2">
+                <PlusIcon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              {t('plants.addFirst')}
             </Link>
             {compact && (
               <Link
@@ -433,10 +435,14 @@ export function PlantsPage() {
             )}
           </div>
           {/* The iOS app has the "+" in its navigation bar. */}
-          <Link to="/plants/new" className="shrink-0 native-frame:hidden!">
-            <Button size="sm" leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}>
-              {t('plants.addPlant')}
-            </Button>
+          <Link
+            to="/plants/new"
+            className={buttonStyles({ size: 'sm', className: 'shrink-0 native-frame:hidden!' })}
+          >
+            <span className="mr-2">
+              <PlusIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            {t('plants.addPlant')}
           </Link>
         </div>
         {dialogs}
@@ -572,13 +578,11 @@ export function PlantsPage() {
             >
               {t('plants.list.applyTemplate')}
             </Button>
-            <Link to="/plants/new" className="block">
-              <Button
-                className="w-full sm:w-auto"
-                leftIcon={<PlusIcon className="h-5 w-5" aria-hidden="true" />}
-              >
-                {t('plants.addPlant')}
-              </Button>
+            <Link to="/plants/new" className={buttonStyles({ className: 'w-full sm:w-auto' })}>
+              <span className="mr-2">
+                <PlusIcon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              {t('plants.addPlant')}
             </Link>
           </div>
         }
