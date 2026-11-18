@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { NotFoundPage } from '@/components/NotFoundPage';
 import { Toaster } from '@/components/Toaster';
+import { RouteAnnouncer, ROUTE_LOADING_ATTRIBUTE } from '@/components/RouteAnnouncer';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { GoogleAnalyticsPageViews } from '@/components/GoogleAnalyticsPageViews';
 import { NativeLaunchReady } from '@/components/NativeLaunchReady';
@@ -164,7 +165,11 @@ function OnboardingGate({ hasHousehold }: { hasHousehold: boolean }) {
 function RouteFallback() {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-[60vh] items-center justify-center" role="status">
+    <div
+      className="flex min-h-[60vh] items-center justify-center"
+      role="status"
+      {...{ [ROUTE_LOADING_ATTRIBUTE]: '' }}
+    >
       <LoadingSpinner size="lg" />
       <span className="sr-only">{t('common.loading')}</span>
     </div>
@@ -214,6 +219,7 @@ function App() {
         {t('common.skipToMain')}
       </a>
       <Toaster />
+      <RouteAnnouncer />
       <RouteErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <div id="main-content" tabIndex={-1}>
