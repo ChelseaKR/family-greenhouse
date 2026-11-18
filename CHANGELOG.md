@@ -157,6 +157,22 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   (`frontend/scripts/blog-posts-lastmod.json`, written by
   `npm run blog:lastmod --workspace frontend`). The publish date a reader
   sees on a post is unchanged.
+- **A task due every day reads "Every day" on the plant page.** It read
+  "Every 1 days", and in Spanish "Cada 1 día": the singular form held the
+  plural sentence. It now reads "Every day" and "Cada día". Every other
+  interval is unchanged ("Every 2 days", "Cada 2 días").
+- **The dashboard's empty activity filters read as sentences.** When a
+  filter matched none of the last 50 events, the English dropped the filter's
+  name into "No ___ activity": "No tasks activity", "No plants activity", "No
+  people activity" and "No all activity". They now read "No task activity…",
+  "No plant activity…", "No activity about people…" and "No activity…". The
+  Spanish was already right and is unchanged.
+- **The line under the chat's message box says plainly when a reminder is
+  created.** "Reminder suggestions wait for your confirm before being created"
+  is now "Suggested reminders are created only after you confirm them.", and
+  in Spanish "Los recordatorios sugeridos solo se crean cuando los
+  confirmas." It uses the words on the suggestion card itself. The line's
+  first two sentences are unchanged.
 
 ## [0.52.0] - 2026-11-17
 

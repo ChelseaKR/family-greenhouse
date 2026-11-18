@@ -1091,7 +1091,7 @@
       "careHistoryDescription": "Recent task completions",
       "noCareHistory": "No care history yet.",
       "snoozeTask": "Snooze task",
-      "everyDays_one": "Every {{count}} days",
+      "everyDays_one": "Every day",
       "everyDays_other": "Every {{count}} days"
     },
     "photoUpload": {
@@ -2394,7 +2394,7 @@
       "placeholder": "Ask about your plants...",
       "messageLabel": "Chat message",
       "send": "Send",
-      "disclaimer": "AI-generated — verify before acting. Refuses pesticide / dosage advice. Reminder suggestions wait for your confirm before being created.",
+      "disclaimer": "AI-generated — verify before acting. Refuses pesticide / dosage advice. Suggested reminders are created only after you confirm them.",
       "budgetUsed": "{{percent}}% used this month",
       "replying": "Plant care chat is replying",
       "documentTitle": "Plant Care Chat"
@@ -3473,10 +3473,10 @@
       "people": "People"
     },
     "activityEmptyFiltered": {
-      "all": "No all activity in the last 50 events.",
-      "tasks": "No tasks activity in the last 50 events.",
-      "plants": "No plants activity in the last 50 events.",
-      "people": "No people activity in the last 50 events."
+      "all": "No activity in the last 50 events.",
+      "tasks": "No task activity in the last 50 events.",
+      "plants": "No plant activity in the last 50 events.",
+      "people": "No activity about people in the last 50 events."
     }
   },
   "yearInReview": {
