@@ -119,8 +119,11 @@ describe('ChatPage plan availability', () => {
     });
     renderPage();
 
+    // Level one: the locked card is the whole page, and as an h2 it left the
+    // page with no top-level heading.
     expect(
       await screen.findByRole('heading', {
+        level: 1,
         name: 'Plant care chat isn’t available on Seedling',
       })
     ).toBeInTheDocument();
@@ -257,5 +260,85 @@ describe('ChatPage plan availability', () => {
       screen.getByText('General information, not veterinary advice.')
     );
     sessionStorage.removeItem('chat:conversationId:hh-1');
+  });
+
+  describe('for a screen reader and a keyboard', () => {
+    // A reply that waits until the test lets it through.
+    function holdReply() {
+      let finish: () => void = () => {};
+      vi.mocked(chatService.sendMessage).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = () =>
+              resolve({
+                conversationId: 'conv-9',
+                assistantText: 'You have three plants.',
+                proposals: [],
+              } as unknown as Awaited<ReturnType<typeof chatService.sendMessage>>);
+          })
+      );
+      return () => finish();
+    }
+
+    async function ask(question: string) {
+      vi.mocked(billingService.getCurrentSubscription).mockResolvedValue({ planId: 'garden' });
+      renderPage();
+      const box = await screen.findByLabelText('Chat message');
+      box.focus();
+      fireEvent.change(box, { target: { value: question } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      return box;
+    }
+
+    it('puts the conversation in a log named after the page, so a reply is read out', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+
+      // Plain divs before: a question went out and nothing was announced back.
+      const log = screen.getByRole('log', { name: 'Plant care chat' });
+      finish();
+      await waitFor(() => expect(log).toHaveTextContent('You have three plants.'));
+    });
+
+    it('says who is speaking, which only the bubble side and colour showed', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+      const log = screen.getByRole('log');
+      expect(log).toHaveTextContent('You: What plants do I have?');
+
+      finish();
+      await waitFor(() => expect(log).toHaveTextContent('Plant care chat: You have three plants.'));
+    });
+
+    it('says once that a reply is on its way, from a region that is always there', async () => {
+      const finish = holdReply();
+      await ask('What plants do I have?');
+
+      // It was an aria-label on an element with no text that only existed
+      // while the dots were showing. A live region reads text, not labels.
+      const status = screen.getByRole('status');
+      await waitFor(() => expect(status).toHaveTextContent('Plant care chat is replying'));
+      expect(screen.getByRole('log')).not.toContainElement(status);
+      finish();
+      await waitFor(() => expect(status).toBeEmptyDOMElement());
+    });
+
+    it('leaves the keyboard in the message box while the reply comes back', async () => {
+      const finish = holdReply();
+      const box = await ask('What plants do I have?');
+
+      // Disabled, it could not hold focus: every question sent the keyboard
+      // user back to the top of the page.
+      await waitFor(() => expect(screen.getByRole('status')).not.toBeEmptyDOMElement());
+      expect(box).not.toBeDisabled();
+      expect(box).toHaveFocus();
+      // One question at a time all the same.
+      fireEvent.change(box, { target: { value: 'And a second one' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      expect(chatService.sendMessage).toHaveBeenCalledTimes(1);
+      finish();
+      await waitFor(() => expect(screen.getByRole('log')).toHaveTextContent('You have three'));
+      expect(box).toHaveFocus();
+    });
   });
 });

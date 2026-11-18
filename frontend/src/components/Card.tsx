@@ -50,13 +50,16 @@ interface CardHeaderProps {
   title: string;
   description?: string;
   action?: ReactNode;
+  /** `h1` on the few pages whose title is a card header and nothing else:
+   *  without it the page has no level-one heading. Looks the same. */
+  as?: 'h1' | 'h2';
 }
 
-export function CardHeader({ title, description, action }: CardHeaderProps) {
+export function CardHeader({ title, description, action, as: Heading = 'h2' }: CardHeaderProps) {
   return (
     <div className="mb-4 flex items-start justify-between gap-3 large-text:flex-col">
       <div className="min-w-0">
-        <h2 className="font-serif text-lg text-ink">{title}</h2>
+        <Heading className="font-serif text-lg text-ink">{title}</Heading>
         {description && <p className="mt-1 text-sm text-gray-600">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}

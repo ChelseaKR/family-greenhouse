@@ -73,7 +73,7 @@ export function BlogIndex() {
   });
 
   return (
-    <PublicShell>
+    <PublicShell contentLang="en">
       <PageIntro
         eyebrow="The journal"
         title="Notes on growing things"

@@ -134,7 +134,7 @@ export function BlogPost() {
   ).filter((p) => p !== undefined);
 
   return (
-    <PublicShell width="article">
+    <PublicShell width="article" contentLang="en">
       <Link
         to="/blog"
         className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 hover:underline"

@@ -85,7 +85,7 @@ export function HelpTopicPage() {
   if (!section) {
     const available = visibleSections(native);
     return (
-      <PublicShell plainHeader={isAuthenticated}>
+      <PublicShell plainHeader={isAuthenticated} contentLang="en">
         <BackToApp show={isAuthenticated} />
         <PageIntro
           eyebrow="Help & FAQ"
@@ -117,7 +117,7 @@ export function HelpTopicPage() {
   }
 
   return (
-    <PublicShell plainHeader={isAuthenticated}>
+    <PublicShell plainHeader={isAuthenticated} contentLang="en">
       <BackToApp show={isAuthenticated} />
       <nav aria-label="Breadcrumb" className="mb-6">
         <Link to="/help" className="text-sm text-primary-700 underline hover:text-primary-800">

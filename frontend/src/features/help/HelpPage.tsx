@@ -67,7 +67,7 @@ export function HelpPage() {
   const searching = query.trim().length > 0;
 
   return (
-    <PublicShell plainHeader={isAuthenticated}>
+    <PublicShell plainHeader={isAuthenticated} contentLang="en">
       <BackToApp show={isAuthenticated} />
       <PageIntro
         eyebrow="Help & FAQ"

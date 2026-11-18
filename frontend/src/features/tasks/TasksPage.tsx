@@ -62,6 +62,7 @@ import { playHaptic } from '@/services/nativeHaptics';
 import { toast } from '@/store/toastStore';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card } from '@/components/Card';
 import { PageHeader } from '@/components/PageHeader';
 import { NativePushPrompt } from '@/components/NativePushPrompt';
@@ -888,8 +889,8 @@ export function TasksPage() {
                 {t('tasks.page.clearFilter')}
               </Button>
             ) : (
-              <Link to="/plants">
-                <Button>{t('tasks.page.viewPlants')}</Button>
+              <Link to="/plants" className={buttonStyles()}>
+                {t('tasks.page.viewPlants')}
               </Link>
             )
           }

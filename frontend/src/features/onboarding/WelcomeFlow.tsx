@@ -162,7 +162,8 @@ export function WelcomeFlow() {
   if (householdId == null) return <Navigate to="/onboarding" replace />;
 
   return (
-    <div className="greenhouse-grid flex min-h-screen flex-col items-center justify-center bg-paper p-6">
+    // <main>: the first-run screen had no landmark to jump to.
+    <main className="greenhouse-grid flex min-h-screen flex-col items-center justify-center bg-paper p-6">
       <BrandMark variant="wordmark" className="mb-8" />
 
       <Card variant="glass" className="w-full max-w-lg">
@@ -219,6 +220,6 @@ export function WelcomeFlow() {
       </Card>
 
       <p className="mt-6 max-w-lg text-center text-xs text-gray-600">{t('firstRun.footer')}</p>
-    </div>
+    </main>
   );
 }

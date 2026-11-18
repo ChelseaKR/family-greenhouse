@@ -47,6 +47,7 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthShell
+      contentLang="en"
       title="Reset your password"
       subtitle="Enter your email and we'll send you a reset code."
       footer={

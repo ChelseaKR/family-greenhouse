@@ -2087,7 +2087,12 @@
     "notesTooLong": "Notes are too long",
     "tooManyTags": "Too many tags"
   },
+  "commandPalette": {
+    "title": "Search plants and tasks"
+  },
   "chat": {
+    "speakerYou": "You",
+    "speakerAssistant": "Plant care chat",
     "availabilityChecking": "Checking chat availability…",
     "availabilityCheckFailed": "Chat availability could not be checked. Try this page again in a moment.",
     "seedlingUnavailableTitle": "Plant care chat isn’t available on Seedling",

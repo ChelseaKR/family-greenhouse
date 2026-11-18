@@ -48,7 +48,11 @@ export function ResetPasswordPage() {
 
   if (!email) {
     return (
-      <AuthShell title="No email on file" subtitle="Start the reset flow from the beginning.">
+      <AuthShell
+        contentLang="en"
+        title="No email on file"
+        subtitle="Start the reset flow from the beginning."
+      >
         <p className="text-center text-gray-700">No email address provided.</p>
         <div className="mt-4 text-center">
           <Link
@@ -82,7 +86,11 @@ export function ResetPasswordPage() {
 
   if (success) {
     return (
-      <AuthShell title="Password reset" subtitle="You're all set — sign back in to continue.">
+      <AuthShell
+        contentLang="en"
+        title="Password reset"
+        subtitle="You're all set — sign back in to continue."
+      >
         <Alert variant="success" className="mb-6">
           Your password has been reset successfully.
         </Alert>
@@ -95,6 +103,7 @@ export function ResetPasswordPage() {
 
   return (
     <AuthShell
+      contentLang="en"
       title="Set a new password"
       subtitle={
         <>

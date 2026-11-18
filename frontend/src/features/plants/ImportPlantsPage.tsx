@@ -14,6 +14,7 @@ import {
 } from '@/services/billingService';
 import { getErrorMessage } from '@/services/api';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { Card, CardHeader } from '@/components/Card';
 import { Alert } from '@/components/Alert';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -233,7 +234,7 @@ function ImportFlow() {
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader t={t} />
         <Card>
-          <CardHeader title={t('importPlants.results.title')} />
+          <CardHeader as="h1" title={t('importPlants.results.title')} />
           <div className="space-y-4">
             <Alert variant={summary.created > 0 ? 'success' : 'warning'}>
               {t('importPlants.results.created', { count: summary.created })}
@@ -283,8 +284,8 @@ function ImportFlow() {
               <Button onClick={reset} variant="secondary">
                 {t('importPlants.startOver')}
               </Button>
-              <Link to="/plants">
-                <Button>{t('importPlants.results.viewPlants')}</Button>
+              <Link to="/plants" className={buttonStyles()}>
+                {t('importPlants.results.viewPlants')}
               </Link>
             </div>
           </div>
@@ -298,7 +299,11 @@ function ImportFlow() {
       <PageHeader t={t} />
 
       <Card>
-        <CardHeader title={t('importPlants.title')} description={t('importPlants.description')} />
+        <CardHeader
+          as="h1"
+          title={t('importPlants.title')}
+          description={t('importPlants.description')}
+        />
 
         {parseError && (
           <Alert variant="error" className="mb-4">

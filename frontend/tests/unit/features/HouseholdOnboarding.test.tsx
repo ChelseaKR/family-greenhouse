@@ -257,6 +257,19 @@ describe('HouseholdOnboarding', () => {
     });
   });
 
+  it('is a main landmark whose title is the only heading, at level one', async () => {
+    // No landmark before, and the title was an h2 with an h3 inside each of
+    // the two choice buttons: nothing to jump to, an outline that started at
+    // level two, and headings inside buttons, which read them as one name.
+    renderOnboarding();
+
+    const title = await screen.findByRole('heading', { level: 1 });
+    expect(screen.getByRole('main')).toContainElement(title);
+    expect(screen.getAllByRole('heading')).toEqual([title]);
+    const create = screen.getByRole('button', { name: /create a new household/i });
+    expect(create.querySelector('h1, h2, h3, h4, p')).toBeNull();
+  });
+
   it('renders in Spanish for a visitor who selected it', async () => {
     renderOnboarding({ i18n: spanish });
 

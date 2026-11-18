@@ -44,6 +44,7 @@ import { SharedCarePulse } from './SharedCarePulse';
 import { GoingAwaySoonCard } from './GoingAwaySoonCard';
 import { Card, CardHeader } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { buttonStyles } from '@/components/buttonStyles';
 import { PageHeader } from '@/components/PageHeader';
 import { PlantGridSkeleton, ListSkeleton } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
@@ -287,10 +288,8 @@ export function DashboardPage() {
                 : 'Overdue and due today'
             }
             action={
-              <Link to="/tasks">
-                <Button variant="secondary" size="sm">
-                  View all
-                </Button>
+              <Link to="/tasks" className={buttonStyles({ variant: 'secondary', size: 'sm' })}>
+                View all
               </Link>
             }
           />
@@ -315,8 +314,8 @@ export function DashboardPage() {
               title={t('dashboardTasksEmpty.laterTitle')}
               description={t('dashboardTasksEmpty.laterBody', { count: laterTasks.length })}
               action={
-                <Link to="/tasks">
-                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                <Link to="/tasks" className={buttonStyles()}>
+                  {t('dashboardTasksEmpty.viewTasks')}
                 </Link>
               }
             />
@@ -325,8 +324,8 @@ export function DashboardPage() {
               title={t('dashboardTasksEmpty.noneTitle')}
               description={t('dashboardTasksEmpty.noneBody')}
               action={
-                <Link to="/plants">
-                  <Button>{t('dashboardTasksEmpty.viewPlants')}</Button>
+                <Link to="/plants" className={buttonStyles()}>
+                  {t('dashboardTasksEmpty.viewPlants')}
                 </Link>
               }
             />
@@ -353,8 +352,8 @@ export function DashboardPage() {
                   : t('dashboardTasksEmpty.notThisWeekBody')
               }
               action={
-                <Link to="/tasks">
-                  <Button>{t('dashboardTasksEmpty.viewTasks')}</Button>
+                <Link to="/tasks" className={buttonStyles()}>
+                  {t('dashboardTasksEmpty.viewTasks')}
                 </Link>
               }
             />
@@ -390,8 +389,8 @@ export function DashboardPage() {
         <CardHeader
           title="Your plants"
           action={
-            <Link to="/plants/new">
-              <Button size="sm">Add plant</Button>
+            <Link to="/plants/new" className={buttonStyles({ size: 'sm' })}>
+              Add plant
             </Link>
           }
         />
@@ -427,8 +426,8 @@ export function DashboardPage() {
             title="Let's add your first plant"
             description="Name it, or start from a species suggestion and we'll fill in the care details. We'll handle the watering reminders from there."
             action={
-              <Link to="/plants/new">
-                <Button size="lg">Add your first plant</Button>
+              <Link to="/plants/new" className={buttonStyles({ size: 'lg' })}>
+                Add your first plant
               </Link>
             }
             hint="Takes less than a minute."

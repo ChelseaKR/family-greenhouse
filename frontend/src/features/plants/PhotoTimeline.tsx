@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { plantService } from '@/services/plantService';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
@@ -16,6 +17,7 @@ interface PhotoTimelineProps {
 export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
   const householdId = useActiveHouseholdId();
   const refreshSignedPhotos = useRefreshSignedPhotos();
+  const headingId = useId();
   const { data: photos, isLoading } = useQuery({
     queryKey: ['plants', householdId, plantId, 'photos'],
     queryFn: () => plantService.listPhotos(plantId),
@@ -33,8 +35,15 @@ export function PhotoTimeline({ plantId }: PhotoTimelineProps) {
 
   return (
     <section aria-label="Photo timeline">
-      <h2 className="text-sm font-semibold text-ink mb-2">Photo timeline</h2>
-      <ul className="flex gap-3 overflow-x-auto pb-2">
+      <h2 id={headingId} className="text-sm font-semibold text-ink mb-2">
+        Photo timeline
+      </h2>
+      {/* tabIndex 0: the strip scrolls sideways and holds nothing focusable,
+          so without a tab stop a keyboard user could not reach the photos
+          past the first few (WCAG 2.1.1; axe scrollable-region-focusable).
+          Focused, the arrow keys scroll it. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be focusable to be scrolled from the keyboard */}
+      <ul className="flex gap-3 overflow-x-auto pb-2" tabIndex={0} aria-labelledby={headingId}>
         {photos.map((photo) => (
           <li key={photo.id} className="shrink-0">
             <figure className="w-32">

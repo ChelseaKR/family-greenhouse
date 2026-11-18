@@ -8,6 +8,11 @@ interface AuthShellProps {
   children: ReactNode;
   /** Optional sub-footer below the card (e.g. "Don't have an account?"). */
   footer?: ReactNode;
+  /** Set on the screens that are not translated yet (forgot and reset
+   *  password). Their English sat inside `<html lang="es">` for a
+   *  Spanish-speaking visitor, so a screen reader pronounced it as Spanish
+   *  (WCAG 3.1.2). */
+  contentLang?: 'en';
 }
 
 /**
@@ -19,9 +24,15 @@ interface AuthShellProps {
  * The botanical sprigs anchor the page corners on desktop and fade on
  * mobile so the form has room to breathe on small screens.
  */
-export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
+export function AuthShell({ title, subtitle, children, footer, contentLang }: AuthShellProps) {
   return (
-    <div className="greenhouse-grid relative min-h-screen flex flex-col justify-center overflow-hidden bg-paper px-4 py-12 sm:px-6 lg:px-8">
+    // <main>, not <div>: the sign-in, sign-up, confirm and reset screens had no
+    // landmark at all, so a screen-reader user had nothing to jump to and the
+    // skip link had no main region to hand focus to.
+    <main
+      lang={contentLang}
+      className="greenhouse-grid relative min-h-screen flex flex-col justify-center overflow-hidden bg-paper px-4 py-12 sm:px-6 lg:px-8"
+    >
       <CornerSprig
         className="pointer-events-none absolute -left-8 top-0 hidden md:block w-56 h-auto text-primary-300/50"
         aria-hidden="true"
@@ -52,7 +63,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
         </div>
         {footer && <p className="mt-6 text-center text-sm text-gray-700">{footer}</p>}
       </div>
-    </div>
+    </main>
   );
 }
 

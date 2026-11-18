@@ -280,6 +280,9 @@ describe('HouseholdPage', () => {
       'http://localhost:3000/join/LINK'
     );
     expect(screen.getByText('This link works for 7 days and for up to 5 people.')).toBeVisible();
+    // The button that was pressed is gone. Focus goes to the link it made
+    // rather than to the top of the page, so the link is also read out.
+    expect(screen.getByLabelText('Invite link')).toHaveFocus();
   });
 
   it('turns off invite links: asks the server, clears the link on screen and says so', async () => {
@@ -539,6 +542,16 @@ describe('HouseholdPage', () => {
       expect(await screen.findByRole('button', { name: 'Remove Bob' })).toBeInTheDocument();
     });
 
+    it('names the role button with the words on it first, then whose role it is', async () => {
+      // It read "Make member" and was named "Demote Bob to member": someone
+      // using voice control who says what they see matched nothing (2.5.3).
+      becomeAdmin();
+      renderWithToasts();
+      const button = await screen.findByRole('button', { name: 'Make member, Bob' });
+      expect(button).toHaveTextContent(/^Make member/);
+      expect(button).not.toHaveAttribute('aria-label');
+    });
+
     it('shows the server’s reason when a role change is refused', async () => {
       becomeAdmin();
       server.use(
@@ -552,7 +565,7 @@ describe('HouseholdPage', () => {
       const user = userEvent.setup();
       renderWithToasts();
 
-      await user.click(await screen.findByRole('button', { name: 'Demote Bob to member' }));
+      await user.click(await screen.findByRole('button', { name: 'Make member, Bob' }));
 
       expect(
         await within(notifications()).findByText(
@@ -560,7 +573,7 @@ describe('HouseholdPage', () => {
         )
       ).toBeInTheDocument();
       // Still an admin: the button still offers the demotion.
-      expect(screen.getByRole('button', { name: 'Demote Bob to member' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Make member, Bob' })).toBeInTheDocument();
     });
 
     it('says the app could not be reached when a role change gets no answer', async () => {
@@ -571,7 +584,7 @@ describe('HouseholdPage', () => {
       const user = userEvent.setup();
       renderWithToasts();
 
-      await user.click(await screen.findByRole('button', { name: 'Demote Bob to member' }));
+      await user.click(await screen.findByRole('button', { name: 'Make member, Bob' }));
 
       expect(
         await within(notifications()).findByText(

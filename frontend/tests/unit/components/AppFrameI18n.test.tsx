@@ -63,7 +63,10 @@ describe('app shell under es', () => {
   it('announces a loading route in Spanish', () => {
     renderSpanishApp();
     // The route chunk is lazy, so the first render is the Suspense fallback.
-    const status = screen.getByRole('status');
+    // Two status regions now: this one, and the route announcer, which has
+    // nothing to say on the first page.
+    const [announcer, status] = screen.getAllByRole('status');
+    expect(announcer).toBeEmptyDOMElement();
     expect(status).toHaveTextContent('Cargando…');
     expect(status).not.toHaveTextContent('Loading…');
   });

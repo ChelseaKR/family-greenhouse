@@ -142,6 +142,8 @@ describe('AccountSettings — CSV export', () => {
     renderSettings();
 
     expect(screen.getByRole('button', { name: 'Delete my account' })).toBeInTheDocument();
+    // The person's own name: identified so it can be filled in (WCAG 1.3.5).
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute('autocomplete', 'name');
     expect(screen.getByRole('button', { name: 'Download full data (JSON)' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Download CSV' })).not.toBeInTheDocument();
     expect(screen.queryByText('Calendar feed')).not.toBeInTheDocument();

@@ -82,6 +82,12 @@ describe('first-run accessibility (structural)', () => {
     expect(await run(container)).toHaveNoViolations();
   });
 
+  it('is a main landmark, so there is a region to jump to', async () => {
+    renderFirstRun();
+    const heading = await screen.findByRole('heading', { name: /add your first plant/i });
+    expect(screen.getByRole('main')).toContainElement(heading);
+  });
+
   it('the invite step has no violations, link field included', async () => {
     const user = userEvent.setup();
     const { container } = renderFirstRun();

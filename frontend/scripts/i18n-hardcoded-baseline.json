@@ -45,7 +45,7 @@
     "features/auth/AuthShell.tsx": 1,
     "features/auth/ForgotPasswordPage.tsx": 2,
     "features/auth/ResetPasswordPage.tsx": 6,
-    "features/chat/ChatPage.tsx": 6,
+    "features/chat/ChatPage.tsx": 5,
     "features/dashboard/DashboardPage.tsx": 8,
     "features/dashboard/YearInReviewCard.tsx": 3,
     "features/household/HouseholdPage.tsx": 5,

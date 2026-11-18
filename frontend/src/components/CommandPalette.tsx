@@ -107,7 +107,16 @@ export function CommandPalette() {
 
   return (
     <Transition.Root show={open} as={Fragment} afterLeave={() => setQuery('')}>
-      <Dialog as="div" className="relative z-50" onClose={close} initialFocus={inputRef}>
+      {/* PROPOSED WORDING. The dialog had no accessible name, and the search
+          field's only name was its placeholder. Both now carry
+          commandPalette.title. */}
+      <Dialog
+        as="div"
+        className="relative z-50"
+        onClose={close}
+        initialFocus={inputRef}
+        aria-label={t('commandPalette.title')}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-200"
@@ -140,6 +149,7 @@ export function CommandPalette() {
                   <Combobox.Input
                     ref={inputRef}
                     className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-gray-900 placeholder:text-gray-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 text-base sm:text-sm"
+                    aria-label={t('commandPalette.title')}
                     placeholder="Search plants and tasks..."
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -170,8 +180,11 @@ export function CommandPalette() {
                               >
                                 <PlantBullet />
                                 <span className="flex-auto truncate">{r.label}</span>
+                                {/* opacity-90, not 75: on the highlighted row
+                                    this is white on the brand green, and at
+                                    75% it was 4.3:1. */}
                                 {r.sub && (
-                                  <span className="text-xs italic opacity-75 truncate">
+                                  <span className="text-xs italic opacity-90 truncate">
                                     {r.sub}
                                   </span>
                                 )}
@@ -203,7 +216,7 @@ export function CommandPalette() {
                                   aria-hidden="true"
                                 />
                                 <span className="flex-auto truncate">{r.label}</span>
-                                <span className="text-xs opacity-75 truncate">{r.sub}</span>
+                                <span className="text-xs opacity-90 truncate">{r.sub}</span>
                               </Combobox.Option>
                             ))}
                         </ul>
@@ -227,14 +240,19 @@ export function CommandPalette() {
                 {query !== '' && results.length === 0 && !searching && !readFailed && (
                   <div className="p-6 text-center">
                     <EmptySearch className="mx-auto h-24 w-auto" />
-                    <p className="mt-2 text-sm text-gray-500">
+                    {/* role="status", like the loading and error lines beside
+                        it: an empty result was the one outcome of typing here
+                        that a screen reader never heard (WCAG 4.1.3). */}
+                    <p className="mt-2 text-sm text-gray-500" role="status">
                       No matches for &ldquo;{query}&rdquo;.
                     </p>
                   </div>
                 )}
 
+                {/* gray-600, not -500, on the hint: its Esc key cap sits on
+                    parchment, where gray-500 is 4.2:1. */}
                 {query === '' && (
-                  <p className="px-6 py-8 text-center text-sm text-gray-500">
+                  <p className="px-6 py-8 text-center text-sm text-gray-600">
                     Type to search plants and tasks. Press{' '}
                     <kbd className="rounded-sm border border-primary-200/70 bg-parchment/70 px-1 font-sans text-xs">
                       Esc

@@ -579,6 +579,8 @@ export function AddPlantPage() {
                   <div
                     className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
                     role="progressbar"
+                    // A progressbar with no name is announced as a bare percentage.
+                    aria-label={t('caretaker.page.photoUploading')}
                     aria-valuenow={Math.round(uploadProgress * 100)}
                     aria-valuemin={0}
                     aria-valuemax={100}

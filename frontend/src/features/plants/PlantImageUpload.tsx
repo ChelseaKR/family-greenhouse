@@ -46,6 +46,9 @@ export function PlantImageUpload({
   const householdId = useActiveHouseholdId();
   const native = canUseNativeCamera();
   const inputId = useId();
+  // What the polite status region says once an upload has finished. Empty
+  // until then, and cleared when the next one starts.
+  const [doneMessage, setDoneMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [lastFile, setLastFile] = useState<File | null>(null);
@@ -93,6 +96,7 @@ export function PlantImageUpload({
       queryClient.invalidateQueries({ queryKey: ['plants', householdId] });
       setProgress(0);
       setLastFile(null);
+      setDoneMessage(t('caretaker.page.photoAdded'));
       onUploadSuccess?.();
     },
     onError: (err) => {
@@ -112,13 +116,14 @@ export function PlantImageUpload({
     // No pre-downscale size check: a 12 MB camera original usually shrinks
     // well under the limit. The final blob is guarded in the mutation.
     setLastFile(file);
+    setDoneMessage('');
     upload.mutate(file);
   }
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || upload.isPending) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError('Image must be a JPEG, PNG, or WebP file.');
       e.target.value = '';
@@ -177,13 +182,22 @@ export function PlantImageUpload({
         <NativePhotoButtons onPick={onNativePick} onError={setError} disabled={upload.isPending} />
       ) : (
         <div>
+          {/* aria-disabled, not disabled, while a photo is uploading. A
+              disabled control cannot hold focus: someone who chose the file
+              with the keyboard was dropped to the top of the document the
+              moment the upload began, and had to Tab back down the whole page
+              (WCAG 2.4.3). The click is refused instead, so the picker still
+              cannot open twice. */}
           <input
             ref={inputRef}
             id={inputId}
             type="file"
             accept={ACCEPTED_TYPES.join(',')}
             onChange={onPick}
-            disabled={upload.isPending}
+            onClick={(e) => {
+              if (upload.isPending) e.preventDefault();
+            }}
+            aria-disabled={upload.isPending || undefined}
             className="peer sr-only"
           />
           <label
@@ -202,10 +216,19 @@ export function PlantImageUpload({
           </p>
         </div>
       )}
+      {/* Always in the document, so it is a live region before it has anything
+          to say. Without it the upload started and finished in silence: the
+          label's text changed and a photo appeared, and neither is announced
+          (WCAG 4.1.3). Failures are announced by the Alert above. */}
+      <p className="sr-only" role="status">
+        {upload.isPending ? t('caretaker.page.photoUploading') : doneMessage}
+      </p>
       {upload.isPending && (
         <div
           className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
           role="progressbar"
+          // A progressbar with no name is announced as a bare percentage.
+          aria-label={t('caretaker.page.photoUploading')}
           aria-valuenow={Math.round(progress * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
