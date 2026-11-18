@@ -32,7 +32,8 @@ function instructionFor(task: SitterTask, t: TFunction): string {
   const plant = task.plantName;
   // A task with no plant name gets its own whole sentence ("Riega tu planta"),
   // not the named template with a stand-in dropped in: Spanish would read
-  // "Riega la tu planta". The English is unchanged ("Water the this plant").
+  // "Riega la tu planta", and English "Water the this plant". So it reads
+  // "Riega tu planta" / "Water your plant".
   if (!plant) {
     switch (task.taskType) {
       case 'water':

@@ -224,9 +224,10 @@ describe('the sitter page in Spanish', () => {
   });
 
   /**
-   * A task with no plant name (approved by Chelsea 2026-11-18, "Use 'tu
-   * planta'"): Spanish gets a whole no-name sentence, never the named
-   * template with a stand-in ("Riega la tu planta"). English is unchanged.
+   * A task with no plant name (approved by Chelsea 2026-11-18: "tu planta",
+   * and in English "your plant"): each language gets a whole no-name
+   * sentence, never the named template with a stand-in ("Riega la tu
+   * planta", "Water the this plant").
    */
   const unnamed = (taskId: string, taskType: string) => ({
     taskId,
@@ -247,13 +248,8 @@ describe('the sitter page in Spanish', () => {
     ],
     [
       'en',
-      [
-        'Water the this plant',
-        'Feed the this plant',
-        'Prune the this plant',
-        'Repot the this plant',
-      ],
-      'Misting — this plant',
+      ['Water your plant', 'Feed your plant', 'Prune your plant', 'Repot your plant'],
+      'Misting — your plant',
       ['Riega tu planta'],
     ],
   ] as const)(
@@ -280,6 +276,11 @@ describe('the sitter page in Spanish', () => {
       for (const text of verbs) expect(await screen.findByText(text)).toBeInTheDocument();
       expect(screen.getByText(custom)).toBeInTheDocument();
       for (const text of absent) expect(screen.queryByText(text)).not.toBeInTheDocument();
+      // The old stand-in, anywhere on the page, including screen-reader names.
+      expect(document.body.textContent ?? '').not.toContain('this plant');
+      for (const button of screen.getAllByRole('button')) {
+        expect(button.getAttribute('aria-label') ?? '').not.toContain('this plant');
+      }
     }
   );
 });
