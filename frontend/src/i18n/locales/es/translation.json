@@ -2621,6 +2621,7 @@
     "featureUnlimitedMembers": "Miembros del hogar ilimitados",
     "featureFullHistory": "Historial completo de estadísticas",
     "featureChat": "Asistente de cuidados con IA",
+    "featureSitterBriefPhotos": "Una guía de cuidados imprimible y fotos de tu cuidador",
     "featureManyHomes": "Hogares ilimitados: forma parte de todos los hogares que ayudas",
     "featureSitterBasic": "1 enlace de cuidador a la vez, hasta 7 días",
     "featureAnalytics30": "30 días de estadísticas",
@@ -3149,7 +3150,7 @@
       },
       "growing": {
         "label": "Una colección que crece",
-        "body": "Unas cuantas plantas se volvieron diez. Importa la hoja de cálculo que has ido llevando y deja que un solo panel guarde todas las fechas."
+        "body": "Unas cuantas plantas se volvieron diez. Importa la hoja de cálculo que has ido llevando y deja que un solo panel guarde todas las fechas. El plan gratuito admite 8 plantas; Garden, 200."
       },
       "away": {
         "label": "Si viajas seguido",

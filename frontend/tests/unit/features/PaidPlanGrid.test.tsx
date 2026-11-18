@@ -323,6 +323,64 @@ describe('feature bullets follow the catalog flags, and only where the tier gain
   });
 });
 
+describe('the Garden card names the Away Kit (approved 2026-11-18)', () => {
+  const card = (name: string) => within(screen.getByRole('heading', { name }).closest('li')!);
+  const bullets = (name: string) =>
+    card(name)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+  // Garden as the live catalog publishes it: 10 sitter links of up to 90 days.
+  const gardenLive: Plan = {
+    ...garden,
+    limits: { ...garden.limits!, sitterLinksActive: 10 },
+  };
+
+  it('lists the sitter lines right after the members line, with the catalog figures', () => {
+    render(<PaidPlanGrid plans={[seedling, gardenLive, greenhouse]} />);
+    expect(bullets('Garden')).toEqual([
+      'Everything in Seedling',
+      'Unlimited household members',
+      'Sitter links of up to 90 days, with up to 10 live at once',
+      'A printable care brief and photos back from your sitter',
+      'Full analytics history',
+      'AI care assistant',
+    ]);
+  });
+
+  it('names them on Garden only: not on the free card, not again on Greenhouse', () => {
+    render(<PaidPlanGrid plans={[seedling, gardenLive, greenhouse]} />);
+    const brief = 'A printable care brief and photos back from your sitter';
+    expect(bullets('Seedling')).not.toContain(brief);
+    expect(bullets('Greenhouse')).not.toContain(brief);
+    expect(bullets('Seedling')).toContain('1 sitter link at a time, up to 7 days');
+  });
+
+  it('leaves the sitter-link line out when the catalog sends no figure, and keeps the brief line', () => {
+    render(<PaidPlanGrid plans={[seedling, garden, greenhouse]} />);
+    expect(bullets('Garden')).toEqual([
+      'Everything in Seedling',
+      'Unlimited household members',
+      'A printable care brief and photos back from your sitter',
+      'Full analytics history',
+      'AI care assistant',
+    ]);
+  });
+
+  it('claims no Away Kit for a Garden whose catalog says it has none', () => {
+    const noKit: Plan = {
+      ...gardenLive,
+      features: { ...gardenLive.features!, awayKit: false },
+    };
+    render(<PaidPlanGrid plans={[seedling, noKit]} />);
+    expect(bullets('Garden')).toEqual([
+      'Everything in Seedling',
+      'Unlimited household members',
+      'Full analytics history',
+      'AI care assistant',
+    ]);
+  });
+});
+
 describe('the toggle opens on yearly (ADR 0042, "Yearly first")', () => {
   // As the API publishes it after ADR 0042: Garden monthly and yearly,
   // Greenhouse monthly only (its yearly cadence is still withdrawn).

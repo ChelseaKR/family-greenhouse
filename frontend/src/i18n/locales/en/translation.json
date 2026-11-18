@@ -2557,6 +2557,7 @@
     "featureUnlimitedMembers": "Unlimited household members",
     "featureFullHistory": "Full analytics history",
     "featureChat": "AI care assistant",
+    "featureSitterBriefPhotos": "A printable care brief and photos back from your sitter",
     "featureManyHomes": "Unlimited homes — belong to every home you help with",
     "featureSitterBasic": "1 sitter link at a time, up to 7 days",
     "featureAnalytics30": "30 days of analytics",
@@ -3078,7 +3079,7 @@
       },
       "growing": {
         "label": "A growing collection",
-        "body": "A few plants turned into ten. Import the spreadsheet you have been keeping, and let one dashboard hold every due date."
+        "body": "A few plants turned into ten. Import the spreadsheet you have been keeping, and let one dashboard hold every due date. The free plan holds 8 plants; Garden holds 200."
       },
       "away": {
         "label": "Away a lot",

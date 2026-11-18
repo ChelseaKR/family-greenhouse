@@ -80,6 +80,16 @@ function planLimit(tier, field) {
 const plants = planLimit('seedling', 'plants');
 const members = planLimit('seedling', 'members');
 const homes = planLimit('seedling', 'homes');
+// Garden's plant cap, for the one landing sentence that names it beside the
+// free plan's (`landing.who.growing.body`, approved 2026-11-18).
+const gardenPlants = planLimit('garden', 'plants');
+
+/** A template with the catalog's figures in place of `{plants}`, `{members}`, `{gardenPlants}`. */
+const fill = (template) =>
+  template
+    .replace('{plants}', plants)
+    .replace('{members}', members)
+    .replace('{gardenPlants}', gardenPlants);
 
 /**
  * The public statements of those caps.
@@ -150,6 +160,11 @@ const CATALOG_SURFACES = [
     'one home, up to {members} household members and {plants} plants',
     'un hogar, hasta {members} miembros del hogar y {plants} plantas',
   ],
+  [
+    'landing.who.growing.body',
+    'The free plan holds {plants} plants; Garden holds {gardenPlants}.',
+    'El plan gratuito admite {plants} plantas; Garden, {gardenPlants}.',
+  ],
 ];
 
 const catalogs = Object.fromEntries(
@@ -165,7 +180,7 @@ const flatten = (text) => text.replace(/\s+/g, ' ');
 
 if (plants !== null && members !== null) {
   for (const [file, template, expected] of SURFACES) {
-    const sentence = flatten(template.replace('{plants}', plants).replace('{members}', members));
+    const sentence = flatten(fill(template));
     const found = flatten(read(file)).split(sentence).length - 1;
     if (found !== expected) {
       problems.push(
@@ -178,7 +193,7 @@ if (plants !== null && members !== null) {
   }
 }
 
-if (plants !== null && members !== null) {
+if (plants !== null && members !== null && gardenPlants !== null) {
   for (const [key, english, spanish] of CATALOG_SURFACES) {
     for (const [locale, template] of [
       ['en', english],
@@ -190,7 +205,7 @@ if (plants !== null && members !== null) {
         problems.push(`${where}: no such string. The copy moved; move this check with it.`);
         continue;
       }
-      const sentence = template.replace('{plants}', plants).replace('{members}', members);
+      const sentence = fill(template);
       if (!value.includes(sentence)) {
         problems.push(
           `${where}: expected it to state "${sentence}". Either the free-plan caps moved in ` +
@@ -224,5 +239,6 @@ if (problems.length > 0) {
 console.log(
   `Plan copy OK — ${SURFACES.length} public statements of the free plan, plus ` +
     `${CATALOG_SURFACES.length} catalog statements in each of en and es (${homes} home, ` +
-    `${members} members, ${plants} plants) re-derived from backend/src/models/plans.ts.`
+    `${members} members, ${plants} plants; Garden ${gardenPlants} plants) re-derived from ` +
+    `backend/src/models/plans.ts.`
 );

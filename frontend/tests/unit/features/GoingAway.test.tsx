@@ -8,7 +8,7 @@
  * did not land, offer Garden to a household that has it, or sell inside the
  * apps.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -19,6 +19,21 @@ import { GoingAwaySoonCard, GOING_AWAY_ROUTE } from '@/features/dashboard/GoingA
 import { useAuthStore } from '@/store/authStore';
 import { usePrefsStore } from '@/store/prefsStore';
 import { server } from '../../msw/server';
+
+// Apple In-App Purchase in the iPhone app (ADR 0041): off unless a test turns
+// it on. The plans note follows the same switch, as the real module's does.
+const appStoreOn = vi.fn(() => false);
+vi.mock('@/services/appStoreAvailability', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appStoreAvailability')>(
+    '@/services/appStoreAvailability'
+  );
+  return {
+    ...actual,
+    appStorePurchasesAvailable: () => appStoreOn(),
+    nativePlanNoteKey: () =>
+      appStoreOn() ? 'appStore.plansInSettings' : 'settings.billing.nativeUnavailable',
+  };
+});
 
 const API = 'http://localhost:4000';
 const DAY = 24 * 60 * 60 * 1000;
@@ -182,6 +197,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (window as { Capacitor?: unknown }).Capacitor;
+  appStoreOn.mockReturnValue(false);
 });
 
 describe('Going away? on the sitter-link form', () => {
@@ -320,6 +336,46 @@ describe('Going away? on the sitter-link form', () => {
     expect(within(offer).getByText(/plan changes aren't available in the app/i)).toBeVisible();
     // The free path is still offered.
     expect(within(offer).getByRole('button', { name: 'Use 7 days instead' })).toBeVisible();
+  });
+
+  it('in the iPhone app with In-App Purchase on, an admin gets "See plans" and still no price', async () => {
+    const user = userEvent.setup();
+    (window as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    appStoreOn.mockReturnValue(true);
+    stub();
+    renderCard();
+
+    await typeLength(user, '14');
+    const offer = await screen.findByTestId('going-away-offer');
+    expect(
+      within(offer).getByText(
+        'Plans are in Settings → Plan status, where a household admin can subscribe.'
+      )
+    ).toBeVisible();
+    expect(within(offer).getByRole('link', { name: 'See plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing'
+    );
+    expect(offer.textContent).not.toContain('$');
+    expect(within(offer).getByRole('button', { name: 'Use 7 days instead' })).toBeVisible();
+  });
+
+  it('in the iPhone app with In-App Purchase on, a member gets the sentence and no button', async () => {
+    const user = userEvent.setup();
+    (window as { Capacitor?: unknown }).Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'ios',
+    };
+    appStoreOn.mockReturnValue(true);
+    stub({ role: 'member' });
+    renderCard();
+
+    await typeLength(user, '14');
+    const offer = await screen.findByTestId('going-away-offer');
+    expect(within(offer).queryByRole('link', { name: 'See plans' })).toBeNull();
   });
 });
 
