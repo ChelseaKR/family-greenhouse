@@ -101,6 +101,37 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   from every other guide and not only from the home page and `/care`.
   `HOLIDAY_CARE_GUIDES_ON` in `holidayGuideList.ts` still switches the list
   off everywhere.
+- **The poinsettia guide's search title and description lead with the
+  watering answer.** The title is now "How Often to Water a Poinsettia: When
+  the Surface Is Dry" (it was "Poinsettia Care and Pet Safety: Past the
+  Holidays"), and the description opens with the same answer. Both restate
+  the guide's own cited watering answer; no fact changes, and the page's
+  heading and pet section are as they were. The other holiday guides that
+  lead this way are the ones that reach the first page of US results, and the
+  poinsettia guide had no US search impressions in the 28 days to 2026-11-16.
+- **The Christmas cactus guide's search title leads with the watering
+  question.** It is now "How Often to Water a Christmas Cactus: Top Inch Dry"
+  (it was "How to Care for a Christmas Cactus: When to Water It"), from the
+  guide's own cited water line. The description, which already opens with
+  that answer, and the heading are unchanged.
+- **Six care guides answer "how often should I water it in winter?"** The
+  snake plant, jade plant, ponytail palm, hoya, haworthia and Boston fern
+  guides each gain that question, second in their FAQ and in the FAQ markup.
+  Each answer restates what the guide's watering section already says, with
+  the same named source; no fact is new. The short answer under "How often
+  to water" is still the year-round one. 23 guides give a winter instruction
+  in their water line, and only one asked the winter question.
+- **A blog post that has changed shows when.** The line above a post's
+  title reads, for example, "July 29, 2026 · Updated November 17, 2026 · 6 min
+  read". The second date is the post's `updated` date, the one its markup and
+  the sitemap already publish, so a reader sees the date a crawler does. A
+  post that has not changed since it was published shows its publish date
+  alone. Blog posts are English only, so the word is not in the catalogs.
+- **The App Store keyword field gains `water`.** It is now 97 of 100
+  characters. "Watering" is in the subtitle, and the bare word was in none of
+  the three fields Apple indexes. It is for the iPhone submission already
+  planned; nothing else in the listing changes
+  (`store-assets/metadata/en-US.json`, `docs/APP-STORE.md`).
 
 ### Fixed
 
@@ -124,8 +155,8 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   takes the newest of them. A new check in `npm run test:edge` fails when a
   post's text, title or descriptions change and its `updated` does not
   (`frontend/scripts/blog-posts-lastmod.json`, written by
-  `npm run blog:lastmod --workspace frontend`). The date a reader sees on a
-  post is unchanged: it is still the publish date.
+  `npm run blog:lastmod --workspace frontend`). The publish date a reader
+  sees on a post is unchanged.
 
 ## [0.52.0] - 2026-11-17
 

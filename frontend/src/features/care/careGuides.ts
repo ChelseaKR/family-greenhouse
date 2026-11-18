@@ -243,7 +243,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'Water a snake plant only once the soil has dried, and very little in winter. It takes anything from low light to some sun; overwatering is what kills it.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-17',
     summary:
       'The snake plant is as close to unkillable as houseplants get — and the one way people do kill it is kindness. It wants to be left alone, and most plant deaths here are an excess of attention, not a lack of it.',
     quickFacts: {
@@ -284,6 +284,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a snake plant?',
         a: 'Once the soil has dried out, and as little as once every one to two months in winter, according to North Carolina State Extension. The sources give no fixed summer interval. If you are unsure, wait: overwatering is the main way snake plants die.',
+      },
+      {
+        q: 'How often should I water a snake plant in winter?',
+        a: 'Far less than in summer. North Carolina State Extension puts it at once every one to two months. If you are not sure whether it needs water, it almost certainly does not.',
       },
       {
         q: 'Why is my snake plant going soft and mushy?',
@@ -1384,7 +1388,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'Water a jade plant deeply, then let the soil dry, and keep it on the dry side in winter. It wants four or more hours of direct sun. Why leaves drop.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-17',
     summary:
       'A jade plant is a slow-growing succulent tree that will happily outlive you if you leave it alone. Almost every jade plant that dies was loved to death with a weekly watering it never asked for.',
     quickFacts: {
@@ -1425,6 +1429,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a jade plant?',
         a: 'Deeply, and only after the soil has dried, keeping it on the dry side in winter. The extension sources give no fixed number of days, and they differ on how dry: Penn State says completely dry, Wisconsin says slightly dry in spring and summer.',
+      },
+      {
+        q: 'How often should I water a jade plant in winter?',
+        a: 'Keep it on the dry side in winter, when it is semi-dormant. The extension sources give no fixed number of days. Wisconsin says overwatering drops the leaves and rots the stem.',
       },
       {
         q: 'Why is my jade plant dropping leaves?',
@@ -1540,7 +1548,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'Boston ferns are non-toxic to cats and dogs (per the ASPCA). Keep the soil evenly moist, never saturated, and give it high humidity. Why fronds go brown.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-17',
     summary:
       'A Boston fern is one of the few genuinely pet-safe plants that also looks like something. It’s also the plant most likely to shed brown fronds across your floor in January, and those two facts are worth weighing against each other honestly.',
     quickFacts: {
@@ -1581,6 +1589,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a Boston fern?',
         a: 'Often enough to keep the soil evenly moist but never saturated, and less in winter. The extension sources give no fixed number of days, so check by touch.',
+      },
+      {
+        q: 'How often should I water a Boston fern in winter?',
+        a: 'Less than the rest of the year. North Carolina State Extension says the plant is dormant in winter and overwatering can lead to root rot. The extension sources give no fixed number of days, so check by touch.',
       },
       {
         q: 'Why is my Boston fern turning brown and dropping everywhere?',
@@ -1689,12 +1701,12 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Schlumbergera',
     alsoKnownAs: ['Holiday Cactus', 'Thanksgiving Cactus', 'Zygocactus', 'Schlumbergera'],
     related: ['poinsettia', 'kalanchoe', 'blue-echeveria'],
-    metaTitle: 'How to Care for a Christmas Cactus: When to Water It',
+    metaTitle: 'How Often to Water a Christmas Cactus: Top Inch Dry',
     heading: 'How to care for a Christmas cactus',
     metaDescription:
       'Water a Christmas cactus when the top inch of soil is dry, in bright, filtered light. Why it drops buds and how to make it bloom again.',
     reviewed: '2026-11-03',
-    updated: '2026-11-04',
+    updated: '2026-11-17',
     summary:
       'A Christmas cactus is a jungle plant wearing a desert plant’s costume. It isn’t a succulent that wants neglect — it wants regular water and shade — and once you know that, it’s easy, long-lived and safe around pets.',
     quickFacts: {
@@ -1935,7 +1947,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'Water a hoya (wax plant, porcelain flower) thoroughly, then let the mix dry almost completely. Bright, indirect light helps it flower. Pet-safe per the ASPCA.',
     reviewed: '2026-11-03',
-    updated: '2026-11-03',
+    updated: '2026-11-17',
     summary:
       'A hoya is a trailing plant with thick, almost plastic-feeling leaves that stores its own water and asks very little of you. It’s slow, it’s nearly indestructible, and Hoya carnosa is on the ASPCA non-toxic list — which makes it the pet-safe answer to a hanging pothos.',
     quickFacts: {
@@ -1976,6 +1988,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a hoya?',
         a: 'Thoroughly, and then not again until the mix has dried almost completely, with very little water in winter. The extension sources give no fixed number of days.',
+      },
+      {
+        q: 'How often should I water a hoya in winter?',
+        a: 'Much less than in summer. UF says to water very sparingly in winter or in lower light. Let the mix dry almost completely first.',
       },
       {
         q: 'Why won’t my hoya flower?',
@@ -2160,11 +2176,11 @@ export const CARE_GUIDES: CareGuide[] = [
     scientificName: 'Euphorbia pulcherrima',
     alsoKnownAs: ['Christmas Flower', 'Christmas Star', 'Euphorbia'],
     related: ['christmas-cactus', 'amaryllis', 'anthurium'],
-    metaTitle: 'Poinsettia Care and Pet Safety: Past the Holidays',
+    metaTitle: 'How Often to Water a Poinsettia: When the Surface Is Dry',
     metaDescription:
-      'How to water a poinsettia, the light it needs, how to keep it alive after the holidays, and what the ASPCA says about poinsettias and cats and dogs.',
+      'Water a poinsettia when the soil surface is dry to the touch, then let it drain. Check it daily. Plus the light it needs and keeping it past the holidays.',
     reviewed: '2026-11-03',
-    updated: '2026-11-04',
+    updated: '2026-11-17',
     summary:
       'A poinsettia is the one houseplant most people bring home in December and lose by February, usually from too much water or a cold drafty doorway. It can last for months with a bright window and a careful hand, and the ASPCA lists it as toxic to cats and dogs.',
     quickFacts: {
@@ -2393,7 +2409,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'How often to water a haworthia, the light it wants, why it stretches or shrivels, and why the ASPCA lists it as non-toxic to cats and dogs.',
     reviewed: '2026-10-22',
-    updated: '2026-11-03',
+    updated: '2026-11-17',
     summary:
       'Haworthia is a small, slow rosette of thick, pointed leaves that looks like a miniature aloe and asks for even less. It wants a bright window, a fast-draining mix and a dry spell between waterings. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -2435,6 +2451,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a haworthia?',
         a: 'In a well-drained mix, about weekly in summer and less in winter, and always after the mix has dried. University of Wisconsin–Madison Extension gives that range and warns that prolonged wet soil leads to root rot.',
+      },
+      {
+        q: 'How often should I water a haworthia in winter?',
+        a: 'Less often than in summer. University of Wisconsin–Madison Extension says a haworthia in a well-drained mix can be watered weekly in summer and less often in winter. Let the mix dry before you water again.',
       },
       {
         q: 'Why is my haworthia stretching or losing color?',
@@ -3887,7 +3907,7 @@ export const CARE_GUIDES: CareGuide[] = [
     metaDescription:
       'Water a ponytail palm deeply, then let the soil dry out before the next drink, and cut back sharply in winter. It is a succulent that stores water.',
     reviewed: '2026-11-05',
-    updated: '2026-11-05',
+    updated: '2026-11-17',
     summary:
       'A ponytail palm is not a palm at all but a succulent tree from Mexico, with a swollen base that stores water and a fountain of long, thin leaves on top. It wants as much light as you can give it, a fast-draining cactus mix, and much less water than most houseplants. The ASPCA lists it as non-toxic to cats and dogs.',
     quickFacts: {
@@ -3928,6 +3948,10 @@ export const CARE_GUIDES: CareGuide[] = [
       {
         q: 'How often should I water a ponytail palm?',
         a: 'Deeply, and only after the soil has dried out, with much less water in winter. North Carolina State Extension, Wisconsin Horticulture and Iowa State University Extension and Outreach all give a dryness rule rather than a number of days.',
+      },
+      {
+        q: 'How often should I water a ponytail palm in winter?',
+        a: 'Much less than in summer. North Carolina State Extension says to reduce watering greatly in winter. Wisconsin explains why: in the wild it gets summer rain and stays dry through most of the winter, and its swollen base stores water.',
       },
       {
         q: 'Is a ponytail palm a real palm?',
