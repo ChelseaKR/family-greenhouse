@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -62,6 +62,10 @@ export function ChatPage() {
   });
   // The tier whose features apply now, so a no-card Garden trial counts; not
   // merely the plan on file (ADR 0027).
+  // Names the conversation log after the page heading.
+  const headingId = useId();
+  // Spoken by the status region while a reply is on its way.
+  const replyingLabel = 'Plant care chat is replying';
   const chatPlanId = effectivePlanId(subscriptionQuery.data);
   const chatAvailable = chatPlanId === 'garden' || chatPlanId === 'greenhouse';
 
@@ -248,7 +252,7 @@ export function ChatPage() {
       <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-2 border-b border-primary-100/80">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h1 className="font-serif text-2xl text-ink flex items-center gap-2">
+            <h1 id={headingId} className="font-serif text-2xl text-ink flex items-center gap-2">
               <SparklesIcon className="h-6 w-6 text-primary-600" />
               Plant care chat
             </h1>
@@ -274,8 +278,13 @@ export function ChatPage() {
         </div>
       </div>
 
+      {/* role="log": a reply appended here is read out, once, when it lands.
+          The conversation used to be plain divs, so a screen-reader user sent
+          a question and heard nothing back (WCAG 4.1.3). */}
       <div
         ref={scrollRef}
+        role="log"
+        aria-labelledby={headingId}
         className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
       >
         {messages.length === 0 && !isSending && (
@@ -353,19 +362,18 @@ export function ChatPage() {
             )}
           </div>
         ))}
+        {/* The reply while it streams is for the eyes only. It is rewritten
+            many times a second, and a live region would read each fragment;
+            the finished message above is what gets announced. */}
         {isSending && streamingText && (
-          <div className="flex justify-start">
+          <div className="flex justify-start" aria-hidden="true">
             <div className="max-w-xl rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap bg-parchment text-gray-900">
               {streamingText}
             </div>
           </div>
         )}
         {isSending && !streamingText && (
-          <div
-            className="flex justify-start"
-            role="status"
-            aria-label="Plant care chat is replying"
-          >
+          <div className="flex justify-start">
             <div className="bg-parchment text-gray-900 rounded-2xl px-4 py-3 text-sm">
               <span className="inline-flex gap-1" aria-hidden="true">
                 <span className="w-1.5 h-1.5 bg-primary-300 rounded-full animate-bounce" />
@@ -392,6 +400,13 @@ export function ChatPage() {
       </div>
 
       <div className="border-t border-primary-100/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8 native-frame:pb-3!">
+        {/* Always in the document and outside the log, so "replying" is said
+            once when a question is sent. It used to be an aria-label on a
+            status element that only existed while the dots were showing, with
+            no text in it: there was nothing for a live region to read. */}
+        <p className="sr-only" role="status">
+          {isSending ? replyingLabel : ''}
+        </p>
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
@@ -399,7 +414,10 @@ export function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about your plants..."
-            disabled={isSending}
+            // Not disabled while a reply is on its way: a disabled field
+            // cannot hold focus, so sending a question threw the keyboard
+            // user to the top of the page, every time (WCAG 2.4.3).
+            // handleSend refuses a second send until this one is back.
             rows={1}
             className="min-h-[44px] min-w-0 flex-1 resize-none rounded-lg border border-primary-200 px-3 py-3 text-base focus:border-primary-500 focus:ring-2 focus:ring-primary-500 disabled:bg-parchment/60 sm:text-sm"
             aria-label="Chat message"
