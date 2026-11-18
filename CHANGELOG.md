@@ -121,6 +121,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   at all. Renewals, restores, Apple's notifications and Sandbox purchases send
   nothing. Nothing a customer sees changes. `docs/analytics.md` says how to
   count it.
+- **The day-10 trial email asks a household with no plant to add one first.**
+  When the household's plant count reads as 0, the email leads with "You have
+  not added a plant yet. Add your first plant and say how often it needs
+  water, and Family Greenhouse can remind you when it is due." and a button,
+  "Add your first plant", to `/plants/new`, in English and Spanish. The plans
+  line and "See plans in Settings" follow it. The facts section is left out in
+  that case, since there is nothing to count. A count that could not be read,
+  or a household that has plants now, gets the email as before. Households
+  with plants and the day-14 email are unchanged.
 - **Every care guide ends with the "Holiday plants" list.** It is the list
   the home page and `/care` already show, with the same heading and the same
   link words: Amaryllis, Paperwhite, Poinsettia, Christmas Cactus, Cyclamen
