@@ -16,6 +16,17 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-18
+
+**Production grants App Store plans for Production transactions only, a plant
+photo upload is bound to one file, household invites admit a limited number of
+people, an email change waits for verification, and the deploy pipeline runs
+under three narrower AWS roles. The iPhone app gets a "See plans" button, the
+Garden card names the Away Kit, and more of the app is in Spanish.** The Terms
+and Privacy text did not change. This release needs the one-time admin step in
+`docs/cicd-setup.md` ("Moving an existing account to environment-only trust")
+done before its tag.
+
 ### Security
 
 - **Production grants a plan only for Production App Store transactions**
@@ -231,6 +242,10 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   not match." now reads "Passwords don't match" (the reset-password wording),
   and Year in review says "1 task", not "1 tasks". Spanish approved by
   Chelsea on 2026-11-18; no native speaker has reviewed it.
+- **Accessibility fixes from the 2026-11-17 sweep.** Buttons that show a busy
+  state keep keyboard focus, new chat messages and page changes are announced
+  to screen readers, and a few labels and focus orders are corrected.
+
 - **A sitter task with no plant name reads "Water your plant".** The English
   read "Water the this plant" (and "Feed", "Prune", "Repot the this plant",
   and "Misting — this plant" for a custom task). It now reads "Water your
