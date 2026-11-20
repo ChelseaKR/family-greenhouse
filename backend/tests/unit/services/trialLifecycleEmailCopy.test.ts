@@ -84,30 +84,6 @@ describe('day 10', () => {
     expect(email.text).not.toMatch(/delet(e|ed|ion)s? (your|all|them)/i);
   });
 
-  it('names the yearly Garden price first and the monthly once, from the catalog, and no other amount (ADR 0042, "Yearly first")', () => {
-    const yearly = `$${PLANS.garden.annualPrice}`;
-    const monthly = `$${PLANS.garden.monthlyPrice}`;
-    // With the ADR 0042 catalog this is the exact sentence
-    // "If you would like to keep Garden, it is $24.99 a year, or $2.99 a month."
-    const sentence = `If you would like to keep Garden, it is ${yearly} a year, or ${monthly} a month.`;
-    expect(yearly).toBe('$24.99');
-    expect(monthly).toBe('$2.99');
-    expect(email.text.split(sentence).length - 1).toBe(1);
-    expect(email.html.split(sentence).length - 1).toBe(1);
-    expect(email.text.split(yearly).length - 1).toBe(1);
-    expect(email.text.split(monthly).length - 1).toBe(1);
-    // Every dollar amount in the email is one of the two catalog prices.
-    const amounts = email.text.match(/\$\s?\d[\d,]*(?:\.\d+)?/g) ?? [];
-    expect(amounts.sort()).toEqual([yearly, monthly].sort());
-    expect(email.text).toContain('Settings');
-  });
-
-  it('names the yearly price before the monthly one', () => {
-    expect(email.text.indexOf(`$${PLANS.garden.annualPrice}`)).toBeLessThan(
-      email.text.indexOf(`$${PLANS.garden.monthlyPrice}`)
-    );
-  });
-
   it('shows the counts it read', () => {
     expect(email.text).toContain('You added 6 plants.');
     expect(email.text).toContain('Your household marked 11 care tasks done.');
@@ -177,60 +153,181 @@ describe('day 14', () => {
 });
 
 /**
- * No stacked trials (owner decision 2026-10-23): checkout during the no-card
- * trial ends the Stripe trial on the no-card end date, so the email names that
- * date as the first charge, never "14 more days".
+ * The trial emails are account notices, not offers (owner decision 2026-11-19,
+ * ADR 0039 §7 as amended): the dates, what changes and that nothing is
+ * deleted. No price, no plans link or button, no line about keeping Garden.
+ * The unsubscribe header and link stay.
  */
-describe('the first charge matches checkout (no stacked trials)', () => {
-  it('day 10 names the trial end as the first charge, with the last day to start it', () => {
-    const email = composeTrialLifecycleEmail(ctx());
-    // ENDS is 2026-10-15T10:00Z; minus 48h30m is 2026-10-13T09:30Z, which is
-    // October 13 in Los Angeles.
-    expect(email.text).toContain(
-      'If you start it before October 13, 2026, you add a card then, and your first charge would be on October 15, 2026, the day the trial ends.'
-    );
-    expect(email.text).not.toMatch(/14 (more|free) days|another 14/i);
+describe('a notice, not an offer', () => {
+  // Every link target in the email's HTML, by plain string splitting.
+  const hrefs = (html: string) =>
+    html
+      .split('href="')
+      .slice(1)
+      .map((rest) => rest.slice(0, rest.indexOf('"')));
+  // A currency amount in any form Intl or a person would write it:
+  // $2.99, US$, 2,99 US$, €, a bare 24.99.
+  const CURRENCY = /[$€£]|US\$|\bUSD\b|\d+[.,]\d{2}\b/;
+  const PROMO = [
+    /see plans/i,
+    /ver los planes/i,
+    /plan status/i,
+    /estado del plan/i,
+    /keep garden/i,
+    /conservar garden/i,
+    /garden back/i,
+    /recuperar garden/i,
+    /a (month|year)\b/i,
+    /al (mes|año)\b/i,
+    /first charge/i,
+    /primer cobro/i,
+    /pricing/i,
+    /precios?\b/i,
+    /\bsubscri/i,
+    /\bsuscri/i,
+  ];
+  const facts: Record<string, TrialFacts> = {
+    usual: FACTS,
+    noPlant: { ...FACTS, plantsAdded: ok(0), tasksCompleted: ok(0), plantsNow: ok(0) },
+    plantsFromBefore: { ...FACTS, plantsAdded: ok(0), tasksCompleted: ok(0), plantsNow: ok(5) },
+    unreadable: {
+      plantsAdded: { status: 'unavailable' },
+      tasksCompleted: { status: 'unavailable' },
+      plantsNow: { status: 'unavailable' },
+      membersNow: { status: 'unavailable' },
+    },
+  };
+  const sendTimes = {
+    // Early on day 10, and inside checkout's minimum lead, where the old copy
+    // switched to a different charge sentence.
+    trial_day10: ['2026-10-11T17:30:00.000Z', '2026-10-14T00:00:00.000Z'],
+    trial_day14: ['2026-10-16T17:30:00.000Z'],
+  } as const;
+  const cases = (['en', 'es'] as const).flatMap((locale) =>
+    (['trial_day10', 'trial_day14'] as const).flatMap((kind) =>
+      Object.keys(facts).flatMap((name) =>
+        sendTimes[kind].map((at) => [locale, kind, name, at] as const)
+      )
+    )
+  );
+  const compose = (
+    locale: 'en' | 'es',
+    kind: 'trial_day10' | 'trial_day14',
+    name: string,
+    at: string
+  ) => composeTrialLifecycleEmail(ctx({ locale, kind, now: new Date(at), facts: facts[name] }));
+
+  it.each(cases)('%s %s (%s, at %s) names no price', (locale, kind, name, at) => {
+    const e = compose(locale, kind, name, at);
+    for (const part of [e.subject, e.preheader, e.text, e.html]) {
+      expect(part).not.toMatch(CURRENCY);
+    }
   });
 
-  it('day 10 sent inside the minimum lead says the charge is the day you start, with the same prices', () => {
-    const late = composeTrialLifecycleEmail(ctx({ now: new Date('2026-10-14T00:00:00.000Z') }));
-    expect(late.text).toContain(
-      'If you would like to keep Garden, it is $24.99 a year, or $2.99 a month, and the first charge is the day you start it.'
-    );
-    expect(late.text).not.toContain('your first charge would be on');
-    expect(late.text.split('$24.99').length - 1).toBe(1);
-    expect(late.text.split('$2.99').length - 1).toBe(1);
+  it.each(cases)(
+    '%s %s (%s, at %s) has no plans link, plans button or upsell line',
+    (locale, kind, name, at) => {
+      const e = compose(locale, kind, name, at);
+      for (const href of hrefs(e.html)) {
+        expect(href).not.toMatch(/billing|pricing|plans?\b|checkout/i);
+      }
+      for (const re of PROMO) {
+        expect(e.subject).not.toMatch(re);
+        expect(e.text).not.toMatch(re);
+        expect(e.html).not.toMatch(re);
+      }
+    }
+  );
+
+  it.each(cases)(
+    '%s %s (%s, at %s) keeps the unsubscribe header and link',
+    (locale, kind, name, at) => {
+      const e = compose(locale, kind, name, at);
+      expect(e.headers).toEqual({
+        'List-Unsubscribe':
+          '<https://api.familygreenhouse.net/notifications/email/unsubscribe?t=tok>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      });
+      expect(hrefs(e.html)).toContain(
+        'https://api.familygreenhouse.net/notifications/email/unsubscribe?t=tok'
+      );
+    }
+  );
+
+  it('still states the dates and that nothing is charged', () => {
+    const d10 = composeTrialLifecycleEmail(ctx());
+    expect(d10.text).toContain('ends on October 15, 2026');
+    expect(d10.text).toContain('nothing will be charged');
+    expect(d10.text).toContain('moves to Seedling, the free plan, on its own');
+    const d14 = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14' }));
+    expect(d14.text).toContain('ended on October 15, 2026');
+    expect(d14.text).toContain('nothing was charged');
+  });
+});
+
+/**
+ * The facts are counted inside the trial window (`readTrialFacts`, from
+ * endsAt minus 14 days). A household that already had plants when its trial
+ * began and added none during it must not be told it has no plant.
+ */
+describe('a household that had plants before the trial', () => {
+  const before: TrialFacts = {
+    ...FACTS,
+    plantsAdded: ok(0),
+    tasksCompleted: ok(3),
+    plantsNow: ok(5),
+  };
+
+  it.each(['trial_day10', 'trial_day14'] as const)(
+    '%s names the plants it has now, not "not added a plant"',
+    (kind) => {
+      const e = composeTrialLifecycleEmail(ctx({ kind, facts: before }));
+      expect(e.text).toContain('Your household has 5 active plants.');
+      expect(e.html).toContain('Your household has 5 active plants.');
+      expect(e.text).not.toContain('not added a plant');
+      expect(e.text).not.toContain('Add your first plant');
+      expect(e.text).not.toContain('You added');
+      // With plants, the care tasks done during the trial are shown.
+      expect(e.text).toContain('Your household marked 3 care tasks done.');
+    }
+  );
+
+  it('uses the singular for one plant', () => {
+    const e = composeTrialLifecycleEmail(ctx({ facts: { ...before, plantsNow: ok(1) } }));
+    expect(e.text).toContain('Your household has 1 active plant.');
   });
 
-  it('day 14 says the first charge is the day Garden starts, and names the same prices in the same order', () => {
-    const email = composeTrialLifecycleEmail(ctx({ kind: 'trial_day14' }));
-    expect(email.text).toContain(
-      'If you would like Garden back, it is $24.99 a year, or $2.99 a month, and the first charge is the day you start it.'
+  it('does not say no task was ever done, only none during the trial', () => {
+    const e = composeTrialLifecycleEmail(
+      ctx({ kind: 'trial_day14', facts: { ...before, tasksCompleted: ok(0) } })
     );
-    expect(email.text).not.toContain('your first charge would be on');
-    expect(email.text.split('$24.99').length - 1).toBe(1);
-    expect(email.text.split('$2.99').length - 1).toBe(1);
+    expect(e.text).toContain('No care task has been marked done during the trial.');
+    expect(e.text).not.toContain('marked done yet');
   });
 
   it('says the same in Spanish', () => {
-    // Intl's Spanish currency format puts a no-break space before "US$".
-    const yearly = '24,99 US$';
-    const monthly = '2,99 US$';
-    const d10 = composeTrialLifecycleEmail(ctx({ locale: 'es' }));
-    expect(d10.text).toContain(
-      `Si quieres conservar Garden, cuesta ${yearly} al año o ${monthly} al mes. Si lo empiezas antes del 13 de octubre de 2026, añades una tarjeta en ese momento y el primer cobro sería el 15 de octubre de 2026`
+    for (const kind of ['trial_day10', 'trial_day14'] as const) {
+      const e = composeTrialLifecycleEmail(ctx({ locale: 'es', kind, facts: before }));
+      expect(e.text).toContain('Tu hogar tiene 5 plantas activas.');
+      expect(e.text).not.toContain('no has añadido ninguna planta');
+    }
+    const one = composeTrialLifecycleEmail(
+      ctx({ locale: 'es', facts: { ...before, plantsNow: ok(1), tasksCompleted: ok(0) } })
     );
-    expect(d10.text.split(yearly).length - 1).toBe(1);
-    expect(d10.text.split(monthly).length - 1).toBe(1);
-    const d14 = composeTrialLifecycleEmail(ctx({ locale: 'es', kind: 'trial_day14' }));
-    expect(d14.text).toContain(
-      `Si quieres recuperar Garden, cuesta ${yearly} al año o ${monthly} al mes, y el primer cobro es el día en que lo empiezas`
+    expect(one.text).toContain('Tu hogar tiene 1 planta activa.');
+    expect(one.text).toContain(
+      'No se ha marcado ninguna tarea de cuidado como hecha durante la prueba.'
     );
   });
 });
 
 describe('absence is never rendered as achievement', () => {
-  const none: TrialFacts = { ...FACTS, plantsAdded: ok(0), tasksCompleted: ok(0) };
+  const none: TrialFacts = {
+    ...FACTS,
+    plantsAdded: ok(0),
+    tasksCompleted: ok(0),
+    plantsNow: ok(0),
+  };
   it('says plainly that no plant has been added, and shows no zero count', () => {
     for (const kind of ['trial_day10', 'trial_day14'] as const) {
       const e = composeTrialLifecycleEmail(ctx({ kind, facts: none }));
@@ -244,7 +341,7 @@ describe('absence is never rendered as achievement', () => {
   it('says no task has been marked done when plants exist but nothing was done', () => {
     const e = composeTrialLifecycleEmail(ctx({ facts: { ...FACTS, tasksCompleted: ok(0) } }));
     expect(e.text).toContain('You added 6 plants.');
-    expect(e.text).toContain('No care task has been marked done yet.');
+    expect(e.text).toContain('No care task has been marked done during the trial.');
     expect(e.text).not.toContain('marked 0');
   });
   it('leaves out a count it could not read and says so, never 0', () => {
@@ -278,24 +375,22 @@ describe('day 10 for a household with no plant (decision C1)', () => {
       .slice(1)
       .map((rest) => rest.slice(0, rest.indexOf('"')));
 
-  it('leads with "Add your first plant" and its button, before the plans line', () => {
+  it('leads with "Add your first plant" and its button, and no plans line follows', () => {
     const e = composeTrialLifecycleEmail(ctx({ facts: none }));
     const lead = e.text.indexOf('Add your first plant and say how often it needs water');
-    const plans = e.text.indexOf('If you would like to keep Garden');
+    // The plain-text part prints headings in capitals.
+    const changes = e.text.indexOf('WHAT CHANGES ON');
     expect(lead).toBeGreaterThan(-1);
-    expect(plans).toBeGreaterThan(lead);
+    expect(changes).toBeGreaterThan(lead);
     expect(e.text).toContain('You have not added a plant yet.');
     const links = hrefs(e.html);
-    const add = links.findIndex((h) => h.endsWith('/plants/new'));
-    const billing = links.findIndex((h) => h.endsWith('/settings/billing'));
-    expect(add).toBeGreaterThan(-1);
-    expect(billing).toBeGreaterThan(add);
-    // The plans line and its button stay.
-    expect(e.text).toContain('See plans in Settings');
+    expect(links.filter((h) => h.endsWith('/plants/new'))).toHaveLength(1);
+    // The plans line and its button are gone (owner decision 2026-11-19).
+    expect(links.some((h) => h.endsWith('/settings/billing'))).toBe(false);
+    expect(e.text).not.toContain('See plans in Settings');
+    expect(e.text).not.toContain('If you would like to keep Garden');
     // With nothing to count, the facts section is not repeated.
     expect(e.text).not.toContain('What your household did during the trial');
-    // The plans line is said once, with the catalog's price, not repeated.
-    expect(e.text.split(`$${PLANS.garden.monthlyPrice}`).length - 1).toBe(1);
   });
 
   it('says the same in Spanish', () => {
@@ -304,9 +399,7 @@ describe('day 10 for a household with no plant (decision C1)', () => {
       'Todavía no has añadido ninguna planta. Añade tu primera planta e indica cada cuánto necesita agua'
     );
     expect(e.html).toContain('Añadir tu primera planta');
-    expect(e.text.indexOf('Añadir tu primera planta')).toBeLessThan(
-      e.text.indexOf('Ver los planes en Ajustes')
-    );
+    expect(e.text).not.toContain('Ver los planes en Ajustes');
   });
 
   it('keeps the usual email for a household with plants', () => {
@@ -323,7 +416,9 @@ describe('day 10 for a household with no plant (decision C1)', () => {
     expect(unread.text).not.toContain('Add your first plant');
     const hasNow = composeTrialLifecycleEmail(ctx({ facts: { ...none, plantsNow: ok(2) } }));
     expect(hasNow.text).not.toContain('Add your first plant');
-    expect(hasNow.text).toContain('You have not added a plant yet.');
+    // It had plants before the trial: it is told what it has, not that it has none.
+    expect(hasNow.text).toContain('Your household has 2 active plants.');
+    expect(hasNow.text).not.toContain('not added a plant');
     // An unreadable plantsNow does not undo a real 0.
     const nowUnread = composeTrialLifecycleEmail(
       ctx({ facts: { ...none, plantsNow: { status: 'unavailable' } } })
@@ -407,7 +502,7 @@ describe('Spanish', () => {
     expect(d14.subject).toBe('Has vuelto a Seedling y no se borró nada');
     expect(d10.html).toContain('lang="es"');
     const none = composeTrialLifecycleEmail(
-      ctx({ locale: 'es', facts: { ...FACTS, plantsAdded: ok(0) } })
+      ctx({ locale: 'es', facts: { ...FACTS, plantsAdded: ok(0), plantsNow: ok(0) } })
     );
     expect(none.text).toContain('Todavía no has añadido ninguna planta.');
   });
