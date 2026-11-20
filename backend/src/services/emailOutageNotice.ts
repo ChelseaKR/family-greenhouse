@@ -43,7 +43,6 @@ import { cognito, USER_POOL_ID } from '../utils/cognito.js';
 import { logger } from '../utils/logger.js';
 import {
   NO_CARD_TRIAL_DAYS,
-  getEntitledPlan,
   noCardTrialState,
   type EntitlementSubscription,
 } from '../models/plans.js';
@@ -228,9 +227,12 @@ export function composeEmailOutageNotice(copy: NoticeRecipientCopy): {
  * outage and the household is not on a paid plan now; null otherwise.
  *
  * `noCardTrialState` is the definition of record: it already reports `none`
- * for any Stripe, App Store or running-gift state. The entitled-plan check on
- * top keeps a household that is on any paid tier by any route out. The start
- * is derived from the end and the trial length, as the trial emails do.
+ * for any Stripe state (a subscription id or status, a lifetime purchase, a
+ * paid `planId`), any App Store state and a running gift, which are every
+ * route to a paid plan. So `ended` already means "trial over, not paying",
+ * and no plan-id comparison is added on top (the entitlement-gates check
+ * forbids one). The start is derived from the end and the trial length, as
+ * the trial emails do.
  */
 export function endedTrialDuringOutage(
   sub: EntitlementSubscription,
@@ -238,7 +240,6 @@ export function endedTrialDuringOutage(
 ): TrialWindow | null {
   if (!sub.noCardTrialEndsAt) return null;
   if (noCardTrialState(sub, now) !== 'ended') return null;
-  if (getEntitledPlan(sub, now).id !== 'seedling') return null;
   const endMs = Date.parse(sub.noCardTrialEndsAt);
   if (!Number.isFinite(endMs)) return null;
   if (endMs < Date.parse(OUTAGE_START) || endMs >= Date.parse(OUTAGE_END_EXCLUSIVE)) return null;
