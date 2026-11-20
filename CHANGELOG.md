@@ -16,6 +16,28 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **HTML emails send again.** Every email with an HTML part (care reminders,
+  weekly digests, the welcome email and the trial emails on days 10 and 14)
+  had been refused by Amazon SES with "Duplicate header 'Content-Type'" since
+  v0.24.0. The message builder left out the empty line that ends the header
+  block, so the text part's own `Content-Type` was read as a second top-level
+  header. Text-only emails (invites, billing notices) were not affected. Tests
+  now parse each built message into its header blocks and require exactly one
+  `Content-Type` in each.
+- **Household emails are queued again.** The queue write for household emails
+  (a task is up for grabs, someone covered your task, someone joined or left)
+  named the attribute `items` without an alias. `items` is a DynamoDB reserved
+  word, so every write was rejected and none of these emails was ever queued.
+  Every attribute in those writes is now aliased, and tests check each write
+  against DynamoDB's own expression rules.
+- **The household members list can tell which addresses bounced.** The
+  Lambda role lacked `dynamodb:BatchGetItem`, so the email-suppression lookup
+  behind the members list was denied on every call and every member's email
+  showed as unknown. The role now has that one action on the app table only
+  (not its indexes); the IAM invariants test pins it.
+
 ## [0.53.0] - 2026-11-18
 
 **Production grants App Store plans for Production transactions only, a plant
