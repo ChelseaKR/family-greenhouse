@@ -16,6 +16,13 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.53.1] - 2026-11-19
+
+**Emails send again.** Care reminders, weekly digests, the welcome email, the
+trial emails and the household emails had not been sent since v0.24.0, and the
+members list could not show which addresses bounce. No user data, Terms or
+Privacy text changed. The IAM change applies with the normal deploy.
+
 ### Fixed
 
 - **HTML emails send again.** Every email with an HTML part (care reminders,
