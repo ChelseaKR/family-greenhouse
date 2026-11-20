@@ -60,7 +60,7 @@ import { TaskLocation } from '@/components/TaskLocation';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { completedTaskName, taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { formatDate, formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
@@ -492,7 +492,7 @@ export function DashboardPage() {
                   className={clsx(
                     'min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
                     activityFilter === f
-                      ? 'bg-primary-100 text-primary-800 border-primary-400'
+                      ? 'bg-primary-700 text-white border-primary-700'
                       : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
                   )}
                 >
@@ -578,7 +578,12 @@ function ActivityRow({ event }: ActivityRowProps) {
       body = (
         <Trans
           i18nKey="activity.taskCompleted"
-          values={{ actor: actorName, task: event.payload.taskType ?? t('activity.aTask') }}
+          values={{
+            actor: actorName,
+            task: event.payload.taskType
+              ? completedTaskName(t, event.payload.taskType)
+              : t('activity.aTask'),
+          }}
           components={bold}
         />
       );

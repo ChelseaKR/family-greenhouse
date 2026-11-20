@@ -320,7 +320,7 @@ export function SitPage() {
                         size="sm"
                         isLoading={isPending}
                         onClick={() => handleComplete(task.taskId)}
-                        aria-label={`Mark "${instructionFor(task, t)}" as done`}
+                        aria-label={t('caretaker.page.doneAria', { task: instructionFor(task, t) })}
                       >
                         {t('common.done')}
                       </Button>

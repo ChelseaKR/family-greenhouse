@@ -669,7 +669,7 @@ export function PlantsPage() {
                 'relative inline-flex items-center min-h-touch min-w-touch justify-center px-3 py-2 text-sm font-medium border focus:z-10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
                 shape,
                 viewMode === mode
-                  ? 'bg-primary-50 text-primary-700 border-primary-500'
+                  ? 'bg-primary-700 text-white border-primary-700'
                   : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
               )}
               onClick={() => setViewMode(mode)}
@@ -704,7 +704,7 @@ export function PlantsPage() {
             className={clsx(
               'min-h-touch rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
               spaceFilter === filter
-                ? 'border-primary-400 bg-primary-100 text-primary-800'
+                ? 'border-primary-700 bg-primary-700 text-white'
                 : 'border-primary-200/70 bg-paper text-gray-700 hover:bg-primary-50'
             )}
           >

@@ -273,6 +273,18 @@ export interface NativeChromeEvents {
   rightButton: { id: string };
 }
 
+/**
+ * Native -> web events only the iOS app sends (the Android shell has no tab
+ * bar to tap again).
+ */
+export interface NativeChromeIosEvents {
+  /**
+   * The current tab was tapped again while its first screen was already at
+   * the top. The page may refresh, as pull to refresh does (WCAG 2.5.7).
+   */
+  tabRetap: { tab: NativeTabId };
+}
+
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /** The drawer's destinations that are not tabs, in its order, plus About. */

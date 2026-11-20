@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { listMyHouseholds } from '@/services/householdService';
 import { useSwitchHousehold } from '@/hooks/useSwitchHousehold';
 import { NativeChrome } from '@/services/nativeChrome';
+import { requestRefresh } from '@/lib/refreshRequest';
 import {
   HOUSEHOLD_ID_PREFIX,
   RIGHT_BUTTON_PATHS,
@@ -68,6 +69,11 @@ export default function NativeFrameBridge() {
         if (!reselect) playHaptic('selection');
         // More's first screen is native: nothing for the web to show.
         if (path) act.current.navigate(path, { replace: true });
+      }),
+      // Tapping the tab you are on, at the top of its first screen, refreshes
+      // it: a single tap for what pull to refresh does (WCAG 2.5.7).
+      NativeChrome.addListener('tabRetap', () => {
+        requestRefresh();
       }),
       NativeChrome.addListener('back', ({ path }) => {
         act.current.navigate(path, { replace: true });

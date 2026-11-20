@@ -18,6 +18,7 @@ import {
   sameTitle,
   tabForPath,
   type NativeChromeEvents,
+  type NativeChromeIosEvents,
   type NativeChromeUpdate,
 } from '@/config/nativeFrame';
 import type { NativeBarToolsEvents } from '@/config/nativeBarTools';
@@ -336,8 +337,12 @@ describe('the Swift side reads the same messages', () => {
 
   it('sends exactly the events the web listens for, with the same fields', () => {
     const sent = [...plugin.matchAll(/notifyListeners\("([^"]+)", data: ([^\n]+)/g)];
-    const events: Record<keyof (NativeChromeEvents & NativeBarToolsEvents), string[]> = {
+    const events: Record<
+      keyof (NativeChromeEvents & NativeBarToolsEvents & NativeChromeIosEvents),
+      string[]
+    > = {
       tabSelect: ['tab', 'path', 'reselect'],
+      tabRetap: ['tab'],
       back: ['path'],
       moreSelect: [],
       rightButton: ['id'],

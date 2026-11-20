@@ -794,6 +794,12 @@ final class NativeFrameController: NSObject, UITabBarControllerDelegate, UINavig
             list.tableView.setContentOffset(
                 CGPoint(x: 0, y: -list.tableView.adjustedContentInset.top), animated: !reduceMotion)
         } else {
+            // Already at the top: the tap asks the page to refresh, a single
+            // tap for what pull to refresh does (WCAG 2.5.7).
+            let scrollView = webView.scrollView
+            if scrollView.contentOffset.y <= -scrollView.adjustedContentInset.top + 1 {
+                plugin?.sendTabRetap(tab: tab)
+            }
             scrollToTop(animated: !reduceMotion)
         }
         return false

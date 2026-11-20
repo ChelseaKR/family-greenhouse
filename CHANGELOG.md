@@ -41,6 +41,25 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Fixed
 
+- **A selected chip or view toggle no longer depends on a pale tint.** The
+  selected filter chip or view toggle (Tasks, the phone checklist, Plants,
+  the dashboard activity chips, the space picker) is now filled dark green
+  with white text, 5.8:1 against the page, where it was a 1.1:1 tint (WCAG
+  1.4.1, 1.4.11). It matches the plant-name and billing-interval choices.
+
+- **Spanish for the last English the app wrote on Spanish screens** (WCAG
+  3.1.2): the care report's times ("hace 3 días"), the Skip cycle snooze
+  option ("Saltar esta vez"), the climate card when weather is off, the
+  overdue notification ("Regar: cuando puedas."), the phone push timeout, the
+  pet-safe tab title and share text, and the sitter page's Done button name.
+  Task types show by name rather than as the stored value ("Regar — Monstera",
+  "completó el riego"; in English "Water", "completed watering"). Plan names
+  stay English as proper names. No native-speaker review yet.
+
+- **Refreshing in the iPhone app without the pull gesture.** Tapping the tab
+  you are on, when its first screen is already at the top, refreshes it the
+  same way pull to refresh does (WCAG 2.5.7). Not yet tried on a device.
+
 - **Accessibility gaps found while writing the report.** Email titles and
   section labels are real headings. The command palette's result lists are
   named groups. A toast waits while the pointer is on it or focus is in it, so

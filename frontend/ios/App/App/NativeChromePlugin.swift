@@ -239,6 +239,11 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin {
         notifyListeners("tabSelect", data: ["tab": tab, "path": path ?? NSNull(), "reselect": reselect])
     }
 
+    /// The current tab tapped again at the top of its first screen.
+    func sendTabRetap(tab: String) {
+        notifyListeners("tabRetap", data: ["tab": tab])
+    }
+
     func sendBack(path: String) {
         notifyListeners("back", data: ["path": path])
     }

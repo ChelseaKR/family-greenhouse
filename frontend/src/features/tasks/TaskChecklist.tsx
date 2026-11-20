@@ -108,14 +108,16 @@ export function TaskChecklist({
       aria-pressed={segment === id}
       className={clsx(
         'inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full px-3 text-sm font-semibold',
-        segment === id ? 'bg-paper text-ink shadow-sm ring-1 ring-primary-100' : 'text-gray-700'
+        segment === id ? 'bg-primary-700 text-white shadow-sm' : 'text-gray-700'
       )}
     >
       {label}
       {counts[id] > 0 && (
         <>
           {' '}
-          <span className="font-medium text-gray-600">{counts[id]}</span>
+          <span className={clsx('font-medium', segment === id ? 'text-white' : 'text-gray-600')}>
+            {counts[id]}
+          </span>
         </>
       )}
     </button>

@@ -109,7 +109,7 @@ export function ClimateCard() {
             <p className="mt-1 text-sm text-gray-500">
               {data.configured
                 ? t('climate.card.weatherUnavailable')
-                : 'Climate insights are off. Add an OpenWeatherMap key to enable.'}
+                : t('household.climateUnavailable')}
             </p>
           )}
         </div>
