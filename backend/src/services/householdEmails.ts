@@ -322,18 +322,36 @@ async function enqueue(params: {
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: key,
+        // Every attribute is aliased, not only the ones known to be reserved.
+        // `items` is a DynamoDB reserved word, and spelling it bare made this
+        // write fail validation on every call from v0.24.0 to v0.53.0: no
+        // household email was ever queued. The failure is a runtime
+        // ValidationException, never a compile error, so aliasing everything
+        // is cheaper than checking each name against the list.
         UpdateExpression:
-          'SET entityType = :entityType, #kind = :kind, householdId = :householdId, ' +
-          'email = :email, userId = :userId, ' +
+          'SET #entityType = :entityType, #kind = :kind, #householdId = :householdId, ' +
+          '#email = :email, #userId = :userId, ' +
           '#status = if_not_exists(#status, :pending), ' +
-          'createdAt = if_not_exists(createdAt, :now), ' +
-          'expiresAt = if_not_exists(expiresAt, :expiresAt), ' +
+          '#createdAt = if_not_exists(#createdAt, :now), ' +
+          '#expiresAt = if_not_exists(#expiresAt, :expiresAt), ' +
           '#ttl = if_not_exists(#ttl, :ttl), ' +
-          'items = list_append(if_not_exists(items, :empty), :one)',
+          '#items = list_append(if_not_exists(#items, :empty), :one)',
         ConditionExpression:
-          '(attribute_not_exists(PK) OR #status = :pending) AND ' +
-          '(attribute_not_exists(items) OR size(items) < :max)',
-        ExpressionAttributeNames: { '#kind': 'kind', '#status': 'status', '#ttl': 'ttl' },
+          '(attribute_not_exists(#pk) OR #status = :pending) AND ' +
+          '(attribute_not_exists(#items) OR size(#items) < :max)',
+        ExpressionAttributeNames: {
+          '#pk': 'PK',
+          '#entityType': 'entityType',
+          '#kind': 'kind',
+          '#householdId': 'householdId',
+          '#email': 'email',
+          '#userId': 'userId',
+          '#status': 'status',
+          '#createdAt': 'createdAt',
+          '#expiresAt': 'expiresAt',
+          '#ttl': 'ttl',
+          '#items': 'items',
+        },
         ExpressionAttributeValues: {
           ...base,
           ':userId': userId,
@@ -358,9 +376,9 @@ async function enqueue(params: {
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: key,
-        UpdateExpression: 'ADD overflow :one',
+        UpdateExpression: 'ADD #overflow :one',
         ConditionExpression: '#status = :pending',
-        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeNames: { '#overflow': 'overflow', '#status': 'status' },
         ExpressionAttributeValues: { ':one': 1, ':pending': 'pending' },
       })
     );
@@ -566,9 +584,9 @@ async function markSent(key: { PK: string; SK: string }, now: Date): Promise<voi
     new UpdateCommand({
       TableName: TABLE_NAME,
       Key: key,
-      UpdateExpression: 'SET #status = :sent, sentAt = :sentAt',
+      UpdateExpression: 'SET #status = :sent, #sentAt = :sentAt',
       ConditionExpression: '#status = :pending',
-      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeNames: { '#status': 'status', '#sentAt': 'sentAt' },
       ExpressionAttributeValues: {
         ':sent': 'sent',
         ':pending': 'pending',
