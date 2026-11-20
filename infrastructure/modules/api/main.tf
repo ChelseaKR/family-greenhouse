@@ -178,6 +178,17 @@ resource "aws_iam_role_policy" "lambda" {
         ]
       },
       {
+        # The household members list reads every member's email-suppression
+        # row in one call (services/emailSuppression.getDeliveryStates, run by
+        # the households Lambda). Without this action that read was denied on
+        # every call, so every roster showed "delivery unknown". Its own
+        # statement, on the table alone: BatchGetItem cannot read an index, and
+        # it reads nothing GetItem above cannot already read row by row.
+        Effect   = "Allow"
+        Action   = ["dynamodb:BatchGetItem"]
+        Resource = var.dynamodb_table_arn
+      },
+      {
         Effect = "Allow"
         Action = [
           "s3:PutObject",

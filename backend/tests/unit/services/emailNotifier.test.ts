@@ -107,6 +107,20 @@ describe('emailNotifier', () => {
     expect(raw).toContain('text/html; charset=UTF-8');
   });
 
+  // The send path, not just the builder: the bytes handed to SES must have one
+  // top-level Content-Type, or SES rejects the whole send (v0.24.0-v0.53.0).
+  it('hands SES an html message whose header block has exactly one Content-Type', async () => {
+    process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'hello@example.net' };
+    sesSendMock.mockResolvedValue({ MessageId: 'm-1' });
+    const { sendEmail } = await import('../../../src/services/emailNotifier.js');
+    await sendEmail({ to: 'a@b.com', subject: 'hi', text: 'plain', html: '<p>rich</p>' });
+    const raw = rawOf();
+    const headerBlock = raw.slice(0, raw.indexOf('\r\n\r\n'));
+    expect(headerBlock.match(/^content-type:/gim)).toHaveLength(1);
+    expect(headerBlock).toMatch(/^Content-Type: multipart\/alternative;/m);
+    expect(headerBlock).not.toMatch(/^--/m);
+  });
+
   it('stays a single text/plain message when no html is supplied', async () => {
     // Callers that have not adopted the template kit still send valid mail.
     process.env = { ...ORIGINAL, SES_FROM_EMAIL: 'noreply@x.com' };
