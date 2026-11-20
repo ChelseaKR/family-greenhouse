@@ -16,6 +16,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **A one-time note about the missed emails.** `npm run notify:email-outage`
+  sends the approved service note about the 2026-09-04 to 2026-11-19 email
+  outage to every member of an active household with email on, before the
+  2026-11-23 weekly digest. Admins of a household whose no-card trial ended in
+  that window, and which is not on a paid plan, also get an offer of another
+  14 days of Garden if they reply. It is a dry run unless `--confirm` is
+  passed, keeps one marker per person so a re-run never mails anyone twice,
+  skips anyone with email turned off and any suppressed address, leaves out
+  leftover test households, and refuses to run after the digest unless
+  `--late` is passed. Operator-run only; nothing runs it on a schedule. See
+  `docs/runbooks.md`.
+
 ## [0.53.1] - 2026-11-19
 
 **Emails send again.** Care reminders, weekly digests, the welcome email, the
