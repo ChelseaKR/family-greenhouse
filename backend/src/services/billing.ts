@@ -137,7 +137,10 @@ export interface HouseholdSubscription {
    * End of the household's no-card Garden trial (ADR 0027), ISO 8601.
    *
    * Written once, by `householdService.createHousehold`, on a NEW household
-   * whose creating account had not had one. No Stripe path writes or clears it
+   * whose creating account had not had one. The one exception is the
+   * operator-run `outageTrialRestart`, once per household whose trial ended
+   * during the 2026-09 to 2026-11 email outage (ADR 0027, amendment of
+   * 2026-11-19). No Stripe path writes or clears it
    * (`SubscriptionWriteField` excludes it), and it is absent on every household
    * created before the trial existed. Entitlement reads it only through
    * `noCardTrialState` in models/plans.ts, which ignores it whenever the row

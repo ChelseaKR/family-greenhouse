@@ -684,8 +684,8 @@ export const NO_CARD_TRIAL_DAYS = 14;
  * App-side entitlement only. No Stripe customer, subscription, price or
  * checkout session stands behind it, so nothing at Stripe can renew it, charge
  * for it, or end it. It is two attributes on the household row, written once
- * when the household is created, and it ends because the clock passes one of
- * them.
+ * when the household is created (with one operator-run exception, ADR 0027's
+ * 2026-11-19 amendment), and it ends because the clock passes one of them.
  */
 export const NO_CARD_TRIAL_PLAN: Plan = PLANS.garden;
 
