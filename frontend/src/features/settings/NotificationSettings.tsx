@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader } from '@/components/Card';
@@ -92,6 +92,12 @@ function uiEmailLocale(language: string): 'en' | 'es' {
 }
 
 export function NotificationSettings() {
+  // Each switch is described by the sentence beside it, and each block of
+  // controls under one title is a group named by that title (WCAG 1.3.1).
+  // Both were visual only: a screen reader heard "Weekly digest, switch, off,
+  // dimmed" and never why it was dimmed.
+  const fieldId = useId();
+  const desc = (name: string) => `${fieldId}-${name}-desc`;
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const householdId = useActiveHouseholdId();
@@ -581,7 +587,9 @@ export function NotificationSettings() {
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">{t('notifications.email')}</p>
-            <p className="text-sm text-gray-600">{t('notifications.emailDescription')}</p>
+            <p id={desc('email')} className="text-sm text-gray-600">
+              {t('notifications.emailDescription')}
+            </p>
           </div>
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.panel.emailToggle')}</span>
@@ -589,6 +597,7 @@ export function NotificationSettings() {
               {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
+              aria-describedby={desc('email')}
               checked={prefs.email}
               disabled={saveMutation.isPending}
               onChange={(e) => save({ email: e.target.checked })}
@@ -627,7 +636,7 @@ export function NotificationSettings() {
             <p className="text-sm font-medium text-gray-900">
               {t('notifications.weeklyDigestTitle')}
             </p>
-            <p className="text-sm text-gray-600">
+            <p id={desc('weeklyDigest')} className="text-sm text-gray-600">
               {prefs.email
                 ? t('notifications.weeklyDigestDescription')
                 : t('notifications.weeklyDigestRequiresEmail')}
@@ -639,6 +648,7 @@ export function NotificationSettings() {
               {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
+              aria-describedby={desc('weeklyDigest')}
               checked={(prefs.weeklyDigest ?? true) && prefs.email}
               disabled={!prefs.email || saveMutation.isPending}
               onChange={(e) => save({ weeklyDigest: e.target.checked })}
@@ -649,11 +659,16 @@ export function NotificationSettings() {
         {/* Household emails — one switch each. Before these, `weeklyDigest` was
             the only per-email control in the product, so anyone who wanted
             fewer emails had to turn the whole channel off. */}
-        <div className="border-b border-primary-100/70 pb-4">
-          <p className="text-sm font-medium text-gray-900">
+        <div
+          role="group"
+          aria-labelledby={`${fieldId}-household-title`}
+          aria-describedby={desc('household')}
+          className="border-b border-primary-100/70 pb-4"
+        >
+          <p id={`${fieldId}-household-title`} className="text-sm font-medium text-gray-900">
             {t('notifications.householdEmailsTitle')}
           </p>
-          <p className="text-sm text-gray-600">
+          <p id={desc('household')} className="text-sm text-gray-600">
             {prefs.email
               ? t('notifications.householdEmailsDescription')
               : t('notifications.householdEmailsRequiresEmail')}
@@ -663,7 +678,7 @@ export function NotificationSettings() {
               <div key={toggle.key} className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm text-gray-900">{t(`notifications.${toggle.titleKey}`)}</p>
-                  <p className="text-xs text-gray-600">
+                  <p id={desc(toggle.key)} className="text-xs text-gray-600">
                     {t(`notifications.${toggle.descriptionKey}`)}
                   </p>
                 </div>
@@ -673,6 +688,7 @@ export function NotificationSettings() {
                     {...nativeSwitchRole()}
                     type="checkbox"
                     className="h-5 w-5 accent-primary-700"
+                    aria-describedby={desc(toggle.key)}
                     checked={(prefs[toggle.key] ?? true) && prefs.email}
                     disabled={!prefs.email || saveMutation.isPending}
                     onChange={(e) => save({ [toggle.key]: e.target.checked })}
@@ -689,7 +705,7 @@ export function NotificationSettings() {
         <div className="flex items-center justify-between gap-4 border-b border-primary-100/70 pb-4">
           <div>
             <p className="text-sm font-medium text-gray-900">{t('notifications.yearRecapTitle')}</p>
-            <p className="text-sm text-gray-600">
+            <p id={desc('yearRecap')} className="text-sm text-gray-600">
               {prefs.email
                 ? t('notifications.yearRecapDescription')
                 : t('notifications.yearRecapRequiresEmail')}
@@ -701,6 +717,7 @@ export function NotificationSettings() {
               {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
+              aria-describedby={desc('yearRecap')}
               checked={(prefs.yearRecap ?? true) && prefs.email}
               disabled={!prefs.email || saveMutation.isPending}
               onChange={(e) => save({ yearRecap: e.target.checked })}
@@ -714,12 +731,15 @@ export function NotificationSettings() {
             <p className="text-sm font-medium text-gray-900">
               {t('notifications.emailLanguageTitle')}
             </p>
-            <p className="text-sm text-gray-600">{t('notifications.emailLanguageDescription')}</p>
+            <p id={desc('emailLanguage')} className="text-sm text-gray-600">
+              {t('notifications.emailLanguageDescription')}
+            </p>
           </div>
           <label className="inline-flex items-center">
             <span className="sr-only">{t('notifications.emailLanguageTitle')}</span>
             <select
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+              aria-describedby={desc('emailLanguage')}
+              className="rounded-md border border-primary-500 bg-white px-2 py-1 text-sm text-gray-900"
               value={prefs.emailLocale || uiEmailLocale(i18n.language)}
               disabled={saveMutation.isPending}
               onChange={(e) => save({ emailLocale: e.target.value as 'en' | 'es' })}
@@ -735,7 +755,7 @@ export function NotificationSettings() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">{t('notifications.sms')}</p>
-              <p className="text-sm text-gray-600">
+              <p id={desc('sms')} className="text-sm text-gray-600">
                 {!smsAvailable
                   ? t('notifications.smsUnavailableShort')
                   : phoneIsVerified || prefs.sms
@@ -749,6 +769,7 @@ export function NotificationSettings() {
                 {...nativeSwitchRole()}
                 type="checkbox"
                 className="h-5 w-5 accent-primary-700"
+                aria-describedby={desc('sms')}
                 checked={prefs.sms}
                 // Allow turning OFF anytime; turning ON requires a verified number.
                 disabled={
@@ -840,7 +861,9 @@ export function NotificationSettings() {
             <p className="text-sm font-medium text-gray-900">
               {t('notifications.panel.pestTitle')}
             </p>
-            <p className="text-sm text-gray-600">{t('notifications.panel.pestDescription')}</p>
+            <p id={desc('pest')} className="text-sm text-gray-600">
+              {t('notifications.panel.pestDescription')}
+            </p>
           </div>
           <label className="inline-flex items-center cursor-pointer">
             <span className="sr-only">{t('notifications.panel.pestToggle')}</span>
@@ -848,6 +871,7 @@ export function NotificationSettings() {
               {...nativeSwitchRole()}
               type="checkbox"
               className="h-5 w-5 accent-primary-700"
+              aria-describedby={desc('pest')}
               checked={prefs.pestAlerts ?? false}
               disabled={saveMutation.isPending}
               onChange={(e) => save({ pestAlerts: e.target.checked })}
@@ -856,12 +880,19 @@ export function NotificationSettings() {
         </div>
 
         {/* Quiet hours */}
-        <div className="space-y-3 pt-2">
+        <div
+          role="group"
+          aria-labelledby={`${fieldId}-quiet-title`}
+          aria-describedby={desc('quiet')}
+          className="space-y-3 pt-2"
+        >
           <div>
-            <p className="text-sm font-medium text-gray-900">
+            <p id={`${fieldId}-quiet-title`} className="text-sm font-medium text-gray-900">
               {t('notifications.panel.quietHours')}
             </p>
-            <p className="text-sm text-gray-600">{t('notifications.quietHoursDescription')}</p>
+            <p id={desc('quiet')} className="text-sm text-gray-600">
+              {t('notifications.quietHoursDescription')}
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-start">
             <Input

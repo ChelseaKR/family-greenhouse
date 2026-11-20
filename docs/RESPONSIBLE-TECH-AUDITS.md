@@ -14,7 +14,7 @@ This is the detail layer behind the README's `## Standards conformance` table. W
 - **B Bias:** applies (light) — plant-care content and care-guide copy; EN/ES is the one first-class segment (no ranking/classification of people; the app never infers protected attributes)
 - **C Privacy:** applies — real PII (emails, phone numbers, plant/household photos, household membership graphs). DPIA: [`docs/audits/dpia.md`](audits/dpia.md) (committed 2026-07-10, closes P2-1); `docs/compliance.md` §3 remains the GDPR/sub-processor checklist
 - **D Transparency:** applies — model card: [`model-card.md`](../model-card.md)
-- **E Accessibility:** applies — see [`accessibility.md`](accessibility.md) (WCAG 2.2 AA enforced; ACR/VPAT not yet published — tracked gap, P2-3/P2-4)
+- **E Accessibility:** applies — see [`accessibility.md`](accessibility.md) (WCAG 2.2 AA enforced; draft ACR based on VPAT 2.5 Rev WCAG at [`a11y/ACR.md`](a11y/ACR.md), issued once its human walkthrough is done — P2-3/P2-4)
 - **F Security:** applies — ASVS **L2** (declared below); threat model: [`security.md`](security.md) (OWASP Top 10 working audit) + [`security-review-2026-05-31.md`](security-review-2026-05-31.md)
 - **AI-EVAL:** **APPLIES** (tiers: tool-use + RAG, citation/grounding guard, model-card; red-team and full RAGAS-class metric suite **not yet built** — see the dated waiver below). This repo predates its addition to `STANDARDS/AI-EVALUATION-STANDARD.md`'s explicit repo list; per that standard's §0, "a new `uses:` of an LLM SDK flips the declaration to APPLIES" regardless of whether the repo was enumerated when the standard was written.
 - **I18N:** applies (opted in) — EN/ES catalogs, i18next. Current gates and residual work are recorded in [`docs/i18n.md`](i18n.md).

@@ -30,6 +30,30 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   the new dates. Operator-run only, once per household (ADR 0027, amended
   2026-11-19). See `docs/runbooks.md`.
 
+- **An Accessibility Conformance Report.** `docs/a11y/ACR.md` reports every
+  WCAG 2.2 Level A and AA criterion for the web site, the signed-in app, the
+  token pages and the HTML emails, based on the VPAT® 2.5 Rev WCAG edition
+  (VPAT is a registered service mark of ITI). It is a draft from automated and
+  synthetic evidence: rows that depend on what a screen reader says are marked
+  as qualified, and its Appendix B is the human walkthrough that issues it.
+  The iOS app's native frame is reported separately, as not yet run on a
+  device. Linked from `docs/accessibility.md` and the README.
+
+### Fixed
+
+- **Accessibility gaps found while writing the report.** Email titles and
+  section labels are real headings. The command palette's result lists are
+  named groups. A toast waits while the pointer is on it or focus is in it, so
+  its Undo button cannot vanish while in use. The chat message box, help
+  search and two selects that set their own border reach 3:1, like the other
+  fields. Each notification switch is described by the sentence beside it, and
+  its blocks are named groups. The 30-day chart gives a screen reader each
+  day's count. The care guides mark their English content as English for a
+  Spanish visitor. The kiosk's "Due today" line reaches 4.5:1. The brand
+  wordmark drops an `aria-label` that ARIA does not allow on a plain `span`.
+  The populated plant tag and kiosk pages are now in the axe suite. No wording
+  changed; existing sentences are now announced in a few new places.
+
 ## [0.53.2] - 2026-11-20
 
 **The trial emails tell the truth about a household's plants and are plain

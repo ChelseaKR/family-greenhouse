@@ -71,4 +71,49 @@ describe('Toaster actions', () => {
       vi.useRealTimers();
     }
   });
+
+  it('stays up while its Undo button has keyboard focus, and ends after focus leaves', async () => {
+    // A toast that timed out under a focused Undo button dropped focus to the
+    // top of the page (WCAG 2.4.3) and cut short the time to act (2.2.1).
+    vi.useFakeTimers();
+    render(<Toaster />);
+    act(() => {
+      toast.success('Moved “Fern” to the trash', {
+        action: { label: 'Undo', onAction: vi.fn() },
+      });
+    });
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    act(() => undo.focus());
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText('Moved “Fern” to the trash')).toBeInTheDocument();
+    expect(undo).toHaveFocus();
+
+    act(() => undo.blur());
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.queryByText('Moved “Fern” to the trash')).not.toBeInTheDocument();
+  });
+
+  it('stays up while the pointer is over it', () => {
+    vi.useFakeTimers();
+    render(<Toaster />);
+    act(() => {
+      toast.info('Task snoozed');
+    });
+    const message = screen.getByText('Task snoozed');
+    const card = message.parentElement!;
+    act(() => {
+      card.dispatchEvent(new MouseEvent('mouseenter'));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText('Task snoozed')).toBeInTheDocument();
+    act(() => {
+      card.dispatchEvent(new MouseEvent('mouseleave'));
+      vi.advanceTimersByTime(4000);
+    });
+    expect(screen.queryByText('Task snoozed')).not.toBeInTheDocument();
+  });
 });

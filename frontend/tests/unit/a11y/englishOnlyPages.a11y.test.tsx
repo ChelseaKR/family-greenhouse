@@ -12,6 +12,9 @@ import { HelpPage } from '@/features/help/HelpPage';
 import { HelpTopicPage } from '@/features/help/HelpTopicPage';
 import { BlogIndex } from '@/features/blog/BlogIndex';
 import { ChangelogPage } from '@/features/changelog/ChangelogPage';
+import { CareGuidePage } from '@/features/care/CareGuidePage';
+import { CareIndex } from '@/features/care/CareIndex';
+import { HOLIDAY_CARE_GUIDES_ON } from '@/features/care/holidayGuideList';
 
 /**
  * Pages that are written in English whatever language the visitor chose.
@@ -90,4 +93,40 @@ describe('English-only pages say so', () => {
     renderAt(path, route, element);
     expect(screen.getByRole('main')).toHaveAttribute('lang', 'en');
   });
+});
+
+describe('care guides are English inside, with their translated pieces in the page language', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  // The guides and the index's intro and list are English by design; the
+  // holiday list, the shop link and the index's household links are catalog
+  // strings. Before 2026-11 neither was marked, so a Spanish visitor's screen
+  // reader read the whole guide with Spanish rules (WCAG 3.1.2).
+  it.each([
+    ['/care/monstera', '/care/:slug', <CareGuidePage key="g" />],
+    ['/care', '/care', <CareIndex key="i" />],
+  ])(
+    '%s marks its content English and its translated pieces Spanish',
+    async (path, route, element) => {
+      await ensureLocaleCatalog(i18n, 'es');
+      await i18n.changeLanguage('es');
+      renderAt(path, route, element);
+      const main = screen.getByRole('main');
+      expect(main).toHaveAttribute('lang', 'en');
+      const holiday = screen.queryByRole('heading', {
+        name: i18n.t('petSafeSpecies.holidayHeading'),
+      });
+      // The list is behind a seasonal switch; when it is on it must be marked.
+      expect(Boolean(holiday)).toBe(HOLIDAY_CARE_GUIDES_ON);
+      if (holiday) expect(holiday.closest('[lang]')).toHaveAttribute('lang', 'es');
+      if (path === '/care') {
+        const household = screen.getByRole('heading', {
+          name: i18n.t('landing.care.householdHeading'),
+        });
+        expect(household.closest('[lang]')).toHaveAttribute('lang', 'es');
+      }
+    }
+  );
 });

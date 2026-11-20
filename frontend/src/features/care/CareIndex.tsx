@@ -66,7 +66,11 @@ const CARE_INDEX_JSON_LD = {
  * a single page that links them all. Public, no auth.
  */
 export function CareIndex() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // The intro and the guide list are English by design (docs/i18n.md); the
+  // household section and the holiday list are translated and carry the
+  // page's own language back inside the English <main> (WCAG 3.1.2).
+  const pageLang = i18n.resolvedLanguage ?? i18n.language;
   useMetaTags({
     title: PAGE_TITLE,
     description: PAGE_DESCRIPTION,
@@ -75,7 +79,7 @@ export function CareIndex() {
   });
 
   return (
-    <PublicShell>
+    <PublicShell contentLang="en">
       <PageIntro
         eyebrow="Before the plant comes home"
         title="Plant care guides"
@@ -83,7 +87,9 @@ export function CareIndex() {
       />
 
       {/* Holiday care guides; see holidayGuideList.ts. */}
-      <HolidayCareGuides id="care-index-holiday" />
+      <div lang={pageLang}>
+        <HolidayCareGuides id="care-index-holiday" />
+      </div>
 
       <ul className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CARE_GUIDE_INDEX.map((g) => (
@@ -102,7 +108,7 @@ export function CareIndex() {
         ))}
       </ul>
 
-      <section aria-labelledby="care-index-household" className="mt-12">
+      <section lang={pageLang} aria-labelledby="care-index-household" className="mt-12">
         <h2 id="care-index-household" className="font-serif text-xl text-ink">
           {t('landing.care.householdHeading')}
         </h2>

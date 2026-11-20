@@ -431,7 +431,7 @@ export function ChatPage() {
             // user to the top of the page, every time (WCAG 2.4.3).
             // handleSend refuses a second send until this one is back.
             rows={1}
-            className="min-h-[44px] min-w-0 flex-1 resize-none rounded-lg border border-primary-200 px-3 py-3 text-base focus:border-primary-500 focus:ring-2 focus:ring-primary-500 disabled:bg-parchment/60 sm:text-sm"
+            className="min-h-[44px] min-w-0 flex-1 resize-none rounded-lg border border-primary-500 px-3 py-3 text-base focus:border-primary-500 focus:ring-2 focus:ring-primary-500 disabled:bg-parchment/60 sm:text-sm"
             aria-label={t('chat.page.messageLabel')}
           />
           <button

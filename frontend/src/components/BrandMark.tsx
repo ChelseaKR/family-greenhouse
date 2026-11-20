@@ -87,7 +87,9 @@ export function BrandMark({
   const taglineColor = tone === 'light' ? 'text-primary-200' : 'text-primary-700';
 
   return (
-    <span className={clsx('inline-flex items-center gap-3', className)} aria-label={name}>
+    // No aria-label here: it is prohibited on a span with no role, and the
+    // visible name below already names the lockup (WCAG 4.1.2).
+    <span className={clsx('inline-flex items-center gap-3', className)}>
       <span className="block overflow-hidden rounded-[0.7rem] bg-paper ring-1 ring-primary-200/70">
         <img src="/brand/icon.svg" alt="" className={clsx(s.icon, 'w-auto')} />
       </span>

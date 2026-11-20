@@ -240,6 +240,33 @@ describe('renderEmail', () => {
     expect(html).not.toContain('display:grid');
   });
 
+  it('marks the title and each section heading as headings, not styled cells (WCAG 1.3.1)', () => {
+    const { html } = renderEmail(
+      doc({
+        blocks: [
+          { kind: 'heading', text: 'Could use a hand' },
+          { kind: 'text', text: 'Two plants are waiting.' },
+          { kind: 'heading', text: 'Coming up' },
+        ],
+      })
+    );
+    // One h1, the title; one h2 per heading block, in order. Nothing else
+    // claims to be a heading (the row badge and the logo are not).
+    expect([...html.matchAll(/<h1\b[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1])).toEqual([
+      'Your week in the greenhouse',
+    ]);
+    expect([...html.matchAll(/<h2\b[^>]*>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual([
+      'Could use a hand',
+      'Coming up',
+    ]);
+    expect(html).not.toMatch(/<h[3-6]\b/);
+    // A client's default heading margin and weight would change the look.
+    for (const tag of html.match(/<h[12]\b[^>]*>/g) ?? []) {
+      expect(tag).toMatch(/style="margin:0;/);
+      expect(tag).toMatch(/font-weight:\d+;/);
+    }
+  });
+
   it('marks an honest-failure notice distinctly in the text part too', () => {
     const { html, text } = renderEmail(
       doc({ blocks: [{ kind: 'notice', text: 'We could not read your local forecast.' }] })

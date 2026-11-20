@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Combobox, Dialog, Transition } from '@headlessui/react';
 import { useNavigate } from 'react-router';
 import { Trans, useTranslation } from 'react-i18next';
@@ -28,6 +28,8 @@ export function CommandPalette() {
   // `initialFocus` (rather than `autoFocus`) keeps focus management explicit
   // and a11y-correct: focus enters the dialog only when it actually opens.
   const inputRef = useRef<HTMLInputElement>(null);
+  const plantsGroupId = useId();
+  const tasksGroupId = useId();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -157,17 +159,29 @@ export function CommandPalette() {
                   />
                 </div>
 
+                {/* A listbox may own only options and groups. The two lists
+                    were a heading and a plain list inside a list item, which a
+                    screen reader cannot read as part of the listbox; each is
+                    now a group named by its (visually unchanged) label. */}
                 {results.length > 0 && (
                   <Combobox.Options
                     static
                     className="max-h-80 scroll-py-2 divide-y divide-primary-100/60 overflow-y-auto"
                   >
                     {results.some((r) => r.kind === 'plant') && (
-                      <li>
-                        <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
+                      <li role="presentation">
+                        <div
+                          id={plantsGroupId}
+                          aria-hidden="true"
+                          className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700"
+                        >
                           {t('nav.plants')}
-                        </h2>
-                        <ul className="text-sm text-gray-700">
+                        </div>
+                        <ul
+                          role="group"
+                          aria-labelledby={plantsGroupId}
+                          className="text-sm text-gray-700"
+                        >
                           {results
                             .filter((r) => r.kind === 'plant')
                             .map((r) => (
@@ -196,11 +210,19 @@ export function CommandPalette() {
                       </li>
                     )}
                     {results.some((r) => r.kind === 'task') && (
-                      <li>
-                        <h2 className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700">
+                      <li role="presentation">
+                        <div
+                          id={tasksGroupId}
+                          aria-hidden="true"
+                          className="bg-parchment/70 px-4 py-2 text-xs font-semibold text-gray-700"
+                        >
                           {t('nav.tasks')}
-                        </h2>
-                        <ul className="text-sm text-gray-700">
+                        </div>
+                        <ul
+                          role="group"
+                          aria-labelledby={tasksGroupId}
+                          className="text-sm text-gray-700"
+                        >
                           {results
                             .filter((r) => r.kind === 'task')
                             .map((r) => (
