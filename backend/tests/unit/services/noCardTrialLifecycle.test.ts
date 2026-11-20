@@ -401,7 +401,18 @@ describe('no-card trial: only household creation writes it', () => {
       .filter((path) => readFileSync(path, 'utf8').includes('noCardTrialStartedAt'))
       .map((path) => path.slice(SRC.length))
       .sort();
-    expect(writers).toEqual(['services/householdService.ts']);
+    // The one exception is the operator-run restart for households whose
+    // trial ended during the 2026-09 to 2026-11 email outage, once each
+    // (ADR 0027, amendment of 2026-11-19). Nothing in a Lambda calls it.
+    expect(writers).toEqual(['services/householdService.ts', 'services/outageTrialRestart.ts']);
+  });
+
+  it('the outage restart is reachable only from its operator script', () => {
+    const importers = sourceFiles(SRC)
+      .filter((path) => readFileSync(path, 'utf8').includes('outageTrialRestart.js'))
+      .map((path) => path.slice(SRC.length))
+      .sort();
+    expect(importers).toEqual(['scripts/restartOutageTrial.ts']);
   });
 
   it('no Stripe path can write or clear the trial end: the webhook write map does not name it', () => {

@@ -55,9 +55,9 @@ export const CHECKOUT_TRIAL_END_MIN_LEAD_MS =
  *     `CHECKOUT_TRIAL_END_MIN_LEAD_MS`.
  *
  * A `noCardTrialEndsAt` that does not parse is read as absent, the same way
- * `noCardTrialState` in models/plans.ts reads it. Only household creation
- * writes that attribute, always as an ISO date, so the case is a row edited
- * by hand.
+ * `noCardTrialState` in models/plans.ts reads it. Only household creation and
+ * the operator-run outage restart (`services/outageTrialRestart.ts`) write
+ * that attribute, always as an ISO date, so the case is a row edited by hand.
  *
  * Pure. `createCheckoutSession` and `getHouseholdSubscription` both call it on
  * the same row, so what Settings → Billing says and what Stripe is asked for

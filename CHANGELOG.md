@@ -16,6 +16,20 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **A way to give an outage household its 14 days.**
+  `npm run trial:restart-outage -- <householdId>` restarts the no-card Garden
+  trial for 14 days from now, for one household whose trial ended during the
+  email outage and whose admin replied to the note asking for it. It is a dry
+  run unless `--confirm` is passed, and prints dates and counts only. It refuses
+  a household on any paid plan, App Store purchase, lifetime purchase or
+  running gift, one whose trial is still running or ended outside the outage,
+  and one already restarted. The write is cancelled if the household changed
+  after it was read. The existing day-10 and day-14 trial emails then follow
+  the new dates. Operator-run only, once per household (ADR 0027, amended
+  2026-11-19). See `docs/runbooks.md`.
+
 ## [0.53.2] - 2026-11-20
 
 **The trial emails tell the truth about a household's plants and are plain

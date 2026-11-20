@@ -871,7 +871,10 @@ to Seedling on its own. Nothing is charged, and no card is asked for to start it
 
 - **App-side only.** The trial is two attributes on the household METADATA row,
   `noCardTrialStartedAt` and `noCardTrialEndsAt`, written once by
-  `householdService.createHousehold`. No Stripe customer, subscription, trial,
+  `householdService.createHousehold`. The one exception is an operator-run
+  restart for households whose trial ended during the 2026-09 to 2026-11 email
+  outage, once each (ADR 0027, amendment of 2026-11-19; `docs/runbooks.md`). No
+  Stripe customer, subscription, trial,
   price or checkout session is created to start, run or end it. No Stripe path
   reads or writes those attributes: `SubscriptionWriteField` excludes them.
 - **Ends on the clock.** `noCardTrialState` (`models/plans.ts`) compares the time
