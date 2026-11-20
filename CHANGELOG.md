@@ -18,6 +18,16 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ### Added
 
+- **An alarm when email stops going out.** From v0.24.0 to v0.53.1 nearly
+  every app email failed and nothing alerted: each failure was caught, logged
+  as a warning, and the run carried on. CloudWatch now counts those failure
+  lines on every backend function's log group, covering emails Amazon SES
+  refused or that failed before the send, and household emails that could not
+  be queued. The alerts topic is paged when five or more land in 24 hours. One
+  failed send does not page. Tests check that every counted message is still
+  logged by the code, and that any new email-failure message is either counted
+  or excluded with a reason.
+
 - **A one-time note about the missed emails.** `npm run notify:email-outage`
   sends the approved service note about the 2026-09-04 to 2026-11-19 email
   outage to every member of an active household with email on, before the
@@ -29,6 +39,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   leftover test households, and refuses to run after the digest unless
   `--late` is passed. Operator-run only; nothing runs it on a schedule. See
   `docs/runbooks.md`.
+
+### Fixed
+
+- **The trial emails no longer tell a household with plants that it has none.**
+  The day-10 and day-14 emails count plants added during the trial. A household
+  that already had plants when its trial began, and added none during it, was
+  told "You have not added a plant yet." It is now told how many active plants it
+  has. With no care task done, the email says none was marked done "during the
+  trial" rather than "yet". English and Spanish.
+
+### Changed
+
+- **The trial emails are account notices, not offers.** The day-10 and day-14
+  emails no longer name the Garden prices or a first-charge date, and no longer
+  have the "See plans in Settings" button. They say when the trial ends, that
+  nothing is charged, what changes and that nothing is deleted. The one-click
+  unsubscribe and the trial-notices setting are unchanged (ADR 0039 §6 and §7
+  amended).
 
 ## [0.53.1] - 2026-11-19
 

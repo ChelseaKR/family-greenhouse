@@ -43,6 +43,11 @@ output "billing_lambda_log_group_name" {
   value       = aws_cloudwatch_log_group.lambda["billing"].name
 }
 
+output "lambda_log_group_names" {
+  description = "Every handler Lambda's CloudWatch log group, keyed by handler name. The email-failure metric filters in modules/monitoring read all of them, because the services that send email run inside several handlers and a new one can start sending without anyone touching monitoring."
+  value       = { for handler, group in aws_cloudwatch_log_group.lambda : handler => group.name }
+}
+
 output "api_gateway_arn" {
   description = "API Gateway ARN"
   value       = aws_apigatewayv2_api.main.arn
