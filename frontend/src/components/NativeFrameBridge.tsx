@@ -7,7 +7,6 @@ import { useAuthStore } from '@/store/authStore';
 import { listMyHouseholds } from '@/services/householdService';
 import { useSwitchHousehold } from '@/hooks/useSwitchHousehold';
 import { NativeChrome } from '@/services/nativeChrome';
-import { isTabRetapRefreshPreview } from '@/config/a11yPreview';
 import { requestRefresh } from '@/lib/refreshRequest';
 import {
   HOUSEHOLD_ID_PREFIX,
@@ -72,10 +71,9 @@ export default function NativeFrameBridge() {
         if (path) act.current.navigate(path, { replace: true });
       }),
       // Tapping the tab you are on, at the top of its first screen, refreshes
-      // it: a single tap for what pull to refresh does (WCAG 2.5.7). Behind
-      // the a11y preview flag until the option is chosen.
+      // it: a single tap for what pull to refresh does (WCAG 2.5.7).
       NativeChrome.addListener('tabRetap', () => {
-        if (isTabRetapRefreshPreview()) requestRefresh();
+        requestRefresh();
       }),
       NativeChrome.addListener('back', ({ path }) => {
         act.current.navigate(path, { replace: true });
