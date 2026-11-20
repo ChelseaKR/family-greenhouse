@@ -157,7 +157,7 @@ describe('the repriced Garden plan, as the public copy states it', () => {
   });
 });
 
-describe('yearly first (ADR 0042): the toggle and the trial emails, in both locales', () => {
+describe('yearly first (ADR 0042): the toggle, and the trial emails that no longer name a price', () => {
   const en = json('frontend/src/i18n/locales/en/translation.json') as {
     pricing: Record<string, string>;
   };
@@ -188,13 +188,15 @@ describe('yearly first (ADR 0042): the toggle and the trial emails, in both loca
     expect(es.pricing.intervalYearly).toBe('Anual');
   });
 
-  it('names the catalog prices in the trial emails, yearly first, in both locales, and says nothing is unlimited', () => {
+  // The trial emails named these prices, yearly first, until 2026-11-19. They
+  // are now account notices and name no price at all (owner decision, ADR 0039
+  // §7 as amended); trialLifecycleEmailCopy.test.ts pins the rendered emails.
+  it('names no price in the trial emails, in either locale, and says nothing is unlimited', () => {
     const copy = read('backend/src/services/trialLifecycleEmailCopy.ts');
-    expect(copy).toContain("pricesYearlyAndMonthly: '{{yearly}} a year, or {{monthly}} a month'");
-    expect(copy).toContain("pricesYearlyAndMonthly: '{{yearly}} al año o {{monthly}} al mes'");
-    // Amounts come from the catalog (`PLANS.garden`), never from a literal.
-    expect(copy).toContain('PLANS.garden.annualPrice');
-    expect(copy).toContain('PLANS.garden.monthlyPrice');
+    expect(copy).not.toContain('pricesYearlyAndMonthly');
+    expect(copy).not.toContain('PLANS.garden.annualPrice');
+    expect(copy).not.toContain('PLANS.garden.monthlyPrice');
+    expect(copy).not.toMatch(/style: 'currency'/);
     expect(copy).not.toMatch(/\$\d/);
     expect(copy).not.toMatch(/unlimited|ilimitad/i);
   });
