@@ -107,7 +107,7 @@ export function TaskChecklist({
       }}
       aria-pressed={segment === id}
       className={clsx(
-        'inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full px-3 text-sm font-semibold',
+        'fg-sel-seg inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full px-3 text-sm font-semibold',
         segment === id ? 'bg-paper text-ink shadow-sm ring-1 ring-primary-100' : 'text-gray-700'
       )}
     >
