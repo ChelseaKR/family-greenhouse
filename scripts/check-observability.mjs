@@ -94,6 +94,36 @@ const stripeNoGrantAlarm = tfResource(
   'stripe_webhook_no_grant'
 );
 
+const emailSendFilter = tfResource(
+  monitoring,
+  'aws_cloudwatch_log_metric_filter',
+  'email_send_failed'
+);
+const emailQueueFilter = tfResource(
+  monitoring,
+  'aws_cloudwatch_log_metric_filter',
+  'email_queue_failed'
+);
+const emailFailuresAlarm = tfResource(monitoring, 'aws_cloudwatch_metric_alarm', 'email_failures');
+
+/**
+ * What the September to November 2026 email outage logged: 1,427 SES refusals
+ * and 529 rejected queue writes in 30 days, every one caught, logged at WARN
+ * and followed by a normal return. Restated here on purpose, as the incident's
+ * record: whatever else changes in the lists, these may not leave them. The
+ * two-way contract between the lists and backend/src is
+ * backend/tests/unit/config/emailFailureAlarmWiring.test.ts.
+ */
+const EMAIL_OUTAGE_MESSAGES = [
+  'email_failed',
+  'digest.send_failed',
+  'welcome_email_failed',
+  'trial_email.send_failed',
+  'household_email.up_for_grabs_failed',
+  'household_email.care_credit_failed',
+  'email_suppression.batch_failed',
+];
+
 /**
  * The three messages the no-grant filter was built for. Restated here on
  * purpose — unlike the paid-no-grant message below, these are the EXISTING
@@ -738,6 +768,37 @@ const checks = [
     /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(stripeNoGrantAlarm) &&
       /comparison_operator\s*=\s*"GreaterThanThreshold"/u.test(stripeNoGrantAlarm) &&
       /threshold\s*=\s*0\b/u.test(stripeNoGrantAlarm),
+  ],
+  // ---------------------------------------------------------------------
+  // Email that did not go out. From v0.24.0 to v0.53.1 nearly every app email
+  // failed, and each failure was caught per recipient, logged at WARN, and the
+  // run returned normally: no Lambda error, no `failed` count, no alarm.
+  // ---------------------------------------------------------------------
+  [
+    'email failures are counted on every handler log group, into one metric',
+    [emailSendFilter, emailQueueFilter].every(
+      (filter) =>
+        /for_each\s*=\s*var\.lambda_log_group_names/u.test(filter) &&
+        /name\s*=\s*"EmailFailures"/u.test(filter)
+    ) &&
+      /lambda_log_group_names\s*=\s*module\.api\.lambda_log_group_names/u.test(rootInfrastructure),
+  ],
+  [
+    'every message the 2026 email outage logged is counted',
+    EMAIL_OUTAGE_MESSAGES.every((message) =>
+      new RegExp(`^\\s*"${message.replaceAll('.', '\\.')}",`, 'mu').test(monitoring)
+    ),
+  ],
+  [
+    'the email-failure alarm pages the alerts topic and reads a day without failures as healthy',
+    /metric_name\s*=\s*"EmailFailures"/u.test(emailFailuresAlarm) &&
+      /alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(emailFailuresAlarm) &&
+      /ok_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/u.test(emailFailuresAlarm) &&
+      /treat_missing_data\s*=\s*"notBreaching"/u.test(emailFailuresAlarm),
+  ],
+  [
+    'docs/observability.md documents the email-failure alarm',
+    /EmailFailures/u.test(observabilityDoc) && /email-failures/u.test(observabilityDoc),
   ],
   [
     'production smoke uses component health',
