@@ -19,6 +19,7 @@
     "entitlements:check": "node scripts/check-entitlement-gates.mjs",
     "eval": "vitest run tests/eval",
     "notify:price-change": "tsx src/scripts/sendPriceChangeNotice.ts",
+    "notify:email-outage": "tsx src/scripts/sendEmailOutageNotice.ts",
     "backfill:token-hashes": "tsx src/scripts/backfillTokenHashes.ts",
     "backfill:photo-metadata": "tsx src/scripts/stripStoredPhotoMetadata.ts"
   },

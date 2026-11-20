@@ -112,6 +112,8 @@ const NOT_COUNTED: Record<string, string> = {
     'SES already accepted the email; only the dedupe marker write failed, so the risk is a duplicate, not a missing email.',
   'household_email.item_parse_failed':
     'One queued item could not be parsed and is left out of a body that is still sent.',
+  email_outage_notice_send_failed:
+    'The one-time outage notice runs from an operator terminal, not a Lambda, so it never reaches a log group; the script exits 1 and names the failed count.',
 };
 
 /** What the 2026-09 to 2026-11 outage actually logged (production, 30 days). */
