@@ -38,6 +38,30 @@ describe('production integration IAM invariants', () => {
     );
   });
 
+  // Production, v0.24.0 to v0.53.0: the households Lambda's suppression
+  // lookup for the member list was denied dynamodb:BatchGetItem on every call,
+  // so a roster never showed which addresses had bounced.
+  it('lets the fleet batch-read the table, and only the table, for the suppression lookup', () => {
+    const fleetPolicy = apiModule.slice(
+      apiModule.indexOf('resource "aws_iam_role_policy" "lambda"'),
+      apiModule.indexOf('resource "aws_iam_role_policy" "chat_stream"')
+    );
+
+    const grants = fleetPolicy.match(/"dynamodb:BatchGetItem"/g) ?? [];
+    expect(grants).toHaveLength(1);
+    expect(fleetPolicy).toMatch(
+      /Action\s*=\s*\["dynamodb:BatchGetItem"\]\s*\n\s*Resource\s*=\s*var\.dynamodb_table_arn\s*\n/
+    );
+    // Nowhere else in the module: the chat-stream role does not batch-read.
+    expect(apiModule.match(/"dynamodb:BatchGetItem"/g) ?? []).toHaveLength(1);
+    // And the grant still has its reader: the suppression lookup batch-reads.
+    const suppression = readFileSync(
+      new URL('backend/src/services/emailSuppression.ts', root),
+      'utf8'
+    );
+    expect(suppression).toContain('new BatchGetCommand(');
+  });
+
   it('lets both chat Lambda roles read only the configured Sprout secret', () => {
     expect(apiModule).toMatch(
       /sprout_secret_arn\s*=[\s\S]*?startswith\(var\.sprout_integration_secret_id, "arn:"\)/
