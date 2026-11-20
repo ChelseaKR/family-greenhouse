@@ -354,6 +354,34 @@ Three blind spots were closed on 2026-09-04, at roughly $0.80/month:
   reset. Thresholds are 3% and 0.05%, both under AWS's, sustained over three
   hourly datapoints so one bounce in a quiet week cannot page.
 
+One more was closed on 2026-11-19, after the fact:
+
+- **Email that did not go out** (`*-email-failures`). From v0.24.0
+  (2026-09-04) to v0.53.1 nearly every app email failed. SES refused every
+  message with an HTML part, and every household-email queue write was
+  rejected: 1,427 refusals and 529 failed writes in the 30 days of logs that
+  remained. Nothing fired. Each failure was caught per recipient, logged at
+  WARN, and the run returned normally, and `reminders.run_complete`'s `sent`
+  counts members reached on any channel, so push kept it above zero. Metric
+  filters on every handler log group now count the per-attempt failure lines
+  (`email_failed`, `digest.send_failed`, `household_email.*_failed`,
+  `email_suppression.batch_failed` and the rest, listed in
+  `modules/monitoring/main.tf`) into the `EmailFailures` metric in
+  `FamilyGreenhouse/Email/{env}`. The alarm fires on five or more in a rolling 24 hours. The
+  outage ran at about 65 a day, so a repeat pages within hours. One throttled
+  send does not page, and a bounce is not counted at all: SES accepts the
+  message and reports the bounce later. Two limits. A sender too rare to reach
+  five a day on its own (the welcome email) does not page by itself. And an
+  email the code never attempts and never logs is invisible. A "SES `Send` is
+  zero while email was due" alarm was considered and not built. `AWS/SES Send`
+  is account-wide and counted 1 to 7 a day through this outage (text-only mail
+  and Cognito's own messages), so it would not have fired. No run summary
+  counts the emails it meant to send, so "due" has no metric. The message
+  names are a contract with `backend/src` in both directions, enforced by
+  `backend/tests/unit/config/emailFailureAlarmWiring.test.ts`. A renamed
+  message fails it, and so does a new email-failure message that is neither
+  counted nor excluded with a reason.
+
 Staging is off because its alerts SNS topic had no subscribers — `alert_email`
 is empty there, so 18 alarms plus a dashboard billed roughly $5.60/month to
 notify nobody. An alarm whose destination is empty is cost without coverage, so

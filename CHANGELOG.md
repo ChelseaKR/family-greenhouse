@@ -16,6 +16,18 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+### Added
+
+- **An alarm when email stops going out.** From v0.24.0 to v0.53.1 nearly
+  every app email failed and nothing alerted: each failure was caught, logged
+  as a warning, and the run carried on. CloudWatch now counts those failure
+  lines on every backend function's log group, covering emails Amazon SES
+  refused or that failed before the send, and household emails that could not
+  be queued. The alerts topic is paged when five or more land in 24 hours. One
+  failed send does not page. Tests check that every counted message is still
+  logged by the code, and that any new email-failure message is either counted
+  or excluded with a reason.
+
 ## [0.53.1] - 2026-11-19
 
 **Emails send again.** Care reminders, weekly digests, the welcome email, the

@@ -450,6 +450,13 @@ module "monitoring" {
   monthly_budget_usd              = var.monthly_budget_usd
   cognito_mau_alert_threshold     = var.cognito_mau_alert_threshold
   lambda_dlq_name                 = module.api.lambda_dlq_name
+
+  # Every handler's log group, for the email-failure metric filters. Email is
+  # sent from inside many handlers (reminders, digests, households, tasks,
+  # billing, notifications ...), so the filters fan out over all of them
+  # rather than a hand-kept list that a new sender would not be on.
+  lambda_log_group_names = module.api.lambda_log_group_names
+
   # Wired only when the email module is provisioned (domain set). No cycle:
   # monitoring already depends on api (which depends on email), and email
   # depends on nothing here.
