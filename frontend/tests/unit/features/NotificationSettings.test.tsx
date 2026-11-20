@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import { act, cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettings } from '@/features/settings/NotificationSettings';
@@ -150,6 +150,28 @@ describe('NotificationSettings', () => {
     expect(
       screen.getByText('Turn on email notifications to receive the weekly digest.')
     ).toBeInTheDocument();
+  });
+
+  it('says why a switch is dimmed, and names each block of controls (WCAG 1.3.1)', async () => {
+    // The sentence beside a switch was visual only: a screen reader heard
+    // "Weekly plant digest, switch, off, dimmed" and never the reason.
+    await renderSettings(prefs({ email: false }));
+    expect(
+      screen.getByRole('checkbox', { name: 'Weekly plant digest' })
+    ).toHaveAccessibleDescription('Turn on email notifications to receive the weekly digest.');
+    expect(
+      screen.getByRole('checkbox', { name: 'Email notifications' })
+    ).toHaveAccessibleDescription(/.+/);
+
+    // The household email switches sit under one title; they are a group
+    // named by it, and each switch carries its own one-line description.
+    const household = screen.getByRole('group', { name: 'Household emails' });
+    const switches = within(household).getAllByRole('checkbox');
+    expect(switches.length).toBeGreaterThan(1);
+    for (const toggle of switches) {
+      expect(toggle).toHaveAccessibleDescription(/.+/);
+    }
+    expect(screen.getByRole('group', { name: 'Quiet hours' })).toBeInTheDocument();
   });
 
   it('keeps the SMS toggle disabled until the phone is verified', async () => {
