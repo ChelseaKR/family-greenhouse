@@ -128,6 +128,62 @@ already mailed are skipped, not mailed twice.
 
 ---
 
+## Send the email-outage notice (one time, before 2026-11-23 00:00 UTC)
+
+**What:** the service note approved on 2026-11-19 about the 2026-09-04 to
+2026-11-19 email outage, to every member of an active household with email
+on. Admins of a household whose no-card trial ended in that window, and which
+is not on a paid plan, also get the "reply for another 14 days" paragraph.
+Code and approved text: `backend/src/services/emailOutageNotice.ts`.
+
+**Run**, from the repository root, with production credentials. The settings
+are read from the production digests Lambda, so nothing is typed by hand:
+
+```bash
+export AWS_PROFILE=family-greenhouse AWS_REGION=us-east-1 AWS_XRAY_CONTEXT_MISSING=IGNORE_ERROR
+FN=family-greenhouse-digests-production
+for k in TABLE_NAME COGNITO_USER_POOL_ID COGNITO_CLIENT_ID FRONTEND_URL \
+         SES_FROM_EMAIL SES_CONFIGURATION_SET SES_REPLY_TO; do
+  export "$k=$(aws lambda get-function-configuration --function-name "$FN" \
+    --query "Environment.Variables.$k" --output text)"
+done
+
+# 1. dry run: reads only, sends nothing, writes nothing, prints counts only
+npm run notify:email-outage --workspace backend --silent
+
+# 2. send
+npm run notify:email-outage --workspace backend --silent -- --confirm
+```
+
+**What to expect.** The dry run prints five lines, counts only (never an
+address, a name or an id):
+
+```text
+Email outage notice (email-outage-2026-11): dry run
+Households: H scanned, X left out as test households (creator not in Cognito), E with a trial that ended during the outage.
+Recipients: R would be emailed, T of them with the trial paragraph.
+Skipped: a email turned off, b already sent, c no address, d suppressed, e suppression status unknown.
+Dry run only: nothing was emailed and nothing was written. Pass --confirm to send.
+```
+
+`--confirm` prints `Sent: N, T of them with the trial paragraph.` and the
+same skip line, and exits 0. If any send failed it says how many and exits 1;
+their markers were released, so running `--confirm` again mails only them.
+A second `--confirm` after a clean run sends nothing and counts everyone as
+`already sent`.
+
+- **Test households** are those whose creator no longer exists in Cognito. To
+  name households yourself instead, pass `--allowlist ids.txt` (one household
+  id per line); the Cognito check is then skipped.
+- **Cutoff:** at or after 2026-11-23 00:00 UTC the script refuses to run,
+  dry run included. Pass `--late` to run anyway.
+- `--confirm` refuses to start without `SES_FROM_EMAIL` or with a non-https
+  `FRONTEND_URL`, so a half-configured shell cannot burn markers on dry sends.
+- Replies go to the support inbox (`SES_REPLY_TO`). A reply asking for the
+  extra 14 days is handled by hand; this script starts no trial.
+
+---
+
 ## Reminders not sending
 
 **Symptom:** users report missing watering reminders.
