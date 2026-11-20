@@ -256,12 +256,19 @@ function paragraph(text: string, tone: 'normal' | 'muted'): string {
   )}</tr>`;
 }
 
+/**
+ * A section heading is an `<h2>`, not a styled cell: a screen reader lists
+ * and jumps by headings, and a cell that only LOOKS like one is invisible to
+ * that (WCAG 1.3.1). The look is unchanged — every property a client's
+ * default heading style would add (margin, size, weight) is stated inline.
+ */
 function heading(text: string): string {
   return `<tr>${td(
-    `padding:10px 32px 10px;font-family:${FONT};font-size:12px;line-height:18px;` +
-      `letter-spacing:0.1em;text-transform:uppercase;font-weight:700;color:${LIGHT.accent};`,
-    escapeHtml(text),
-    'fg-pad fg-label'
+    'padding:10px 32px 10px;',
+    `<h2 class="fg-label" style="margin:0;font-family:${FONT};font-size:12px;line-height:18px;` +
+      `letter-spacing:0.1em;text-transform:uppercase;font-weight:700;color:${LIGHT.accent};">` +
+      `${escapeHtml(text)}</h2>`,
+    'fg-pad'
   )}</tr>`;
 }
 
@@ -495,10 +502,10 @@ export function renderEmail(
 <table role="presentation" class="fg-card" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background-color:${LIGHT.card};border-radius:14px;">
 ${header()}
 <tr>${td(
-    `padding:28px 32px 8px;font-family:${FONT_DISPLAY};font-size:26px;line-height:33px;` +
-      `font-weight:400;color:${LIGHT.title};`,
-    escapeHtml(doc.title),
-    'fg-pad fg-title'
+    'padding:28px 32px 8px;',
+    `<h1 class="fg-title" style="margin:0;font-family:${FONT_DISPLAY};font-size:26px;` +
+      `line-height:33px;font-weight:400;color:${LIGHT.title};">${escapeHtml(doc.title)}</h1>`,
+    'fg-pad'
   )}</tr>
 ${bodyRows}${footer}
 </table>

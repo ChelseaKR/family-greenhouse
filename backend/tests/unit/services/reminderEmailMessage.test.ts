@@ -75,7 +75,7 @@ describe('composeReminderMessage — the title says what to do', () => {
     );
     expect(today.emailSubject).toBe('Water Monstera today');
     expect(titleOf(today.html)).toBe('Water Monstera today');
-    expect(today.html).toContain('>Water Monstera today</td>');
+    expect(today.html).toContain('>Water Monstera today</h1>');
   });
 
   it('counts the rest truthfully, from the complete list and not the capped one', () => {
