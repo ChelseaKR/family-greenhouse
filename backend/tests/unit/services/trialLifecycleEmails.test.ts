@@ -198,6 +198,17 @@ function sentRaw(): string {
   return cmd.input.RawMessage.Data.toString('utf8');
 }
 
+/** The decoded body of the sent message's part with this Content-Type. */
+function sentPart(contentType: 'text/plain' | 'text/html'): string {
+  const raw = sentRaw();
+  const start = raw.indexOf(`Content-Type: ${contentType}; charset=UTF-8`);
+  expect(start, `the message has a ${contentType} part`).toBeGreaterThan(-1);
+  const bodyStart = raw.indexOf('\r\n\r\n', start) + 4;
+  const bodyEnd = raw.indexOf('\r\n--', bodyStart);
+  const b64 = raw.slice(bodyStart, bodyEnd === -1 ? undefined : bodyEnd).replace(/\r\n/g, '');
+  return Buffer.from(b64, 'base64').toString('utf8');
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   rows = new Map();
@@ -407,6 +418,49 @@ describe('what is sent', () => {
     await runTrialLifecycleEmails(DAY10, {}, ENABLED);
     expect(sesSendMock).toHaveBeenCalledTimes(1);
     expect(sentRaw()).not.toContain('List-Unsubscribe');
+  });
+
+  // Owner decision 2026-11-19: the trial emails are account notices. What
+  // actually leaves for SES carries no price and no plans link or button, and
+  // still carries one-click unsubscribe.
+  it.each([
+    ['day 10', DAY10],
+    ['day 14', DAY14],
+  ])('%s as sent names no price and links no plans page, and keeps unsubscribe', async (_, at) => {
+    await runTrialLifecycleEmails(at, {}, ENABLED);
+    expect(sesSendMock).toHaveBeenCalledTimes(1);
+    const raw = sentRaw();
+    expect(raw).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
+    expect(raw).toMatch(/List-Unsubscribe: <https:\/\/api\.familygreenhouse\.net\//);
+    for (const body of [sentPart('text/plain'), sentPart('text/html')]) {
+      expect(body).toContain('Garden trial');
+      expect(body).not.toMatch(/[$€£]|US\$|\d+[.,]\d{2}\b/);
+      expect(body).not.toMatch(/settings\/billing|pricing|See plans/i);
+      expect(body).not.toMatch(/a (month|year)\b|first charge/i);
+      expect(body).toContain('Unsubscribe from these');
+    }
+  });
+
+  it('tells a household that had plants before the trial what it has, not that it has none', async () => {
+    vi.mocked(factsModule.readTrialFacts).mockResolvedValue({
+      plantsAdded: { status: 'ok', value: 0 },
+      tasksCompleted: { status: 'ok', value: 2 },
+      plantsNow: { status: 'ok', value: 4 },
+      membersNow: { status: 'ok', value: 2 },
+    });
+    for (const at of [DAY10, DAY14]) {
+      rows = new Map();
+      installFakeTable();
+      seedHousehold();
+      seedPrefs('user-admin');
+      sesSendMock.mockClear();
+      await runTrialLifecycleEmails(at, {}, ENABLED);
+      expect(sesSendMock).toHaveBeenCalledTimes(1);
+      const text = sentPart('text/plain');
+      expect(text).toContain('Your household has 4 active plants.');
+      expect(text).not.toContain('not added a plant');
+      expect(text).not.toContain('Add your first plant');
+    }
   });
 
   it('reads the facts once per household, for the trial window clamped to now', async () => {

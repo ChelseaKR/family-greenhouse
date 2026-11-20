@@ -58,14 +58,22 @@ saying plainly that nothing was deleted.
 
 6. **Absence is not an achievement.** A household with no plants is told "You have not added a
    plant yet." A household with plants and no completed task is told "No care task has been marked
-   done yet." A count that could not be read is left out and the email says the counts could not be
-   loaded. None of them prints a zero as a result.
+   done during the trial." A count that could not be read is left out and the email says the counts
+   could not be loaded. None of them prints a zero as a result. _Amended 2026-11-19:_ the counts
+   cover the trial window only, so a household that had plants before its trial and added none
+   during it was told it had not added a plant. It is now told how many active plants it has (the
+   household's plant counter), and the no-task sentence says "during the trial" rather than "yet".
 
-7. **Not marketing pressure.** No discount, no code, no countdown beyond the plain end date, no
-   exclamation marks. The prices named are the catalog's Garden prices, the yearly first and then
-   the monthly, each once (amended 2026-11-08 with ADR 0042's "Yearly first"; until then the one
-   price named was the monthly, once). When the catalog has no yearly Garden price on sale, the
-   monthly alone is named, once. A test pins the banned phrases.
+7. **A notice, not an offer.** No discount, no code, no countdown beyond the plain end date, no
+   exclamation marks. _Amended 2026-11-19 (owner decision):_ the emails name no price and carry no
+   plans link or button and no line about keeping Garden. They say when the trial ends, that
+   nothing is charged, what changes and that nothing is deleted. Before this they named the
+   catalog's Garden prices (the yearly first and then the monthly from 2026-11-08, ADR 0042's
+   "Yearly first"; the monthly alone before that), when a first charge would fall, and a "See
+   plans in Settings" button. Removing them keeps both emails plainly about the account instead of
+   adding a postal address to their footers. Consent, one-click unsubscribe and `trialNotices`
+   (decision 8) are unchanged. Tests pin the banned phrases and that no currency amount or plans
+   link appears.
 
 8. **The existing mail rules apply.**
    - _Consent._ These are lifecycle mail, not transactional like ADR 0023's, so they honor

@@ -28,6 +28,24 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   logged by the code, and that any new email-failure message is either counted
   or excluded with a reason.
 
+### Fixed
+
+- **The trial emails no longer tell a household with plants that it has none.**
+  The day-10 and day-14 emails count plants added during the trial. A household
+  that already had plants when its trial began, and added none during it, was
+  told "You have not added a plant yet." It is now told how many active plants it
+  has. With no care task done, the email says none was marked done "during the
+  trial" rather than "yet". English and Spanish.
+
+### Changed
+
+- **The trial emails are account notices, not offers.** The day-10 and day-14
+  emails no longer name the Garden prices or a first-charge date, and no longer
+  have the "See plans in Settings" button. They say when the trial ends, that
+  nothing is charged, what changes and that nothing is deleted. The one-click
+  unsubscribe and the trial-notices setting are unchanged (ADR 0039 §6 and §7
+  amended).
+
 ## [0.53.1] - 2026-11-19
 
 **Emails send again.** Care reminders, weekly digests, the welcome email, the

@@ -2,9 +2,9 @@
  * What a new subscription checkout gives before its first charge.
  *
  * Pure: no Stripe, no DynamoDB. `services/billing.ts` applies it to a
- * Checkout Session and publishes it on GET /billing/me, and the no-card-trial
- * emails (`services/trialLifecycleEmailCopy.ts`) use the same constants to
- * name the same first-charge date.
+ * Checkout Session and publishes it on GET /billing/me. (The no-card-trial
+ * emails used to name this first-charge date too; since 2026-11-19 they name
+ * no price or charge at all, ADR 0039 §7.)
  */
 
 /** Length of the free trial offered on a household's FIRST paid subscription. */
