@@ -11,6 +11,32 @@ function decodePart(raw: string, contentType: string): string {
   return Buffer.from(b64, 'base64').toString('utf8');
 }
 
+/**
+ * Split an RFC 5322 entity at its first empty line, the way SES and every
+ * mail client do: everything before it is the header block, folded lines
+ * joined back onto the field they continue.
+ */
+function splitEntity(raw: string): { headers: string[]; body: string } {
+  const at = raw.indexOf('\r\n\r\n');
+  expect(at, 'an entity must end its header block with an empty line').toBeGreaterThan(-1);
+  return {
+    headers: raw
+      .slice(0, at)
+      .replace(/\r\n[ \t]/g, ' ')
+      .split('\r\n'),
+    body: raw.slice(at + 4),
+  };
+}
+
+const fieldsNamed = (headers: string[], name: string) =>
+  headers.filter((line) => line.toLowerCase().startsWith(`${name.toLowerCase()}:`));
+
+/** Every line of a header block must be a `Name: value` field. A boundary
+ *  delimiter or a body line in there means the block ran on too long. */
+function expectOnlyHeaderFields(headers: string[]) {
+  for (const line of headers) expect(line).toMatch(/^[!-9;-~]+:/);
+}
+
 describe('buildRawMessage', () => {
   const base = {
     from: 'Family Greenhouse <hello@example.net>',
@@ -25,6 +51,63 @@ describe('buildRawMessage', () => {
     expect(raw).toContain('Content-Type: multipart/alternative; boundary="');
     expect(decodePart(raw, 'text/plain; charset=UTF-8')).toBe('plain body');
     expect(decodePart(raw, 'text/html; charset=UTF-8')).toBe('<p>html body</p>');
+  });
+
+  // Production, v0.24.0 to v0.53.0: SES refused every html email with
+  // "Duplicate header 'Content-Type'". The top-level header block had no empty
+  // line after it, so the first part's headers were read as more top-level
+  // headers. Each assertion below is on the parsed structure, not a substring,
+  // because every substring check above passed throughout.
+  it('ends the top-level header block before the first part, with one Content-Type', () => {
+    const raw = buildRawMessage({
+      ...base,
+      replyTo: 'support@example.net',
+      headers: {
+        'List-Unsubscribe': '<https://api.example/notifications/email/unsubscribe?t=abc>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    }).toString('utf8');
+
+    const top = splitEntity(raw);
+    expectOnlyHeaderFields(top.headers);
+    const contentTypes = fieldsNamed(top.headers, 'Content-Type');
+    expect(contentTypes).toHaveLength(1);
+    expect(contentTypes[0]).toMatch(/^Content-Type: multipart\/alternative; boundary="[^"]+"$/);
+    expect(fieldsNamed(top.headers, 'MIME-Version')).toHaveLength(1);
+    expect(fieldsNamed(top.headers, 'Content-Transfer-Encoding')).toHaveLength(0);
+
+    const boundary = /boundary="([^"]+)"/.exec(contentTypes[0])?.[1] ?? '';
+    const segments = top.body.split(`--${boundary}`);
+    // [preamble, text part, html part, closing "--" epilogue]
+    expect(segments).toHaveLength(4);
+    expect(segments[0]).toBe('');
+    expect(segments[3].startsWith('--')).toBe(true);
+
+    const partTypes = segments.slice(1, 3).map((segment) => {
+      expect(segment.startsWith('\r\n')).toBe(true);
+      const part = splitEntity(segment.slice(2));
+      expectOnlyHeaderFields(part.headers);
+      expect(fieldsNamed(part.headers, 'Content-Transfer-Encoding')).toEqual([
+        'Content-Transfer-Encoding: base64',
+      ]);
+      const types = fieldsNamed(part.headers, 'Content-Type');
+      expect(types).toHaveLength(1);
+      return types[0];
+    });
+    expect(partTypes).toEqual([
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Type: text/html; charset=UTF-8',
+    ]);
+  });
+
+  it('gives a text-only message one header block with one Content-Type', () => {
+    const raw = buildRawMessage({ ...base, html: undefined }).toString('utf8');
+    const top = splitEntity(raw);
+    expectOnlyHeaderFields(top.headers);
+    expect(fieldsNamed(top.headers, 'Content-Type')).toEqual([
+      'Content-Type: text/plain; charset=UTF-8',
+    ]);
+    expect(fieldsNamed(top.headers, 'Content-Transfer-Encoding')).toHaveLength(1);
   });
 
   it('puts text before html, so a dual-capable client shows the html', () => {
