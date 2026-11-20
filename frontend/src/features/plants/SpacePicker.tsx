@@ -111,9 +111,9 @@ export function SpacePicker({
                 <button
                   key={option}
                   type="button"
-                  className={`fg-sel-chip min-h-touch rounded-full border px-3 py-1.5 text-sm ${
+                  className={`min-h-touch rounded-full border px-3 py-1.5 text-sm ${
                     environment === option
-                      ? 'border-primary-500 bg-primary-100 text-primary-900'
+                      ? 'border-primary-700 bg-primary-700 text-white'
                       : 'border-primary-200 bg-paper text-gray-700'
                   }`}
                   aria-pressed={environment === option}

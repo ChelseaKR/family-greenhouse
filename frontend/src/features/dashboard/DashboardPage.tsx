@@ -490,9 +490,9 @@ export function DashboardPage() {
                   onClick={() => setActivityFilter(f)}
                   aria-pressed={activityFilter === f}
                   className={clsx(
-                    'fg-sel-chip min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
+                    'min-h-touch rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500',
                     activityFilter === f
-                      ? 'bg-primary-100 text-primary-800 border-primary-400'
+                      ? 'bg-primary-700 text-white border-primary-700'
                       : 'bg-paper text-gray-700 border-primary-200/70 hover:bg-primary-50'
                   )}
                 >

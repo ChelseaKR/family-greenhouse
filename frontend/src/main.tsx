@@ -23,7 +23,6 @@ import { isRTL } from './i18n';
 import { applyDensity, usePrefsStore } from './store/prefsStore';
 import { useAuthStore } from './store/authStore';
 import { isNativeApp } from './lib/platform';
-import { applyA11yPreview } from './config/a11yPreview';
 import { isAbandonedChunkLoad } from './lib/pageLeaving';
 // Self-hosted brand fonts. Bitter Variable is the display face used in the
 // wordmark and major headlines; Instrument Sans is the body face. Both are loaded
@@ -61,9 +60,6 @@ initGoogleAnalytics();
   document.documentElement.lang = prefs.language;
   document.documentElement.dir = isRTL(prefs.language) ? 'rtl' : 'ltr';
 }
-// Preview of the selected-state options awaiting a design choice; does
-// nothing unless the dev flag is set (src/config/a11yPreview.ts).
-applyA11yPreview();
 
 const queryClient = createAppQueryClient();
 // Done / Snooze from a reminder notification (web push messages here; the
