@@ -58,6 +58,12 @@ variable "digests_lambda_log_group_name" {
   default     = ""
 }
 
+variable "lambda_log_group_names" {
+  description = "Every handler Lambda's log group, keyed by handler name. The email-failure metric filters are created on each one. Empty creates no filters and no email-failure alarm."
+  type        = map(string)
+  default     = {}
+}
+
 variable "ses_configuration_set_name" {
   description = "SES configuration set publishing Reputation.BounceRate/ComplaintRate. Empty (no email module) skips the SES alarms."
   type        = string

@@ -666,6 +666,136 @@ resource "aws_cloudwatch_log_metric_filter" "retention_engagement_unavailable" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Email that did not go out
+#
+# From v0.24.0 (2026-09-04) to v0.53.1 (2026-11-19) almost no app email was
+# sent, and nothing here noticed. In the last 30 days of logs alone SES refused
+# 1,427 messages ("Duplicate header 'Content-Type'") and 529 household-email
+# queue writes were rejected (`items` is a DynamoDB reserved word). Every one of
+# those was caught where it happened, logged at WARN, and the run carried on and
+# returned normally — the same shape the scheduled-run note above describes,
+# one level further down. The run summaries did not help: `reminders.run_complete`
+# counts members reached on ANY channel, so push kept it above zero, and the
+# per-recipient catches never touched a `failed` counter.
+#
+# So these filters read the per-attempt lines themselves. Two lists, split by
+# what went wrong, publishing into ONE metric:
+#
+#   send  — the send was attempted and threw: SES refused it, or the code
+#           around the send failed before SES could take it.
+#   queue — the email was never attempted: the queue write, the queue flush,
+#           or the suppression lookup that has to answer first, failed.
+#
+# Two filters rather than one only because a metric filter pattern is capped at
+# 1024 characters and one list would leave almost no room for the next sender.
+# The precondition on each filter fails the plan, with this explanation, before
+# AWS would reject it at apply.
+#
+# The message names are a contract with backend/src, in two directions, and
+# both are tested (backend/tests/unit/config/emailFailureAlarmWiring.test.ts and
+# scripts/check-observability.mjs): every name here must still be logged by the
+# code, so a rename cannot quietly un-alarm a path; and every email-failure
+# message the code logs must be on one of these lists or on the test's
+# exclusion list with a reason, so a new sender cannot be missed by omission.
+#
+# The filters are created on EVERY handler's log group rather than on the ones
+# that send email today. Email is sent from inside reminders, digests,
+# households, tasks, billing, notifications and checkoutRecovery, through
+# shared services, and a filter on a log group that never emits the message
+# costs nothing. A hand-kept list of "the groups that send email" is exactly the
+# list a new sender would not be on.
+#
+# Not covered: an email that is not attempted and not logged. A bug that makes a
+# sender decide nobody is due produces no line here, and no metric anywhere
+# today can tell "nothing was due" from "we wrongly decided nothing was due".
+# ---------------------------------------------------------------------------
+locals {
+  email_send_failure_messages = [
+    "email_failed",                              # notifier's email leg: reminders, ask-family, escalation, upgrade requests
+    "reminders.send_failed",                     # care reminder: sendToUser threw, email leg never ran
+    "reminders.pest_alert_send_failed",          # pest alert: same
+    "ask_family.send_failed",                    # "ask family to do it": same
+    "escalation.send_failed",                    # overdue auto-handoff: same
+    "digest.send_failed",                        # weekly digest
+    "recap.send_failed",                         # yearly recap
+    "trial_email.send_failed",                   # trial day-10 / day-14 emails
+    "welcome_email_failed",                      # welcome email
+    "household_email.send_failed",               # queued household email, at flush
+    "household_email.leave_confirmation_failed", # "you left the household"
+    "invite_email.send_failed",                  # household invite
+    "billing_email_send_failed",                 # billing lifecycle notice
+    "billing_email_dispatch_failed",             # billing notice failed before the send
+    "account_deletion_email_failed",             # account deletion confirmation
+    "checkout_recovery.send_failed",             # abandoned-checkout email
+    "upgrade_request.email_failed",              # "a member asked to upgrade"
+    "price_change_notice_send_failed",           # advance notice of a price change
+  ]
+
+  email_queue_failure_messages = [
+    "household_email.up_for_grabs_failed",  # hourly up-for-grabs queue write
+    "household_email.care_credit_failed",   # "someone covered your task" queue write
+    "household_email.coverage_failed",      # "you are covering" queue write
+    "household_email.member_joined_failed", # "someone joined" queue write
+    "household_email.member_left_failed",   # "someone left" queue write
+    "household_email.flush_failed",         # the hourly queue flush itself
+    "household_email.run_failed",           # the whole household-email pass
+    "email_suppression.batch_failed",       # suppression store unreadable (batch)
+    "email_suppression.lookup_failed",      # suppression store unreadable (single)
+    "email_suppression_unknown",            # a send declined because of the above
+  ]
+
+  email_send_failure_pattern  = "{ ${join(" || ", [for message in local.email_send_failure_messages : "$.msg = \"${message}\""])} }"
+  email_queue_failure_pattern = "{ ${join(" || ", [for message in local.email_queue_failure_messages : "$.msg = \"${message}\""])} }"
+
+  # CloudWatch Logs rejects a filter pattern longer than this.
+  metric_filter_pattern_max_length = 1024
+}
+
+resource "aws_cloudwatch_log_metric_filter" "email_send_failed" {
+  for_each = var.lambda_log_group_names
+
+  name           = "${var.project_name}-email-send-failed-${each.key}-${var.environment}"
+  log_group_name = each.value
+  pattern        = local.email_send_failure_pattern
+
+  metric_transformation {
+    name          = "EmailFailures"
+    namespace     = "FamilyGreenhouse/Email/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+
+  lifecycle {
+    precondition {
+      condition     = length(local.email_send_failure_pattern) <= local.metric_filter_pattern_max_length
+      error_message = "The email send-failure filter pattern is ${length(local.email_send_failure_pattern)} characters; CloudWatch Logs allows ${local.metric_filter_pattern_max_length}. Move messages to a third filter publishing the same EmailFailures metric rather than dropping any."
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "email_queue_failed" {
+  for_each = var.lambda_log_group_names
+
+  name           = "${var.project_name}-email-queue-failed-${each.key}-${var.environment}"
+  log_group_name = each.value
+  pattern        = local.email_queue_failure_pattern
+
+  metric_transformation {
+    name          = "EmailFailures"
+    namespace     = "FamilyGreenhouse/Email/${var.environment}"
+    value         = "1"
+    default_value = "0"
+  }
+
+  lifecycle {
+    precondition {
+      condition     = length(local.email_queue_failure_pattern) <= local.metric_filter_pattern_max_length
+      error_message = "The email queue-failure filter pattern is ${length(local.email_queue_failure_pattern)} characters; CloudWatch Logs allows ${local.metric_filter_pattern_max_length}. Move messages to a third filter publishing the same EmailFailures metric rather than dropping any."
+    }
+  }
+}
+
 # CloudWatch Alarms
 #
 # Alarm strategy (cost-driven consolidation): standard alarms are ~$0.10/mo
@@ -1431,6 +1561,58 @@ resource "aws_cloudwatch_metric_alarm" "digests_run_truncated" {
 
   tags = {
     Name = "${var.project_name}-digests-run-truncated-alarm-${var.environment}"
+  }
+}
+
+# Email that did not go out. See the EmailFailures filters above for what is
+# counted and why.
+#
+# Five or more in a rolling day. Measured against the outage this exists for,
+# the failures ran at roughly 65 a day (1,978 over 30 days), most of them from
+# the hourly reminder pass, so a repeat would cross five within a couple of
+# hours of the first reminders falling due and page well inside a day. A broken
+# weekly digest (about 22 failures a week, over four Monday runs) crosses it
+# within its Monday runs. What it does not page on: one
+# throttled or refused send, or a handful in a day. A bounce is not counted at
+# all: SES accepts the message and reports the bounce later through
+# emailEvents, which never logs these lines; the SES bounce-rate alarm below
+# watches bounces.
+#
+# A day, not an hour, because some senders are rare. The welcome email failed 12
+# times in those 30 days; an hourly window would only ever see the busy
+# senders. The cost is a slow return to OK: the alarm clears 24 hours after the
+# last failure, not when the fix ships.
+#
+# What it cannot see: a sender with so little volume that it alone never
+# reaches five in a day. The welcome email, broken on its own, would never page
+# here. An outage with one shared cause, as this one had, is caught through the
+# reminder pass. And because the window is one day, a slow trickle of
+# fewer than five a day never pages; Logs Insights on msg finds it.
+#
+# notBreaching, deliberately: no failures logged is the healthy answer, and
+# "SES sent nothing while email was due" is not a signal this stack has. The
+# account-wide AWS/SES Send metric kept counting 1 to 7 a day through the
+# outage (text-only mail and Cognito's own messages), so a "Send is zero" alarm
+# would not have fired for it, and no run summary counts the emails it meant to
+# send.
+resource "aws_cloudwatch_metric_alarm" "email_failures" {
+  count = var.enable_alarms && length(var.lambda_log_group_names) > 0 ? 1 : 0
+
+  alarm_name          = "${var.project_name}-email-failures-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "EmailFailures"
+  namespace           = "FamilyGreenhouse/Email/${var.environment}"
+  period              = 86400
+  statistic           = "Sum"
+  threshold           = 4
+  alarm_description   = "Five or more emails in the last 24 hours were refused by SES, threw before SES could take them, or were never queued. Each failure is caught, logged at WARN and the run returns normally, which is how nearly all app email failed from September to November 2026 with no signal. In Logs Insights, select the production handler log groups and run: fields @timestamp, @log, msg, err | filter msg like /_failed$|_unknown$/ | stats count(*) by @log, msg. The err field names the cause. The messages counted are listed in modules/monitoring/main.tf."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name = "${var.project_name}-email-failures-alarm-${var.environment}"
   }
 }
 
