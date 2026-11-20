@@ -8,7 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
-import { useToastStore, type ToastVariant } from '@/store/toastStore';
+import { useToastStore, type HoldReason, type ToastVariant } from '@/store/toastStore';
 
 const variantConfig: Record<
   ToastVariant,
@@ -35,6 +35,38 @@ const variantConfig: Record<
 };
 
 const noopSubscribe = () => () => {};
+
+/**
+ * A ref callback that stops a toast's clock while the pointer is over it or
+ * focus is inside it, so it cannot vanish mid-sentence or from under a focused
+ * Undo button (WCAG 2.2.1, 2.4.3). Native listeners rather than JSX handlers:
+ * the toast is not itself a control, and must not be announced as one.
+ */
+function holdWhileInUse(
+  id: number,
+  hold: (id: number, reason: HoldReason) => void,
+  release: (id: number, reason: HoldReason) => void
+) {
+  return (el: HTMLDivElement | null) => {
+    if (!el) return;
+    const onEnter = () => hold(id, 'pointer');
+    const onLeave = () => release(id, 'pointer');
+    const onFocusIn = () => hold(id, 'focus');
+    const onFocusOut = (e: FocusEvent) => {
+      if (!el.contains(e.relatedTarget as Node | null)) release(id, 'focus');
+    };
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    el.addEventListener('focusin', onFocusIn);
+    el.addEventListener('focusout', onFocusOut);
+    return () => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+      el.removeEventListener('focusin', onFocusIn);
+      el.removeEventListener('focusout', onFocusOut);
+    };
+  };
+}
 
 /**
  * False during server rendering AND during the client's hydration render, true
@@ -70,6 +102,8 @@ export function Toaster() {
   const { t: translate } = useTranslation();
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
+  const hold = useToastStore((s) => s.hold);
+  const release = useToastStore((s) => s.release);
   const hydrated = useIsHydrated();
 
   // Nothing to portal into during the prerender, and nothing may be portalled
@@ -90,6 +124,7 @@ export function Toaster() {
         return (
           <div
             key={t.id}
+            ref={holdWhileInUse(t.id, hold, release)}
             className={clsx(
               'pointer-events-auto flex items-start gap-3 rounded-md p-4 shadow-lg ring-1',
               c.bg

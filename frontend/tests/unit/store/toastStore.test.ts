@@ -48,4 +48,31 @@ describe('toastStore', () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0].message).toBe('b');
   });
+
+  it('stops the clock while held and resumes it with the time that was left', () => {
+    // WCAG 2.2.1: a toast must not vanish while someone is reading or using it.
+    const id = toast.success('Saved');
+    vi.advanceTimersByTime(3000);
+    useToastStore.getState().hold(id, 'pointer');
+    vi.advanceTimersByTime(60_000);
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+
+    useToastStore.getState().release(id, 'pointer');
+    vi.advanceTimersByTime(999);
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('keeps a toast up until every hold is released', () => {
+    const id = toast.info('Task snoozed');
+    useToastStore.getState().hold(id, 'pointer');
+    useToastStore.getState().hold(id, 'focus');
+    useToastStore.getState().release(id, 'pointer');
+    vi.advanceTimersByTime(60_000);
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+    useToastStore.getState().release(id, 'focus');
+    vi.advanceTimersByTime(4000);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
 });
