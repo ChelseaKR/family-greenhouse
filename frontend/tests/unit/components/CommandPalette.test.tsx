@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
@@ -53,6 +53,32 @@ describe('CommandPalette', () => {
 
     expect(screen.getByRole('dialog', { name: 'Search plants and tasks' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Search plants and tasks' })).toHaveValue('f');
+  });
+
+  it('groups results the way a listbox allows: named groups of options, nothing else', async () => {
+    // The Plants and Tasks labels were h2 headings inside list items inside
+    // the listbox. A listbox may own only options and groups (WCAG 4.1.2,
+    // 1.3.1), so the headings and the grouping were lost to a screen reader.
+    vi.mocked(plantService.getPlants).mockResolvedValue([fern] as never);
+    vi.mocked(taskService.getTasks).mockResolvedValue([
+      { id: 't1', plantId: 'p1', plantName: 'Fern', type: 'water', assignedToName: null },
+    ] as never);
+    await openAndType('fern');
+
+    const listbox = await screen.findByRole('listbox');
+    expect(within(listbox).queryAllByRole('heading')).toHaveLength(0);
+    const groups = within(listbox).getAllByRole('group');
+    expect(groups).toHaveLength(2);
+    expect(within(listbox).getByRole('group', { name: 'Plants' })).toBeInTheDocument();
+    expect(within(listbox).getByRole('group', { name: 'Tasks' })).toBeInTheDocument();
+    // Every element under the listbox that a screen reader would treat as an
+    // item is an option or a group; list items are presentational.
+    for (const li of listbox.querySelectorAll('li')) {
+      expect(['option', 'presentation']).toContain(li.getAttribute('role'));
+    }
+    for (const group of groups) {
+      expect(within(group).getAllByRole('option').length).toBeGreaterThan(0);
+    }
   });
 
   it('finds a plant once the lists have loaded', async () => {
