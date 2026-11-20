@@ -16,6 +16,15 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
 
 ## [Unreleased]
 
+## [0.53.2] - 2026-11-20
+
+**The trial emails tell the truth about a household's plants and are plain
+account notices, an alarm now pages when app email stops going out, and a
+one-time operator script can send the note about the September to November
+email outage.** No stored data, Terms or Privacy text changed. The alarm is new
+Terraform (metric filters and one CloudWatch alarm) applied by the normal
+deploy.
+
 ### Added
 
 - **An alarm when email stops going out.** From v0.24.0 to v0.53.1 nearly
