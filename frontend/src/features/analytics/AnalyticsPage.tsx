@@ -447,6 +447,15 @@ function DailyTrend({ series }: DailyTrendProps) {
         </svg>
       </div>
       <p className="text-xs text-gray-600">{t('analytics.page.trendLegend')}</p>
+      {/* The count for each day was in a hover tooltip only, so a screen
+          reader heard the month's total and nothing per day (WCAG 1.1.1).
+          The same per-day line, for assistive technology; the bars above
+          are unchanged. */}
+      <ul className="sr-only">
+        {series.map((d) => (
+          <li key={d.date}>{t('analytics.page.dayTitle', { date: d.date, count: d.count })}</li>
+        ))}
+      </ul>
     </div>
   );
 }
