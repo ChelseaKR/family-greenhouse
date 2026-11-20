@@ -14,6 +14,32 @@ import { CustomTaskIcon } from '@/components/icons/CustomTaskIcon';
  * the journal palette consistent and makes the type set extendable in one
  * place.
  */
+/** The built-in task types; anything else is a custom type, shown as typed. */
+const BUILT_IN_TYPES = ['water', 'fertilize', 'prune', 'repot'] as const;
+
+function isBuiltInType(type: string): type is (typeof BUILT_IN_TYPES)[number] {
+  return (BUILT_IN_TYPES as readonly string[]).includes(type);
+}
+
+type Translate = (key: string) => string;
+
+/**
+ * A task's type as a name, in the reader's language: "Water" / "Regar". The
+ * stored value (`water`) used to be shown as is on Spanish screens (WCAG
+ * 3.1.2). A custom type is the person's own words and stays as typed.
+ */
+export function taskTypeName(t: Translate, type: string): string {
+  return isBuiltInType(type) ? t(`tasks.types.${type}`) : type;
+}
+
+/**
+ * The same, as the object of "completed …": "watering" / "el riego", so the
+ * activity line reads as a sentence. A custom type stays as typed.
+ */
+export function completedTaskName(t: Translate, type: string): string {
+  return isBuiltInType(type) ? t(`tasks.completedName.${type}`) : type;
+}
+
 export const taskTypeLabels: Record<string, string> = {
   water: 'Water',
   fertilize: 'Fertilize',

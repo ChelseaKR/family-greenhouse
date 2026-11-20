@@ -184,7 +184,7 @@ test('an open tab alerts when a task turns overdue, respects permission, and ded
     .toEqual([
       expect.objectContaining({
         title: 'Timer Fern could use a little care',
-        body: 'water is ready whenever you are.',
+        body: 'Water is ready whenever you are.',
         tag: `task-${waterTaskId}`,
       }),
     ]);
@@ -236,7 +236,7 @@ test('an open tab alerts when a task turns overdue, respects permission, and ded
       expect.objectContaining({ tag: `task-${waterTaskId}` }),
       expect.objectContaining({
         title: 'Timer Fern could use a little care',
-        body: 'fertilize is ready whenever you are.',
+        body: 'Fertilize is ready whenever you are.',
         tag: `task-${fertilizeTaskId}`,
       }),
     ]);

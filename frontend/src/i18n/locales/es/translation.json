@@ -1099,8 +1099,30 @@
       "doneCount_many": "{{count}} hechas",
       "noneInLast": "ninguna en las últimas {{limit}}",
       "best": "mejor racha {{value}}",
-      "last": "último {{value}}",
+      "last": "último: {{value}}",
       "never": "nunca",
+      "relToday": "hoy",
+      "relToday_stat": "Hoy",
+      "relYesterday": "ayer",
+      "relYesterday_stat": "Ayer",
+      "relDays_one": "hace {{count}} día",
+      "relDays_many": "hace {{count}} días",
+      "relDays_other": "hace {{count}} días",
+      "relDays_stat_one": "Hace {{count}} día",
+      "relDays_stat_many": "Hace {{count}} días",
+      "relDays_stat_other": "Hace {{count}} días",
+      "relWeeks_one": "hace {{count}} semana",
+      "relWeeks_many": "hace {{count}} semanas",
+      "relWeeks_other": "hace {{count}} semanas",
+      "relWeeks_stat_one": "Hace {{count}} semana",
+      "relWeeks_stat_many": "Hace {{count}} semanas",
+      "relWeeks_stat_other": "Hace {{count}} semanas",
+      "relMonths_one": "hace {{count}} mes",
+      "relMonths_many": "hace {{count}} meses",
+      "relMonths_other": "hace {{count}} meses",
+      "relMonths_stat_one": "Hace {{count}} mes",
+      "relMonths_stat_many": "Hace {{count}} meses",
+      "relMonths_stat_other": "Hace {{count}} meses",
       "completions": "Tareas completadas (últimas {{limit}})",
       "bestStreak": "Mejor racha (últimas {{limit}})",
       "cycles_one": "{{count}} ciclo",
@@ -1139,7 +1161,8 @@
       "snooze": {
         "oneDay": "1 día",
         "threeDays": "3 días",
-        "oneWeek": "1 semana"
+        "oneWeek": "1 semana",
+        "skipCycle": "Saltar esta vez"
       },
       "lastDone": "Último cuidado: {{date}}"
     },
@@ -1295,6 +1318,12 @@
       "prune": "Podar",
       "repot": "Trasplantar",
       "custom": "Personalizada"
+    },
+    "completedName": {
+      "water": "el riego",
+      "fertilize": "el abono",
+      "prune": "la poda",
+      "repot": "el trasplante"
     },
     "upForGrabs": "Disponible",
     "upForGrabsEscalated": "Disponible · traspaso automático",
@@ -2331,6 +2360,7 @@
     "turnOff": "Desactivar",
     "deniedHint": "Las notificaciones de Family Greenhouse están desactivadas en los Ajustes del teléfono. Actívalas allí y vuelve aquí.",
     "deniedError": "Tu teléfono no permitió las notificaciones. Actívalas para Family Greenhouse en los Ajustes del teléfono y vuelve a intentarlo.",
+    "registerTimeout": "No pudimos activar las notificaciones a tiempo. Vuelve a intentarlo.",
     "enabled": "Las notificaciones están activadas en este teléfono.",
     "disabled": "Las notificaciones están desactivadas en este teléfono."
   },
@@ -2415,6 +2445,7 @@
       "clear": "Borrar"
     },
     "overdueAlertTitle": "A {{plant}} le vendría bien un poco de cuidado",
+    "overdueAlertBody": "{{task}}: cuando puedas.",
     "browserActiveHint": "Los avisos aparecen mientras tengas una pestaña abierta o la aplicación instalada.",
     "browserDeniedHint": "Permiso denegado: actualiza la configuración del navegador para volver a activarlas.",
     "browserEnableHint": "Actívalas para recibir un aviso cuando aparezcan tareas atrasadas en el panel.",
@@ -3560,6 +3591,8 @@
     "page": {
       "eyebrow": "Seguridad para mascotas",
       "title": "¿Es segura esta planta para las mascotas?",
+      "metaTitle": "¿Es segura esta planta para las mascotas? — Comprobador de toxicidad para gatos y perros",
+      "metaDescription": "Comprobador gratuito y sin registro: escribe el nombre de una planta de interior y mira si es tóxica para gatos y perros, explicado con claridad. Basado en los datos de seguridad de plantas de la ASPCA.",
       "searchLabel": "Buscar la toxicidad de una planta para mascotas",
       "nameLabel": "Nombre de la planta o de la especie",
       "namePlaceholder": "p. ej., snake plant, pothos, lily…",

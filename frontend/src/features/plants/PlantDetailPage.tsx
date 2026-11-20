@@ -57,7 +57,7 @@ import { ShareCuttingDialog } from './ShareCuttingDialog';
 import { LeafHealthCard } from './LeafHealthCard';
 import clsx from 'clsx';
 import { TitleUnderline } from '@/components/brand/TitleUnderline';
-import { taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
+import { completedTaskName, taskTypeLabels, taskTypeStyle } from '@/utils/taskTypeConfig';
 import i18n from '@/i18n';
 import { formatRelativeDay } from '@/i18n/format';
 import { toast } from '@/store/toastStore';
@@ -804,7 +804,10 @@ export function PlantDetailPage() {
                   <p className="text-gray-900">
                     <Trans
                       i18nKey="activity.taskCompleted"
-                      values={{ actor: completion.completedByName, task: completion.taskType }}
+                      values={{
+                        actor: completion.completedByName,
+                        task: completedTaskName(t, completion.taskType),
+                      }}
                       components={{ b: <span className="font-medium" /> }}
                     />
                   </p>
@@ -893,22 +896,19 @@ interface TaskRowProps {
   isMatchingSchedule: boolean;
 }
 
-/**
- * `labelKey` is a catalog key. "Skip cycle" has no Spanish yet (its wording is
- * waiting on a review of the menu in use), so it keeps its English `label`.
- */
-const SNOOZE_OPTIONS: ReadonlyArray<{ days: number; labelKey?: string; label?: string }> = [
+/** `labelKey` is a catalog key. */
+const SNOOZE_OPTIONS: ReadonlyArray<{ days: number; labelKey: string }> = [
   { labelKey: 'plants.detailPage.snooze.oneDay', days: 1 },
   { labelKey: 'plants.detailPage.snooze.threeDays', days: 3 },
   { labelKey: 'plants.detailPage.snooze.oneWeek', days: 7 },
-  { label: 'Skip cycle', days: 0 }, // resolved at click time using task.frequency
+  { labelKey: 'plants.detailPage.snooze.skipCycle', days: 0 }, // resolved at click time using task.frequency
 ];
 
 function snoozeOptionLabel(
   opt: (typeof SNOOZE_OPTIONS)[number],
   t: ReturnType<typeof useTranslation>['t']
 ): string {
-  return opt.labelKey ? t(opt.labelKey) : (opt.label ?? '');
+  return t(opt.labelKey);
 }
 
 function TaskRow({

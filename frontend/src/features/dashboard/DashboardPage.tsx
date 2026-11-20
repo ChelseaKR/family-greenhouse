@@ -60,7 +60,7 @@ import { TaskLocation } from '@/components/TaskLocation';
 import { getErrorMessage } from '@/services/api';
 import clsx from 'clsx';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
+import { completedTaskName, taskTypeLabels, taskTypeStyles } from '@/utils/taskTypeConfig';
 import { formatDate, formatDueDate, isOverdue, isToday } from '@/utils/date';
 import { filterActivity, type ActivityFilter } from './activityFeed';
 
@@ -578,7 +578,12 @@ function ActivityRow({ event }: ActivityRowProps) {
       body = (
         <Trans
           i18nKey="activity.taskCompleted"
-          values={{ actor: actorName, task: event.payload.taskType ?? t('activity.aTask') }}
+          values={{
+            actor: actorName,
+            task: event.payload.taskType
+              ? completedTaskName(t, event.payload.taskType)
+              : t('activity.aTask'),
+          }}
           components={bold}
         />
       );

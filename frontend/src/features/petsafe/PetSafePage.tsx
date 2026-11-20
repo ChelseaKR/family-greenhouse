@@ -136,9 +136,11 @@ const BADGE_STYLE: Record<PetSafetyLevel, string> = {
  */
 export function PetSafePage() {
   const { t } = useTranslation();
+  // The tab title and share text follow the reader's language; the
+  // prerender (English) and the JSON-LD stay English (`inLanguage: 'en'`).
   useMetaTags({
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
+    title: t('petSafety.page.metaTitle'),
+    description: t('petSafety.page.metaDescription'),
     canonical: siteUrl('/pet-safe'),
     jsonLd: PET_SAFE_JSON_LD,
   });

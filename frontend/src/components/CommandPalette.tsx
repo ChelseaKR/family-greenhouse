@@ -8,6 +8,7 @@ import { plantService, type Plant, type Task } from '@/services/plantService';
 import { EmptySearch } from '@/components/illustrations/EmptySearch';
 import { taskService } from '@/services/taskService';
 import { useAuthStore } from '@/store/authStore';
+import { taskTypeName } from '@/utils/taskTypeConfig';
 import { useActiveHouseholdId } from '@/hooks/useActiveHouseholdId';
 
 type Result =
@@ -87,7 +88,7 @@ export function CommandPalette() {
       .map((task: Task) => ({
         kind: 'task',
         id: task.id,
-        label: `${task.customType ?? task.type} — ${task.plantName}`,
+        label: `${taskTypeName(t, task.customType ?? task.type)} — ${task.plantName}`,
         sub: task.assignedToName
           ? t('tasks.page.assignedTo', { name: task.assignedToName })
           : t('tasks.page.unassigned'),

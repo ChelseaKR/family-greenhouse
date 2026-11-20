@@ -1079,6 +1079,22 @@
       "best": "best {{value}}",
       "last": "last {{value}}",
       "never": "never",
+      "relToday": "today",
+      "relToday_stat": "today",
+      "relYesterday": "yesterday",
+      "relYesterday_stat": "yesterday",
+      "relDays_one": "{{count}}d ago",
+      "relDays_other": "{{count}}d ago",
+      "relDays_stat_one": "{{count}}d ago",
+      "relDays_stat_other": "{{count}}d ago",
+      "relWeeks_one": "{{count}}w ago",
+      "relWeeks_other": "{{count}}w ago",
+      "relWeeks_stat_one": "{{count}}w ago",
+      "relWeeks_stat_other": "{{count}}w ago",
+      "relMonths_one": "{{count}}mo ago",
+      "relMonths_other": "{{count}}mo ago",
+      "relMonths_stat_one": "{{count}}mo ago",
+      "relMonths_stat_other": "{{count}}mo ago",
       "completions": "Completions (last {{limit}})",
       "bestStreak": "Best streak (last {{limit}})",
       "cycles_one": "{{count}} cycle",
@@ -1115,7 +1131,8 @@
       "snooze": {
         "oneDay": "1 day",
         "threeDays": "3 days",
-        "oneWeek": "1 week"
+        "oneWeek": "1 week",
+        "skipCycle": "Skip cycle"
       },
       "lastDone": "Last: {{date}}"
     },
@@ -1262,6 +1279,12 @@
       "prune": "Prune",
       "repot": "Repot",
       "custom": "Custom"
+    },
+    "completedName": {
+      "water": "watering",
+      "fertilize": "fertilizing",
+      "prune": "pruning",
+      "repot": "repotting"
     },
     "upForGrabs": "Up for grabs",
     "upForGrabsEscalated": "Up for grabs · auto-handoff",
@@ -2274,6 +2297,7 @@
     "turnOff": "Turn off",
     "deniedHint": "Notifications are off for Family Greenhouse in your phone’s Settings. Turn them on there, then come back here.",
     "deniedError": "Your phone didn’t allow notifications. Turn them on for Family Greenhouse in your phone’s Settings, then try again.",
+    "registerTimeout": "We couldn’t turn on notifications in time. Try again.",
     "enabled": "Notifications are on for this phone.",
     "disabled": "Notifications are off for this phone."
   },
@@ -2358,6 +2382,7 @@
       "clear": "Clear"
     },
     "overdueAlertTitle": "{{plant}} could use a little care",
+    "overdueAlertBody": "{{task}} is ready whenever you are.",
     "browserActiveHint": "Pop-ups appear while a tab is open or the app is installed.",
     "browserDeniedHint": "Permission denied — update your browser settings to re-enable.",
     "browserEnableHint": "Enable to be alerted when overdue tasks appear in the dashboard.",
@@ -3484,6 +3509,8 @@
     "page": {
       "eyebrow": "Pet safety",
       "title": "Is this plant safe for pets?",
+      "metaTitle": "Is This Plant Safe for Pets? — Cat & Dog Toxicity Checker",
+      "metaDescription": "Free, no-signup checker: type a houseplant name and see whether it’s toxic to cats and dogs, in plain language. Based on the ASPCA’s plant safety data.",
       "searchLabel": "Search plant pet-toxicity",
       "nameLabel": "Plant or species name",
       "namePlaceholder": "e.g. snake plant, pothos, lily…",

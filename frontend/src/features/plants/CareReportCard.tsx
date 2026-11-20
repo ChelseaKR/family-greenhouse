@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardHeader } from '@/components/Card';
 import { RECENT_COMPLETIONS_LIMIT } from '@/services/plantService';
 import type { PlantWithTasks, Task } from '@/services/plantService';
+import { taskTypeName } from '@/utils/taskTypeConfig';
 import { longestStreak } from '@/utils/streaks';
 
 interface CareReportCardProps {
@@ -68,7 +69,7 @@ export function CareReportCard({ plant }: CareReportCardProps) {
         />
         <Stat
           label={t('plants.careReport.lastCare')}
-          value={lastCompletion ? formatRelative(lastCompletion) : t('common.never')}
+          value={lastCompletion ? formatRelative(lastCompletion, t, 'stat') : t('common.never')}
         />
       </dl>
 
@@ -111,7 +112,7 @@ function TaskRow({
   // holds the newest RECENT_COMPLETIONS_LIMIT rows across all tasks, so a
   // rare task next to a frequent one drops out of it within weeks.
   const last = newest([task.lastCompleted, ...own.map((c) => c.completedAt)]);
-  const label = task.customType ?? task.type;
+  const label = taskTypeName(t, task.customType ?? task.type);
   const doneLabel =
     own.length > 0 || !last
       ? t('plants.careReport.doneCount', { count: own.length })
@@ -125,7 +126,7 @@ function TaskRow({
         <span>{t('plants.careReport.best', { value: best >= 2 ? `${best}×` : '—' })}</span>
         <span className="hidden sm:inline">
           {t('plants.careReport.last', {
-            value: last ? formatRelative(last) : t('plants.careReport.never'),
+            value: last ? formatRelative(last, t) : t('plants.careReport.never'),
           })}
         </span>
       </div>
@@ -148,11 +149,21 @@ function newest(isos: Array<string | null | undefined>): string | undefined {
   return best;
 }
 
-function formatRelative(iso: string): string {
+/**
+ * How long ago, in the reader's language. `stat` is the stand-alone value
+ * under "Last care", which Spanish starts with a capital ("Hace 3 días");
+ * without it the words go inside "last: …" ("último: hace 3 días").
+ */
+function formatRelative(
+  iso: string,
+  t: ReturnType<typeof useTranslation>['t'],
+  context?: 'stat'
+): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000));
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+  const key = (name: string) => `plants.careReport.${name}`;
+  if (days <= 0) return t(key('relToday'), { context });
+  if (days === 1) return t(key('relYesterday'), { context });
+  if (days < 7) return t(key('relDays'), { count: days, context });
+  if (days < 30) return t(key('relWeeks'), { count: Math.floor(days / 7), context });
+  return t(key('relMonths'), { count: Math.floor(days / 30), context });
 }
