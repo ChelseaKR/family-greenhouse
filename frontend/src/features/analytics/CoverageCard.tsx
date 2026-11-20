@@ -458,7 +458,7 @@ function BackupForm({
           id={selectId}
           value={assignedTo}
           onChange={(e) => setAssignedTo(e.target.value)}
-          className="min-h-touch rounded-lg border border-dew bg-paper px-3 text-sm text-ink"
+          className="min-h-touch rounded-lg border border-primary-500 bg-paper px-3 text-sm text-ink"
         >
           {backups.map((m) => (
             <option key={m.userId} value={m.userId}>

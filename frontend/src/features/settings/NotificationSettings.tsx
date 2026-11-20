@@ -719,7 +719,7 @@ export function NotificationSettings() {
           <label className="inline-flex items-center">
             <span className="sr-only">{t('notifications.emailLanguageTitle')}</span>
             <select
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
+              className="rounded-md border border-primary-500 bg-white px-2 py-1 text-sm text-gray-900"
               value={prefs.emailLocale || uiEmailLocale(i18n.language)}
               disabled={saveMutation.isPending}
               onChange={(e) => save({ emailLocale: e.target.value as 'en' | 'es' })}
