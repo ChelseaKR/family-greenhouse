@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import PullToRefreshGesture, { PULL_THRESHOLD_PX } from '@/components/PullToRefreshGesture';
+import { requestRefresh } from '@/lib/refreshRequest';
 
 function renderPull(component: 'wrapper' | 'gesture' = 'gesture') {
   const queryClient = new QueryClient();
@@ -61,6 +62,15 @@ describe('PullToRefresh', () => {
     it('refetches what is on screen after a full pull from the top, and says so', async () => {
       const invalidate = renderPull();
       pull(PULL_THRESHOLD_PX + 10);
+      expect(invalidate).toHaveBeenCalledWith({ refetchType: 'active' });
+      expect(await screen.findByRole('status')).toHaveTextContent('Updated');
+    });
+
+    it('refreshes the same way on a request, with no gesture (WCAG 2.5.7)', async () => {
+      const invalidate = renderPull();
+      act(() => {
+        requestRefresh();
+      });
       expect(invalidate).toHaveBeenCalledWith({ refetchType: 'active' });
       expect(await screen.findByRole('status')).toHaveTextContent('Updated');
     });

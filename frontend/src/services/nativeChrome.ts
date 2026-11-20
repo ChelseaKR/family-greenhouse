@@ -4,6 +4,7 @@ import { NATIVE_CHROME_PLUGIN } from '@/lib/platform';
 import type {
   NativeChromeConfiguration,
   NativeChromeEvents,
+  NativeChromeIosEvents,
   NativeChromeUpdate,
 } from '@/config/nativeFrame';
 import type { NativeBarTools, NativeBarToolsEvents } from '@/config/nativeBarTools';
@@ -26,6 +27,8 @@ import type {
  * - A screen's menus and search in the bar: `setBarTools`, and the
  *   `barMenuSelect` / `barSearch` events (config/nativeBarTools.ts).
  */
+type NativeChromeAllEvents = NativeChromeEvents & NativeBarToolsEvents & NativeChromeIosEvents;
+
 export interface NativeChromePlugin {
   configure(options: NativeChromeConfiguration): Promise<void>;
   update(options: NativeChromeUpdate): Promise<void>;
@@ -34,9 +37,9 @@ export interface NativeChromePlugin {
   dismissPresented(options: { token: string }): Promise<void>;
   presentForm(options: NativeFormSheetRequest): Promise<NativeFormSheetResult>;
   setBarTools(options: NativeBarTools): Promise<void>;
-  addListener<E extends keyof (NativeChromeEvents & NativeBarToolsEvents)>(
+  addListener<E extends keyof NativeChromeAllEvents>(
     eventName: E,
-    listener: (event: (NativeChromeEvents & NativeBarToolsEvents)[E]) => void
+    listener: (event: NativeChromeAllEvents[E]) => void
   ): Promise<PluginListenerHandle>;
 }
 
