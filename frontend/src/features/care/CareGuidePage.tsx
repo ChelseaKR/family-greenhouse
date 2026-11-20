@@ -1,4 +1,5 @@
 import { use, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { PublicShell } from '@/components/PublicShell';
@@ -197,6 +198,11 @@ function Paragraphs({ items }: { items: string[] }) {
  */
 export function CareGuidePage() {
   const { slug } = useParams<{ slug: string }>();
+  // The guide is English whatever language the visitor chose (docs/i18n.md),
+  // so <main> says so (WCAG 3.1.2). The two translated pieces inside it, the
+  // shop link and the holiday list, carry the page's own language back.
+  const { i18n } = useTranslation();
+  const pageLang = i18n.resolvedLanguage ?? i18n.language;
   // The index says whether the slug is published; only then is the full
   // guide asked for. `use` returns at once when the guide is in the bundle or
   // in the prerendered page, and suspends on a fetch otherwise.
@@ -323,7 +329,7 @@ export function CareGuidePage() {
     });
 
   return (
-    <PublicShell width="article">
+    <PublicShell width="article" contentLang="en">
       <Link
         to="/care"
         className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 hover:underline"
@@ -532,7 +538,9 @@ export function CareGuidePage() {
       {/* Optional paid link to a shop (ADR 0038). Placed after the dates and
           away from the toxicity section, so it never reads as part of the
           pet answer. Renders nothing unless a program is configured. */}
-      <PlantShopLink slug={guide.slug} />
+      <div lang={pageLang}>
+        <PlantShopLink slug={guide.slug} />
+      </div>
 
       {related.length > 0 && (
         <section className="mt-16">
@@ -565,7 +573,9 @@ export function CareGuidePage() {
           thing on the page: nothing moves above the sign-up link. A holiday
           guide leaves itself out. Off with the same switch as the other two
           pages (holidayGuideList.ts). */}
-      <HolidayCareGuides id="care-holiday-guides" className="mt-12" exclude={guide.slug} />
+      <div lang={pageLang}>
+        <HolidayCareGuides id="care-holiday-guides" className="mt-12" exclude={guide.slug} />
+      </div>
     </PublicShell>
   );
 }
