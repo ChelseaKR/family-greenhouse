@@ -22,6 +22,7 @@ import {
   clearPendingGuidePlant,
   getPendingGuidePlant,
   getPendingGuideSlug,
+  guideNameKey,
 } from './guidePlantHandoff';
 
 const makeFirstPlantSchema = (t: TFunction) =>
@@ -104,7 +105,7 @@ export function FirstPlantStep({
   onSkip,
   onWantsFullForm,
 }: FirstPlantStepProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   // A tap in the picker and a submit of the form must not both create a
@@ -124,10 +125,16 @@ export function FirstPlantStep({
   // visitor's own pick in the existing "Start with a watering reminder" step,
   // because the guide gives a soil rule and no cited day count. No species is
   // filled in, so no curated bundle is matched for them either.
+  // The name is the guide's English common name, or, outside English, the
+  // translated name the catalog already holds for that plant, if any.
   const [namedGuide] = useState(() => {
     if (getPendingGuidePlant()) return undefined;
     const slug = getPendingGuideSlug();
-    return slug ? findCareGuideEntry(slug) : undefined;
+    const entry = slug ? findCareGuideEntry(slug) : undefined;
+    if (!entry) return undefined;
+    const key = guideNameKey(entry.slug);
+    const english = (i18n.resolvedLanguage ?? i18n.language ?? 'en').startsWith('en');
+    return { name: !english && key ? t(key) : entry.commonName };
   });
   const leave = (next: () => void) => () => {
     clearPendingGuidePlant();
@@ -141,7 +148,7 @@ export function FirstPlantStep({
     formState: { errors },
   } = useForm<FirstPlantFormData>({
     resolver: zodResolver(schema),
-    defaultValues: namedGuide ? { name: namedGuide.commonName } : undefined,
+    defaultValues: namedGuide ? { name: namedGuide.name } : undefined,
   });
 
   const speciesValue = watch('species') ?? '';
@@ -215,8 +222,7 @@ export function FirstPlantStep({
       // A guide's plant added under the name it was carried with counts as a
       // guide handoff, as a tap on a preset guide plant does.
       if (plant.firstPlantForAccount === true) {
-        const fromGuide =
-          namedGuide !== undefined && submitted.name.trim() === namedGuide.commonName;
+        const fromGuide = namedGuide !== undefined && submitted.name.trim() === namedGuide.name;
         trackGoogleConversion({
           name: 'first_plant_added',
           method: fromGuide ? 'guide_handoff' : 'typed',

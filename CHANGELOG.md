@@ -78,7 +78,7 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   `/register?plant=<slug>` from all 64 guides, not 11. A guide whose sources
   give a cited day count keeps its one-tap preset with that count. For the
   rest, the first run fills the plant's name into its "Something else?" form
-  and leaves the rhythm to the existing "Start with a watering reminder"
+  (in Spanish where the catalog already has that plant's name) and leaves the rhythm to the existing "Start with a watering reminder"
   step, a starting point the visitor chooses, so no interval is guessed. Pet
   pages are unchanged. Such a plant added under the carried name counts as
   `first_plant_added` with `method: guide_handoff`. No new copy.

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
+import i18n, { ensureLanguageCatalog } from '@/i18n';
 import { WelcomeFlow } from '@/features/onboarding/WelcomeFlow';
 import { HomeRedirect } from '@/features/onboarding/HomeRedirect';
 import { useAuthStore } from '@/store/authStore';
@@ -899,6 +900,35 @@ describe('WelcomeFlow plant named from a guide without a cited day count', () =>
     expect(vi.mocked(trackGoogleConversion).mock.calls[1]).toEqual([
       { name: 'first_plant_added', method: 'typed' },
     ]);
+  });
+
+  it('fills the Spanish name the catalog already has, and English otherwise', async () => {
+    await ensureLanguageCatalog('es');
+    await i18n.changeLanguage('es');
+    try {
+      setPendingGuidePlant('poinsettia');
+      newHouseholdHandlers();
+      renderFirstRun();
+      // careHolidayGuides.poinsettia, already in both catalogs.
+      expect(await screen.findByLabelText(/nombre de la planta/i)).toHaveValue('Flor de Pascua');
+      cleanup();
+      sessionStorage.clear();
+
+      // No Spanish name in the catalog for this guide: its English common name.
+      setPendingGuidePlant('peperomia');
+      newHouseholdHandlers();
+      renderFirstRun();
+      expect(await screen.findByLabelText(/nombre de la planta/i)).toHaveValue('Peperomia');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('keeps the guide’s English name for an English visitor', async () => {
+    setPendingGuidePlant('poinsettia');
+    newHouseholdHandlers();
+    renderFirstRun();
+    expect(await screen.findByLabelText(/plant name/i)).toHaveValue('Poinsettia');
   });
 
   it('leaves the name empty without a carried guide (negative control)', async () => {

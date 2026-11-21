@@ -4,12 +4,15 @@ import {
   clearPendingGuidePlant,
   getPendingGuidePlant,
   getPendingGuideSlug,
+  guideNameKey,
   guidePlant,
   registerHrefForGuide,
   registerHrefForPlant,
   setPendingGuidePlant,
 } from '@/features/onboarding/guidePlantHandoff';
 import { CARE_GUIDES } from '@/features/care/careGuides';
+import en from '@/i18n/locales/en/translation.json';
+import es from '@/i18n/locales/es/translation.json';
 import { COMMON_PLANTS } from '@/features/onboarding/commonPlants';
 import { GUIDE_HANDOFF_PLANTS } from '@/features/onboarding/guideHandoffPlants';
 
@@ -65,6 +68,24 @@ describe('guidePlantHandoff', () => {
     expect(getPendingGuidePlant()).toBeUndefined();
     clearPendingGuidePlant();
     expect(getPendingGuideSlug()).toBeUndefined();
+  });
+
+  it('names a non-preset guide plant only from keys both catalogs already hold', () => {
+    const lookup = (catalog: unknown, key: string) =>
+      key
+        .split('.')
+        .reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], catalog);
+    const named = CARE_GUIDES.filter((guide) => guideNameKey(guide.slug));
+    expect(named.map((guide) => guide.slug)).toEqual(
+      expect.arrayContaining(['poinsettia', 'christmas-cactus', 'boston-fern'])
+    );
+    for (const guide of named) {
+      const key = guideNameKey(guide.slug)!;
+      expect(typeof lookup(es, key), key).toBe('string');
+      // The English entry names the same plant as the guide.
+      expect(String(lookup(en, key)).toLowerCase(), key).toBe(guide.commonName.toLowerCase());
+    }
+    expect(guideNameKey('peperomia')).toBeUndefined();
   });
 
   it('keeps a known plant for the visit and reads it back', () => {

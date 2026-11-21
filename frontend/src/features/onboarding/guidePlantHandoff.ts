@@ -1,4 +1,5 @@
 import { CARE_GUIDE_SLUGS } from '@/features/care/careGuideSlugs';
+import { HOLIDAY_CARE_GUIDES } from '@/features/care/holidayGuideList';
 import { COMMON_PLANTS, type CommonPlant } from './commonPlants';
 import { GUIDE_HANDOFF_PLANTS } from './guideHandoffPlants';
 
@@ -68,6 +69,23 @@ export function registerHrefForPlant(slug: string): string {
 export function registerHrefForGuide(slug: string): string {
   const guide = carriedGuideSlug(slug);
   return guide ? `/register?plant=${encodeURIComponent(guide)}` : '/register';
+}
+
+/**
+ * Catalog keys that already hold a guide plant's translated name, for the
+ * guides that are not one-tap presets (whose names are
+ * `firstRun.picker.plants.<slug>`). Existing data only: the holiday-guide
+ * list's names and the Boston fern in the home page's app mock-up. A guide
+ * with no entry is named by its English common name in every language.
+ */
+const GUIDE_NAME_KEYS: ReadonlyMap<string, string> = new Map<string, string>([
+  ...HOLIDAY_CARE_GUIDES.map(({ slug, nameKey }) => [slug, nameKey] as [string, string]),
+  ['boston-fern', 'landing.plants.bostonFern'],
+]);
+
+/** The catalog key holding a non-preset guide plant's translated name, if any. */
+export function guideNameKey(slug: string): string | undefined {
+  return GUIDE_NAME_KEYS.get(slug);
 }
 
 export function setPendingGuidePlant(slug: string | null | undefined): void {
