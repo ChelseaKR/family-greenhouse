@@ -60,6 +60,19 @@ reaches 1.0.0 (pre-1.0: minor bumps may include breaking changes — see
   title names Maranta ("How Often to Water a Prayer Plant (Maranta): Evenly
   Moist"), the name people search it by.
 
+- **One header and one footer on every public page.** The home page and the
+  content pages had different headers and footers, and neither header linked
+  the pet-safety hub. Every public page, the 404 page included, now has the
+  same header: Care guides, Pets and plants, Blog, Plans, then Log in and
+  "Sign up free" (on a phone: the wordmark, "Sign up free" and a Menu whose
+  first item is Log in). Content pages gain Log in, and their "Try the app →"
+  link becomes the "Sign up free" button, still carrying a guide's plant. The
+  same footer follows, in four groups: Learn, Product, Company and Legal. The
+  home page gains Help, Support and Delete account; the content pages gain the
+  pet-safe checker and Contact. The memorial line and the analytics opt-out
+  stay. No URL, title or page content changes, and the header and footer stay
+  hidden inside the apps. Every label was already in English and Spanish.
+
 ### Fixed
 
 - **A selected chip or view toggle no longer depends on a pale tint.** The

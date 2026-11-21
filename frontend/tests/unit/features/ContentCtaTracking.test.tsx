@@ -84,9 +84,9 @@ describe('content-page sign-up links are counted', () => {
     ]);
   });
 
-  it('counts the header "Try the app" link with the page it was on', async () => {
+  it('counts the header "Sign up free" button with the page it was on', async () => {
     const { href, sent } = await clickOn('/care/monstera', () =>
-      screen.getByRole('link', { name: /try the app/i })
+      screen.getByRole('link', { name: /sign up free/i })
     );
     // On a care guide the header link carries the plant, like the page's own.
     expect(href).toBe('/register?plant=monstera');
@@ -97,7 +97,7 @@ describe('content-page sign-up links are counted', () => {
 
   it('carries the plant in the header link on a pet-safety page too', async () => {
     const { href, sent } = await clickOn('/pet-safe/peace-lily', () =>
-      screen.getByRole('link', { name: /try the app/i })
+      screen.getByRole('link', { name: /sign up free/i })
     );
     expect(href).toBe('/register?plant=peace-lily');
     expect(sent).toEqual([
@@ -109,7 +109,7 @@ describe('content-page sign-up links are counted', () => {
     // A real guide outside the first run's list: counted with its plant, as
     // before, but the link does not promise a plant the first run can't offer.
     const ivy = await clickOn('/care/english-ivy', () =>
-      screen.getByRole('link', { name: /try the app/i })
+      screen.getByRole('link', { name: /sign up free/i })
     );
     expect(ivy.href).toBe('/register');
     expect(ivy.sent).toEqual([
@@ -121,7 +121,7 @@ describe('content-page sign-up links are counted', () => {
       },
     ]);
     const blog = await clickOn(`/blog/${POSTS[0]!.slug}`, () =>
-      screen.getByRole('link', { name: /try the app/i })
+      screen.getByRole('link', { name: /sign up free/i })
     );
     expect(blog.href).toBe('/register');
   });
@@ -140,7 +140,7 @@ describe('content-page sign-up links are counted', () => {
     const path = `/blog/${POSTS[0]!.slug}`;
     const body = await clickOn(path, () => screen.getByRole('link', { name: 'Get started' }));
     expect(body.sent).toEqual([{ name: 'landing_cta_click', source: 'blog', placement: 'body' }]);
-    const header = await clickOn(path, () => screen.getByRole('link', { name: /try the app/i }));
+    const header = await clickOn(path, () => screen.getByRole('link', { name: /sign up free/i }));
     expect(header.sent).toEqual([
       { name: 'landing_cta_click', source: 'blog', placement: 'header' },
     ]);
@@ -150,7 +150,7 @@ describe('content-page sign-up links are counted', () => {
     const pickers: Array<() => HTMLElement> = [
       () => screen.getByTestId('care-glance-cta'),
       () => within(screen.getByTestId('care-cta')).getByRole('link'),
-      () => screen.getByRole('link', { name: /try the app/i }),
+      () => screen.getByRole('link', { name: /sign up free/i }),
     ];
     for (const pick of pickers) {
       const { sent } = await clickOn('/care/aloe-vera', pick);

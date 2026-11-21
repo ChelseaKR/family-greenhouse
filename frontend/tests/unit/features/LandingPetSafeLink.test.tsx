@@ -10,6 +10,9 @@ import { LandingPage } from '@/features/landing/LandingPage';
  * and the home page is where most visitors arrive. Before this test the home
  * page linked the care guides and the blog but never /pet-safe, so the
  * checker was reachable only from inside other pages.
+ *
+ * Since the one site header (2026-11-21) it is also the header's "Pets and
+ * plants" link, once in the wide-screen row and once in the phone Menu.
  */
 function renderLanding(): HTMLElement {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,11 +37,15 @@ describe('the home page links the pet-safe checker', () => {
     await i18n.changeLanguage('en');
   });
 
-  it('links /pet-safe from the care band and from the footer, with real words', () => {
+  it('links /pet-safe from the header, the care band and the footer, with real words', () => {
     const container = renderLanding();
     const links = petSafeLinks(container);
-    expect(links.length).toBe(2);
+    // Header row + header Menu + care band + footer.
+    expect(links.length).toBe(4);
     expect(links.some((a) => container.querySelector('footer')?.contains(a))).toBe(true);
+    expect(
+      links.filter((a) => container.querySelector('header')?.contains(a)).map((a) => a.textContent)
+    ).toEqual(['Pets and plants', 'Pets and plants']);
     for (const a of links)
       expect(a.textContent?.replace(/→/g, '').trim().length).toBeGreaterThan(8);
   });
@@ -46,7 +53,8 @@ describe('the home page links the pet-safe checker', () => {
   it('the Spanish home page links it too, in Spanish', async () => {
     await i18n.changeLanguage('es');
     const links = petSafeLinks(renderLanding());
-    expect(links.length).toBe(2);
+    expect(links.length).toBe(4);
+    expect(links.map((a) => a.textContent)).toContain('Mascotas y plantas');
     expect(links.map((a) => a.textContent)).not.toContain('Pet-safe plant checker');
   });
 

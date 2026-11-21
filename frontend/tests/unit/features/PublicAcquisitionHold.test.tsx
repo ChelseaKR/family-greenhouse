@@ -62,7 +62,10 @@ describe('free registration with paid activity on hold', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('link', { name: /try the app/i })).toHaveAttribute('href', '/register');
+    expect(screen.getByRole('link', { name: /sign up free/i })).toHaveAttribute(
+      'href',
+      '/register'
+    );
   });
 
   it('keeps paid acquisition controls out of public signup surfaces', () => {

@@ -1,14 +1,8 @@
 import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router';
 import clsx from 'clsx';
-import { BrandMark } from './BrandMark';
 import { Footer } from './Footer';
+import { SiteHeader } from './SiteHeader';
 import { TitleUnderline } from './brand/TitleUnderline';
-import { useTranslation } from 'react-i18next';
-import { PUBLIC_REGISTRATION_AVAILABLE } from '@/config/commercialStatus';
-import { isNativeApp } from '@/lib/platform';
-import { contentCtaContext, trackGoogleConversion } from '@/services/googleAnalytics';
-import { registerHrefForPlant } from '@/features/onboarding/guidePlantHandoff';
 
 /**
  * Shared chrome for the public content pages (care guides, blog, pricing,
@@ -30,7 +24,7 @@ const WIDTHS = {
 
 interface PublicShellProps {
   width?: keyof typeof WIDTHS;
-  /** Drop the nav links + app CTA. The sitter page uses this: a guest
+  /** Drop the nav links + sign-up button. The sitter page uses this: a guest
    *  doing someone a favor shouldn't be marketed at from the header. */
   plainHeader?: boolean;
   /** The language the page's own content is written in, when that is fixed
@@ -49,111 +43,10 @@ export function PublicShell({
   contentLang,
   children,
 }: PublicShellProps) {
-  const { t } = useTranslation();
-  // The apps have no plans page (it opens Settings → Plan status), so the
-  // header does not offer one: see WEB_ONLY_LINKS in Footer.tsx.
-  const showPricing = !isNativeApp();
-  const { pathname } = useLocation();
-  // On a care guide or pet-safe page, "Try the app" carries the page's plant
-  // the same way the page's own sign-up links do, so the first run can offer
-  // it first. Any other page, or a plant the first run cannot offer, is plain
-  // /register. The GA4 click below is unchanged.
-  const ctaContext = contentCtaContext(pathname);
-  const registerHref =
-    ctaContext.plant && (ctaContext.source === 'care_guide' || ctaContext.source === 'pet_safe')
-      ? registerHrefForPlant(ctaContext.plant)
-      : '/register';
-
   return (
     <div className="min-h-screen bg-paper flex flex-col">
-      {/* print:hidden — the sticky site header is chrome, not content; a
-          printed page (the sitter handoff brief) should start at the title.
-          The safe-area padding carries its background under the status bar
-          in the native shells (help, legal and pricing pages are reachable
-          there); env() is 0 in a browser tab. */}
-      <header className="sticky top-0 z-40 border-b border-dew/60 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-xs print:hidden native-frame:hidden!">
-        <nav
-          className={clsx(
-            'mx-auto flex items-center justify-between gap-3 px-4 py-4 sm:px-6',
-            WIDTHS[width]
-          )}
-          aria-label={t('publicShell.siteNavLabel')}
-        >
-          <Link to="/" aria-label={t('publicShell.homeLabel', { tagline: t('brand.tagline') })}>
-            <BrandMark variant="wordmark" size="sm" compactOnMobile />
-          </Link>
-          {!plainHeader && (
-            <div className="flex items-center gap-x-3 sm:gap-x-6">
-              <Link
-                to="/care"
-                className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
-              >
-                {t('publicShell.careGuides')}
-              </Link>
-              <Link
-                to="/blog"
-                className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
-              >
-                {t('publicShell.blog')}
-              </Link>
-              {showPricing && (
-                <Link
-                  to="/pricing"
-                  className="hidden md:block text-sm font-medium text-ink hover:text-primary-700 transition-colors"
-                >
-                  {t('publicShell.pricing')}
-                </Link>
-              )}
-              <details className="group relative md:hidden">
-                <summary className="flex min-h-touch min-w-touch cursor-pointer list-none items-center justify-center rounded-lg border border-dew bg-paper text-ink transition-colors hover:bg-glass/50 [&::-webkit-details-marker]:hidden">
-                  <span className="sr-only">{t('publicShell.openMenu')}</span>
-                  <svg
-                    className="h-5 w-5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 7h14M5 12h14M5 17h14" />
-                  </svg>
-                </summary>
-                <div className="absolute right-0 top-[calc(100%+0.6rem)] z-50 w-44 overflow-hidden rounded-xl border border-dew bg-paper p-2 shadow-journal">
-                  {[
-                    [t('publicShell.careGuides'), '/care'],
-                    [t('publicShell.blog'), '/blog'],
-                    ...(showPricing ? [[t('publicShell.pricing'), '/pricing']] : []),
-                  ].map(([label, to]) => (
-                    <Link
-                      key={to}
-                      to={to}
-                      className="block rounded-lg px-3 py-2 text-sm font-medium text-ink hover:bg-glass/55"
-                    >
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              </details>
-              <Link
-                to={PUBLIC_REGISTRATION_AVAILABLE ? registerHref : '/login'}
-                className="text-sm font-semibold text-primary-700 hover:text-primary-800 whitespace-nowrap"
-                onClick={() => {
-                  // Only the sign-up link is a sign-up CTA; "Sign in" is not.
-                  if (!PUBLIC_REGISTRATION_AVAILABLE) return;
-                  trackGoogleConversion({
-                    name: 'landing_cta_click',
-                    ...ctaContext,
-                    placement: 'header',
-                  });
-                }}
-              >
-                {PUBLIC_REGISTRATION_AVAILABLE ? t('publicShell.tryApp') : t('auth.signIn')} →
-              </Link>
-            </div>
-          )}
-        </nav>
-      </header>
+      {/* The one site header (SiteHeader.tsx), the same as the home page's. */}
+      <SiteHeader plain={plainHeader} />
 
       <main
         lang={contentLang}

@@ -34,7 +34,7 @@ import { SUPPORT_EMAIL, POPULAR, visibleSections } from './helpContent';
 export function HelpPage() {
   const native = isNativeApp();
   // A signed-in reader gets a plain header and a way back into the app; the
-  // public header's "Try the app" CTA is aimed at someone who has not signed
+  // public header's "Sign up free" button is aimed at someone who has not signed
   // up, and reads as a dead end to someone who already has.
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [query, setQuery] = useState('');
